@@ -283,6 +283,7 @@ def _make_provider(config: Config):
     """Create the appropriate LLM provider from config."""
     from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.providers.openai_codex_provider import OpenAICodexProvider
+    from nanobot.providers.anthropic_oauth_provider import AnthropicOAuthProvider
     from nanobot.providers.custom_provider import CustomProvider
 
     model = config.agents.defaults.model
@@ -292,6 +293,10 @@ def _make_provider(config: Config):
     # OpenAI Codex (OAuth)
     if provider_name == "openai_codex" or model.startswith("openai-codex/"):
         return OpenAICodexProvider(default_model=model)
+
+    # Anthropic OAuth
+    if provider_name == "anthropic_oauth" or model.startswith("anthropic-oauth/"):
+        return AnthropicOAuthProvider(default_model=model)
 
     # Custom: direct OpenAI-compatible endpoint, bypasses LiteLLM
     if provider_name == "custom":
@@ -1095,6 +1100,34 @@ def _login_openai_codex() -> None:
         console.print(f"[green]✓ Authenticated with OpenAI Codex[/green]  [dim]{token.account_id}[/dim]")
     except ImportError:
         console.print("[red]oauth_cli_kit not installed. Run: pip install oauth-cli-kit[/red]")
+        raise typer.Exit(1)
+
+
+@_register_login("anthropic_oauth")
+def _login_anthropic_oauth() -> None:
+    from nanobot.providers.anthropic_oauth import get_anthropic_token, login_interactive
+
+    token = None
+    try:
+        token = get_anthropic_token()
+    except Exception:
+        pass
+
+    if not token:
+        console.print("[cyan]Starting interactive OAuth login...[/cyan]\n")
+        login_interactive(
+            print_fn=lambda s: console.print(s),
+            prompt_fn=lambda s: typer.prompt(s),
+        )
+        try:
+            token = get_anthropic_token()
+        except Exception:
+            pass
+
+    if token:
+        console.print("[green]Authenticated with Anthropic (OAuth)[/green]")
+    else:
+        console.print("[red]Authentication failed[/red]")
         raise typer.Exit(1)
 
 
