@@ -6,6 +6,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
+import { Trash2 } from "lucide-react";
 import type { AgentStatus } from "@/lib/constants";
 
 const STATUS_DOT_STYLES: Record<AgentStatus, string> = {
@@ -46,9 +47,10 @@ export function getInitials(displayName: string): string {
 interface AgentSidebarItemProps {
   agent: Doc<"agents">;
   onClick?: () => void;
+  onDelete?: () => void;
 }
 
-export function AgentSidebarItem({ agent, onClick }: AgentSidebarItemProps) {
+export function AgentSidebarItem({ agent, onClick, onDelete }: AgentSidebarItemProps) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const initials = getInitials(agent.displayName);
@@ -100,9 +102,18 @@ export function AgentSidebarItem({ agent, onClick }: AgentSidebarItemProps) {
           </span>
           <span className={`truncate text-xs ${isDisabled ? "" : "text-sidebar-foreground/70"}`}>{agent.role}</span>
         </div>
-        <span
-          className={`h-2 w-2 shrink-0 rounded-full transition-colors duration-200 ${statusStyle}`}
-        />
+        {onDelete ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full transition-colors duration-200 ${statusStyle}`}
+          />
+        )}
       </SidebarMenuButton>
     </SidebarMenuItem>
   );

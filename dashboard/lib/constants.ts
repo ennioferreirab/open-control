@@ -67,6 +67,9 @@ export const AUTHOR_TYPE = {
   SYSTEM: "system",
 } as const;
 
+// System agent names (agents that cannot be disabled, excluded from task routing)
+export const SYSTEM_AGENT_NAMES = new Set(["lead-agent", "mc-agent"]);
+
 // Derived TypeScript types for use in function signatures and component props
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
 export type TrustLevel = (typeof TRUST_LEVEL)[keyof typeof TRUST_LEVEL];

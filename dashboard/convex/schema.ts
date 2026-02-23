@@ -73,8 +73,10 @@ export default defineSchema({
       v.literal("crashed"),
     ),
     enabled: v.optional(v.boolean()),
+    isSystem: v.optional(v.boolean()),
     model: v.optional(v.string()),
     lastActiveAt: v.optional(v.string()),
+    deletedAt: v.optional(v.string()),
   })
     .index("by_name", ["name"])
     .index("by_status", ["status"]),
@@ -104,6 +106,7 @@ export default defineSchema({
       v.literal("agent_config_updated"),
       v.literal("agent_activated"),
       v.literal("agent_deactivated"),
+      v.literal("agent_deleted"),
       v.literal("bulk_clear_done"),
       v.literal("manual_task_status_changed"),
       v.literal("file_attached"),

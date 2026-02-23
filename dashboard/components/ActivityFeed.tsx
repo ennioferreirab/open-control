@@ -77,7 +77,7 @@ export function ActivityFeed() {
   // Reconnecting state: had data before but now loading
   if (activities === undefined && hadDataRef.current) {
     return (
-      <div className="p-4">
+      <div className="flex-1 p-4">
         <p className="text-xs text-muted-foreground italic">Reconnecting...</p>
       </div>
     );
@@ -89,14 +89,14 @@ export function ActivityFeed() {
   // Empty state
   if (activities.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground italic p-4">
-        Waiting for activity...
-      </p>
+      <div className="flex-1 p-4">
+        <p className="text-sm text-muted-foreground italic">Waiting for activity...</p>
+      </div>
     );
   }
 
   return (
-    <div className="relative h-full flex flex-col">
+    <div className="relative flex-1 min-h-0 flex flex-col">
       <ScrollArea ref={scrollAreaRef} className="flex-1">
         <div className="p-2 space-y-1">
           {activities.map((activity) => (

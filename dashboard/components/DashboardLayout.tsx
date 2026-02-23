@@ -92,7 +92,7 @@ export function DashboardLayout() {
             <TaskInput />
           </div>
 
-          <div className="flex-1 overflow-hidden px-6 py-4">
+          <div className="flex-1 overflow-hidden px-6 py-4 flex flex-col min-h-0">
             <KanbanBoard onTaskClick={(taskId) => setSelectedTaskId(taskId)} />
           </div>
         </div>
