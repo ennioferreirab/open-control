@@ -43,6 +43,7 @@ export function AgentSidebar() {
   const [systemOpen, setSystemOpen] = useState(true);
   const [deleteMode, setDeleteMode] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<{ name: string; displayName: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { regularAgents, systemAgents } = useMemo(() => {
     if (!agents) return { regularAgents: [], systemAgents: [] };
@@ -71,7 +72,8 @@ export function AgentSidebar() {
             <button
               onClick={() => setDeleteMode((prev) => !prev)}
               className={`ml-auto transition-colors ${deleteMode ? "text-destructive" : "text-muted-foreground hover:text-destructive"}`}
-              title={deleteMode ? "Exit delete mode" : "Delete an agent"}
+              aria-label={deleteMode ? "Exit delete mode" : "Delete an agent"}
+              aria-pressed={deleteMode}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -146,7 +148,7 @@ export function AgentSidebar() {
       open={showCreateSheet}
       onClose={() => setShowCreateSheet(false)}
     />
-    <AlertDialog open={!!agentToDelete} onOpenChange={(open) => !open && setAgentToDelete(null)}>
+    <AlertDialog open={!!agentToDelete} onOpenChange={(open) => { if (!open) { setAgentToDelete(null); setDeleteMode(false); } }}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete agent?</AlertDialogTitle>
@@ -158,15 +160,23 @@ export function AgentSidebar() {
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            disabled={isDeleting}
             onClick={async () => {
-              if (agentToDelete) {
-                await softDeleteAgent({ agentName: agentToDelete.name });
-                setAgentToDelete(null);
-                setDeleteMode(false);
+              if (agentToDelete && !isDeleting) {
+                setIsDeleting(true);
+                try {
+                  await softDeleteAgent({ agentName: agentToDelete.name });
+                  setAgentToDelete(null);
+                  setDeleteMode(false);
+                } catch {
+                  // Keep dialog open so user can retry
+                } finally {
+                  setIsDeleting(false);
+                }
               }
             }}
           >
-            Delete
+            {isDeleting ? "Deleting…" : "Delete"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

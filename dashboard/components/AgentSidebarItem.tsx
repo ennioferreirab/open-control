@@ -106,6 +106,7 @@ export function AgentSidebarItem({ agent, onClick, onDelete }: AgentSidebarItemP
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+            aria-label={`Delete ${agent.displayName}`}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
