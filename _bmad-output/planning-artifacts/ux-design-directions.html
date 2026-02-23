@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nanobot Mission Control — Design Directions</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #0f172a; }
+
+  /* Navigation */
+  .nav { position: fixed; top: 0; left: 0; right: 0; background: #fff; border-bottom: 1px solid #e2e8f0; padding: 12px 24px; display: flex; align-items: center; gap: 16px; z-index: 100; }
+  .nav h1 { font-size: 16px; font-weight: 700; color: #0f172a; white-space: nowrap; }
+  .nav-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .nav-tab { padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid #e2e8f0; background: #fff; color: #64748b; transition: all 0.2s; }
+  .nav-tab:hover { background: #f8fafc; color: #0f172a; }
+  .nav-tab.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+
+  /* Mockup Container */
+  .mockup-container { margin-top: 60px; padding: 24px; }
+  .mockup { display: none; }
+  .mockup.active { display: block; }
+  .mockup-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .mockup-desc { font-size: 14px; color: #64748b; margin-bottom: 20px; }
+
+  /* === SHARED COMPONENT STYLES === */
+  .dashboard { display: grid; height: calc(100vh - 140px); border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; background: #fff; }
+
+  /* Sidebar */
+  .sidebar { background: #f8fafc; border-right: 1px solid #e2e8f0; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .sidebar-header { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; }
+  .agent-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
+  .agent-item:hover { background: #e2e8f0; }
+  .agent-avatar { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #fff; flex-shrink: 0; }
+  .agent-info { flex: 1; min-width: 0; }
+  .agent-name { font-size: 13px; font-weight: 500; }
+  .agent-role { font-size: 11px; color: #94a3b8; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-active { background: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.2); }
+  .status-idle { background: #94a3b8; }
+  .status-error { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
+
+  /* Kanban */
+  .kanban { display: grid; gap: 16px; padding: 16px; overflow-x: auto; }
+  .kanban-5col { grid-template-columns: repeat(5, minmax(200px, 1fr)); }
+  .column { background: #f8fafc; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 200px; }
+  .column-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 8px; }
+  .column-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .column-count { font-size: 11px; color: #94a3b8; background: #e2e8f0; padding: 1px 7px; border-radius: 99px; }
+  .column-accent { width: 3px; height: 14px; border-radius: 2px; }
+
+  /* Cards */
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; }
+  .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-color: #cbd5e1; }
+  .card-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; line-height: 1.4; }
+  .card-meta { display: flex; align-items: center; justify-content: space-between; }
+  .card-agent { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #64748b; }
+  .card-agent-dot { width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: #fff; }
+  .card-badge { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 99px; }
+
+  /* Activity Feed */
+  .feed { background: #f8fafc; border-left: 1px solid #e2e8f0; padding: 16px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .feed-header { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; padding-bottom: 8px; }
+  .feed-item { font-size: 12px; color: #64748b; padding: 8px; border-radius: 6px; background: #fff; border: 1px solid #e2e8f0; line-height: 1.5; }
+  .feed-time { font-size: 10px; color: #94a3b8; font-family: ui-monospace, monospace; }
+  .feed-agent { font-weight: 500; color: #0f172a; }
+
+  /* Task Input */
+  .task-input-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; background: #fff; }
+  .task-input { flex: 1; padding: 8px 14px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; outline: none; background: #f8fafc; }
+  .task-input:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+  .task-input::placeholder { color: #94a3b8; }
+  .btn-primary { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; border: none; cursor: pointer; background: #3b82f6; color: #fff; }
+  .btn-primary:hover { background: #2563eb; }
+
+  /* Approve/Deny buttons on card */
+  .card-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .btn-approve { padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; border: none; cursor: pointer; background: #22c55e; color: #fff; }
+  .btn-deny { padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; border: none; cursor: pointer; background: #fff; color: #ef4444; border: 1px solid #fecaca; }
+
+  /* Pulse animation */
+  @keyframes pulse-blue { 0%,100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); } 50% { box-shadow: 0 0 0 4px rgba(59,130,246,0.15); } }
+  .card-pulse { animation: pulse-blue 2s ease-in-out infinite; border-color: #93c5fd; }
+
+  /* Header bar */
+  .dash-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; }
+  .dash-title { font-size: 18px; font-weight: 700; }
+  .dash-subtitle { font-size: 12px; color: #64748b; }
+
+  /* Badge HITL */
+  .hitl-badge { background: #fef3c7; color: #d97706; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+
+  /* Direction-specific overrides */
+
+  /* Direction A: Classic Clean */
+
+  /* Direction B: Compact Dense */
+  .dir-b .card { padding: 8px 10px; }
+  .dir-b .card-title { font-size: 12px; margin-bottom: 4px; }
+  .dir-b .column { gap: 4px; padding: 8px; }
+  .dir-b .kanban { gap: 8px; padding: 12px; }
+  .dir-b .agent-item { padding: 6px; gap: 8px; }
+  .dir-b .agent-avatar { width: 26px; height: 26px; font-size: 11px; border-radius: 6px; }
+
+  /* Direction C: Board-First (no sidebar visible by default) */
+  .dir-c .sidebar { width: 56px; padding: 12px 8px; align-items: center; }
+  .dir-c .sidebar .agent-info, .dir-c .sidebar .sidebar-header { display: none; }
+  .dir-c .sidebar .agent-avatar { width: 36px; height: 36px; font-size: 15px; }
+  .dir-c .sidebar .status-dot { position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; border: 2px solid #f8fafc; }
+  .dir-c .agent-item { position: relative; padding: 4px; justify-content: center; }
+
+  /* Direction D: Activity-Forward */
+  .dir-d .feed { min-width: 320px; }
+  .dir-d .feed-item { padding: 10px 12px; }
+
+  /* Direction E: Card-Rich */
+  .dir-e .card { padding: 14px; border-radius: 10px; }
+  .dir-e .card-title { font-size: 14px; font-weight: 600; }
+  .dir-e .card-description { font-size: 12px; color: #64748b; margin-bottom: 8px; line-height: 1.4; }
+  .dir-e .card-tags { display: flex; gap: 4px; margin-bottom: 8px; }
+  .dir-e .card-tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b; }
+
+  /* Direction F: Minimal Focus */
+  .dir-f .column { background: transparent; border-radius: 0; border-right: 1px solid #e2e8f0; padding: 12px 16px; }
+  .dir-f .column:last-child { border-right: none; }
+  .dir-f .card { border: none; border-bottom: 1px solid #f1f5f9; border-radius: 4px; box-shadow: none; }
+  .dir-f .card:hover { background: #f8fafc; box-shadow: none; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <h1>Mission Control — Design Directions</h1>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="showMockup('a')">A: Classic Clean</div>
+    <div class="nav-tab" onclick="showMockup('b')">B: Compact Dense</div>
+    <div class="nav-tab" onclick="showMockup('c')">C: Board-First</div>
+    <div class="nav-tab" onclick="showMockup('d')">D: Activity-Forward</div>
+    <div class="nav-tab" onclick="showMockup('e')">E: Card-Rich</div>
+    <div class="nav-tab" onclick="showMockup('f')">F: Minimal Focus</div>
+  </div>
+</nav>
+
+<div class="mockup-container">
+
+  <!-- ============ DIRECTION A: Classic Clean ============ -->
+  <div class="mockup active" id="mockup-a">
+    <div class="mockup-title">Direction A: Classic Clean</div>
+    <div class="mockup-desc">Full sidebar + Kanban + feed. Balanced layout, ShadCN defaults. The Trello-inspired baseline.</div>
+    <div class="dashboard" style="grid-template-columns: 240px 1fr 280px;">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">Agents</div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#3b82f6;">LA</div>
+          <div class="agent-info"><div class="agent-name">Lead Agent</div><div class="agent-role">Task Router</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#8b5cf6;">FA</div>
+          <div class="agent-info"><div class="agent-name">Finance Agent</div><div class="agent-role">Budget & Expenses</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#f59e0b;">CA</div>
+          <div class="agent-info"><div class="agent-name">Calendar Agent</div><div class="agent-role">Scheduling</div></div>
+          <div class="status-dot status-idle"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#ef4444;">RA</div>
+          <div class="agent-info"><div class="agent-name">Research Agent</div><div class="agent-role">Analysis & Briefs</div></div>
+          <div class="status-dot status-error"></div>
+        </div>
+        <div style="flex:1;"></div>
+        <div style="font-size:11px; color:#94a3b8; padding:8px;">3 active · 1 crashed</div>
+      </div>
+
+      <!-- Main Content -->
+      <div style="display:flex; flex-direction:column; overflow:hidden;">
+        <div class="dash-header">
+          <div><div class="dash-title">Mission Control</div><div class="dash-subtitle">4 tasks active · 2 awaiting review</div></div>
+        </div>
+        <div class="task-input-bar">
+          <input class="task-input" placeholder="Type a task... (e.g., 'Organize my finances for February')" />
+          <button class="btn-primary">Create</button>
+        </div>
+        <div class="kanban kanban-5col" style="flex:1; overflow-y:auto; align-content:start;">
+          <!-- Inbox -->
+          <div class="column">
+            <div class="column-header">
+              <div class="column-title"><div class="column-accent" style="background:#8b5cf6;"></div> Inbox</div>
+              <span class="column-count">1</span>
+            </div>
+            <div class="card">
+              <div class="card-title">Research AI agent trends for blog post</div>
+              <div class="card-meta">
+                <span class="card-agent"><div class="card-agent-dot" style="background:#94a3b8;">?</div> Unassigned</span>
+                <span class="card-badge" style="background:#f5f3ff; color:#8b5cf6;">New</span>
+              </div>
+            </div>
+          </div>
+          <!-- Assigned -->
+          <div class="column">
+            <div class="column-header">
+              <div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> Assigned</div>
+              <span class="column-count">1</span>
+            </div>
+            <div class="card">
+              <div class="card-title">Sync Google Calendar for next week</div>
+              <div class="card-meta">
+                <span class="card-agent"><div class="card-agent-dot" style="background:#f59e0b;">CA</div> Calendar</span>
+                <span class="card-badge" style="background:#eff6ff; color:#3b82f6;">Assigned</span>
+              </div>
+            </div>
+          </div>
+          <!-- In Progress -->
+          <div class="column">
+            <div class="column-header">
+              <div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> In Progress</div>
+              <span class="column-count">2</span>
+            </div>
+            <div class="card card-pulse">
+              <div class="card-title">Organize finances for February</div>
+              <div class="card-meta">
+                <span class="card-agent"><div class="card-agent-dot" style="background:#8b5cf6;">FA</div> Finance</span>
+                <span class="card-badge" style="background:#eff6ff; color:#3b82f6;">Step 2/3</span>
+              </div>
+            </div>
+            <div class="card card-pulse">
+              <div class="card-title">Compile weekly research digest</div>
+              <div class="card-meta">
+                <span class="card-agent"><div class="card-agent-dot" style="background:#ef4444;">RA</div> Research</span>
+                <span class="card-badge" style="background:#fef2f2; color:#ef4444;">Retrying</span>
+              </div>
+            </div>
+          </div>
+          <!-- Review -->
+          <div class="column">
+            <div class="column-header">
+              <div class="column-title"><div class="column-accent" style="background:#f59e0b;"></div> Review <span class="hitl-badge" style="margin-left:6px;">2 HITL</span></div>
+            </div>
+            <div class="card" style="border-color:#fbbf24;">
+              <div class="card-title">Monthly budget report — January</div>
+              <div class="card-meta">
+                <span class="card-agent"><div class="card-agent-dot" style="background:#8b5cf6;">FA</div> Finance</span>
+                <span class="card-badge" style="background:#fef3c7; color:#d97706;">Needs Approval</span>
+              </div>
+              <div class="card-actions">
+                <button class="btn-approve">Approve</button>
+                <button class="btn-deny">Deny</button>
+              </div>
+            </div>
+            <div class="card" style="border-color:#fbbf24;">
+              <div class="card-title">Calendar optimization suggestions</div>
+              <div class="card-meta">
+                <span class="card-agent"><div class="card-agent-dot" style="background:#f59e0b;">CA</div> Calendar</span>
+                <span class="card-badge" style="background:#fef3c7; color:#d97706;">Needs Approval</span>
+              </div>
+              <div class="card-actions">
+                <button class="btn-approve">Approve</button>
+                <button class="btn-deny">Deny</button>
+              </div>
+            </div>
+          </div>
+          <!-- Done -->
+          <div class="column">
+            <div class="column-header">
+              <div class="column-title"><div class="column-accent" style="background:#22c55e;"></div> Done</div>
+              <span class="column-count">3</span>
+            </div>
+            <div class="card" style="opacity:0.7;">
+              <div class="card-title">Set up recurring finance task</div>
+              <div class="card-meta">
+                <span class="card-agent"><div class="card-agent-dot" style="background:#3b82f6;">LA</div> Lead</span>
+                <span class="card-badge" style="background:#f0fdf4; color:#22c55e;">Done</span>
+              </div>
+            </div>
+            <div class="card" style="opacity:0.7;">
+              <div class="card-title">Research meeting prep notes</div>
+              <div class="card-meta">
+                <span class="card-agent"><div class="card-agent-dot" style="background:#ef4444;">RA</div> Research</span>
+                <span class="card-badge" style="background:#f0fdf4; color:#22c55e;">Done</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Feed -->
+      <div class="feed">
+        <div class="feed-header">Activity Feed</div>
+        <div class="feed-item"><span class="feed-time">09:42</span> <span class="feed-agent">Lead Agent</span> assigned "Sync Google Calendar" to Calendar Agent</div>
+        <div class="feed-item"><span class="feed-time">09:41</span> <span class="feed-agent">Finance Agent</span> completed step 1/3 on "Organize finances"</div>
+        <div class="feed-item"><span class="feed-time">09:40</span> <span class="feed-agent">Research Agent</span> retry attempt 2/3 on "Compile weekly digest"</div>
+        <div class="feed-item"><span class="feed-time">09:38</span> <span class="feed-agent">Finance Agent</span> submitted "Monthly budget report" for HITL review</div>
+        <div class="feed-item"><span class="feed-time">09:35</span> <span class="feed-agent">Calendar Agent</span> submitted "Calendar optimization" for review</div>
+        <div class="feed-item"><span class="feed-time">09:30</span> <span class="feed-agent">Lead Agent</span> created execution plan for "Organize finances" (3 steps)</div>
+        <div class="feed-item"><span class="feed-time">09:28</span> User created task "Research AI agent trends"</div>
+        <div class="feed-item" style="border-color:#fecaca;"><span class="feed-time">09:25</span> <span class="feed-agent" style="color:#ef4444;">Research Agent</span> encountered error: API rate limit exceeded</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DIRECTION B: Compact Dense ============ -->
+  <div class="mockup" id="mockup-b">
+    <div class="mockup-title">Direction B: Compact Dense</div>
+    <div class="mockup-desc">Tighter spacing, smaller cards, more visible at once. For power users who want maximum information density.</div>
+    <div class="dashboard dir-b" style="grid-template-columns: 200px 1fr 240px;">
+      <div class="sidebar">
+        <div class="sidebar-header">Agents</div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#3b82f6;">LA</div>
+          <div class="agent-info"><div class="agent-name">Lead Agent</div><div class="agent-role">Router</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#8b5cf6;">FA</div>
+          <div class="agent-info"><div class="agent-name">Finance</div><div class="agent-role">Budget</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#f59e0b;">CA</div>
+          <div class="agent-info"><div class="agent-name">Calendar</div><div class="agent-role">Schedule</div></div>
+          <div class="status-dot status-idle"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#ef4444;">RA</div>
+          <div class="agent-info"><div class="agent-name">Research</div><div class="agent-role">Analysis</div></div>
+          <div class="status-dot status-error"></div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; overflow:hidden;">
+        <div class="task-input-bar" style="padding:8px 12px;">
+          <input class="task-input" placeholder="New task..." style="padding:6px 12px; font-size:12px;" />
+          <button class="btn-primary" style="padding:6px 12px; font-size:12px;">+</button>
+        </div>
+        <div class="kanban kanban-5col" style="flex:1; overflow-y:auto; align-content:start;">
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#8b5cf6;"></div> Inbox</div><span class="column-count">1</span></div>
+            <div class="card"><div class="card-title">Research AI agent trends</div><div class="card-meta"><span class="card-agent" style="font-size:10px;">Unassigned</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> Assigned</div><span class="column-count">1</span></div>
+            <div class="card"><div class="card-title">Sync Google Calendar</div><div class="card-meta"><span class="card-agent" style="font-size:10px;"><div class="card-agent-dot" style="background:#f59e0b; width:14px; height:14px; font-size:8px;">CA</div> Calendar</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> In Progress</div><span class="column-count">2</span></div>
+            <div class="card card-pulse"><div class="card-title">Organize finances Feb</div><div class="card-meta"><span class="card-agent" style="font-size:10px;"><div class="card-agent-dot" style="background:#8b5cf6; width:14px; height:14px; font-size:8px;">FA</div> Finance · 2/3</span></div></div>
+            <div class="card card-pulse"><div class="card-title">Weekly research digest</div><div class="card-meta"><span class="card-agent" style="font-size:10px;"><div class="card-agent-dot" style="background:#ef4444; width:14px; height:14px; font-size:8px;">RA</div> Research</span><span class="card-badge" style="background:#fef2f2; color:#ef4444; font-size:9px;">Retry</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#f59e0b;"></div> Review</div><span class="hitl-badge">2</span></div>
+            <div class="card" style="border-color:#fbbf24;"><div class="card-title">Monthly budget Jan</div><div class="card-actions"><button class="btn-approve" style="font-size:10px; padding:3px 10px;">✓</button><button class="btn-deny" style="font-size:10px; padding:3px 10px;">✗</button></div></div>
+            <div class="card" style="border-color:#fbbf24;"><div class="card-title">Calendar optimization</div><div class="card-actions"><button class="btn-approve" style="font-size:10px; padding:3px 10px;">✓</button><button class="btn-deny" style="font-size:10px; padding:3px 10px;">✗</button></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#22c55e;"></div> Done</div><span class="column-count">3</span></div>
+            <div class="card" style="opacity:0.6;"><div class="card-title">Set up recurring finance</div></div>
+            <div class="card" style="opacity:0.6;"><div class="card-title">Meeting prep notes</div></div>
+            <div class="card" style="opacity:0.6;"><div class="card-title">Expense categorization</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="feed" style="font-size:11px;">
+        <div class="feed-header">Activity</div>
+        <div class="feed-item" style="padding:6px; font-size:11px;"><span class="feed-time">09:42</span> Lead → Calendar: assigned sync task</div>
+        <div class="feed-item" style="padding:6px; font-size:11px;"><span class="feed-time">09:41</span> Finance: step 1/3 done</div>
+        <div class="feed-item" style="padding:6px; font-size:11px;"><span class="feed-time">09:40</span> Research: retry 2/3</div>
+        <div class="feed-item" style="padding:6px; font-size:11px;"><span class="feed-time">09:38</span> Finance → HITL: budget report</div>
+        <div class="feed-item" style="padding:6px; font-size:11px;"><span class="feed-time">09:35</span> Calendar → HITL: optimization</div>
+        <div class="feed-item" style="padding:6px; font-size:11px; border-color:#fecaca;"><span class="feed-time">09:25</span> <span style="color:#ef4444;">Research: API error</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DIRECTION C: Board-First ============ -->
+  <div class="mockup" id="mockup-c">
+    <div class="mockup-title">Direction C: Board-First</div>
+    <div class="mockup-desc">Collapsed sidebar (icon-only), maximized Kanban space. Agents visible as icons, expand on hover. Board dominates.</div>
+    <div class="dashboard dir-c" style="grid-template-columns: 56px 1fr 280px;">
+      <div class="sidebar" style="align-items:center;">
+        <div class="agent-item" title="Lead Agent — Active">
+          <div class="agent-avatar" style="background:#3b82f6;">LA</div>
+          <div class="status-dot status-active" style="position:absolute; bottom:2px; right:2px; border:2px solid #f8fafc;"></div>
+        </div>
+        <div class="agent-item" title="Finance Agent — Active">
+          <div class="agent-avatar" style="background:#8b5cf6;">FA</div>
+          <div class="status-dot status-active" style="position:absolute; bottom:2px; right:2px; border:2px solid #f8fafc;"></div>
+        </div>
+        <div class="agent-item" title="Calendar Agent — Idle">
+          <div class="agent-avatar" style="background:#f59e0b;">CA</div>
+          <div class="status-dot status-idle" style="position:absolute; bottom:2px; right:2px; border:2px solid #f8fafc;"></div>
+        </div>
+        <div class="agent-item" title="Research Agent — Crashed">
+          <div class="agent-avatar" style="background:#ef4444;">RA</div>
+          <div class="status-dot status-error" style="position:absolute; bottom:2px; right:2px; border:2px solid #f8fafc;"></div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; overflow:hidden;">
+        <div class="dash-header">
+          <div><div class="dash-title">Mission Control</div><div class="dash-subtitle">4 active · 2 review · 1 error</div></div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span class="hitl-badge">2 approvals pending</span>
+          </div>
+        </div>
+        <div class="task-input-bar">
+          <input class="task-input" placeholder="Delegate a task to your agents..." />
+          <button class="btn-primary">Send</button>
+        </div>
+        <div class="kanban kanban-5col" style="flex:1; overflow-y:auto; align-content:start;">
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#8b5cf6;"></div> Inbox</div><span class="column-count">1</span></div>
+            <div class="card"><div class="card-title">Research AI agent trends for blog post</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#94a3b8;">?</div> Unassigned</span><span class="card-badge" style="background:#f5f3ff; color:#8b5cf6;">New</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> Assigned</div><span class="column-count">1</span></div>
+            <div class="card"><div class="card-title">Sync Google Calendar for next week</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#f59e0b;">CA</div> Calendar</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> In Progress</div><span class="column-count">2</span></div>
+            <div class="card card-pulse"><div class="card-title">Organize finances for February</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#8b5cf6;">FA</div> Finance</span><span class="card-badge" style="background:#eff6ff; color:#3b82f6;">Step 2/3</span></div></div>
+            <div class="card card-pulse"><div class="card-title">Compile weekly research digest</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#ef4444;">RA</div> Research</span><span class="card-badge" style="background:#fef2f2; color:#ef4444;">Retrying</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#f59e0b;"></div> Review</div><span class="hitl-badge">2</span></div>
+            <div class="card" style="border-color:#fbbf24;"><div class="card-title">Monthly budget report — January</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#8b5cf6;">FA</div> Finance</span></div><div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-deny">Deny</button></div></div>
+            <div class="card" style="border-color:#fbbf24;"><div class="card-title">Calendar optimization suggestions</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#f59e0b;">CA</div> Calendar</span></div><div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-deny">Deny</button></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#22c55e;"></div> Done</div><span class="column-count">3</span></div>
+            <div class="card" style="opacity:0.7;"><div class="card-title">Set up recurring finance task</div><div class="card-meta"><span class="card-badge" style="background:#f0fdf4; color:#22c55e;">Done</span></div></div>
+            <div class="card" style="opacity:0.7;"><div class="card-title">Research meeting prep notes</div><div class="card-meta"><span class="card-badge" style="background:#f0fdf4; color:#22c55e;">Done</span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="feed">
+        <div class="feed-header">Activity Feed</div>
+        <div class="feed-item"><span class="feed-time">09:42</span> <span class="feed-agent">Lead Agent</span> assigned "Sync Calendar" to Calendar Agent</div>
+        <div class="feed-item"><span class="feed-time">09:41</span> <span class="feed-agent">Finance Agent</span> completed step 1/3</div>
+        <div class="feed-item"><span class="feed-time">09:40</span> <span class="feed-agent">Research Agent</span> retry 2/3</div>
+        <div class="feed-item"><span class="feed-time">09:38</span> <span class="feed-agent">Finance Agent</span> → HITL review</div>
+        <div class="feed-item" style="border-color:#fecaca;"><span class="feed-time">09:25</span> <span style="color:#ef4444;">Research Agent error</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DIRECTION D: Activity-Forward ============ -->
+  <div class="mockup" id="mockup-d">
+    <div class="mockup-title">Direction D: Activity-Forward</div>
+    <div class="mockup-desc">Wider activity feed as a primary co-surface. For users who want to read the narrative of what agents are doing, not just see board state.</div>
+    <div class="dashboard dir-d" style="grid-template-columns: 240px 1fr 360px;">
+      <div class="sidebar">
+        <div class="sidebar-header">Agents</div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#3b82f6;">LA</div>
+          <div class="agent-info"><div class="agent-name">Lead Agent</div><div class="agent-role">Task Router</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#8b5cf6;">FA</div>
+          <div class="agent-info"><div class="agent-name">Finance Agent</div><div class="agent-role">Budget & Expenses</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#f59e0b;">CA</div>
+          <div class="agent-info"><div class="agent-name">Calendar Agent</div><div class="agent-role">Scheduling</div></div>
+          <div class="status-dot status-idle"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#ef4444;">RA</div>
+          <div class="agent-info"><div class="agent-name">Research Agent</div><div class="agent-role">Analysis & Briefs</div></div>
+          <div class="status-dot status-error"></div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; overflow:hidden;">
+        <div class="task-input-bar">
+          <input class="task-input" placeholder="Type a task..." />
+          <button class="btn-primary">Create</button>
+        </div>
+        <div class="kanban kanban-5col" style="flex:1; overflow-y:auto; align-content:start;">
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#8b5cf6;"></div> Inbox</div><span class="column-count">1</span></div>
+            <div class="card"><div class="card-title">Research AI trends</div><div class="card-meta"><span class="card-badge" style="background:#f5f3ff; color:#8b5cf6;">New</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> Assigned</div><span class="column-count">1</span></div>
+            <div class="card"><div class="card-title">Sync Calendar</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#f59e0b;">CA</div></span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> In Progress</div><span class="column-count">2</span></div>
+            <div class="card card-pulse"><div class="card-title">Organize finances</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#8b5cf6;">FA</div></span><span class="card-badge" style="background:#eff6ff; color:#3b82f6;">2/3</span></div></div>
+            <div class="card card-pulse"><div class="card-title">Weekly digest</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#ef4444;">RA</div></span><span class="card-badge" style="background:#fef2f2; color:#ef4444;">Retry</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#f59e0b;"></div> Review</div><span class="hitl-badge">2</span></div>
+            <div class="card" style="border-color:#fbbf24;"><div class="card-title">Budget report Jan</div><div class="card-actions"><button class="btn-approve">✓</button><button class="btn-deny">✗</button></div></div>
+            <div class="card" style="border-color:#fbbf24;"><div class="card-title">Calendar suggestions</div><div class="card-actions"><button class="btn-approve">✓</button><button class="btn-deny">✗</button></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#22c55e;"></div> Done</div><span class="column-count">3</span></div>
+            <div class="card" style="opacity:0.6;"><div class="card-title">Recurring finance setup</div></div>
+            <div class="card" style="opacity:0.6;"><div class="card-title">Meeting prep notes</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="feed" style="min-width:360px;">
+        <div class="feed-header">Live Activity Stream</div>
+        <div class="feed-item" style="padding:12px;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span class="feed-agent">Lead Agent</span><span class="feed-time">09:42</span></div>
+          Assigned "Sync Google Calendar for next week" to <strong>Calendar Agent</strong>. Execution plan: 1 step, estimated 30s.
+        </div>
+        <div class="feed-item" style="padding:12px;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span class="feed-agent">Finance Agent</span><span class="feed-time">09:41</span></div>
+          Completed step 1/3 on "Organize finances for February": Fetched transaction data from bank API (47 transactions found).
+        </div>
+        <div class="feed-item" style="padding:12px; border-color:#fecaca;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span class="feed-agent" style="color:#ef4444;">Research Agent</span><span class="feed-time">09:40</span></div>
+          Retry attempt 2/3 on "Compile weekly digest". Error: API rate limit exceeded. Next retry in 30s with exponential backoff.
+        </div>
+        <div class="feed-item" style="padding:12px;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span class="feed-agent">Finance Agent</span><span class="feed-time">09:38</span></div>
+          Submitted "Monthly budget report — January" for <strong>HITL review</strong>. Agent-reviewed by Lead Agent (approved). Awaiting human approval.
+        </div>
+        <div class="feed-item" style="padding:12px;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span class="feed-agent">Lead Agent</span><span class="feed-time">09:30</span></div>
+          Created execution plan for "Organize finances": 3 steps — (1) fetch transactions, (2) categorize expenses, (3) generate summary report.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DIRECTION E: Card-Rich ============ -->
+  <div class="mockup" id="mockup-e">
+    <div class="mockup-title">Direction E: Card-Rich</div>
+    <div class="mockup-desc">Larger cards with description preview, tags, and more metadata visible without clicking. Trade-off: fewer cards visible at once.</div>
+    <div class="dashboard dir-e" style="grid-template-columns: 240px 1fr 280px;">
+      <div class="sidebar">
+        <div class="sidebar-header">Agents</div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#3b82f6;">LA</div>
+          <div class="agent-info"><div class="agent-name">Lead Agent</div><div class="agent-role">Task Router</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#8b5cf6;">FA</div>
+          <div class="agent-info"><div class="agent-name">Finance Agent</div><div class="agent-role">Budget & Expenses</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#f59e0b;">CA</div>
+          <div class="agent-info"><div class="agent-name">Calendar Agent</div><div class="agent-role">Scheduling</div></div>
+          <div class="status-dot status-idle"></div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; overflow:hidden;">
+        <div class="task-input-bar">
+          <input class="task-input" placeholder="Type a task..." />
+          <button class="btn-primary">Create</button>
+        </div>
+        <div class="kanban kanban-5col" style="flex:1; overflow-y:auto; align-content:start;">
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#8b5cf6;"></div> Inbox</div><span class="column-count">1</span></div>
+            <div class="card">
+              <div class="card-title">Research AI agent trends for blog post</div>
+              <div class="card-description">Find latest developments in multi-agent orchestration, tool use, and autonomous workflows.</div>
+              <div class="card-tags"><span class="card-tag">research</span><span class="card-tag">blog</span></div>
+              <div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#94a3b8;">?</div> Unassigned</span><span class="card-badge" style="background:#f5f3ff; color:#8b5cf6;">New</span></div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> Assigned</div><span class="column-count">1</span></div>
+            <div class="card">
+              <div class="card-title">Sync Google Calendar for next week</div>
+              <div class="card-description">Pull events from Feb 24–28 and create daily summary.</div>
+              <div class="card-tags"><span class="card-tag">calendar</span><span class="card-tag">recurring</span></div>
+              <div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#f59e0b;">CA</div> Calendar Agent</span></div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#3b82f6;"></div> In Progress</div><span class="column-count">1</span></div>
+            <div class="card card-pulse">
+              <div class="card-title">Organize finances for February</div>
+              <div class="card-description">Step 2/3: Categorizing 47 transactions by expense type.</div>
+              <div class="card-tags"><span class="card-tag">finance</span><span class="card-tag">monthly</span></div>
+              <div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#8b5cf6;">FA</div> Finance Agent</span><span class="card-badge" style="background:#eff6ff; color:#3b82f6;">Step 2/3</span></div>
+              <div style="margin-top:8px; height:4px; background:#e2e8f0; border-radius:2px;"><div style="height:100%; width:66%; background:#3b82f6; border-radius:2px;"></div></div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#f59e0b;"></div> Review</div><span class="hitl-badge">1</span></div>
+            <div class="card" style="border-color:#fbbf24;">
+              <div class="card-title">Monthly budget report — January</div>
+              <div class="card-description">Complete budget analysis with income/expense breakdown and savings rate.</div>
+              <div class="card-tags"><span class="card-tag">finance</span><span class="card-tag">report</span></div>
+              <div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#8b5cf6;">FA</div> Finance Agent</span><span class="card-badge" style="background:#fef3c7; color:#d97706;">HITL</span></div>
+              <div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-deny">Deny with feedback</button></div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title"><div class="column-accent" style="background:#22c55e;"></div> Done</div><span class="column-count">2</span></div>
+            <div class="card" style="opacity:0.7;">
+              <div class="card-title">Set up recurring finance task</div>
+              <div class="card-meta"><span class="card-badge" style="background:#f0fdf4; color:#22c55e;">Done</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="feed">
+        <div class="feed-header">Activity Feed</div>
+        <div class="feed-item"><span class="feed-time">09:42</span> <span class="feed-agent">Lead Agent</span> assigned Calendar sync</div>
+        <div class="feed-item"><span class="feed-time">09:41</span> <span class="feed-agent">Finance Agent</span> completed step 1/3</div>
+        <div class="feed-item"><span class="feed-time">09:38</span> <span class="feed-agent">Finance Agent</span> → HITL review</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DIRECTION F: Minimal Focus ============ -->
+  <div class="mockup" id="mockup-f">
+    <div class="mockup-title">Direction F: Minimal Focus</div>
+    <div class="mockup-desc">Ultra-minimal aesthetic. No card borders, subtle dividers, maximum whitespace. Calm and quiet — content speaks for itself.</div>
+    <div class="dashboard dir-f" style="grid-template-columns: 240px 1fr 280px;">
+      <div class="sidebar" style="background:#fff; border-right:1px solid #f1f5f9;">
+        <div class="sidebar-header" style="color:#cbd5e1;">Agents</div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#3b82f6;">LA</div>
+          <div class="agent-info"><div class="agent-name">Lead Agent</div><div class="agent-role">Task Router</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#8b5cf6;">FA</div>
+          <div class="agent-info"><div class="agent-name">Finance Agent</div><div class="agent-role">Budget & Expenses</div></div>
+          <div class="status-dot status-active"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#f59e0b;">CA</div>
+          <div class="agent-info"><div class="agent-name">Calendar Agent</div><div class="agent-role">Scheduling</div></div>
+          <div class="status-dot status-idle"></div>
+        </div>
+        <div class="agent-item">
+          <div class="agent-avatar" style="background:#ef4444;">RA</div>
+          <div class="agent-info"><div class="agent-name">Research Agent</div><div class="agent-role">Analysis</div></div>
+          <div class="status-dot status-error"></div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; overflow:hidden; background:#fff;">
+        <div class="task-input-bar" style="border-bottom:1px solid #f1f5f9;">
+          <input class="task-input" placeholder="What do you need done?" style="background:#fff; border-color:#f1f5f9;" />
+          <button class="btn-primary" style="background:#0f172a; border-radius:6px;">Create</button>
+        </div>
+        <div class="kanban kanban-5col" style="flex:1; overflow-y:auto; align-content:start; background:#fff;">
+          <div class="column">
+            <div class="column-header"><div class="column-title" style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em;">Inbox</div></div>
+            <div class="card"><div class="card-title" style="font-size:14px;">Research AI agent trends</div><div class="card-meta"><span style="font-size:11px; color:#94a3b8;">Unassigned</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title" style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em;">Assigned</div></div>
+            <div class="card"><div class="card-title" style="font-size:14px;">Sync Google Calendar</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#f59e0b;">CA</div> Calendar</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title" style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em;">In Progress</div></div>
+            <div class="card" style="border-left:3px solid #3b82f6;"><div class="card-title" style="font-size:14px;">Organize finances</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#8b5cf6;">FA</div> Finance · 2/3</span></div></div>
+            <div class="card" style="border-left:3px solid #ef4444;"><div class="card-title" style="font-size:14px;">Weekly research digest</div><div class="card-meta"><span class="card-agent"><div class="card-agent-dot" style="background:#ef4444;">RA</div> Research</span><span style="font-size:10px; color:#ef4444;">retrying</span></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title" style="color:#d97706; font-size:11px; text-transform:uppercase; letter-spacing:0.05em;">Review</div></div>
+            <div class="card" style="border-left:3px solid #f59e0b;"><div class="card-title" style="font-size:14px;">Monthly budget report</div><div class="card-actions" style="margin-top:6px;"><button class="btn-approve">Approve</button><button class="btn-deny">Deny</button></div></div>
+            <div class="card" style="border-left:3px solid #f59e0b;"><div class="card-title" style="font-size:14px;">Calendar optimization</div><div class="card-actions" style="margin-top:6px;"><button class="btn-approve">Approve</button><button class="btn-deny">Deny</button></div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-title" style="color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.05em;">Done</div></div>
+            <div class="card" style="opacity:0.5;"><div class="card-title" style="font-size:14px;">Recurring finance setup</div></div>
+            <div class="card" style="opacity:0.5;"><div class="card-title" style="font-size:14px;">Meeting prep notes</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="feed" style="background:#fff; border-left:1px solid #f1f5f9;">
+        <div class="feed-header" style="color:#cbd5e1;">Activity</div>
+        <div class="feed-item" style="background:transparent; border:none; border-bottom:1px solid #f8fafc; border-radius:0;"><span class="feed-time">09:42</span> <span class="feed-agent">Lead Agent</span> assigned Calendar sync</div>
+        <div class="feed-item" style="background:transparent; border:none; border-bottom:1px solid #f8fafc; border-radius:0;"><span class="feed-time">09:41</span> <span class="feed-agent">Finance Agent</span> step 1/3 done</div>
+        <div class="feed-item" style="background:transparent; border:none; border-bottom:1px solid #f8fafc; border-radius:0;"><span class="feed-time">09:40</span> <span style="color:#ef4444;">Research retry 2/3</span></div>
+        <div class="feed-item" style="background:transparent; border:none; border-bottom:1px solid #f8fafc; border-radius:0;"><span class="feed-time">09:38</span> <span class="feed-agent">Finance</span> → HITL review</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function showMockup(id) {
+  document.querySelectorAll('.mockup').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('mockup-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+
+</body>
+</html>
