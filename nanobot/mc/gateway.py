@@ -501,6 +501,13 @@ async def main() -> None:
         except Exception:
             logger.exception("[gateway] Skills sync failed")
 
+        # Ensure default board exists (AC2)
+        try:
+            bridge.ensure_default_board()
+            logger.info("[gateway] Default board ensured")
+        except Exception:
+            logger.exception("[gateway] Failed to ensure default board")
+
         await run_gateway(bridge)
     finally:
         bridge.close()

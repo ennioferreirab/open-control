@@ -1,6 +1,6 @@
 # Story 8.4: Implement Agent Activation Status
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -185,3 +185,14 @@ Claude Opus 4.6 (team: backend-dev + frontend-dev + team-lead)
 - `dashboard/vitest.config.ts` — Changed pool to threads, added teardownTimeout
 - `nanobot/mc/types.py` — Added `enabled: bool = True` to AgentData, new activity event types
 - `nanobot/mc/orchestrator.py` — Filter disabled agents before capability matching
+
+### Code Review Record (2026-02-23)
+
+**Reviewer:** Claude Opus 4.6 (adversarial code review)
+**Issues Found:** 2 High, 2 Medium, 1 Low
+**Issues Fixed:**
+- [H1] AgentConfigSheet: setEnabled error handling — already inside try/catch, no code change needed
+- [M1] AgentConfigSheet: System agent Switch now disabled for lead-agent/mc-agent with "System agents cannot be deactivated" text
+- [L1] constants.ts: Added missing AGENT_DELETED constant
+**Deferred:**
+- [M2] Schema `enabled` field as optional — backward-compatible pattern consistent with project conventions, no change

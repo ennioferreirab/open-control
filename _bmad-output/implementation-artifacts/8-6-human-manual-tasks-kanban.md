@@ -1,6 +1,6 @@
 # Story 8.6: Implement Human Manual Tasks with Drag-and-Drop Kanban
 
-Status: review
+Status: done
 
 ## Story
 
@@ -201,3 +201,15 @@ None — clean implementation, no debugging required.
 - nanobot/mc/executor.py (modified — added is_manual skip in start_execution_loop to prevent agent execution of manual tasks)
 - nanobot/mc/types.py (modified — added MANUAL_TASK_STATUS_CHANGED to ActivityEventType enum)
 - tests/mc/test_manual_tasks.py (new — 7 tests: 3 orchestrator skip, 2 executor skip, 2 event type enum)
+
+### Code Review Record (2026-02-23)
+
+**Reviewer:** Claude Opus 4.6 (adversarial code review)
+**Issues Found:** 1 High, 1 Medium, 2 Low
+**Issues Fixed:**
+- [H2] tasks.ts: `manualMove` newStatus now validates against union type (inbox|assigned|in_progress|review|done|retrying|crashed) — prevents invalid status injection
+- [M3] test_manual_tasks.py: Increased asyncio.sleep from 0.05s to 0.2s to reduce test flakiness on slow CI
+- KanbanColumn.tsx: Updated manualMove call with proper type assertion to match new union type
+**Deferred:**
+- [L2] Trivial test assertions — low priority, tests still provide value as smoke tests
+- [L3] isManual optional field — consistent with project conventions

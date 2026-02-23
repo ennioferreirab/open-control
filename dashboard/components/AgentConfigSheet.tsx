@@ -25,10 +25,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { Check, Lock } from "lucide-react";
+import { Check, Eye, Lock, Pencil } from "lucide-react";
 import { SkillsSelector } from "@/components/SkillsSelector";
+import { PromptEditModal, type PromptVariable } from "@/components/PromptEditModal";
+import { AgentTextViewerModal } from "@/components/AgentTextViewerModal";
 import { getAvatarColor, getInitials } from "@/components/AgentSidebarItem";
 import type { AgentStatus } from "@/lib/constants";
+import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
 
 const STATUS_DOT_STYLES: Record<string, string> = {
   active: "bg-blue-500",
@@ -67,6 +70,16 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  const [variables, setVariables] = useState<PromptVariable[]>([]);
+  const [showPromptModal, setShowPromptModal] = useState(false);
+
+  // Memory/history state (read-only, not part of form dirty state)
+  const [memory, setMemory] = useState<string | null>(null);
+  const [history, setHistory] = useState<string | null>(null);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [showMemoryModal, setShowMemoryModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   // Initialize form from agent data
   useEffect(() => {
@@ -80,8 +93,31 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
       setErrors({});
       setSaveError(null);
       setShowSuccess(false);
+      setVariables(agent.variables || []);
     }
   }, [agent]);
+
+  // Fetch memory/history files (read-only, does NOT affect isDirty)
+  useEffect(() => {
+    if (!agentName) return;
+    let cancelled = false;
+    setMemory(null);
+    setHistory(null);
+    setMemoryLoading(true);
+    setHistoryLoading(true);
+
+    fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/MEMORY.md`)
+      .then((r) => r.ok ? r.text() : null)
+      .then((text) => { if (!cancelled) setMemory(text); })
+      .finally(() => { if (!cancelled) setMemoryLoading(false); });
+
+    fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/HISTORY.md`)
+      .then((r) => r.ok ? r.text() : null)
+      .then((text) => { if (!cancelled) setHistory(text); })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [agentName]);
 
   // Dirty state detection
   const isDirty = useMemo(() => {
@@ -92,9 +128,10 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
       prompt !== (agent.prompt || "") ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills) ||
       model !== (agent.model || "") ||
-      enabled !== (agent.enabled !== false)
+      enabled !== (agent.enabled !== false) ||
+      JSON.stringify(variables) !== JSON.stringify(agent.variables || [])
     );
-  }, [agent, displayName, role, prompt, skills, model, enabled]);
+  }, [agent, displayName, role, prompt, skills, model, enabled, variables]);
 
   // Validation
   const validate = useCallback((): boolean => {
@@ -121,6 +158,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
         prompt,
         skills,
         model: model || undefined,
+        variables,
       });
 
       // Persist enabled state change if it differs from server
@@ -133,7 +171,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
     } catch {
       setSaveError("Failed to save. Please try again.");
     }
-  }, [agentName, agent, displayName, role, prompt, skills, model, enabled, validate, updateConfig, setEnabled]);
+  }, [agentName, agent, displayName, role, prompt, skills, model, enabled, variables, validate, updateConfig, setEnabled]);
 
   const handleClose = useCallback(() => {
     if (isDirty) {
@@ -148,7 +186,16 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
     onClose();
   }, [onClose]);
 
+  const handlePromptModalSave = useCallback((newPrompt: string, newVariables: PromptVariable[]) => {
+    setPrompt(newPrompt);
+    setVariables(newVariables);
+    if (errors.prompt && newPrompt.trim()) {
+      setErrors((prev) => ({ ...prev, prompt: undefined }));
+    }
+  }, [errors.prompt]);
+
   const isLoaded = agent != null && typeof agent === "object" && "name" in agent;
+  const isSystemAgent = isLoaded && SYSTEM_AGENT_NAMES.has(agent.name);
   const hasErrors = Object.keys(errors).length > 0;
 
   return (
@@ -193,19 +240,24 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label htmlFor="agent-enabled-toggle" className="text-sm font-medium">
-                      {enabled ? "Active" : "Deactivated"}
+                      {isSystemAgent ? "Active (System)" : enabled ? "Active" : "Deactivated"}
                     </label>
                     <Switch
                       id="agent-enabled-toggle"
                       checked={enabled}
                       onCheckedChange={(checked) => setEnabledState(checked)}
+                      disabled={isSystemAgent}
                     />
                   </div>
-                  {!enabled && (
+                  {isSystemAgent ? (
+                    <p className="text-xs text-muted-foreground">
+                      System agents cannot be deactivated
+                    </p>
+                  ) : !enabled ? (
                     <p className="text-xs text-muted-foreground">
                       This agent will not receive new tasks
                     </p>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Name (read-only) */}
@@ -251,8 +303,21 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
 
                 {/* Prompt */}
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Prompt</label>
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="agent-prompt" className="text-sm font-medium">Prompt</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Edit prompt"
+                      className="h-6 px-2 text-xs gap-1"
+                      onClick={() => setShowPromptModal(true)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </Button>
+                  </div>
                   <Textarea
+                    id="agent-prompt"
                     value={prompt}
                     onChange={(e) => {
                       setPrompt(e.target.value);
@@ -266,6 +331,18 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                   />
                   {errors.prompt && (
                     <p className="text-xs text-red-500">{errors.prompt}</p>
+                  )}
+                  {variables.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {variables.map((v) => (
+                        <span
+                          key={v.name}
+                          className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-mono"
+                        >
+                          {`{{${v.name}}}`}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
 
@@ -281,6 +358,60 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
 
                 {/* Skills */}
                 <SkillsSelector selected={skills} onChange={setSkills} />
+
+                {/* Memory (read-only) */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Memory</label>
+                    {memory && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs gap-1"
+                        onClick={() => setShowMemoryModal(true)}
+                      >
+                        <Eye className="h-3 w-3" />
+                        View
+                      </Button>
+                    )}
+                  </div>
+                  {memoryLoading ? (
+                    <p className="text-xs text-muted-foreground">Loading...</p>
+                  ) : memory ? (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 max-h-[80px] overflow-hidden">
+                      <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap line-clamp-4">{memory}</pre>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">No memory yet.</p>
+                  )}
+                </div>
+
+                {/* History (read-only) */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">History</label>
+                    {history && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs gap-1"
+                        onClick={() => setShowHistoryModal(true)}
+                      >
+                        <Eye className="h-3 w-3" />
+                        View
+                      </Button>
+                    )}
+                  </div>
+                  {historyLoading ? (
+                    <p className="text-xs text-muted-foreground">Loading...</p>
+                  ) : history ? (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 max-h-[80px] overflow-hidden">
+                      <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap line-clamp-4">{history}</pre>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">No history yet.</p>
+                  )}
+                </div>
               </div>
 
               <Separator />
@@ -331,6 +462,30 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {isLoaded && (
+        <>
+          <PromptEditModal
+            open={showPromptModal}
+            onClose={() => setShowPromptModal(false)}
+            onSave={handlePromptModalSave}
+            initialPrompt={prompt}
+            initialVariables={variables}
+          />
+          <AgentTextViewerModal
+            open={showMemoryModal}
+            onClose={() => setShowMemoryModal(false)}
+            title="Memory"
+            content={memory || ""}
+          />
+          <AgentTextViewerModal
+            open={showHistoryModal}
+            onClose={() => setShowHistoryModal(false)}
+            title="History"
+            content={history || ""}
+          />
+        </>
+      )}
     </>
   );
 }

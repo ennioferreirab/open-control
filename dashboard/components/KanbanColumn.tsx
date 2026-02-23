@@ -76,7 +76,7 @@ export function KanbanColumn({
         setIsDragOver(false);
         const taskId = e.dataTransfer.getData("text/plain");
         if (taskId) {
-          await manualMove({ taskId: taskId as Id<"tasks">, newStatus: status });
+          await manualMove({ taskId: taskId as Id<"tasks">, newStatus: status as "inbox" | "assigned" | "in_progress" | "review" | "done" | "retrying" | "crashed" });
         }
       }}
     >

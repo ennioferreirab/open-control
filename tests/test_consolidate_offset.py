@@ -826,3 +826,196 @@ class TestConsolidationDeduplicationGuard:
         assert response is not None
         assert "new session started" in response.content.lower()
         assert session.key not in loop._consolidation_locks
+
+
+class TestEndTaskSession:
+    """Test AgentLoop.end_task_session() — mirrors /new behavior for MC tasks."""
+
+    @pytest.mark.asyncio
+    async def test_end_task_session_clears_session_on_success(self, tmp_path: Path) -> None:
+        """end_task_session clears session when consolidation succeeds."""
+        from nanobot.agent.loop import AgentLoop
+        from nanobot.bus.queue import MessageBus
+
+        bus = MessageBus()
+        provider = MagicMock()
+        provider.get_default_model.return_value = "test-model"
+        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+        session_key = "mc:task:test-agent"
+        session = loop.sessions.get_or_create(session_key)
+        for i in range(5):
+            session.add_message("user", f"msg{i}")
+            session.add_message("assistant", f"resp{i}")
+        loop.sessions.save(session)
+        assert len(session.messages) == 10
+
+        async def _ok_consolidate(sess, archive_all: bool = False) -> bool:
+            return True
+
+        loop._consolidate_memory = _ok_consolidate  # type: ignore[method-assign]
+
+        await loop.end_task_session(session_key)
+
+        assert session.messages == [], "Session messages must be cleared on success"
+        assert session.last_consolidated == 0, "last_consolidated must be reset"
+        # Verify cache was invalidated — fresh load from disk returns empty session
+        session_fresh = loop.sessions.get_or_create(session_key)
+        assert session_fresh.messages == [], "Session on disk must reflect cleared state"
+
+    @pytest.mark.asyncio
+    async def test_end_task_session_does_not_clear_when_consolidation_returns_false(
+        self, tmp_path: Path
+    ) -> None:
+        """end_task_session must NOT clear session when _consolidate_memory returns False."""
+        from nanobot.agent.loop import AgentLoop
+        from nanobot.bus.queue import MessageBus
+
+        bus = MessageBus()
+        provider = MagicMock()
+        provider.get_default_model.return_value = "test-model"
+        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+        session_key = "mc:task:test-agent"
+        session = loop.sessions.get_or_create(session_key)
+        for i in range(5):
+            session.add_message("user", f"msg{i}")
+        loop.sessions.save(session)
+        before_count = len(session.messages)
+
+        async def _failing_consolidate(sess, archive_all: bool = False) -> bool:
+            return False
+
+        loop._consolidate_memory = _failing_consolidate  # type: ignore[method-assign]
+
+        await loop.end_task_session(session_key)
+
+        assert len(session.messages) == before_count, (
+            "Session must remain intact when consolidation fails"
+        )
+
+    @pytest.mark.asyncio
+    async def test_end_task_session_does_not_clear_when_consolidation_raises(
+        self, tmp_path: Path
+    ) -> None:
+        """end_task_session must NOT clear session when _consolidate_memory raises."""
+        from nanobot.agent.loop import AgentLoop
+        from nanobot.bus.queue import MessageBus
+
+        bus = MessageBus()
+        provider = MagicMock()
+        provider.get_default_model.return_value = "test-model"
+        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+        session_key = "mc:task:test-agent"
+        session = loop.sessions.get_or_create(session_key)
+        for i in range(5):
+            session.add_message("user", f"msg{i}")
+        loop.sessions.save(session)
+        before_count = len(session.messages)
+
+        async def _exploding_consolidate(sess, archive_all: bool = False) -> bool:
+            raise RuntimeError("LLM provider unreachable")
+
+        loop._consolidate_memory = _exploding_consolidate  # type: ignore[method-assign]
+
+        await loop.end_task_session(session_key)
+
+        assert len(session.messages) == before_count, (
+            "Session must remain intact when consolidation raises"
+        )
+
+    @pytest.mark.asyncio
+    async def test_end_task_session_cleans_up_consolidation_lock(self, tmp_path: Path) -> None:
+        """end_task_session removes lock entry from _consolidation_locks after run."""
+        from nanobot.agent.loop import AgentLoop
+        from nanobot.bus.queue import MessageBus
+
+        bus = MessageBus()
+        provider = MagicMock()
+        provider.get_default_model.return_value = "test-model"
+        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+        session_key = "mc:task:test-agent"
+        session = loop.sessions.get_or_create(session_key)
+        for i in range(3):
+            session.add_message("user", f"msg{i}")
+        loop.sessions.save(session)
+
+        # Pre-seed lock entry
+        _ = loop._get_consolidation_lock(session_key)
+        assert session_key in loop._consolidation_locks
+
+        async def _ok_consolidate(sess, archive_all: bool = False) -> bool:
+            return True
+
+        loop._consolidate_memory = _ok_consolidate  # type: ignore[method-assign]
+
+        await loop.end_task_session(session_key)
+
+        assert session_key not in loop._consolidation_locks, (
+            "Lock must be pruned after end_task_session"
+        )
+
+    @pytest.mark.asyncio
+    async def test_end_task_session_clears_empty_session_without_consolidating(
+        self, tmp_path: Path
+    ) -> None:
+        """end_task_session clears session even when there are no messages to archive."""
+        from nanobot.agent.loop import AgentLoop
+        from nanobot.bus.queue import MessageBus
+
+        bus = MessageBus()
+        provider = MagicMock()
+        provider.get_default_model.return_value = "test-model"
+        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+        session_key = "mc:task:test-agent"
+        session = loop.sessions.get_or_create(session_key)
+        # No messages — empty session
+        loop.sessions.save(session)
+
+        consolidation_calls = 0
+
+        async def _ok_consolidate(sess, archive_all: bool = False) -> bool:
+            nonlocal consolidation_calls
+            consolidation_calls += 1
+            return True
+
+        loop._consolidate_memory = _ok_consolidate  # type: ignore[method-assign]
+
+        await loop.end_task_session(session_key)
+
+        assert consolidation_calls == 0, "Consolidation must not run for empty snapshot"
+        assert session.messages == [], "Session must still be cleared"
+
+    @pytest.mark.asyncio
+    async def test_end_task_session_does_not_propagate_save_failure(
+        self, tmp_path: Path
+    ) -> None:
+        """end_task_session must not raise if sessions.save() fails (disk error)."""
+        from nanobot.agent.loop import AgentLoop
+        from nanobot.bus.queue import MessageBus
+
+        bus = MessageBus()
+        provider = MagicMock()
+        provider.get_default_model.return_value = "test-model"
+        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+
+        session_key = "mc:task:test-agent"
+        session = loop.sessions.get_or_create(session_key)
+        for i in range(3):
+            session.add_message("user", f"msg{i}")
+        loop.sessions.save(session)
+
+        async def _ok_consolidate(sess, archive_all: bool = False) -> bool:
+            return True
+
+        loop._consolidate_memory = _ok_consolidate  # type: ignore[method-assign]
+        loop.sessions.save = MagicMock(side_effect=OSError("Disk full"))  # type: ignore[method-assign]
+
+        # Must not raise — task result should still be returned normally
+        await loop.end_task_session(session_key)
+
+        # Session was cleared in memory despite the save failure
+        assert session.messages == []

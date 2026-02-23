@@ -2,6 +2,19 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  boards: defineTable({
+    name: v.string(),
+    displayName: v.string(),
+    description: v.optional(v.string()),
+    enabledAgents: v.array(v.string()),
+    isDefault: v.optional(v.boolean()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+    deletedAt: v.optional(v.string()),
+  })
+    .index("by_name", ["name"])
+    .index("by_isDefault", ["isDefault"]),
+
   tasks: defineTable({
     title: v.string(),
     description: v.optional(v.string()),
@@ -30,6 +43,7 @@ export default defineSchema({
     isManual: v.optional(v.boolean()),
     deletedAt: v.optional(v.string()),
     previousStatus: v.optional(v.string()),
+    boardId: v.optional(v.id("boards")),
     files: v.optional(v.array(v.object({
       name: v.string(),
       type: v.string(),
@@ -39,7 +53,9 @@ export default defineSchema({
     }))),
     createdAt: v.string(),
     updatedAt: v.string(),
-  }).index("by_status", ["status"]),
+  })
+    .index("by_status", ["status"])
+    .index("by_boardId", ["boardId"]),
 
   messages: defineTable({
     taskId: v.id("tasks"),
@@ -75,6 +91,7 @@ export default defineSchema({
     enabled: v.optional(v.boolean()),
     isSystem: v.optional(v.boolean()),
     model: v.optional(v.string()),
+    variables: v.optional(v.array(v.object({ name: v.string(), value: v.string() }))),
     lastActiveAt: v.optional(v.string()),
     deletedAt: v.optional(v.string()),
   })
@@ -111,6 +128,9 @@ export default defineSchema({
       v.literal("manual_task_status_changed"),
       v.literal("file_attached"),
       v.literal("agent_output"),
+      v.literal("board_created"),
+      v.literal("board_updated"),
+      v.literal("board_deleted"),
     ),
     description: v.string(),
     timestamp: v.string(),

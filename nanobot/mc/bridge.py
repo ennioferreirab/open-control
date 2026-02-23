@@ -569,6 +569,29 @@ class ConvexBridge:
             except Exception as exc:
                 logger.error("[bridge] Failed to create output file activity: %s", exc)
 
+    def get_board_by_id(self, board_id: str) -> dict[str, Any] | None:
+        """Fetch a board by its Convex _id.
+
+        Args:
+            board_id: Convex board _id string.
+
+        Returns:
+            Board dict with snake_case keys, or None if not found.
+        """
+        return self.query("boards:getById", {"board_id": board_id})
+
+    def ensure_default_board(self) -> Any:
+        """Ensure a default board exists in Convex.
+
+        Creates it if none exists. Idempotent — safe to call on every startup.
+
+        Returns:
+            The default board's _id.
+        """
+        result = self.mutation("boards:ensureDefaultBoard", {})
+        self._log_state_transition("board", "Ensured default board exists")
+        return result
+
     def close(self) -> None:
         """Close the Convex client connection."""
         logger.info("ConvexBridge closing connection")

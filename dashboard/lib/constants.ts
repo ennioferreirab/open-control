@@ -47,8 +47,12 @@ export const ACTIVITY_EVENT_TYPE = {
   AGENT_CONFIG_UPDATED: "agent_config_updated",
   AGENT_ACTIVATED: "agent_activated",
   AGENT_DEACTIVATED: "agent_deactivated",
+  AGENT_DELETED: "agent_deleted",
   BULK_CLEAR_DONE: "bulk_clear_done",
   MANUAL_TASK_STATUS_CHANGED: "manual_task_status_changed",
+  BOARD_CREATED: "board_created",
+  BOARD_UPDATED: "board_updated",
+  BOARD_DELETED: "board_deleted",
 } as const;
 
 // Message type values

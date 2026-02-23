@@ -110,9 +110,10 @@ development_status:
   8-3-add-clear-done-and-done-list: in-progress
   8-4-fix-orchestrator-bridge-reliability: done
   8-5-fix-provider-integration-validation: done
-  8-4-implement-agent-activation-status: review
-  8-6-human-manual-tasks-kanban: review
+  8-4-implement-agent-activation-status: done
+  8-6-human-manual-tasks-kanban: done
   8-7-implement-task-tags-management: done
+  8-9-agent-memory-history-viewer: done
 
   # Epic 9: Thread Files Context
   epic-9: in-progress
@@ -133,3 +134,8 @@ development_status:
   9-12-bridge-manifest-sync-for-agent-output-files: done
   9-13-lead-agent-file-aware-routing: done
   epic-9-retrospective: optional
+
+  # Epic 10: Mission Control Boards & Agent Memory Isolation
+  epic-10: in-progress
+  10-1-mission-control-boards-foundation: review
+  epic-10-retrospective: optional

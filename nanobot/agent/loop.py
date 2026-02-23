@@ -61,11 +61,14 @@ class AgentLoop:
         mcp_servers: dict | None = None,
         allowed_skills: list[str] | None = None,
         global_skills_dir: Path | None = None,
+        memory_workspace: Path | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.bus = bus
         self.provider = provider
         self.workspace = workspace
+        # Board-scoped memory/session path (falls back to global workspace)
+        self.memory_workspace = memory_workspace or workspace
         self.model = model or provider.get_default_model()
         self.max_iterations = max_iterations
         self.temperature = temperature
@@ -77,8 +80,8 @@ class AgentLoop:
         self.restrict_to_workspace = restrict_to_workspace
         self.allowed_skills = allowed_skills
 
-        self.context = ContextBuilder(workspace, global_skills_dir=global_skills_dir)
-        self.sessions = session_manager or SessionManager(workspace)
+        self.context = ContextBuilder(self.memory_workspace, global_skills_dir=global_skills_dir)
+        self.sessions = session_manager or SessionManager(self.memory_workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
             provider=provider,
@@ -420,10 +423,53 @@ class AgentLoop:
 
     async def _consolidate_memory(self, session, archive_all: bool = False) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
-        return await MemoryStore(self.workspace).consolidate(
+        return await MemoryStore(self.memory_workspace).consolidate(
             session, self.provider, self.model,
             archive_all=archive_all, memory_window=self.memory_window,
         )
+
+    async def end_task_session(self, session_key: str) -> None:
+        """Consolidate memory and clear session at end of an MC task.
+
+        Replicates the /new command behavior: archives all unconsolidated
+        messages into MEMORY.md + HISTORY.md, then clears the session so
+        the next task starts fresh. If consolidation fails, logs a warning
+        and leaves the session intact (same fail-safe as /new).
+        """
+        session = self.sessions.get_or_create(session_key)
+        lock = self._get_consolidation_lock(session.key)
+        self._consolidating.add(session.key)
+        try:
+            async with lock:
+                snapshot = session.messages[session.last_consolidated:]
+                if snapshot:
+                    temp = Session(key=session.key)
+                    temp.messages = list(snapshot)
+                    if not await self._consolidate_memory(temp, archive_all=True):
+                        logger.warning(
+                            "end_task_session: memory consolidation failed for {}, session not cleared",
+                            session_key,
+                        )
+                        return
+        except Exception:
+            logger.exception(
+                "end_task_session: consolidation error for {}, session not cleared", session_key
+            )
+            return
+        finally:
+            self._consolidating.discard(session.key)
+            self._prune_consolidation_lock(session.key, lock)
+
+        session.clear()
+        try:
+            self.sessions.save(session)
+        except Exception:
+            logger.exception(
+                "end_task_session: failed to persist cleared session for {}, cleared in memory only",
+                session_key,
+            )
+        self.sessions.invalidate(session.key)
+        logger.info("end_task_session: session cleared for {}", session_key)
 
     async def process_direct(
         self,

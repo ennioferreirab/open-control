@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
+import { Id } from "../convex/_generated/dataModel";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Bot, ChevronDown, Paperclip, User, X } from "lucide-react";
 import { TAG_COLORS } from "@/lib/constants";
+import { useBoard } from "@/components/BoardContext";
 
 const formatSize = (bytes: number) =>
   bytes < 1024 * 1024
@@ -38,6 +40,7 @@ export function TaskInput() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { activeBoardId } = useBoard();
   const createTask = useMutation(api.tasks.create);
   const agents = useQuery(api.agents.list);
   const predefinedTags = useQuery(api.taskTags.list);
@@ -57,10 +60,12 @@ export function TaskInput() {
       trustLevel?: string;
       reviewers?: string[];
       isManual?: boolean;
+      boardId?: Id<"boards">;
       files?: Array<{ name: string; type: string; size: number; subfolder: string; uploadedAt: string }>;
     } = {
       title: trimmed,
       tags: selectedTags.length > 0 ? selectedTags : undefined,
+      boardId: activeBoardId ?? undefined,
     };
     if (isManual) {
       args.isManual = true;

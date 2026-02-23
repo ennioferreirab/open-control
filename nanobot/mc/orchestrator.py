@@ -106,6 +106,33 @@ class TaskOrchestrator:
         agents = [AgentData(**filter_agent_fields(a)) for a in agents_data]
         agents = [a for a in agents if a.enabled is not False]
 
+        # Filter agents by board's enabledAgents (AC5)
+        board_id = task_data.get("board_id")
+        if board_id:
+            try:
+                board = await asyncio.to_thread(
+                    self._bridge.get_board_by_id, board_id
+                )
+                if board:
+                    board_enabled_agents = board.get("enabled_agents") or []
+                    if board_enabled_agents:
+                        agents = [
+                            a for a in agents
+                            if a.name in board_enabled_agents or getattr(a, "is_system", False)
+                        ]
+                        logger.info(
+                            "[orchestrator] Board '%s': filtering to %d agent(s): %s",
+                            board.get("name", board_id),
+                            len(agents),
+                            [a.name for a in agents],
+                        )
+            except Exception:
+                logger.warning(
+                    "[orchestrator] Failed to fetch board config for task %s, using all agents",
+                    task_id,
+                    exc_info=True,
+                )
+
         # Use LLM-based planner (falls back to heuristic on failure)
         planner = TaskPlanner()
         plan = await planner.plan_task(

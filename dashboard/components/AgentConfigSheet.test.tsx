@@ -58,6 +58,14 @@ vi.mock("@/components/AgentSidebarItem", () => ({
   getInitials: (name: string) => name.slice(0, 2).toUpperCase(),
 }));
 
+vi.mock("@/components/PromptEditModal", () => ({
+  PromptEditModal: () => null,
+}));
+
+vi.mock("@/components/AgentTextViewerModal", () => ({
+  AgentTextViewerModal: () => null,
+}));
+
 // Mock ShadCN UI components
 vi.mock("@/components/ui/sheet", () => ({
   Sheet: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
@@ -125,6 +133,8 @@ describe("AgentConfigSheet", () => {
     mockUpdateConfig.mockResolvedValue(undefined);
     mockSetEnabled.mockReset();
     mockSetEnabled.mockResolvedValue(undefined);
+    // Mock fetch for memory/history endpoints (return 404 by default)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }));
   });
 
   afterEach(() => {
@@ -363,5 +373,54 @@ describe("AgentConfigSheet", () => {
     // Header should show "Deactivated" instead of runtime status
     const statusTexts = screen.getAllByText("Deactivated");
     expect(statusTexts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // --- Memory/History section tests ---
+
+  it("shows 'No memory yet.' placeholder when fetch returns 404", async () => {
+    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("No memory yet.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows 'No history yet.' placeholder when fetch returns 404", async () => {
+    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("No history yet.")).toBeInTheDocument();
+    });
+  });
+
+  it("fetches memory and history when agentName is set", () => {
+    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/agents/test-agent/memory/MEMORY.md"
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/agents/test-agent/memory/HISTORY.md"
+    );
+  });
+
+  it("shows memory content and View button when fetch succeeds", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) =>
+      Promise.resolve(
+        url.includes("MEMORY.md")
+          ? { ok: true, text: () => Promise.resolve("Agent Memory Content") }
+          : { ok: false, status: 404 }
+      )
+    ));
+
+    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Agent Memory Content")).toBeInTheDocument();
+    });
+
+    // View button should appear for Memory
+    const viewButtons = screen.getAllByText("View");
+    expect(viewButtons.length).toBeGreaterThanOrEqual(1);
   });
 });

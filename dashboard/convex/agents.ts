@@ -114,6 +114,7 @@ export const updateConfig = mutation({
     soul: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),
     model: v.optional(v.string()),
+    variables: v.optional(v.array(v.object({ name: v.string(), value: v.string() }))),
   },
   handler: async (ctx, args) => {
     const agent = await ctx.db
@@ -134,6 +135,7 @@ export const updateConfig = mutation({
     if (args.soul !== undefined) updates.soul = args.soul;
     if (args.skills !== undefined) updates.skills = args.skills;
     if (args.model !== undefined) updates.model = args.model;
+    if (args.variables !== undefined) updates.variables = args.variables;
 
     await ctx.db.patch(agent._id, updates);
 

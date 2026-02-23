@@ -89,11 +89,14 @@ async def _run_agent_on_task(
     task_title: str,
     task_description: str | None,
     agent_skills: list[str] | None = None,
+    board_name: str | None = None,
+    memory_workspace: Path | None = None,
 ) -> str:
     """Run the nanobot agent loop on a task and return the result.
 
     Uses AgentLoop.process_direct() with the agent's system prompt and model.
     The task title + description become the message input.
+    When board_name is provided, uses board-scoped session key and memory_workspace.
     """
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
@@ -115,6 +118,12 @@ async def _run_agent_on_task(
     if agent_prompt:
         message = f"[System instructions]\n{agent_prompt}\n\n[Task]\n{message}"
 
+    # Board-scoped session key format (AC6)
+    if board_name:
+        session_key = f"mc:board:{board_name}:task:{agent_name}"
+    else:
+        session_key = f"mc:task:{agent_name}"
+
     # Create provider from user config (respects OAuth, API keys, etc.)
     provider, resolved_model = _make_provider(agent_model)
 
@@ -126,14 +135,17 @@ async def _run_agent_on_task(
         model=resolved_model,
         allowed_skills=agent_skills,
         global_skills_dir=global_skills_dir,
+        memory_workspace=memory_workspace,
     )
 
     result = await loop.process_direct(
         content=message,
-        session_key=f"mc:task:{agent_name}",
+        session_key=session_key,
         channel="mc",
         chat_id=agent_name,
     )
+    # Consolidate memory and clear session (mirrors /new behavior)
+    await loop.end_task_session(session_key)
     return result
 
 
@@ -214,6 +226,50 @@ class TaskExecutor:
 
         # Execute the task
         await self._execute_task(task_id, title, description, agent_name, trust_level, task_data)
+
+    def _resolve_board_workspace(self, board_name: str, agent_name: str) -> Path:
+        """Resolve the board-scoped memory workspace for an agent.
+
+        Creates the directory structure idempotently and bootstraps MEMORY.md
+        from the global agent workspace if this is the first run on this board.
+
+        Returns:
+            Path to ~/.nanobot/boards/{board_name}/agents/{agent_name}/
+        """
+        import shutil
+
+        board_workspace = (
+            Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
+        )
+        memory_dir = board_workspace / "memory"
+        sessions_dir = board_workspace / "sessions"
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+
+        memory_md = memory_dir / "MEMORY.md"
+        if not memory_md.exists():
+            global_memory = (
+                Path.home() / ".nanobot" / "agents" / agent_name / "memory" / "MEMORY.md"
+            )
+            if global_memory.exists():
+                shutil.copy2(global_memory, memory_md)
+                logger.info(
+                    "[executor] Bootstrapped board-scoped MEMORY.md for agent '%s' on board '%s'",
+                    agent_name, board_name,
+                )
+            else:
+                memory_md.write_text("", encoding="utf-8")
+                logger.info(
+                    "[executor] Created empty board-scoped MEMORY.md for agent '%s' on board '%s'",
+                    agent_name, board_name,
+                )
+
+        # HISTORY.md always starts empty per board
+        history_md = memory_dir / "HISTORY.md"
+        if not history_md.exists():
+            history_md.write_text("", encoding="utf-8")
+
+        return board_workspace
 
     def _load_agent_config(
         self, agent_name: str
@@ -372,6 +428,32 @@ class TaskExecutor:
                 agent_name,
             )
 
+        # Resolve board-scoped workspace (AC6, AC7)
+        board_name: str | None = None
+        memory_workspace: Path | None = None
+        board_id = (task_data or {}).get("board_id")
+        if board_id:
+            try:
+                board = await asyncio.to_thread(
+                    self._bridge.get_board_by_id, board_id
+                )
+                if board:
+                    board_name = board.get("name")
+                    if board_name:
+                        memory_workspace = self._resolve_board_workspace(
+                            board_name, agent_name
+                        )
+                        logger.info(
+                            "[executor] Using board-scoped workspace for agent '%s' on board '%s'",
+                            agent_name, board_name,
+                        )
+            except Exception:
+                logger.warning(
+                    "[executor] Failed to resolve board workspace for task '%s', using global workspace",
+                    title,
+                    exc_info=True,
+                )
+
         try:
             result = await _run_agent_on_task(
                 agent_name=agent_name,
@@ -380,6 +462,8 @@ class TaskExecutor:
                 task_title=title,
                 task_description=description,
                 agent_skills=agent_skills,
+                board_name=board_name,
+                memory_workspace=memory_workspace,
             )
 
             # Write agent output as a work message

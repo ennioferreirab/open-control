@@ -79,6 +79,7 @@ export const create = mutation({
     trustLevel: v.optional(v.string()),
     reviewers: v.optional(v.array(v.string())),
     isManual: v.optional(v.boolean()),
+    boardId: v.optional(v.id("boards")),
     files: v.optional(v.array(v.object({
       name: v.string(),
       type: v.string(),
@@ -101,6 +102,18 @@ export const create = mutation({
           | "agent_reviewed"
           | "human_approved");
 
+    // Resolve boardId: use provided value or fall back to default board
+    let boardId = args.boardId;
+    if (!boardId) {
+      const defaultBoard = await ctx.db
+        .query("boards")
+        .withIndex("by_isDefault", (q) => q.eq("isDefault", true))
+        .first();
+      if (defaultBoard && !defaultBoard.deletedAt) {
+        boardId = defaultBoard._id;
+      }
+    }
+
     // Create the task
     const taskId = await ctx.db.insert("tasks", {
       title: args.title,
@@ -111,6 +124,7 @@ export const create = mutation({
       reviewers: isManual ? undefined : args.reviewers,
       tags: args.tags,
       ...(isManual ? { isManual: true } : {}),
+      ...(boardId ? { boardId } : {}),
       ...(args.files ? { files: args.files } : {}),
       createdAt: now,
       updatedAt: now,
@@ -152,6 +166,30 @@ export const list = query({
   handler: async (ctx) => {
     const all = await ctx.db.query("tasks").collect();
     return all.filter((t) => t.status !== "deleted");
+  },
+});
+
+export const listByBoard = query({
+  args: {
+    boardId: v.id("boards"),
+    includeNoBoardId: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const boardTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_boardId", (q) => q.eq("boardId", args.boardId))
+      .collect();
+
+    let result = boardTasks.filter((t) => t.status !== "deleted");
+
+    if (args.includeNoBoardId) {
+      const all = await ctx.db.query("tasks").collect();
+      const orphans = all.filter((t) => t.status !== "deleted" && !t.boardId);
+      const ids = new Set(result.map((t) => t._id));
+      result = [...result, ...orphans.filter((t) => !ids.has(t._id))];
+    }
+
+    return result;
   },
 });
 
@@ -371,7 +409,15 @@ export const approve = mutation({
 export const manualMove = mutation({
   args: {
     taskId: v.id("tasks"),
-    newStatus: v.string(),
+    newStatus: v.union(
+      v.literal("inbox"),
+      v.literal("assigned"),
+      v.literal("in_progress"),
+      v.literal("review"),
+      v.literal("done"),
+      v.literal("retrying"),
+      v.literal("crashed"),
+    ),
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -386,7 +432,7 @@ export const manualMove = mutation({
     const now = new Date().toISOString();
 
     await ctx.db.patch(args.taskId, {
-      status: args.newStatus as any,
+      status: args.newStatus,
       updatedAt: now,
     });
 

@@ -10,6 +10,7 @@ import { TrashBinSheet } from "./TrashBinSheet";
 import { DoneTasksSheet } from "./DoneTasksSheet";
 import { Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useBoard } from "@/components/BoardContext";
 
 const COLUMNS = [
   { title: "Inbox", status: "inbox", accentColor: "bg-violet-500" },
@@ -24,7 +25,18 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ onTaskClick }: KanbanBoardProps) {
-  const tasks = useQuery(api.tasks.list);
+  const { activeBoardId, isDefaultBoard } = useBoard();
+
+  // Board-scoped query when a board is selected; falls back to global list
+  const allTasksResult = useQuery(api.tasks.list);
+  const boardTasksResult = useQuery(
+    api.tasks.listByBoard,
+    activeBoardId
+      ? { boardId: activeBoardId, includeNoBoardId: isDefaultBoard }
+      : "skip",
+  );
+  const tasks = activeBoardId ? boardTasksResult : allTasksResult;
+
   const hitlCount = useQuery(api.tasks.countHitlPending) ?? 0;
   const deletedTasks = useQuery(api.tasks.listDeleted);
   const deletedCount = deletedTasks?.length ?? 0;
