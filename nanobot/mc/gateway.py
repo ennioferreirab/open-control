@@ -28,8 +28,18 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
 AGENTS_DIR = Path.home() / ".nanobot" / "agents"
+
+
+def _config_default_model() -> str:
+    """Return the user's configured default model (with provider prefix).
+
+    Reads ``agents.defaults.model`` from ``~/.nanobot/config.json``.
+    This is the single source of truth for the active model/provider.
+    """
+    from nanobot.config.loader import load_config
+
+    return load_config().agents.defaults.model
 
 
 def _resolve_convex_url(dashboard_dir: Path | None = None) -> str | None:
@@ -168,7 +178,7 @@ def sync_agent_registry(
 
     Returns (synced_agents, errors_by_filename).
     """
-    resolved_default = default_model or DEFAULT_MODEL
+    resolved_default = default_model or _config_default_model()
 
     # Step 0: Write-back — Convex → local for dashboard-edited agents
     _write_back_convex_agents(bridge, agents_dir)
@@ -189,9 +199,12 @@ def sync_agent_registry(
                 else:
                     valid_agents.append(result)
 
-    # Step 2-3: Resolve model and sync each valid agent
+    # Step 2-3: Resolve model (with provider prefix) and sync each valid agent
     for agent in valid_agents:
         if not agent.model:
+            agent.model = resolved_default
+        elif "/" not in agent.model and resolved_default.endswith("/" + agent.model):
+            # Bare model name matches config default — use full name with prefix
             agent.model = resolved_default
 
         try:

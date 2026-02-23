@@ -9,17 +9,34 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from nanobot.mc.gateway import DEFAULT_MODEL, AgentGateway, MAX_AUTO_RETRIES, sync_agent_registry
+from unittest.mock import patch as _patch
+
+from nanobot.mc.gateway import AgentGateway, MAX_AUTO_RETRIES, sync_agent_registry
 from nanobot.mc.types import AgentData
+
+# All tests mock _config_default_model so they don't depend on ~/.nanobot/config.json
+_CONFIG_DEFAULT = "anthropic-oauth/claude-sonnet-4-6"
+
+
+@pytest.fixture(autouse=True)
+def _mock_config_default_model():
+    """Mock _config_default_model for all tests so they don't need ~/.nanobot/config.json."""
+    with _patch("nanobot.mc.gateway._config_default_model", return_value=_CONFIG_DEFAULT):
+        yield
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _write_yaml(tmp_path: Path, filename: str, content: str) -> Path:
-    """Write a YAML string to a file and return its path."""
-    p = tmp_path / filename
+def _write_yaml(tmp_path: Path, agent_name: str, content: str) -> Path:
+    """Write an agent config.yaml inside agent_name/ subdirectory.
+
+    sync_agent_registry expects: agents_dir/<agent_name>/config.yaml
+    """
+    agent_dir = tmp_path / agent_name
+    agent_dir.mkdir(exist_ok=True)
+    p = agent_dir / "config.yaml"
     p.write_text(textwrap.dedent(content), encoding="utf-8")
     return p
 
@@ -41,7 +58,7 @@ class TestSyncValidAgents:
     """Tests for syncing valid agent YAML files."""
 
     def test_all_valid_agents_synced(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "agent1.yaml", """\
+        _write_yaml(tmp_path, "dev-agent", """\
             name: dev-agent
             role: Senior Developer
             prompt: "You are a senior developer."
@@ -50,7 +67,7 @@ class TestSyncValidAgents:
               - debugging
             model: claude-sonnet-4-6
         """)
-        _write_yaml(tmp_path, "agent2.yaml", """\
+        _write_yaml(tmp_path, "test-agent", """\
             name: test-agent
             role: Tester
             prompt: "You test code."
@@ -71,7 +88,7 @@ class TestSyncValidAgents:
         assert set(deactivate_call_args) == {"dev-agent", "test-agent"}
 
     def test_single_agent_synced(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "agent.yaml", """\
+        _write_yaml(tmp_path, "solo-agent", """\
             name: solo-agent
             role: Helper
             prompt: "You help."
@@ -94,12 +111,12 @@ class TestMixedValidInvalid:
     """Tests that valid agents sync even when some are invalid."""
 
     def test_valid_synced_invalid_logged(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "good.yaml", """\
+        _write_yaml(tmp_path, "good-agent", """\
             name: good-agent
             role: Worker
             prompt: "You work."
         """)
-        _write_yaml(tmp_path, "bad.yaml", """\
+        _write_yaml(tmp_path, "bad-agent", """\
             name: "Invalid Name!"
             role: Breaker
             prompt: "Oops."
@@ -110,15 +127,15 @@ class TestMixedValidInvalid:
 
         assert len(agents) == 1
         assert agents[0].name == "good-agent"
-        assert "bad.yaml" in errors
+        assert "bad-agent" in errors
         bridge.sync_agent.assert_called_once()
 
     def test_all_invalid_no_sync(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "bad1.yaml", """\
+        _write_yaml(tmp_path, "bad1", """\
             role: Breaker
             prompt: "Missing name."
         """)
-        _write_yaml(tmp_path, "bad2.yaml", """\
+        _write_yaml(tmp_path, "bad2", """\
             name: "INVALID"
             role: Breaker
             prompt: "Bad name."
@@ -142,7 +159,7 @@ class TestModelResolution:
     """Tests for default model resolution chain."""
 
     def test_agent_with_model_keeps_it(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "agent.yaml", """\
+        _write_yaml(tmp_path, "custom-model", """\
             name: custom-model
             role: Developer
             prompt: "You code."
@@ -155,7 +172,7 @@ class TestModelResolution:
         assert agents[0].model == "gpt-4o"
 
     def test_agent_without_model_gets_provided_default(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "agent.yaml", """\
+        _write_yaml(tmp_path, "no-model", """\
             name: no-model
             role: Developer
             prompt: "You code."
@@ -166,8 +183,8 @@ class TestModelResolution:
 
         assert agents[0].model == "claude-opus-4-6"
 
-    def test_agent_without_model_gets_hardcoded_default(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "agent.yaml", """\
+    def test_agent_without_model_gets_config_default(self, tmp_path: Path) -> None:
+        _write_yaml(tmp_path, "no-model", """\
             name: no-model
             role: Developer
             prompt: "You code."
@@ -176,16 +193,16 @@ class TestModelResolution:
         bridge = _make_bridge()
         agents, _ = sync_agent_registry(bridge, tmp_path)
 
-        assert agents[0].model == DEFAULT_MODEL
+        assert agents[0].model == _CONFIG_DEFAULT
 
     def test_default_model_not_override_explicit_model(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "a.yaml", """\
+        _write_yaml(tmp_path, "agent-a", """\
             name: agent-a
             role: Developer
             prompt: "Has model."
             model: my-model
         """)
-        _write_yaml(tmp_path, "b.yaml", """\
+        _write_yaml(tmp_path, "agent-b", """\
             name: agent-b
             role: Tester
             prompt: "No model."
@@ -209,12 +226,12 @@ class TestDeactivation:
     """Tests for soft deactivation of removed agents."""
 
     def test_deactivate_called_with_active_names(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "a.yaml", """\
+        _write_yaml(tmp_path, "agent-a", """\
             name: agent-a
             role: Worker
             prompt: "Work."
         """)
-        _write_yaml(tmp_path, "b.yaml", """\
+        _write_yaml(tmp_path, "agent-b", """\
             name: agent-b
             role: Builder
             prompt: "Build."
@@ -252,12 +269,12 @@ class TestEdgeCases:
         assert errors == {}
 
     def test_sync_agent_failure_does_not_block_others(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "a.yaml", """\
+        _write_yaml(tmp_path, "agent-a", """\
             name: agent-a
             role: Worker
             prompt: "Work."
         """)
-        _write_yaml(tmp_path, "b.yaml", """\
+        _write_yaml(tmp_path, "agent-b", """\
             name: agent-b
             role: Builder
             prompt: "Build."

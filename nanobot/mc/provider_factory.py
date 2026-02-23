@@ -41,8 +41,20 @@ def create_provider(model: str | None = None) -> tuple[Any, str]:
     from nanobot.config.loader import load_config
 
     config = load_config()
-    resolved_model = model or config.agents.defaults.model
+    default_model = config.agents.defaults.model
+    resolved_model = model or default_model
+
+    # If the caller supplied a bare model name (e.g. "claude-sonnet-4-6")
+    # that doesn't resolve to a provider, check if the config default model
+    # is the same base model with a provider prefix (e.g.
+    # "anthropic-oauth/claude-sonnet-4-6").  If so, use the config default
+    # so the correct provider is selected.
     provider_name = config.get_provider_name(resolved_model)
+    if provider_name is None and model and "/" not in model:
+        if default_model.endswith("/" + model):
+            resolved_model = default_model
+            provider_name = config.get_provider_name(resolved_model)
+
     p = config.get_provider(resolved_model)
 
     # Anthropic OAuth
