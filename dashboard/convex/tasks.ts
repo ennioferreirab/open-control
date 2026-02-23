@@ -147,6 +147,36 @@ export const listDeleted = query({
   },
 });
 
+/**
+ * Return all tasks that have ever reached done: currently done OR soft-deleted
+ * with previousStatus "done". Sorted by updatedAt descending.
+ */
+export const listDoneHistory = query({
+  args: {},
+  handler: async (ctx) => {
+    const doneTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", "done"))
+      .collect();
+
+    const deletedTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", "deleted"))
+      .collect();
+
+    const clearedDone = deletedTasks.filter(
+      (t) => t.previousStatus === "done"
+    );
+
+    const all = [...doneTasks, ...clearedDone];
+    all.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+    return all;
+  },
+});
+
 export const countHitlPending = query({
   args: {},
   handler: async (ctx) => {
@@ -355,7 +385,8 @@ export const updateStatus = mutation({
         | "agent_crashed"
         | "system_error"
         | "task_deleted"
-        | "task_restored",
+        | "task_restored"
+        | "bulk_clear_done",
       description,
       timestamp: now,
     });
@@ -531,6 +562,40 @@ export const softDelete = mutation({
       messageType: "system_event",
       timestamp: now,
     });
+  },
+});
+
+/**
+ * Bulk-clear all done tasks: soft-delete each, log a single activity event.
+ */
+export const clearAllDone = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const doneTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", "done"))
+      .collect();
+
+    if (doneTasks.length === 0) return 0;
+
+    const now = new Date().toISOString();
+
+    for (const task of doneTasks) {
+      await ctx.db.patch(task._id, {
+        status: "deleted",
+        previousStatus: "done",
+        deletedAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await ctx.db.insert("activities", {
+      eventType: "bulk_clear_done",
+      description: `Cleared ${doneTasks.length} completed task${doneTasks.length === 1 ? "" : "s"}`,
+      timestamp: now,
+    });
+
+    return doneTasks.length;
   },
 });
 

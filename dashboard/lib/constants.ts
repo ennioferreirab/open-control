@@ -44,6 +44,8 @@ export const ACTIVITY_EVENT_TYPE = {
   SYSTEM_ERROR: "system_error",
   TASK_DELETED: "task_deleted",
   TASK_RESTORED: "task_restored",
+  AGENT_CONFIG_UPDATED: "agent_config_updated",
+  BULK_CLEAR_DONE: "bulk_clear_done",
 } as const;
 
 // Message type values

@@ -56,6 +56,7 @@ export default defineSchema({
     name: v.string(),
     displayName: v.string(),
     role: v.string(),
+    prompt: v.optional(v.string()),
     skills: v.array(v.string()),
     status: v.union(
       v.literal("active"),
@@ -90,12 +91,25 @@ export default defineSchema({
       v.literal("system_error"),
       v.literal("task_deleted"),
       v.literal("task_restored"),
+      v.literal("agent_config_updated"),
+      v.literal("bulk_clear_done"),
     ),
     description: v.string(),
     timestamp: v.string(),
   })
     .index("by_taskId", ["taskId"])
     .index("by_timestamp", ["timestamp"]),
+
+  skills: defineTable({
+    name: v.string(),
+    description: v.string(),
+    content: v.string(),
+    metadata: v.optional(v.string()),
+    source: v.union(v.literal("builtin"), v.literal("workspace")),
+    always: v.optional(v.boolean()),
+    available: v.boolean(),
+    requires: v.optional(v.string()),
+  }).index("by_name", ["name"]),
 
   settings: defineTable({
     key: v.string(),

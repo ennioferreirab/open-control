@@ -41,63 +41,70 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Project Foundation & System Lifecycle
-  epic-1: in-progress
-  1-1-initialize-dashboard-project-with-starter-template: ready-for-dev
-  1-2-define-convex-data-schema: backlog
-  1-3-build-asyncio-convex-bridge-core: backlog
-  1-4-add-bridge-retry-logic-and-dual-logging: backlog
-  1-5-implement-process-manager: backlog
-  1-6-implement-cli-lifecycle-commands: backlog
+  epic-1: done
+  1-1-initialize-dashboard-project-with-starter-template: done
+  1-2-define-convex-data-schema: done
+  1-3-build-asyncio-convex-bridge-core: done
+  1-4-add-bridge-retry-logic-and-dual-logging: done
+  1-5-implement-process-manager: done
+  1-6-implement-cli-lifecycle-commands: done
   epic-1-retrospective: optional
 
   # Epic 2: Task Board & Real-Time Visibility
-  epic-2: backlog
-  2-1-build-dashboard-layout-shell: backlog
-  2-2-implement-task-creation-from-dashboard: backlog
-  2-3-build-kanban-board-with-real-time-task-cards: backlog
-  2-4-implement-task-state-machine: backlog
-  2-5-build-activity-feed: backlog
-  2-6-build-task-detail-sheet: backlog
-  2-7-implement-cli-task-commands: backlog
+  epic-2: done
+  2-1-build-dashboard-layout-shell: done
+  2-2-implement-task-creation-from-dashboard: done
+  2-3-build-kanban-board-with-real-time-task-cards: done
+  2-4-implement-task-state-machine: done
+  2-5-build-activity-feed: done
+  2-6-build-task-detail-sheet: done
+  2-7-implement-cli-task-commands: done
   epic-2-retrospective: optional
 
   # Epic 3: Agent Registration & Dashboard Presence
-  epic-3: backlog
-  3-1-implement-yaml-agent-validator: backlog
-  3-2-build-agent-registry-sync: backlog
-  3-3-build-agent-sidebar: backlog
-  3-4-implement-cli-agent-commands: backlog
-  3-5-implement-agent-assisted-cli: backlog
+  epic-3: done
+  3-1-implement-yaml-agent-validator: done
+  3-2-build-agent-registry-sync: done
+  3-3-build-agent-sidebar: done
+  3-4-implement-cli-agent-commands: done
+  3-5-implement-agent-assisted-cli: done
   epic-3-retrospective: optional
 
   # Epic 4: Intelligent Task Routing & Orchestration
-  epic-4: backlog
-  4-1-implement-lead-agent-capability-matching: backlog
-  4-2-implement-execution-planning: backlog
-  4-3-build-execution-plan-visualization: backlog
-  4-4-add-agent-assignment-to-task-input: backlog
+  epic-4: done
+  4-1-implement-lead-agent-capability-matching: done
+  4-2-implement-execution-planning: done
+  4-3-build-execution-plan-visualization: done
+  4-4-add-agent-assignment-to-task-input: done
   epic-4-retrospective: optional
 
   # Epic 5: Inter-Agent Review & Collaboration
-  epic-5: backlog
-  5-1-implement-trust-level-and-reviewer-configuration: backlog
-  5-2-implement-inter-agent-messaging: backlog
-  5-3-build-review-feedback-flow: backlog
+  epic-5: done
+  5-1-implement-trust-level-and-reviewer-configuration: done
+  5-2-implement-inter-agent-messaging: done
+  5-3-build-review-feedback-flow: done
   epic-5-retrospective: optional
 
   # Epic 6: Human-in-the-Loop Approval
-  epic-6: backlog
-  6-1-implement-hitl-approve-action: backlog
-  6-2-implement-hitl-deny-with-inline-rejection: backlog
-  6-3-implement-hitl-notification-badges: backlog
-  6-4-implement-manual-crash-retry: backlog
+  epic-6: done
+  6-1-implement-hitl-approve-action: done
+  6-2-implement-hitl-deny-with-inline-rejection: done
+  6-3-implement-hitl-notification-badges: done
+  6-4-implement-manual-crash-retry: done
   epic-6-retrospective: optional
 
   # Epic 7: Reliability, Configuration & Security
-  epic-7: backlog
-  7-1-implement-auto-retry-on-agent-crash: backlog
-  7-2-implement-timeout-detection-and-escalation: backlog
-  7-3-build-dashboard-settings-panel: backlog
-  7-4-implement-access-token-authentication: backlog
-  7-5-implement-cli-system-health-and-documentation: backlog
+  epic-7: done
+  7-1-implement-auto-retry-on-agent-crash: done
+  7-2-implement-timeout-detection-and-escalation: done
+  7-3-build-dashboard-settings-panel: done
+  7-4-implement-access-token-authentication: done
+  7-5-implement-cli-system-health-and-documentation: done
   epic-7-retrospective: optional
+
+  # Epic 8: Integration Hardening & End-to-End Flow
+  epic-8: in-progress
+  8-1-fix-gateway-placeholders-and-agent-execution-pipeline: in-progress
+  8-2-build-agent-config-editor-dashboard: done
+  8-3-add-clear-done-and-done-list: in-progress
+  8-4-implement-agent-activation-status: ready-for-dev

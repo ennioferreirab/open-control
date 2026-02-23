@@ -31,7 +31,8 @@ export const create = mutation({
         | "agent_crashed"
         | "system_error"
         | "task_deleted"
-        | "task_restored",
+        | "task_restored"
+        | "bulk_clear_done",
       description: args.description,
       timestamp: args.timestamp,
     });
