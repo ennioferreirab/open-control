@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { Doc } from "../convex/_generated/dataModel";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface ThreadMessageProps {
   message: Doc<"messages">;
@@ -55,18 +56,23 @@ export function ThreadMessage({ message }: ThreadMessageProps) {
             {new Date(message.timestamp).toLocaleTimeString()}
           </span>
         </div>
-        <div className="flex items-center gap-1 mt-0.5">
+        <div className="flex items-start gap-1 mt-0.5">
           {isApproval && (
-            <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0 mt-0.5" />
           )}
           {isDenial && (
-            <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />
+            <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
           )}
-          <p
-            className={`text-sm text-muted-foreground ${isSystem ? "italic" : ""}`}
-          >
-            {message.content}
-          </p>
+          {isSystem || message.authorType === "user" ? (
+            <p className={`text-sm text-muted-foreground ${isSystem ? "italic" : ""}`}>
+              {message.content}
+            </p>
+          ) : (
+            <MarkdownRenderer
+              content={message.content}
+              className="text-muted-foreground"
+            />
+          )}
         </div>
       </div>
     </div>

@@ -17,10 +17,11 @@ import {
 } from "@/components/ui/sheet";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { TagsPanel } from "@/components/TagsPanel";
-import { Settings, Tag } from "lucide-react";
+import { Settings, Tag, Clock } from "lucide-react";
 import { BoardProvider } from "@/components/BoardContext";
 import { BoardSelector } from "@/components/BoardSelector";
 import { BoardSettingsSheet } from "@/components/BoardSettingsSheet";
+import { CronJobsModal } from "@/components/CronJobsModal";
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
@@ -44,6 +45,7 @@ export function DashboardLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
+  const [cronOpen, setCronOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -79,6 +81,13 @@ export function DashboardLayout() {
                 <BoardSelector onOpenSettings={() => setBoardSettingsOpen(true)} />
               </div>
               <div className="flex items-center gap-1">
+                <button
+                  aria-label="Open cron jobs"
+                  onClick={() => setCronOpen(true)}
+                  className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  <Clock className="h-5 w-5" />
+                </button>
                 <button
                   aria-label="Open tags"
                   onClick={() => setTagsOpen(true)}
@@ -132,6 +141,7 @@ export function DashboardLayout() {
           open={boardSettingsOpen}
           onClose={() => setBoardSettingsOpen(false)}
         />
+        <CronJobsModal open={cronOpen} onClose={() => setCronOpen(false)} />
       </SidebarProvider>
     </BoardProvider>
   );
