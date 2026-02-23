@@ -107,6 +107,7 @@ export default defineSchema({
       v.literal("bulk_clear_done"),
       v.literal("manual_task_status_changed"),
       v.literal("file_attached"),
+      v.literal("agent_output"),
     ),
     description: v.string(),
     timestamp: v.string(),

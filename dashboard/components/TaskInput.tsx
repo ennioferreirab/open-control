@@ -39,7 +39,6 @@ export function TaskInput() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createTask = useMutation(api.tasks.create);
-  const addTaskFiles = useMutation(api.tasks.addTaskFiles);
   const agents = useQuery(api.agents.list);
   const predefinedTags = useQuery(api.taskTags.list);
 
@@ -58,6 +57,7 @@ export function TaskInput() {
       trustLevel?: string;
       reviewers?: string[];
       isManual?: boolean;
+      files?: Array<{ name: string; type: string; size: number; subfolder: string; uploadedAt: string }>;
     } = {
       title: trimmed,
       tags: selectedTags.length > 0 ? selectedTags : undefined,
@@ -76,6 +76,18 @@ export function TaskInput() {
       }
     }
 
+    // Include file metadata atomically with task creation (avoids race condition
+    // where orchestrator picks up the task before addTaskFiles completes)
+    if (pendingFiles.length > 0) {
+      args.files = pendingFiles.map((f) => ({
+        name: f.name,
+        type: f.type || "application/octet-stream",
+        size: f.size,
+        subfolder: "attachments",
+        uploadedAt: new Date().toISOString(),
+      }));
+    }
+
     try {
       const taskId = await createTask(args);
       setTitle("");
@@ -86,6 +98,7 @@ export function TaskInput() {
       setSelectedTags([]);
       setIsExpanded(false);
 
+      // Upload actual files to disk (metadata already in Convex from createTask)
       if (pendingFiles.length > 0) {
         const formData = new FormData();
         for (const file of pendingFiles) {
@@ -97,11 +110,9 @@ export function TaskInput() {
             body: formData,
           });
           if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-          const { files: uploadedFiles } = await res.json();
-          await addTaskFiles({ taskId, files: uploadedFiles });
           setPendingFiles([]);
         } catch {
-          setError("Task created, but file upload failed. Please retry.");
+          setError("Task created, but file upload to disk failed. Please retry.");
         }
       }
     } catch {

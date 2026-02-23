@@ -1,7 +1,7 @@
 # Story 9-13: Lead Agent File-Aware Routing
 
 **Epic:** 9 — Thread Files Context: Agent File Integration
-**Status:** ready-for-dev
+**Status:** done
 
 ## Story
 

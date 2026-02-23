@@ -29,6 +29,7 @@ export const create = mutation({
       v.literal("agent_deactivated"),
       v.literal("bulk_clear_done"),
       v.literal("file_attached"),
+      v.literal("agent_output"),
     ),
     description: v.string(),
     timestamp: v.string(),

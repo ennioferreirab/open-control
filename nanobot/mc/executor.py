@@ -318,16 +318,26 @@ class TaskExecutor:
         """Run the agent on the task and handle completion or crash."""
         import re
 
-        # Build file context from task_data
+        # Fetch fresh task data for up-to-date file manifest (NFR8)
         safe_id = re.sub(r"[^\w\-]", "_", task_id)
         files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
-        raw_files = (task_data or {}).get("files") or []
+        try:
+            fresh_task = await asyncio.to_thread(
+                self._bridge.query, "tasks:getById", {"task_id": task_id}
+            )
+            raw_files = (fresh_task or {}).get("files") or []
+        except Exception:
+            logger.warning(
+                "[executor] Failed to fetch fresh task data for '%s', using subscription snapshot",
+                title,
+            )
+            raw_files = (task_data or {}).get("files") or []
         file_manifest = [
             {
-                "name": f["name"],
-                "type": f["type"],
-                "size": f["size"],
-                "subfolder": f["subfolder"],
+                "name": f.get("name", "unknown"),
+                "type": f.get("type", "application/octet-stream"),
+                "size": f.get("size", 0),
+                "subfolder": f.get("subfolder", "attachments"),
             }
             for f in raw_files
         ]

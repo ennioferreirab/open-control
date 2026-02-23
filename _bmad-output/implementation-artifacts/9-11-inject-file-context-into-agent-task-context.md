@@ -1,7 +1,7 @@
 # Story 9-11: Inject File Context into Agent Task Context
 
 **Epic:** 9 — Thread Files Context: Agent File Integration
-**Status:** ready-for-dev
+**Status:** done
 
 ## Story
 

@@ -12,7 +12,7 @@ const mockAgents = [
 
 vi.mock("../convex/_generated/api", () => ({
   api: {
-    tasks: { create: "tasks:create" },
+    tasks: { create: "tasks:create", addTaskFiles: "tasks:addTaskFiles" },
     agents: { list: "agents:list" },
     taskTags: { list: "taskTags:list" },
   },

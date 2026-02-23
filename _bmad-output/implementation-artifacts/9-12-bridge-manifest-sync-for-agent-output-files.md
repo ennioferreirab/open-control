@@ -1,7 +1,7 @@
 # Story 9-12: Bridge Manifest Sync for Agent Output Files
 
 **Epic:** 9 — Thread Files Context: Agent File Integration
-**Status:** ready-for-dev
+**Status:** done
 
 ## Story
 

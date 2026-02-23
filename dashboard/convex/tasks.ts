@@ -79,6 +79,13 @@ export const create = mutation({
     trustLevel: v.optional(v.string()),
     reviewers: v.optional(v.array(v.string())),
     isManual: v.optional(v.boolean()),
+    files: v.optional(v.array(v.object({
+      name: v.string(),
+      type: v.string(),
+      size: v.number(),
+      subfolder: v.string(),
+      uploadedAt: v.string(),
+    }))),
   },
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
@@ -104,6 +111,7 @@ export const create = mutation({
       reviewers: isManual ? undefined : args.reviewers,
       tags: args.tags,
       ...(isManual ? { isManual: true } : {}),
+      ...(args.files ? { files: args.files } : {}),
       createdAt: now,
       updatedAt: now,
     });
