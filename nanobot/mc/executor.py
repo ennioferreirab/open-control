@@ -213,7 +213,7 @@ class TaskExecutor:
         )
 
         # Execute the task
-        await self._execute_task(task_id, title, description, agent_name, trust_level)
+        await self._execute_task(task_id, title, description, agent_name, trust_level, task_data)
 
     def _load_agent_config(
         self, agent_name: str
@@ -313,8 +313,41 @@ class TaskExecutor:
         description: str | None,
         agent_name: str,
         trust_level: str,
+        task_data: dict[str, Any] | None = None,
     ) -> None:
         """Run the agent on the task and handle completion or crash."""
+        import re
+
+        # Build file context from task_data
+        safe_id = re.sub(r"[^\w\-]", "_", task_id)
+        files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
+        raw_files = (task_data or {}).get("files") or []
+        file_manifest = [
+            {
+                "name": f["name"],
+                "type": f["type"],
+                "size": f["size"],
+                "subfolder": f["subfolder"],
+            }
+            for f in raw_files
+        ]
+
+        if file_manifest:
+            def _human_size(b: int) -> str:
+                if b < 1024 * 1024:
+                    return f"{b // 1024} KB"
+                return f"{b / (1024 * 1024):.1f} MB"
+
+            manifest_summary = ", ".join(
+                f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
+                for f in file_manifest
+            )
+            file_instruction = (
+                f"Task has {len(file_manifest)} attached file(s) at {files_dir}. "
+                f"Review the file manifest before starting work: {manifest_summary}"
+            )
+            description = (description or "") + f"\n\n{file_instruction}"
+
         # Load agent prompt, model, and skills from YAML config
         agent_prompt, agent_model, agent_skills = self._load_agent_config(agent_name)
 
@@ -348,6 +381,17 @@ class TaskExecutor:
                 result,
                 MessageType.WORK,
             )
+
+            # Sync output file manifest to Convex (best-effort, non-blocking)
+            try:
+                await asyncio.to_thread(
+                    self._bridge.sync_task_output_files,
+                    task_id,
+                    task_data or {},
+                    agent_name,
+                )
+            except Exception:
+                logger.exception("[executor] Failed to sync output files for task '%s'", title)
 
             # Determine final status based on trust level
             if trust_level == TrustLevel.AUTONOMOUS:

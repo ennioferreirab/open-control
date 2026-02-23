@@ -113,3 +113,23 @@ development_status:
   8-4-implement-agent-activation-status: review
   8-6-human-manual-tasks-kanban: review
   8-7-implement-task-tags-management: done
+
+  # Epic 9: Thread Files Context
+  epic-9: in-progress
+  # Group A: Attach Files to Tasks
+  9-1-extend-convex-schema-and-create-task-directories: done
+  9-2-upload-files-at-task-creation: done
+  9-3-build-files-tab-in-task-detail-sheet: done
+  9-4-attach-files-to-existing-tasks: done
+  9-5-file-indicators-on-task-cards: done
+  # Group B: View Files in Dashboard
+  9-6-file-serving-api-route: done
+  9-7-viewer-modal-shell-with-text-and-code-viewers: done
+  9-8-pdf-viewer: done
+  9-9-html-and-markdown-viewers-with-raw-toggle: done
+  9-10-image-viewer: done
+  # Group C: Agent File Integration
+  9-11-inject-file-context-into-agent-task-context: done
+  9-12-bridge-manifest-sync-for-agent-output-files: done
+  9-13-lead-agent-file-aware-routing: done
+  epic-9-retrospective: optional

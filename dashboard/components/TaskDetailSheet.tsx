@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
@@ -16,10 +16,28 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { File, FileCode, FileText, Image, Paperclip } from "lucide-react";
 import { ThreadMessage } from "./ThreadMessage";
 import { ExecutionPlanTab } from "./ExecutionPlanTab";
 import { STATUS_COLORS, type TaskStatus } from "@/lib/constants";
 import { InlineRejection } from "./InlineRejection";
+import { DocumentViewerModal } from "./DocumentViewerModal";
+
+const formatSize = (bytes: number) =>
+  bytes < 1024 * 1024
+    ? `${(bytes / 1024).toFixed(0)} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
+const CODE_EXTS = new Set([".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".sh"]);
+
+function FileIcon({ name }: { name: string }) {
+  const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
+  if (ext === ".pdf") return <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
+  if (IMAGE_EXTS.has(ext)) return <Image className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
+  if (CODE_EXTS.has(ext)) return <FileCode className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
+  return <File className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
+}
 
 interface TaskDetailSheetProps {
   taskId: Id<"tasks"> | null;
@@ -37,7 +55,13 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   );
   const approveMutation = useMutation(api.tasks.approve);
   const retryMutation = useMutation(api.tasks.retry);
+  const addTaskFiles = useMutation(api.tasks.addTaskFiles);
+  const createActivity = useMutation(api.activities.create);
+  const [viewerFile, setViewerFile] = useState<{ name: string; type: string; size: number; subfolder: string } | null>(null);
   const [showRejection, setShowRejection] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   // Guard: task must be a valid document (not undefined, null, or a non-object from test mocks)
   const isTaskLoaded = task != null && typeof task === "object" && "status" in task;
@@ -45,6 +69,39 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const colors = isTaskLoaded
     ? STATUS_COLORS[task.status as TaskStatus] ?? STATUS_COLORS.inbox
     : null;
+
+  const handleAttachFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    e.target.value = "";
+
+    setIsUploading(true);
+    setUploadError("");
+
+    try {
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append("files", file, file.name);
+      }
+      const res = await fetch(`/api/tasks/${task!._id}/files`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      const { files: uploadedFiles } = await res.json();
+      await addTaskFiles({ taskId: task!._id, files: uploadedFiles });
+      await createActivity({
+        taskId: task!._id,
+        eventType: "file_attached",
+        description: `User attached ${files.length} file${files.length > 1 ? "s" : ""} to task`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch {
+      setUploadError("Upload failed. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <Sheet open={!!taskId} onOpenChange={(open) => !open && onClose()}>
@@ -124,6 +181,11 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                 <TabsTrigger value="thread">Thread</TabsTrigger>
                 <TabsTrigger value="plan">Execution Plan</TabsTrigger>
                 <TabsTrigger value="config">Config</TabsTrigger>
+                <TabsTrigger value="files">
+                  {task.files && task.files.length > 0
+                    ? `Files (${task.files.length})`
+                    : "Files"}
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="thread" className="flex-1 min-h-0 m-0">
@@ -220,6 +282,69 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                   )}
                 </div>
               </TabsContent>
+              <TabsContent value="files" className="flex-1 min-h-0 m-0">
+                <ScrollArea className="h-full px-6 py-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <input
+                      type="file"
+                      multiple
+                      ref={attachInputRef}
+                      onChange={handleAttachFiles}
+                      className="hidden"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => attachInputRef.current?.click()}
+                      disabled={isUploading}
+                    >
+                      <Paperclip className="h-3.5 w-3.5 mr-1.5" />
+                      {isUploading ? "Uploading..." : "Attach File"}
+                    </Button>
+                    {uploadError && (
+                      <p className="text-xs text-red-500">{uploadError}</p>
+                    )}
+                  </div>
+                  {!task.files || task.files.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      No files yet. Attach files or wait for agent output.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {["attachments", "output"].map((subfolder) => {
+                        const group = task.files!.filter((f) => f.subfolder === subfolder);
+                        if (group.length === 0) return null;
+                        const label = subfolder === "attachments" ? "Attachments" : "Output";
+                        return (
+                          <div key={subfolder}>
+                            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                              {label}
+                            </h4>
+                            <div className="flex flex-col gap-1">
+                              {group.map((file) => (
+                                <div
+                                  key={`${file.subfolder}-${file.name}`}
+                                  className="flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 animate-in fade-in duration-300"
+                                  onClick={() => setViewerFile(file)}
+                                >
+                                  <FileIcon name={file.name} />
+                                  <span className="flex-1 text-sm truncate">{file.name}</span>
+                                  <Badge variant="secondary" className="text-xs flex-shrink-0">
+                                    {file.subfolder === "attachments" ? "attachment" : "output"}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                                    {formatSize(file.size)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </ScrollArea>
+              </TabsContent>
             </Tabs>
           </>
         ) : taskId ? (
@@ -231,6 +356,11 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
           </>
         ) : null}
       </SheetContent>
+      <DocumentViewerModal
+        taskId={task?._id ?? ""}
+        file={viewerFile}
+        onClose={() => setViewerFile(null)}
+      />
     </Sheet>
   );
 }

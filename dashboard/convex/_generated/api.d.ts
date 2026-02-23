@@ -13,6 +13,7 @@ import type * as agents from "../agents.js";
 import type * as messages from "../messages.js";
 import type * as settings from "../settings.js";
 import type * as skills from "../skills.js";
+import type * as taskTags from "../taskTags.js";
 import type * as tasks from "../tasks.js";
 
 import type {
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   settings: typeof settings;
   skills: typeof skills;
+  taskTags: typeof taskTags;
   tasks: typeof tasks;
 }>;
 

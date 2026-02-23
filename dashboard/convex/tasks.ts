@@ -676,6 +676,55 @@ export const clearAllDone = mutation({
 });
 
 /**
+ * Replace the output section of a task's files array with a fresh manifest
+ * scanned from the filesystem. Attachment entries are preserved unchanged.
+ */
+export const updateTaskOutputFiles = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    outputFiles: v.array(
+      v.object({
+        name: v.string(),
+        type: v.string(),
+        size: v.number(),
+        subfolder: v.string(),
+        uploadedAt: v.string(),
+      })
+    ),
+  },
+  handler: async (ctx, { taskId, outputFiles }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) return;
+    const attachments = (task.files ?? []).filter((f) => f.subfolder === "attachments");
+    await ctx.db.patch(taskId, { files: [...attachments, ...outputFiles] });
+  },
+});
+
+/**
+ * Append uploaded file metadata to a task's files array.
+ */
+export const addTaskFiles = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    files: v.array(
+      v.object({
+        name: v.string(),
+        type: v.string(),
+        size: v.number(),
+        subfolder: v.string(),
+        uploadedAt: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, { taskId, files }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new ConvexError(`Task ${taskId} not found`);
+    const existing = task.files ?? [];
+    await ctx.db.patch(taskId, { files: [...existing, ...files] });
+  },
+});
+
+/**
  * Restore a deleted task.
  * mode "previous": restore to n-1 state, preserve assignedAgent
  * mode "beginning": restore to inbox, clear assignedAgent

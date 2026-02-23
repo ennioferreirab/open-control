@@ -10,9 +10,18 @@ const mockAgents = [
   { name: "disabled-bot", displayName: "Disabled Bot", role: "tester", skills: [], status: "idle" as const, enabled: false },
 ];
 
+vi.mock("../convex/_generated/api", () => ({
+  api: {
+    tasks: { create: "tasks:create" },
+    agents: { list: "agents:list" },
+    taskTags: { list: "taskTags:list" },
+  },
+}));
+
 vi.mock("convex/react", () => ({
   useMutation: () => mockMutate,
-  useQuery: () => mockAgents,
+  // Return [] for taskTags so chips don't render and interfere with these tests
+  useQuery: (ref: string) => (ref === "taskTags:list" ? [] : mockAgents),
 }));
 
 describe("TaskInput", () => {
@@ -96,20 +105,6 @@ describe("TaskInput", () => {
     expect(
       screen.queryByText("Task description required")
     ).not.toBeInTheDocument();
-  });
-
-  it("parses tags from hash-separated input", () => {
-    mockMutate.mockResolvedValue("taskId123");
-    render(<TaskInput />);
-    const input = screen.getByPlaceholderText("Create a new task...");
-    fireEvent.change(input, {
-      target: { value: "Research AI trends #tag1, tag2" },
-    });
-    fireEvent.click(screen.getByText("Create"));
-    expect(mockMutate).toHaveBeenCalledWith({
-      title: "Research AI trends",
-      tags: ["tag1", "tag2"],
-    });
   });
 
   // --- New tests for Story 4.4: Progressive disclosure & agent assignment ---

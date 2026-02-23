@@ -8,6 +8,7 @@ All other modules interact with Convex exclusively through this bridge.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -232,6 +233,41 @@ class ConvexBridge:
         self._log_state_transition("activity", description)
         return result
 
+    def create_task_directory(self, task_id: str) -> None:
+        """Create the filesystem directory structure for a task.
+
+        Creates:
+            ~/.nanobot/tasks/{safe_task_id}/attachments/
+            ~/.nanobot/tasks/{safe_task_id}/output/
+
+        Idempotent — no error if directories already exist.
+        On OSError, logs an activity event and continues (does not raise).
+
+        Args:
+            task_id: Convex task _id (e.g. "jd7abc123xyz").
+        """
+        safe_task_id = re.sub(r"[^\w\-]", "_", task_id)
+        task_dir = Path.home() / ".nanobot" / "tasks" / safe_task_id
+        for subdir in ("attachments", "output"):
+            path = task_dir / subdir
+            try:
+                os.makedirs(path, exist_ok=True)
+                logger.debug("Created task directory: %s", path)
+            except OSError as exc:
+                error_msg = f"Failed to create task directory {path}: {exc}"
+                logger.error(error_msg)
+                try:
+                    self.create_activity(
+                        "system_error",
+                        error_msg,
+                        task_id=task_id,
+                    )
+                except Exception as activity_exc:
+                    logger.error(
+                        "Failed to log directory creation error as activity: %s",
+                        activity_exc,
+                    )
+
     def send_message(
         self,
         task_id: str,
@@ -449,6 +485,89 @@ class ConvexBridge:
         # Generate SOUL.md if not already present (preserves user edits)
         role = agent_data.get("role", "Agent")
         ensure_soul_md(agent_dir, name, role, soul)
+
+    def sync_task_output_files(self, task_id: str, task_data: dict, agent_name: str = "agent") -> None:
+        """Scan output/ directory and sync file manifest in Convex.
+
+        - Adds new output files not yet in the manifest
+        - Replaces the output section if stale entries exist
+        - Creates activity event if new files were found
+        """
+        import mimetypes
+
+        EXT_MIME: dict[str, str] = {
+            "pdf": "application/pdf", "md": "text/markdown", "markdown": "text/markdown",
+            "html": "text/html", "htm": "text/html", "txt": "text/plain",
+            "csv": "text/csv", "json": "application/json", "yaml": "text/yaml",
+            "yml": "text/yaml", "xml": "application/xml", "py": "text/x-python",
+            "ts": "text/typescript", "tsx": "text/typescript", "js": "text/javascript",
+            "jsx": "text/javascript", "go": "text/x-go", "rs": "text/x-rust",
+            "sh": "text/x-sh", "bash": "text/x-sh",
+        }
+
+        safe_id = re.sub(r"[^\w\-]", "_", task_id)
+        output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+
+        if not output_dir.exists():
+            return
+
+        # Scan filesystem
+        now = datetime.utcnow().isoformat() + "Z"
+        fs_files: list[dict] = []
+        try:
+            for entry in output_dir.iterdir():
+                if entry.is_file():
+                    ext = entry.suffix.lstrip(".").lower()
+                    mime = EXT_MIME.get(ext, "application/octet-stream")
+                    fs_files.append({
+                        "name": entry.name,
+                        "type": mime,
+                        "size": entry.stat().st_size,
+                        "subfolder": "output",
+                        "uploaded_at": now,
+                    })
+        except OSError as exc:
+            logger.error("[bridge] Failed to scan output dir %s: %s", output_dir, exc)
+            return
+
+        # Compare with existing manifest
+        existing_output = {
+            f["name"] for f in (task_data.get("files") or [])
+            if f.get("subfolder") == "output"
+        }
+        fs_names = {f["name"] for f in fs_files}
+
+        new_files = [f for f in fs_files if f["name"] not in existing_output]
+        stale_names = existing_output - fs_names
+
+        if not new_files and not stale_names:
+            return  # nothing to do
+
+        # Update Convex — replace full output section
+        try:
+            self._mutation_with_retry("tasks:updateTaskOutputFiles", {
+                "task_id": task_id,
+                "output_files": fs_files,
+            })
+            logger.info("[bridge] Synced %d output file(s) for task %s", len(fs_files), task_id)
+        except Exception as exc:
+            logger.error("[bridge] Failed to sync output files for task %s: %s", task_id, exc)
+            return
+
+        if stale_names:
+            logger.warning(
+                "[bridge] Manifest reconciliation: removed %d orphaned entries for task %s",
+                len(stale_names), task_id,
+            )
+
+        # Activity event for new files
+        if new_files:
+            file_names = ", ".join(f["name"] for f in new_files)
+            msg = f"{agent_name} produced {len(new_files)} output file(s): {file_names}"
+            try:
+                self.create_activity("agent_output", msg, task_id=task_id)
+            except Exception as exc:
+                logger.error("[bridge] Failed to create output file activity: %s", exc)
 
     def close(self) -> None:
         """Close the Convex client connection."""

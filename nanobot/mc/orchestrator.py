@@ -91,6 +91,9 @@ class TaskOrchestrator:
             logger.warning("[orchestrator] Skipping task with no id: %s", task_data)
             return
 
+        # Create filesystem directory structure for this task
+        await asyncio.to_thread(self._bridge.create_task_directory, task_id)
+
         # Skip manual tasks — they are user-managed via dashboard drag-and-drop
         if task_data.get("is_manual"):
             logger.info("[orchestrator] Skipping manual task '%s' (%s)", title, task_id)
@@ -106,7 +109,8 @@ class TaskOrchestrator:
         # Use LLM-based planner (falls back to heuristic on failure)
         planner = TaskPlanner()
         plan = await planner.plan_task(
-            title, description, agents, explicit_agent=assigned_agent
+            title, description, agents, explicit_agent=assigned_agent,
+            files=task_data.get("files") or [],
         )
 
         logger.info(

@@ -8,7 +8,7 @@ import { api } from "../convex/_generated/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Clock, ListChecks, RefreshCw, Trash2, User } from "lucide-react";
+import { AlertTriangle, Clock, ListChecks, Paperclip, RefreshCw, Trash2, User } from "lucide-react";
 import { Doc } from "../convex/_generated/dataModel";
 import { STATUS_COLORS, TAG_COLORS, type TaskStatus } from "@/lib/constants";
 import { InlineRejection } from "./InlineRejection";
@@ -126,6 +126,12 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
               {task.assignedAgent}
+            </span>
+          )}
+          {task.files && task.files.length > 0 && (
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <Paperclip className="w-3 h-3" />
+              {task.files.length}
             </span>
           )}
           {showHitlButtons && (
