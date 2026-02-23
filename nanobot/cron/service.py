@@ -45,6 +45,78 @@ def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
     return None
 
 
+def _parse_raw_job(j: dict) -> CronJob:
+    """Parse a job dict that may be in old flat or new nested format."""
+    now = _now_ms()
+
+    # --- schedule ---
+    raw_sched = j.get("schedule")
+    if isinstance(raw_sched, str):
+        # Flat format: "schedule" is a cron expression string
+        schedule = CronSchedule(kind="cron", expr=raw_sched, tz=j.get("tz"))
+    elif isinstance(raw_sched, dict):
+        schedule = CronSchedule(
+            kind=raw_sched.get("kind", "cron"),
+            at_ms=raw_sched.get("atMs"),
+            every_ms=raw_sched.get("everyMs"),
+            expr=raw_sched.get("expr"),
+            tz=raw_sched.get("tz"),
+        )
+    elif j.get("cron_expr"):
+        # Another flat variant: top-level cron_expr
+        schedule = CronSchedule(kind="cron", expr=j["cron_expr"], tz=j.get("tz"))
+    else:
+        schedule = CronSchedule(kind="every", every_ms=None)
+
+    # --- payload ---
+    raw_payload = j.get("payload")
+    if isinstance(raw_payload, dict):
+        payload = CronPayload(
+            kind=raw_payload.get("kind", "agent_turn"),
+            message=raw_payload.get("message", ""),
+            deliver=raw_payload.get("deliver", False),
+            channel=raw_payload.get("channel"),
+            to=raw_payload.get("to"),
+        )
+    else:
+        # Flat formats use "task" or "message" as the message text
+        msg = j.get("task") or j.get("message") or ""
+        payload = CronPayload(kind="agent_turn", message=msg)
+
+    # --- state ---
+    raw_state = j.get("state", {}) or {}
+    state = CronJobState(
+        next_run_at_ms=raw_state.get("nextRunAtMs"),
+        last_run_at_ms=raw_state.get("lastRunAtMs"),
+        last_status=raw_state.get("lastStatus"),
+        last_error=raw_state.get("lastError"),
+    )
+
+    # --- id ---
+    job_id = j.get("id") or str(uuid.uuid4())[:8]
+
+    # --- createdAtMs ---
+    created_at_ms = j.get("createdAtMs", 0) or 0
+    if not created_at_ms and j.get("created_at"):
+        try:
+            from datetime import timezone
+            created_at_ms = int(datetime.fromisoformat(j["created_at"]).timestamp() * 1000)
+        except Exception:
+            pass
+
+    return CronJob(
+        id=job_id,
+        name=j.get("name") or job_id,
+        enabled=j.get("enabled", True),
+        schedule=schedule,
+        payload=payload,
+        state=state,
+        created_at_ms=created_at_ms,
+        updated_at_ms=j.get("updatedAtMs", 0) or 0,
+        delete_after_run=j.get("deleteAfterRun", False),
+    )
+
+
 def _validate_schedule_for_add(schedule: CronSchedule) -> None:
     """Validate schedule fields that would otherwise create non-runnable jobs."""
     if schedule.tz and schedule.kind != "cron":
@@ -83,34 +155,10 @@ class CronService:
                 data = json.loads(self.store_path.read_text(encoding="utf-8"))
                 jobs = []
                 for j in data.get("jobs", []):
-                    jobs.append(CronJob(
-                        id=j["id"],
-                        name=j["name"],
-                        enabled=j.get("enabled", True),
-                        schedule=CronSchedule(
-                            kind=j["schedule"]["kind"],
-                            at_ms=j["schedule"].get("atMs"),
-                            every_ms=j["schedule"].get("everyMs"),
-                            expr=j["schedule"].get("expr"),
-                            tz=j["schedule"].get("tz"),
-                        ),
-                        payload=CronPayload(
-                            kind=j["payload"].get("kind", "agent_turn"),
-                            message=j["payload"].get("message", ""),
-                            deliver=j["payload"].get("deliver", False),
-                            channel=j["payload"].get("channel"),
-                            to=j["payload"].get("to"),
-                        ),
-                        state=CronJobState(
-                            next_run_at_ms=j.get("state", {}).get("nextRunAtMs"),
-                            last_run_at_ms=j.get("state", {}).get("lastRunAtMs"),
-                            last_status=j.get("state", {}).get("lastStatus"),
-                            last_error=j.get("state", {}).get("lastError"),
-                        ),
-                        created_at_ms=j.get("createdAtMs", 0),
-                        updated_at_ms=j.get("updatedAtMs", 0),
-                        delete_after_run=j.get("deleteAfterRun", False),
-                    ))
+                    try:
+                        jobs.append(_parse_raw_job(j))
+                    except Exception as e:
+                        logger.warning("Skipping malformed cron job {}: {}", j.get("id", "?"), e)
                 self._store = CronStore(jobs=jobs)
             except Exception as e:
                 logger.warning("Failed to load cron store: {}", e)
