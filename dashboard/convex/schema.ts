@@ -1,0 +1,104 @@
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  tasks: defineTable({
+    title: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(
+      v.literal("inbox"),
+      v.literal("assigned"),
+      v.literal("in_progress"),
+      v.literal("review"),
+      v.literal("done"),
+      v.literal("retrying"),
+      v.literal("crashed"),
+      v.literal("deleted"),
+    ),
+    assignedAgent: v.optional(v.string()),
+    trustLevel: v.union(
+      v.literal("autonomous"),
+      v.literal("agent_reviewed"),
+      v.literal("human_approved"),
+    ),
+    reviewers: v.optional(v.array(v.string())),
+    tags: v.optional(v.array(v.string())),
+    taskTimeout: v.optional(v.number()),
+    interAgentTimeout: v.optional(v.number()),
+    executionPlan: v.optional(v.any()),
+    stalledAt: v.optional(v.string()),
+    deletedAt: v.optional(v.string()),
+    previousStatus: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  }).index("by_status", ["status"]),
+
+  messages: defineTable({
+    taskId: v.id("tasks"),
+    authorName: v.string(),
+    authorType: v.union(
+      v.literal("agent"),
+      v.literal("user"),
+      v.literal("system"),
+    ),
+    content: v.string(),
+    messageType: v.union(
+      v.literal("work"),
+      v.literal("review_feedback"),
+      v.literal("approval"),
+      v.literal("denial"),
+      v.literal("system_event"),
+    ),
+    timestamp: v.string(),
+  }).index("by_taskId", ["taskId"]),
+
+  agents: defineTable({
+    name: v.string(),
+    displayName: v.string(),
+    role: v.string(),
+    skills: v.array(v.string()),
+    status: v.union(
+      v.literal("active"),
+      v.literal("idle"),
+      v.literal("crashed"),
+    ),
+    model: v.optional(v.string()),
+    lastActiveAt: v.optional(v.string()),
+  })
+    .index("by_name", ["name"])
+    .index("by_status", ["status"]),
+
+  activities: defineTable({
+    taskId: v.optional(v.id("tasks")),
+    agentName: v.optional(v.string()),
+    eventType: v.union(
+      v.literal("task_created"),
+      v.literal("task_assigned"),
+      v.literal("task_started"),
+      v.literal("task_completed"),
+      v.literal("task_crashed"),
+      v.literal("task_retrying"),
+      v.literal("review_requested"),
+      v.literal("review_feedback"),
+      v.literal("review_approved"),
+      v.literal("hitl_requested"),
+      v.literal("hitl_approved"),
+      v.literal("hitl_denied"),
+      v.literal("agent_connected"),
+      v.literal("agent_disconnected"),
+      v.literal("agent_crashed"),
+      v.literal("system_error"),
+      v.literal("task_deleted"),
+      v.literal("task_restored"),
+    ),
+    description: v.string(),
+    timestamp: v.string(),
+  })
+    .index("by_taskId", ["taskId"])
+    .index("by_timestamp", ["timestamp"]),
+
+  settings: defineTable({
+    key: v.string(),
+    value: v.string(),
+  }).index("by_key", ["key"]),
+});
