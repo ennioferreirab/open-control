@@ -1,0 +1,321 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { X, Trash2 } from "lucide-react";
+
+interface CronSchedule {
+  kind: "at" | "every" | "cron";
+  atMs: number | null;
+  everyMs: number | null;
+  expr: string | null;
+  tz: string | null;
+}
+
+interface CronPayload {
+  kind: string;
+  message: string;
+  deliver: boolean;
+  channel: string | null;
+  to: string | null;
+}
+
+interface CronJobState {
+  nextRunAtMs: number | null;
+  lastRunAtMs: number | null;
+  lastStatus: "ok" | "error" | "skipped" | null;
+  lastError: string | null;
+}
+
+interface CronJob {
+  id: string;
+  name: string;
+  enabled: boolean;
+  schedule: CronSchedule;
+  payload: CronPayload;
+  state: CronJobState;
+  createdAtMs: number;
+  updatedAtMs: number;
+  deleteAfterRun: boolean;
+}
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+}
+
+function formatSchedule(schedule: CronSchedule): string {
+  const tz = schedule.tz ? ` (${schedule.tz})` : "";
+  if (schedule.kind === "every" && schedule.everyMs) {
+    const s = schedule.everyMs / 1000;
+    if (s < 60) return `every ${s}s${tz}`;
+    if (s < 3600) return `every ${Math.round(s / 60)}min${tz}`;
+    return `every ${Math.round(s / 3600)}hr${tz}`;
+  }
+  if (schedule.kind === "cron" && schedule.expr) {
+    return `cron: ${schedule.expr}${tz}`;
+  }
+  if (schedule.kind === "at" && schedule.atMs) {
+    return `at: ${new Date(schedule.atMs).toLocaleString()}${tz}`;
+  }
+  return "—";
+}
+
+function formatRelative(ms: number | null): string {
+  if (ms == null) return "—";
+  const diff = ms - Date.now();
+  const abs = Math.abs(diff);
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  if (abs < 60_000) return rtf.format(Math.round(diff / 1000), "seconds");
+  if (abs < 3_600_000) return rtf.format(Math.round(diff / 60_000), "minutes");
+  if (abs < 86_400_000)
+    return rtf.format(Math.round(diff / 3_600_000), "hours");
+  return rtf.format(Math.round(diff / 86_400_000), "days");
+}
+
+function StatusBadge({
+  status,
+  error,
+}: {
+  status: "ok" | "error" | "skipped";
+  error: string | null;
+}) {
+  const cls: Record<string, string> = {
+    ok: "text-green-600 bg-green-50 border-green-200",
+    error: "text-red-600 bg-red-50 border-red-200",
+    skipped: "text-muted-foreground bg-muted border-border",
+  };
+  const badge = (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${cls[status] ?? cls.skipped}`}
+    >
+      {status}
+    </span>
+  );
+  if (status === "error" && error) {
+    return (
+      <span title={error} className="cursor-help">
+        {badge}
+      </span>
+    );
+  }
+  return badge;
+}
+
+export function CronJobsModal({ open, onClose }: Props) {
+  const [jobs, setJobs] = useState<CronJob[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDeleteJob, setConfirmDeleteJob] = useState<CronJob | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setJobs([]);
+    setLoading(true);
+    setError(null);
+    fetch("/api/cron")
+      .then((res) => {
+        if (!res.ok) throw new Error("server error");
+        return res.json() as Promise<{ jobs: CronJob[] }>;
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setJobs(data.jobs);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Failed to load cron jobs.");
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  async function handleDelete() {
+    if (!confirmDeleteJob) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/cron/${confirmDeleteJob.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("failed");
+      setJobs((prev) => prev.filter((j) => j.id !== confirmDeleteJob.id));
+      setConfirmDeleteJob(null);
+    } catch {
+      setDeleteError("Failed to delete. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-4xl w-full max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
+        <DialogHeader className="flex flex-row items-center justify-between px-6 py-4 border-b shrink-0">
+          <DialogTitle className="text-base font-medium">
+            Scheduled Cron Jobs
+          </DialogTitle>
+          <Button
+            aria-label="Close cron jobs"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </DialogHeader>
+
+        <div className="flex-1 min-h-0 overflow-auto p-4">
+          {loading && (
+            <div className="flex flex-col gap-2">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-10 bg-muted animate-pulse rounded"
+                />
+              ))}
+            </div>
+          )}
+
+          {error && (
+            <p className="text-sm text-red-500 text-center py-8">{error}</p>
+          )}
+
+          {!loading && !error && jobs.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No scheduled jobs. Agents can create cron jobs using the{" "}
+              <code className="font-mono">cron</code> tool.
+            </p>
+          )}
+
+          {!loading && !error && jobs.length > 0 && (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-muted-foreground text-xs">
+                  <th className="text-left pb-2 pr-4 font-medium">Name</th>
+                  <th className="text-left pb-2 pr-4 font-medium">Schedule</th>
+                  <th className="text-left pb-2 pr-4 font-medium">Delivery</th>
+                  <th className="text-left pb-2 pr-4 font-medium">Last Run</th>
+                  <th className="text-left pb-2 pr-4 font-medium">Next Run</th>
+                  <th className="text-left pb-2 pr-4 font-medium">Last Status</th>
+                  <th className="pb-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job, idx) => (
+                  <tr key={job.id || idx} className="border-b last:border-0">
+                    <td className="py-2 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{job.name}</span>
+                        <Badge
+                          variant={job.enabled ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {job.enabled ? "enabled" : "disabled"}
+                        </Badge>
+                      </div>
+                    </td>
+                    <td className="py-2 pr-4 text-muted-foreground font-mono text-xs">
+                      {formatSchedule(job.schedule)}
+                    </td>
+                    <td className="py-2 pr-4 text-muted-foreground text-xs">
+                      {job.payload.channel && job.payload.to
+                        ? `${job.payload.channel} → ${job.payload.to}`
+                        : "—"}
+                    </td>
+                    <td className="py-2 pr-4 text-muted-foreground text-xs">
+                      {formatRelative(job.state.lastRunAtMs)}
+                    </td>
+                    <td className="py-2 pr-4 text-muted-foreground text-xs">
+                      {job.enabled
+                        ? formatRelative(job.state.nextRunAtMs)
+                        : "—"}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {job.state.lastStatus ? (
+                        <StatusBadge
+                          status={job.state.lastStatus}
+                          error={job.state.lastError}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="py-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Delete ${job.name}`}
+                        className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                        onClick={() => {
+                          setDeleteError(null);
+                          setConfirmDeleteJob(job);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </DialogContent>
+
+      <AlertDialog
+        open={confirmDeleteJob !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setConfirmDeleteJob(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &quot;{confirmDeleteJob?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <p className="text-xs text-red-500 -mt-2">{deleteError}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Dialog>
+  );
+}
