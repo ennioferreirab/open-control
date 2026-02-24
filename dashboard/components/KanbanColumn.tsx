@@ -56,7 +56,7 @@ export function KanbanColumn({
 
   return (
     <div
-      className={`flex flex-col min-h-0 rounded-lg transition-colors ${isDragOver ? "ring-2 ring-blue-400 bg-blue-50/30 dark:bg-blue-950/30" : ""}`}
+      className={`flex flex-col min-h-0 min-w-0 overflow-hidden rounded-lg transition-colors ${isDragOver ? "ring-2 ring-blue-400 bg-blue-50/30 dark:bg-blue-950/30" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";

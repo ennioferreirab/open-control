@@ -79,7 +79,7 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) {
   return (
     <LayoutGroup>
       <div className="flex-1 flex gap-4 overflow-hidden">
-        <div className="flex-1 grid grid-cols-5 gap-4">
+        <div className="flex-1 grid grid-cols-5 gap-4 min-w-0">
           {tasksByStatus.map((col) => (
             <KanbanColumn
               key={col.status}
