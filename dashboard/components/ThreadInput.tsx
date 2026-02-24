@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SendHorizontal } from "lucide-react";
+import { SendHorizontal, RotateCcw } from "lucide-react";
 
 interface ThreadInputProps {
   task: Doc<"tasks">;
@@ -25,12 +25,14 @@ const BLOCKED_STATUSES = ["in_progress", "retrying"];
 export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [error, setError] = useState("");
   const [selectedAgent, setSelectedAgent] = useState(
     task.assignedAgent ?? ""
   );
 
   const sendMessage = useMutation(api.messages.sendThreadMessage);
+  const restoreTask = useMutation(api.tasks.restore);
   const agents = useQuery(api.agents.list);
   const board = useQuery(
     api.boards.getById,
@@ -85,6 +87,41 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
       if (canSend) handleSend();
     }
   };
+
+  const handleRestore = async () => {
+    setIsRestoring(true);
+    setError("");
+    try {
+      await restoreTask({ taskId: task._id, mode: "previous" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to restore task.");
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  if (task.status === "deleted") {
+    return (
+      <div className="px-6 py-3 border-t space-y-2">
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Task is in trash. Restore to send a message?
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs h-7"
+            onClick={handleRestore}
+            disabled={isRestoring}
+          >
+            <RotateCcw className="h-3 w-3 mr-1.5" />
+            {isRestoring ? "Restoring..." : "Restore"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isBlocked) {
     return (
