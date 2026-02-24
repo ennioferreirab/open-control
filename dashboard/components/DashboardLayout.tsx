@@ -69,11 +69,11 @@ export function DashboardLayout() {
 
   return (
     <BoardProvider>
-      <SidebarProvider defaultOpen={isXl}>
+      <SidebarProvider defaultOpen={isXl} className="h-screen overflow-hidden">
         <AgentSidebar />
-        <SidebarInset>
+        <SidebarInset className="h-screen min-w-0 overflow-hidden">
           <div className="flex h-screen flex-col overflow-hidden bg-background">
-            <header className="border-b border-border px-6 py-4 flex items-center justify-between">
+            <header className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-foreground">
                   Mission Control
@@ -105,11 +105,11 @@ export function DashboardLayout() {
               </div>
             </header>
 
-            <div className="border-b border-border px-6 py-3">
+            <div className="border-b border-border px-4 py-3">
               <TaskInput />
             </div>
 
-            <div className="flex-1 overflow-hidden px-6 py-4 flex flex-col min-h-0">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4">
               <KanbanBoard onTaskClick={(taskId) => setSelectedTaskId(taskId)} />
             </div>
           </div>

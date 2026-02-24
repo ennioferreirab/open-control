@@ -26,18 +26,18 @@ export function FeedItem({ activity }: FeedItemProps) {
   }
 
   return (
-    <div className={`px-2 py-1.5 ${borderClass} rounded-sm`}>
-      <div className="flex items-center gap-2">
+    <div className={`rounded-md border border-border bg-background px-3 py-2 ${borderClass}`}>
+      <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-xs font-mono text-muted-foreground">
           {formatTime(activity.timestamp)}
         </span>
         {activity.agentName && (
-          <span className="text-xs font-medium text-foreground">
+          <span className="truncate text-xs font-medium text-foreground">
             {activity.agentName}
           </span>
         )}
       </div>
-      <p className="text-xs text-muted-foreground mt-0.5">{activity.description}</p>
+      <p className="text-xs text-muted-foreground">{activity.description}</p>
     </div>
   );
 }

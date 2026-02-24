@@ -55,7 +55,7 @@ export function KanbanColumn({
 
   return (
     <div
-      className={`flex flex-col min-h-0 min-w-0 overflow-hidden rounded-lg transition-colors ${isDragOver ? "ring-2 ring-blue-400 bg-blue-50/30 dark:bg-blue-950/30" : ""}`}
+      className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-muted/40 p-3 transition-colors ${isDragOver ? "ring-2 ring-blue-400 bg-blue-50/30 dark:bg-blue-950/30" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
@@ -79,16 +79,16 @@ export function KanbanColumn({
         }
       }}
     >
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <div className={`w-2 h-2 rounded-full ${accentColor}`} />
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        <Badge variant="secondary" className="text-xs">
+      <div className="mb-2 flex items-center gap-2">
+        <div className={`h-4 w-1 rounded-full ${accentColor}`} />
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        <Badge variant="secondary" className="h-5 px-2 text-[10px]">
           {tasks.length}
         </Badge>
         {hitlCount > 0 && (
           <span
             data-testid="hitl-badge"
-            className={`bg-amber-500 text-white text-xs font-medium rounded-full px-1.5 min-w-[20px] text-center ${isPulsing ? "animate-pulse-once" : ""}`}
+            className={`min-w-[20px] rounded-full bg-amber-500 px-1.5 text-center text-xs font-medium text-white ${isPulsing ? "animate-pulse-once" : ""}`}
           >
             {hitlCount}
           </span>
@@ -96,14 +96,14 @@ export function KanbanColumn({
         {onClear && (
           <Eraser
             aria-label="Clear done tasks"
-            className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer${clearDisabled ? " pointer-events-none opacity-40" : ""}`}
+            className={`ml-auto h-3.5 w-3.5 cursor-pointer text-muted-foreground transition-colors hover:text-foreground${clearDisabled ? " pointer-events-none opacity-40" : ""}`}
             onClick={() => setShowClearConfirm(true)}
           />
         )}
         {onViewAll && (
           <List
             aria-label="View all done tasks"
-            className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            className={`${onClear ? "" : "ml-auto "}h-3.5 w-3.5 cursor-pointer text-muted-foreground transition-colors hover:text-foreground`}
             onClick={onViewAll}
           />
         )}
@@ -140,9 +140,9 @@ export function KanbanColumn({
           </div>
         </motion.div>
       )}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {tasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">No tasks</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">No tasks</p>
         ) : (
           <div className="flex flex-col gap-2">
             {tasks.map((task) => (

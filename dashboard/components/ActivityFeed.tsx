@@ -96,9 +96,9 @@ export function ActivityFeed() {
   }
 
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col" aria-live="polite">
       <ScrollArea ref={scrollAreaRef} className="flex-1">
-        <div className="p-2 space-y-1">
+        <div className="space-y-2 p-3">
           {activities.map((activity) => (
             <motion.div
               key={activity._id}
@@ -120,8 +120,8 @@ export function ActivityFeed() {
       {hasNewActivity && (
         <button
           onClick={scrollToTop}
-          className="absolute bottom-2 left-1/2 -translate-x-1/2
-            bg-blue-500 text-white text-xs px-3 py-1 rounded-full
+          className="absolute bottom-3 left-1/2 -translate-x-1/2
+            rounded-full bg-blue-500 px-3 py-1 text-xs text-white
             shadow-md hover:bg-blue-600 transition-colors"
         >
           New activity

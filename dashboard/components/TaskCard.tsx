@@ -8,7 +8,15 @@ import { api } from "../convex/_generated/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ChevronDown, ChevronUp, Clock, ListChecks, Paperclip, RefreshCw, Trash2, User } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock,
+  ListChecks,
+  Paperclip,
+  RefreshCw,
+  Trash2,
+  User,
+} from "lucide-react";
 import { Doc } from "../convex/_generated/dataModel";
 import { STATUS_COLORS, TAG_COLORS, type TaskStatus } from "@/lib/constants";
 import { InlineRejection } from "./InlineRejection";
@@ -26,12 +34,28 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
   const [showRejection, setShowRejection] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [titleExpanded, setTitleExpanded] = useState(false);
-
   const colors = STATUS_COLORS[task.status as TaskStatus] ?? STATUS_COLORS.inbox;
   const showHitlButtons =
     task.status === "review" && task.trustLevel === "human_approved";
   const isManual = task.isManual === true;
+  const steps = (task as any).executionPlan?.steps;
+  const totalSteps = Array.isArray(steps) ? steps.length : 0;
+  const completedSteps = totalSteps
+    ? steps.filter((s: any) => s.status === "completed").length
+    : 0;
+  const progressPercent = totalSteps
+    ? Math.round((completedSteps / totalSteps) * 100)
+    : 0;
+  const showProgress =
+    totalSteps > 0 && (task.status === "in_progress" || task.status === "retrying");
+  const assignedAgentInitials = task.assignedAgent
+    ? task.assignedAgent
+        .split(/[\s-_]+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0]?.toUpperCase() ?? "")
+        .join("")
+    : "?";
 
   return (
     <motion.div
@@ -40,8 +64,12 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
       transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.3 }}
     >
       <Card
-        className={`p-4 rounded-[10px] border-l-[3px] cursor-pointer
-          hover:shadow-md transition-shadow ${colors.border}${isDragging ? " opacity-50 shadow-lg" : ""}${isManual ? " cursor-grab" : ""}`}
+        className={[
+          "cursor-pointer rounded-[10px] border-l-[3px] p-3.5 transition-shadow hover:shadow-md",
+          colors.border,
+          isDragging ? "opacity-50 shadow-lg" : "",
+          isManual ? "cursor-grab" : "",
+        ].join(" ")}
         onClick={onClick}
         role="article"
         aria-label={`${task.title} - ${task.status}`}
@@ -53,37 +81,31 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
         } : undefined}
         onDragEnd={isManual ? () => setIsDragging(false) : undefined}
       >
-        <div className="flex items-start justify-between gap-2">
-          <h3 className={`text-sm font-semibold text-foreground min-w-0 ${titleExpanded ? "" : "line-clamp-2"}`}>
+        <div className="mb-1.5 flex items-start justify-between gap-2">
+          <h3 className="min-w-0 text-sm font-semibold text-foreground line-clamp-2">
             {task.title}
           </h3>
-          <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+          <div className="mt-0.5 flex shrink-0 items-center gap-1">
             {isManual && <User className="h-3.5 w-3.5 text-muted-foreground" />}
-            <button
-              onClick={(e) => { e.stopPropagation(); setTitleExpanded((v) => !v); }}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              aria-label={titleExpanded ? "Collapse title" : "Expand title"}
-            >
-              {titleExpanded
-                ? <ChevronUp className="h-3.5 w-3.5" />
-                : <ChevronDown className="h-3.5 w-3.5" />}
-            </button>
+            {task.status === "crashed" && (
+              <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+            )}
           </div>
         </div>
         {task.description && (
-          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+          <p className="mb-2 text-xs text-muted-foreground line-clamp-2">
             {task.description}
           </p>
         )}
         {task.tags && task.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
+          <div className="mb-2 flex flex-wrap gap-1">
             {task.tags.map((tag) => {
               const colorKey = tagColorMap?.[tag];
               const color = colorKey ? TAG_COLORS[colorKey] : null;
               return (
                 <span
                   key={tag}
-                  className={`text-xs px-1.5 py-0.5 rounded-full flex items-center gap-1 ${
+                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${
                     color
                       ? `${color.bg} ${color.text}`
                       : "bg-muted text-muted-foreground"
@@ -100,58 +122,77 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
             })}
           </div>
         )}
-        {(task as any).executionPlan?.steps && (
-          <div className="flex items-center gap-1 mt-1.5">
+        {totalSteps > 0 && (
+          <div className="mb-1 flex items-center gap-1">
             <ListChecks className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">
-              {(task as any).executionPlan.steps.filter((s: any) => s.status === "completed").length}
-              /{(task as any).executionPlan.steps.length} steps
+              {completedSteps}/{totalSteps} steps
             </span>
           </div>
         )}
-        {task.status === "crashed" && (
-          <div className="flex items-center gap-1 mt-1.5">
-            <AlertTriangle className="h-3 w-3 text-red-500" />
-            <span className="text-xs text-red-600">Crashed</span>
+        {showProgress && (
+          <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-blue-500 transition-[width] duration-200"
+              style={{ width: `${progressPercent}%` }}
+            />
           </div>
         )}
-        {task.stalledAt && task.status !== "crashed" && task.status !== "done" && (
-          <div className="flex items-center gap-1 mt-1.5">
-            <Clock className="h-3 w-3 text-amber-500" />
-            <Badge variant="outline" className="text-[10px] font-medium text-amber-600 bg-amber-50 border-amber-200 px-1.5 py-0">
+        <div className="mt-2 flex items-center gap-2">
+          <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <span className="flex h-4 w-4 items-center justify-center rounded-[5px] bg-muted text-[9px] font-semibold text-foreground">
+              {assignedAgentInitials || "?"}
+            </span>
+            <span className="truncate">{task.assignedAgent ?? "Unassigned"}</span>
+          </span>
+          <Badge
+            variant="secondary"
+            className={`h-5 rounded-full px-2 text-[10px] font-medium ${colors.bg} ${colors.text}`}
+          >
+            {task.status}
+          </Badge>
+          {task.trustLevel === "human_approved" && (
+            <Badge className="h-5 rounded-full bg-amber-500 px-2 text-[10px] text-white">
+              HITL
+            </Badge>
+          )}
+          {task.stalledAt && task.status !== "crashed" && task.status !== "done" && (
+            <Badge
+              variant="outline"
+              className="h-5 rounded-full border-amber-300 bg-amber-50 px-2 text-[10px] font-medium text-amber-600"
+            >
+              <Clock className="mr-1 h-3 w-3" />
               Stalled
             </Badge>
-          </div>
-        )}
-        {task.trustLevel !== "autonomous" && (
-          <div className="flex items-center gap-1 mt-1">
-            <RefreshCw className="h-3 w-3 text-amber-500" />
-            {task.trustLevel === "human_approved" && (
-              <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1 rounded">
-                HITL
+          )}
+          {task.status === "crashed" && (
+            <Badge className="h-5 rounded-full bg-red-500 px-2 text-[10px] text-white">
+              Crashed
+            </Badge>
+          )}
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {task.trustLevel !== "autonomous" && (
+              <span className="inline-flex items-center gap-1">
+                <RefreshCw className="h-3 w-3 text-amber-500" />
+                {task.trustLevel === "agent_reviewed" ? "Reviewed" : "Human review"}
+              </span>
+            )}
+            {task.files && task.files.length > 0 && (
+              <span className="inline-flex items-center gap-0.5">
+                <Paperclip className="h-3 w-3" />
+                {task.files.length}
               </span>
             )}
           </div>
-        )}
-        <div className="flex items-center justify-between mt-2">
-          {task.assignedAgent && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground min-w-0 overflow-hidden">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-              <span className="truncate">{task.assignedAgent}</span>
-            </span>
-          )}
-          {task.files && task.files.length > 0 && (
-            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-              <Paperclip className="w-3 h-3" />
-              {task.files.length}
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-1">
           {showHitlButtons && (
             <>
               <Button
                 variant="default"
                 size="sm"
-                className="bg-green-500 hover:bg-green-600 text-white text-xs h-7 px-2 ml-auto mr-1"
+                className="h-7 bg-green-500 px-2 text-xs text-white hover:bg-green-600"
                 onClick={(e) => {
                   e.stopPropagation();
                   approveMutation({ taskId: task._id });
@@ -162,7 +203,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
               <Button
                 variant="destructive"
                 size="sm"
-                className="text-xs h-7 px-2"
+                className="h-7 px-2 text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowRejection((prev) => !prev);
@@ -173,12 +214,13 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
             </>
           )}
           <Trash2
-            className="h-3.5 w-3.5 ml-auto text-muted-foreground hover:text-red-500 transition-colors cursor-pointer"
+            className="h-3.5 w-3.5 cursor-pointer text-muted-foreground transition-colors hover:text-red-500"
             onClick={(e) => {
               e.stopPropagation();
               setShowDeleteConfirm((prev) => !prev);
             }}
           />
+          </div>
         </div>
         {showRejection && (
           <div onClick={(e) => e.stopPropagation()}>
@@ -197,12 +239,12 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
               transition={{ duration: 0.15 }}
               className="overflow-hidden"
             >
-              <div className="pt-2 flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-2">
                 <span className="text-xs text-muted-foreground">Delete this task?</span>
                 <Button
                   size="sm"
                   variant="destructive"
-                  className="text-xs h-6 px-2"
+                  className="h-6 px-2 text-xs"
                   onClick={async (e) => {
                     e.stopPropagation();
                     await softDeleteMutation({ taskId: task._id });
@@ -213,7 +255,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-xs h-6 px-2"
+                  className="h-6 px-2 text-xs"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowDeleteConfirm(false);

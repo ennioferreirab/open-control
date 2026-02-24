@@ -37,6 +37,26 @@ vi.mock("@/components/SettingsPanel", () => ({
   SettingsPanel: () => <div data-testid="settings-panel">Settings</div>,
 }));
 
+vi.mock("@/components/BoardContext", () => ({
+  BoardProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+
+vi.mock("@/components/BoardSelector", () => ({
+  BoardSelector: ({ onOpenSettings }: { onOpenSettings?: () => void }) => (
+    <button data-testid="board-selector" onClick={() => onOpenSettings?.()}>
+      Board Selector
+    </button>
+  ),
+}));
+
+vi.mock("@/components/BoardSettingsSheet", () => ({
+  BoardSettingsSheet: () => null,
+}));
+
+vi.mock("@/components/CronJobsModal", () => ({
+  CronJobsModal: () => null,
+}));
+
 // Mock ShadCN sidebar
 vi.mock("@/components/ui/sidebar", () => ({
   SidebarProvider: ({ children }: React.PropsWithChildren) => <div data-testid="sidebar-provider">{children}</div>,
