@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,10 +8,71 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Info } from "lucide-react";
+
+function HighlightedPromptTextarea({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleScroll = () => {
+    if (backdropRef.current && textareaRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  };
+
+  const highlighted = useMemo(() => {
+    const parts = value.split(/(\{\{\w+\}\})/);
+    return parts.map((part, i) => {
+      if (/^\{\{\w+\}\}$/.test(part)) {
+        return (
+          <mark
+            key={i}
+            style={{
+              background: "oklch(0.905 0.093 95.31 / 0.55)",
+              color: "transparent",
+              borderRadius: "3px",
+              fontWeight: "bold",
+            }}
+          >
+            {part}
+          </mark>
+        );
+      }
+      return (
+        <span key={i} style={{ color: "transparent" }}>
+          {part}
+        </span>
+      );
+    });
+  }, [value]);
+
+  return (
+    <div className="relative rounded-md border border-input shadow-sm focus-within:ring-1 focus-within:ring-ring">
+      <div
+        ref={backdropRef}
+        aria-hidden="true"
+        className="absolute inset-0 overflow-hidden pointer-events-none px-3 py-2 font-mono text-sm whitespace-pre-wrap break-words leading-normal"
+      >
+        {highlighted}
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onScroll={handleScroll}
+        className="relative block w-full bg-transparent px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus-visible:outline-none min-h-[300px] resize-y leading-normal"
+      />
+    </div>
+  );
+}
 
 export type PromptVariable = { name: string; value: string };
 
@@ -86,10 +147,9 @@ export function PromptEditModal({
         </DialogHeader>
 
         <div className="flex-1 px-6 pb-4 space-y-4 overflow-y-auto">
-          <Textarea
+          <HighlightedPromptTextarea
             value={localPrompt}
-            onChange={(e) => handlePromptChange(e.target.value)}
-            className="font-mono min-h-[300px] resize-y"
+            onChange={handlePromptChange}
           />
 
           <div className="space-y-2">

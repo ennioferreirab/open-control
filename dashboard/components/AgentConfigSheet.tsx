@@ -25,7 +25,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { Check, Eye, Lock, Pencil } from "lucide-react";
+import { Check, Lock, Pencil, Trash2 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SkillsSelector } from "@/components/SkillsSelector";
 import { PromptEditModal, type PromptVariable } from "@/components/PromptEditModal";
 import { AgentTextViewerModal } from "@/components/AgentTextViewerModal";
@@ -118,6 +124,40 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
 
     return () => { cancelled = true; };
   }, [agentName]);
+
+  const handleSaveMemory = useCallback(async (content: string) => {
+    if (!agentName) return;
+    const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/MEMORY.md`, {
+      method: "PUT",
+      body: content,
+    });
+    if (!res.ok) throw new Error("Failed to save");
+    setMemory(content || null);
+  }, [agentName]);
+
+  const handleSaveHistory = useCallback(async (content: string) => {
+    if (!agentName) return;
+    const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/HISTORY.md`, {
+      method: "PUT",
+      body: content,
+    });
+    if (!res.ok) throw new Error("Failed to save");
+    setHistory(content || null);
+  }, [agentName]);
+
+  const [clearTarget, setClearTarget] = useState<"memory" | "history" | null>(null);
+
+  const handleConfirmClear = useCallback(async () => {
+    if (!agentName || !clearTarget) return;
+    const filename = clearTarget === "memory" ? "MEMORY.md" : "HISTORY.md";
+    await fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/${filename}`, {
+      method: "PUT",
+      body: "",
+    });
+    if (clearTarget === "memory") setMemory(null);
+    else setHistory(null);
+    setClearTarget(null);
+  }, [agentName, clearTarget]);
 
   // Dirty state detection
   const isDirty = useMemo(() => {
@@ -333,16 +373,26 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                     <p className="text-xs text-red-500">{errors.prompt}</p>
                   )}
                   {variables.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {variables.map((v) => (
-                        <span
-                          key={v.name}
-                          className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-mono"
-                        >
-                          {`{{${v.name}}}`}
-                        </span>
-                      ))}
-                    </div>
+                    <TooltipProvider>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {variables.map((v) => (
+                          <Tooltip key={v.name}>
+                            <TooltipTrigger asChild>
+                              <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-mono font-semibold cursor-default">
+                                {`{{${v.name}}}`}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {v.value ? (
+                                <span className="font-mono">{v.value}</span>
+                              ) : (
+                                <span className="italic text-muted-foreground">no value set</span>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    </TooltipProvider>
                   )}
                 </div>
 
@@ -359,21 +409,32 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                 {/* Skills */}
                 <SkillsSelector selected={skills} onChange={setSkills} />
 
-                {/* Memory (read-only) */}
+                {/* Memory */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium">Memory</label>
-                    {memory && (
+                    <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs gap-1"
                         onClick={() => setShowMemoryModal(true)}
                       >
-                        <Eye className="h-3 w-3" />
-                        View
+                        <Pencil className="h-3 w-3" />
+                        Edit
                       </Button>
-                    )}
+                      {memory && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive"
+                          onClick={() => setClearTarget("memory")}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Clear
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   {memoryLoading ? (
                     <p className="text-xs text-muted-foreground">Loading...</p>
@@ -386,21 +447,32 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                   )}
                 </div>
 
-                {/* History (read-only) */}
+                {/* History */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium">History</label>
-                    {history && (
+                    <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs gap-1"
                         onClick={() => setShowHistoryModal(true)}
                       >
-                        <Eye className="h-3 w-3" />
-                        View
+                        <Pencil className="h-3 w-3" />
+                        Edit
                       </Button>
-                    )}
+                      {history && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive"
+                          onClick={() => setClearTarget("history")}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Clear
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   {historyLoading ? (
                     <p className="text-xs text-muted-foreground">Loading...</p>
@@ -448,6 +520,27 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
         </SheetContent>
       </Sheet>
 
+      <AlertDialog open={!!clearTarget} onOpenChange={(open) => { if (!open) setClearTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear {clearTarget === "memory" ? "Memory" : "History"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently erase the agent&apos;s {clearTarget === "memory" ? "memory" : "history"}.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmClear}
+            >
+              Clear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -477,12 +570,16 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
             onClose={() => setShowMemoryModal(false)}
             title="Memory"
             content={memory || ""}
+            editable
+            onSave={handleSaveMemory}
           />
           <AgentTextViewerModal
             open={showHistoryModal}
             onClose={() => setShowHistoryModal(false)}
             title="History"
             content={history || ""}
+            editable
+            onSave={handleSaveHistory}
           />
         </>
       )}
