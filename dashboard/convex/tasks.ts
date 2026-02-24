@@ -8,9 +8,10 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   inbox: ["assigned"],
   assigned: ["in_progress"],
   in_progress: ["review", "done"],
-  review: ["done", "inbox"],
+  review: ["done", "inbox", "assigned"],
+  done: ["assigned"],
   retrying: ["in_progress", "crashed"],
-  crashed: ["inbox"],
+  crashed: ["inbox", "assigned"],
 };
 
 // Universal transitions (allowed from any state)
@@ -27,6 +28,9 @@ const TRANSITION_EVENT_MAP: Record<string, string> = {
   "retrying->in_progress": "task_retrying",
   "retrying->crashed": "task_crashed",
   "crashed->inbox": "task_retrying",
+  "done->assigned": "thread_message_sent",
+  "review->assigned": "thread_message_sent",
+  "crashed->assigned": "thread_message_sent",
 };
 
 // Restore target map: previousStatus -> target status (n-1)
@@ -80,6 +84,7 @@ export const create = mutation({
     reviewers: v.optional(v.array(v.string())),
     isManual: v.optional(v.boolean()),
     boardId: v.optional(v.id("boards")),
+    cronParentTaskId: v.optional(v.string()),
     files: v.optional(v.array(v.object({
       name: v.string(),
       type: v.string(),
@@ -125,6 +130,7 @@ export const create = mutation({
       tags: args.tags,
       ...(isManual ? { isManual: true } : {}),
       ...(boardId ? { boardId } : {}),
+      ...(args.cronParentTaskId !== undefined ? { cronParentTaskId: args.cronParentTaskId } : {}),
       ...(args.files ? { files: args.files } : {}),
       createdAt: now,
       updatedAt: now,
@@ -516,7 +522,8 @@ export const updateStatus = mutation({
         | "task_deleted"
         | "task_restored"
         | "bulk_clear_done"
-        | "manual_task_status_changed",
+        | "manual_task_status_changed"
+        | "thread_message_sent",
       description,
       timestamp: now,
     });

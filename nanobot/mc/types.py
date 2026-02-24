@@ -75,6 +75,7 @@ class ActivityEventType(StrEnum):
     TASK_RESTORED = "task_restored"
     BULK_CLEAR_DONE = "bulk_clear_done"
     MANUAL_TASK_STATUS_CHANGED = "manual_task_status_changed"
+    THREAD_MESSAGE_SENT = "thread_message_sent"
 
 
 class MessageType(StrEnum):
@@ -84,6 +85,7 @@ class MessageType(StrEnum):
     APPROVAL = "approval"
     DENIAL = "denial"
     SYSTEM_EVENT = "system_event"
+    USER_MESSAGE = "user_message"
 
 
 class AuthorType(StrEnum):

@@ -268,6 +268,11 @@ class ConvexBridge:
                         activity_exc,
                     )
 
+    def get_task_messages(self, task_id: str) -> list[dict[str, Any]]:
+        """Fetch all thread messages for a task, in chronological order."""
+        result = self.query("messages:listByTask", {"task_id": task_id})
+        return result if isinstance(result, list) else []
+
     def send_message(
         self,
         task_id: str,
@@ -568,6 +573,73 @@ class ConvexBridge:
                 self.create_activity("agent_output", msg, task_id=task_id)
             except Exception as exc:
                 logger.error("[bridge] Failed to create output file activity: %s", exc)
+
+    def sync_output_files_to_parent(
+        self, source_task_id: str, parent_task_id: str, agent_name: str = "agent"
+    ) -> None:
+        """Sync output files from a cron-triggered task to its parent task.
+
+        Fetches files from the source task's output/ directory and appends
+        any new filenames (append-only) to the parent task's output section.
+        """
+        EXT_MIME: dict[str, str] = {
+            "pdf": "application/pdf", "md": "text/markdown", "markdown": "text/markdown",
+            "html": "text/html", "htm": "text/html", "txt": "text/plain",
+            "csv": "text/csv", "json": "application/json", "yaml": "text/yaml",
+            "yml": "text/yaml", "xml": "application/xml", "py": "text/x-python",
+            "ts": "text/typescript", "tsx": "text/typescript", "js": "text/javascript",
+            "jsx": "text/javascript", "go": "text/x-go", "rs": "text/x-rust",
+            "sh": "text/x-sh", "bash": "text/x-sh",
+        }
+        safe_source_id = re.sub(r"[^\w\-]", "_", source_task_id)
+        source_output_dir = Path.home() / ".nanobot" / "tasks" / safe_source_id / "output"
+        if not source_output_dir.exists():
+            return
+        now = datetime.utcnow().isoformat() + "Z"
+        source_files: list[dict] = []
+        try:
+            for entry in source_output_dir.iterdir():
+                if entry.is_file():
+                    ext = entry.suffix.lstrip(".").lower()
+                    mime = EXT_MIME.get(ext, "application/octet-stream")
+                    source_files.append({
+                        "name": entry.name, "type": mime,
+                        "size": entry.stat().st_size, "subfolder": "output", "uploaded_at": now,
+                    })
+        except OSError as exc:
+            logger.error("[bridge] Failed to scan source output dir %s: %s", source_output_dir, exc)
+            return
+        if not source_files:
+            return
+        try:
+            parent_task = self.query("tasks:getById", {"task_id": parent_task_id})
+            parent_files = (parent_task or {}).get("files") or []
+        except Exception:
+            logger.warning("[bridge] Could not fetch parent task %s", parent_task_id)
+            parent_files = []
+        existing_output = [f for f in parent_files if f.get("subfolder") == "output"]
+        existing_names = {f["name"] for f in existing_output}
+        truly_new = [f for f in source_files if f["name"] not in existing_names]
+        if not truly_new:
+            return
+        merged_output = existing_output + truly_new
+        try:
+            self._mutation_with_retry("tasks:updateTaskOutputFiles", {
+                "task_id": parent_task_id, "output_files": merged_output,
+            })
+            logger.info("[bridge] Synced %d file(s) from cron task %s to parent %s",
+                        len(truly_new), source_task_id, parent_task_id)
+        except Exception as exc:
+            logger.error("[bridge] Failed to sync to parent %s: %s", parent_task_id, exc)
+            return
+        if truly_new:
+            file_names = ", ".join(f["name"] for f in truly_new)
+            try:
+                self.create_activity("agent_output",
+                    f"{agent_name} produced {len(truly_new)} file(s) via cron: {file_names}",
+                    task_id=parent_task_id)
+            except Exception:
+                pass
 
     def get_board_by_id(self, board_id: str) -> dict[str, Any] | None:
         """Fetch a board by its Convex _id.

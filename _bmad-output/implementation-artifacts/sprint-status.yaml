@@ -139,3 +139,8 @@ development_status:
   epic-10: in-progress
   10-1-mission-control-boards-foundation: review
   epic-10-retrospective: optional
+
+  # Epic 11: Human-Agent Thread Interaction
+  epic-11: in-progress
+  11-1-thread-based-agent-interaction: done
+  epic-11-retrospective: optional

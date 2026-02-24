@@ -91,6 +91,8 @@ async def _run_agent_on_task(
     agent_skills: list[str] | None = None,
     board_name: str | None = None,
     memory_workspace: Path | None = None,
+    cron_service: Any | None = None,
+    task_id: str | None = None,
 ) -> str:
     """Run the nanobot agent loop on a task and return the result.
 
@@ -136,6 +138,7 @@ async def _run_agent_on_task(
         allowed_skills=agent_skills,
         global_skills_dir=global_skills_dir,
         memory_workspace=memory_workspace,
+        cron_service=cron_service,
     )
 
     result = await loop.process_direct(
@@ -143,19 +146,79 @@ async def _run_agent_on_task(
         session_key=session_key,
         channel="mc",
         chat_id=agent_name,
+        task_id=task_id,
     )
     # Consolidate memory and clear session (mirrors /new behavior)
     await loop.end_task_session(session_key)
     return result
 
 
+def _build_thread_context(messages: list[dict[str, Any]], max_messages: int = 20) -> str:
+    """Format thread messages as conversation context for the agent.
+
+    Returns empty string if no user messages exist (first execution).
+    For long threads, only includes the last *max_messages* messages.
+    The latest user message is separated into a [Latest Follow-up] section
+    so the agent can clearly identify the new instruction.
+    """
+    if not messages:
+        return ""
+
+    # Only inject context if there are user messages (multi-turn interaction)
+    has_user_messages = any(
+        m.get("author_type") == "user" or m.get("message_type") == "user_message"
+        for m in messages
+    )
+    if not has_user_messages:
+        return ""
+
+    # Find the latest user message to separate it
+    latest_user_idx = -1
+    for i in range(len(messages) - 1, -1, -1):
+        m = messages[i]
+        if m.get("author_type") == "user" or m.get("message_type") == "user_message":
+            latest_user_idx = i
+            break
+
+    lines: list[str] = []
+    total = len(messages)
+    included = messages
+
+    if total > max_messages:
+        lines.append(f"({total - max_messages} earlier messages omitted)")
+        included = messages[-max_messages:]
+        # Adjust latest_user_idx relative to the truncated list
+        latest_user_idx = latest_user_idx - (total - max_messages)
+
+    # Build thread history (excluding the latest user message)
+    for i, m in enumerate(included):
+        if i == latest_user_idx:
+            continue
+        author = m.get("author_name", "Unknown")
+        author_type = m.get("author_type", "system")
+        ts = m.get("timestamp", "")
+        content = m.get("content", "")
+        lines.append(f"{author} [{author_type}] ({ts}): {content}")
+
+    result = "\n[Thread History]\n" + "\n".join(lines)
+
+    # Append the latest user message as a clearly marked follow-up
+    if 0 <= latest_user_idx < len(included):
+        latest = included[latest_user_idx]
+        latest_content = latest.get("content", "")
+        result += f"\n\n[Latest Follow-up]\nUser: {latest_content}"
+
+    return result
+
+
 class TaskExecutor:
     """Picks up assigned tasks and runs agent execution."""
 
-    def __init__(self, bridge: ConvexBridge) -> None:
+    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None) -> None:
         self._bridge = bridge
         self._agent_gateway = AgentGateway(bridge)
         self._known_assigned_ids: set[str] = set()
+        self._cron_service = cron_service
 
     async def start_execution_loop(self) -> None:
         """Subscribe to assigned tasks and execute them as they arrive.
@@ -362,6 +425,35 @@ class TaskExecutor:
         except Exception:
             logger.exception("[executor] Failed to crash task after provider error")
 
+    def _maybe_inject_orientation(
+        self, agent_name: str, agent_prompt: str | None
+    ) -> str | None:
+        """Prepend global orientation for non-lead-agent MC agents.
+
+        Reads ~/.nanobot/mc/agent-orientation.md and prepends its content
+        before the agent's own prompt. Returns prompt unchanged if:
+        - agent is 'lead-agent'
+        - orientation file does not exist
+        - orientation file is empty
+        """
+        if agent_name == "lead-agent":
+            return agent_prompt
+
+        orientation_path = Path.home() / ".nanobot" / "mc" / "agent-orientation.md"
+        if not orientation_path.exists():
+            return agent_prompt
+
+        orientation = orientation_path.read_text(encoding="utf-8").strip()
+        if not orientation:
+            return agent_prompt
+
+        logger.info(
+            "[executor] Global orientation injected for agent '%s'", agent_name
+        )
+        if agent_prompt:
+            return f"{orientation}\n\n---\n\n{agent_prompt}"
+        return orientation
+
     async def _execute_task(
         self,
         task_id: str,
@@ -414,8 +506,30 @@ class TaskExecutor:
             )
             description = (description or "") + f"\n\n{file_instruction}"
 
+        # Inject thread context for multi-turn agent interaction
+        try:
+            thread_messages = await asyncio.to_thread(
+                self._bridge.get_task_messages, task_id
+            )
+            thread_context = _build_thread_context(thread_messages)
+            if thread_context:
+                description = (description or "") + f"\n{thread_context}"
+                injected_count = min(len(thread_messages), 20)
+                logger.info(
+                    "[executor] Injected thread context (%d of %d messages) for task '%s'",
+                    injected_count, len(thread_messages), title,
+                )
+        except Exception:
+            logger.warning(
+                "[executor] Failed to fetch thread messages for '%s', continuing without thread context",
+                title,
+                exc_info=True,
+            )
+
         # Load agent prompt, model, and skills from YAML config
         agent_prompt, agent_model, agent_skills = self._load_agent_config(agent_name)
+        # Inject global orientation for non-lead agents
+        agent_prompt = self._maybe_inject_orientation(agent_name, agent_prompt)
 
         if agent_skills is not None:
             logger.info(
@@ -464,6 +578,8 @@ class TaskExecutor:
                 agent_skills=agent_skills,
                 board_name=board_name,
                 memory_workspace=memory_workspace,
+                cron_service=self._cron_service,
+                task_id=task_id,
             )
 
             # Write agent output as a work message
@@ -486,6 +602,22 @@ class TaskExecutor:
                 )
             except Exception:
                 logger.exception("[executor] Failed to sync output files for task '%s'", title)
+
+            # Sync output files to cron parent task if applicable (best-effort)
+            cron_parent_task_id = (task_data or {}).get("cron_parent_task_id")
+            if cron_parent_task_id:
+                try:
+                    await asyncio.to_thread(
+                        self._bridge.sync_output_files_to_parent,
+                        task_id,
+                        cron_parent_task_id,
+                        agent_name,
+                    )
+                except Exception:
+                    logger.exception(
+                        "[executor] Failed to sync output files to parent task '%s'",
+                        cron_parent_task_id,
+                    )
 
             # Determine final status based on trust level
             if trust_level == TrustLevel.AUTONOMOUS:

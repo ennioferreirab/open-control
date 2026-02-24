@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
@@ -22,6 +22,7 @@ import { ExecutionPlanTab } from "./ExecutionPlanTab";
 import { STATUS_COLORS, type TaskStatus } from "@/lib/constants";
 import { InlineRejection } from "./InlineRejection";
 import { DocumentViewerModal } from "./DocumentViewerModal";
+import { ThreadInput } from "./ThreadInput";
 
 const formatSize = (bytes: number) =>
   bytes < 1024 * 1024
@@ -65,6 +66,18 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
   const [deleteError, setDeleteError] = useState("");
   const attachInputRef = useRef<HTMLInputElement>(null);
+  const threadEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll thread to bottom when messages change
+  const scrollToBottom = useCallback(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages?.length, scrollToBottom]);
 
   // Guard: task must be a valid document (not undefined, null, or a non-object from test mocks)
   const isTaskLoaded = task != null && typeof task === "object" && "status" in task;
@@ -215,8 +228,8 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="thread" className="flex-1 min-h-0 m-0">
-                <ScrollArea className="h-full px-6 py-4">
+              <TabsContent value="thread" className="flex-1 min-h-0 m-0 flex flex-col">
+                <ScrollArea className="flex-1 px-6 py-4">
                   {messages === undefined ? (
                     <p className="text-sm text-muted-foreground text-center py-8">
                       Loading messages...
@@ -230,9 +243,11 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       {messages.map((msg) => (
                         <ThreadMessage key={msg._id} message={msg} />
                       ))}
+                      <div ref={threadEndRef} />
                     </div>
                   )}
                 </ScrollArea>
+                {task && <ThreadInput task={task} onMessageSent={scrollToBottom} />}
               </TabsContent>
 
               <TabsContent value="plan" className="flex-1 min-h-0 m-0 px-6 py-4">

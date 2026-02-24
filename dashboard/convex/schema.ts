@@ -44,6 +44,7 @@ export default defineSchema({
     deletedAt: v.optional(v.string()),
     previousStatus: v.optional(v.string()),
     boardId: v.optional(v.id("boards")),
+    cronParentTaskId: v.optional(v.string()),
     files: v.optional(v.array(v.object({
       name: v.string(),
       type: v.string(),
@@ -72,6 +73,7 @@ export default defineSchema({
       v.literal("approval"),
       v.literal("denial"),
       v.literal("system_event"),
+      v.literal("user_message"),
     ),
     timestamp: v.string(),
   }).index("by_taskId", ["taskId"]),
@@ -131,6 +133,7 @@ export default defineSchema({
       v.literal("board_created"),
       v.literal("board_updated"),
       v.literal("board_deleted"),
+      v.literal("thread_message_sent"),
     ),
     description: v.string(),
     timestamp: v.string(),
