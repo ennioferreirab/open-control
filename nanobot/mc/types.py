@@ -116,6 +116,19 @@ class MessageType(StrEnum):
     USER_MESSAGE = "user_message"
 
 
+class ThreadMessageType(StrEnum):
+    """Unified thread message types. Matches Convex messages.type union type (Story 2.4).
+
+    Distinct from MessageType (legacy messageType field) — this is the new
+    architecture-aligned classification used for structured rendering (Story 2.7).
+    """
+    STEP_COMPLETION = "step_completion"
+    USER_MESSAGE = "user_message"
+    SYSTEM_ERROR = "system_error"
+    LEAD_AGENT_PLAN = "lead_agent_plan"
+    LEAD_AGENT_CHAT = "lead_agent_chat"
+
+
 class AuthorType(StrEnum):
     """Message author types. Matches Convex messages.authorType union type."""
     AGENT = "agent"
@@ -273,15 +286,41 @@ class AgentData:
 
 
 @dataclass
+class ArtifactData:
+    """An artifact produced by an agent step (e.g., created/modified file).
+
+    Mirrors the Convex schema messages.artifacts array element.
+    All string values match the Convex schema union types exactly.
+    """
+    path: str
+    action: str  # "created" | "modified" | "deleted"
+    description: str | None = None
+    diff: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a dict for inclusion in bridge mutation args."""
+        d: dict[str, Any] = {"path": self.path, "action": self.action}
+        if self.description is not None:
+            d["description"] = self.description
+        if self.diff is not None:
+            d["diff"] = self.diff
+        return d
+
+
+@dataclass
 class MessageData:
     """Python representation of a Convex message document (snake_case fields)."""
     task_id: str
     author_name: str
     author_type: str  # AuthorType value
     content: str
-    message_type: str  # MessageType value
+    message_type: str  # MessageType value (legacy)
     timestamp: str  # ISO 8601
     id: str | None = None  # Convex _id (populated on read)
+    # Unified thread fields (Story 2.4)
+    type: str | None = None  # ThreadMessageType value
+    step_id: str | None = None  # Convex step _id
+    artifacts: list[ArtifactData] | None = None
 
 
 @dataclass

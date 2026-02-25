@@ -2,6 +2,27 @@ import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { isValidTransition } from "./tasks";
 
+/** Validator for the unified thread message type (new field). */
+const threadMessageTypeValidator = v.optional(v.union(
+  v.literal("step_completion"),
+  v.literal("user_message"),
+  v.literal("system_error"),
+  v.literal("lead_agent_plan"),
+  v.literal("lead_agent_chat"),
+));
+
+/** Validator for artifact objects stored on step-completion messages. */
+const artifactsValidator = v.optional(v.array(v.object({
+  path: v.string(),
+  action: v.union(
+    v.literal("created"),
+    v.literal("modified"),
+    v.literal("deleted"),
+  ),
+  description: v.optional(v.string()),
+  diff: v.optional(v.string()),
+})));
+
 export const listByTask = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
@@ -31,6 +52,10 @@ export const create = mutation({
       v.literal("user_message"),
     ),
     timestamp: v.string(),
+    // Unified thread fields (optional for backward compat)
+    type: threadMessageTypeValidator,
+    stepId: v.optional(v.id("steps")),
+    artifacts: artifactsValidator,
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("messages", {
@@ -40,6 +65,100 @@ export const create = mutation({
       content: args.content,
       messageType: args.messageType,
       timestamp: args.timestamp,
+      type: args.type,
+      stepId: args.stepId,
+      artifacts: args.artifacts,
+    });
+  },
+});
+
+/**
+ * Post a step-completion message to the unified task thread.
+ * Called by agents when they finish executing a step.
+ */
+export const postStepCompletion = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    stepId: v.id("steps"),
+    agentName: v.string(),
+    content: v.string(),
+    artifacts: artifactsValidator,
+  },
+  handler: async (ctx, args) => {
+    const timestamp = new Date().toISOString();
+    const messageId = await ctx.db.insert("messages", {
+      taskId: args.taskId,
+      stepId: args.stepId,
+      authorName: args.agentName,
+      authorType: "agent",
+      content: args.content,
+      messageType: "work",       // Legacy field for existing UI styling
+      type: "step_completion",   // New unified thread type
+      artifacts: args.artifacts,
+      timestamp,
+    });
+
+    // Observability event
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      agentName: args.agentName,
+      eventType: "thread_message_sent",
+      description: `Step completion posted by ${args.agentName}`,
+      timestamp,
+    });
+
+    return messageId;
+  },
+});
+
+/**
+ * Post a system-error message to the unified task thread.
+ * Called when a step crashes or an unhandled system error occurs.
+ */
+export const postSystemError = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    content: v.string(),
+    stepId: v.optional(v.id("steps")),
+  },
+  handler: async (ctx, args) => {
+    const timestamp = new Date().toISOString();
+    return await ctx.db.insert("messages", {
+      taskId: args.taskId,
+      stepId: args.stepId,
+      authorName: "System",
+      authorType: "system",
+      content: args.content,
+      messageType: "system_event", // Legacy field
+      type: "system_error",        // New unified thread type
+      timestamp,
+    });
+  },
+});
+
+/**
+ * Post a Lead Agent message (plan or chat) to the unified task thread.
+ * Used when the Lead Agent generates/updates a plan or sends a chat message.
+ */
+export const postLeadAgentMessage = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    content: v.string(),
+    type: v.union(
+      v.literal("lead_agent_plan"),
+      v.literal("lead_agent_chat"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const timestamp = new Date().toISOString();
+    return await ctx.db.insert("messages", {
+      taskId: args.taskId,
+      authorName: "lead-agent",
+      authorType: "system",
+      content: args.content,
+      messageType: "system_event", // Legacy field
+      type: args.type,             // New unified thread type
+      timestamp,
     });
   },
 });
@@ -80,6 +199,7 @@ export const sendThreadMessage = mutation({
       authorType: "user",
       content: args.content,
       messageType: "user_message",
+      type: "user_message",  // Unified thread type (AC: 2)
       timestamp,
     });
 

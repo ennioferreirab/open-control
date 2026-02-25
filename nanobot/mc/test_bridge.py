@@ -786,3 +786,171 @@ class TestConvenienceMethods:
 
         assert mock_client.mutation.call_count == 2
         mock_sleep.assert_called_once_with(1)
+
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_send_message_without_type(self, MockClient):
+        """send_message without type omits the type field (backward compat)."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.send_message("t1", "dev", "agent", "Done!", "work")
+
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "messages:create"
+        assert "type" not in call_args[1]
+        assert call_args[1]["messageType"] == "work"
+
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_send_message_with_type(self, MockClient):
+        """send_message with type includes the type field in args."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.send_message("t1", "dev", "agent", "Done!", "work", type="step_completion")
+
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "messages:create"
+        assert call_args[1]["type"] == "step_completion"
+        assert call_args[1]["messageType"] == "work"
+
+
+# ── Story 2.4: Unified Thread Bridge Methods ─────────────────────────
+
+class TestPostStepCompletion:
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_post_step_completion_basic(self, MockClient):
+        """post_step_completion calls postStepCompletion with correct camelCase args."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = "msg-123"
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        result = bridge.post_step_completion(
+            task_id="task-abc",
+            step_id="step-xyz",
+            agent_name="general-agent",
+            content="Step completed successfully.",
+        )
+
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "messages:postStepCompletion"
+        assert call_args[1]["taskId"] == "task-abc"
+        assert call_args[1]["stepId"] == "step-xyz"
+        assert call_args[1]["agentName"] == "general-agent"
+        assert call_args[1]["content"] == "Step completed successfully."
+        assert "artifacts" not in call_args[1]
+
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_post_step_completion_with_artifacts(self, MockClient):
+        """post_step_completion with artifacts includes them in the mutation args."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = "msg-456"
+
+        artifacts = [
+            {"path": "src/main.py", "action": "modified", "description": "Refactored"},
+            {"path": "README.md", "action": "created"},
+        ]
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.post_step_completion(
+            task_id="task-abc",
+            step_id="step-xyz",
+            agent_name="general-agent",
+            content="Done.",
+            artifacts=artifacts,
+        )
+
+        call_args = mock_client.mutation.call_args[0]
+        sent_artifacts = call_args[1]["artifacts"]
+        assert len(sent_artifacts) == 2
+        assert sent_artifacts[0]["path"] == "src/main.py"
+        assert sent_artifacts[0]["action"] == "modified"
+        assert sent_artifacts[0]["description"] == "Refactored"
+        assert sent_artifacts[1]["path"] == "README.md"
+        assert sent_artifacts[1]["action"] == "created"
+
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_post_step_completion_no_artifacts_when_none(self, MockClient):
+        """post_step_completion with artifacts=None omits artifacts from args."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.post_step_completion("t1", "s1", "agent", "ok", artifacts=None)
+
+        call_args = mock_client.mutation.call_args[0]
+        assert "artifacts" not in call_args[1]
+
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_post_step_completion_no_artifacts_when_empty(self, MockClient):
+        """post_step_completion with artifacts=[] omits artifacts from args."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.post_step_completion("t1", "s1", "agent", "ok", artifacts=[])
+
+        call_args = mock_client.mutation.call_args[0]
+        assert "artifacts" not in call_args[1]
+
+    @patch("nanobot.mc.bridge.time.sleep")
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_post_step_completion_uses_retry(self, MockClient, mock_sleep):
+        """post_step_completion retries on transient failure."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.side_effect = [Exception("Network error"), "msg-ok"]
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.post_step_completion("t1", "s1", "agent", "done")
+
+        assert mock_client.mutation.call_count == 2
+
+
+class TestPostLeadAgentMessage:
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_post_lead_agent_plan(self, MockClient):
+        """post_lead_agent_message with lead_agent_plan type calls correct mutation."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = "msg-789"
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        result = bridge.post_lead_agent_message(
+            task_id="task-abc",
+            content="Here is the execution plan...",
+            msg_type="lead_agent_plan",
+        )
+
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "messages:postLeadAgentMessage"
+        assert call_args[1]["taskId"] == "task-abc"
+        assert call_args[1]["content"] == "Here is the execution plan..."
+        assert call_args[1]["type"] == "lead_agent_plan"
+
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_post_lead_agent_chat(self, MockClient):
+        """post_lead_agent_message with lead_agent_chat type sends correct type value."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.post_lead_agent_message(
+            task_id="task-abc",
+            content="I need clarification...",
+            msg_type="lead_agent_chat",
+        )
+
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[1]["type"] == "lead_agent_chat"
+
+    @patch("nanobot.mc.bridge.time.sleep")
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_post_lead_agent_message_uses_retry(self, MockClient, mock_sleep):
+        """post_lead_agent_message retries on transient failure."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.side_effect = [Exception("Timeout"), None]
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.post_lead_agent_message("t1", "plan text", "lead_agent_plan")
+
+        assert mock_client.mutation.call_count == 2

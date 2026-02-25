@@ -280,21 +280,98 @@ class ConvexBridge:
         author_type: str,
         content: str,
         message_type: str,
+        type: str | None = None,
     ) -> Any:
-        """Send a task-scoped message with retry and logging."""
-        result = self._mutation_with_retry(
-            "messages:create",
-            {
-                "task_id": task_id,
-                "author_name": author_name,
-                "author_type": author_type,
-                "content": content,
-                "message_type": message_type,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+        """Send a task-scoped message with retry and logging.
+
+        Args:
+            task_id: Convex task _id.
+            author_name: Display name of the message author.
+            author_type: AuthorType value ("agent", "user", or "system").
+            content: Message body.
+            message_type: Legacy MessageType value for existing UI styling.
+            type: Optional ThreadMessageType value for unified thread (Story 2.4).
+                  When provided, stored as the new `type` field on the message.
+                  When omitted, the `type` field is not set (backward compatible).
+        """
+        args: dict[str, Any] = {
+            "task_id": task_id,
+            "author_name": author_name,
+            "author_type": author_type,
+            "content": content,
+            "message_type": message_type,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if type is not None:
+            args["type"] = type
+        result = self._mutation_with_retry("messages:create", args)
         self._log_state_transition(
             "message", f"Message sent by {author_name} on task {task_id}"
+        )
+        return result
+
+    def post_step_completion(
+        self,
+        task_id: str,
+        step_id: str,
+        agent_name: str,
+        content: str,
+        artifacts: list[dict[str, Any]] | None = None,
+    ) -> Any:
+        """Post a step-completion message to the unified task thread.
+
+        Calls messages:postStepCompletion Convex mutation. The bridge's
+        key-conversion will translate snake_case args to camelCase automatically.
+
+        Args:
+            task_id: Convex task _id.
+            step_id: Convex step _id linking the message to the specific step.
+            agent_name: Name of the agent that completed the step.
+            content: Completion message body (summary of what was done).
+            artifacts: Optional list of artifact dicts with keys:
+                       path, action ("created"|"modified"|"deleted"),
+                       description (optional), diff (optional).
+        """
+        args: dict[str, Any] = {
+            "task_id": task_id,
+            "step_id": step_id,
+            "agent_name": agent_name,
+            "content": content,
+        }
+        if artifacts:
+            args["artifacts"] = artifacts
+        result = self._mutation_with_retry("messages:postStepCompletion", args)
+        self._log_state_transition(
+            "message",
+            f"Step completion posted by {agent_name} on task {task_id}",
+        )
+        return result
+
+    def post_lead_agent_message(
+        self,
+        task_id: str,
+        content: str,
+        msg_type: str,
+    ) -> Any:
+        """Post a Lead Agent plan or chat message to the unified task thread.
+
+        Calls messages:postLeadAgentMessage Convex mutation.
+
+        Args:
+            task_id: Convex task _id.
+            content: Message body (plan text or chat message).
+            msg_type: ThreadMessageType value — either "lead_agent_plan"
+                      or "lead_agent_chat".
+        """
+        args: dict[str, Any] = {
+            "task_id": task_id,
+            "content": content,
+            "type": msg_type,
+        }
+        result = self._mutation_with_retry("messages:postLeadAgentMessage", args)
+        self._log_state_transition(
+            "message",
+            f"Lead agent message ({msg_type}) posted on task {task_id}",
         )
         return result
 
