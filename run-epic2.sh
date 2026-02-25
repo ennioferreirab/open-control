@@ -5,12 +5,13 @@ PROJECT_DIR="/Users/ennio/Documents/nanobot-ennio"
 WORKTREE_DIR="$PROJECT_DIR/.claude/worktrees"
 BASE_BRANCH="novo-plano"
 MODEL="gpt-5.3-codex"
+REVIEW_MODEL="gpt-5.3-codex"
 
 cd "$PROJECT_DIR"
 mkdir -p "$WORKTREE_DIR"
 
-# Helper: build codex prompt from story file
-make_prompt() {
+# Helper: build codex dev prompt from story file
+make_dev_prompt() {
   local story_file="$1"
   cat <<PROMPT
 You are implementing a story for the nanobot-ennio project.
@@ -31,15 +32,69 @@ CRITICAL RULES:
 PROMPT
 }
 
-# Helper: run codex on a worktree
+# Helper: build codex code-review prompt
+make_review_prompt() {
+  local story_file="$1"
+  cat <<'REVIEWPROMPT'
+You are performing an ADVERSARIAL Senior Developer code review for the nanobot-ennio project.
+
+## WORKFLOW
+You MUST follow the BMAD code-review workflow. Load these files IN ORDER:
+1. READ _bmad/core/tasks/workflow.xml (the workflow execution engine)
+2. READ _bmad/bmm/workflows/4-implementation/code-review/workflow.yaml (the workflow config)
+3. READ _bmad/bmm/workflows/4-implementation/code-review/instructions.xml (the review instructions)
+
+## TARGET STORY
+REVIEWPROMPT
+  echo "Review the story file at: $story_file"
+  cat <<'REVIEWPROMPT2'
+
+## EXECUTION MODE
+Run in YOLO mode — skip all user confirmations. When the workflow asks what to do with findings:
+- Choose option 1: FIX THEM AUTOMATICALLY
+- Fix ALL HIGH and MEDIUM severity issues in the code
+- Add/update tests as needed
+- Update the story file with fixes applied and completion status
+- Update sprint-status.yaml if the story reaches "done" status
+
+## REVIEW REQUIREMENTS
+- Find 3-10 specific issues minimum — NO lazy "looks good" reviews
+- Validate EVERY acceptance criterion against actual implementation
+- Verify EVERY task marked [x] is actually implemented
+- Check code quality, test quality, architecture compliance
+- After fixing, run tests: cd dashboard && npx vitest run (TS) / uv run pytest nanobot/mc/ (Python)
+- Commit fixes with message: "review: fix findings for story X.Y"
+REVIEWPROMPT2
+}
+
+# Helper: run codex dev on a worktree
 run_story() {
   local worktree="$1"
   local story_file="$2"
   local prompt
-  prompt=$(make_prompt "$story_file")
-  echo "[$(date +%H:%M:%S)] Starting: $story_file"
+  prompt=$(make_dev_prompt "$story_file")
+  echo "[$(date +%H:%M:%S)] DEV Starting: $story_file"
   codex exec -C "$worktree" -m "$MODEL" -s workspace-write "$prompt"
-  echo "[$(date +%H:%M:%S)] Finished: $story_file"
+  echo "[$(date +%H:%M:%S)] DEV Finished: $story_file"
+}
+
+# Helper: run codex code-review on a worktree
+run_review() {
+  local worktree="$1"
+  local story_file="$2"
+  local prompt
+  prompt=$(make_review_prompt "$story_file")
+  echo "[$(date +%H:%M:%S)] REVIEW Starting: $story_file"
+  codex exec -C "$worktree" -m "$REVIEW_MODEL" -s workspace-write "$prompt"
+  echo "[$(date +%H:%M:%S)] REVIEW Finished: $story_file"
+}
+
+# Helper: run dev + review sequentially on same worktree
+run_story_with_review() {
+  local worktree="$1"
+  local story_file="$2"
+  run_story "$worktree" "$story_file"
+  run_review "$worktree" "$story_file"
 }
 
 # Helper: merge a branch into base
@@ -74,16 +129,17 @@ cleanup_worktree() {
 # ============================================
 echo ""
 echo "========================================="
-echo "  WAVE 1: Stories 2.1 + 2.4"
+echo "  WAVE 1: Stories 2.1 + 2.4 (dev + review)"
 echo "========================================="
 BASE_COMMIT=$(git rev-parse HEAD)
 
 git worktree add "$WORKTREE_DIR/2-1" -b story/2-1 "$BASE_COMMIT"
 git worktree add "$WORKTREE_DIR/2-4" -b story/2-4 "$BASE_COMMIT"
 
-run_story "$WORKTREE_DIR/2-1" "_bmad-output/implementation-artifacts/2-1-dispatch-steps-in-autonomous-mode.md" &
+# Dev + Review run sequentially per story, but stories run in parallel
+run_story_with_review "$WORKTREE_DIR/2-1" "_bmad-output/implementation-artifacts/2-1-dispatch-steps-in-autonomous-mode.md" &
 PID_21=$!
-run_story "$WORKTREE_DIR/2-4" "_bmad-output/implementation-artifacts/2-4-build-unified-thread-per-task.md" &
+run_story_with_review "$WORKTREE_DIR/2-4" "_bmad-output/implementation-artifacts/2-4-build-unified-thread-per-task.md" &
 PID_24=$!
 
 wait $PID_21 || { echo "Story 2.1 FAILED"; exit 1; }
@@ -94,23 +150,23 @@ merge_branch "story/2-1"
 run_tests
 cleanup_worktree "2-1"
 cleanup_worktree "2-4"
-git commit --allow-empty -m "wave-1: Stories 2.1 + 2.4 merged and tested" 2>/dev/null || true
+git commit --allow-empty -m "wave-1: Stories 2.1 + 2.4 implemented, reviewed, merged" 2>/dev/null || true
 
 # ============================================
 # WAVE 2: 2.2 (subprocesses) + 2.5 (completion)
 # ============================================
 echo ""
 echo "========================================="
-echo "  WAVE 2: Stories 2.2 + 2.5"
+echo "  WAVE 2: Stories 2.2 + 2.5 (dev + review)"
 echo "========================================="
 BASE_COMMIT=$(git rev-parse HEAD)
 
 git worktree add "$WORKTREE_DIR/2-2" -b story/2-2 "$BASE_COMMIT"
 git worktree add "$WORKTREE_DIR/2-5" -b story/2-5 "$BASE_COMMIT"
 
-run_story "$WORKTREE_DIR/2-2" "_bmad-output/implementation-artifacts/2-2-execute-steps-as-agent-subprocesses.md" &
+run_story_with_review "$WORKTREE_DIR/2-2" "_bmad-output/implementation-artifacts/2-2-execute-steps-as-agent-subprocesses.md" &
 PID_22=$!
-run_story "$WORKTREE_DIR/2-5" "_bmad-output/implementation-artifacts/2-5-post-structured-completion-messages.md" &
+run_story_with_review "$WORKTREE_DIR/2-5" "_bmad-output/implementation-artifacts/2-5-post-structured-completion-messages.md" &
 PID_25=$!
 
 wait $PID_22 || { echo "Story 2.2 FAILED"; exit 1; }
@@ -121,23 +177,23 @@ merge_branch "story/2-2"
 run_tests
 cleanup_worktree "2-2"
 cleanup_worktree "2-5"
-git commit --allow-empty -m "wave-2: Stories 2.2 + 2.5 merged and tested" 2>/dev/null || true
+git commit --allow-empty -m "wave-2: Stories 2.2 + 2.5 implemented, reviewed, merged" 2>/dev/null || true
 
 # ============================================
 # WAVE 3a: 2.6 (context) + 2.7 (UI)
 # ============================================
 echo ""
 echo "========================================="
-echo "  WAVE 3a: Stories 2.6 + 2.7"
+echo "  WAVE 3a: Stories 2.6 + 2.7 (dev + review)"
 echo "========================================="
 BASE_COMMIT=$(git rev-parse HEAD)
 
 git worktree add "$WORKTREE_DIR/2-6" -b story/2-6 "$BASE_COMMIT"
 git worktree add "$WORKTREE_DIR/2-7" -b story/2-7 "$BASE_COMMIT"
 
-run_story "$WORKTREE_DIR/2-6" "_bmad-output/implementation-artifacts/2-6-build-thread-context-for-agents.md" &
+run_story_with_review "$WORKTREE_DIR/2-6" "_bmad-output/implementation-artifacts/2-6-build-thread-context-for-agents.md" &
 PID_26=$!
-run_story "$WORKTREE_DIR/2-7" "_bmad-output/implementation-artifacts/2-7-render-thread-view-in-real-time.md" &
+run_story_with_review "$WORKTREE_DIR/2-7" "_bmad-output/implementation-artifacts/2-7-render-thread-view-in-real-time.md" &
 PID_27=$!
 
 wait $PID_26 || { echo "Story 2.6 FAILED"; exit 1; }
@@ -148,20 +204,20 @@ merge_branch "story/2-7"
 run_tests
 cleanup_worktree "2-6"
 cleanup_worktree "2-7"
-git commit --allow-empty -m "wave-3a: Stories 2.6 + 2.7 merged and tested" 2>/dev/null || true
+git commit --allow-empty -m "wave-3a: Stories 2.6 + 2.7 implemented, reviewed, merged" 2>/dev/null || true
 
 # ============================================
 # WAVE 3b: 2.3 (auto-unblock) — depends on all prior
 # ============================================
 echo ""
 echo "========================================="
-echo "  WAVE 3b: Story 2.3"
+echo "  WAVE 3b: Story 2.3 (dev + review)"
 echo "========================================="
 BASE_COMMIT=$(git rev-parse HEAD)
 
 git worktree add "$WORKTREE_DIR/2-3" -b story/2-3 "$BASE_COMMIT"
 
-run_story "$WORKTREE_DIR/2-3" "_bmad-output/implementation-artifacts/2-3-auto-unblock-dependent-steps.md"
+run_story_with_review "$WORKTREE_DIR/2-3" "_bmad-output/implementation-artifacts/2-3-auto-unblock-dependent-steps.md"
 
 merge_branch "story/2-3"
 run_tests
@@ -175,10 +231,11 @@ echo "========================================="
 echo "  EPIC 2 COMPLETE"
 echo "========================================="
 echo ""
-echo "All 7 stories implemented and merged into $BASE_BRANCH."
+echo "All 7 stories implemented, reviewed, and merged into $BASE_BRANCH."
+echo ""
+echo "Pipeline per story: codex dev -> codex review (auto-fix) -> merge -> tests"
 echo ""
 echo "Next steps:"
-echo "  1. Review: git log --oneline -20"
-echo "  2. Update sprint-status.yaml (all stories -> done)"
-echo "  3. Run /bmad-bmm-code-review on each story"
-echo "  4. Consider /bmad-bmm-retrospective for Epic 2"
+echo "  1. git log --oneline -20"
+echo "  2. Verify sprint-status.yaml (reviews should have marked stories done)"
+echo "  3. Consider /bmad-bmm-retrospective for Epic 2"
