@@ -732,11 +732,6 @@ class TaskExecutor:
             f"Do NOT save output files outside this directory."
         )
         if file_manifest:
-            def _human_size(b: int) -> str:
-                if b < 1024 * 1024:
-                    return f"{b // 1024} KB"
-                return f"{b / (1024 * 1024):.1f} MB"
-
             manifest_summary = ", ".join(
                 f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
                 for f in file_manifest

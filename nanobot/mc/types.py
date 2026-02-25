@@ -311,27 +311,8 @@ class ArtifactData:
         return d
 
 
-@dataclass
-class StepCompletionArtifact:
-    """A file artifact recorded in a step-completion message (Story 2.5).
-
-    Mirrors the Convex schema messages.artifacts array element.
-    Equivalent to ArtifactData; provided as a distinct name for story clarity.
-    All string values match the Convex schema union types exactly.
-    """
-    path: str
-    action: str  # "created" | "modified" | "deleted"
-    description: str | None = None
-    diff: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize to a Convex-compatible dict for bridge mutation args."""
-        d: dict[str, Any] = {"path": self.path, "action": self.action}
-        if self.description is not None:
-            d["description"] = self.description
-        if self.diff is not None:
-            d["diff"] = self.diff
-        return d
+# Alias for Story 2.5 — same dataclass, exposed under the name used in the story spec.
+StepCompletionArtifact = ArtifactData
 
 
 @dataclass
