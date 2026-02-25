@@ -64,12 +64,12 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Step Lifecycle & Error Recovery
-  epic-3: backlog
-  3-1-implement-step-status-state-machine: backlog
-  3-2-visualize-blocked-and-crashed-steps: backlog
-  3-3-post-crash-errors-with-recovery-instructions: backlog
-  3-4-retry-crashed-steps: backlog
-  3-5-extend-activity-feed-with-step-events: backlog
+  epic-3: done
+  3-1-implement-step-status-state-machine: done
+  3-2-visualize-blocked-and-crashed-steps: done
+  3-3-post-crash-errors-with-recovery-instructions: done
+  3-4-retry-crashed-steps: done
+  3-5-extend-activity-feed-with-step-events: done
   epic-3-retrospective: optional
 
   # Epic 4: Pre-Kickoff Plan Review & Negotiation
