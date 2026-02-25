@@ -75,6 +75,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const attachInputRef = useRef<HTMLInputElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const messageCount = messages?.length ?? 0;
 
   // Track if user is at bottom via IntersectionObserver
   useEffect(() => {
@@ -94,10 +95,10 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   }, []);
 
   useEffect(() => {
-    if (isAtBottom && messages && messages.length > 0) {
+    if (isAtBottom && messageCount > 0) {
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages?.length, isAtBottom]);
+  }, [messageCount, isAtBottom]);
 
   // Guard: task must be a valid document (not undefined, null, or a non-object from test mocks)
   const isTaskLoaded = task != null && typeof task === "object" && "status" in task;
