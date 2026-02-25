@@ -40,6 +40,7 @@ class TaskOrchestrator:
         self._step_dispatcher = StepDispatcher(bridge)
         self._known_planning_ids: set[str] = set()
         self._known_review_task_ids: set[str] = set()
+        self._known_kickoff_ids: set[str] = set()
 
     async def start_routing_loop(self) -> None:
         """Subscribe to planning tasks and plan them as they arrive."""
@@ -197,9 +198,24 @@ class TaskOrchestrator:
 
         supervision_mode = task_data.get("supervision_mode", "autonomous")
         if supervision_mode != "autonomous":
+            # Transition to reviewing_plan so the dashboard can show the kick-off UI
+            await asyncio.to_thread(
+                self._bridge.update_task_status,
+                task_id,
+                TaskStatus.REVIEWING_PLAN,
+                None,
+                f"Plan ready for review: '{title}'",
+            )
+            await asyncio.to_thread(
+                self._bridge.create_activity,
+                ActivityEventType.TASK_PLANNING,
+                f"Plan ready for review -- awaiting user kick-off for '{title}'",
+                task_id,
+                self._lead_agent_name,
+            )
             logger.info(
-                "[orchestrator] Task '%s' is in supervised mode; "
-                "awaiting explicit kick-off before materialization.",
+                "[orchestrator] Task '%s' transitioned to reviewing_plan; "
+                "awaiting user kick-off.",
                 title,
             )
             return
@@ -274,6 +290,97 @@ class TaskOrchestrator:
                     continue
                 self._known_review_task_ids.add(task_id)
                 await self._handle_review_transition(task_id, task_data)
+
+    async def start_kickoff_watch_loop(self) -> None:
+        """Watch for kicked-off tasks that need materialization.
+
+        Subscribes to in_progress tasks. When a new in_progress task appears
+        that has an execution plan but no materialized steps, it was just
+        kicked off via approveAndKickOff -- materialize and dispatch.
+        """
+        logger.info("[orchestrator] Starting kickoff watch loop")
+
+        queue = self._bridge.async_subscribe(
+            "tasks:listByStatus", {"status": "in_progress"}
+        )
+
+        while True:
+            tasks = await queue.get()
+            if tasks is None:
+                continue
+
+            # Prune IDs no longer in_progress so re-entries are handled.
+            current_ids = {t.get("id") for t in tasks if t.get("id")}
+            self._known_kickoff_ids &= current_ids
+
+            for task_data in tasks:
+                task_id = task_data.get("id")
+                if not task_id or task_id in self._known_kickoff_ids:
+                    continue
+                self._known_kickoff_ids.add(task_id)
+
+                # Only process tasks with a plan but no materialized steps
+                if not task_data.get("execution_plan"):
+                    continue
+
+                steps = await asyncio.to_thread(
+                    self._bridge.get_steps_by_task, task_id
+                )
+                if steps:
+                    continue  # Already materialized
+
+                title = task_data.get("title", task_id)
+                logger.info(
+                    "[orchestrator] Detected kicked-off task '%s'; materializing...",
+                    title,
+                )
+                try:
+                    plan = ExecutionPlan.from_dict(task_data["execution_plan"])
+                    created_step_ids = await asyncio.to_thread(
+                        self._plan_materializer.materialize,
+                        task_id,
+                        plan,
+                        skip_kickoff=True,
+                    )
+                    asyncio.create_task(
+                        self._step_dispatcher.dispatch_steps(
+                            task_id, created_step_ids
+                        )
+                    )
+                    logger.info(
+                        "[orchestrator] Task '%s': materialized %d steps after kick-off",
+                        title,
+                        len(created_step_ids),
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[orchestrator] Materialization failed for kicked-off task %s",
+                        task_id,
+                        exc_info=True,
+                    )
+                    # Note: the materializer's _mark_task_failed() tries FAILED, which
+                    # will silently fail since in_progress -> failed is invalid. We
+                    # transition to CRASHED instead (a universal target from any state).
+                    try:
+                        await asyncio.to_thread(
+                            self._bridge.update_task_status,
+                            task_id,
+                            TaskStatus.CRASHED,
+                            None,
+                            f"Materialization failed after kick-off: {type(exc).__name__}: {exc}",
+                        )
+                        await asyncio.to_thread(
+                            self._bridge.create_activity,
+                            ActivityEventType.SYSTEM_ERROR,
+                            f"Materialization failed for '{title}': {type(exc).__name__}: {exc}",
+                            task_id,
+                        )
+                    except Exception:
+                        logger.error(
+                            "[orchestrator] Failed to mark task %s as crashed after materialization failure",
+                            task_id,
+                            exc_info=True,
+                        )
 
     async def _handle_review_transition(
         self, task_id: str, task: dict[str, Any]

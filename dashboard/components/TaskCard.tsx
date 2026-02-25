@@ -149,8 +149,13 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
             variant="secondary"
             className={`h-5 rounded-full px-2 text-[10px] font-medium ${colors.bg} ${colors.text}`}
           >
-            {task.status}
+            {task.status === "reviewing_plan" ? "reviewing plan" : task.status}
           </Badge>
+          {task.status === "reviewing_plan" && (
+            <Badge className="h-5 rounded-full bg-amber-400 px-2 text-[10px] text-amber-900 font-medium">
+              Awaiting Kick-off
+            </Badge>
+          )}
           {task.trustLevel === "human_approved" && (
             <Badge className="h-5 rounded-full bg-amber-500 px-2 text-[10px] text-white">
               HITL

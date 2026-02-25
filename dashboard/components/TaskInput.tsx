@@ -34,7 +34,7 @@ export function TaskInput() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [trustLevel, setTrustLevel] = useState<string>("autonomous");
-  const [supervisionMode, setSupervisionMode] = useState<string>("autonomous");
+  const [supervisionMode, setSupervisionMode] = useState<"autonomous" | "supervised">("autonomous");
   const [isManual, setIsManual] = useState(false);
   const [selectedReviewers, setSelectedReviewers] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -59,7 +59,7 @@ export function TaskInput() {
       tags?: string[];
       assignedAgent?: string;
       trustLevel?: string;
-      supervisionMode?: string;
+      supervisionMode?: "autonomous" | "supervised";
       reviewers?: string[];
       isManual?: boolean;
       boardId?: Id<"boards">;
@@ -324,7 +324,7 @@ export function TaskInput() {
 
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground font-medium">Supervision Mode</label>
-              <Select value={supervisionMode} onValueChange={setSupervisionMode}>
+              <Select value={supervisionMode} onValueChange={(val) => setSupervisionMode(val as "autonomous" | "supervised")}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>

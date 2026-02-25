@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { TaskDetailSheet } from "./TaskDetailSheet";
 import { ThreadMessage } from "./ThreadMessage";
 
@@ -197,6 +198,423 @@ describe("TaskDetailSheet", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Retry from Beginning" }));
     expect(mockMutationFn).toHaveBeenCalledWith({ taskId: "task1" });
+  });
+
+  // --- Story 4.6: Kick-off button for reviewing_plan tasks ---
+
+  it("shows Kick-off button when task status is reviewing_plan", () => {
+    const reviewingTask = {
+      ...baseTask,
+      status: "reviewing_plan" as const,
+      supervisionMode: "supervised" as const,
+    };
+    mockUseQuery
+      .mockReturnValueOnce(reviewingTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    expect(screen.getByTestId("kick-off-button")).toBeInTheDocument();
+  });
+
+  it("does NOT show Kick-off button when task status is in_progress", () => {
+    mockUseQuery
+      .mockReturnValueOnce(baseTask) // in_progress
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
+  });
+
+  it("does NOT show Kick-off button when task status is planning", () => {
+    const planningTask = { ...baseTask, status: "planning" as const };
+    mockUseQuery
+      .mockReturnValueOnce(planningTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
+  });
+
+  it("shows reviewing_plan banner when task is awaiting kick-off", () => {
+    const reviewingTask = {
+      ...baseTask,
+      status: "reviewing_plan" as const,
+    };
+    mockUseQuery
+      .mockReturnValueOnce(reviewingTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    expect(screen.getByTestId("reviewing-plan-banner")).toBeInTheDocument();
+  });
+
+  // --- Story 5.3: Files tab ---
+
+  it("renders Files tab trigger with count when task has files", () => {
+    const taskWithFiles = {
+      ...baseTask,
+      files: [
+        { name: "report.pdf", type: "application/pdf", size: 867328, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+        { name: "output.ts", type: "text/plain", size: 1024, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
+        { name: "chart.png", type: "image/png", size: 204800, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    mockUseQuery
+      .mockReturnValueOnce(taskWithFiles)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    expect(screen.getByRole("tab", { name: "Files (3)" })).toBeInTheDocument();
+  });
+
+  it("renders Files tab trigger without count when task has no files", () => {
+    const taskNoFiles = {
+      ...baseTask,
+      files: [],
+    };
+    mockUseQuery
+      .mockReturnValueOnce(taskNoFiles)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    expect(screen.getByRole("tab", { name: "Files" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Files \(/ })).not.toBeInTheDocument();
+  });
+
+  it("renders empty placeholder when task has no files", async () => {
+    const user = userEvent.setup();
+    const taskNoFiles = {
+      ...baseTask,
+      files: [],
+    };
+    mockUseQuery
+      .mockReturnValueOnce(taskNoFiles)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("files-empty-placeholder")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("No files yet. Attach files or wait for agent output."),
+    ).toBeInTheDocument();
+  });
+
+  it("renders attachments and outputs in separate sections", async () => {
+    const user = userEvent.setup();
+    const taskWithFiles = {
+      ...baseTask,
+      files: [
+        { name: "notes.pdf", type: "application/pdf", size: 102400, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+        { name: "result.py", type: "text/plain", size: 2048, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    mockUseQuery
+      .mockReturnValueOnce(taskWithFiles)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Files (2)" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Attachments")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Outputs")).toBeInTheDocument();
+    expect(screen.getByText("notes.pdf")).toBeInTheDocument();
+    expect(screen.getByText("result.py")).toBeInTheDocument();
+  });
+
+  it("renders file type icons correctly for PDF, image, and code files", async () => {
+    const user = userEvent.setup();
+    const taskWithFiles = {
+      ...baseTask,
+      files: [
+        { name: "document.pdf", type: "application/pdf", size: 512000, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+        { name: "screenshot.png", type: "image/png", size: 204800, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+        { name: "script.ts", type: "text/plain", size: 1024, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
+        { name: "Makefile", type: "text/plain", size: 512, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    mockUseQuery
+      .mockReturnValueOnce(taskWithFiles)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(
+      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Files (4)" }));
+
+    // Assert file names are rendered
+    await waitFor(() => {
+      expect(screen.getByText("document.pdf")).toBeInTheDocument();
+    });
+    expect(screen.getByText("screenshot.png")).toBeInTheDocument();
+    expect(screen.getByText("script.ts")).toBeInTheDocument();
+    expect(screen.getByText("Makefile")).toBeInTheDocument();
+
+    // Assert correct icons via aria-label (FileIcon renders aria-label on each icon)
+    expect(screen.getByLabelText("PDF file")).toBeInTheDocument();
+    expect(screen.getByLabelText("Image file")).toBeInTheDocument();
+    expect(screen.getByLabelText("Code file")).toBeInTheDocument();
+    // Makefile has no extension — should render generic File icon
+    expect(screen.getByLabelText("Generic file")).toBeInTheDocument();
+  });
+
+  // --- Story 5.4: Attach files to existing tasks ---
+
+  it("renders Attach File button in the Files tab (AC: 1)", async () => {
+    const user = userEvent.setup();
+    const taskNoFiles = { ...baseTask, files: [] };
+    mockUseQuery
+      .mockReturnValueOnce(taskNoFiles)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("attach-file-button")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("attach-file-button")).toHaveTextContent("Attach File");
+  });
+
+  it("disables button and shows Uploading... text during upload (AC: 8)", async () => {
+    const user = userEvent.setup();
+    const taskNoFiles = { ...baseTask, files: [] };
+    // The component tree has 5 useQuery calls per render: getById, listByTask, getByTask
+    // (TaskDetailSheet) + agents.list + board (ThreadInput). Provide enough queued values
+    // for several renders so re-renders triggered by state changes don't get undefined.
+    mockUseQuery
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 2
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 3 (setIsUploading)
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 4+
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
+
+    // Mock fetch to hang so we can observe the uploading state
+    let resolveFetch!: (value: Response) => void;
+    const hangingFetch = new Promise<Response>((resolve) => { resolveFetch = resolve; });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(hangingFetch));
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("attach-file-button")).toBeInTheDocument();
+    });
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const mockFile = new File(["content"], "test.txt", { type: "text/plain" });
+    Object.defineProperty(fileInput, "files", { value: [mockFile], configurable: true });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("attach-file-button")).toBeDisabled();
+    });
+    expect(screen.getByTestId("attach-file-button")).toHaveTextContent("Uploading...");
+
+    // Resolve the hanging fetch to allow cleanup
+    resolveFetch(new Response(JSON.stringify({ files: [] }), { status: 200 }));
+    vi.unstubAllGlobals();
+  });
+
+  it("shows upload error message when upload fails (AC: 7)", async () => {
+    const user = userEvent.setup();
+    const taskNoFiles = { ...baseTask, files: [] };
+    // Use args-based dispatch so this mock is render-count independent.
+    // api.tasks.getById is called with { taskId } → return task.
+    // api.agents.list is called with no args (undefined) → return [].
+    // api.boards.getById is called with "skip" → return undefined.
+    // All other { taskId } queries (messages, steps) → return [].
+    // Because getById, listByTask, getByTask all share the same args shape,
+    // we track call count WITHIN the same args to distinguish the first (getById).
+    const callsByArgs = new Map<string, number>();
+    mockUseQuery.mockImplementation((_query: unknown, args: unknown) => {
+      if (args === "skip" || args === undefined) return undefined;
+      const key = JSON.stringify(args);
+      const count = (callsByArgs.get(key) ?? 0) + 1;
+      callsByArgs.set(key, count);
+      // Every render, getById is the FIRST { taskId } call → returns task.
+      // listByTask is SECOND, getByTask is THIRD → return [].
+      // The count resets naturally each render via the Map tracking total calls,
+      // but since we use total count, we use modulo 3 among { taskId } calls.
+      const mod = ((count - 1) % 3);
+      if (mod === 0) return taskNoFiles; // 1st, 4th, 7th... call → getById
+      return []; // 2nd, 3rd (listByTask, getByTask)
+    });
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("attach-file-button")).toBeInTheDocument();
+    });
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const mockFile = new File(["content"], "fail.txt", { type: "text/plain" });
+    Object.defineProperty(fileInput, "files", { value: [mockFile], configurable: true });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("upload-error")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("upload-error")).toHaveTextContent("Upload failed. Please try again.");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("calls addTaskFiles and createActivity mutations on successful upload (AC: 2, 3, 5)", async () => {
+    const user = userEvent.setup();
+    const taskNoFiles = { ...baseTask, files: [] };
+    // 5 useQuery calls per render pass (3 in TaskDetailSheet + 2 in ThreadInput)
+    mockUseQuery
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // mount
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setIsUploading(true)
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render after mutations
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setIsUploading(false)
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
+
+    const returnedFiles = [
+      { name: "doc.pdf", type: "application/pdf", size: 1024, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ files: returnedFiles }), { status: 200 }),
+      ),
+    );
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("attach-file-button")).toBeInTheDocument();
+    });
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const mockFile = new File(["content"], "doc.pdf", { type: "application/pdf" });
+    Object.defineProperty(fileInput, "files", { value: [mockFile], configurable: true });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      // addTaskFiles mutation called with returned file metadata
+      expect(mockMutationFn).toHaveBeenCalledWith({ taskId: "task1", files: returnedFiles });
+    });
+    // createActivity mutation called with eventType: "file_attached"
+    expect(mockMutationFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "task1",
+        eventType: "file_attached",
+        description: "User attached 1 file to task",
+      }),
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("renders No attachments yet. placeholder when task has only output files (AC: 9 — empty attachments section)", async () => {
+    const user = userEvent.setup();
+    const taskOutputOnly = {
+      ...baseTask,
+      files: [
+        { name: "result.py", type: "text/plain", size: 2048, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    mockUseQuery
+      .mockReturnValueOnce(taskOutputOnly)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+    await user.click(screen.getByRole("tab", { name: "Files (1)" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("No attachments yet.")).toBeInTheDocument();
+    });
+    // Output file still renders
+    expect(screen.getByText("result.py")).toBeInTheDocument();
+  });
+
+  it("calls removeTaskFile mutation when delete button is clicked (AC: 9)", async () => {
+    const user = userEvent.setup();
+    const taskWithAttachment = {
+      ...baseTask,
+      files: [
+        { name: "notes.pdf", type: "application/pdf", size: 10240, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    // 5 useQuery calls per render pass (3 in TaskDetailSheet + 2 in ThreadInput)
+    mockUseQuery
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // mount
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setDeletingFiles
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render after mutation
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render on finally
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })),
+    );
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+    await user.click(screen.getByRole("tab", { name: "Files (1)" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("notes.pdf")).toBeInTheDocument();
+    });
+
+    const deleteBtn = screen.getByRole("button", { name: "Delete attachment" });
+    await user.click(deleteBtn);
+
+    await waitFor(() => {
+      expect(mockMutationFn).toHaveBeenCalledWith({
+        taskId: "task1",
+        subfolder: "attachments",
+        filename: "notes.pdf",
+      });
+    });
+
+    vi.unstubAllGlobals();
   });
 });
 

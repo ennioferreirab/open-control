@@ -33,8 +33,18 @@ class PlanMaterializer:
     def __init__(self, bridge: ConvexBridge) -> None:
         self._bridge = bridge
 
-    def materialize(self, task_id: str, plan: ExecutionPlan) -> list[str]:
-        """Materialize steps for a task and transition the task to active state."""
+    def materialize(
+        self, task_id: str, plan: ExecutionPlan, *, skip_kickoff: bool = False
+    ) -> list[str]:
+        """Materialize steps for a task and transition the task to active state.
+
+        Args:
+            task_id: Convex task _id.
+            plan: Execution plan to materialize.
+            skip_kickoff: When True, skip the kick_off_task() call. Used for
+                supervised tasks where approveAndKickOff already transitioned
+                the task to in_progress.
+        """
         try:
             if not plan.steps:
                 raise ValueError(f"Cannot materialize empty execution plan for task {task_id}")
@@ -48,7 +58,8 @@ class PlanMaterializer:
                     "steps:batchCreate returned an unexpected number of created step IDs"
                 )
 
-            self._bridge.kick_off_task(task_id, len(created_step_ids))
+            if not skip_kickoff:
+                self._bridge.kick_off_task(task_id, len(created_step_ids))
 
             logger.info(
                 "[materializer] Materialized %d steps for task %s",

@@ -720,6 +720,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     orchestrator = TaskOrchestrator(bridge)
     routing_task = asyncio.create_task(orchestrator.start_routing_loop())
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
+    kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
 
     executor = TaskExecutor(bridge, cron_service=cron)
     execution_task = asyncio.create_task(executor.start_execution_loop())
@@ -736,9 +737,10 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     # Cancel all loops gracefully
     routing_task.cancel()
     review_task.cancel()
+    kickoff_task.cancel()
     execution_task.cancel()
     timeout_task.cancel()
-    for task in (routing_task, review_task, execution_task, timeout_task):
+    for task in (routing_task, review_task, kickoff_task, execution_task, timeout_task):
         try:
             await task
         except asyncio.CancelledError:

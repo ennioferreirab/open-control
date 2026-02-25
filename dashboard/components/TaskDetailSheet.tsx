@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { File, FileCode, FileText, Image, Loader2, Paperclip, Trash2 } from "lucide-react";
+import { File, FileCode, FileText, Image, Loader2, Paperclip, Play, Trash2 } from "lucide-react";
 import { ThreadMessage } from "./ThreadMessage";
 import { ExecutionPlanTab } from "./ExecutionPlanTab";
 import { STATUS_COLORS, type TaskStatus } from "@/lib/constants";
@@ -35,19 +35,21 @@ const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
 const CODE_EXTS = new Set([".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".sh"]);
 
 function FileIcon({ name }: { name: string }) {
-  const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
-  if (ext === ".pdf") return <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
-  if (IMAGE_EXTS.has(ext)) return <Image className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
-  if (CODE_EXTS.has(ext)) return <FileCode className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
-  return <File className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
+  const dotIdx = name.lastIndexOf(".");
+  const ext = dotIdx > 0 ? name.slice(dotIdx).toLowerCase() : "";
+  if (ext === ".pdf") return <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="PDF file" />;
+  if (IMAGE_EXTS.has(ext)) return <Image className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Image file" />;
+  if (CODE_EXTS.has(ext)) return <FileCode className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Code file" />;
+  return <File className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Generic file" />;
 }
 
 interface TaskDetailSheetProps {
   taskId: Id<"tasks"> | null;
   onClose: () => void;
+  onOpenPreKickoff?: (taskId: Id<"tasks">) => void;
 }
 
-export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
+export function TaskDetailSheet({ taskId, onClose, onOpenPreKickoff }: TaskDetailSheetProps) {
   const task = useQuery(
     api.tasks.getById,
     taskId ? { taskId } : "skip",
@@ -61,6 +63,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     taskId ? { taskId } : "skip",
   );
   const approveMutation = useMutation(api.tasks.approve);
+  const kickOffMutation = useMutation(api.tasks.approveAndKickOff);
   const retryMutation = useMutation(api.tasks.retry);
   const addTaskFiles = useMutation(api.tasks.addTaskFiles);
   const removeTaskFile = useMutation(api.tasks.removeTaskFile);
@@ -68,6 +71,8 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const shouldReduceMotion = useReducedMotion();
   const [viewerFile, setViewerFile] = useState<{ name: string; type: string; size: number; subfolder: string } | null>(null);
   const [showRejection, setShowRejection] = useState(false);
+  const [isKickingOff, setIsKickingOff] = useState(false);
+  const [kickOffError, setKickOffError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
@@ -107,7 +112,23 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     ? STATUS_COLORS[task.status as TaskStatus] ?? STATUS_COLORS.inbox
     : null;
 
+  const handleKickOff = async () => {
+    if (!task || !isTaskLoaded) return;
+    setIsKickingOff(true);
+    setKickOffError("");
+    try {
+      await kickOffMutation({ taskId: task._id });
+      onClose();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setKickOffError(`Kick-off failed: ${message}`);
+    } finally {
+      setIsKickingOff(false);
+    }
+  };
+
   const handleAttachFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!task || !isTaskLoaded) return;
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     e.target.value = "";
@@ -120,15 +141,15 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
       for (const file of files) {
         formData.append("files", file, file.name);
       }
-      const res = await fetch(`/api/tasks/${task!._id}/files`, {
+      const res = await fetch(`/api/tasks/${task._id}/files`, {
         method: "POST",
         body: formData,
       });
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       const { files: uploadedFiles } = await res.json();
-      await addTaskFiles({ taskId: task!._id, files: uploadedFiles });
+      await addTaskFiles({ taskId: task._id, files: uploadedFiles });
       await createActivity({
-        taskId: task!._id,
+        taskId: task._id,
         eventType: "file_attached",
         description: `User attached ${files.length} file${files.length > 1 ? "s" : ""} to task`,
         timestamp: new Date().toISOString(),
@@ -141,17 +162,18 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   };
 
   const handleDeleteFile = async (file: { name: string; subfolder: string }) => {
+    if (!task || !isTaskLoaded) return;
     const key = `${file.subfolder}-${file.name}`;
     setDeletingFiles((prev) => new Set(prev).add(key));
     setDeleteError("");
     try {
-      const res = await fetch(`/api/tasks/${task!._id}/files`, {
+      const res = await fetch(`/api/tasks/${task._id}/files`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subfolder: file.subfolder, filename: file.name }),
       });
       if (!res.ok) throw new Error("Delete failed");
-      await removeTaskFile({ taskId: task!._id, subfolder: file.subfolder, filename: file.name });
+      await removeTaskFile({ taskId: task._id, subfolder: file.subfolder, filename: file.name });
     } catch {
       // Re-clicking is idempotent: ENOENT is treated as success, so retry will self-heal
       setDeleteError("Delete failed. Please try again.");
@@ -223,6 +245,41 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       Retry from Beginning
                     </Button>
                   )}
+                  {task.status === "reviewing_plan" && onOpenPreKickoff && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-purple-500 hover:bg-purple-600 text-white text-xs h-7 px-2"
+                      onClick={() => {
+                        onOpenPreKickoff(task._id);
+                        onClose();
+                      }}
+                    >
+                      Review Plan
+                    </Button>
+                  )}
+                  {task.status === "reviewing_plan" && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
+                      onClick={handleKickOff}
+                      disabled={isKickingOff}
+                      data-testid="kick-off-button"
+                    >
+                      {isKickingOff ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                          Kicking off...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3.5 w-3.5 mr-1" />
+                          Kick-off
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </SheetDescription>
               {showRejection && taskId && (
@@ -231,6 +288,16 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                     taskId={taskId}
                     onClose={() => setShowRejection(false)}
                   />
+                </div>
+              )}
+              {task.status === "reviewing_plan" && (
+                <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800" data-testid="reviewing-plan-banner">
+                  This task is awaiting your approval. Review the execution plan and click Kick-off when ready.
+                </div>
+              )}
+              {kickOffError && (
+                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
+                  {kickOffError}
                 </div>
               )}
             </SheetHeader>
@@ -378,94 +445,105 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       size="sm"
                       onClick={() => attachInputRef.current?.click()}
                       disabled={isUploading}
+                      data-testid="attach-file-button"
                     >
                       <Paperclip className="h-3.5 w-3.5 mr-1.5" />
                       {isUploading ? "Uploading..." : "Attach File"}
                     </Button>
                     {uploadError && (
-                      <p className="text-xs text-red-500">{uploadError}</p>
+                      <p className="text-xs text-red-500" data-testid="upload-error">{uploadError}</p>
                     )}
                   </div>
                   {deleteError && (
-                    <p className="text-xs text-red-500 mb-3">{deleteError}</p>
+                    <p className="text-xs text-red-500 mb-3" data-testid="delete-error">{deleteError}</p>
                   )}
 
-                  <div className="space-y-6">
-                    {/* ATTACHMENTS */}
-                    <div>
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                        Attachments
-                      </h4>
-                      {(task.files ?? []).filter((f) => f.subfolder === "attachments").length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-2">No attachments yet.</p>
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          {(task.files ?? [])
-                            .filter((f) => f.subfolder === "attachments")
-                            .map((file) => {
-                              const key = `${file.subfolder}-${file.name}`;
-                              const isDeleting = deletingFiles.has(key);
-                              return (
-                                <div
-                                  key={key}
-                                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 animate-in fade-in duration-300 group transition-opacity ${isDeleting ? "opacity-40 pointer-events-none" : ""}`}
-                                >
-                                  <FileIcon name={file.name} />
-                                  <span
-                                    className="flex-1 min-w-0 text-sm truncate cursor-pointer"
+                  {(() => {
+                    const allFiles = task.files ?? [];
+                    const attachments = allFiles.filter((f) => f.subfolder === "attachments");
+                    const outputs = allFiles.filter((f) => f.subfolder === "output");
+
+                    if (allFiles.length === 0) {
+                      return (
+                        <p className="text-sm text-muted-foreground py-8 text-center" data-testid="files-empty-placeholder">
+                          No files yet. Attach files or wait for agent output.
+                        </p>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-6">
+                        {/* ATTACHMENTS */}
+                        <div>
+                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                            Attachments
+                          </h4>
+                          {attachments.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-2">No attachments yet.</p>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              {attachments.map((file) => {
+                                const key = `${file.subfolder}-${file.name}`;
+                                const isDeleting = deletingFiles.has(key);
+                                return (
+                                  <div
+                                    key={key}
+                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 animate-in fade-in duration-300 group transition-opacity ${isDeleting ? "opacity-40 pointer-events-none" : ""}`}
                                     onClick={() => setViewerFile(file)}
                                   >
-                                    {file.name}
-                                  </span>
+                                    <FileIcon name={file.name} />
+                                    <span className="flex-1 min-w-0 text-sm truncate">
+                                      {file.name}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                                      {formatSize(file.size)}
+                                    </span>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteFile(file); }}
+                                      disabled={isDeleting}
+                                      className={`flex-shrink-0 transition-opacity text-muted-foreground hover:text-destructive ${isDeleting ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                                      aria-label="Delete attachment"
+                                    >
+                                      {isDeleting
+                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        : <Trash2 className="h-3.5 w-3.5" />
+                                      }
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* OUTPUTS */}
+                        <div>
+                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                            Outputs
+                          </h4>
+                          {outputs.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-2">No outputs yet.</p>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              {outputs.map((file) => (
+                                <div
+                                  key={`${file.subfolder}-${file.name}`}
+                                  className="flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 animate-in fade-in duration-300"
+                                  onClick={() => setViewerFile(file)}
+                                >
+                                  <FileIcon name={file.name} />
+                                  <span className="flex-1 min-w-0 text-sm truncate">{file.name}</span>
                                   <span className="text-xs text-muted-foreground flex-shrink-0">
                                     {formatSize(file.size)}
                                   </span>
-                                  <button
-                                    onClick={() => handleDeleteFile(file)}
-                                    disabled={isDeleting}
-                                    className={`flex-shrink-0 transition-opacity text-muted-foreground hover:text-destructive ${isDeleting ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                                    aria-label="Delete attachment"
-                                  >
-                                    {isDeleting
-                                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      : <Trash2 className="h-3.5 w-3.5" />
-                                    }
-                                  </button>
                                 </div>
-                              );
-                            })}
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-
-                    {/* OUTPUTS */}
-                    <div>
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                        Outputs
-                      </h4>
-                      {(task.files ?? []).filter((f) => f.subfolder === "output").length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-2">No outputs yet.</p>
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          {(task.files ?? [])
-                            .filter((f) => f.subfolder === "output")
-                            .map((file) => (
-                              <div
-                                key={`${file.subfolder}-${file.name}`}
-                                className="flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 animate-in fade-in duration-300"
-                                onClick={() => setViewerFile(file)}
-                              >
-                                <FileIcon name={file.name} />
-                                <span className="flex-1 min-w-0 text-sm truncate">{file.name}</span>
-                                <span className="text-xs text-muted-foreground flex-shrink-0">
-                                  {formatSize(file.size)}
-                                </span>
-                              </div>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                      </div>
+                    );
+                  })()}
                 </ScrollArea>
               </TabsContent>
             </Tabs>
@@ -479,11 +557,13 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
           </>
         ) : null}
       </SheetContent>
-      <DocumentViewerModal
-        taskId={task?._id ?? ""}
-        file={viewerFile}
-        onClose={() => setViewerFile(null)}
-      />
+      {isTaskLoaded && (
+        <DocumentViewerModal
+          taskId={task._id}
+          file={viewerFile}
+          onClose={() => setViewerFile(null)}
+        />
+      )}
     </Sheet>
   );
 }

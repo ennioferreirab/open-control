@@ -5,7 +5,7 @@ import { useReducedMotion } from "motion/react";
 import type { KeyboardEvent } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Lock } from "lucide-react";
+import { AlertTriangle, Lock, Paperclip } from "lucide-react";
 import { Doc } from "../convex/_generated/dataModel";
 import { STEP_STATUS_COLORS, type StepStatus } from "@/lib/constants";
 
@@ -107,6 +107,12 @@ export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
               <Lock className="mr-1 h-3 w-3" />
               Blocked
             </Badge>
+          )}
+          {step.attachedFiles && step.attachedFiles.length > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+              <Paperclip className="h-3 w-3" />
+              {step.attachedFiles.length}
+            </span>
           )}
         </div>
       </Card>

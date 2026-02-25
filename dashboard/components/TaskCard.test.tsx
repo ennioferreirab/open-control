@@ -176,4 +176,71 @@ describe("TaskCard", () => {
     // stopPropagation should prevent parent onClick
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  // --- Story 5.5: File indicator ---
+
+  it("shows paperclip icon and file count when files present", () => {
+    render(
+      <TaskCard
+        task={{
+          ...baseTask,
+          files: [
+            {
+              name: "a.pdf",
+              type: "application/pdf",
+              size: 100,
+              subfolder: "attachments",
+              uploadedAt: "2026-01-01T00:00:00Z",
+            },
+          ],
+        }}
+      />
+    );
+    expect(screen.getByText("1")).toBeInTheDocument();
+  });
+
+  it("does not show file count when no files", () => {
+    render(<TaskCard task={baseTask} />);
+    // baseTask has no files field — ensure no numeric count is displayed in a file span
+    const card = screen.getByRole("article");
+    const fileSpans = card.querySelectorAll("span.inline-flex");
+    const fileIndicator = Array.from(fileSpans).find(
+      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? "")
+    );
+    expect(fileIndicator).toBeUndefined();
+  });
+
+  it("shows correct count for multiple files", () => {
+    render(
+      <TaskCard
+        task={{
+          ...baseTask,
+          files: [
+            {
+              name: "a.pdf",
+              type: "application/pdf",
+              size: 100,
+              subfolder: "attachments",
+              uploadedAt: "2026-01-01T00:00:00Z",
+            },
+            {
+              name: "b.csv",
+              type: "text/csv",
+              size: 200,
+              subfolder: "attachments",
+              uploadedAt: "2026-01-01T00:00:00Z",
+            },
+            {
+              name: "c.txt",
+              type: "text/plain",
+              size: 50,
+              subfolder: "attachments",
+              uploadedAt: "2026-01-01T00:00:00Z",
+            },
+          ],
+        }}
+      />
+    );
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
 });

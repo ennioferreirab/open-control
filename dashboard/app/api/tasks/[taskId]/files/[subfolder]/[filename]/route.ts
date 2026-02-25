@@ -61,7 +61,7 @@ export async function GET(
   if (!VALID_SUBFOLDERS.has(subfolder)) {
     return NextResponse.json({ error: "Invalid subfolder" }, { status: 400 });
   }
-  if (!FILENAME_RE.test(filename) || filename === ".." || filename.includes("..")) {
+  if (!FILENAME_RE.test(filename) || filename === "..") {
     return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   }
 

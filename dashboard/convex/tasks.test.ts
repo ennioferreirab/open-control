@@ -37,7 +37,9 @@ function getKickOffHandler() {
 }
 
 describe("tasks.create", () => {
-  it("defaults supervision mode to autonomous and creates unassigned tasks in inbox", async () => {
+  it("defaults supervision mode to autonomous and creates unassigned non-manual tasks in planning (Story 1.5 AC 8.4)", async () => {
+    // Non-manual tasks without an assigned agent start in "planning" so the
+    // orchestrator's planning subscription picks them up for LLM plan generation.
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
@@ -47,7 +49,7 @@ describe("tasks.create", () => {
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
     expect(taskInsert?.value.supervisionMode).toBe("autonomous");
-    expect(taskInsert?.value.status).toBe("inbox");
+    expect(taskInsert?.value.status).toBe("planning");
   });
 
   it("forces manual tasks to autonomous supervision mode", async () => {

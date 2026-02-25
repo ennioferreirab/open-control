@@ -41,13 +41,13 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Task Creation & Execution Planning
-  epic-1: in-progress
+  epic-1: done
   1-1-extend-convex-schema-for-task-step-hierarchy: done
   1-2-add-supervision-mode-to-task-creation: done
-  1-3-register-general-agent-as-system-fallback: review
-  1-4-enforce-lead-agent-as-pure-orchestrator: review
-  1-5-generate-execution-plans: review
-  1-6-materialize-plans-into-step-records: review
+  1-3-register-general-agent-as-system-fallback: done
+  1-4-enforce-lead-agent-as-pure-orchestrator: done
+  1-5-generate-execution-plans: done
+  1-6-materialize-plans-into-step-records: done
   1-7-render-step-cards-on-kanban-board: done
   1-8-visualize-execution-plan: done
   epic-1-retrospective: optional
@@ -73,32 +73,32 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Pre-Kickoff Plan Review & Negotiation
-  epic-4: backlog
-  4-1-build-pre-kickoff-modal-shell: backlog
-  4-2-reassign-agents-to-steps: backlog
-  4-3-reorder-steps-and-edit-dependencies: backlog
-  4-4-attach-documents-to-steps: backlog
-  4-5-chat-with-lead-agent-for-plan-negotiation: backlog
-  4-6-approve-plan-and-kick-off: backlog
+  epic-4: done
+  4-1-build-pre-kickoff-modal-shell: done
+  4-2-reassign-agents-to-steps: done
+  4-3-reorder-steps-and-edit-dependencies: done
+  4-4-attach-documents-to-steps: done
+  4-5-chat-with-lead-agent-for-plan-negotiation: done
+  4-6-approve-plan-and-kick-off: done
   epic-4-retrospective: optional
 
   # Epic 5: File Attachment & Viewing
-  epic-5: backlog
-  5-1-extend-schema-and-create-task-directories: backlog
-  5-2-upload-files-at-task-creation: backlog
-  5-3-build-files-tab-in-task-detail: backlog
-  5-4-attach-files-to-existing-tasks: backlog
-  5-5-file-indicators-on-task-cards: backlog
-  5-6-file-serving-api-route: backlog
-  5-7-viewer-modal-with-text-and-code-viewers: backlog
-  5-8-pdf-viewer: backlog
-  5-9-html-and-markdown-viewers: backlog
-  5-10-image-viewer: backlog
+  epic-5: done
+  5-1-extend-schema-and-create-task-directories: done
+  5-2-upload-files-at-task-creation: done
+  5-3-build-files-tab-in-task-detail: done
+  5-4-attach-files-to-existing-tasks: done
+  5-5-file-indicators-on-task-cards: done
+  5-6-file-serving-api-route: done
+  5-7-viewer-modal-with-text-and-code-viewers: done
+  5-8-pdf-viewer: done
+  5-9-html-and-markdown-viewers: done
+  5-10-image-viewer: done
   epic-5-retrospective: optional
 
   # Epic 6: Agent File Integration
-  epic-6: backlog
-  6-1-inject-file-context-into-agent-task-context: backlog
-  6-2-bridge-manifest-sync-for-agent-output: backlog
-  6-3-lead-agent-file-aware-routing: backlog
+  epic-6: done
+  6-1-inject-file-context-into-agent-task-context: done
+  6-2-bridge-manifest-sync-for-agent-output: done
+  6-3-lead-agent-file-aware-routing: done
   epic-6-retrospective: optional

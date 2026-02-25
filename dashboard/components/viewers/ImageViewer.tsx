@@ -15,6 +15,12 @@ const SCALES = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 export function ImageViewer({ blobUrl, filename, onDownload }: Props) {
   const [scale, setScale] = useState<number | "fit">("fit");
   const [error, setError] = useState(false);
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+  };
 
   const zoomIn = () => {
     if (scale === "fit") {
@@ -61,7 +67,7 @@ export function ImageViewer({ blobUrl, filename, onDownload }: Props) {
         >
           1:1
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomOut} disabled={scale === "fit"}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Zoom out" onClick={zoomOut} disabled={scale === "fit"}>
           <Minus className="h-3 w-3" />
         </Button>
         {scale !== "fit" && (
@@ -69,28 +75,37 @@ export function ImageViewer({ blobUrl, filename, onDownload }: Props) {
             {Math.round((scale as number) * 100)}%
           </span>
         )}
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomIn} disabled={scale === 2.0}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Zoom in" onClick={zoomIn} disabled={scale === 2.0}>
           <Plus className="h-3 w-3" />
         </Button>
       </div>
 
       {/* Image area */}
-      <div className="flex-1 overflow-auto flex items-center justify-center bg-muted/20 p-4">
+      <div className="flex-1 overflow-auto bg-muted/20 p-4">
         {scale === "fit" ? (
-          <img
-            src={blobUrl}
-            alt={filename}
-            className="max-w-full max-h-full object-contain"
-            onError={() => setError(true)}
-          />
+          <div className="flex items-center justify-center h-full">
+            <img
+              src={blobUrl}
+              alt={filename}
+              className="max-w-full max-h-full object-contain"
+              onLoad={handleLoad}
+              onError={() => setError(true)}
+            />
+          </div>
         ) : (
-          <img
-            src={blobUrl}
-            alt={filename}
-            style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}
-            className="block"
-            onError={() => setError(true)}
-          />
+          <div className="min-h-full min-w-full inline-flex items-start justify-center">
+            <img
+              src={blobUrl}
+              alt={filename}
+              style={{
+                width: naturalSize ? naturalSize.w * (scale as number) : undefined,
+                height: naturalSize ? naturalSize.h * (scale as number) : undefined,
+              }}
+              className="block"
+              onLoad={handleLoad}
+              onError={() => setError(true)}
+            />
+          </div>
         )}
       </div>
     </div>

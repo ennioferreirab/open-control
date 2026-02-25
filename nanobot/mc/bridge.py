@@ -441,6 +441,24 @@ class ConvexBridge:
         )
         return result
 
+    def approve_and_kick_off(
+        self, task_id: str, execution_plan: dict[str, Any] | None = None
+    ) -> Any:
+        """Approve plan and kick off a supervised task.
+
+        Calls the atomic Convex mutation that saves the (optionally edited)
+        execution plan, transitions reviewing_plan -> in_progress, and creates
+        an activity event.
+        """
+        args: dict[str, Any] = {"task_id": task_id}
+        if execution_plan is not None:
+            args["execution_plan"] = execution_plan
+        result = self._mutation_with_retry("tasks:approveAndKickOff", args)
+        self._log_state_transition(
+            "task", f"Task {task_id} approved and kicked off"
+        )
+        return result
+
     def update_step_status(
         self,
         step_id: str,
@@ -714,8 +732,6 @@ class ConvexBridge:
         - Replaces the output section if stale entries exist
         - Creates activity event if new files were found
         """
-        import mimetypes
-
         EXT_MIME: dict[str, str] = {
             "pdf": "application/pdf", "md": "text/markdown", "markdown": "text/markdown",
             "html": "text/html", "htm": "text/html", "txt": "text/plain",
@@ -733,7 +749,7 @@ class ConvexBridge:
             return
 
         # Scan filesystem
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat()
         fs_files: list[dict] = []
         try:
             for entry in output_dir.iterdir():

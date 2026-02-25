@@ -1,6 +1,6 @@
 # Story 1.5: Generate Execution Plans
 
-Status: review
+Status: done
 
 ## Story
 
@@ -623,6 +623,43 @@ Recent work is UI and cron features. No conflicts expected with planner/orchestr
 - [Source: _bmad-output/planning-artifacts/prd.md#FR6-FR10] -- Execution Planning requirements
 - [Source: _bmad-output/planning-artifacts/prd.md#NFR1] -- Plan generation < 10 seconds
 - [Source: _bmad-output/planning-artifacts/prd.md#NFR10] -- No silent planning failures
+
+## Review Findings
+
+### Reviewer: Claude Sonnet 4.6 (adversarial review)
+### Date: 2026-02-25
+
+### Issues Found
+
+#### HIGH: Task `create` mutation uses `"inbox"` as default status instead of `"planning"` (AC 8.4)
+**Severity:** HIGH
+**Location:** `dashboard/convex/tasks.ts:118`
+**Description:** The story explicitly requires AC 8.4: "Update task creation mutation to use `"planning"` as initial status (instead of `"inbox"`) for non-manual tasks." The implementation still had `const initialStatus = assignedAgent ? "assigned" : "inbox"` without the `isManual` check. This means newly created tasks went to `"inbox"` (never picked up by the planning loop) instead of `"planning"`. The orchestrator subscribes to `"planning"` tasks but no tasks were entering that state from creation.
+**Status:** FIXED — Changed to `const initialStatus = isManual ? "inbox" : (assignedAgent ? "assigned" : "planning");`
+
+#### HIGH: `"ready"` status missing from Convex schema task status union
+**Severity:** HIGH
+**Location:** `dashboard/convex/schema.ts` — tasks table status union
+**Description:** `VALID_TRANSITIONS` in `tasks.ts` references `planning -> ready` and the `RESTORE_TARGET_MAP` implies `"ready"` is a valid task state, but the schema only had `"planning"`, `"reviewing_plan"`, `"failed"`, `"inbox"`, `"assigned"`, `"in_progress"`, `"review"`, `"done"`, `"retrying"`, `"crashed"`, `"deleted"`. Any attempt to transition a task to `"ready"` would cause a Convex schema validation error.
+**Status:** FIXED — Added `v.literal("ready")` to the schema union, added `ready` to `VALID_TRANSITIONS`, `TRANSITION_EVENT_MAP`, `RESTORE_TARGET_MAP`, `listByStatus` query union, and `TASK_STATUS`/`STATUS_COLORS` in `constants.ts`. Also added `READY = "ready"` to Python `TaskStatus` enum.
+
+#### MEDIUM: `tasks.test.ts` asserted old `"inbox"` initial status (broken by AC 8.4 fix)
+**Severity:** MEDIUM
+**Location:** `dashboard/convex/tasks.test.ts:50`
+**Description:** The test `"defaults supervision mode to autonomous and creates unassigned tasks in inbox"` was asserting `status === "inbox"` for non-manual unassigned tasks. After fixing AC 8.4, this test broke. This is a test that needed updating to reflect the new correct behavior.
+**Status:** FIXED — Updated test to expect `"planning"` and renamed the test to clarify the behavior.
+
+### ACs Verified
+- AC1: Orchestrator subscribes to `"planning"` status tasks. VERIFIED in `orchestrator.py:50`.
+- AC2: `ExecutionPlan` has `tempId`, `title`, `description`, `assignedAgent`, `blockedBy`, `parallelGroup`, `order`, `generatedAt`, `generatedBy`. VERIFIED in `types.py`.
+- AC3: General Agent fallback when no specialist matches. VERIFIED in `_validate_agent_names()` and `_fallback_heuristic_plan()`.
+- AC4: `_normalize_plan_dependencies_and_groups()` handles `parallelGroup` and `blockedBy`. VERIFIED.
+- AC5: Failure sets task to `"failed"` with activity + system message. VERIFIED in `orchestrator.py:162-197`.
+- AC6: Single-step plan works via heuristic fallback. VERIFIED in test.
+
+### Verdict: DONE (after fixing HIGH and MEDIUM issues)
+
+---
 
 ## Dev Agent Record
 

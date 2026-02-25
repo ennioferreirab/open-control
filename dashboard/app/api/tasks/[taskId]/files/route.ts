@@ -50,7 +50,12 @@ export async function POST(
     if (!(value instanceof File)) continue;
 
     const file = value;
-    const finalPath = join(attachmentsDir, file.name);
+    // Sanitize the filename to prevent path traversal attacks: strip any
+    // directory components so that e.g. "../../etc/passwd" becomes "passwd".
+    const safeName = basename(file.name);
+    if (!safeName) continue;
+
+    const finalPath = join(attachmentsDir, safeName);
     const tmpPath = `${finalPath}.tmp`;
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -61,13 +66,13 @@ export async function POST(
     } catch (err) {
       await rm(tmpPath, { force: true });
       return NextResponse.json(
-        { error: `Failed to write file: ${file.name}` },
+        { error: `Failed to write file: ${safeName}` },
         { status: 500 },
       );
     }
 
     uploadedFiles.push({
-      name: file.name,
+      name: safeName,
       type: file.type,
       size: file.size,
       subfolder: "attachments",

@@ -11,6 +11,10 @@ from nanobot.mc.types import TaskStatus, ActivityEventType
 
 # Valid transitions: current_status -> [allowed_next_statuses]
 VALID_TRANSITIONS: dict[str, list[str]] = {
+    TaskStatus.PLANNING: [TaskStatus.FAILED, TaskStatus.REVIEWING_PLAN],
+    # reviewing_plan -> in_progress is handled by the approveAndKickOff Convex mutation.
+    # reviewing_plan -> failed covers post-kickoff materialization failure.
+    TaskStatus.REVIEWING_PLAN: [TaskStatus.IN_PROGRESS, TaskStatus.PLANNING, TaskStatus.FAILED],
     TaskStatus.INBOX: [TaskStatus.ASSIGNED],
     TaskStatus.ASSIGNED: [TaskStatus.IN_PROGRESS],
     TaskStatus.IN_PROGRESS: [TaskStatus.REVIEW, TaskStatus.DONE],
@@ -24,6 +28,11 @@ UNIVERSAL_TARGETS: set[str] = {TaskStatus.RETRYING, TaskStatus.CRASHED}
 
 # Map (from, to) -> activity event type
 TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
+    (TaskStatus.PLANNING, TaskStatus.REVIEWING_PLAN): ActivityEventType.TASK_PLANNING,
+    (TaskStatus.PLANNING, TaskStatus.FAILED): ActivityEventType.TASK_FAILED,
+    (TaskStatus.REVIEWING_PLAN, TaskStatus.PLANNING): ActivityEventType.TASK_PLANNING,
+    (TaskStatus.REVIEWING_PLAN, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_STARTED,
+    (TaskStatus.REVIEWING_PLAN, TaskStatus.FAILED): ActivityEventType.TASK_FAILED,
     (TaskStatus.INBOX, TaskStatus.ASSIGNED): ActivityEventType.TASK_ASSIGNED,
     (TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_STARTED,
     (TaskStatus.IN_PROGRESS, TaskStatus.REVIEW): ActivityEventType.REVIEW_REQUESTED,
