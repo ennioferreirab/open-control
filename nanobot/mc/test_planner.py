@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
-from nanobot.mc.planner import TaskPlanner, _parse_plan_response
+import pytest
+
+from nanobot.mc.planner import TaskPlanner, _build_file_summary, _parse_plan_response
 from nanobot.mc.types import AgentData, ExecutionPlan, ExecutionPlanStep, GENERAL_AGENT_NAME, LEAD_AGENT_NAME
 
 
@@ -230,3 +233,161 @@ def test_execution_plan_to_dict_uses_camel_case_generated_fields() -> None:
     assert "createdAt" not in payload
     assert "stepId" not in payload["steps"][0]
     assert "dependsOn" not in payload["steps"][0]
+
+
+# ---------------------------------------------------------------------------
+# Story 6.3: _build_file_summary() tests (FR-F28, FR-F29)
+# ---------------------------------------------------------------------------
+
+
+def test_build_file_summary_with_files_returns_formatted_string() -> None:
+    """_build_file_summary returns a formatted string with names, types, and sizes."""
+    files = [
+        {"name": "invoice.pdf", "type": "application/pdf", "size": 867328},
+        {"name": "notes.md", "type": "text/markdown", "size": 12288},
+    ]
+    result = _build_file_summary(files)
+
+    assert "2 attached file(s)" in result
+    assert "invoice.pdf" in result
+    assert "application/pdf" in result
+    assert "notes.md" in result
+    assert "text/markdown" in result
+    assert "847 KB" in result   # 867328 // 1024 = 847
+    assert "12 KB" in result    # 12288 // 1024 = 12
+    assert "Consider file types" in result
+
+
+def test_build_file_summary_with_empty_files_returns_empty_string() -> None:
+    """_build_file_summary returns empty string for empty file list (AC #3)."""
+    assert _build_file_summary([]) == ""
+
+
+def test_build_file_summary_single_file() -> None:
+    """_build_file_summary handles a single file correctly."""
+    files = [
+        {"name": "report.docx", "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size": 51200},
+    ]
+    result = _build_file_summary(files)
+
+    assert "1 attached file(s)" in result
+    assert "report.docx" in result
+    assert "50 KB" in result   # 51200 // 1024 = 50
+    assert "Consider file types" in result
+
+
+def test_build_file_summary_large_files_uses_mb_format() -> None:
+    """_build_file_summary uses MB format for files >= 1 MB."""
+    files = [
+        {"name": "video.mp4", "type": "video/mp4", "size": 1073741824},  # 1 GB
+        {"name": "data.csv", "type": "text/csv", "size": 2097152},        # 2 MB
+    ]
+    result = _build_file_summary(files)
+
+    assert "video.mp4" in result
+    assert "data.csv" in result
+    # 1073741824 / 1048576 = 1024.0 MB
+    assert "1024.0 MB" in result
+    # 2097152 / 1048576 = 2.0 MB
+    assert "2.0 MB" in result
+    # Total: 1073741824 + 2097152 = 1075838976 bytes / 1048576 = 1026.0 MB
+    assert "1026.0 MB" in result
+
+
+def test_build_file_summary_zero_byte_file() -> None:
+    """_build_file_summary handles zero-byte files gracefully."""
+    files = [
+        {"name": "empty.txt", "type": "text/plain", "size": 0},
+    ]
+    result = _build_file_summary(files)
+
+    assert "1 attached file(s)" in result
+    assert "empty.txt" in result
+    assert "0 KB" in result
+
+
+def test_build_file_summary_missing_type_defaults_to_octet_stream() -> None:
+    """_build_file_summary defaults to application/octet-stream when type field is absent."""
+    files = [
+        {"name": "mystery.bin", "size": 1024},
+    ]
+    result = _build_file_summary(files)
+
+    assert "mystery.bin" in result
+    assert "application/octet-stream" in result
+
+
+@pytest.mark.asyncio
+async def test_llm_plan_includes_file_summary_in_prompt_when_files_present() -> None:
+    """_llm_plan appends file summary to the user prompt when files are provided."""
+    planner = TaskPlanner()
+    agents = [_agent("general-agent", ["general"])]
+    files = [
+        {"name": "invoice.pdf", "type": "application/pdf", "size": 867328},
+    ]
+
+    captured_messages: list[list[dict]] = []
+
+    def _fake_chat(**kwargs):
+        captured_messages.append(kwargs["messages"])
+        return json.dumps({
+            "steps": [
+                {
+                    "tempId": "step_1",
+                    "title": "Process invoice",
+                    "description": "Process the invoice",
+                    "assignedAgent": "general-agent",
+                    "blockedBy": [],
+                    "parallelGroup": 1,
+                    "order": 1,
+                }
+            ]
+        })
+
+    fake_provider = type("FakeProvider", (), {"chat": staticmethod(_fake_chat)})()
+
+    with patch("nanobot.mc.provider_factory.create_provider", return_value=(fake_provider, "fake-model")):
+        await planner._llm_plan("Process invoice", "Analyze the attached invoice", agents, files=files)
+
+    assert len(captured_messages) == 1
+    user_prompt = captured_messages[0][1]["content"]
+    assert "invoice.pdf" in user_prompt
+    assert "application/pdf" in user_prompt
+    assert "Consider file types" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_llm_plan_excludes_file_summary_when_no_files() -> None:
+    """_llm_plan does NOT append file summary when files is empty or None (AC #3)."""
+    planner = TaskPlanner()
+    agents = [_agent("general-agent", ["general"])]
+
+    captured_messages: list[list[dict]] = []
+
+    def _fake_chat(**kwargs):
+        captured_messages.append(kwargs["messages"])
+        return json.dumps({
+            "steps": [
+                {
+                    "tempId": "step_1",
+                    "title": "Write report",
+                    "description": "Write the report",
+                    "assignedAgent": "general-agent",
+                    "blockedBy": [],
+                    "parallelGroup": 1,
+                    "order": 1,
+                }
+            ]
+        })
+
+    fake_provider = type("FakeProvider", (), {"chat": staticmethod(_fake_chat)})()
+
+    for files_arg in [[], None]:
+        captured_messages.clear()
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(fake_provider, "fake-model")):
+            await planner._llm_plan("Write report", "Write a status report", agents, files=files_arg)
+
+        assert len(captured_messages) == 1
+        user_prompt = captured_messages[0][1]["content"]
+        assert "Consider file types" not in user_prompt
+        assert "attached file" not in user_prompt

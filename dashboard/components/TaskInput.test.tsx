@@ -28,6 +28,7 @@ describe("TaskInput", () => {
   afterEach(() => {
     cleanup();
     mockMutate.mockClear();
+    vi.unstubAllGlobals();
   });
 
   it("renders the input with placeholder text", () => {
@@ -340,5 +341,269 @@ describe("TaskInput", () => {
     // Enabled agents should not have the suffix
     expect(screen.getByText("Coder Agent")).toBeInTheDocument();
     expect(screen.queryByText("Coder Agent (Deactivated)")).not.toBeInTheDocument();
+  });
+
+  // --- Story 5.2: File attachment tests ---
+
+  it("renders paperclip attach button with correct aria-label", () => {
+    render(<TaskInput />);
+    expect(screen.getByLabelText("Attach files")).toBeInTheDocument();
+  });
+
+  it("shows file chips after file selection", () => {
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const file = new File(["content"], "report.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [file],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+    expect(screen.getByText(/report\.pdf/)).toBeInTheDocument();
+  });
+
+  it("shows file size in human-readable format", () => {
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+
+    // 2048 bytes → "2 KB"
+    const small = new File(["x".repeat(2048)], "small.txt", {
+      type: "text/plain",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [small],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+    expect(screen.getByText(/2 KB/)).toBeInTheDocument();
+  });
+
+  it("shows file size in MB for large files", () => {
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+
+    // 1572864 bytes = 1.5 MB
+    const large = new File(["x".repeat(1572864)], "large.bin", {
+      type: "application/octet-stream",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [large],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+    expect(screen.getByText(/1\.5 MB/)).toBeInTheDocument();
+  });
+
+  it("removes file chip when X button is clicked", () => {
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const file = new File(["content"], "report.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [file],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+    expect(screen.getByText(/report\.pdf/)).toBeInTheDocument();
+
+    // Click the remove button
+    fireEvent.click(screen.getByLabelText("Remove report.pdf"));
+    expect(screen.queryByText(/report\.pdf/)).not.toBeInTheDocument();
+  });
+
+  it("includes file metadata in createTask mutation when files are pending", async () => {
+    mockMutate.mockResolvedValue("taskId123");
+    // Also mock fetch so the upload step succeeds silently
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const file = new File(["content"], "report.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [file],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+
+    const input = screen.getByPlaceholderText("Create a new task...");
+    fireEvent.change(input, { target: { value: "Task with attachment" } });
+    fireEvent.click(screen.getByText("Create"));
+
+    await vi.waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          files: [
+            expect.objectContaining({
+              name: "report.pdf",
+              type: "application/pdf",
+              size: expect.any(Number),
+              subfolder: "attachments",
+              uploadedAt: expect.any(String),
+            }),
+          ],
+        })
+      );
+    });
+  });
+
+  it("calls upload endpoint after task creation with pending files", async () => {
+    mockMutate.mockResolvedValue("taskId123");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const file = new File(["content"], "report.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [file],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+
+    const input = screen.getByPlaceholderText("Create a new task...");
+    fireEvent.change(input, { target: { value: "Upload test" } });
+    fireEvent.click(screen.getByText("Create"));
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/tasks/taskId123/files",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+  });
+
+  it("does not include files or call upload when no files are pending", async () => {
+    mockMutate.mockResolvedValue("taskId123");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<TaskInput />);
+    const input = screen.getByPlaceholderText("Create a new task...");
+    fireEvent.change(input, { target: { value: "No files task" } });
+    fireEvent.click(screen.getByText("Create"));
+
+    await vi.waitFor(() => {
+      const callArgs = mockMutate.mock.calls[0][0] as Record<string, unknown>;
+      expect(callArgs).not.toHaveProperty("files");
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("shows error message when file upload fails", async () => {
+    mockMutate.mockResolvedValue("taskId123");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const file = new File(["content"], "report.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [file],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+
+    const input = screen.getByPlaceholderText("Create a new task...");
+    fireEvent.change(input, { target: { value: "Upload failure test" } });
+    fireEvent.click(screen.getByText("Create"));
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getByText(
+          "Task created, but file upload to disk failed. Please retry."
+        )
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("clears pending files after successful upload", async () => {
+    mockMutate.mockResolvedValue("taskId123");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const file = new File(["content"], "report.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [file],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+    expect(screen.getByText(/report\.pdf/)).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText("Create a new task...");
+    fireEvent.change(input, { target: { value: "Clear files test" } });
+    fireEvent.click(screen.getByText("Create"));
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText(/report\.pdf/)).not.toBeInTheDocument();
+    });
+  });
+
+  it("retains pending file chips when upload fails", async () => {
+    mockMutate.mockResolvedValue("taskId123");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<TaskInput />);
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const file = new File(["content"], "keep-me.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(fileInput, "files", {
+      value: [file],
+      writable: false,
+    });
+    fireEvent.change(fileInput);
+    expect(screen.getByText(/keep-me\.pdf/)).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText("Create a new task...");
+    fireEvent.change(input, { target: { value: "Upload failure retention" } });
+    fireEvent.click(screen.getByText("Create"));
+
+    await vi.waitFor(() => {
+      // Error message should appear
+      expect(
+        screen.getByText(
+          "Task created, but file upload to disk failed. Please retry."
+        )
+      ).toBeInTheDocument();
+    });
+    // File chips should STILL be visible (pendingFiles not cleared on failure)
+    expect(screen.getByText(/keep-me\.pdf/)).toBeInTheDocument();
   });
 });

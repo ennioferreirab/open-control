@@ -1,5 +1,6 @@
 """Unit tests for ConvexBridge: case conversion, query/mutation/subscribe, retry logic."""
 
+from pathlib import Path  # noqa: F401 - used by TestCreateTaskDirectory
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -954,3 +955,92 @@ class TestPostLeadAgentMessage:
         bridge.post_lead_agent_message("t1", "plan text", "lead_agent_plan")
 
         assert mock_client.mutation.call_count == 2
+
+
+# ── TestCreateTaskDirectory tests (Story 5.1) ─────────────────────────
+
+
+class TestCreateTaskDirectory:
+    """Unit tests for ConvexBridge.create_task_directory."""
+
+    @patch("nanobot.mc.bridge.os.makedirs")
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_creates_attachments_and_output_dirs(self, MockClient, mock_makedirs):
+        """Happy path: makedirs is called for both attachments and output subdirs."""
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.create_task_directory("jd7abc123xyz")
+
+        expected_base = Path.home() / ".nanobot" / "tasks" / "jd7abc123xyz"
+        mock_makedirs.assert_any_call(expected_base / "attachments", exist_ok=True)
+        mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)
+        assert mock_makedirs.call_count == 2
+
+    @patch("nanobot.mc.bridge.os.makedirs")
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_filesystem_safe_id_conversion(self, MockClient, mock_makedirs):
+        """Special characters in task_id are replaced with underscores."""
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.create_task_directory("abc|def/ghi")
+
+        expected_base = Path.home() / ".nanobot" / "tasks" / "abc_def_ghi"
+        mock_makedirs.assert_any_call(expected_base / "attachments", exist_ok=True)
+        mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)
+
+    @patch("nanobot.mc.bridge.os.makedirs")
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_idempotent_no_error_on_existing_dir(self, MockClient, mock_makedirs):
+        """Calling create_task_directory twice raises no exception (idempotent)."""
+        bridge = ConvexBridge("https://test.convex.cloud")
+        # First call
+        bridge.create_task_directory("jd7abc123xyz")
+        # Second call -- should not raise
+        bridge.create_task_directory("jd7abc123xyz")
+        assert mock_makedirs.call_count == 4  # 2 dirs x 2 calls
+
+    @patch("nanobot.mc.bridge.os.makedirs")
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_oserror_logs_activity_event(self, MockClient, mock_makedirs):
+        """OSError on makedirs logs a system_error activity event and does not raise."""
+        mock_makedirs.side_effect = OSError("Permission denied")
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        # Must NOT raise
+        bridge.create_task_directory("jd7abc123xyz")
+
+        # Verify create_activity was called with system_error event type
+        # Both subdirectories (attachments + output) fail, so exactly 2 activity calls
+        call_args_list = mock_client.mutation.call_args_list
+        activity_calls = [c for c in call_args_list if c[0][0] == "activities:create"]
+        assert len(activity_calls) == 2
+        for activity_call in activity_calls:
+            activity_args = activity_call[0][1]
+            assert activity_args["eventType"] == "system_error"
+            assert "Permission denied" in activity_args["description"]
+            assert activity_args["taskId"] == "jd7abc123xyz"
+
+    @patch("nanobot.mc.bridge.time.sleep")
+    @patch("nanobot.mc.bridge.os.makedirs")
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_oserror_activity_failure_does_not_raise(self, MockClient, mock_makedirs, mock_sleep):
+        """Double-fault tolerance: OSError on makedirs + Exception on create_activity still does not raise."""
+        mock_makedirs.side_effect = OSError("Disk full")
+        mock_client = MockClient.return_value
+        # Make mutation (used by create_activity) also fail
+        mock_client.mutation.side_effect = Exception("Convex unavailable")
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        # Must NOT raise even when both makedirs and create_activity fail
+        bridge.create_task_directory("jd7abc123xyz")
+
+    @patch("nanobot.mc.bridge.os.makedirs")
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_filesystem_safe_preserves_alphanumeric_and_hyphens(self, MockClient, mock_makedirs):
+        """Alphanumeric characters and hyphens are preserved in safe task ID."""
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.create_task_directory("task-abc-123")
+
+        expected_base = Path.home() / ".nanobot" / "tasks" / "task-abc-123"
+        mock_makedirs.assert_any_call(expected_base / "attachments", exist_ok=True)
+        mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)

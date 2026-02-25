@@ -277,6 +277,11 @@ class StepDispatcher:
 
     async def _execute_step(self, task_id: str, step: dict[str, Any]) -> list[str]:
         """Execute one assigned step and return any newly unblocked step IDs."""
+        # Deferred imports to break circular dependency:
+        # step_dispatcher -> executor -> gateway -> orchestrator -> step_dispatcher
+        from nanobot.mc.executor import _human_size, _snapshot_output_dir, _collect_output_artifacts
+        from nanobot.mc.planner import _build_file_summary
+
         step_id = step.get("id")
         if not step_id:
             logger.warning("[dispatcher] Skipping step without id: %s", step)
@@ -329,6 +334,18 @@ class StepDispatcher:
             task_data = task_data if isinstance(task_data, dict) else {}
             task_title = task_data.get("title", "Untitled Task")
 
+            # Build task-level file manifest from fresh task data (AC: 1, 4; NFR-F8).
+            raw_files = task_data.get("files") or []
+            file_manifest = [
+                {
+                    "name": f.get("name", "unknown"),
+                    "type": f.get("type", "application/octet-stream"),
+                    "size": f.get("size", 0),
+                    "subfolder": f.get("subfolder", "attachments"),
+                }
+                for f in raw_files
+            ]
+
             safe_task_id = re.sub(r"[^\w\-]", "_", task_id)
             files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_task_id)
             output_dir = str(Path.home() / ".nanobot" / "tasks" / safe_task_id / "output")
@@ -351,11 +368,39 @@ class StepDispatcher:
                 f"Save ALL output files to: {output_dir}\n"
                 "Do NOT save output files outside this directory."
             )
+
+            # Inject task-level file manifest (AC: 1, 5, 6, 7; Story 6.1).
+            # Must come BEFORE any step-level file sections so agent sees broad context first.
+            if file_manifest:
+                manifest_summary = ", ".join(
+                    f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
+                    for f in file_manifest
+                )
+                execution_description += (
+                    f"\n\nTask has {len(file_manifest)} file(s) in its manifest. "
+                    f"File manifest: {manifest_summary}\n"
+                    f"Review the file manifest before starting work."
+                )
+
+            # Inject task-level file routing context (FR-F29; Story 6.3).
+            # Builds a delegation-aware summary from raw_files using _build_file_summary()
+            # (which includes MIME types and total size), then replaces the planning-only
+            # "Consider file types" advisory with the executor-appropriate "Available at" path.
+            # Guarded by `if raw_files` to ensure no empty file context noise (AC #3).
+            if raw_files:
+                file_routing_summary = _build_file_summary(raw_files)
+                if file_routing_summary:
+                    # Strip the planner-targeted advisory; replace with executor-targeted path.
+                    delegation_summary = file_routing_summary.replace(
+                        "Consider file types when selecting the best agent.",
+                        f"Files available at: {files_dir}/attachments",
+                    )
+                    execution_description += f"\n\n{delegation_summary}"
+
             if thread_context:
                 execution_description += f"\n{thread_context}"
 
             # Snapshot output dir before agent execution for artifact detection (Story 2.5).
-            from nanobot.mc.executor import _snapshot_output_dir, _collect_output_artifacts
             pre_snapshot = await asyncio.to_thread(_snapshot_output_dir, task_id)
 
             result = await _run_step_agent(
@@ -374,6 +419,21 @@ class StepDispatcher:
             artifacts = await asyncio.to_thread(
                 _collect_output_artifacts, task_id, pre_snapshot
             )
+
+            # Sync output file manifest to Convex (best-effort, non-blocking) (Story 6.2).
+            try:
+                await asyncio.to_thread(
+                    self._bridge.sync_task_output_files,
+                    task_id,
+                    task_data,
+                    agent_name,
+                )
+            except Exception:
+                logger.exception(
+                    "[dispatcher] Failed to sync output files for step %s",
+                    step_id,
+                )
+
             await asyncio.to_thread(
                 self._bridge.post_step_completion,
                 task_id,

@@ -1,6 +1,8 @@
 // Task status values
 export const TASK_STATUS = {
   PLANNING: "planning",
+  REVIEWING_PLAN: "reviewing_plan",
+  READY: "ready",
   FAILED: "failed",
   INBOX: "inbox",
   ASSIGNED: "assigned",
@@ -125,6 +127,16 @@ export const STATUS_COLORS: Record<
     border: "border-l-indigo-500",
     bg: "bg-indigo-100 dark:bg-indigo-950",
     text: "text-indigo-700 dark:text-indigo-300",
+  },
+  ready: {
+    border: "border-l-teal-500",
+    bg: "bg-teal-100 dark:bg-teal-950",
+    text: "text-teal-700 dark:text-teal-300",
+  },
+  reviewing_plan: {
+    border: "border-l-amber-400",
+    bg: "bg-amber-50 dark:bg-amber-950",
+    text: "text-amber-600 dark:text-amber-300",
   },
   failed: {
     border: "border-l-rose-500",

@@ -5,7 +5,9 @@ import { v, ConvexError } from "convex/values";
 
 // Valid transition map: current_status -> [allowed_next_statuses]
 const VALID_TRANSITIONS: Record<string, string[]> = {
-  planning: ["failed", "reviewing_plan", "ready"],
+  planning: ["failed", "reviewing_plan", "ready", "in_progress"],
+  reviewing_plan: ["in_progress", "planning", "failed"],
+  ready: ["in_progress", "planning", "failed"],
   failed: ["planning"],
   inbox: ["assigned"],
   assigned: ["in_progress"],
@@ -23,7 +25,14 @@ const UNIVERSAL_TARGETS = ["retrying", "crashed", "deleted"];
 const TRANSITION_EVENT_MAP: Record<string, string> = {
   "planning->failed": "task_failed",
   "planning->reviewing_plan": "task_planning",
+  "planning->in_progress": "task_started",
+  "reviewing_plan->in_progress": "task_started",
+  "reviewing_plan->planning": "task_planning",
+  "reviewing_plan->failed": "task_failed",
   "planning->ready": "task_planning",
+  "ready->in_progress": "task_started",
+  "ready->planning": "task_planning",
+  "ready->failed": "task_failed",
   "failed->planning": "task_planning",
   "inbox->assigned": "task_assigned",
   "assigned->in_progress": "task_started",
@@ -42,6 +51,8 @@ const TRANSITION_EVENT_MAP: Record<string, string> = {
 // Restore target map: previousStatus -> target status (n-1)
 const RESTORE_TARGET_MAP: Record<string, string> = {
   planning: "planning",
+  reviewing_plan: "planning",
+  ready: "planning",
   failed: "planning",
   inbox: "inbox",
   assigned: "inbox",
@@ -110,7 +121,10 @@ export const create = mutation({
     // Manual tasks: force autonomous, no agent assignment
     const isManual = args.isManual === true;
     const assignedAgent = isManual ? undefined : args.assignedAgent;
-    const initialStatus = assignedAgent ? "assigned" : "inbox";
+    // Story 1.5 (AC 8.4): non-manual tasks without pre-assigned agent start in "planning"
+    // so the orchestrator's planning subscription can pick them up for LLM planning.
+    // Manual tasks stay in "inbox" (user-managed). Pre-assigned tasks go directly to "assigned".
+    const initialStatus = isManual ? "inbox" : (assignedAgent ? "assigned" : "planning");
     const trustLevel = isManual
       ? "autonomous"
       : ((args.trustLevel ?? "autonomous") as
@@ -272,6 +286,8 @@ export const listByStatus = query({
   args: {
     status: v.union(
       v.literal("planning"),
+      v.literal("reviewing_plan"),
+      v.literal("ready"),
       v.literal("failed"),
       v.literal("inbox"),
       v.literal("assigned"),
@@ -373,6 +389,54 @@ export const kickOff = mutation({
       description: `Task kicked off with ${args.stepCount} step${args.stepCount === 1 ? "" : "s"}`,
       timestamp: now,
     });
+  },
+});
+
+/**
+ * Approve plan and kick off a supervised task.
+ * Atomically saves (optionally edited) execution plan, transitions from
+ * reviewing_plan to in_progress, and creates an activity event.
+ */
+export const approveAndKickOff = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    executionPlan: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    if (task.status !== "reviewing_plan") {
+      throw new ConvexError(
+        `Cannot kick off task in status '${task.status}'. Expected: reviewing_plan`
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    // Save updated plan if provided (user made edits)
+    const patch: Record<string, unknown> = {
+      status: "in_progress",
+      updatedAt: now,
+    };
+    if (args.executionPlan !== undefined) {
+      patch.executionPlan = args.executionPlan;
+    }
+    await ctx.db.patch(args.taskId, patch);
+
+    // Count steps from the plan for the activity event
+    const plan = args.executionPlan ?? task.executionPlan;
+    const stepCount = plan?.steps?.length ?? 0;
+
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      eventType: "task_started",
+      description: `User approved plan and kicked off task (${stepCount} step${stepCount === 1 ? "" : "s"})`,
+      timestamp: now,
+    });
+
+    return args.taskId;
   },
 });
 

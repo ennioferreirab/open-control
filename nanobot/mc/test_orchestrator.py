@@ -204,3 +204,66 @@ class TestProcessPlanningTask:
         assert send_args[2] == AuthorType.SYSTEM
         assert "Plan generation failed" in send_args[3]
         assert send_args[4] == MessageType.SYSTEM_EVENT
+
+    @pytest.mark.asyncio
+    async def test_process_planning_task_passes_files_to_planner(self) -> None:
+        """AC #1 (FR-F28): orchestrator passes task files to planner.plan_task()."""
+        bridge = _make_bridge()
+        bridge.list_agents.return_value = [
+            {
+                "name": "general-agent",
+                "display_name": "General Agent",
+                "role": "Generalist",
+                "skills": ["general"],
+                "enabled": True,
+            }
+        ]
+        orchestrator = TaskOrchestrator(bridge)
+        orchestrator._step_dispatcher = MagicMock()
+        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
+
+        files = [
+            {"name": "invoice.pdf", "type": "application/pdf", "size": 867328},
+            {"name": "notes.md", "type": "text/markdown", "size": 12288},
+        ]
+        task = _make_task()
+        task["files"] = files
+
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Process files",
+                    description="Process the attached files",
+                    assigned_agent="general-agent",
+                    blocked_by=[],
+                    parallel_group=1,
+                    order=1,
+                )
+            ]
+        )
+
+        captured_plan_task_kwargs: list[dict] = []
+
+        async def _capture_plan_task(*args, **kwargs):
+            captured_plan_task_kwargs.append(kwargs)
+            return plan
+
+        def _capture_create_task(coro):
+            coro.close()
+            return MagicMock()
+
+        with (
+            patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("nanobot.mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
+            patch("nanobot.mc.orchestrator.TaskPlanner") as planner_cls,
+        ):
+            planner = planner_cls.return_value
+            planner.plan_task = AsyncMock(side_effect=_capture_plan_task)
+            await orchestrator._process_planning_task(task)
+
+        # Verify planner.plan_task was called with the task's files
+        planner.plan_task.assert_called_once()
+        call_kwargs = planner.plan_task.call_args[1]
+        assert "files" in call_kwargs
+        assert call_kwargs["files"] == files

@@ -185,6 +185,55 @@ export const postLeadAgentMessage = mutation({
 });
 
 /**
+ * List plan-negotiation chat messages for a task.
+ * Returns only messages with type "lead_agent_chat" or "user_message".
+ */
+export const listPlanChat = query({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const all = await ctx.db
+      .query("messages")
+      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+      .collect();
+    return all.filter(
+      (m) => m.type === "lead_agent_chat" || m.type === "user_message"
+    );
+  },
+});
+
+/**
+ * Post a user chat message for plan negotiation.
+ * Creates a "user_message" typed message in the task thread.
+ */
+export const postPlanChatMessage = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const timestamp = new Date().toISOString();
+    const messageId = await ctx.db.insert("messages", {
+      taskId: args.taskId,
+      authorName: "User",
+      authorType: "user",
+      content: args.content,
+      messageType: "user_message",
+      type: "user_message",
+      timestamp,
+    });
+
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      eventType: "thread_message_sent",
+      description: "User sent plan negotiation chat message",
+      timestamp,
+    });
+
+    return messageId;
+  },
+});
+
+/**
  * Send a thread message from the user to an agent on a task.
  * Atomically: creates user message, transitions task to "assigned",
  * clears executionPlan, and creates activity event.

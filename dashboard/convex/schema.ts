@@ -20,6 +20,8 @@ export default defineSchema({
     description: v.optional(v.string()),
     status: v.union(
       v.literal("planning"),
+      v.literal("reviewing_plan"),
+      v.literal("ready"),
       v.literal("failed"),
       v.literal("inbox"),
       v.literal("assigned"),
@@ -84,6 +86,7 @@ export default defineSchema({
     startedAt: v.optional(v.string()),
     completedAt: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
+    attachedFiles: v.optional(v.array(v.string())),
   })
     .index("by_taskId", ["taskId"])
     .index("by_status", ["status"]),

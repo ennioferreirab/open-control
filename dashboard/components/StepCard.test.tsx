@@ -116,4 +116,42 @@ describe("StepCard", () => {
       })
     ).toBeInTheDocument();
   });
+
+  // --- Story 5.5: File indicator on StepCard ---
+
+  it("shows paperclip icon and file count when attachedFiles present", () => {
+    render(
+      <StepCard
+        step={{ ...baseStep, attachedFiles: ["report.pdf", "data.csv"] }}
+        parentTaskTitle="Q4 Forecast Task"
+      />
+    );
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it("does not show file indicator when no attachedFiles", () => {
+    render(<StepCard step={baseStep} parentTaskTitle="Q4 Forecast Task" />);
+    // baseStep has no attachedFiles — ensure no numeric count is displayed in a file span
+    const card = screen.getByRole("article");
+    const fileSpans = card.querySelectorAll("span.inline-flex");
+    const fileIndicator = Array.from(fileSpans).find(
+      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? "")
+    );
+    expect(fileIndicator).toBeUndefined();
+  });
+
+  it("does not show file indicator when attachedFiles is empty array", () => {
+    render(
+      <StepCard
+        step={{ ...baseStep, attachedFiles: [] }}
+        parentTaskTitle="Q4 Forecast Task"
+      />
+    );
+    const card = screen.getByRole("article");
+    const fileSpans = card.querySelectorAll("span.inline-flex");
+    const fileIndicator = Array.from(fileSpans).find(
+      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? "")
+    );
+    expect(fileIndicator).toBeUndefined();
+  });
 });

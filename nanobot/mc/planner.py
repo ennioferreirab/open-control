@@ -116,7 +116,11 @@ def score_agent(agent: AgentData, keywords: list[str]) -> float:
 
 
 def _build_file_summary(files: list[dict]) -> str:
-    """Build a human-readable file summary for lead agent context."""
+    """Build a human-readable file summary for lead agent context (FR-F28, FR-F29).
+
+    Includes file names, MIME types, sizes, and total size so the Lead Agent
+    can consider file types when routing steps to agents.
+    """
     if not files:
         return ""
 
@@ -125,7 +129,8 @@ def _build_file_summary(files: list[dict]) -> str:
 
     total = sum(f.get("size", 0) for f in files)
     names = ", ".join(
-        f"{f['name']} ({_human_size(f.get('size', 0))})" for f in files
+        f"{f['name']} ({f.get('type', 'application/octet-stream')}, {_human_size(f.get('size', 0))})"
+        for f in files
     )
     return (
         f"Task has {len(files)} attached file(s) (total {_human_size(total)}): {names}. "

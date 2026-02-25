@@ -111,6 +111,10 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) {
             t.status === "crashed"
           );
         }
+        // reviewing_plan tasks appear in the Inbox column with a distinguishing badge
+        if (col.status === "inbox") {
+          return t.status === "inbox" || t.status === "reviewing_plan";
+        }
         return t.status === col.status;
       })
       .sort((a, b) => b._creationTime - a._creationTime);

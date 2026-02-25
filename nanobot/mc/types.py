@@ -38,6 +38,8 @@ def is_lead_agent(agent_name: str | None) -> bool:
 class TaskStatus(StrEnum):
     """Task lifecycle states. Matches Convex tasks.status union type."""
     PLANNING = "planning"
+    REVIEWING_PLAN = "reviewing_plan"
+    READY = "ready"
     FAILED = "failed"
     INBOX = "inbox"
     ASSIGNED = "assigned"
