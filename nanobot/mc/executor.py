@@ -246,78 +246,15 @@ def _collect_output_artifacts(
 def _build_thread_context(messages: list[dict[str, Any]], max_messages: int = 20) -> str:
     """Format thread messages as conversation context for the agent.
 
-    Returns empty string if no user messages exist (first execution).
-    For long threads, only includes the last *max_messages* messages.
-    The latest user message is separated into a [Latest Follow-up] section
-    so the agent can clearly identify the new instruction.
+    Thin shim that delegates to ThreadContextBuilder for backward compatibility.
+    Preserves legacy behavior: returns empty string if no user messages exist.
+
+    For step-aware context with predecessor injection, use ThreadContextBuilder
+    directly with predecessor_step_ids parameter.
     """
-    if not messages:
-        return ""
+    from nanobot.mc.thread_context import ThreadContextBuilder
 
-    # Only inject context if there are user messages (multi-turn interaction)
-    has_user_messages = any(
-        m.get("author_type") == "user" or m.get("message_type") == "user_message"
-        for m in messages
-    )
-    if not has_user_messages:
-        return ""
-
-    # Find the latest user message to separate it
-    latest_user_idx = -1
-    for i in range(len(messages) - 1, -1, -1):
-        m = messages[i]
-        if m.get("author_type") == "user" or m.get("message_type") == "user_message":
-            latest_user_idx = i
-            break
-
-    lines: list[str] = []
-    total = len(messages)
-    included = messages
-
-    if total > max_messages:
-        lines.append(f"({total - max_messages} earlier messages omitted)")
-        included = messages[-max_messages:]
-        # Adjust latest_user_idx relative to the truncated list
-        latest_user_idx = latest_user_idx - (total - max_messages)
-
-    # Build thread history (excluding the latest user message)
-    for i, m in enumerate(included):
-        if i == latest_user_idx:
-            continue
-        author = m.get("author_name", "Unknown")
-        author_type = m.get("author_type", "system")
-        ts = m.get("timestamp", "")
-        content = m.get("content", "")
-        msg_type = m.get("type")
-
-        if msg_type == "step_completion":
-            lines.append(f"{author} [{author_type}] ({ts}) [Step Completion]: {content}")
-            artifacts = m.get("artifacts") or []
-            if artifacts:
-                lines.append("  Artifacts:")
-                for artifact in artifacts:
-                    path = artifact.get("path", "")
-                    action = artifact.get("action", "")
-                    description = artifact.get("description")
-                    diff = artifact.get("diff")
-                    if description:
-                        lines.append(f"  - [{action}] {path}: {description}")
-                    elif diff:
-                        lines.append(f"  - [{action}] {path} ({diff})")
-                    else:
-                        lines.append(f"  - [{action}] {path}")
-        else:
-            lines.append(f"{author} [{author_type}] ({ts}): {content}")
-
-    result = "\n[Thread History]\n" + "\n".join(lines)
-
-    # Append the latest user message as a clearly marked follow-up
-    if 0 <= latest_user_idx < len(included):
-        latest = included[latest_user_idx]
-        latest_content = latest.get("content", "")
-        result += f"\n\n[Latest Follow-up]\nUser: {latest_content}"
-
-    return result
+    return ThreadContextBuilder().build(messages, max_messages=max_messages)
 
 
 class TaskExecutor:

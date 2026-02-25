@@ -109,56 +109,23 @@ def _maybe_inject_orientation(
 
 
 def _build_step_thread_context(
-    messages: list[dict[str, Any]], max_messages: int = 20
+    messages: list[dict[str, Any]],
+    max_messages: int = 20,
+    predecessor_step_ids: list[str] | None = None,
 ) -> str:
-    """Format thread messages as execution context for a step agent."""
-    if not messages:
-        return ""
+    """Format thread messages as execution context for a step agent.
 
-    has_user_messages = any(
-        message.get("author_type") == "user"
-        or message.get("message_type") == "user_message"
-        for message in messages
+    Delegates to ThreadContextBuilder with predecessor awareness (AC #3).
+    When predecessor_step_ids is provided, ensures their completion messages
+    are always included even outside the 20-message window.
+    """
+    from nanobot.mc.thread_context import ThreadContextBuilder
+
+    return ThreadContextBuilder().build(
+        messages,
+        max_messages=max_messages,
+        predecessor_step_ids=predecessor_step_ids,
     )
-    if not has_user_messages:
-        return ""
-
-    latest_user_idx = -1
-    for idx in range(len(messages) - 1, -1, -1):
-        message = messages[idx]
-        if (
-            message.get("author_type") == "user"
-            or message.get("message_type") == "user_message"
-        ):
-            latest_user_idx = idx
-            break
-
-    lines: list[str] = []
-    total = len(messages)
-    included = messages
-
-    if total > max_messages:
-        lines.append(f"({total - max_messages} earlier messages omitted)")
-        included = messages[-max_messages:]
-        latest_user_idx = latest_user_idx - (total - max_messages)
-
-    for idx, message in enumerate(included):
-        if idx == latest_user_idx:
-            continue
-        author = message.get("author_name", "Unknown")
-        author_type = message.get("author_type", "system")
-        timestamp = message.get("timestamp", "")
-        content = message.get("content", "")
-        lines.append(f"{author} [{author_type}] ({timestamp}): {content}")
-
-    result = "\n[Thread History]\n" + "\n".join(lines)
-
-    if 0 <= latest_user_idx < len(included):
-        latest = included[latest_user_idx]
-        latest_content = latest.get("content", "")
-        result += f"\n\n[Latest Follow-up]\nUser: {latest_content}"
-
-    return result
 
 
 async def _run_step_agent(
@@ -346,7 +313,13 @@ class StepDispatcher:
             thread_messages = await asyncio.to_thread(
                 self._bridge.get_task_messages, task_id
             )
-            thread_context = _build_step_thread_context(thread_messages)
+            # Resolve predecessor step IDs from the step's blockedBy list (AC #3, AC #6).
+            predecessor_step_ids: list[str] = [
+                str(pid) for pid in (step.get("blocked_by") or []) if pid
+            ]
+            thread_context = _build_step_thread_context(
+                thread_messages, predecessor_step_ids=predecessor_step_ids
+            )
 
             task_data = await asyncio.to_thread(
                 self._bridge.query,
