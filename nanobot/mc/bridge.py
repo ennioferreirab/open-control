@@ -364,6 +364,42 @@ class ConvexBridge:
         )
         return result
 
+    def update_step_status(
+        self,
+        step_id: str,
+        status: str,
+        error_message: str | None = None,
+    ) -> Any:
+        """Update a step's lifecycle status via steps:updateStatus."""
+        args: dict[str, Any] = {"step_id": step_id, "status": status}
+        if error_message is not None:
+            args["error_message"] = error_message
+
+        result = self._mutation_with_retry("steps:updateStatus", args)
+        self._log_state_transition(
+            "step", f"Step {step_id} status changed to {status}"
+        )
+        return result
+
+    def get_steps_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        """Fetch all steps for a task ordered by step.order."""
+        result = self.query("steps:getByTask", {"task_id": task_id})
+        return result if isinstance(result, list) else []
+
+    def check_and_unblock_dependents(self, step_id: str) -> list[str]:
+        """Unblock dependents for a completed step.
+
+        Returns:
+            List of newly unblocked step IDs.
+        """
+        result = self._mutation_with_retry(
+            "steps:checkAndUnblockDependents",
+            {"step_id": step_id},
+        )
+        if not isinstance(result, list):
+            return []
+        return [str(unblocked_id) for unblocked_id in result]
+
     def sync_agent(self, agent_data: Any) -> Any:
         """Upsert an agent in Convex by name.
 
