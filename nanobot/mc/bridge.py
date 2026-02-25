@@ -280,7 +280,7 @@ class ConvexBridge:
         author_type: str,
         content: str,
         message_type: str,
-        type: str | None = None,
+        msg_type: str | None = None,
     ) -> Any:
         """Send a task-scoped message with retry and logging.
 
@@ -290,9 +290,9 @@ class ConvexBridge:
             author_type: AuthorType value ("agent", "user", or "system").
             content: Message body.
             message_type: Legacy MessageType value for existing UI styling.
-            type: Optional ThreadMessageType value for unified thread (Story 2.4).
-                  When provided, stored as the new `type` field on the message.
-                  When omitted, the `type` field is not set (backward compatible).
+            msg_type: Optional ThreadMessageType value for unified thread (Story 2.4).
+                      When provided, stored as the `type` field on the message.
+                      When omitted, the `type` field is not set (backward compatible).
         """
         args: dict[str, Any] = {
             "task_id": task_id,
@@ -302,8 +302,8 @@ class ConvexBridge:
             "message_type": message_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        if type is not None:
-            args["type"] = type
+        if msg_type is not None:
+            args["type"] = msg_type
         result = self._mutation_with_retry("messages:create", args)
         self._log_state_transition(
             "message", f"Message sent by {author_name} on task {task_id}"

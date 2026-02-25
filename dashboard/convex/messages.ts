@@ -123,7 +123,7 @@ export const postSystemError = mutation({
   },
   handler: async (ctx, args) => {
     const timestamp = new Date().toISOString();
-    return await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       taskId: args.taskId,
       stepId: args.stepId,
       authorName: "System",
@@ -133,6 +133,16 @@ export const postSystemError = mutation({
       type: "system_error",        // New unified thread type
       timestamp,
     });
+
+    // Observability event
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      eventType: "thread_message_sent",
+      description: "System error posted to thread",
+      timestamp,
+    });
+
+    return messageId;
   },
 });
 
@@ -151,7 +161,7 @@ export const postLeadAgentMessage = mutation({
   },
   handler: async (ctx, args) => {
     const timestamp = new Date().toISOString();
-    return await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       taskId: args.taskId,
       authorName: "lead-agent",
       authorType: "system",
@@ -160,6 +170,17 @@ export const postLeadAgentMessage = mutation({
       type: args.type,             // New unified thread type
       timestamp,
     });
+
+    // Observability event
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      agentName: "lead-agent",
+      eventType: "thread_message_sent",
+      description: `Lead agent posted ${args.type === "lead_agent_plan" ? "plan" : "chat"} message`,
+      timestamp,
+    });
+
+    return messageId;
   },
 });
 

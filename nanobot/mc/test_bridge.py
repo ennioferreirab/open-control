@@ -808,7 +808,7 @@ class TestConvenienceMethods:
         mock_client.mutation.return_value = None
 
         bridge = ConvexBridge("https://test.convex.cloud")
-        bridge.send_message("t1", "dev", "agent", "Done!", "work", type="step_completion")
+        bridge.send_message("t1", "dev", "agent", "Done!", "work", msg_type="step_completion")
 
         call_args = mock_client.mutation.call_args[0]
         assert call_args[0] == "messages:create"
