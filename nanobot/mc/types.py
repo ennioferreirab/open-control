@@ -48,6 +48,16 @@ class TaskStatus(StrEnum):
     CRASHED = "crashed"
 
 
+class StepStatus(StrEnum):
+    """Step lifecycle states. Matches Convex steps.status union type."""
+    PLANNED = "planned"
+    ASSIGNED = "assigned"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    CRASHED = "crashed"
+    BLOCKED = "blocked"
+
+
 class TrustLevel(StrEnum):
     """Trust levels for task oversight. Matches Convex tasks.trustLevel union type."""
     AUTONOMOUS = "autonomous"
@@ -84,6 +94,8 @@ class ActivityEventType(StrEnum):
     AGENT_CONFIG_UPDATED = "agent_config_updated"
     AGENT_ACTIVATED = "agent_activated"
     AGENT_DEACTIVATED = "agent_deactivated"
+    TASK_DISPATCH_STARTED = "task_dispatch_started"
+    STEP_DISPATCHED = "step_dispatched"
     SYSTEM_ERROR = "system_error"
     TASK_DELETED = "task_deleted"
     TASK_RESTORED = "task_restored"

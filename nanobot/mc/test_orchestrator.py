@@ -70,7 +70,9 @@ class TestPlanningRoutingLoop:
 
 class TestProcessPlanningTask:
     @pytest.mark.asyncio
-    async def test_success_stores_execution_plan_and_materializes_steps(self) -> None:
+    async def test_success_stores_execution_plan_materializes_and_starts_dispatch(
+        self,
+    ) -> None:
         bridge = _make_bridge()
         bridge.list_agents.return_value = [
             {
@@ -82,7 +84,10 @@ class TestProcessPlanningTask:
             }
         ]
         orchestrator = TaskOrchestrator(bridge)
+        orchestrator._step_dispatcher = MagicMock()
+        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
         task = _make_task()
+        scheduled_coroutines: list[object] = []
 
         plan = ExecutionPlan(
             steps=[
@@ -98,8 +103,14 @@ class TestProcessPlanningTask:
             ]
         )
 
+        def _capture_create_task(coro):
+            scheduled_coroutines.append(coro)
+            coro.close()
+            return MagicMock()
+
         with (
             patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("nanobot.mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
             patch("nanobot.mc.orchestrator.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
@@ -111,6 +122,8 @@ class TestProcessPlanningTask:
         bridge.update_task_status.assert_not_called()
         bridge.batch_create_steps.assert_called_once()
         bridge.kick_off_task.assert_called_once_with("task-1", 1)
+        orchestrator._step_dispatcher.dispatch_steps.assert_called_once_with("task-1", ["step-1"])
+        assert len(scheduled_coroutines) == 1
 
         assert bridge.create_activity.call_count == 2
         first_activity = bridge.create_activity.call_args_list[0][0]
@@ -123,6 +136,8 @@ class TestProcessPlanningTask:
         bridge = _make_bridge()
         bridge.list_agents.return_value = []
         orchestrator = TaskOrchestrator(bridge)
+        orchestrator._step_dispatcher = MagicMock()
+        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
         task = _make_task(task_id="task-supervised", title="Supervised")
         task["supervision_mode"] = "supervised"
 
@@ -142,6 +157,7 @@ class TestProcessPlanningTask:
 
         with (
             patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("nanobot.mc.orchestrator.asyncio.create_task") as create_task_mock,
             patch("nanobot.mc.orchestrator.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
@@ -151,6 +167,8 @@ class TestProcessPlanningTask:
         bridge.update_execution_plan.assert_called_once_with("task-supervised", plan.to_dict())
         bridge.batch_create_steps.assert_not_called()
         bridge.kick_off_task.assert_not_called()
+        create_task_mock.assert_not_called()
+        orchestrator._step_dispatcher.dispatch_steps.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_failure_marks_task_failed_and_reports_error(self) -> None:

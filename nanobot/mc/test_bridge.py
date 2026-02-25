@@ -719,6 +719,46 @@ class TestConvenienceMethods:
         assert call_args[1]["stepCount"] == 3
 
     @patch("nanobot.mc.bridge.ConvexClient")
+    def test_update_step_status(self, MockClient):
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.update_step_status("step-123", "running")
+
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "steps:updateStatus"
+        assert call_args[1]["stepId"] == "step-123"
+        assert call_args[1]["status"] == "running"
+        assert "errorMessage" not in call_args[1]
+
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_get_steps_by_task(self, MockClient):
+        mock_client = MockClient.return_value
+        mock_client.query.return_value = [{"_id": "step-123", "taskId": "task-123"}]
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        result = bridge.get_steps_by_task("task-123")
+
+        assert result == [{"id": "step-123", "task_id": "task-123"}]
+        mock_client.query.assert_called_once_with(
+            "steps:getByTask", {"taskId": "task-123"}
+        )
+
+    @patch("nanobot.mc.bridge.ConvexClient")
+    def test_check_and_unblock_dependents(self, MockClient):
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = ["step-2", "step-3"]
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        result = bridge.check_and_unblock_dependents("step-1")
+
+        assert result == ["step-2", "step-3"]
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "steps:checkAndUnblockDependents"
+        assert call_args[1]["stepId"] == "step-1"
+
+    @patch("nanobot.mc.bridge.ConvexClient")
     def test_create_activity_optional_fields(self, MockClient):
         """Activity without task_id and agent_name omits those fields."""
         mock_client = MockClient.return_value

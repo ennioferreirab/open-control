@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from nanobot.mc.plan_materializer import PlanMaterializer
 from nanobot.mc.planner import TaskPlanner
+from nanobot.mc.step_dispatcher import StepDispatcher
 from nanobot.mc.types import (
     AgentData,
     ActivityEventType,
@@ -36,6 +37,7 @@ class TaskOrchestrator:
         self._bridge = bridge
         self._lead_agent_name = LEAD_AGENT_NAME
         self._plan_materializer = PlanMaterializer(bridge)
+        self._step_dispatcher = StepDispatcher(bridge)
         self._known_planning_ids: set[str] = set()
         self._known_review_task_ids: set[str] = set()
 
@@ -212,6 +214,13 @@ class TaskOrchestrator:
                 "[orchestrator] Task '%s': materialized %d step records",
                 title,
                 len(created_step_ids),
+            )
+            asyncio.create_task(
+                self._step_dispatcher.dispatch_steps(task_id, created_step_ids)
+            )
+            logger.info(
+                "[orchestrator] Task '%s': step dispatch started (autonomous mode)",
+                title,
             )
         except Exception as exc:
             logger.error(

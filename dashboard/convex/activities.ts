@@ -35,6 +35,8 @@ export const create = mutation({
       v.literal("board_created"),
       v.literal("board_updated"),
       v.literal("board_deleted"),
+      v.literal("task_dispatch_started"),
+      v.literal("step_dispatched"),
       v.literal("step_created"),
       v.literal("step_status_changed"),
       v.literal("step_unblocked"),
