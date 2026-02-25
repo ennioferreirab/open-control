@@ -1,6 +1,6 @@
 # Story 2.6: Build Thread Context for Agents
 
-Status: ready
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -28,51 +28,51 @@ So that dependent agents have the information they need to continue the work.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Add bridge method to fetch step records by IDs** (AC: 3, 6)
-  - [ ] 1.1 Add `get_steps_by_task(task_id: str) -> list[dict]` method to `ConvexBridge` in `nanobot/mc/bridge.py` that queries `steps:getByTask`
-  - [ ] 1.2 Add unit test in `nanobot/mc/test_bridge.py` for the new method
+- [x] **Task 1: Add bridge method to fetch step records by IDs** (AC: 3, 6)
+  - [x] 1.1 Add `get_steps_by_task(task_id: str) -> list[dict]` method to `ConvexBridge` in `nanobot/mc/bridge.py` that queries `steps:getByTask`
+  - [x] 1.2 Add unit test in `nanobot/mc/test_bridge.py` for the new method
 
-- [ ] **Task 2: Extend messages schema/bridge to support step-aware queries** (AC: 3, 6)
-  - [ ] 2.1 Verify that `messages:listByTask` returns `stepId` and `type` and `artifacts` fields (already in schema — confirm bridge snake_case conversion handles them)
-  - [ ] 2.2 Add integration note: messages with `type: "step_completion"` and a `step_id` field are the ones to match against predecessor step IDs
+- [x] **Task 2: Extend messages schema/bridge to support step-aware queries** (AC: 3, 6)
+  - [x] 2.1 Verify that `messages:listByTask` returns `stepId` and `type` and `artifacts` fields (already in schema — confirm bridge snake_case conversion handles them)
+  - [x] 2.2 Add integration note: messages with `type: "step_completion"` and a `step_id` field are the ones to match against predecessor step IDs
 
-- [ ] **Task 3: Create `ThreadContextBuilder` class in `nanobot/mc/thread_context.py`** (AC: 1, 2, 3, 4, 5, 6, 7)
-  - [ ] 3.1 Extract the existing `_build_thread_context()` function from `executor.py` into a new `nanobot/mc/thread_context.py` module as a `ThreadContextBuilder` class
-  - [ ] 3.2 Implement `build(messages, max_messages=20, predecessor_step_ids=None)` as the main entry point
-  - [ ] 3.3 When `predecessor_step_ids` is None or empty, delegate to existing logic (backward compat)
-  - [ ] 3.4 When `predecessor_step_ids` is provided, implement predecessor-aware context building:
+- [x] **Task 3: Create `ThreadContextBuilder` class in `nanobot/mc/thread_context.py`** (AC: 1, 2, 3, 4, 5, 6, 7)
+  - [x] 3.1 Extract the existing `_build_thread_context()` function from `executor.py` into a new `nanobot/mc/thread_context.py` module as a `ThreadContextBuilder` class
+  - [x] 3.2 Implement `build(messages, max_messages=20, predecessor_step_ids=None)` as the main entry point
+  - [x] 3.3 When `predecessor_step_ids` is None or empty, delegate to existing logic (backward compat)
+  - [x] 3.4 When `predecessor_step_ids` is provided, implement predecessor-aware context building:
     - Identify predecessor completion messages by matching `step_id` field against `predecessor_step_ids`
     - Separate messages into: predecessor completions + recent window + latest user message
     - If predecessor messages fall within the 20-message window, include them at their natural chronological position
     - If predecessor messages fall outside the 20-message window, inject them as a `[Predecessor Context]` preamble section before the `[Thread History]` section
     - Always include the `"(N earlier messages omitted)"` note when messages are truncated
-  - [ ] 3.5 Implement `_format_message(message)` helper that renders a single message including artifacts if present
-  - [ ] 3.6 Implement `_format_artifacts(artifacts)` helper that renders artifact details in a compact, parseable format
-  - [ ] 3.7 Keep the `_build_thread_context()` function in `executor.py` as a thin shim that calls `ThreadContextBuilder().build()` for backward compatibility
+  - [x] 3.5 Implement `_format_message(message)` helper that renders a single message including artifacts if present
+  - [x] 3.6 Implement `_format_artifacts(artifacts)` helper that renders artifact details in a compact, parseable format
+  - [x] 3.7 Keep the `_build_thread_context()` function in `executor.py` as a thin shim that calls `ThreadContextBuilder().build()` for backward compatibility
 
-- [ ] **Task 4: Integrate step-aware context into executor** (AC: 1, 2, 3, 4, 5, 6)
-  - [ ] 4.1 Add a new method `_build_step_context()` to `TaskExecutor` (or extend `_execute_task`) that accepts step metadata (step_id, blockedBy, title, description)
-  - [ ] 4.2 When executing a step: fetch step records for the task via bridge, resolve `blockedBy` to predecessor step IDs
-  - [ ] 4.3 Call `ThreadContextBuilder().build(messages, predecessor_step_ids=predecessor_ids)` instead of the legacy `_build_thread_context(messages)`
-  - [ ] 4.4 Inject step description alongside task description in the agent's prompt context
-  - [ ] 4.5 When thread is empty and this is the first step, inject only task description + step description
+- [x] **Task 4: Integrate step-aware context into executor** (AC: 1, 2, 3, 4, 5, 6)
+  - [x] 4.1 Add a new method `_build_step_context()` to `TaskExecutor` (or extend `_execute_task`) that accepts step metadata (step_id, blockedBy, title, description)
+  - [x] 4.2 When executing a step: fetch step records for the task via bridge, resolve `blockedBy` to predecessor step IDs
+  - [x] 4.3 Call `ThreadContextBuilder().build(messages, predecessor_step_ids=predecessor_ids)` instead of the legacy `_build_thread_context(messages)`
+  - [x] 4.4 Inject step description alongside task description in the agent's prompt context
+  - [x] 4.5 When thread is empty and this is the first step, inject only task description + step description
 
-- [ ] **Task 5: Write comprehensive tests for `ThreadContextBuilder`** (AC: 1, 2, 3, 4, 5, 6, 7)
-  - [ ] 5.1 Create `nanobot/mc/test_thread_context.py`
-  - [ ] 5.2 Test: empty messages list returns empty string
-  - [ ] 5.3 Test: messages within 20-message window are all included
-  - [ ] 5.4 Test: messages exceeding 20-message window are truncated with omission note
-  - [ ] 5.5 Test: latest user message separated into `[Latest Follow-up]` section
-  - [ ] 5.6 Test: predecessor completion messages within window appear at natural position
-  - [ ] 5.7 Test: predecessor completion messages outside window appear in `[Predecessor Context]` preamble
-  - [ ] 5.8 Test: predecessor messages with artifacts are formatted with file paths, actions, descriptions, diffs
-  - [ ] 5.9 Test: backward compat — no predecessor_step_ids produces same output as legacy function
-  - [ ] 5.10 Test: messages with no user messages return empty string (preserves existing behavior)
-  - [ ] 5.11 Test: step-aware context includes step description in output
+- [x] **Task 5: Write comprehensive tests for `ThreadContextBuilder`** (AC: 1, 2, 3, 4, 5, 6, 7)
+  - [x] 5.1 Create `nanobot/mc/test_thread_context.py`
+  - [x] 5.2 Test: empty messages list returns empty string
+  - [x] 5.3 Test: messages within 20-message window are all included
+  - [x] 5.4 Test: messages exceeding 20-message window are truncated with omission note
+  - [x] 5.5 Test: latest user message separated into `[Latest Follow-up]` section
+  - [x] 5.6 Test: predecessor completion messages within window appear at natural position
+  - [x] 5.7 Test: predecessor completion messages outside window appear in `[Predecessor Context]` preamble
+  - [x] 5.8 Test: predecessor messages with artifacts are formatted with file paths, actions, descriptions, diffs
+  - [x] 5.9 Test: backward compat — no predecessor_step_ids produces same output as legacy function
+  - [x] 5.10 Test: messages with no user messages return empty string (preserves existing behavior)
+  - [x] 5.11 Test: step-aware context includes step description in output
 
-- [ ] **Task 6: Update executor tests** (AC: 7)
-  - [ ] 6.1 Verify existing `_build_thread_context` tests in executor still pass (shim delegates correctly)
-  - [ ] 6.2 Add test for step-aware execution path showing predecessor context injection
+- [x] **Task 6: Update executor tests** (AC: 7)
+  - [x] 6.1 Verify existing `_build_thread_context` tests in executor still pass (shim delegates correctly)
+  - [x] 6.2 Add test for step-aware execution path showing predecessor context injection
 
 ## Dev Notes
 

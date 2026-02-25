@@ -304,8 +304,10 @@ class TestBuildThreadContextWithArtifacts:
             self._user_msg("Please also add a chart"),
         ]
         ctx = _build_thread_context(messages)
-        assert "Artifacts:" in ctx
-        assert "[created] output/report.pdf: PDF, 245 KB" in ctx
+        # Story 2.6: new ThreadContextBuilder format uses "Files:" and "CREATED:"
+        assert "Files:" in ctx
+        assert "CREATED: output/report.pdf" in ctx
+        assert "PDF, 245 KB" in ctx
 
     def test_step_completion_with_modified_artifact(self):
         messages = [
@@ -320,7 +322,9 @@ class TestBuildThreadContextWithArtifacts:
             self._user_msg("Thanks"),
         ]
         ctx = _build_thread_context(messages)
-        assert "[modified] output/data.json (File updated (12 KB))" in ctx
+        # Story 2.6: new ThreadContextBuilder format uses "MODIFIED:" and "diff: ..."
+        assert "MODIFIED: output/data.json" in ctx
+        assert "diff: File updated (12 KB)" in ctx
 
     def test_step_completion_with_empty_artifacts_no_artifacts_section(self):
         messages = [
@@ -329,7 +333,7 @@ class TestBuildThreadContextWithArtifacts:
         ]
         ctx = _build_thread_context(messages)
         assert "[Step Completion]" in ctx
-        assert "Artifacts:" not in ctx
+        assert "Files:" not in ctx
 
     def test_step_completion_with_no_artifacts_key(self):
         messages = [
@@ -338,7 +342,7 @@ class TestBuildThreadContextWithArtifacts:
         ]
         ctx = _build_thread_context(messages)
         assert "[Step Completion]" in ctx
-        assert "Artifacts:" not in ctx
+        assert "Files:" not in ctx
 
     def test_multiple_artifacts_all_rendered(self):
         messages = [
@@ -352,8 +356,11 @@ class TestBuildThreadContextWithArtifacts:
             self._user_msg("Good work"),
         ]
         ctx = _build_thread_context(messages)
-        assert "[created] output/a.pdf: PDF, 10 KB" in ctx
-        assert "[modified] output/b.json (+2 KB)" in ctx
+        # Story 2.6: new format — CREATED/MODIFIED with " — " separator
+        assert "CREATED: output/a.pdf" in ctx
+        assert "PDF, 10 KB" in ctx
+        assert "MODIFIED: output/b.json" in ctx
+        assert "diff: +2 KB" in ctx
 
     def test_non_step_completion_message_not_labeled(self):
         messages = [
@@ -379,8 +386,8 @@ class TestBuildThreadContextWithArtifacts:
             self._user_msg("Review please"),
         ]
         ctx = _build_thread_context(messages)
-        # Falls back to the else branch: neither description nor diff
-        assert "[created] output/x.bin" in ctx
+        # Story 2.6: new format — "CREATED: output/x.bin" with no separator
+        assert "CREATED: output/x.bin" in ctx
 
     def test_empty_messages_returns_empty_string(self):
         assert _build_thread_context([]) == ""
