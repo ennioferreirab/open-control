@@ -1,6 +1,6 @@
 # Story 2.7: Render Thread View in Real-Time
 
-Status: ready
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -28,40 +28,40 @@ So that I can follow agent collaboration as it happens.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Extend ThreadMessage to handle structured message types** (AC: 1, 5)
-  - [ ] 1.1 Refactor `getMessageStyles()` in `ThreadMessage.tsx` to handle the new `type` field values: `step_completion`, `user_message`, `system_error`, `lead_agent_plan`, `lead_agent_chat` — in addition to the existing `messageType` field values
-  - [ ] 1.2 Add visual distinction: `system_error` type gets `bg-red-50` background with italic text styling and an `AlertTriangle` icon; `lead_agent_plan` and `lead_agent_chat` get `bg-indigo-50` background with a "Plan" or "Chat" label badge
-  - [ ] 1.3 When a message has `type: "step_completion"`, display a step reference badge showing the step title (derived from `stepId`) below the author name
-  - [ ] 1.4 Render the `artifacts` array by delegating to the new `ArtifactRenderer` component (Task 2)
+- [x] **Task 1: Extend ThreadMessage to handle structured message types** (AC: 1, 5)
+  - [x] 1.1 Refactor `getMessageStyles()` in `ThreadMessage.tsx` to handle the new `type` field values: `step_completion`, `user_message`, `system_error`, `lead_agent_plan`, `lead_agent_chat` — in addition to the existing `messageType` field values
+  - [x] 1.2 Add visual distinction: `system_error` type gets `bg-red-50` background with italic text styling and an `AlertTriangle` icon; `lead_agent_plan` and `lead_agent_chat` get `bg-indigo-50` background with a "Plan" or "Chat" label badge
+  - [x] 1.3 When a message has `type: "step_completion"`, display a step reference badge showing the step title (derived from `stepId`) below the author name
+  - [x] 1.4 Render the `artifacts` array by delegating to the new `ArtifactRenderer` component (Task 2)
 
-- [ ] **Task 2: Create ArtifactRenderer component** (AC: 2, 6)
-  - [ ] 2.1 Create `dashboard/components/ArtifactRenderer.tsx` that accepts an array of artifact objects (`{ path, action, description?, diff? }`)
-  - [ ] 2.2 For each artifact, render: file path in monospace font (`font-mono text-xs`), an action badge using existing Badge component — "created" (green: `bg-green-100 text-green-700`), "modified" (blue: `bg-blue-100 text-blue-700`), "deleted" (red: `bg-red-100 text-red-700`)
-  - [ ] 2.3 For created files with a `description`, render the description text below the file path in `text-xs text-muted-foreground`
-  - [ ] 2.4 For modified files with a `diff`, render a collapsible diff section using the existing `Collapsible` ShadCN component — collapsed by default, expand/collapse toggle shows "Show diff" / "Hide diff"
-  - [ ] 2.5 Inside the diff collapsible, render the diff content using `react-syntax-highlighter` with `oneDark` theme and `diff` language, matching the existing `CodeBlock` pattern in `MarkdownRenderer.tsx`
-  - [ ] 2.6 File paths are rendered as styled spans with `cursor-pointer hover:underline text-blue-500` to indicate clickability (actual navigation is out of scope for this story — future file viewer integration)
+- [x] **Task 2: Create ArtifactRenderer component** (AC: 2, 6)
+  - [x] 2.1 Create `dashboard/components/ArtifactRenderer.tsx` that accepts an array of artifact objects (`{ path, action, description?, diff? }`)
+  - [x] 2.2 For each artifact, render: file path in monospace font (`font-mono text-xs`), an action badge using existing Badge component — "created" (green: `bg-green-100 text-green-700`), "modified" (blue: `bg-blue-100 text-blue-700`), "deleted" (red: `bg-red-100 text-red-700`)
+  - [x] 2.3 For created files with a `description`, render the description text below the file path in `text-xs text-muted-foreground`
+  - [x] 2.4 For modified files with a `diff`, render a collapsible diff section using the existing `Collapsible` ShadCN component — collapsed by default, expand/collapse toggle shows "Show diff" / "Hide diff"
+  - [x] 2.5 Inside the diff collapsible, render the diff content using `react-syntax-highlighter` with `oneDark` theme and `diff` language, matching the existing `CodeBlock` pattern in `MarkdownRenderer.tsx`
+  - [x] 2.6 File paths are rendered as styled spans with `cursor-pointer hover:underline text-blue-500` to indicate clickability (actual navigation is out of scope for this story — future file viewer integration)
 
-- [ ] **Task 3: Implement auto-scroll with pause-on-scroll-up** (AC: 3, 4)
-  - [ ] 3.1 In `TaskDetailSheet.tsx`, replace the simple `scrollToBottom` / `useEffect` with a scroll behavior manager that tracks whether the user is at the bottom of the scroll area
-  - [ ] 3.2 Use an `IntersectionObserver` on the `threadEndRef` sentinel div — when the sentinel is visible, the user is "at bottom" and auto-scroll is active; when the sentinel is not visible (user scrolled up), auto-scroll pauses
-  - [ ] 3.3 When a new message arrives (detected via `messages?.length` change) and auto-scroll is active, scroll to the bottom smoothly
-  - [ ] 3.4 When auto-scroll is paused (user scrolled up), do NOT scroll on new messages — let the user continue reading
+- [x] **Task 3: Implement auto-scroll with pause-on-scroll-up** (AC: 3, 4)
+  - [x] 3.1 In `TaskDetailSheet.tsx`, replace the simple `scrollToBottom` / `useEffect` with a scroll behavior manager that tracks whether the user is at the bottom of the scroll area
+  - [x] 3.2 Use an `IntersectionObserver` on the `threadEndRef` sentinel div — when the sentinel is visible, the user is "at bottom" and auto-scroll is active; when the sentinel is not visible (user scrolled up), auto-scroll pauses
+  - [x] 3.3 When a new message arrives (detected via `messages?.length` change) and auto-scroll is active, scroll to the bottom smoothly
+  - [x] 3.4 When auto-scroll is paused (user scrolled up), do NOT scroll on new messages — let the user continue reading
 
-- [ ] **Task 4: Add Framer Motion entrance animation for new messages** (AC: 7)
-  - [ ] 4.1 Wrap each `ThreadMessage` in the thread list with a `motion.div` from `motion/react-client` (matching the import pattern used in `StepCard.tsx`)
-  - [ ] 4.2 Apply `initial={{ opacity: 0, y: 8 }}`, `animate={{ opacity: 1, y: 0 }}`, `transition={{ duration: 0.2 }}` for a subtle fade-in-and-slide-up effect
-  - [ ] 4.3 Respect `useReducedMotion()` — if reduced motion is preferred, set `transition={{ duration: 0 }}` (matching the `StepCard.tsx` pattern)
+- [x] **Task 4: Add Framer Motion entrance animation for new messages** (AC: 7)
+  - [x] 4.1 Wrap each `ThreadMessage` in the thread list with a `motion.div` from `motion/react-client` (matching the import pattern used in `StepCard.tsx`)
+  - [x] 4.2 Apply `initial={{ opacity: 0, y: 8 }}`, `animate={{ opacity: 1, y: 0 }}`, `transition={{ duration: 0.2 }}` for a subtle fade-in-and-slide-up effect
+  - [x] 4.3 Respect `useReducedMotion()` — if reduced motion is preferred, set `transition={{ duration: 0 }}` (matching the `StepCard.tsx` pattern)
 
-- [ ] **Task 5: Add constants for structured message types** (AC: 1, 5)
-  - [ ] 5.1 In `dashboard/lib/constants.ts`, add a `STRUCTURED_MESSAGE_TYPE` constant object with values: `STEP_COMPLETION`, `USER_MESSAGE`, `SYSTEM_ERROR`, `LEAD_AGENT_PLAN`, `LEAD_AGENT_CHAT`
-  - [ ] 5.2 Add a `StructuredMessageType` TypeScript type derived from the constant
-  - [ ] 5.3 Add an `ARTIFACT_ACTION` constant object with values: `CREATED`, `MODIFIED`, `DELETED`
-  - [ ] 5.4 Add an `ArtifactAction` TypeScript type derived from the constant
+- [x] **Task 5: Add constants for structured message types** (AC: 1, 5)
+  - [x] 5.1 In `dashboard/lib/constants.ts`, add a `STRUCTURED_MESSAGE_TYPE` constant object with values: `STEP_COMPLETION`, `USER_MESSAGE`, `SYSTEM_ERROR`, `LEAD_AGENT_PLAN`, `LEAD_AGENT_CHAT`
+  - [x] 5.2 Add a `StructuredMessageType` TypeScript type derived from the constant
+  - [x] 5.3 Add an `ARTIFACT_ACTION` constant object with values: `CREATED`, `MODIFIED`, `DELETED`
+  - [x] 5.4 Add an `ArtifactAction` TypeScript type derived from the constant
 
-- [ ] **Task 6: Write tests for ThreadMessage and ArtifactRenderer** (AC: 1, 2, 5, 6)
-  - [ ] 6.1 Add test cases to `ThreadMessage.test.tsx` (create if not exists) covering: agent message rendering, user message styling, system error styling, lead agent plan/chat styling, step_completion message with artifacts delegation
-  - [ ] 6.2 Create `ArtifactRenderer.test.tsx` with test cases: renders file paths with action badges, renders description for created files, renders collapsible diff for modified files, handles empty artifacts array, handles artifacts without optional fields
+- [x] **Task 6: Write tests for ThreadMessage and ArtifactRenderer** (AC: 1, 2, 5, 6)
+  - [x] 6.1 Add test cases to `ThreadMessage.test.tsx` (create if not exists) covering: agent message rendering, user message styling, system error styling, lead agent plan/chat styling, step_completion message with artifacts delegation
+  - [x] 6.2 Create `ArtifactRenderer.test.tsx` with test cases: renders file paths with action badges, renders description for created files, renders collapsible diff for modified files, handles empty artifacts array, handles artifacts without optional fields
 
 ## Dev Notes
 
