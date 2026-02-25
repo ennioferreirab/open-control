@@ -55,8 +55,8 @@ development_status:
   # Epic 2: Autonomous Execution & Agent Collaboration
   epic-2: in-progress
   2-1-dispatch-steps-in-autonomous-mode: done
-  2-2-execute-steps-as-agent-subprocesses: ready-for-dev
-  2-3-auto-unblock-dependent-steps: ready-for-dev
+  2-2-execute-steps-as-agent-subprocesses: done
+  2-3-auto-unblock-dependent-steps: done
   2-4-build-unified-thread-per-task: ready-for-dev
   2-5-post-structured-completion-messages: ready-for-dev
   2-6-build-thread-context-for-agents: ready-for-dev
