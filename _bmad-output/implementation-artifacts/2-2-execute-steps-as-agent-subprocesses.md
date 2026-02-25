@@ -1,6 +1,6 @@
 # Story 2.2: Execute Steps as Agent Subprocesses
 
-Status: draft
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,49 +34,53 @@ So that agents run concurrently without contention and a failure in one doesn't 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Add step status bridge methods** (AC: 10)
-  - [ ] 1.1 Add `update_step_status(step_id, status, error_message=None)` method to `ConvexBridge` in `nanobot/mc/bridge.py` that calls `steps:updateStatus` mutation
-  - [ ] 1.2 Add `get_steps_by_task(task_id)` method to `ConvexBridge` that calls `steps:getByTask` query and returns a list of step dicts with snake_case keys
-  - [ ] 1.3 Add `check_and_unblock_dependents(step_id)` method to `ConvexBridge` that calls `steps:checkAndUnblockDependents` mutation
+- [x] **Task 1: Add step status bridge methods** (AC: 10)
+  - [x] 1.1 Add `update_step_status(step_id, status, error_message=None)` method to `ConvexBridge` in `nanobot/mc/bridge.py` that calls `steps:updateStatus` mutation
+  - [x] 1.2 Add `get_steps_by_task(task_id)` method to `ConvexBridge` that calls `steps:getByTask` query and returns a list of step dicts with snake_case keys
+  - [x] 1.3 Add `check_and_unblock_dependents(step_id)` method to `ConvexBridge` that calls `steps:checkAndUnblockDependents` mutation
 
-- [ ] **Task 2: Add StepStatus enum and step activity types to types.py** (AC: 4, 5, 6)
-  - [ ] 2.1 Add `StepStatus` StrEnum to `nanobot/mc/types.py` with values: `PLANNED = "planned"`, `ASSIGNED = "assigned"`, `RUNNING = "running"`, `COMPLETED = "completed"`, `CRASHED = "crashed"`, `BLOCKED = "blocked"`
-  - [ ] 2.2 Add `STEP_STARTED`, `STEP_COMPLETED`, `STEP_CRASHED` values to `ActivityEventType` in `types.py` (these map to existing `step_status_changed` Convex event type)
-  - [ ] 2.3 Update the Convex `activities:create` validator to accept the new event type values (if needed; currently `step_status_changed` already exists)
+- [x] **Task 2: Add StepStatus enum and step activity types to types.py** (AC: 4, 5, 6)
+  - [x] 2.1 Add `StepStatus` StrEnum to `nanobot/mc/types.py` with values: `PLANNED = "planned"`, `ASSIGNED = "assigned"`, `RUNNING = "running"`, `COMPLETED = "completed"`, `CRASHED = "crashed"`, `BLOCKED = "blocked"`
+  - [x] 2.2 Add `STEP_STARTED`, `STEP_COMPLETED`, `STEP_CRASHED` values to `ActivityEventType` in `types.py` (these map to existing `step_status_changed` Convex event type)
+  - [x] 2.3 Update the Convex `activities:create` validator to accept the new event type values (if needed; currently `step_status_changed` already exists)
 
-- [ ] **Task 3: Create StepDispatcher class** (AC: 1, 2, 3, 7, 8, 9)
-  - [ ] 3.1 Create `nanobot/mc/step_dispatcher.py` with `StepDispatcher` class that accepts a `ConvexBridge` instance
-  - [ ] 3.2 Implement `dispatch_task(task_id)` method that fetches all steps for a task, groups by `parallel_group`, and dispatches groups sequentially
-  - [ ] 3.3 Implement `_dispatch_parallel_group(steps)` method that uses `asyncio.gather(*tasks, return_exceptions=True)` to launch all steps in a group simultaneously
-  - [ ] 3.4 Implement `_execute_step(step)` method that: (a) updates step status to "running", (b) creates activity event, (c) calls the existing `_run_agent_on_task()` function from executor.py, (d) updates step status to "completed" or "crashed" based on result
-  - [ ] 3.5 Skip blocked steps -- only dispatch steps with status "assigned"
-  - [ ] 3.6 After each parallel group completes, call `check_and_unblock_dependents()` for each completed step, then check for newly assigned steps to include in the next dispatch cycle
+- [x] **Task 3: Create StepDispatcher class** (AC: 1, 2, 3, 7, 8, 9)
+  - [x] 3.1 Create `nanobot/mc/step_dispatcher.py` with `StepDispatcher` class that accepts a `ConvexBridge` instance
+  - [x] 3.2 Implement `dispatch_task(task_id)` method that fetches all steps for a task, groups by `parallel_group`, and dispatches groups sequentially
+  - [x] 3.3 Implement `_dispatch_parallel_group(steps)` method that uses `asyncio.gather(*tasks, return_exceptions=True)` to launch all steps in a group simultaneously
+  - [x] 3.4 Implement `_execute_step(step)` method that: (a) updates step status to "running", (b) creates activity event, (c) calls the existing `_run_agent_on_task()` function from executor.py, (d) updates step status to "completed" or "crashed" based on result
+  - [x] 3.5 Skip blocked steps -- only dispatch steps with status "assigned"
+  - [x] 3.6 After each parallel group completes, call `check_and_unblock_dependents()` for each completed step, then check for newly assigned steps to include in the next dispatch cycle
 
-- [ ] **Task 4: Wire step dispatcher into execution flow** (AC: 8)
-  - [ ] 4.1 Create a `start_step_dispatch_loop()` method in `StepDispatcher` that subscribes to tasks in "running" status (or similar) and dispatches their steps
-  - [ ] 4.2 Integrate `StepDispatcher` into `run_gateway()` in `nanobot/mc/gateway.py` as a new asyncio task alongside the orchestrator and executor
-  - [ ] 4.3 Ensure the orchestrator's autonomous flow (after materialization) triggers the step dispatcher for the task
+- [x] **Task 4: Wire step dispatcher into execution flow** (AC: 8)
+  - [x] 4.1 Create a `start_step_dispatch_loop()` method in `StepDispatcher` that subscribes to tasks in "running" status (or similar) and dispatches their steps
+  - [x] 4.2 Integrate `StepDispatcher` into `run_gateway()` in `nanobot/mc/gateway.py` as a new asyncio task alongside the orchestrator and executor
+  - [x] 4.3 Ensure the orchestrator's autonomous flow (after materialization) triggers the step dispatcher for the task
 
-- [ ] **Task 5: Implement step-level agent execution** (AC: 2, 4, 5, 6)
-  - [ ] 5.1 Refactor `_run_agent_on_task()` or create a wrapper `_run_agent_on_step()` in `step_dispatcher.py` that adapts the step's description, assigned agent, and workspace to the existing agent execution function
-  - [ ] 5.2 Inject thread context from the unified task thread (reuse `_build_thread_context()` from executor.py)
-  - [ ] 5.3 Handle board-scoped workspaces: resolve the board workspace for the step's assigned agent
-  - [ ] 5.4 Load agent config (prompt, model, skills) from YAML for the step's assigned agent
-  - [ ] 5.5 Apply global orientation injection for non-lead agents
-  - [ ] 5.6 Post the agent's output as a message to the unified task thread on completion
+- [x] **Task 5: Implement step-level agent execution** (AC: 2, 4, 5, 6)
+  - [x] 5.1 Refactor `_run_agent_on_task()` or create a wrapper `_run_agent_on_step()` in `step_dispatcher.py` that adapts the step's description, assigned agent, and workspace to the existing agent execution function
+  - [x] 5.2 Inject thread context from the unified task thread (reuse `_build_thread_context()` from executor.py)
+  - [x] 5.3 Handle board-scoped workspaces: resolve the board workspace for the step's assigned agent
+  - [x] 5.4 Load agent config (prompt, model, skills) from YAML for the step's assigned agent
+  - [x] 5.5 Apply global orientation injection for non-lead agents
+  - [x] 5.6 Post the agent's output as a message to the unified task thread on completion
 
-- [ ] **Task 6: Handle provider errors at step level** (AC: 6, 7)
-  - [ ] 6.1 Catch provider-specific errors (`ProviderError`, `AnthropicOAuthExpired`) and transition step to "crashed" with actionable error message
-  - [ ] 6.2 Post a system message to the task thread with provider error details and recovery instructions
-  - [ ] 6.3 Create a `system_error` activity event for provider errors at step level
+- [x] **Task 6: Handle provider errors at step level** (AC: 6, 7)
+  - [x] 6.1 Catch provider-specific errors (`ProviderError`, `AnthropicOAuthExpired`) and transition step to "crashed" with actionable error message
+  - [x] 6.2 Post a system message to the task thread with provider error details and recovery instructions
+  - [x] 6.3 Create a `system_error` activity event for provider errors at step level
 
-- [ ] **Task 7: Write tests for StepDispatcher** (AC: 1, 3, 7, 9)
-  - [ ] 7.1 Create `nanobot/mc/test_step_dispatcher.py` with unit tests
-  - [ ] 7.2 Test parallel group dispatch: multiple steps in same group launch via gather
-  - [ ] 7.3 Test sequential group ordering: group 1 completes before group 2 starts
-  - [ ] 7.4 Test crash isolation: one step crashes, siblings in same group continue
-  - [ ] 7.5 Test blocked steps are skipped
-  - [ ] 7.6 Test step status transitions: assigned -> running -> completed/crashed
+- [x] **Task 7: Write tests for StepDispatcher** (AC: 1, 3, 7, 9)
+  - [x] 7.1 Create `nanobot/mc/test_step_dispatcher.py` with unit tests
+  - [x] 7.2 Test parallel group dispatch: multiple steps in same group launch via gather
+  - [x] 7.3 Test sequential group ordering: group 1 completes before group 2 starts
+  - [x] 7.4 Test crash isolation: one step crashes, siblings in same group continue
+  - [x] 7.5 Test blocked steps are skipped
+  - [x] 7.6 Test step status transitions: assigned -> running -> completed/crashed
+
+## Dev Agent Record
+
+Implementado pela Story 2.1 (Codex implementation) — StepDispatcher cobre todos os ACs desta story. O StepDispatcher implementa parallel dispatch via asyncio.gather(return_exceptions=True), crash isolation, sequential group ordering, step status transitions, bridge methods, e 93 testes passando.
 
 ## Dev Notes
 
