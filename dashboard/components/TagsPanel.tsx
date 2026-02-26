@@ -165,7 +165,11 @@ export function TagsPanel() {
                   )}
                   <button
                     aria-label={`Delete attribute ${attr.name}`}
-                    onClick={() => removeAttribute({ id: attr._id })}
+                    onClick={() => {
+                      if (window.confirm(`Delete "${attr.name}"? This will remove all values for this attribute across every task and tag.`)) {
+                        removeAttribute({ id: attr._id });
+                      }
+                    }}
                     className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0"
                   >
                     <X className="h-3.5 w-3.5" />
