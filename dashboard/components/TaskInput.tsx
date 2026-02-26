@@ -40,6 +40,8 @@ export function TaskInput() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { activeBoardId } = useBoard();
   const createTask = useMutation(api.tasks.create);
@@ -147,7 +149,7 @@ export function TaskInput() {
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-start">
         <input
           type="file"
           multiple
@@ -168,77 +170,91 @@ export function TaskInput() {
           />
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
-        <Button onClick={handleSubmit}>Create</Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Attach files"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Paperclip className="h-4 w-4 text-muted-foreground" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={isManual ? "Switch to AI mode" : "Switch to manual mode"}
-          onClick={() => {
-            setIsManual((prev) => !prev);
-            if (!isManual) {
-              // Switching to manual: reset agent options and tags
-              setSelectedAgent("");
-              setTrustLevel("autonomous");
-              setSupervisionMode("autonomous");
-              setSelectedReviewers([]);
-              setSelectedTags([]);
-              setIsExpanded(false);
-            }
-          }}
-        >
-          {isManual ? (
-            <User className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <Bot className="h-4 w-4" />
-          )}
-        </Button>
-        <button
-          type="button"
-          aria-label={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
-          title={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
-          onClick={() =>
-            setSupervisionMode((prev) =>
-              prev === "autonomous" ? "supervised" : "autonomous"
-            )
-          }
-          tabIndex={isManual ? -1 : undefined}
-          aria-hidden={isManual ? true : undefined}
-          className={`inline-flex items-center justify-center rounded-md text-xs font-bold h-9 w-9 transition-all duration-200 ${
-            isManual ? "opacity-0 pointer-events-none" : ""
-          } ${
-            supervisionMode === "supervised"
-              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          }`}
-        >
-          {supervisionMode === "supervised" ? (
-            <Eye className="h-4 w-4" />
-          ) : (
-            <Zap className="h-4 w-4" />
-          )}
-        </button>
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Toggle options"
-            tabIndex={isManual ? -1 : undefined}
-            aria-hidden={isManual ? true : undefined}
-            className={`transition-opacity duration-200 ${isManual ? "opacity-0 pointer-events-none" : ""}`}
-          >
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-            />
-          </Button>
-        </CollapsibleTrigger>
+
+        {/* Right-side action group */}
+        <div className="flex gap-1 items-center">
+            <Button onClick={handleSubmit} className="h-9">Create</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label="Attach files"
+              onClick={() => fileInputRef.current?.click()}
+              className="h-9 w-9 p-0"
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </Button>
+
+          {/* Mode + Supervision + Options */}
+          <div className="flex gap-1 items-center">
+            <Button
+              variant={isManual ? "secondary" : "outline"}
+              size="sm"
+              aria-label={isManual ? "Switch to AI mode" : "Switch to manual mode"}
+              onClick={() => {
+                setIsManual((prev) => !prev);
+                if (!isManual) {
+                  setSelectedAgent("");
+                  setTrustLevel("autonomous");
+                  setSupervisionMode("autonomous");
+                  setSelectedReviewers([]);
+                  setSelectedTags([]);
+                  setIsExpanded(false);
+                }
+              }}
+              className="h-8 gap-1.5 px-3"
+            >
+              {isManual ? (
+                <User className="h-3.5 w-3.5" />
+              ) : (
+                <Bot className="h-3.5 w-3.5" />
+              )}
+              <span className="text-xs">{isManual ? "Manual" : "AI"}</span>
+            </Button>
+
+            <button
+              type="button"
+              aria-label={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
+              title={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
+              onClick={() =>
+                setSupervisionMode((prev) =>
+                  prev === "autonomous" ? "supervised" : "autonomous"
+                )
+              }
+              tabIndex={isManual ? -1 : undefined}
+              aria-hidden={isManual ? true : undefined}
+              className={`inline-flex items-center gap-1.5 rounded-md text-xs font-medium h-8 px-3 transition-all duration-200 ${
+                isManual ? "opacity-0 pointer-events-none" : ""
+              } ${
+                supervisionMode === "supervised"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-300 dark:border-amber-700"
+                  : "border border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              }`}
+            >
+              {supervisionMode === "supervised" ? (
+                <Eye className="h-3.5 w-3.5" />
+              ) : (
+                <Zap className="h-3.5 w-3.5" />
+              )}
+              <span>{supervisionMode === "supervised" ? "Supervised" : "Autonomous"}</span>
+            </button>
+
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Toggle options"
+                tabIndex={isManual ? -1 : undefined}
+                aria-hidden={isManual ? true : undefined}
+                className={`h-8 gap-1.5 px-3 transition-opacity duration-200 ${isManual ? "opacity-0 pointer-events-none" : ""}`}
+              >
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                />
+                <span className="text-xs">Options</span>
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+        </div>
       </div>
 
       {/* Pending file chips */}
