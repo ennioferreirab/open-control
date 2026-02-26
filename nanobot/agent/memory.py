@@ -79,6 +79,7 @@ class MemoryStore:
         *,
         archive_all: bool = False,
         memory_window: int = 50,
+        mc_system_prompt: str | None = None,
     ) -> bool:
         """Consolidate old messages into MEMORY.md + HISTORY.md via LLM tool call.
 
@@ -115,10 +116,11 @@ class MemoryStore:
 ## Conversation to Process
 {chr(10).join(lines)}"""
 
+        _system_content = mc_system_prompt or "You are a memory consolidation agent. Call the save_memory tool with your consolidation of the conversation."
         try:
             response = await provider.chat(
                 messages=[
-                    {"role": "system", "content": "You are a memory consolidation agent. Call the save_memory tool with your consolidation of the conversation."},
+                    {"role": "system", "content": _system_content},
                     {"role": "user", "content": prompt},
                 ],
                 tools=_SAVE_MEMORY_TOOL,

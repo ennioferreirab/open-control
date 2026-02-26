@@ -8,7 +8,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   planning: ["failed", "review", "ready", "in_progress"],
   ready: ["in_progress", "planning", "failed"],
   failed: ["planning"],
-  inbox: ["assigned"],
+  inbox: ["assigned", "planning"],
   assigned: ["in_progress", "assigned"],
   in_progress: ["review", "done"],
   review: ["done", "inbox", "assigned", "in_progress", "planning"],
@@ -31,6 +31,7 @@ const TRANSITION_EVENT_MAP: Record<string, string> = {
   "ready->failed": "task_failed",
   "failed->planning": "task_planning",
   "inbox->assigned": "task_assigned",
+  "inbox->planning": "task_planning",
   "assigned->assigned": "task_reassigned",
   "assigned->in_progress": "task_started",
   "in_progress->review": "review_requested",
@@ -120,10 +121,10 @@ export const create = mutation({
     // Manual tasks: force autonomous, no agent assignment
     const isManual = args.isManual === true;
     const assignedAgent = isManual ? undefined : args.assignedAgent;
-    // Story 1.5 (AC 8.4): non-manual tasks without pre-assigned agent start in "planning"
-    // so the orchestrator's planning subscription can pick them up for LLM planning.
-    // Manual tasks stay in "inbox" (user-managed). Pre-assigned tasks go directly to "assigned".
-    const initialStatus = isManual ? "inbox" : (assignedAgent ? "assigned" : "planning");
+    // All non-manual tasks start in "inbox" so the user sees them immediately.
+    // The inbox routing loop handles auto-title then transitions to "planning" or "assigned".
+    // Manual tasks stay in "inbox" (user-managed via drag-and-drop).
+    const initialStatus = isManual ? "inbox" : "inbox";
     const trustLevel = isManual
       ? "autonomous"
       : ((args.trustLevel ?? "autonomous") as
@@ -249,6 +250,47 @@ export const listByBoard = query({
     }
 
     return result;
+  },
+});
+
+export const search = query({
+  args: {
+    query: v.string(),
+    boardId: v.optional(v.id("boards")),
+  },
+  handler: async (ctx, { query: searchQuery, boardId }) => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    const titleResults = await ctx.db
+      .query("tasks")
+      .withSearchIndex("search_title", (q) => {
+        let sq = q.search("title", trimmed);
+        if (boardId) sq = sq.eq("boardId", boardId);
+        return sq;
+      })
+      .take(100);
+
+    const descriptionResults = await ctx.db
+      .query("tasks")
+      .withSearchIndex("search_description", (q) => {
+        let sq = q.search("description", trimmed);
+        if (boardId) sq = sq.eq("boardId", boardId);
+        return sq;
+      })
+      .take(100);
+
+    const merged = [...titleResults, ...descriptionResults];
+    const seen = new Set<string>();
+
+    return merged.filter((task) => {
+      if (task.status === "deleted") return false;
+      if (seen.has(task._id)) return false;
+      seen.add(task._id);
+      return true;
+    });
   },
 });
 

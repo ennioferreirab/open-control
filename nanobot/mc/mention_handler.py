@@ -277,8 +277,9 @@ async def handle_mention(
             timeout=MENTION_TIMEOUT_SECONDS,
         )
 
+        # TODO: revisit task-based consolidation — may be better than message-count
         # End the session (mention is a one-shot interaction)
-        await loop.end_task_session(session_key)
+        # await loop.end_task_session(session_key)
 
     except asyncio.TimeoutError:
         response = (

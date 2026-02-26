@@ -167,9 +167,15 @@ async def _run_agent_on_task(
         cron_service=cron_service,
         mc_consolidation_system_prompt=(
             "You are a memory consolidation agent processing MC task history. "
-            "User messages may contain <title>...</title> XML tags identifying the task. "
-            "When writing history_entry, prefix each task summary with its title: "
-            "'[YYYY-MM-DD HH:MM] Task \"<title>\": <summary>'. "
+            "User messages may contain <title>...</title> and <description>...</description> XML tags identifying the task. "
+            "Descriptions may include: file manifests (input files attached to the task), "
+            "[Task Tag Attributes] (tags and their attribute key=value pairs), "
+            "and ## Thread Context (prior human messages in the task thread). "
+            "When writing history_entry, use this format for each task: "
+            "'[YYYY-MM-DD HH:MM] Task \"<title>\": <summary>. "
+            "Tags: <tag>(<attr=val>, ...). "
+            "Files read: <paths>. Files written: <paths>.' "
+            "Omit any field that has no data. "
             "Call the save_memory tool with your consolidation."
         ),
     )

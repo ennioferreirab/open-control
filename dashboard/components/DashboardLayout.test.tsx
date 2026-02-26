@@ -162,6 +162,12 @@ describe("DashboardLayout", () => {
     expect(screen.getByTestId("task-input")).toBeInTheDocument();
   });
 
+  it("renders the search input in header on desktop", () => {
+    window.matchMedia = createMatchMedia(1280);
+    render(<DashboardLayout />);
+    expect(screen.getByLabelText("Search tasks")).toBeInTheDocument();
+  });
+
   it("does not render settings sheet by default", () => {
     window.matchMedia = createMatchMedia(1280);
     render(<DashboardLayout />);

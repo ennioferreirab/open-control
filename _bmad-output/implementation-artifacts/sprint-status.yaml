@@ -113,3 +113,7 @@ development_status:
   7-3-lead-agent-thread-negotiation: done
   7-4-task-pause-resume: done
   epic-7-retrospective: optional
+
+  # Epic 9: Task Enhancements & Search
+  epic-9: in-progress
+  9-4-text-search-tasks: done

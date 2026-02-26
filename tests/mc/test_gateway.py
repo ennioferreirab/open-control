@@ -382,6 +382,7 @@ class TestTaskExecution:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -405,6 +406,7 @@ class TestTaskExecution:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -428,6 +430,7 @@ class TestTaskExecution:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -459,6 +462,7 @@ class TestTaskExecution:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -480,6 +484,7 @@ class TestTaskExecution:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -557,6 +562,7 @@ class TestTrustLevelStatus:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -631,6 +637,7 @@ class TestKnownAssignedIdsCleanup:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
 
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_cleanup")
@@ -653,6 +660,7 @@ class TestKnownAssignedIdsCleanup:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
 
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_crash_cleanup")
@@ -801,6 +809,7 @@ class TestOrchestratorNoDuplicateActivity:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.send_message = MagicMock()
+        mock_bridge.get_steps_by_task = MagicMock(return_value=[])
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -826,6 +835,7 @@ class TestOrchestratorNoDuplicateActivity:
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_steps_by_task = MagicMock(return_value=[])
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
