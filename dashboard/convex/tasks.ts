@@ -204,6 +204,26 @@ export const list = query({
   },
 });
 
+export const toggleFavorite = mutation({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new ConvexError("Task not found");
+    await ctx.db.patch(args.taskId, {
+      isFavorite: task.isFavorite ? undefined : true,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
+export const listFavorites = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("tasks").collect();
+    return all.filter((t) => t.isFavorite === true && t.status !== "deleted");
+  },
+});
+
 export const listByBoard = query({
   args: {
     boardId: v.id("boards"),
@@ -340,6 +360,21 @@ export const updateExecutionPlan = mutation({
     }
     await ctx.db.patch(args.taskId, {
       executionPlan: args.executionPlan,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
+export const updateTags = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    tags: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new ConvexError("Task not found");
+    await ctx.db.patch(args.taskId, {
+      tags: args.tags.length > 0 ? args.tags : undefined,
       updatedAt: new Date().toISOString(),
     });
   },

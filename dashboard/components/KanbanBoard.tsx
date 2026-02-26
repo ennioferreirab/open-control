@@ -8,7 +8,8 @@ import { LayoutGroup } from "motion/react";
 import { KanbanColumn } from "./KanbanColumn";
 import { TrashBinSheet } from "./TrashBinSheet";
 import { DoneTasksSheet } from "./DoneTasksSheet";
-import { Trash2 } from "lucide-react";
+import { CompactFavoriteCard } from "./CompactFavoriteCard";
+import { Star, Trash2 } from "lucide-react";
 import { useBoard } from "@/components/BoardContext";
 
 const COLUMNS = [
@@ -56,6 +57,10 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) {
   const tasks = activeBoardId ? boardTasksResult : allTasksResult;
   const allStepsResult = useQuery(api.steps.listAll);
 
+  const favorites = useQuery(api.tasks.listFavorites);
+  const boardFavorites = activeBoardId
+    ? (favorites ?? []).filter((t) => t.boardId === activeBoardId || (!t.boardId && isDefaultBoard))
+    : (favorites ?? []);
   const hitlCount = useQuery(api.tasks.countHitlPending) ?? 0;
   const deletedTasks = useQuery(api.tasks.listDeleted);
   const deletedCount = deletedTasks?.length ?? 0;
@@ -157,37 +162,58 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) {
 
   return (
     <LayoutGroup>
-      <div className="flex-1 flex gap-4 overflow-hidden">
-        <div className="flex-1 grid grid-cols-5 gap-4 min-w-0">
-          {tasksByStatus.map((col) => (
-            <KanbanColumn
-              key={col.status}
-              title={col.title}
-              status={col.status}
-              tasks={col.tasks}
-              stepGroups={col.stepGroups}
-              totalCount={col.totalCount}
-              accentColor={col.accentColor}
-              onTaskClick={onTaskClick}
-              hitlCount={col.status === "review" ? hitlCount : undefined}
-              tagColorMap={tagColorMap}
-              {...(col.status === "done"
-                ? {
-                    onClear: () => clearAllDone(),
-                    clearDisabled: doneTaskCount === 0,
-                    onViewAll: () => setDoneSheetOpen(true),
-                  }
-                : {})}
-            />
-          ))}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {boardFavorites.length > 0 && (
+          <div className="px-1 pb-2">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Favorites
+              </span>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {boardFavorites.map((task) => (
+                <CompactFavoriteCard
+                  key={task._id}
+                  task={task}
+                  onClick={() => onTaskClick?.(task._id)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex-1 flex gap-4 overflow-hidden">
+          <div className="flex-1 grid grid-cols-5 gap-4 min-w-0">
+            {tasksByStatus.map((col) => (
+              <KanbanColumn
+                key={col.status}
+                title={col.title}
+                status={col.status}
+                tasks={col.tasks}
+                stepGroups={col.stepGroups}
+                totalCount={col.totalCount}
+                accentColor={col.accentColor}
+                onTaskClick={onTaskClick}
+                hitlCount={col.status === "review" ? hitlCount : undefined}
+                tagColorMap={tagColorMap}
+                {...(col.status === "done"
+                  ? {
+                      onClear: () => clearAllDone(),
+                      clearDisabled: doneTaskCount === 0,
+                      onViewAll: () => setDoneSheetOpen(true),
+                    }
+                  : {})}
+              />
+            ))}
+          </div>
+          <button
+            onClick={() => setTrashOpen(true)}
+            className="flex flex-col items-center gap-2 pt-1 px-2 rounded-lg text-muted-foreground hover:bg-accent/50 transition-colors cursor-pointer"
+            aria-label="Open trash"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
-        <button
-          onClick={() => setTrashOpen(true)}
-          className="flex flex-col items-center gap-2 pt-1 px-2 rounded-lg text-muted-foreground hover:bg-accent/50 transition-colors cursor-pointer"
-          aria-label="Open trash"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
       </div>
       <TrashBinSheet open={trashOpen} onClose={() => setTrashOpen(false)} />
       <DoneTasksSheet open={doneSheetOpen} onClose={() => setDoneSheetOpen(false)} />

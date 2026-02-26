@@ -48,6 +48,7 @@ export default defineSchema({
     )),
     stalledAt: v.optional(v.string()),
     isManual: v.optional(v.boolean()),
+    isFavorite: v.optional(v.boolean()),
     awaitingKickoff: v.optional(v.boolean()),
     deletedAt: v.optional(v.string()),
     previousStatus: v.optional(v.string()),

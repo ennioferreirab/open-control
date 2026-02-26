@@ -14,6 +14,7 @@ import {
   ListChecks,
   Paperclip,
   RefreshCw,
+  Star,
   Trash2,
   User,
 } from "lucide-react";
@@ -31,6 +32,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
   const shouldReduceMotion = useReducedMotion();
   const approveMutation = useMutation(api.tasks.approve);
   const softDeleteMutation = useMutation(api.tasks.softDelete);
+  const toggleFavoriteMutation = useMutation(api.tasks.toggleFavorite);
   const [showRejection, setShowRejection] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -86,6 +88,17 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
             {task.title}
           </h3>
           <div className="mt-0.5 flex shrink-0 items-center gap-1">
+            <Star
+              className={`h-3.5 w-3.5 cursor-pointer transition-colors ${
+                task.isFavorite
+                  ? "fill-amber-400 text-amber-400"
+                  : "text-muted-foreground hover:text-amber-400"
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavoriteMutation({ taskId: task._id });
+              }}
+            />
             {isManual && <User className="h-3.5 w-3.5 text-muted-foreground" />}
             {task.status === "crashed" && (
               <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
