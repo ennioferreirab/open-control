@@ -843,30 +843,48 @@ class TaskExecutor:
         # Load agent prompt, model, and skills from YAML config
         agent_prompt, agent_model, agent_skills = self._load_agent_config(agent_name)
 
-        # Convex is the source of truth for model — override YAML and sync back to disk
+        # Convex is the source of truth for model, prompt, and variables — override YAML
         try:
             from nanobot.mc.gateway import AGENTS_DIR
             convex_agent = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
-            if convex_agent and convex_agent.get("model"):
-                convex_model = convex_agent["model"]
-                if convex_model != agent_model:
+            if convex_agent:
+                # Sync model
+                if convex_agent.get("model"):
+                    convex_model = convex_agent["model"]
+                    if convex_model != agent_model:
+                        logger.info(
+                            "[executor] Model synced from Convex for '%s': %s → %s",
+                            agent_name, agent_model, convex_model,
+                        )
+                        agent_model = convex_model
+                        # Write back to YAML so local host stays in sync
+                        try:
+                            await asyncio.to_thread(
+                                self._bridge.write_agent_config, convex_agent, AGENTS_DIR
+                            )
+                        except Exception:
+                            logger.warning(
+                                "[executor] YAML write-back failed for '%s'", agent_name, exc_info=True
+                            )
+
+                # Sync prompt (Convex is source of truth for dashboard edits)
+                convex_prompt = convex_agent.get("prompt")
+                if convex_prompt:
+                    agent_prompt = convex_prompt
+
+                # Interpolate variables into prompt ({{var_name}} → value)
+                variables = convex_agent.get("variables") or []
+                if variables and agent_prompt:
+                    for var in variables:
+                        placeholder = "{{" + var["name"] + "}}"
+                        agent_prompt = agent_prompt.replace(placeholder, var["value"])
                     logger.info(
-                        "[executor] Model synced from Convex for '%s': %s → %s",
-                        agent_name, agent_model, convex_model,
+                        "[executor] Interpolated %d variable(s) into prompt for '%s'",
+                        len(variables), agent_name,
                     )
-                    agent_model = convex_model
-                    # Write back to YAML so local host stays in sync
-                    try:
-                        await asyncio.to_thread(
-                            self._bridge.write_agent_config, convex_agent, AGENTS_DIR
-                        )
-                    except Exception:
-                        logger.warning(
-                            "[executor] YAML write-back failed for '%s'", agent_name, exc_info=True
-                        )
         except Exception:
             logger.warning(
-                "[executor] Could not fetch Convex model for '%s', using YAML", agent_name, exc_info=True
+                "[executor] Could not fetch Convex agent data for '%s', using YAML", agent_name, exc_info=True
             )
 
         # Resolve tier references (Story 11.1, AC5)
