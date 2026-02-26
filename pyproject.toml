@@ -98,6 +98,7 @@ ignore = ["E501"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 timeout = 60
+timeout_method = "thread"
 
 [dependency-groups]
 dev = [
