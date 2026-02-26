@@ -77,6 +77,7 @@ export const MESSAGE_TYPE = {
   APPROVAL: "approval",
   DENIAL: "denial",
   SYSTEM_EVENT: "system_event",
+  COMMENT: "comment",
 } as const;
 
 // Structured message type values (new `type` field added in Story 1.1)
@@ -86,6 +87,7 @@ export const STRUCTURED_MESSAGE_TYPE = {
   SYSTEM_ERROR: "system_error",
   LEAD_AGENT_PLAN: "lead_agent_plan",
   LEAD_AGENT_CHAT: "lead_agent_chat",
+  COMMENT: "comment",
 } as const;
 
 // Artifact action values

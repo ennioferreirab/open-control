@@ -9,6 +9,7 @@ const threadMessageTypeValidator = v.optional(v.union(
   v.literal("system_error"),
   v.literal("lead_agent_plan"),
   v.literal("lead_agent_chat"),
+  v.literal("comment"),
 ));
 
 /** Validator for artifact objects stored on step-completion messages. */
@@ -50,6 +51,7 @@ export const create = mutation({
       v.literal("denial"),
       v.literal("system_event"),
       v.literal("user_message"),
+      v.literal("comment"),
     ),
     timestamp: v.string(),
     // Unified thread fields (optional for backward compat)
@@ -230,6 +232,51 @@ export const postUserPlanMessage = mutation({
       taskId: args.taskId,
       eventType: "thread_message_sent",
       description: "User sent plan-chat message to Lead Agent",
+      timestamp,
+    });
+
+    return messageId;
+  },
+});
+
+/**
+ * Post a comment to a task thread without triggering agent assignment
+ * or status changes. Comments are inert context notes for humans and
+ * agents to read later (Story 9-2).
+ */
+export const postComment = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    content: v.string(),
+    authorName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    if (task.status === "deleted") {
+      throw new ConvexError("Cannot post comments on deleted tasks");
+    }
+
+    const timestamp = new Date().toISOString();
+    const author = args.authorName ?? "User";
+
+    const messageId = await ctx.db.insert("messages", {
+      taskId: args.taskId,
+      authorName: author,
+      authorType: "user",
+      content: args.content,
+      messageType: "comment",
+      type: "comment",
+      timestamp,
+    });
+
+    // Observability event
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      eventType: "thread_message_sent",
+      description: "User posted a comment",
       timestamp,
     });
 

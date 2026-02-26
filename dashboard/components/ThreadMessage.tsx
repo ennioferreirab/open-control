@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle, MessageCircle } from "lucide-react";
 import { Doc } from "../convex/_generated/dataModel";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ArtifactRenderer } from "./ArtifactRenderer";
@@ -55,6 +55,8 @@ function getMessageStyles(message: Doc<"messages">): MessageStyles {
         return { bg: "bg-indigo-50", label: "Lead Agent", labelColor: "text-indigo-600" };
       case STRUCTURED_MESSAGE_TYPE.USER_MESSAGE:
         return { bg: "bg-blue-50", label: null, labelColor: "" };
+      case STRUCTURED_MESSAGE_TYPE.COMMENT:
+        return { bg: "bg-slate-50", label: "Comment", labelColor: "text-slate-500" };
     }
   }
   // Fall back to legacy messageType
@@ -73,6 +75,7 @@ export function ThreadMessage({ message, steps }: ThreadMessageProps) {
     !isLeadAgentMessage &&
     (message.authorType === "system" || message.messageType === "system_event");
   const isSystemError = message.type === STRUCTURED_MESSAGE_TYPE.SYSTEM_ERROR;
+  const isComment = message.type === STRUCTURED_MESSAGE_TYPE.COMMENT;
   const isApproval = message.messageType === "approval";
   const isDenial = message.messageType === "denial";
 
@@ -90,7 +93,8 @@ export function ThreadMessage({ message, steps }: ThreadMessageProps) {
       </Avatar>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-foreground">
+          <span className="text-xs font-medium text-foreground flex items-center gap-1">
+            {isComment && <MessageCircle className="h-3 w-3 text-slate-500 shrink-0" />}
             {message.authorName}
           </span>
           {styles.label && (

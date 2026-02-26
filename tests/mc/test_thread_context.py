@@ -3,6 +3,7 @@
 import pytest
 
 from nanobot.mc.executor import _build_thread_context
+from nanobot.mc.thread_context import ThreadContextBuilder
 
 
 def _msg(author_name: str, author_type: str, content: str, message_type: str = "work", ts: str = "2026-02-23T10:00:00Z"):
@@ -146,3 +147,37 @@ class TestBuildThreadContextEdgeCases:
         ]
         result = _build_thread_context(messages)
         assert "Unknown [system]" in result  # defaults
+
+
+class TestFormatCommentMessage:
+    """Tests for comment message formatting (Story 9-2)."""
+
+    def test_format_comment_message(self):
+        builder = ThreadContextBuilder()
+        msg = {
+            "author_name": "Alice",
+            "type": "comment",
+            "content": "This needs review",
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+        result = builder._format_message(msg)
+        assert result == "Alice [Comment]: This needs review"
+
+    def test_comment_in_thread_context(self):
+        """Comments should appear in thread context (not filtered out)."""
+        messages = [
+            _msg("User", "user", "Fix the bug", "user_message", "2026-02-23T10:00:00Z"),
+            {
+                "author_name": "Alice",
+                "author_type": "user",
+                "content": "This needs review",
+                "message_type": "comment",
+                "type": "comment",
+                "timestamp": "2026-02-23T10:01:00Z",
+            },
+            _msg("User", "user", "Any update?", "user_message", "2026-02-23T10:05:00Z"),
+        ]
+        result = _build_thread_context(messages)
+        assert "Alice [Comment]: This needs review" in result
+        assert "[Thread History]" in result
+        assert "[Latest Follow-up]" in result

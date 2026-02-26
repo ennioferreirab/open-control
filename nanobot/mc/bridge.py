@@ -939,18 +939,19 @@ class ConvexBridge:
         result = self.query("chats:listPending")
         return result if isinstance(result, list) else []
 
-    def send_chat_response(self, agent_name: str, content: str) -> Any:
+    def send_chat_response(self, agent_name: str, content: str, author_name: str | None = None) -> Any:
         """Send an agent response to a chat conversation.
 
         Args:
             agent_name: Name of the responding agent.
             content: The agent's response text.
+            author_name: Display name for the agent (defaults to agent_name).
         """
         return self._mutation_with_retry(
             "chats:send",
             {
                 "agent_name": agent_name,
-                "author_name": agent_name,
+                "author_name": author_name or agent_name,
                 "author_type": "agent",
                 "content": content,
                 "status": "done",

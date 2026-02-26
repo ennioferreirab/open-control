@@ -188,6 +188,8 @@ class ThreadContextBuilder:
                 if artifact_str:
                     line += "\n" + artifact_str
             return line
+        elif msg_type == "comment":
+            return f"{author} [Comment]: {content}"
         else:
             return f"{author} [{author_type}] ({ts}): {content}"
 

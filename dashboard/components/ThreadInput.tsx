@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SendHorizontal, RotateCcw } from "lucide-react";
+import { SendHorizontal, RotateCcw, MessageCircle } from "lucide-react";
 import { AgentMentionAutocomplete } from "./AgentMentionAutocomplete";
 
 interface ThreadInputProps {
@@ -42,8 +42,10 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
   const mentionQueryRef = useRef(mentionQuery);
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const [inputMode, setInputMode] = useState<"agent" | "comment">("agent");
   const sendMessage = useMutation(api.messages.sendThreadMessage);
   const postPlanMessage = useMutation(api.messages.postUserPlanMessage);
+  const postComment = useMutation(api.messages.postComment);
   const restoreTask = useMutation(api.tasks.restore);
   const agents = useQuery(api.agents.list);
   const board = useQuery(
@@ -76,7 +78,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     (task.status === "review" && taskAny.awaitingKickoff === true);
 
   const isBlocked = BLOCKED_STATUSES.includes(task.status);
-  const canSend = content.trim().length > 0 && !isSubmitting && (isPlanChatMode || !!selectedAgent);
+  const canSend = content.trim().length > 0 && !isSubmitting && (inputMode === "comment" || isPlanChatMode || !!selectedAgent);
 
   // Filter agents by board's enabledAgents (empty = all agents eligible)
   const enabledAgentNames = board?.enabledAgents ?? [];
@@ -167,11 +169,14 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
       }
     }
 
-    if (!isPlanChatMode && !agentForSubmit) return;
+    if (inputMode !== "comment" && !isPlanChatMode && !agentForSubmit) return;
     setIsSubmitting(true);
     setError("");
     try {
-      if (isPlanChatMode) {
+      if (inputMode === "comment") {
+        // Comment mode: post inert comment, no status/agent change
+        await postComment({ taskId: task._id, content: trimmed });
+      } else if (isPlanChatMode) {
         // Plan-chat: just post the message, Lead Agent subscription handles it
         await postPlanMessage({ taskId: task._id, content: trimmed });
       } else {
@@ -276,6 +281,35 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     );
   }
 
+  // Mode toggle pill component
+  const modePill = (primaryLabel: string) => (
+    <div className="inline-flex rounded-full bg-muted p-0.5 text-xs">
+      <button
+        type="button"
+        className={`rounded-full px-3 py-1 transition-colors ${
+          inputMode === "agent"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        onClick={() => setInputMode("agent")}
+      >
+        {primaryLabel}
+      </button>
+      <button
+        type="button"
+        className={`rounded-full px-3 py-1 transition-colors flex items-center gap-1 ${
+          inputMode === "comment"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        onClick={() => setInputMode("comment")}
+      >
+        <MessageCircle className="h-3 w-3" />
+        Comment
+      </button>
+    </div>
+  );
+
   // Plan-chat mode: simplified input addressed to the Lead Agent
   if (isPlanChatMode) {
     return (
@@ -283,12 +317,21 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         {error && (
           <p className="text-xs text-red-500">{error}</p>
         )}
-        <p className="text-xs text-muted-foreground">
-          Ask the Lead Agent to modify the plan...
-        </p>
+        <div className="flex items-center gap-2">
+          {modePill("Plan Chat")}
+        </div>
+        {inputMode === "comment" ? (
+          <p className="text-xs text-muted-foreground">
+            Add a note without triggering agents...
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Ask the Lead Agent to modify the plan...
+          </p>
+        )}
         <div className="flex gap-2">
           <Textarea
-            placeholder="e.g. Add a step to write tests, or remove the deployment step..."
+            placeholder={inputMode === "comment" ? "Add a comment..." : "e.g. Add a step to write tests, or remove the deployment step..."}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -315,25 +358,28 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         <p className="text-xs text-red-500">{error}</p>
       )}
       <div className="flex items-center gap-2">
-        <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-          <SelectTrigger className="w-[180px] h-7 text-xs">
-            <SelectValue placeholder="Select agent" />
-          </SelectTrigger>
-          <SelectContent>
-            {filteredAgents?.map((agent) => (
-              <SelectItem key={agent._id} value={agent.name} className="text-xs">
-                {agent.displayName || agent.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {modePill("Message Agent")}
+        {inputMode === "agent" && (
+          <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+            <SelectTrigger className="w-[180px] h-7 text-xs">
+              <SelectValue placeholder="Select agent" />
+            </SelectTrigger>
+            <SelectContent>
+              {filteredAgents?.map((agent) => (
+                <SelectItem key={agent._id} value={agent.name} className="text-xs">
+                  {agent.displayName || agent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
       <div className="flex gap-2 relative">
         <Textarea
           ref={textareaRef}
-          placeholder="Send a message to the agent..."
+          placeholder={inputMode === "comment" ? "Add a comment..." : "Send a message to the agent..."}
           value={content}
-          onChange={handleTextChange}
+          onChange={inputMode === "comment" ? (e) => setContent(e.target.value) : handleTextChange}
           onKeyDown={handleKeyDown}
           onFocus={() => clearTimeout(blurTimeoutRef.current)}
           onBlur={() => {
@@ -352,7 +398,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         >
           <SendHorizontal className="h-4 w-4" />
         </Button>
-        {mentionQuery !== null && !isPlanChatMode && filteredAgents && (
+        {inputMode === "agent" && mentionQuery !== null && !isPlanChatMode && filteredAgents && (
           <AgentMentionAutocomplete
             agents={filteredAgents.map((a) => ({
               name: a.name,

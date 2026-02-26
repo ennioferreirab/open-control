@@ -114,6 +114,7 @@ export default defineSchema({
       v.literal("denial"),
       v.literal("system_event"),
       v.literal("user_message"),
+      v.literal("comment"),
     ),
     type: v.optional(v.union(
       v.literal("step_completion"),
@@ -121,6 +122,7 @@ export default defineSchema({
       v.literal("system_error"),
       v.literal("lead_agent_plan"),
       v.literal("lead_agent_chat"),
+      v.literal("comment"),
     )),
     artifacts: v.optional(v.array(v.object({
       path: v.string(),

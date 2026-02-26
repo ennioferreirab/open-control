@@ -98,12 +98,14 @@ class ChatHandler:
             agent_prompt = None
             agent_model = None
             agent_skills = None
+            agent_display_name = agent_name
             if config_file.exists():
                 result = validate_agent_file(config_file)
                 if not isinstance(result, list):
                     agent_prompt = result.prompt
                     agent_model = result.model
                     agent_skills = result.skills
+                    agent_display_name = result.display_name or agent_name
 
             # Resolve tier references
             from nanobot.mc.types import is_tier_reference
@@ -155,6 +157,7 @@ class ChatHandler:
                 self._bridge.send_chat_response,
                 agent_name,
                 result,
+                agent_display_name,
             )
 
             # Mark original message as done
