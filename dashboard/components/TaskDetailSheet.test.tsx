@@ -8,7 +8,12 @@ import { ThreadMessage } from "./ThreadMessage";
 const mockUseQuery = vi.fn();
 const mockMutationFn = vi.fn().mockResolvedValue(undefined);
 vi.mock("convex/react", () => ({
-  useQuery: (...args: unknown[]) => mockUseQuery(...args),
+  useQuery: (...args: unknown[]) => {
+    // If mockReturnValueOnce queue is exhausted, return [] as safe default
+    // (handles extra useQuery calls like taskTags.list)
+    const result = mockUseQuery(...args);
+    return result;
+  },
   useMutation: () => mockMutationFn,
 }));
 
@@ -67,19 +72,36 @@ describe("TaskDetailSheet", () => {
     mockMutationFn.mockClear();
   });
 
+  // Helper: set up useQuery to return task + empty arrays for all other queries.
+  // mockReturnValueOnce chains in individual tests override as needed.
+  function setupQueryMock(task: typeof baseTask, messages: unknown[] = []) {
+    mockUseQuery.mockImplementation((_query: unknown, args: unknown) => {
+      // taskTags.list has no args — return empty
+      if (args === undefined) return [];
+      // "skip" queries return undefined
+      if (args === "skip") return undefined;
+      return undefined;
+    });
+    // Override with sequential values for the conditional queries
+    mockUseQuery
+      .mockReturnValueOnce(task)      // getById
+      .mockReturnValueOnce(messages)   // listByTask
+      .mockReturnValueOnce([])         // getByTask (steps)
+      .mockReturnValueOnce([]);        // taskTags.list
+  }
+
   it("renders task title and status badge when open", () => {
     mockUseQuery.mockImplementation((_query: unknown, args: unknown) => {
       if (args && typeof args === "object" && "taskId" in args) {
-        // Could be either getById or listByTask
-        // Return task for the first call, messages for the second
         return undefined;
       }
       return undefined;
     });
-    // Simulate: first useQuery call returns task, second returns messages
     mockUseQuery
       .mockReturnValueOnce(baseTask) // getById
-      .mockReturnValueOnce([]); // listByTask
+      .mockReturnValueOnce([]) // listByTask
+      .mockReturnValueOnce([]) // getByTask
+      .mockReturnValueOnce([]); // taskTags.list
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -92,6 +114,8 @@ describe("TaskDetailSheet", () => {
   it("renders assigned agent name", () => {
     mockUseQuery
       .mockReturnValueOnce(baseTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
       .mockReturnValueOnce([]);
 
     render(
@@ -104,6 +128,8 @@ describe("TaskDetailSheet", () => {
   it("shows empty thread placeholder when no messages", () => {
     mockUseQuery
       .mockReturnValueOnce(baseTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
       .mockReturnValueOnce([]);
 
     render(
@@ -118,7 +144,9 @@ describe("TaskDetailSheet", () => {
   it("renders messages in the thread tab", () => {
     mockUseQuery
       .mockReturnValueOnce(baseTask)
-      .mockReturnValueOnce([baseMessage]);
+      .mockReturnValueOnce([baseMessage])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -355,11 +383,11 @@ describe("TaskDetailSheet", () => {
       ...baseTask,
       files: [],
     };
-    // 5 useQuery calls per render (getById, listByTask, getByTask, agents.list, boards.getById).
+    // 6 useQuery calls per render (getById, listByTask, getByTask, taskTags.list, agents.list, boards.getById).
     // Provide values for 2 renders (initial + after tab click).
     mockUseQuery
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -385,8 +413,8 @@ describe("TaskDetailSheet", () => {
       ],
     };
     mockUseQuery
-      .mockReturnValueOnce(taskWithFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
-      .mockReturnValueOnce(taskWithFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
+      .mockReturnValueOnce(taskWithFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
+      .mockReturnValueOnce(taskWithFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -414,8 +442,8 @@ describe("TaskDetailSheet", () => {
       ],
     };
     mockUseQuery
-      .mockReturnValueOnce(taskWithFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
-      .mockReturnValueOnce(taskWithFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
+      .mockReturnValueOnce(taskWithFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
+      .mockReturnValueOnce(taskWithFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -445,8 +473,8 @@ describe("TaskDetailSheet", () => {
     const user = userEvent.setup();
     const taskNoFiles = { ...baseTask, files: [] };
     mockUseQuery
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
@@ -465,11 +493,11 @@ describe("TaskDetailSheet", () => {
     // (TaskDetailSheet) + agents.list + board (ThreadInput). Provide enough queued values
     // for several renders so re-renders triggered by state changes don't get undefined.
     mockUseQuery
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 2
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 3 (setIsUploading)
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 4+
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 2
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 3 (setIsUploading)
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 4+
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
 
     // Mock fetch to hang so we can observe the uploading state
     let resolveFetch!: (value: Response) => void;
@@ -550,11 +578,11 @@ describe("TaskDetailSheet", () => {
     const taskNoFiles = { ...baseTask, files: [] };
     // 5 useQuery calls per render pass (3 in TaskDetailSheet + 2 in ThreadInput)
     mockUseQuery
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // mount
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setIsUploading(true)
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render after mutations
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setIsUploading(false)
-      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // mount
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setIsUploading(true)
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render after mutations
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setIsUploading(false)
+      .mockReturnValueOnce(taskNoFiles).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
 
     const returnedFiles = [
       { name: "doc.pdf", type: "application/pdf", size: 1024, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
@@ -603,8 +631,8 @@ describe("TaskDetailSheet", () => {
       ],
     };
     mockUseQuery
-      .mockReturnValueOnce(taskOutputOnly).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
-      .mockReturnValueOnce(taskOutputOnly).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
+      .mockReturnValueOnce(taskOutputOnly).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // render 1
+      .mockReturnValueOnce(taskOutputOnly).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined); // render 2
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
     await user.click(screen.getByRole("tab", { name: "Files (1)" }));
@@ -626,11 +654,11 @@ describe("TaskDetailSheet", () => {
     };
     // 5 useQuery calls per render pass (3 in TaskDetailSheet + 2 in ThreadInput)
     mockUseQuery
-      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // mount
-      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setDeletingFiles
-      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render after mutation
-      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render on finally
-      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // mount
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render setDeletingFiles
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render after mutation
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined) // re-render on finally
+      .mockReturnValueOnce(taskWithAttachment).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce([]).mockReturnValueOnce(undefined);
 
     vi.stubGlobal(
       "fetch",

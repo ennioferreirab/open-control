@@ -18,11 +18,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { File, FileCode, FileText, Image, Loader2, Paperclip, Pause, Play, Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { File, FileCode, FileText, Image, Loader2, Paperclip, Pause, Play, Plus, Trash2, X } from "lucide-react";
 import type { ExecutionPlan } from "@/lib/types";
 import { ThreadMessage } from "./ThreadMessage";
 import { ExecutionPlanTab } from "./ExecutionPlanTab";
-import { STATUS_COLORS, type TaskStatus } from "@/lib/constants";
+import { STATUS_COLORS, TAG_COLORS, type TaskStatus } from "@/lib/constants";
 import { InlineRejection } from "./InlineRejection";
 import { DocumentViewerModal } from "./DocumentViewerModal";
 import { ThreadInput } from "./ThreadInput";
@@ -62,11 +63,13 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     api.steps.getByTask,
     taskId ? { taskId } : "skip",
   );
+  const tagsList = useQuery(api.taskTags.list);
   const approveMutation = useMutation(api.tasks.approve);
   const kickOffMutation = useMutation(api.tasks.approveAndKickOff);
   const pauseTaskMutation = useMutation(api.tasks.pauseTask);
   const resumeTaskMutation = useMutation(api.tasks.resumeTask);
   const retryMutation = useMutation(api.tasks.retry);
+  const updateTagsMutation = useMutation(api.tasks.updateTags);
   const addTaskFiles = useMutation(api.tasks.addTaskFiles);
   const removeTaskFile = useMutation(api.tasks.removeTaskFile);
   const createActivity = useMutation(api.activities.create);
@@ -157,6 +160,24 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const colors = isTaskLoaded
     ? STATUS_COLORS[task.status as TaskStatus] ?? STATUS_COLORS.inbox
     : null;
+
+  const tagColorMap: Record<string, string> = Object.fromEntries(
+    tagsList?.map((t) => [t.name, t.color]) ?? []
+  );
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    if (!task || !isTaskLoaded) return;
+    const currentTags = task.tags ?? [];
+    const newTags = currentTags.filter((t) => t !== tagToRemove);
+    updateTagsMutation({ taskId: task._id, tags: newTags });
+  };
+
+  const handleAddTag = (tagToAdd: string) => {
+    if (!task || !isTaskLoaded) return;
+    const currentTags = task.tags ?? [];
+    if (currentTags.includes(tagToAdd)) return;
+    updateTagsMutation({ taskId: task._id, tags: [...currentTags, tagToAdd] });
+  };
 
   const handleKickOff = async () => {
     if (!task || !isTaskLoaded) return;
@@ -554,20 +575,85 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       </p>
                     </div>
                   )}
-                  {task.tags && task.tags.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Tags
-                      </h4>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {task.tags.map((tag) => (
-                          <Badge key={tag} variant="secondary" className="text-xs">
+                  <div>
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Tags
+                    </h4>
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      {(task.tags ?? []).map((tag) => {
+                        const colorKey = tagColorMap[tag];
+                        const color = colorKey ? TAG_COLORS[colorKey] : null;
+                        return (
+                          <span
+                            key={tag}
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
+                              color
+                                ? `${color.bg} ${color.text}`
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {color && (
+                              <span className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`} />
+                            )}
                             {tag}
-                          </Badge>
-                        ))}
-                      </div>
+                            <button
+                              onClick={() => handleRemoveTag(tag)}
+                              className="ml-0.5 rounded-full hover:bg-black/10 p-0.5 transition-colors"
+                              aria-label={`Remove tag ${tag}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="inline-flex items-center justify-center h-6 w-6 rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                            aria-label="Add tag"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48 p-2" align="start">
+                          {tagsList === undefined ? (
+                            <p className="text-xs text-muted-foreground p-2">Loading...</p>
+                          ) : tagsList.length === 0 ? (
+                            <p className="text-xs text-muted-foreground p-2">
+                              No tags defined. Open the Tags panel to create some.
+                            </p>
+                          ) : (
+                            <div className="flex flex-col gap-0.5">
+                              {tagsList.map((catalogTag) => {
+                                const isAssigned = (task.tags ?? []).includes(catalogTag.name);
+                                const color = TAG_COLORS[catalogTag.color];
+                                return (
+                                  <button
+                                    key={catalogTag._id}
+                                    className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs text-left transition-colors ${
+                                      isAssigned
+                                        ? "opacity-50 cursor-default"
+                                        : "hover:bg-muted cursor-pointer"
+                                    }`}
+                                    onClick={() => !isAssigned && handleAddTag(catalogTag.name)}
+                                    disabled={isAssigned}
+                                  >
+                                    {color && (
+                                      <span className={`w-2 h-2 rounded-full ${color.dot} flex-shrink-0`} />
+                                    )}
+                                    <span className="flex-1">{catalogTag.name}</span>
+                                    {isAssigned && (
+                                      <span className="text-muted-foreground text-[10px]">Added</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
                     </div>
-                  )}
+                  </div>
                   </div>
                 </ScrollArea>
               </TabsContent>
