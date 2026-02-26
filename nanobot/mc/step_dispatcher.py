@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -40,32 +39,6 @@ def _as_positive_int(value: Any, default: int) -> int:
     except (TypeError, ValueError):
         return default
 
-
-def _resolve_board_workspace(board_name: str, agent_name: str) -> Path:
-    """Resolve and initialize the board-scoped memory workspace for an agent."""
-    board_workspace = (
-        Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
-    )
-    memory_dir = board_workspace / "memory"
-    sessions_dir = board_workspace / "sessions"
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    sessions_dir.mkdir(parents=True, exist_ok=True)
-
-    memory_md = memory_dir / "MEMORY.md"
-    if not memory_md.exists():
-        global_memory = (
-            Path.home() / ".nanobot" / "agents" / agent_name / "memory" / "MEMORY.md"
-        )
-        if global_memory.exists():
-            shutil.copy2(global_memory, memory_md)
-        else:
-            memory_md.write_text("", encoding="utf-8")
-
-    history_md = memory_dir / "HISTORY.md"
-    if not history_md.exists():
-        history_md.write_text("", encoding="utf-8")
-
-    return board_workspace
 
 
 def _load_agent_config(
@@ -411,7 +384,9 @@ class StepDispatcher:
                 if isinstance(board, dict):
                     board_name = board.get("name")
                     if board_name:
-                        memory_workspace = _resolve_board_workspace(board_name, agent_name)
+                        from nanobot.mc.board_utils import resolve_board_workspace, get_agent_memory_mode
+                        mode = get_agent_memory_mode(board, agent_name) if isinstance(board, dict) else "clean"
+                        memory_workspace = resolve_board_workspace(board_name, agent_name, mode=mode)
 
             execution_description = (
                 f'You are executing step: "{step_title}"\n'

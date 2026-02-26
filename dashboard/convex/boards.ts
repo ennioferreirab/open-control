@@ -90,6 +90,10 @@ export const update = mutation({
     displayName: v.optional(v.string()),
     description: v.optional(v.string()),
     enabledAgents: v.optional(v.array(v.string())),
+    agentMemoryModes: v.optional(v.array(v.object({
+      agentName: v.string(),
+      mode: v.union(v.literal("clean"), v.literal("with_history")),
+    }))),
   },
   handler: async (ctx, args) => {
     const board = await ctx.db.get(args.boardId);
@@ -102,6 +106,7 @@ export const update = mutation({
     if (args.displayName !== undefined) patch.displayName = args.displayName;
     if (args.description !== undefined) patch.description = args.description;
     if (args.enabledAgents !== undefined) patch.enabledAgents = args.enabledAgents;
+    if (args.agentMemoryModes !== undefined) patch.agentMemoryModes = args.agentMemoryModes;
 
     await ctx.db.patch(args.boardId, patch);
 

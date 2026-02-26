@@ -7,6 +7,10 @@ export default defineSchema({
     displayName: v.string(),
     description: v.optional(v.string()),
     enabledAgents: v.array(v.string()),
+    agentMemoryModes: v.optional(v.array(v.object({
+      agentName: v.string(),
+      mode: v.union(v.literal("clean"), v.literal("with_history")),
+    }))),
     isDefault: v.optional(v.boolean()),
     createdAt: v.string(),
     updatedAt: v.string(),
@@ -222,6 +226,17 @@ export default defineSchema({
     name: v.string(),
     color: v.string(), // one of: blue|green|red|amber|violet|pink|orange|teal
   }).index("by_name", ["name"]),
+
+  chats: defineTable({
+    agentName: v.string(),
+    authorName: v.string(),
+    authorType: v.union(v.literal("user"), v.literal("agent")),
+    content: v.string(),
+    status: v.optional(v.union(v.literal("pending"), v.literal("processing"), v.literal("done"))),
+    timestamp: v.string(),
+  })
+    .index("by_agentName", ["agentName"])
+    .index("by_timestamp", ["timestamp"]),
 
   settings: defineTable({
     key: v.string(),

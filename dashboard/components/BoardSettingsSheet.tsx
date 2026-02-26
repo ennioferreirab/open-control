@@ -39,6 +39,7 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
   const [displayName, setDisplayName] = useState("");
   const [description, setDescription] = useState("");
   const [enabledAgents, setEnabledAgents] = useState<string[]>([]);
+  const [agentMemoryModes, setAgentMemoryModes] = useState<Array<{ agentName: string; mode: "clean" | "with_history" }>>([]);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
@@ -49,6 +50,7 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
       setDisplayName(board.displayName);
       setDescription(board.description ?? "");
       setEnabledAgents(board.enabledAgents ?? []);
+      setAgentMemoryModes(board.agentMemoryModes ?? []);
     }
   }, [board]);
 
@@ -60,6 +62,21 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
     setEnabledAgents((prev) =>
       prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
     );
+  };
+
+  const getAgentMode = (agentName: string): "clean" | "with_history" => {
+    return agentMemoryModes.find((m) => m.agentName === agentName)?.mode ?? "clean";
+  };
+
+  const toggleAgentMode = (agentName: string) => {
+    setAgentMemoryModes((prev) => {
+      const current = prev.find((m) => m.agentName === agentName);
+      const newMode = current?.mode === "with_history" ? "clean" : "with_history";
+      return [
+        ...prev.filter((m) => m.agentName !== agentName),
+        { agentName, mode: newMode },
+      ];
+    });
   };
 
   const isDefault = board?.isDefault === true;
@@ -92,6 +109,7 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
         displayName: displayName.trim() || board.displayName,
         description: description.trim() || undefined,
         enabledAgents,
+        agentMemoryModes,
       });
       onClose();
     } catch (e) {
@@ -158,15 +176,44 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
 
             {/* Registered agents */}
             {nonSystemAgents.map((agent) => (
-              <div key={agent.name} className="flex items-center gap-2">
-                <Checkbox
-                  id={`agent-${agent.name}`}
-                  checked={enabledAgents.includes(agent.name)}
-                  onCheckedChange={() => toggleAgent(agent.name)}
-                />
-                <label htmlFor={`agent-${agent.name}`} className="text-sm cursor-pointer">
-                  {agent.displayName || agent.name}
-                </label>
+              <div key={agent.name}>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`agent-${agent.name}`}
+                    checked={enabledAgents.includes(agent.name)}
+                    onCheckedChange={() => toggleAgent(agent.name)}
+                  />
+                  <label htmlFor={`agent-${agent.name}`} className="text-sm cursor-pointer">
+                    {agent.displayName || agent.name}
+                  </label>
+                </div>
+                {enabledAgents.includes(agent.name) && (
+                  <div className="ml-7 flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                    <span>Memory:</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleAgentMode(agent.name)}
+                      className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                        getAgentMode(agent.name) === "clean"
+                          ? "bg-muted text-foreground"
+                          : "bg-transparent text-muted-foreground"
+                      }`}
+                    >
+                      Clean
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleAgentMode(agent.name)}
+                      className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                        getAgentMode(agent.name) === "with_history"
+                          ? "bg-muted text-foreground"
+                          : "bg-transparent text-muted-foreground"
+                      }`}
+                    >
+                      With History
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -100,6 +100,7 @@ async def _run_agent_on_task(
     memory_workspace: Path | None = None,
     cron_service: Any | None = None,
     task_id: str | None = None,
+    bridge: "ConvexBridge | None" = None,
 ) -> str:
     """Run the nanobot agent loop on a task and return the result.
 
@@ -153,6 +154,17 @@ async def _run_agent_on_task(
         memory_workspace=memory_workspace,
         cron_service=cron_service,
     )
+
+    # Set MC context on ask_agent tool for inter-agent conversations (Story 10.3)
+    if ask_tool := loop.tools.get("ask_agent"):
+        from nanobot.agent.tools.ask_agent import AskAgentTool
+        if isinstance(ask_tool, AskAgentTool):
+            ask_tool.set_context(
+                caller_agent=agent_name,
+                task_id=task_id,
+                depth=0,
+                bridge=bridge,
+            )
 
     result = await loop.process_direct(
         content=message,
@@ -477,50 +489,6 @@ class TaskExecutor:
             MessageType.SYSTEM_EVENT,
         )
 
-    def _resolve_board_workspace(self, board_name: str, agent_name: str) -> Path:
-        """Resolve the board-scoped memory workspace for an agent.
-
-        Creates the directory structure idempotently and bootstraps MEMORY.md
-        from the global agent workspace if this is the first run on this board.
-
-        Returns:
-            Path to ~/.nanobot/boards/{board_name}/agents/{agent_name}/
-        """
-        import shutil
-
-        board_workspace = (
-            Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
-        )
-        memory_dir = board_workspace / "memory"
-        sessions_dir = board_workspace / "sessions"
-        memory_dir.mkdir(parents=True, exist_ok=True)
-        sessions_dir.mkdir(parents=True, exist_ok=True)
-
-        memory_md = memory_dir / "MEMORY.md"
-        if not memory_md.exists():
-            global_memory = (
-                Path.home() / ".nanobot" / "agents" / agent_name / "memory" / "MEMORY.md"
-            )
-            if global_memory.exists():
-                shutil.copy2(global_memory, memory_md)
-                logger.info(
-                    "[executor] Bootstrapped board-scoped MEMORY.md for agent '%s' on board '%s'",
-                    agent_name, board_name,
-                )
-            else:
-                memory_md.write_text("", encoding="utf-8")
-                logger.info(
-                    "[executor] Created empty board-scoped MEMORY.md for agent '%s' on board '%s'",
-                    agent_name, board_name,
-                )
-
-        # HISTORY.md always starts empty per board
-        history_md = memory_dir / "HISTORY.md"
-        if not history_md.exists():
-            history_md.write_text("", encoding="utf-8")
-
-        return board_workspace
-
     def _load_agent_config(
         self, agent_name: str
     ) -> tuple[str | None, str | None, list[str] | None]:
@@ -805,12 +773,14 @@ class TaskExecutor:
                 if board:
                     board_name = board.get("name")
                     if board_name:
-                        memory_workspace = self._resolve_board_workspace(
-                            board_name, agent_name
+                        from nanobot.mc.board_utils import resolve_board_workspace, get_agent_memory_mode
+                        mode = get_agent_memory_mode(board, agent_name)
+                        memory_workspace = resolve_board_workspace(
+                            board_name, agent_name, mode=mode
                         )
                         logger.info(
-                            "[executor] Using board-scoped workspace for agent '%s' on board '%s'",
-                            agent_name, board_name,
+                            "[executor] Using board-scoped workspace for agent '%s' on board '%s' (mode=%s)",
+                            agent_name, board_name, mode,
                         )
             except Exception:
                 logger.warning(
@@ -835,6 +805,7 @@ class TaskExecutor:
                 memory_workspace=memory_workspace,
                 cron_service=self._cron_service,
                 task_id=task_id,
+                bridge=self._bridge,
             )
 
             # Collect file artifacts produced during agent execution.
