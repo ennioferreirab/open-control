@@ -405,6 +405,30 @@ def ensure_nanobot_agent(agents_dir: Path) -> None:
                 logger.info("Symlinked %s to global workspace for %s", item, bot_name)
             except Exception as e:
                 logger.warning("Failed to symlink %s for nanobot agent: %s", item, e)
+
+
+def ensure_low_agent(bridge: "ConvexBridge") -> None:
+    """Upsert the low-agent system agent to Convex.
+
+    low-agent is a pure system agent (no YAML file on disk). It is always
+    configured with the standard-low model tier and is used internally for
+    lightweight tasks such as auto-title generation.
+
+    isSystem=True protects it from being deactivated by deactivateExcept.
+    """
+    from nanobot.mc.types import LOW_AGENT_NAME, AgentData
+
+    agent = AgentData(
+        name=LOW_AGENT_NAME,
+        display_name="Low Agent",
+        role="Lightweight system utility agent",
+        model="tier:standard-low",
+        is_system=True,
+    )
+    bridge.sync_agent(agent)
+    logger.info("[gateway] Ensured low-agent system agent")
+
+
 def _sync_model_tiers(bridge: ConvexBridge) -> None:
     """Sync connected models list and seed default tiers on startup.
 
@@ -492,6 +516,12 @@ def sync_agent_registry(
 
     # Step 0: Ensure system agents exist on disk
     ensure_nanobot_agent(agents_dir)
+
+    # Ensure low-agent system agent exists in Convex
+    try:
+        ensure_low_agent(bridge)
+    except Exception:
+        logger.warning("[gateway] Failed to ensure low-agent", exc_info=True)
 
     # Step 0a: Cleanup — archive and remove local folders for soft-deleted agents
     _cleanup_deleted_agents(bridge, agents_dir)
