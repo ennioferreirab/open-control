@@ -15,6 +15,12 @@ from nanobot.providers.registry import find_by_model, find_gateway
 # Standard OpenAI chat-completion message keys; extras (e.g. reasoning_content) are stripped for strict providers.
 _ALLOWED_MSG_KEYS = frozenset({"role", "content", "tool_calls", "tool_call_id", "name"})
 
+_REASONING_BUDGET_TOKENS: dict[str, int] = {
+    "low": 1024,
+    "medium": 8000,
+    "max": 16000,
+}
+
 
 class LiteLLMProvider(LLMProvider):
     """
@@ -170,6 +176,7 @@ class LiteLLMProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        reasoning_level: str | None = None,
     ) -> LLMResponse:
         """
         Send a chat completion request via LiteLLM.
@@ -215,7 +222,27 @@ class LiteLLMProvider(LLMProvider):
         # Pass extra headers (e.g. APP-Code for AiHubMix)
         if self.extra_headers:
             kwargs["extra_headers"] = self.extra_headers
-        
+
+        # Inject reasoning / thinking params
+        if reasoning_level:
+            model_lower = original_model.lower()
+            if "anthropic" in model_lower or "claude" in model_lower:
+                budget = _REASONING_BUDGET_TOKENS.get(reasoning_level)
+                if budget:
+                    kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
+                    kwargs["temperature"] = 1.0  # Anthropic requires temp=1.0 with thinking
+            elif any(p in model_lower for p in ("openai", "gpt", "o1", "o3", "o4")):
+                effort_map = {"low": "low", "medium": "medium", "max": "high"}
+                effort = effort_map.get(reasoning_level)
+                if effort:
+                    kwargs["reasoning_effort"] = effort
+            else:
+                # Unknown provider — try thinking dict (LiteLLM may translate it)
+                budget = _REASONING_BUDGET_TOKENS.get(reasoning_level)
+                if budget:
+                    kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
+                    kwargs["temperature"] = 1.0
+
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
