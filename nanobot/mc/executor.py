@@ -845,6 +845,37 @@ class TaskExecutor:
                 title, agent_name, final_status,
             )
 
+            # --- WRITE TO GLOBAL HEARTBEAT FOR OWL TO PICK UP ---
+            try:
+                # We format a nice summary for the fallback agent (Owl) to pick up via heartbeat
+                result_snippet = "Task completed."
+                if result:
+                    result_snippet = result.strip()
+                    # Truncate if too large to avoid polluting heartbeat
+                    if len(result_snippet) > 1000:
+                        result_snippet = result_snippet[:1000] + "\n...(truncated)..."
+
+                heartbeat_content = f"""
+## Mission Control Update
+
+The task **'{title}'** (ID: `{task_id}`) assigned to **{agent_name}** has finished with status: `{final_status}`.
+
+### Agent's Result:
+```
+{result_snippet}
+```
+
+Please summarize this naturally and notify the user that the task is complete. Do not wait for the user to ask.
+"""
+                heartbeat_file = Path.home() / ".nanobot" / "workspace" / "HEARTBEAT.md"
+                # Append to HEARTBEAT.md so we don't overwrite other pending notifications
+                # We use append mode directly.
+                with open(heartbeat_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n{heartbeat_content}\n")
+                        
+                logger.info("[executor] Written task '%s' completion to global HEARTBEAT.md", title)
+            except Exception as hb_exc:
+                logger.warning("[executor] Failed to write to HEARTBEAT.md for task '%s': %s", title, hb_exc)
         except _PROVIDER_ERRORS as exc:
             # Provider/OAuth errors get surfaced with clear actionable message
             await self._handle_provider_error(task_id, title, agent_name, exc)
