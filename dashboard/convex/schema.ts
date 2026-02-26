@@ -53,6 +53,7 @@ export default defineSchema({
     stalledAt: v.optional(v.string()),
     isManual: v.optional(v.boolean()),
     isFavorite: v.optional(v.boolean()),
+    autoTitle: v.optional(v.boolean()),
     awaitingKickoff: v.optional(v.boolean()),
     deletedAt: v.optional(v.string()),
     previousStatus: v.optional(v.string()),
@@ -152,6 +153,7 @@ export default defineSchema({
     enabled: v.optional(v.boolean()),
     isSystem: v.optional(v.boolean()),
     model: v.optional(v.string()),
+    reasoningLevel: v.optional(v.string()),
     variables: v.optional(v.array(v.object({ name: v.string(), value: v.string() }))),
     lastActiveAt: v.optional(v.string()),
     deletedAt: v.optional(v.string()),
@@ -174,6 +176,7 @@ export default defineSchema({
       v.literal("task_completed"),
       v.literal("task_crashed"),
       v.literal("task_retrying"),
+      v.literal("task_reassigned"),
       v.literal("review_requested"),
       v.literal("review_feedback"),
       v.literal("review_approved"),
@@ -227,6 +230,7 @@ export default defineSchema({
   taskTags: defineTable({
     name: v.string(),
     color: v.string(), // one of: blue|green|red|amber|violet|pink|orange|teal
+    attributeIds: v.optional(v.array(v.id("tagAttributes"))),
   }).index("by_name", ["name"]),
 
   chats: defineTable({
