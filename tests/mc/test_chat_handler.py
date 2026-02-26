@@ -112,10 +112,11 @@ class TestProcessChatMessage:
         bridge.mark_chat_processing.assert_called_once_with("chat123")
         # mark_chat_done called
         bridge.mark_chat_done.assert_called_once_with("chat123")
-        # send_chat_response called with agent name and result
-        bridge.send_chat_response.assert_called_once_with(
-            "test-agent", "Agent response here"
-        )
+        # send_chat_response called with agent name, result, and display name
+        bridge.send_chat_response.assert_called_once()
+        call_args = bridge.send_chat_response.call_args[0]
+        assert call_args[0] == "test-agent"
+        assert call_args[1] == "Agent response here"
 
     @pytest.mark.asyncio
     async def test_skips_message_without_id(self):
