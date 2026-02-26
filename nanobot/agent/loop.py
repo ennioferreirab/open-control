@@ -62,6 +62,8 @@ class AgentLoop:
         allowed_skills: list[str] | None = None,
         global_skills_dir: Path | None = None,
         memory_workspace: Path | None = None,
+        mc_consolidation_system_prompt: str | None = None,
+        reasoning_level: str | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.bus = bus
@@ -74,6 +76,8 @@ class AgentLoop:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.memory_window = memory_window
+        self.mc_consolidation_system_prompt = mc_consolidation_system_prompt
+        self.reasoning_level = reasoning_level
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
@@ -441,6 +445,7 @@ class AgentLoop:
         return await MemoryStore(self.memory_workspace).consolidate(
             session, self.provider, self.model,
             archive_all=archive_all, memory_window=self.memory_window,
+            mc_system_prompt=self.mc_consolidation_system_prompt,
         )
 
     async def end_task_session(self, session_key: str) -> None:

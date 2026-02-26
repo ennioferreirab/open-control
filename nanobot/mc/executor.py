@@ -105,8 +105,9 @@ async def _run_agent_on_task(
     agent_name: str,
     agent_prompt: str | None,
     agent_model: str | None,
-    task_title: str,
-    task_description: str | None,
+    reasoning_level: str | None = None,
+    task_title: str = "",
+    task_description: str | None = None,
     agent_skills: list[str] | None = None,
     board_name: str | None = None,
     memory_workspace: Path | None = None,
@@ -159,10 +160,18 @@ async def _run_agent_on_task(
         provider=provider,
         workspace=workspace,
         model=resolved_model,
+        reasoning_level=reasoning_level,
         allowed_skills=agent_skills,
         global_skills_dir=global_skills_dir,
         memory_workspace=memory_workspace,
         cron_service=cron_service,
+        mc_consolidation_system_prompt=(
+            "You are a memory consolidation agent processing MC task history. "
+            "User messages may contain <title>...</title> XML tags identifying the task. "
+            "When writing history_entry, prefix each task summary with its title: "
+            "'[YYYY-MM-DD HH:MM] Task \"<title>\": <summary>'. "
+            "Call the save_memory tool with your consolidation."
+        ),
     )
 
     # Set MC context on ask_agent tool for inter-agent conversations (Story 10.3)
@@ -183,8 +192,9 @@ async def _run_agent_on_task(
         chat_id=agent_name,
         task_id=task_id,
     )
+    # TODO: revisit task-based consolidation — may be better than message-count
     # Consolidate memory and clear session (mirrors /new behavior)
-    await loop.end_task_session(session_key)
+    # await loop.end_task_session(session_key)
     return result
 
 
@@ -854,13 +864,21 @@ class TaskExecutor:
             )
 
         # Resolve tier references (Story 11.1, AC5)
+        reasoning_level: str | None = None
         if agent_model and is_tier_reference(agent_model):
+            tier_ref = agent_model  # save before overwriting
             try:
                 agent_model = self._get_tier_resolver().resolve_model(agent_model)
                 logger.info("[executor] Resolved tier for agent '%s': %s", agent_name, agent_model)
             except ValueError as exc:
                 await self._handle_tier_error(task_id, title, agent_name, exc)
                 return
+            # Resolve reasoning level — never raises, missing config = off
+            reasoning_level = self._get_tier_resolver().resolve_reasoning_level(tier_ref)
+            if reasoning_level:
+                logger.info(
+                    "[executor] Reasoning level for agent '%s': %s", agent_name, reasoning_level
+                )
 
         # Inject global orientation for non-lead agents
         agent_prompt = self._maybe_inject_orientation(agent_name, agent_prompt)
@@ -927,6 +945,7 @@ class TaskExecutor:
                 agent_name=agent_name,
                 agent_prompt=agent_prompt,
                 agent_model=agent_model,
+                reasoning_level=reasoning_level,
                 task_title=title,
                 task_description=description,
                 agent_skills=agent_skills,
