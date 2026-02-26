@@ -17,14 +17,14 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -62,11 +62,17 @@ export function AgentSidebar() {
     <>
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border p-0">
-        <div className="flex h-[60px] items-center gap-2 px-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
-          <Bot className="h-5 w-5 shrink-0 text-sidebar-foreground/70" />
+        <div className="flex h-[60px] items-center gap-2 px-4 group-data-[collapsible=icon]:px-0">
+          <Bot className="h-5 w-5 shrink-0 text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden" />
           <span className="truncate text-sm font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
             Agents
           </span>
+          <div className="ml-auto group-data-[collapsible=icon]:hidden">
+            <SidebarTrigger />
+          </div>
+          <div className="hidden group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center">
+            <SidebarTrigger />
+          </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -90,29 +96,34 @@ export function AgentSidebar() {
                 ~/.nanobot/agents/
               </code>
             </p>
-          ) : (
-            <SidebarMenu>
-              {regularAgents.map((agent) => (
-                <AgentSidebarItem
-                  key={agent._id}
-                  agent={agent}
-                  onClick={() => setSelectedAgent(agent.name)}
-                  onDelete={deleteMode ? () => setAgentToDelete({ name: agent.name, displayName: agent.displayName }) : undefined}
-                />
-              ))}
-            </SidebarMenu>
-          )}
-          <div className="px-2 pt-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => setShowCreateSheet(true)}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Create Agent
-            </Button>
-          </div>
+          ) : null}
+          <SidebarMenu>
+            {agents !== undefined && regularAgents.map((agent) => (
+              <AgentSidebarItem
+                key={agent._id}
+                agent={agent}
+                onClick={() => setSelectedAgent(agent.name)}
+                onDelete={deleteMode ? () => setAgentToDelete({ name: agent.name, displayName: agent.displayName }) : undefined}
+              />
+            ))}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                tooltip="Create Agent"
+                onClick={() => setShowCreateSheet(true)}
+                className="!h-auto cursor-pointer group-data-[collapsible=icon]:!w-full group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center"
+              >
+                <div className="relative">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+                <span className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                  Create Agent
+                </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarGroup>
 
         {/* System agents */}
@@ -167,9 +178,6 @@ export function AgentSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border">
-        <SidebarTrigger />
-      </SidebarFooter>
     </Sidebar>
     <AgentConfigSheet
       agentName={selectedAgent}

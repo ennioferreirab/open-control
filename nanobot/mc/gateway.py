@@ -426,24 +426,54 @@ def _sync_model_tiers(bridge: ConvexBridge) -> None:
         {"key": "connected_models", "value": json.dumps(models_list)},
     )
 
-    # Only seed default tiers if not already configured
-    existing = bridge.query("settings:get", {"key": "model_tiers"})
-    if existing is None:
-        default_tiers = {
-            "standard-low": "anthropic/claude-haiku-3-5",
-            "standard-medium": "anthropic/claude-sonnet-4-6",
-            "standard-high": "anthropic/claude-opus-4-6",
-            "reasoning-low": None,
-            "reasoning-medium": None,
-            "reasoning-high": None,
-        }
+    # Derive default tier assignments from the models list.
+    # Assumes list is ordered: high-capability first, low-capability last.
+    def _pick_tier(keyword: str) -> str | None:
+        for m in models_list:
+            base = m.split("/", 1)[1] if "/" in m else m
+            if keyword in base:
+                return m
+        return models_list[0] if models_list else None
+
+    default_tiers = {
+        "standard-low": _pick_tier("haiku"),
+        "standard-medium": _pick_tier("sonnet"),
+        "standard-high": _pick_tier("opus"),
+        "reasoning-low": None,
+        "reasoning-medium": None,
+        "reasoning-high": None,
+    }
+
+    existing_raw = bridge.query("settings:get", {"key": "model_tiers"})
+    if existing_raw is None:
         bridge.mutation(
             "settings:set",
             {"key": "model_tiers", "value": json.dumps(default_tiers)},
         )
-        logger.info("[gateway] Seeded default model tiers")
+        logger.info("[gateway] Seeded default model tiers: %s", default_tiers)
     else:
-        logger.info("[gateway] Model tiers already configured — not overwriting")
+        # Migrate any tier values that are no longer in the connected_models list
+        # (e.g. wrong provider prefix or outdated model ID from a previous seed).
+        existing = json.loads(existing_raw)
+        models_set = set(models_list)
+        updated = dict(existing)
+        changed = False
+        for tier_key, default_val in default_tiers.items():
+            current_val = existing.get(tier_key)
+            if current_val and current_val not in models_set:
+                updated[tier_key] = default_val
+                logger.info(
+                    "[gateway] Migrated model tier %s: %s → %s",
+                    tier_key, current_val, default_val,
+                )
+                changed = True
+        if changed:
+            bridge.mutation(
+                "settings:set",
+                {"key": "model_tiers", "value": json.dumps(updated)},
+            )
+        else:
+            logger.info("[gateway] Model tiers up to date — no migration needed")
 
 
 def sync_agent_registry(
@@ -942,6 +972,13 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     chat_handler = ChatHandler(bridge)
     chat_task = asyncio.create_task(chat_handler.run())
 
+    # Mention watcher — detects @agent-name mentions in all task threads
+    # (covers tasks not handled by plan_negotiator: done, crashed, inbox, etc.)
+    from nanobot.mc.mention_watcher import MentionWatcher
+
+    mention_watcher = MentionWatcher(bridge)
+    mention_task = asyncio.create_task(mention_watcher.run())
+
     # Wait for shutdown signal
     await stop_event.wait()
     logger.info("[gateway] Agent Gateway stopping...")
@@ -956,6 +993,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     timeout_task.cancel()
     plan_negotiation_task.cancel()
     chat_task.cancel()
+    mention_task.cancel()
     for task in (
         routing_task,
         review_task,
@@ -964,6 +1002,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         timeout_task,
         plan_negotiation_task,
         chat_task,
+        mention_task,
     ):
         try:
             await task

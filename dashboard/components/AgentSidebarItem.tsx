@@ -6,7 +6,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
 import type { AgentStatus } from "@/lib/constants";
 
 const STATUS_DOT_STYLES: Record<AgentStatus, string> = {
@@ -47,6 +47,7 @@ export function getInitials(displayName: string): string {
 interface AgentSidebarItemProps {
   agent: Doc<"agents">;
   onClick?: () => void;
+  onChat?: () => void;
   onDelete?: () => void;
   onRestore?: () => void;
 }
@@ -72,11 +73,11 @@ export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentS
           size="lg"
           tooltip={tooltipContent}
           onClick={onClick}
-          className="!h-auto !p-1 flex items-center justify-center cursor-pointer"
+          className="!w-full !h-auto !p-2 flex items-center justify-center cursor-pointer"
         >
           <div className="relative">
             <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor}`}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor}`}
             >
               {initials}
             </div>

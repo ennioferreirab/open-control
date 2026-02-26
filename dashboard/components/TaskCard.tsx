@@ -49,7 +49,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
     ? Math.round((completedSteps / totalSteps) * 100)
     : 0;
   const showProgress =
-    totalSteps > 0 && (task.status === "in_progress" || task.status === "retrying");
+    totalSteps > 1 && (task.status === "in_progress" || task.status === "retrying");
   const assignedAgentInitials = task.assignedAgent
     ? task.assignedAgent
         .split(/[\s-_]+/)
@@ -135,7 +135,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
             })}
           </div>
         )}
-        {totalSteps > 0 && (
+        {totalSteps > 1 && (
           <div className="mb-1 flex items-center gap-1">
             <ListChecks className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">
@@ -152,12 +152,14 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
           </div>
         )}
         <div className="mt-2 flex items-center gap-2">
-          <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-            <span className="flex h-4 w-4 items-center justify-center rounded-[5px] bg-muted text-[9px] font-semibold text-foreground">
-              {assignedAgentInitials || "?"}
+          {task.assignedAgent && (
+            <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+              <span className="flex h-4 w-4 items-center justify-center rounded-[5px] bg-muted text-[9px] font-semibold text-foreground">
+                {assignedAgentInitials}
+              </span>
+              <span className="truncate">{task.assignedAgent}</span>
             </span>
-            <span className="truncate">{task.assignedAgent ?? "Unassigned"}</span>
-          </span>
+          )}
           {!(task.status === "review") && (
             <Badge
               variant="secondary"

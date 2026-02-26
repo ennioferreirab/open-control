@@ -77,6 +77,28 @@ class AnthropicOAuthProvider(LLMProvider):
     def get_default_model(self) -> str:
         return self.default_model
 
+    def list_models(self) -> list[str]:
+        """Query Anthropic API for available models on this OAuth subscription."""
+        from nanobot.providers.anthropic_oauth import get_anthropic_token
+
+        try:
+            token = get_anthropic_token()
+            resp = httpx.get(
+                "https://api.anthropic.com/v1/models",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "anthropic-version": ANTHROPIC_VERSION,
+                },
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            return [
+                f"anthropic-oauth/{m['id']}"
+                for m in resp.json().get("data", [])
+            ]
+        except Exception:
+            return []
+
 
 # ---------------------------------------------------------------------------
 # Helpers

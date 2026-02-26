@@ -120,7 +120,7 @@ export function DashboardLayout() {
           onClose={() => setSelectedTaskId(null)}
         />
         <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <SheetContent side="right" className="w-[480px] sm:w-[480px] p-0">
+          <SheetContent side="right" className="w-[600px] sm:w-[600px] p-0">
             <SheetHeader className="sr-only">
               <SheetTitle>Settings</SheetTitle>
               <SheetDescription>Configure global system defaults</SheetDescription>

@@ -26,15 +26,25 @@ const TIER_ORDER = [
 type TierName = (typeof TIER_ORDER)[number];
 
 const TIER_LABELS: Record<TierName, string> = {
-  "standard-low": "Standard Low",
-  "standard-medium": "Standard Medium",
-  "standard-high": "Standard High",
-  "reasoning-low": "Reasoning Low",
-  "reasoning-medium": "Reasoning Medium",
-  "reasoning-high": "Reasoning High",
+  "standard-low": "Low",
+  "standard-medium": "Medium",
+  "standard-high": "High",
+  "reasoning-low": "Low",
+  "reasoning-medium": "Medium",
+  "reasoning-high": "High",
 };
 
+const TIER_GROUPS = [
+  { label: "Model Tier", tiers: ["standard-low", "standard-medium", "standard-high"] as TierName[] },
+];
+
 const NONE_VALUE = "__none__";
+const REASONING_LEVELS = [
+  { value: "__off__", label: "Off" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "max", label: "Max" },
+] as const;
 
 function isReasoningTier(tier: TierName): boolean {
   return tier.startsWith("reasoning-");
@@ -43,55 +53,52 @@ function isReasoningTier(tier: TierName): boolean {
 export function ModelTierSettings() {
   const rawTiers = useQuery(api.settings.get, { key: "model_tiers" });
   const rawModels = useQuery(api.settings.get, { key: "connected_models" });
+  const rawReasoningLevels = useQuery(api.settings.get, { key: "tier_reasoning_levels" });
   const setSetting = useMutation(api.settings.set);
 
-  const [editedTiers, setEditedTiers] = useState<Record<string, string | null>>(
-    {},
-  );
+  const [editedTiers, setEditedTiers] = useState<Record<string, string | null>>({});
+  const [editedReasoningLevels, setEditedReasoningLevels] = useState<Record<string, string>>({});
   const [isDirty, setIsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Parse settings
-  const tiers: Record<string, string | null> = rawTiers
-    ? JSON.parse(rawTiers)
-    : {};
   const connectedModels: string[] = rawModels ? JSON.parse(rawModels) : [];
+  const reasoningLevels: Record<string, string> = rawReasoningLevels ? JSON.parse(rawReasoningLevels) : {};
 
-  // Sync edited state when server data loads
   useEffect(() => {
     if (rawTiers) {
       setEditedTiers(JSON.parse(rawTiers));
+      setEditedReasoningLevels(rawReasoningLevels ? JSON.parse(rawReasoningLevels) : {});
       setIsDirty(false);
     }
-  }, [rawTiers]);
+  }, [rawTiers, rawReasoningLevels]);
 
-  const handleTierChange = useCallback(
-    (tier: TierName, value: string) => {
-      const resolvedValue = value === NONE_VALUE ? null : value;
-      setEditedTiers((prev) => ({ ...prev, [tier]: resolvedValue }));
-      setIsDirty(true);
-      setSaved(false);
-    },
-    [],
-  );
+  const handleTierChange = useCallback((tier: TierName, value: string) => {
+    setEditedTiers((prev) => ({ ...prev, [tier]: value === NONE_VALUE ? null : value }));
+    setIsDirty(true);
+    setSaved(false);
+  }, []);
+
+  const handleReasoningChange = useCallback((tier: TierName, value: string) => {
+    setEditedReasoningLevels((prev) => ({ ...prev, [tier]: value === "__off__" ? "" : value }));
+    setIsDirty(true);
+    setSaved(false);
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await setSetting({
-        key: "model_tiers",
-        value: JSON.stringify(editedTiers),
-      });
+      await setSetting({ key: "model_tiers", value: JSON.stringify(editedTiers) });
+      await setSetting({ key: "tier_reasoning_levels", value: JSON.stringify(editedReasoningLevels) });
       setIsDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
     }
-  }, [setSetting, editedTiers]);
+  }, [setSetting, editedTiers, editedReasoningLevels]);
 
-  const isLoading = rawTiers === undefined || rawModels === undefined;
+  const isLoading = rawTiers === undefined || rawModels === undefined || rawReasoningLevels === undefined;
 
   if (isLoading) {
     return (
@@ -115,42 +122,50 @@ export function ModelTierSettings() {
 
       <Separator />
 
-      <div className="space-y-4">
-        {TIER_ORDER.map((tier) => {
-          const currentValue = editedTiers[tier];
-          const selectValue =
-            currentValue === null || currentValue === undefined
-              ? NONE_VALUE
-              : currentValue;
+      <div className="space-y-6">
+        {TIER_GROUPS.map((group) => (
+          <div key={group.label} className="space-y-4">
+            <p className="text-sm font-semibold">{group.label}</p>
+            <div className="space-y-4">
+              {group.tiers.map((tier) => {
+                const currentValue = editedTiers[tier];
+                const selectValue = currentValue === null || currentValue === undefined ? NONE_VALUE : currentValue;
+                const reasoningValue = editedReasoningLevels[tier] ?? reasoningLevels[tier] ?? "__off__";
 
-          return (
-            <div key={tier} className="flex items-center gap-4">
-              <span className="text-sm font-medium w-40 shrink-0">
-                {TIER_LABELS[tier]}
-              </span>
-              <Select
-                value={selectValue}
-                onValueChange={(val) => handleTierChange(tier, val)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {isReasoningTier(tier) && (
-                    <SelectItem value={NONE_VALUE}>
-                      None (not available)
-                    </SelectItem>
-                  )}
-                  {connectedModels.map((model) => (
-                    <SelectItem key={model} value={model}>
-                      {model}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                return (
+                  <div key={tier} className="space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {TIER_LABELS[tier]}
+                    </span>
+                    <Select value={selectValue} onValueChange={(val) => handleTierChange(tier, val)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {isReasoningTier(tier) && (
+                          <SelectItem value={NONE_VALUE}>None (not available)</SelectItem>
+                        )}
+                        {connectedModels.map((model) => (
+                          <SelectItem key={model} value={model}>{model}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={reasoningValue || "__off__"} onValueChange={(val) => handleReasoningChange(tier, val)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REASONING_LEVELS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       <div className="flex items-center gap-3 pt-2">

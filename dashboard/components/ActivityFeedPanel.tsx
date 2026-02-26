@@ -1,7 +1,9 @@
 "use client";
 
 import { lazy, Suspense, useState } from "react";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Trash2 } from "lucide-react";
+import { useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityFeed } from "@/components/ActivityFeed";
@@ -12,6 +14,7 @@ const ChatPanel = lazy(() =>
 
 export function ActivityFeedPanel() {
   const [collapsed, setCollapsed] = useState(true);
+  const clearActivities = useMutation(api.activities.clearAll);
 
   if (collapsed) {
     return (
@@ -36,14 +39,28 @@ export function ActivityFeedPanel() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Activity Feed
         </h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setCollapsed(true)}
-          aria-label="Hide activity feed"
-        >
-          <PanelRightClose className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (window.confirm("Clear all activities?")) {
+                clearActivities();
+              }
+            }}
+            aria-label="Clear all activities"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(true)}
+            aria-label="Hide activity feed"
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <Tabs defaultValue="activity" className="flex flex-1 min-h-0 flex-col">
         <div className="px-3 pt-2">

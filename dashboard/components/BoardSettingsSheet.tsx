@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Trash2 } from "lucide-react";
+import { Trash2, Eraser, History } from "lucide-react";
 import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
 import { useBoard } from "@/components/BoardContext";
 

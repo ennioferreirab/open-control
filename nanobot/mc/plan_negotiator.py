@@ -9,6 +9,9 @@ negotiation during both review and in_progress phases):
   with a clarification/acknowledgment message.
 - During execution: only allows modifications to pending/blocked steps; locked steps
   (assigned, running, completed) cannot be changed.
+
+Also handles @mention routing: when a user message contains @agent-name, the
+mention_handler is invoked to dispatch the message to the mentioned agent directly.
 """
 
 from __future__ import annotations
@@ -496,7 +499,30 @@ async def start_plan_negotiation_loop(
                 content[:80],
             )
 
-            # Dispatch to handler as a background task with error logging
+            # Check for @mentions — dispatch to mention_handler if present.
+            # A message that is purely a @mention (e.g. "@researcher help me")
+            # is handled by the mention_handler and NOT forwarded to the plan
+            # negotiator (to avoid the Lead Agent responding to agent-directed
+            # messages).
+            # A message with both @mentions and plan-change text is handled by
+            # the mention_handler only — the @mention takes priority.
+            from nanobot.mc.mention_handler import is_mention_message, handle_all_mentions
+
+            if is_mention_message(content):
+                task_title = task.get("title", "")
+                mention_task = asyncio.create_task(
+                    handle_all_mentions(
+                        bridge=bridge,
+                        task_id=task_id,
+                        content=content,
+                        task_title=task_title,
+                    )
+                )
+                mention_task.add_done_callback(_log_task_exception)
+                # Skip plan negotiation for @mention messages
+                continue
+
+            # Dispatch to plan negotiation handler as a background task with error logging
             bg_task = asyncio.create_task(
                 handle_plan_negotiation(
                     bridge,

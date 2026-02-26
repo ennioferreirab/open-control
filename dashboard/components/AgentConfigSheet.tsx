@@ -58,28 +58,32 @@ const STATUS_DOT_STYLES: Record<string, string> = {
 
 type ModelMode = "default" | "tier" | "custom";
 
-const TIER_OPTIONS = [
-  { value: "tier:standard-low", label: "Standard Low" },
-  { value: "tier:standard-medium", label: "Standard Medium" },
-  { value: "tier:standard-high", label: "Standard High" },
-  { value: "tier:reasoning-low", label: "Reasoning Low" },
-  { value: "tier:reasoning-medium", label: "Reasoning Medium" },
-  { value: "tier:reasoning-high", label: "Reasoning High" },
+const TIER_LEVEL_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
 ] as const;
 
-/** Parse a stored model string into modelMode + selectedTier + customModel. */
+/** Parse a stored model string into modelMode + tierLevel + hadReasoning + customModel. */
 function parseModelValue(model: string): {
   modelMode: ModelMode;
-  selectedTier: string;
+  tierLevel: string;
+  hadReasoning: boolean;
   customModel: string;
 } {
   if (!model) {
-    return { modelMode: "default", selectedTier: "", customModel: "" };
+    return { modelMode: "default", tierLevel: "", hadReasoning: false, customModel: "" };
+  }
+  if (model.startsWith("tier:reasoning-")) {
+    return { modelMode: "tier", tierLevel: model.replace("tier:reasoning-", ""), hadReasoning: true, customModel: "" };
+  }
+  if (model.startsWith("tier:standard-")) {
+    return { modelMode: "tier", tierLevel: model.replace("tier:standard-", ""), hadReasoning: false, customModel: "" };
   }
   if (model.startsWith("tier:")) {
-    return { modelMode: "tier", selectedTier: model, customModel: "" };
+    return { modelMode: "tier", tierLevel: model.replace("tier:", ""), hadReasoning: false, customModel: "" };
   }
-  return { modelMode: "custom", selectedTier: "", customModel: model };
+  return { modelMode: "custom", tierLevel: "", hadReasoning: false, customModel: model };
 }
 
 interface AgentConfigSheetProps {
@@ -130,7 +134,8 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
   const [prompt, setPrompt] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [modelMode, setModelMode] = useState<ModelMode>("default");
-  const [selectedTier, setSelectedTier] = useState("");
+  const [tierLevel, setTierLevel] = useState("");
+  const [reasoningLevel, setReasoningLevel] = useState("");
   const [customModel, setCustomModel] = useState("");
   const [enabled, setEnabledState] = useState(true);
 
@@ -154,13 +159,13 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
   const computedModel = useMemo(() => {
     switch (modelMode) {
       case "tier":
-        return selectedTier; // "tier:standard-high" etc.
+        return tierLevel ? `tier:${reasoningLevel ? "reasoning" : "standard"}-${tierLevel}` : "";
       case "custom":
         return customModel;
       default:
         return "";
     }
-  }, [modelMode, selectedTier, customModel]);
+  }, [modelMode, tierLevel, reasoningLevel, customModel]);
 
   // Initialize form from agent data
   useEffect(() => {
@@ -171,7 +176,8 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
       setSkills(agent.skills);
       const parsed = parseModelValue(agent.model || "");
       setModelMode(parsed.modelMode);
-      setSelectedTier(parsed.selectedTier);
+      setTierLevel(parsed.tierLevel);
+      setReasoningLevel((agent as any).reasoningLevel || (parsed.hadReasoning ? "low" : ""));
       setCustomModel(parsed.customModel);
       setEnabledState(agent.enabled !== false);
       setErrors({});
@@ -246,10 +252,11 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
       prompt !== (agent.prompt || "") ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills) ||
       computedModel !== (agent.model || "") ||
+      (reasoningLevel || "") !== ((agent as any).reasoningLevel || "") ||
       enabled !== (agent.enabled !== false) ||
       JSON.stringify(variables) !== JSON.stringify(agent.variables || [])
     );
-  }, [agent, displayName, role, prompt, skills, computedModel, enabled, variables]);
+  }, [agent, displayName, role, prompt, skills, computedModel, reasoningLevel, enabled, variables]);
 
   // Validation
   const validate = useCallback((): boolean => {
@@ -269,15 +276,31 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
     setSaveError(null);
 
     try {
-      await updateConfig({
-        name: agentName,
-        displayName,
-        role,
-        prompt,
-        skills,
-        model: computedModel || undefined,
-        variables,
-      });
+      await Promise.all([
+        // Save to Convex
+        updateConfig({
+          name: agentName,
+          displayName,
+          role,
+          prompt,
+          skills,
+          model: computedModel || undefined,
+          variables,
+          reasoningLevel: reasoningLevel || undefined,
+        }),
+        // Write YAML directly to disk
+        fetch(`/api/agents/${encodeURIComponent(agentName)}/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            role,
+            prompt,
+            model: computedModel || null,
+            display_name: displayName,
+            skills,
+          }),
+        }),
+      ]);
 
       // Persist enabled state change if it differs from server
       if (agent && enabled !== (agent.enabled !== false)) {
@@ -289,7 +312,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
     } catch {
       setSaveError("Failed to save. Please try again.");
     }
-  }, [agentName, agent, displayName, role, prompt, skills, computedModel, enabled, variables, validate, updateConfig, setEnabled]);
+  }, [agentName, agent, displayName, role, prompt, skills, computedModel, reasoningLevel, enabled, variables, validate, updateConfig, setEnabled]);
 
   const handleClose = useCallback(() => {
     if (isDirty) {
@@ -482,22 +505,21 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                       modelMode === "default"
                         ? "__default__"
                         : modelMode === "tier"
-                          ? selectedTier
+                          ? (tierLevel || "__default__")
                           : "__custom__"
                     }
                     onValueChange={(value) => {
                       if (value === "__default__") {
                         setModelMode("default");
-                        setSelectedTier("");
+                        setTierLevel("");
                         setCustomModel("");
                       } else if (value === "__custom__") {
                         setModelMode("custom");
-                        setSelectedTier("");
-                        // Keep any existing customModel
+                        setTierLevel("");
                       } else {
-                        // Must be a tier value
+                        // Must be a tier level value (low/medium/high)
                         setModelMode("tier");
-                        setSelectedTier(value);
+                        setTierLevel(value);
                         setCustomModel("");
                       }
                     }}
@@ -510,7 +532,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                       <SelectSeparator />
                       <SelectGroup>
                         <SelectLabel>Tier Presets</SelectLabel>
-                        {TIER_OPTIONS.map((opt) => (
+                        {TIER_LEVEL_OPTIONS.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
                           </SelectItem>
@@ -520,6 +542,29 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                       <SelectItem value="__custom__">Custom...</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {(modelMode === "tier" || modelMode === "custom") && (
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">Reasoning</label>
+                      <Select
+                        value={reasoningLevel || "__off__"}
+                        onValueChange={(val) => setReasoningLevel(val === "__off__" ? "" : val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__off__">Off</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="max">Max</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Reasoning, if model supports it
+                      </p>
+                    </div>
+                  )}
 
                   {/* Custom model selector — only visible in custom mode */}
                   {modelMode === "custom" && (
@@ -551,18 +596,18 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                       System Default
                     </Badge>
                   )}
-                  {modelMode === "tier" && (() => {
-                    const tierName = selectedTier.replace("tier:", "");
-                    const tierLabel = TIER_OPTIONS.find((t) => t.value === selectedTier)?.label ?? tierName;
-                    const resolvedModel = modelTiers[tierName];
+                  {modelMode === "tier" && tierLevel && (() => {
+                    const fullTier = `${reasoningLevel ? "reasoning" : "standard"}-${tierLevel}`;
+                    const tierLabel = `${tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1)}${reasoningLevel ? ` (Reasoning: ${reasoningLevel})` : ""}`;
+                    const resolvedModel = modelTiers[fullTier];
                     const isConfigured = resolvedModel != null && resolvedModel !== "";
                     return isConfigured ? (
                       <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-normal">
-                        Tier: {tierLabel} &rarr; {resolvedModel}
+                        {tierLabel} &rarr; {resolvedModel}
                       </Badge>
                     ) : (
                       <Badge variant="secondary" className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal">
-                        Tier: {tierLabel} (not configured)
+                        {tierLabel} (not configured)
                       </Badge>
                     );
                   })()}

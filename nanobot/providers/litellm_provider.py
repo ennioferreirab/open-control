@@ -270,3 +270,29 @@ class LiteLLMProvider(LLMProvider):
     def get_default_model(self) -> str:
         """Get the default model."""
         return self.default_model
+
+    def list_models(self) -> list[str]:
+        """Query the provider's /v1/models endpoint if an API key and base URL are available."""
+        if not self.api_key:
+            return []
+
+        gateway = self._gateway
+        api_base = self.api_base or (gateway.default_api_base if gateway else "")
+        if not api_base:
+            return []
+
+        try:
+            import httpx
+            resp = httpx.get(
+                f"{api_base.rstrip('/')}/models",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            data = resp.json().get("data", [])
+            prefix = gateway.litellm_prefix if gateway else ""
+            if prefix:
+                return [f"{prefix}/{m['id']}" for m in data]
+            return [m["id"] for m in data]
+        except Exception:
+            return []

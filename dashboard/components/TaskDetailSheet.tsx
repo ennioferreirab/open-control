@@ -16,10 +16,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { File, FileCode, FileText, Image, Loader2, Paperclip, Pause, Play, Plus, Trash2, X } from "lucide-react";
+import { File, FileCode, FileText, Image, Loader2, Paperclip, Pause, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import type { ExecutionPlan } from "@/lib/types";
 import { ThreadMessage } from "./ThreadMessage";
 import { ExecutionPlanTab } from "./ExecutionPlanTab";
@@ -77,6 +78,8 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const resumeTaskMutation = useMutation(api.tasks.resumeTask);
   const retryMutation = useMutation(api.tasks.retry);
   const updateTagsMutation = useMutation(api.tasks.updateTags);
+  const updateTitleMutation = useMutation(api.tasks.updateTitle);
+  const updateDescriptionMutation = useMutation(api.tasks.updateDescription);
   const addTaskFiles = useMutation(api.tasks.addTaskFiles);
   const removeTaskFile = useMutation(api.tasks.removeTaskFile);
   const createActivity = useMutation(api.activities.create);
@@ -94,6 +97,10 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
   const [deleteError, setDeleteError] = useState("");
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState("");
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editDescriptionValue, setEditDescriptionValue] = useState("");
   const attachInputRef = useRef<HTMLInputElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -174,6 +181,36 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   );
 
   const removeTagAttrValues = useMutation(api.tagAttributeValues.removeByTaskAndTag);
+
+  // Reset inline-edit state whenever a different task opens
+  useEffect(() => {
+    setIsEditingTitle(false);
+    setIsEditingDescription(false);
+  }, [taskId]);
+
+  const handleSaveTitle = async () => {
+    if (!task || !isTaskLoaded) return;
+    const trimmed = editTitleValue.trim();
+    if (!trimmed || trimmed === task.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+    try {
+      await updateTitleMutation({ taskId: task._id, title: trimmed });
+    } finally {
+      setIsEditingTitle(false);
+    }
+  };
+
+  const handleSaveDescription = async () => {
+    if (!task || !isTaskLoaded) return;
+    const trimmed = editDescriptionValue.trim() || undefined;
+    try {
+      await updateDescriptionMutation({ taskId: task._id, description: trimmed });
+    } finally {
+      setIsEditingDescription(false);
+    }
+  };
 
   const handleRemoveTag = (tagToRemove: string) => {
     if (!task || !isTaskLoaded) return;
@@ -302,7 +339,31 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
           <>
             <SheetHeader className="px-6 pt-6 pb-4">
               <SheetTitle className="text-lg font-semibold pr-6">
-                {task.title}
+                {isEditingTitle ? (
+                  <Input
+                    value={editTitleValue}
+                    onChange={(e) => setEditTitleValue(e.target.value)}
+                    onBlur={handleSaveTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); handleSaveTitle(); }
+                      if (e.key === "Escape") { setIsEditingTitle(false); }
+                    }}
+                    className="text-base font-semibold h-7 py-0 border-0 border-b rounded-none focus-visible:ring-0 px-0"
+                    autoFocus
+                  />
+                ) : (
+                  <div className="flex items-start gap-1.5 group/title">
+                    <span className="flex-1">{task.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setEditTitleValue(task.title); setIsEditingTitle(true); }}
+                      className="opacity-0 group-hover/title:opacity-100 transition-opacity mt-0.5 flex-shrink-0 p-0.5 rounded hover:bg-accent"
+                      aria-label="Edit title"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
               </SheetTitle>
               <SheetDescription asChild>
                 <div className="flex items-center gap-2">
@@ -467,6 +528,45 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                   {resumeError}
                 </div>
               )}
+
+              {/* Description — always visible in header, editable with pencil icon */}
+              <div className="mt-3 group/desc">
+                {isEditingDescription ? (
+                  <textarea
+                    value={editDescriptionValue}
+                    onChange={(e) => setEditDescriptionValue(e.target.value)}
+                    onBlur={handleSaveDescription}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") { setIsEditingDescription(false); }
+                    }}
+                    className="w-full text-sm text-foreground resize-none rounded-md border border-input bg-background px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring min-h-[60px]"
+                    placeholder="Describe this task..."
+                    autoFocus
+                    rows={3}
+                  />
+                ) : (
+                  <div className="flex items-start gap-1.5">
+                    {task.description ? (
+                      <p className="text-sm text-muted-foreground flex-1 whitespace-pre-wrap">{task.description}</p>
+                    ) : (
+                      <p
+                        className="text-sm text-muted-foreground/50 italic flex-1 cursor-text"
+                        onClick={() => { setEditDescriptionValue(""); setIsEditingDescription(true); }}
+                      >
+                        Add description...
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setEditDescriptionValue(task.description ?? ""); setIsEditingDescription(true); }}
+                      className="opacity-0 group-hover/desc:opacity-100 transition-opacity mt-0.5 flex-shrink-0 p-0.5 rounded hover:bg-accent"
+                      aria-label="Edit description"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </SheetHeader>
 
             <Separator />
@@ -574,16 +674,6 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       </h4>
                       <p className="text-sm text-foreground mt-1">
                         {task.interAgentTimeout}s
-                      </p>
-                    </div>
-                  )}
-                  {task.description && (
-                    <div>
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Description
-                      </h4>
-                      <p className="text-sm text-foreground mt-1">
-                        {task.description}
                       </p>
                     </div>
                   )}

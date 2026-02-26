@@ -14,6 +14,7 @@ export const create = mutation({
       v.literal("task_completed"),
       v.literal("task_crashed"),
       v.literal("task_retrying"),
+      v.literal("task_reassigned"),
       v.literal("review_requested"),
       v.literal("review_feedback"),
       v.literal("review_approved"),
@@ -75,5 +76,16 @@ export const listRecent = query({
       .withIndex("by_timestamp")
       .order("desc")
       .take(100);
+  },
+});
+
+export const clearAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("activities").collect();
+    for (const activity of all) {
+      await ctx.db.delete(activity._id);
+    }
+    return { deleted: all.length };
   },
 });

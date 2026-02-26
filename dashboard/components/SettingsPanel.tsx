@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Check } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ModelTierSettings } from "@/components/ModelTierSettings";
@@ -19,13 +20,14 @@ import { ModelTierSettings } from "@/components/ModelTierSettings";
 const DEFAULTS: Record<string, string> = {
   task_timeout_minutes: "30",
   inter_agent_timeout_minutes: "10",
-  default_llm_model: "claude-sonnet-4-6",
+  default_llm_model: "tier:standard-medium",
+  auto_title_enabled: "false",
 };
 
-const MODEL_OPTIONS = [
-  { value: "claude-opus-4-6", label: "Claude Opus 4.6" },
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+const TIER_OPTIONS = [
+  { value: "tier:standard-low", label: "Low" },
+  { value: "tier:standard-medium", label: "Medium" },
+  { value: "tier:standard-high", label: "High" },
 ];
 
 function SettingNumberField({
@@ -119,7 +121,7 @@ export function SettingsPanel() {
   );
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-6 pb-12 overflow-y-auto max-h-full">
       <div>
         <h2 className="text-lg font-semibold">Settings</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -160,20 +162,62 @@ export function SettingsPanel() {
           )}
         </div>
         <Select
-          value={getValue("default_llm_model")}
+          value={TIER_OPTIONS.some((o) => o.value === getValue("default_llm_model")) ? getValue("default_llm_model") : "tier:standard-medium"}
           onValueChange={(val) => handleSave("default_llm_model", val)}
         >
           <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {MODEL_OPTIONS.map((opt) => (
+            {TIER_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground">
+          Reasoning level is configured in Model Tier settings below.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <label className="text-sm font-medium">Auto Title</label>
+            <p className="text-xs text-muted-foreground">
+              Generate task titles automatically using AI
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {savedFields["auto_title_enabled"] && (
+              <Check className="h-4 w-4 text-green-500 transition-opacity" />
+            )}
+            <Switch
+              checked={getValue("auto_title_enabled") === "true"}
+              onCheckedChange={(checked) =>
+                handleSave("auto_title_enabled", checked ? "true" : "false")
+              }
+            />
+          </div>
+        </div>
+        {getValue("auto_title_enabled") === "true" && (() => {
+          const tiersRaw = settingsMap["model_tiers"];
+          let hasLowTier = false;
+          if (tiersRaw) {
+            try { hasLowTier = !!(JSON.parse(tiersRaw)?.["standard-low"]); } catch {}
+          }
+          return !hasLowTier ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+              <span className="flex-shrink-0">⚠</span>
+              <span>
+                <span className="font-medium">standard-low</span> model tier not configured —
+                titles will use the default model.{" "}
+                Configure it in <span className="font-medium">Model Tier Settings</span> below for lower cost.
+              </span>
+            </p>
+          ) : null;
+        })()}
       </div>
 
       <Separator />
