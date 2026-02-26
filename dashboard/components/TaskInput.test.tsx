@@ -205,8 +205,11 @@ describe("TaskInput", () => {
     render(<TaskInput />);
     // Switch to manual
     fireEvent.click(screen.getByLabelText("Switch to manual mode"));
-    expect(screen.queryByLabelText("Autonomous mode")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Supervised mode")).not.toBeInTheDocument();
+    // Buttons stay in DOM but are visually hidden with opacity-0 and aria-hidden
+    const supervisionBtn = screen.getByLabelText("Autonomous mode");
+    expect(supervisionBtn).toHaveClass("opacity-0");
+    expect(supervisionBtn).toHaveClass("pointer-events-none");
+    expect(supervisionBtn).toHaveAttribute("aria-hidden", "true");
   });
 
   it("submits with supervisionMode autonomous by default", () => {

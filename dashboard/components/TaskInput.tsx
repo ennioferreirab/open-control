@@ -200,38 +200,45 @@ export function TaskInput() {
             <Bot className="h-4 w-4" />
           )}
         </Button>
-        {!isManual && (
-          <button
-            type="button"
-            aria-label={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
-            title={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
-            onClick={() =>
-              setSupervisionMode((prev) =>
-                prev === "autonomous" ? "supervised" : "autonomous"
-              )
-            }
-            className={`inline-flex items-center justify-center rounded-md text-xs font-bold h-9 w-9 transition-colors ${
-              supervisionMode === "supervised"
-                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            }`}
+        <button
+          type="button"
+          aria-label={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
+          title={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
+          onClick={() =>
+            setSupervisionMode((prev) =>
+              prev === "autonomous" ? "supervised" : "autonomous"
+            )
+          }
+          tabIndex={isManual ? -1 : undefined}
+          aria-hidden={isManual ? true : undefined}
+          className={`inline-flex items-center justify-center rounded-md text-xs font-bold h-9 w-9 transition-all duration-200 ${
+            isManual ? "opacity-0 pointer-events-none" : ""
+          } ${
+            supervisionMode === "supervised"
+              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          }`}
+        >
+          {supervisionMode === "supervised" ? (
+            <Eye className="h-4 w-4" />
+          ) : (
+            <Zap className="h-4 w-4" />
+          )}
+        </button>
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle options"
+            tabIndex={isManual ? -1 : undefined}
+            aria-hidden={isManual ? true : undefined}
+            className={`transition-opacity duration-200 ${isManual ? "opacity-0 pointer-events-none" : ""}`}
           >
-            {supervisionMode === "supervised" ? (
-              <Eye className="h-4 w-4" />
-            ) : (
-              <Zap className="h-4 w-4" />
-            )}
-          </button>
-        )}
-        {!isManual && (
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Toggle options">
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-              />
-            </Button>
-          </CollapsibleTrigger>
-        )}
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+            />
+          </Button>
+        </CollapsibleTrigger>
       </div>
 
       {/* Pending file chips */}
@@ -296,8 +303,7 @@ export function TaskInput() {
         </div>
       )}
 
-      {!isManual && (
-        <CollapsibleContent>
+      <CollapsibleContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 overflow-hidden transition-all">
           <div className="mt-2 p-3 border rounded-md space-y-3">
             <div className="flex items-center gap-2">
               <label className="text-sm text-muted-foreground whitespace-nowrap">
@@ -388,8 +394,7 @@ export function TaskInput() {
               </div>
             )}
           </div>
-        </CollapsibleContent>
-      )}
+      </CollapsibleContent>
     </Collapsible>
   );
 }
