@@ -9,7 +9,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   ready: ["in_progress", "planning", "failed"],
   failed: ["planning"],
   inbox: ["assigned"],
-  assigned: ["in_progress"],
+  assigned: ["in_progress", "assigned"],
   in_progress: ["review", "done"],
   review: ["done", "inbox", "assigned", "in_progress", "planning"],
   done: ["assigned"],
@@ -31,6 +31,7 @@ const TRANSITION_EVENT_MAP: Record<string, string> = {
   "ready->failed": "task_failed",
   "failed->planning": "task_planning",
   "inbox->assigned": "task_assigned",
+  "assigned->assigned": "task_reassigned",
   "assigned->in_progress": "task_started",
   "in_progress->review": "review_requested",
   "in_progress->done": "task_completed",
@@ -101,6 +102,7 @@ export const create = mutation({
     isManual: v.optional(v.boolean()),
     boardId: v.optional(v.id("boards")),
     cronParentTaskId: v.optional(v.string()),
+    autoTitle: v.optional(v.boolean()),
     supervisionMode: v.optional(
       v.union(v.literal("autonomous"), v.literal("supervised"))
     ),
@@ -158,6 +160,7 @@ export const create = mutation({
       ...(boardId ? { boardId } : {}),
       ...(args.cronParentTaskId !== undefined ? { cronParentTaskId: args.cronParentTaskId } : {}),
       ...(args.files ? { files: args.files } : {}),
+      ...(args.autoTitle ? { autoTitle: true } : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -1124,6 +1127,43 @@ export const restore = mutation({
       content: systemMessage,
       messageType: "system_event",
       timestamp: now,
+    });
+  },
+});
+
+/**
+ * Update a task's title. Used by the gateway auto-title generator and the TaskDetailSheet editor.
+ */
+export const updateTitle = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    title: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new ConvexError("Task not found");
+    await ctx.db.patch(args.taskId, {
+      title: args.title,
+      autoTitle: undefined,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
+/**
+ * Update a task's description. Called from the TaskDetailSheet inline editor.
+ */
+export const updateDescription = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new ConvexError("Task not found");
+    await ctx.db.patch(args.taskId, {
+      description: args.description,
+      updatedAt: new Date().toISOString(),
     });
   },
 });

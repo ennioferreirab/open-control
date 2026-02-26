@@ -89,6 +89,18 @@ def _make_provider(model: str | None = None):
     return create_provider(model)
 
 
+def build_task_message(title: str, description: str | None) -> str:
+    """Build the task message sent to the agent.
+
+    When a description exists, uses structured XML tags so the agent
+    can distinguish title from description. Otherwise, plain title
+    for backward compatibility.
+    """
+    if description and description.strip():
+        return f"<title>{title}</title>\n<description>{description}</description>"
+    return title
+
+
 async def _run_agent_on_task(
     agent_name: str,
     agent_prompt: str | None,
@@ -123,10 +135,8 @@ async def _run_agent_on_task(
     # Global workspace skills (installed via ClawHub or manually)
     global_skills_dir = Path.home() / ".nanobot" / "workspace" / "skills"
 
-    # Build the message from task title + description
-    message = task_title
-    if task_description:
-        message += f"\n\n{task_description}"
+    # Build the message from task title + description (structured format)
+    message = build_task_message(task_title, task_description)
 
     # Prefix with agent system prompt if available (ContextBuilder reads
     # bootstrap files from workspace, but the YAML prompt isn't a bootstrap
@@ -816,6 +826,32 @@ class TaskExecutor:
 
         # Load agent prompt, model, and skills from YAML config
         agent_prompt, agent_model, agent_skills = self._load_agent_config(agent_name)
+
+        # Convex is the source of truth for model — override YAML and sync back to disk
+        try:
+            from nanobot.mc.gateway import AGENTS_DIR
+            convex_agent = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
+            if convex_agent and convex_agent.get("model"):
+                convex_model = convex_agent["model"]
+                if convex_model != agent_model:
+                    logger.info(
+                        "[executor] Model synced from Convex for '%s': %s → %s",
+                        agent_name, agent_model, convex_model,
+                    )
+                    agent_model = convex_model
+                    # Write back to YAML so local host stays in sync
+                    try:
+                        await asyncio.to_thread(
+                            self._bridge.write_agent_config, convex_agent, AGENTS_DIR
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[executor] YAML write-back failed for '%s'", agent_name, exc_info=True
+                        )
+        except Exception:
+            logger.warning(
+                "[executor] Could not fetch Convex model for '%s', using YAML", agent_name, exc_info=True
+            )
 
         # Resolve tier references (Story 11.1, AC5)
         if agent_model and is_tier_reference(agent_model):

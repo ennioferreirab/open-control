@@ -7,11 +7,13 @@ and stores execution plans. Handles review transitions (FR27).
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 from nanobot.mc.plan_materializer import PlanMaterializer
 from nanobot.mc.planner import TaskPlanner
+from nanobot.mc.provider_factory import create_provider
 from nanobot.mc.step_dispatcher import StepDispatcher
 from nanobot.mc.types import (
     AgentData,
@@ -28,6 +30,64 @@ if TYPE_CHECKING:
     from nanobot.mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
+
+AUTO_TITLE_PROMPT = (
+    "Create a simple title for this task description. "
+    "Do not change the language used in the text.\n\n"
+    "{description}"
+)
+
+
+async def generate_auto_title(
+    bridge: "ConvexBridge",
+    description: str,
+) -> str | None:
+    """Generate a concise title from a task description.
+
+    Tries to use the standard-low tier model from model_tiers settings.
+    Falls back to the default provider if standard-low is not configured.
+    Returns None only if the LLM call itself fails.
+    """
+    # Try to resolve standard-low model from settings (non-blocking)
+    low_model: str | None = None
+    try:
+        raw_tiers = await asyncio.to_thread(
+            bridge.query, "settings:get", {"key": "model_tiers"}
+        )
+        if raw_tiers:
+            tiers = json.loads(raw_tiers)
+            low_model = tiers.get("standard-low") or None
+            if low_model:
+                logger.info("[orchestrator] Auto-title using standard-low model: %s", low_model)
+            else:
+                logger.info("[orchestrator] standard-low not configured — using default model for auto-title")
+    except Exception:
+        logger.warning("[orchestrator] Failed to read model_tiers for auto-title, using default model")
+
+    description = description[:5000]
+
+    try:
+        # low_model=None falls back to the user's configured default model
+        provider, resolved_model = create_provider(model=low_model)
+        response = await provider.chat(
+            model=resolved_model,
+            messages=[
+                {"role": "user", "content": AUTO_TITLE_PROMPT.format(description=description)},
+            ],
+            temperature=0.3,
+            max_tokens=60,
+        )
+        if response.finish_reason == "error":
+            logger.warning("[orchestrator] Auto-title LLM error: %s", response.content)
+            return None
+        title = (response.content or "").strip().strip('"').strip("'")
+        if not title:
+            return None
+        logger.info("[orchestrator] Auto-title generated: '%s'", title)
+        return title
+    except Exception:
+        logger.exception("[orchestrator] Auto-title generation failed")
+        return None
 
 
 class TaskOrchestrator:
@@ -78,6 +138,23 @@ class TaskOrchestrator:
         title = task_data.get("title", "")
         description = task_data.get("description")
         assigned_agent = task_data.get("assigned_agent")
+
+        # Auto-title: generate a concise title from description if autoTitle is set
+        if task_data.get("auto_title") and description:
+            generated_title = await generate_auto_title(self._bridge, description)
+            if generated_title:
+                title = generated_title
+                # Patch the title back to Convex
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "tasks:updateTitle",
+                    {"task_id": task_id, "title": title},
+                )
+                logger.info(
+                    "[orchestrator] Auto-generated title for task %s: '%s'",
+                    task_id,
+                    title,
+                )
 
         if not task_id:
             logger.warning("[orchestrator] Skipping task with no id: %s", task_data)

@@ -562,6 +562,13 @@ class ConvexBridge:
             return []
         return result
 
+    def get_agent_by_name(self, name: str) -> dict[str, Any] | None:
+        """Fetch a single agent from Convex by name.
+
+        Returns the agent dict with snake_case keys, or None if not found.
+        """
+        return self.query("agents:getByName", {"name": name})
+
     def list_deleted_agents(self) -> list[dict[str, Any]]:
         """List all soft-deleted agents from Convex.
 

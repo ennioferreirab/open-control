@@ -194,6 +194,15 @@ class AgentsConfig(Base):
     """Agent configuration."""
 
     defaults: AgentDefaults = Field(default_factory=AgentDefaults)
+    models: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Explicit list of available model identifiers. "
+            "If non-empty, used as-is (no provider API query). "
+            "If empty, the active provider is queried for its model list. "
+            "Example: ['anthropic-oauth/claude-opus-4-6', 'anthropic-oauth/claude-sonnet-4-6']"
+        ),
+    )
 
 
 class ProviderConfig(Base):

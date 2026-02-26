@@ -14,11 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 def list_available_models() -> list[str]:
-    """Return a list of model identifiers available from configured providers.
+    """Return model identifiers available from the configured provider.
 
-    Reads the user's nanobot config and returns the default model plus a
-    curated list of well-known Anthropic models. The dashboard UI allows
-    further customization via the connected_models setting.
+    Priority:
+      1. agents.models in config — explicit user-defined list (takes precedence).
+      2. Provider API query — e.g. GET /v1/models for OpenRouter, Anthropic, etc.
+      3. Fallback — just the default model if everything else fails.
 
     Story 11.1 — AC #4.
     """
@@ -27,22 +28,21 @@ def list_available_models() -> list[str]:
     config = load_config()
     default_model = config.agents.defaults.model
 
-    # Well-known models — always included so tiers have options
-    well_known = [
-        "anthropic/claude-opus-4-6",
-        "anthropic/claude-sonnet-4-6",
-        "anthropic/claude-haiku-3-5",
-    ]
+    # 1. Explicit user-defined list (e.g. for OAuth providers that don't expose /v1/models)
+    if config.agents.models:
+        return list(config.agents.models)
 
-    # Start with default, then add well-known (dedup, preserve order)
-    seen: set[str] = set()
-    models: list[str] = []
-    for m in [default_model] + well_known:
-        if m and m not in seen:
-            seen.add(m)
-            models.append(m)
+    # 2. Query the active provider's models endpoint
+    try:
+        provider, _ = create_provider(model=None)
+        models = provider.list_models()
+        if models:
+            return models
+    except Exception as e:
+        logger.warning("list_available_models: provider query failed: %s", e)
 
-    return models
+    # 3. Fallback
+    return [default_model] if default_model else []
 
 
 class ProviderError(Exception):
@@ -86,6 +86,27 @@ def create_provider(model: str | None = None) -> tuple[Any, str]:
         if default_model.endswith("/" + model):
             resolved_model = default_model
             provider_name = config.get_provider_name(resolved_model)
+
+    # If the model uses a "plain" provider prefix (e.g. "anthropic/claude-haiku-3-5")
+    # but the user configured an OAuth/custom variant (e.g. "anthropic-oauth/..."),
+    # inherit the default provider's prefix for the same model family.
+    # E.g. standard-low="anthropic/claude-haiku-3-5" + default="anthropic-oauth/claude-sonnet-4-6"
+    #   → resolved as "anthropic-oauth/claude-haiku-3-5" so OAuth auth is used.
+    if provider_name is None and model and "/" in model:
+        _model_prefix = model.split("/", 1)[0]
+        _model_base = model.split("/", 1)[1]
+        if "/" in default_model:
+            _default_prefix = default_model.rsplit("/", 1)[0]
+            if _default_prefix.startswith(_model_prefix):
+                _candidate = f"{_default_prefix}/{_model_base}"
+                _candidate_pn = config.get_provider_name(_candidate)
+                if _candidate_pn is not None:
+                    logger.debug(
+                        "create_provider: remapped %s → %s (inherit default provider prefix)",
+                        resolved_model, _candidate,
+                    )
+                    resolved_model = _candidate
+                    provider_name = _candidate_pn
 
     p = config.get_provider(resolved_model)
 

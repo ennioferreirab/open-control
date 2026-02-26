@@ -108,3 +108,11 @@ class LLMProvider(ABC):
     def get_default_model(self) -> str:
         """Get the default model for this provider."""
         pass
+
+    def list_models(self) -> list[str]:
+        """Return available model IDs for this provider.
+
+        Override in subclasses that can query the provider's API.
+        Returns an empty list by default (caller falls back to default model).
+        """
+        return []

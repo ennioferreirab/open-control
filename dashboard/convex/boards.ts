@@ -48,6 +48,10 @@ export const create = mutation({
     displayName: v.string(),
     description: v.optional(v.string()),
     enabledAgents: v.optional(v.array(v.string())),
+    agentMemoryModes: v.optional(v.array(v.object({
+      agentName: v.string(),
+      mode: v.union(v.literal("clean"), v.literal("with_history")),
+    }))),
   },
   handler: async (ctx, args) => {
     if (!KEBAB_CASE_RE.test(args.name)) {
@@ -70,6 +74,7 @@ export const create = mutation({
       displayName: args.displayName,
       description: args.description,
       enabledAgents: args.enabledAgents ?? [],
+      agentMemoryModes: args.agentMemoryModes,
       createdAt: now,
       updatedAt: now,
     });
