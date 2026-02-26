@@ -54,3 +54,15 @@ export const remove = mutation({
     await ctx.db.delete(id);
   },
 });
+
+export const updateAttributeIds = mutation({
+  args: {
+    tagId: v.id("taskTags"),
+    attributeIds: v.array(v.id("tagAttributes")),
+  },
+  handler: async (ctx, { tagId, attributeIds }) => {
+    const tag = await ctx.db.get(tagId);
+    if (!tag) throw new ConvexError("Tag not found");
+    await ctx.db.patch(tagId, { attributeIds });
+  },
+});
