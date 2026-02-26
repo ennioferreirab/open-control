@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Bot, ChevronDown, Paperclip, User, X, Eye, Zap } from "lucide-react";
 import { TAG_COLORS } from "@/lib/constants";
@@ -42,6 +43,9 @@ export function TaskInput() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [tagAttrValues, setTagAttrValues] = useState<Record<string, Record<string, string>>>({});
+  const [openAttrPopover, setOpenAttrPopover] = useState<string | null>(null);
+  const [attrPopoverSearch, setAttrPopoverSearch] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -49,6 +53,8 @@ export function TaskInput() {
   const createTask = useMutation(api.tasks.create);
   const agents = useQuery(api.agents.list);
   const predefinedTags = useQuery(api.taskTags.list);
+  const allAttributes = useQuery(api.tagAttributes.list);
+  const upsertAttrValue = useMutation(api.tagAttributeValues.upsert);
   const autoTitleSetting = useQuery(api.settings.get, { key: "auto_title_enabled" });
   const isAutoTitle = autoTitleSetting === "true";
 
@@ -122,12 +128,24 @@ export function TaskInput() {
 
       try {
         const taskId = await createTask(args);
+        const attrUpserts: Promise<unknown>[] = [];
+        for (const [tName, attrMap] of Object.entries(tagAttrValues)) {
+          for (const [attrId, value] of Object.entries(attrMap)) {
+            if (value.trim() !== "") {
+              attrUpserts.push(upsertAttrValue({ taskId, tagName: tName, attributeId: attrId as Id<"tagAttributes">, value }));
+            }
+          }
+        }
+        await Promise.all(attrUpserts);
         setDescription("");
         setIsFocused(false);
         setSelectedAgent("");
         setTrustLevel("autonomous");
         setSupervisionMode("autonomous");
         setSelectedReviewers([]);
+        setSelectedTags([]);
+        setTagAttrValues({});
+        setOpenAttrPopover(null);
         setIsExpanded(false);
 
         if (pendingFiles.length > 0) {
@@ -202,6 +220,15 @@ export function TaskInput() {
 
       try {
         const taskId = await createTask(args);
+        const attrUpserts: Promise<unknown>[] = [];
+        for (const [tName, attrMap] of Object.entries(tagAttrValues)) {
+          for (const [attrId, value] of Object.entries(attrMap)) {
+            if (value.trim() !== "") {
+              attrUpserts.push(upsertAttrValue({ taskId, tagName: tName, attributeId: attrId as Id<"tagAttributes">, value }));
+            }
+          }
+        }
+        await Promise.all(attrUpserts);
         setTitle("");
         setDescription("");
         setIsFocused(false);
@@ -209,6 +236,9 @@ export function TaskInput() {
         setTrustLevel("autonomous");
         setSupervisionMode("autonomous");
         setSelectedReviewers([]);
+        setSelectedTags([]);
+        setTagAttrValues({});
+        setOpenAttrPopover(null);
         setIsExpanded(false);
 
         if (pendingFiles.length > 0) {
@@ -262,7 +292,7 @@ export function TaskInput() {
           onChange={handleFileSelect}
           className="hidden"
         />
-        <div className="flex-1 space-y-1.5">
+        <div className="flex-1 min-w-0 space-y-1.5">
           {/* Title input — only in manual mode, stays as a simple Input */}
           {!isAutoTitle && (
             <Input
@@ -279,7 +309,7 @@ export function TaskInput() {
             {isFocused ? (
               <textarea
                 ref={textareaRef}
-                placeholder={isAutoTitle ? "Describe your task..." : "Description (optional)..."}
+                placeholder={isAutoTitle ? "Describe your task..." : "Description..."}
                 value={description}
                 onChange={(e) => {
                   setDescription(e.target.value);
@@ -320,11 +350,13 @@ export function TaskInput() {
                     setIsFocused(true);
                   }
                 }}
-                className={`flex h-[36px] cursor-text items-center rounded-md border px-3 py-1.5 text-sm overflow-hidden whitespace-nowrap text-ellipsis ${
+                className={`flex h-[36px] cursor-text items-center rounded-md border px-3 py-1.5 text-sm overflow-hidden ${
                   error && isAutoTitle && !description.trim() ? "border-red-500" : "border-input"
                 } ${description ? "text-foreground" : "text-muted-foreground"}`}
               >
-                {description || (isAutoTitle ? "Describe your task..." : "Description (optional)...")}
+                <span className="min-w-0 truncate">
+                  {description || (isAutoTitle ? "Describe your task..." : "Description...")}
+                </span>
               </div>
             )}
           </div>
@@ -359,6 +391,8 @@ export function TaskInput() {
                   setSupervisionMode("autonomous");
                   setSelectedReviewers([]);
                   setSelectedTags([]);
+                  setTagAttrValues({});
+                  setOpenAttrPopover(null);
                   setIsExpanded(false);
                 }
               }}
@@ -443,38 +477,103 @@ export function TaskInput() {
         </div>
       )}
 
-      {/* Tag chips — always visible, no dropdown needed */}
+      {/* Tag chips — chips with attributes open an attribute-value popover */}
       {predefinedTags && predefinedTags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
           {predefinedTags.map((tag) => {
             const color = TAG_COLORS[tag.color];
             const isSelected = selectedTags.includes(tag.name);
+            const hasAttrs = (tag.attributeIds?.length ?? 0) > 0;
+            const attrValues = tagAttrValues[tag.name] ?? {};
+            const hasFilledValues = isSelected && Object.values(attrValues).some((v) => v !== "");
+
+            const tagAttrs = hasAttrs
+              ? (tag.attributeIds ?? []).map((id) => allAttributes?.find((a) => a._id === id)).filter(Boolean)
+              : [];
+
+            const filteredTagAttrs = tagAttrs.filter((a) =>
+              a!.name.toLowerCase().includes(attrPopoverSearch.toLowerCase())
+            );
+
             return (
-              <button
+              <Popover
                 key={tag.name}
-                type="button"
-                aria-label={tag.name}
-                aria-pressed={isSelected}
-                onClick={() =>
-                  setSelectedTags((prev) =>
-                    isSelected
-                      ? prev.filter((t) => t !== tag.name)
-                      : [...prev, tag.name]
-                  )
-                }
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer border ${
-                  isSelected && color
-                    ? `${color.bg} ${color.text} border-transparent`
-                    : "bg-transparent text-muted-foreground border-border hover:border-muted-foreground"
-                }`}
+                open={openAttrPopover === tag.name}
+                onOpenChange={(open) => {
+                  if (!open) { setOpenAttrPopover(null); setAttrPopoverSearch(""); }
+                }}
               >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    isSelected && color ? color.dot : "bg-muted-foreground"
-                  }`}
-                />
-                {tag.name}
-              </button>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={tag.name}
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedTags((prev) => prev.filter((t) => t !== tag.name));
+                        setTagAttrValues((prev) => { const next = { ...prev }; delete next[tag.name]; return next; });
+                        setOpenAttrPopover(null);
+                      } else {
+                        setSelectedTags((prev) => [...prev, tag.name]);
+                        if (hasAttrs) { setOpenAttrPopover(tag.name); setAttrPopoverSearch(""); }
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer border ${
+                      isSelected && color
+                        ? `${color.bg} ${color.text} border-transparent`
+                        : "bg-transparent text-muted-foreground border-border hover:border-muted-foreground"
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isSelected && color ? color.dot : "bg-muted-foreground"}`} />
+                    {tag.name}
+                    {hasFilledValues && <span className="w-1 h-1 rounded-full bg-current opacity-60 ml-0.5" />}
+                  </button>
+                </PopoverTrigger>
+                {hasAttrs && (
+                  <PopoverContent className="w-64 p-3 space-y-2" align="start">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{tag.name} attributes</p>
+                    {tagAttrs.length > 2 && (
+                      <input
+                        autoFocus
+                        placeholder="Search..."
+                        value={attrPopoverSearch}
+                        onChange={(e) => setAttrPopoverSearch(e.target.value)}
+                        className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    )}
+                    <div className="space-y-2">
+                      {filteredTagAttrs.map((attr) => {
+                        if (!attr) return null;
+                        const value = attrValues[attr._id] ?? "";
+                        const setValue = (v: string) => {
+                          setTagAttrValues((prev) => ({ ...prev, [tag.name]: { ...(prev[tag.name] ?? {}), [attr._id]: v } }));
+                        };
+                        return (
+                          <div key={attr._id} className="space-y-1">
+                            <label className="text-xs text-muted-foreground">{attr.name}</label>
+                            {attr.type === "select" && attr.options ? (
+                              <Select value={value} onValueChange={setValue}>
+                                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                <SelectContent>
+                                  {attr.options.map((opt) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                type={attr.type === "number" ? "number" : attr.type === "date" ? "date" : "text"}
+                                value={value}
+                                onChange={(e) => setValue(e.target.value)}
+                                className="h-8 text-sm"
+                                placeholder={attr.type === "number" ? "0" : attr.type === "date" ? "" : "..."}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                )}
+              </Popover>
             );
           })}
         </div>
