@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Id } from "../convex/_generated/dataModel";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AgentSidebar } from "@/components/AgentSidebar";
@@ -22,6 +22,8 @@ import { BoardProvider } from "@/components/BoardContext";
 import { BoardSelector } from "@/components/BoardSelector";
 import { BoardSettingsSheet } from "@/components/BoardSettingsSheet";
 import { CronJobsModal } from "@/components/CronJobsModal";
+import { SearchBar } from "@/components/SearchBar";
+import { parseSearch } from "@/lib/searchParser";
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
@@ -46,6 +48,9 @@ export function DashboardLayout() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
   const [cronOpen, setCronOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const parsedSearch = useMemo(() => parseSearch(searchQuery), [searchQuery]);
 
   useEffect(() => {
     setMounted(true);
@@ -74,11 +79,12 @@ export function DashboardLayout() {
         <SidebarInset className="h-screen min-w-0 overflow-hidden">
           <div className="flex h-screen flex-col overflow-hidden bg-background">
             <header className="flex items-center justify-between border-b border-border px-4 py-3">
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <h1 className="text-2xl font-bold text-foreground">
                   Mission Control
                 </h1>
                 <BoardSelector onOpenSettings={() => setBoardSettingsOpen(true)} />
+                <SearchBar onSearchChange={setSearchQuery} />
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -110,7 +116,10 @@ export function DashboardLayout() {
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4">
-              <KanbanBoard onTaskClick={(taskId) => setSelectedTaskId(taskId)} />
+              <KanbanBoard
+                onTaskClick={(taskId) => setSelectedTaskId(taskId)}
+                search={parsedSearch}
+              />
             </div>
           </div>
         </SidebarInset>

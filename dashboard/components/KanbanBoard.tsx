@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useConvex } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Doc, Id } from "../convex/_generated/dataModel";
 import { LayoutGroup } from "motion/react";
@@ -11,6 +11,7 @@ import { DoneTasksSheet } from "./DoneTasksSheet";
 import { CompactFavoriteCard } from "./CompactFavoriteCard";
 import { Star, Trash2 } from "lucide-react";
 import { useBoard } from "@/components/BoardContext";
+import { ParsedSearch } from "@/lib/searchParser";
 
 const COLUMNS = [
   { title: "Inbox", status: "inbox", accentColor: "bg-violet-500" },
@@ -22,9 +23,15 @@ const COLUMNS = [
 
 interface KanbanBoardProps {
   onTaskClick?: (taskId: Id<"tasks">) => void;
+  search?: ParsedSearch;
 }
 
 type ColumnStatus = (typeof COLUMNS)[number]["status"];
+const EMPTY_SEARCH: ParsedSearch = {
+  freeText: "",
+  tagFilters: [],
+  attributeFilters: [],
+};
 
 function stepStatusToColumnStatus(
   stepStatus: Doc<"steps">["status"]
@@ -43,21 +50,153 @@ function stepStatusToColumnStatus(
   }
 }
 
-export function KanbanBoard({ onTaskClick }: KanbanBoardProps) {
+export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardProps) {
   const { activeBoardId, isDefaultBoard } = useBoard();
+  const convex = useConvex();
+  const hasFreeText = search.freeText.trim().length > 0;
+  const hasTagFilters = search.tagFilters.length > 0;
+  const hasAttributeFilters = search.attributeFilters.length > 0;
+  const isSearchActive = hasFreeText || hasTagFilters || hasAttributeFilters;
 
-  // Board-scoped query when a board is selected; falls back to global list
-  const allTasksResult = useQuery(api.tasks.list);
+  const searchedTasksResult = useQuery(
+    api.tasks.search,
+    hasFreeText
+      ? activeBoardId
+        ? { query: search.freeText, boardId: activeBoardId }
+        : { query: search.freeText }
+      : "skip"
+  );
+  const allTasksResult = useQuery(api.tasks.list, !hasFreeText && !activeBoardId ? {} : "skip");
   const boardTasksResult = useQuery(
     api.tasks.listByBoard,
-    activeBoardId
+    !hasFreeText && activeBoardId
       ? { boardId: activeBoardId, includeNoBoardId: isDefaultBoard }
       : "skip",
   );
-  const tasks = activeBoardId ? boardTasksResult : allTasksResult;
+  const baseTasks = hasFreeText
+    ? searchedTasksResult
+    : activeBoardId
+      ? boardTasksResult
+      : allTasksResult;
+  const tagAttributes = useQuery(
+    api.tagAttributes.list,
+    hasAttributeFilters ? {} : "skip"
+  );
+  const [attributeMatchedTaskIds, setAttributeMatchedTaskIds] = useState<Set<Id<"tasks">> | null>(null);
+  const [isAttributeFiltering, setIsAttributeFiltering] = useState(false);
   const allStepsResult = useQuery(api.steps.listAll);
 
-  // Derive favorites from already-fetched tasks (no separate query needed)
+  const tagFilteredTasks = useMemo(() => {
+    if (!baseTasks) return undefined;
+    if (!hasTagFilters) return baseTasks;
+    return baseTasks.filter((task) => {
+      const taskTags = (task.tags ?? []).map((tag) => tag.toLowerCase());
+      return search.tagFilters.every((tagFilter) => taskTags.includes(tagFilter));
+    });
+  }, [baseTasks, hasTagFilters, search.tagFilters]);
+
+  // Stable key for attribute filters so the effect only re-runs when
+  // the actual filter values change, not on every task-list update.
+  const attrFilterKey = useMemo(
+    () => JSON.stringify(search.attributeFilters),
+    [search.attributeFilters]
+  );
+  const tagFilteredTaskIds = useMemo(
+    () => tagFilteredTasks?.map((t) => t._id),
+    [tagFilteredTasks]
+  );
+  const tagFilteredTaskIdsKey = useMemo(
+    () => JSON.stringify(tagFilteredTaskIds),
+    [tagFilteredTaskIds]
+  );
+
+  useEffect(() => {
+    if (!hasAttributeFilters) {
+      setAttributeMatchedTaskIds(null);
+      setIsAttributeFiltering(false);
+      return;
+    }
+    if (!tagFilteredTasks || tagAttributes === undefined) {
+      setIsAttributeFiltering(true);
+      return;
+    }
+
+    let cancelled = false;
+    setIsAttributeFiltering(true);
+
+    const run = async () => {
+      const attrNameById = new Map(
+        tagAttributes.map((attr) => [attr._id, attr.name.toLowerCase()] as const)
+      );
+      const preFilterMatches = await Promise.all(
+        search.attributeFilters.map((filter) =>
+          convex.query(api.tagAttributeValues.searchByValue, {
+            value: filter.value,
+            tagName: filter.tagName,
+          })
+        )
+      );
+      const preFilteredTaskIdSets = preFilterMatches.map(
+        (ids) => new Set(ids as Id<"tasks">[])
+      );
+      const preFilteredTasks = tagFilteredTasks.filter((task) =>
+        preFilteredTaskIdSets.every((taskIds) => taskIds.has(task._id))
+      );
+      const valuesByTask = await Promise.all(
+        preFilteredTasks.map((task) =>
+          convex.query(api.tagAttributeValues.getByTask, { taskId: task._id })
+        )
+      );
+      if (cancelled) return;
+
+      const matchedTaskIds = new Set<Id<"tasks">>();
+      for (const [index, task] of preFilteredTasks.entries()) {
+        const values = valuesByTask[index] ?? [];
+        const matchesAllFilters = search.attributeFilters.every((filter) =>
+          values.some((entry) => {
+            const attrName = attrNameById.get(entry.attributeId)?.toLowerCase();
+            return (
+              entry.tagName.toLowerCase() === filter.tagName &&
+              attrName === filter.attrName &&
+              entry.value.toLowerCase().includes(filter.value)
+            );
+          })
+        );
+        if (matchesAllFilters) {
+          matchedTaskIds.add(task._id);
+        }
+      }
+
+      setAttributeMatchedTaskIds(matchedTaskIds);
+      setIsAttributeFiltering(false);
+    };
+
+    run().catch(() => {
+      if (!cancelled) {
+        setAttributeMatchedTaskIds(new Set());
+        setIsAttributeFiltering(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convex, hasAttributeFilters, attrFilterKey, tagAttributes, tagFilteredTaskIdsKey]);
+
+  const tasks = useMemo(() => {
+    if (!tagFilteredTasks) return undefined;
+    if (!hasAttributeFilters) return tagFilteredTasks;
+    if (isAttributeFiltering || !attributeMatchedTaskIds) return undefined;
+    return tagFilteredTasks.filter((task) => attributeMatchedTaskIds.has(task._id));
+  }, [
+    attributeMatchedTaskIds,
+    hasAttributeFilters,
+    isAttributeFiltering,
+    tagFilteredTasks,
+  ]);
+
+  // Derive favorites from the currently displayed task set.
   const boardFavorites = (tasks ?? []).filter((t) => t.isFavorite === true);
   const hitlCount = useQuery(api.tasks.countHitlPending) ?? 0;
   const deletedTasks = useQuery(api.tasks.listDeleted);
@@ -75,13 +214,14 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) {
   }
   const allSteps = allStepsResult;
 
-  if (tasks.length === 0 && deletedCount === 0) {
+  if (!isSearchActive && tasks.length === 0 && deletedCount === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
         No tasks yet. Type above to create your first task.
       </div>
     );
   }
+  const showNoSearchResults = isSearchActive && tasks.length === 0;
 
   const visibleTaskIds = new Set(tasks.map((task) => task._id));
   const boardSteps = allSteps.filter((step) => visibleTaskIds.has(step.taskId));
@@ -161,6 +301,11 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) {
   return (
     <LayoutGroup>
       <div className="flex-1 flex flex-col overflow-hidden">
+        {showNoSearchResults && (
+          <div className="py-4 text-center text-sm text-muted-foreground">
+            No tasks match your search
+          </div>
+        )}
         {boardFavorites.length > 0 && (
           <div className="px-1 pb-2">
             <div className="flex items-center gap-1.5 mb-1.5">

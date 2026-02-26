@@ -5,11 +5,14 @@ import { KanbanBoard } from "./KanbanBoard";
 let mockQueryValues: Record<string, unknown> = {};
 const mockUseQuery = vi.fn();
 const mockClearAllDone = vi.fn();
+const mockConvexQuery = vi.fn();
+const mockConvexClient = { query: mockConvexQuery };
 
 vi.mock("../convex/_generated/api", () => ({
   api: {
     tasks: {
       list: { name: "tasks.list" },
+      search: { name: "tasks.search" },
       listByBoard: { name: "tasks.listByBoard" },
       countHitlPending: { name: "tasks.countHitlPending" },
       listDeleted: { name: "tasks.listDeleted" },
@@ -21,6 +24,13 @@ vi.mock("../convex/_generated/api", () => ({
     taskTags: {
       list: { name: "taskTags.list" },
     },
+    tagAttributes: {
+      list: { name: "tagAttributes.list" },
+    },
+    tagAttributeValues: {
+      getByTask: { name: "tagAttributeValues.getByTask" },
+      searchByValue: { name: "tagAttributeValues.searchByValue" },
+    },
   },
 }));
 
@@ -30,6 +40,7 @@ vi.mock("convex/react", () => ({
     args?: unknown
   ) => mockUseQuery(queryRef, args),
   useMutation: () => mockClearAllDone,
+  useConvex: () => mockConvexClient,
 }));
 
 // Mock motion/react
@@ -52,10 +63,12 @@ vi.mock("motion/react-client", () => ({
 function setDefaultQueryValues() {
   mockQueryValues = {
     "tasks.list": [],
+    "tasks.search": undefined,
     "tasks.listByBoard": undefined,
     "tasks.countHitlPending": 0,
     "tasks.listDeleted": [],
     "taskTags.list": [],
+    "tagAttributes.list": [],
     "steps.listAll": [],
   };
 }
@@ -101,6 +114,16 @@ describe("KanbanBoard", () => {
       return mockQueryValues[queryRef?.name ?? ""];
     });
     mockClearAllDone.mockReset();
+    mockConvexQuery.mockReset();
+    mockConvexQuery.mockImplementation((queryRef: { name?: string }) => {
+      if (queryRef?.name === "tagAttributeValues.searchByValue") {
+        return Promise.resolve([]);
+      }
+      if (queryRef?.name === "tagAttributeValues.getByTask") {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve([]);
+    });
   });
 
   afterEach(() => {
@@ -152,6 +175,79 @@ describe("KanbanBoard", () => {
     expect(screen.getByText("Progress task")).toBeInTheDocument();
     expect(screen.getByText("Review task")).toBeInTheDocument();
     expect(screen.getByText("Done task")).toBeInTheDocument();
+  });
+
+  it("uses tasks.search query when free text is present", () => {
+    mockQueryValues["tasks.search"] = [
+      makeTask({ _id: "s1", title: "OAuth task", status: "inbox" }),
+    ];
+    render(
+      <KanbanBoard
+        search={{ freeText: "OAuth", tagFilters: [], attributeFilters: [] }}
+      />
+    );
+    expect(screen.getByText("OAuth task")).toBeInTheDocument();
+    expect(
+      mockUseQuery.mock.calls.some(
+        ([queryRef, args]) =>
+          queryRef?.name === "tasks.search" &&
+          args &&
+          typeof args === "object" &&
+          (args as { query?: string }).query === "OAuth"
+      )
+    ).toBe(true);
+  });
+
+  it("shows search empty-state message when no tasks match active search", () => {
+    mockQueryValues["tasks.search"] = [];
+    render(
+      <KanbanBoard
+        search={{ freeText: "missing", tagFilters: [], attributeFilters: [] }}
+      />
+    );
+    expect(screen.getByText("No tasks match your search")).toBeInTheDocument();
+  });
+
+  it("pre-filters attribute search candidates with searchByValue before getByTask", async () => {
+    mockQueryValues["tasks.list"] = [
+      makeTask({ _id: "t1", title: "Task One", status: "inbox", tags: ["feature"] }),
+      makeTask({ _id: "t2", title: "Task Two", status: "inbox", tags: ["feature"] }),
+    ];
+    mockQueryValues["tagAttributes.list"] = [
+      { _id: "attr1", name: "priority" },
+    ];
+    mockConvexQuery.mockImplementation((queryRef: { name?: string }, args?: any) => {
+      if (queryRef?.name === "tagAttributeValues.searchByValue") {
+        return Promise.resolve(["t2"]);
+      }
+      if (queryRef?.name === "tagAttributeValues.getByTask" && args?.taskId === "t2") {
+        return Promise.resolve([
+          { tagName: "feature", attributeId: "attr1", value: "high" },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(
+      <KanbanBoard
+        search={{
+          freeText: "",
+          tagFilters: [],
+          attributeFilters: [{ tagName: "feature", attrName: "priority", value: "high" }],
+        }}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Task Two")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Task One")).not.toBeInTheDocument();
+
+    const getByTaskCalls = mockConvexQuery.mock.calls.filter(
+      ([queryRef]) => queryRef?.name === "tagAttributeValues.getByTask"
+    );
+    expect(getByTaskCalls).toHaveLength(1);
+    expect(getByTaskCalls[0][1]).toEqual({ taskId: "t2" });
   });
 
   it("places retrying and crashed tasks in the In Progress column", () => {

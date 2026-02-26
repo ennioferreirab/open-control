@@ -70,7 +70,15 @@ export default defineSchema({
     updatedAt: v.string(),
   })
     .index("by_status", ["status"])
-    .index("by_boardId", ["boardId"]),
+    .index("by_boardId", ["boardId"])
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["boardId"],
+    })
+    .searchIndex("search_description", {
+      searchField: "description",
+      filterFields: ["boardId"],
+    }),
 
   steps: defineTable({
     taskId: v.id("tasks"),
@@ -259,7 +267,8 @@ export default defineSchema({
     updatedAt: v.string(),
   }).index("by_taskId", ["taskId"])
     .index("by_taskId_tagName", ["taskId", "tagName"])
-    .index("by_attributeId", ["attributeId"]),
+    .index("by_attributeId", ["attributeId"])
+    .index("by_tagName", ["tagName"]),
 
   settings: defineTable({
     key: v.string(),

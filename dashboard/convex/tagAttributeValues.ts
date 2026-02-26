@@ -28,6 +28,29 @@ export const getByTaskAndTag = query({
   },
 });
 
+export const searchByValue = query({
+  args: {
+    value: v.string(),
+    tagName: v.optional(v.string()),
+  },
+  handler: async (ctx, { value, tagName }) => {
+    const needle = value.trim().toLowerCase();
+    if (!needle) return [];
+
+    const normalizedTagName = tagName?.toLowerCase();
+    const entries = await ctx.db.query("tagAttributeValues").collect();
+    const matches = entries.filter((entry) => {
+      if (normalizedTagName && entry.tagName.toLowerCase() !== normalizedTagName) {
+        return false;
+      }
+      return entry.value.toLowerCase().includes(needle);
+    });
+
+    const uniqueTaskIds = new Set(matches.map((entry) => entry.taskId));
+    return [...uniqueTaskIds];
+  },
+});
+
 export const upsert = mutation({
   args: {
     taskId: v.id("tasks"),
