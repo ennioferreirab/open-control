@@ -341,8 +341,7 @@ class TaskPlanner:
 
         provider, model = create_provider()
         response = await asyncio.wait_for(
-            asyncio.to_thread(
-                provider.chat,
+            provider.chat(
                 model=model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},

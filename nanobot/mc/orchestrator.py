@@ -114,9 +114,87 @@ class TaskOrchestrator:
         self._lead_agent_name = LEAD_AGENT_NAME
         self._plan_materializer = PlanMaterializer(bridge)
         self._step_dispatcher = StepDispatcher(bridge)
+        self._known_inbox_ids: set[str] = set()
         self._known_planning_ids: set[str] = set()
         self._known_review_task_ids: set[str] = set()
         self._known_kickoff_ids: set[str] = set()
+
+    async def start_inbox_routing_loop(self) -> None:
+        """Subscribe to inbox tasks, generate auto-title, then transition to planning/assigned."""
+        logger.info("[orchestrator] Starting inbox routing loop")
+
+        queue = self._bridge.async_subscribe(
+            "tasks:listByStatus", {"status": "inbox"}
+        )
+
+        while True:
+            tasks = await queue.get()
+            if tasks is None:
+                continue
+            current_ids = {t.get("id") for t in tasks if t.get("id")}
+            self._known_inbox_ids &= current_ids
+            for task_data in tasks:
+                task_id = task_data.get("id")
+                if not task_id or task_id in self._known_inbox_ids:
+                    continue
+                # Skip manual tasks — stay in inbox, user manages them
+                if task_data.get("is_manual"):
+                    self._known_inbox_ids.add(task_id)
+                    continue
+                self._known_inbox_ids.add(task_id)
+                try:
+                    await self._process_inbox_task(task_data)
+                except Exception:
+                    logger.warning(
+                        "[orchestrator] Error processing inbox task %s",
+                        task_id,
+                        exc_info=True,
+                    )
+
+    async def _process_inbox_task(self, task_data: dict[str, Any]) -> None:
+        """Handle an inbox task: generate auto-title then transition to planning or assigned."""
+        task_id = task_data.get("id")
+        title = task_data.get("title", "")
+        description = task_data.get("description")
+        assigned_agent = task_data.get("assigned_agent")
+        auto_title = task_data.get("auto_title")
+
+        logger.info(
+            "[orchestrator] Processing inbox task %s: auto_title=%s, has_description=%s",
+            task_id,
+            auto_title,
+            bool(description),
+        )
+
+        # Auto-title: generate a concise title from description if requested
+        if auto_title and description:
+            generated_title = await generate_title_via_low_agent(self._bridge, description)
+            if generated_title:
+                title = generated_title
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "tasks:updateTitle",
+                    {"task_id": task_id, "title": title},
+                )
+                logger.info(
+                    "[orchestrator] Auto-generated title for task %s: '%s'",
+                    task_id,
+                    title,
+                )
+
+        # Transition: if already assigned, go to "assigned"; otherwise "planning"
+        next_status = "assigned" if assigned_agent else "planning"
+        await asyncio.to_thread(
+            self._bridge.update_task_status,
+            task_id,
+            next_status,
+        )
+        logger.info(
+            "[orchestrator] Inbox task %s ('%s') → %s",
+            task_id,
+            title,
+            next_status,
+        )
 
     async def start_routing_loop(self) -> None:
         """Subscribe to planning tasks and plan them as they arrive."""
@@ -154,23 +232,6 @@ class TaskOrchestrator:
         title = task_data.get("title", "")
         description = task_data.get("description")
         assigned_agent = task_data.get("assigned_agent")
-
-        # Auto-title: generate a concise title from description if autoTitle is set
-        if task_data.get("auto_title") and description:
-            generated_title = await generate_title_via_low_agent(self._bridge, description)
-            if generated_title:
-                title = generated_title
-                # Patch the title back to Convex
-                await asyncio.to_thread(
-                    self._bridge.mutation,
-                    "tasks:updateTitle",
-                    {"task_id": task_id, "title": title},
-                )
-                logger.info(
-                    "[orchestrator] Auto-generated title for task %s: '%s'",
-                    task_id,
-                    title,
-                )
 
         if not task_id:
             logger.warning("[orchestrator] Skipping task with no id: %s", task_data)
