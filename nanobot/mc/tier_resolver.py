@@ -126,11 +126,14 @@ class TierResolver:
             return None
 
         if time.monotonic() - self._cache_time > self.CACHE_TTL:
-            self._refresh_cache()
+            try:
+                self._refresh_cache()
+            except Exception:
+                logger.warning("[tier_resolver] Cache refresh failed; using stale reasoning cache")
 
         level = self._reasoning_cache.get(tier_name)
         return level if level else None  # empty string → None (off)
 
     def invalidate_cache(self) -> None:
-        """Force a refresh on the next resolve_model() call."""
+        """Force a refresh on the next resolve_model() or resolve_reasoning_level() call."""
         self._cache_time = 0.0
