@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X, Trash2, ExternalLink } from "lucide-react";
+import { parseCronToTable } from "@/lib/cron-parser";
 
 interface CronSchedule {
   kind: "at" | "every" | "cron";
@@ -242,8 +243,30 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                         </Badge>
                       </div>
                     </td>
-                    <td className="py-2 pr-4 text-muted-foreground font-mono text-xs">
-                      {formatSchedule(job.schedule)}
+                    <td className="py-2 pr-4 text-muted-foreground text-xs">
+                      <div className="font-mono">
+                        {formatSchedule(job.schedule)}
+                      </div>
+                      {job.schedule.kind === "cron" && job.schedule.expr && (() => {
+                        const parsed = parseCronToTable(job.schedule.expr);
+                        if (!parsed) return null;
+                        return (
+                          <div className="mt-1 grid grid-cols-3 gap-x-3 text-[11px] text-muted-foreground">
+                            <div>
+                              <span className="font-medium text-foreground/70">Days</span>
+                              <div>{parsed.days}</div>
+                            </div>
+                            <div>
+                              <span className="font-medium text-foreground/70">Hours</span>
+                              <div>{parsed.hours}</div>
+                            </div>
+                            <div>
+                              <span className="font-medium text-foreground/70">Minutes</span>
+                              <div>{parsed.minutes}</div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground text-xs">
                       {job.payload.channel && job.payload.to
