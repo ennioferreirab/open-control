@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Collapsible,
   CollapsibleContent,
@@ -29,6 +30,7 @@ const formatSize = (bytes: number) =>
 
 export function TaskInput() {
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState("");
@@ -47,86 +49,194 @@ export function TaskInput() {
   const createTask = useMutation(api.tasks.create);
   const agents = useQuery(api.agents.list);
   const predefinedTags = useQuery(api.taskTags.list);
+  const autoTitleSetting = useQuery(api.settings.get, { key: "auto_title_enabled" });
+  const isAutoTitle = autoTitleSetting === "true";
+
+  useEffect(() => {
+    if (isFocused && textareaRef.current) {
+      const el = textareaRef.current;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + "px";
+    }
+  }, [isFocused]);
 
   const handleSubmit = async () => {
-    const trimmed = title.trim();
-    if (!trimmed) {
-      setError("Task description required");
-      return;
-    }
-    setError("");
-
-    const args: {
-      title: string;
-      tags?: string[];
-      assignedAgent?: string;
-      trustLevel?: string;
-      supervisionMode?: "autonomous" | "supervised";
-      reviewers?: string[];
-      isManual?: boolean;
-      boardId?: Id<"boards">;
-      files?: Array<{ name: string; type: string; size: number; subfolder: string; uploadedAt: string }>;
-    } = {
-      title: trimmed,
-      tags: selectedTags.length > 0 ? selectedTags : undefined,
-      boardId: activeBoardId ?? undefined,
-    };
-    if (isManual) {
-      args.isManual = true;
-      args.supervisionMode = "autonomous";
-    } else {
-      args.supervisionMode = supervisionMode;
-      if (selectedAgent && selectedAgent !== "auto") {
-        args.assignedAgent = selectedAgent;
+    if (isAutoTitle) {
+      // Auto-title mode: description is required
+      const trimmedDesc = description.trim();
+      if (!trimmedDesc) {
+        setError("Task description required");
+        return;
       }
-      if (trustLevel !== "autonomous") {
-        args.trustLevel = trustLevel;
+      setError("");
+
+      const placeholderTitle = trimmedDesc.length > 80
+        ? trimmedDesc.substring(0, 80) + "..."
+        : trimmedDesc;
+
+      const args: {
+        title: string;
+        description?: string;
+        autoTitle?: boolean;
+        tags?: string[];
+        assignedAgent?: string;
+        trustLevel?: string;
+        supervisionMode?: "autonomous" | "supervised";
+        reviewers?: string[];
+        isManual?: boolean;
+        boardId?: Id<"boards">;
+        files?: Array<{ name: string; type: string; size: number; subfolder: string; uploadedAt: string }>;
+      } = {
+        title: placeholderTitle,
+        description: trimmedDesc,
+        autoTitle: true,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
+        boardId: activeBoardId ?? undefined,
+      };
+      if (isManual) {
+        args.isManual = true;
+        args.supervisionMode = "autonomous";
+      } else {
+        args.supervisionMode = supervisionMode;
+        if (selectedAgent && selectedAgent !== "auto") {
+          args.assignedAgent = selectedAgent;
+        }
+        if (trustLevel !== "autonomous") {
+          args.trustLevel = trustLevel;
+        }
+        if (selectedReviewers.length > 0) {
+          args.reviewers = selectedReviewers;
+        }
       }
-      if (selectedReviewers.length > 0) {
-        args.reviewers = selectedReviewers;
-      }
-    }
-
-    // Include file metadata atomically with task creation (avoids race condition
-    // where orchestrator picks up the task before addTaskFiles completes)
-    if (pendingFiles.length > 0) {
-      args.files = pendingFiles.map((f) => ({
-        name: f.name,
-        type: f.type || "application/octet-stream",
-        size: f.size,
-        subfolder: "attachments",
-        uploadedAt: new Date().toISOString(),
-      }));
-    }
-
-    try {
-      const taskId = await createTask(args);
-      setTitle("");
-      setSelectedAgent("");
-      setTrustLevel("autonomous");
-      setSupervisionMode("autonomous");
-      setSelectedReviewers([]);
-      setIsExpanded(false);
-
-      // Upload actual files to disk (metadata already in Convex from createTask)
       if (pendingFiles.length > 0) {
-        const formData = new FormData();
-        for (const file of pendingFiles) {
-          formData.append("files", file, file.name);
+        args.files = pendingFiles.map((f) => ({
+          name: f.name,
+          type: f.type || "application/octet-stream",
+          size: f.size,
+          subfolder: "attachments",
+          uploadedAt: new Date().toISOString(),
+        }));
+      }
+
+      try {
+        const taskId = await createTask(args);
+        setDescription("");
+        setIsFocused(false);
+        setSelectedAgent("");
+        setTrustLevel("autonomous");
+        setSupervisionMode("autonomous");
+        setSelectedReviewers([]);
+        setIsExpanded(false);
+
+        if (pendingFiles.length > 0) {
+          const formData = new FormData();
+          for (const file of pendingFiles) {
+            formData.append("files", file, file.name);
+          }
+          try {
+            const res = await fetch(`/api/tasks/${taskId}/files`, {
+              method: "POST",
+              body: formData,
+            });
+            if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+            setPendingFiles([]);
+          } catch {
+            setError("Task created, but file upload to disk failed. Please retry.");
+          }
         }
-        try {
-          const res = await fetch(`/api/tasks/${taskId}/files`, {
-            method: "POST",
-            body: formData,
-          });
-          if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-          setPendingFiles([]);
-        } catch {
-          setError("Task created, but file upload to disk failed. Please retry.");
+      } catch {
+        setError("Failed to create task. Please try again.");
+      }
+    } else {
+      // Manual title mode: title required, description optional
+      const trimmed = title.trim();
+      if (!trimmed) {
+        setError("Task title required");
+        return;
+      }
+      setError("");
+
+      const args: {
+        title: string;
+        description?: string;
+        tags?: string[];
+        assignedAgent?: string;
+        trustLevel?: string;
+        supervisionMode?: "autonomous" | "supervised";
+        reviewers?: string[];
+        isManual?: boolean;
+        boardId?: Id<"boards">;
+        files?: Array<{ name: string; type: string; size: number; subfolder: string; uploadedAt: string }>;
+      } = {
+        title: trimmed,
+        description: description.trim() || undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
+        boardId: activeBoardId ?? undefined,
+      };
+      if (isManual) {
+        args.isManual = true;
+        args.supervisionMode = "autonomous";
+      } else {
+        args.supervisionMode = supervisionMode;
+        if (selectedAgent && selectedAgent !== "auto") {
+          args.assignedAgent = selectedAgent;
+        }
+        if (trustLevel !== "autonomous") {
+          args.trustLevel = trustLevel;
+        }
+        if (selectedReviewers.length > 0) {
+          args.reviewers = selectedReviewers;
         }
       }
-    } catch {
-      setError("Failed to create task. Please try again.");
+      if (pendingFiles.length > 0) {
+        args.files = pendingFiles.map((f) => ({
+          name: f.name,
+          type: f.type || "application/octet-stream",
+          size: f.size,
+          subfolder: "attachments",
+          uploadedAt: new Date().toISOString(),
+        }));
+      }
+
+      try {
+        const taskId = await createTask(args);
+        setTitle("");
+        setDescription("");
+        setIsFocused(false);
+        setSelectedAgent("");
+        setTrustLevel("autonomous");
+        setSupervisionMode("autonomous");
+        setSelectedReviewers([]);
+        setIsExpanded(false);
+
+        if (pendingFiles.length > 0) {
+          const formData = new FormData();
+          for (const file of pendingFiles) {
+            formData.append("files", file, file.name);
+          }
+          try {
+            const res = await fetch(`/api/tasks/${taskId}/files`, {
+              method: "POST",
+              body: formData,
+            });
+            if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+            setPendingFiles([]);
+          } catch {
+            setError("Task created, but file upload to disk failed. Please retry.");
+          }
+        }
+      } catch {
+        setError("Failed to create task. Please try again.");
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -152,60 +262,74 @@ export function TaskInput() {
           onChange={handleFileSelect}
           className="hidden"
         />
-        <div className="relative flex-1" style={{ height: 36 }}>
-          {isFocused ? (
-            <textarea
-              ref={textareaRef}
-              placeholder="Create a new task..."
+        <div className="flex-1 space-y-1.5">
+          {/* Title input — only in manual mode, stays as a simple Input */}
+          {!isAutoTitle && (
+            <Input
+              placeholder="Task title..."
               value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setError("");
-                // Auto-grow
-                const el = e.target;
-                el.style.height = "auto";
-                el.style.height = el.scrollHeight + "px";
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-                if (e.key === "Escape") {
-                  textareaRef.current?.blur();
-                }
-              }}
-              onBlur={(e) => {
-                if (wrapperRef.current?.contains(e.relatedTarget as Node)) return;
-                setIsFocused(false);
-              }}
-              rows={1}
-              className={`absolute top-0 left-0 right-0 z-50 min-h-[36px] w-full resize-none rounded-md border bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring ${
-                error ? "border-red-500" : "border-input"
-              }`}
+              onChange={(e) => { setTitle(e.target.value); setError(""); }}
+              onKeyDown={handleKeyDown}
+              className={error && !title.trim() ? "border-red-500" : ""}
             />
-          ) : (
-            <div
-              role="textbox"
-              aria-label="Create a new task"
-              aria-multiline={false}
-              tabIndex={0}
-              onClick={() => setIsFocused(true)}
-              onFocus={() => setIsFocused(true)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setIsFocused(true);
-                }
-              }}
-              className={`flex h-[36px] cursor-text items-center rounded-md border px-3 py-1.5 text-sm ${
-                error ? "border-red-500" : "border-input"
-              } ${title ? "text-foreground" : "text-muted-foreground"} overflow-hidden whitespace-nowrap text-ellipsis`}
-            >
-              {title || "Create a new task..."}
-            </div>
           )}
-          {error && <p className="absolute top-[38px] left-0 text-xs text-red-500">{error}</p>}
+
+          {/* Description field — expand-on-focus in both modes */}
+          <div className="relative" style={{ height: 36 }}>
+            {isFocused ? (
+              <textarea
+                ref={textareaRef}
+                placeholder={isAutoTitle ? "Describe your task..." : "Description (optional)..."}
+                value={description}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setError("");
+                  const el = e.target;
+                  el.style.height = "auto";
+                  el.style.height = el.scrollHeight + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                  if (e.key === "Escape") {
+                    textareaRef.current?.blur();
+                  }
+                }}
+                onBlur={(e) => {
+                  if (wrapperRef.current?.contains(e.relatedTarget as Node)) return;
+                  setIsFocused(false);
+                }}
+                rows={1}
+                className={`absolute top-0 left-0 right-0 z-50 min-h-[36px] w-full resize-none rounded-md border bg-background px-3 py-1.5 text-sm shadow-md focus:outline-none focus:ring-1 focus:ring-ring ${
+                  error && isAutoTitle && !description.trim() ? "border-red-500" : "border-input"
+                }`}
+              />
+            ) : (
+              <div
+                role="textbox"
+                aria-label={isAutoTitle ? "Describe your task" : "Task description (optional)"}
+                aria-multiline={false}
+                tabIndex={0}
+                onClick={() => setIsFocused(true)}
+                onFocus={() => setIsFocused(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setIsFocused(true);
+                  }
+                }}
+                className={`flex h-[36px] cursor-text items-center rounded-md border px-3 py-1.5 text-sm overflow-hidden whitespace-nowrap text-ellipsis ${
+                  error && isAutoTitle && !description.trim() ? "border-red-500" : "border-input"
+                } ${description ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                {description || (isAutoTitle ? "Describe your task..." : "Description (optional)...")}
+              </div>
+            )}
+          </div>
+
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
 
         {/* Right-side action group */}
