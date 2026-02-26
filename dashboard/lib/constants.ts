@@ -107,6 +107,10 @@ export const AUTHOR_TYPE = {
 // System agent names (agents that cannot be disabled, excluded from task routing)
 export const SYSTEM_AGENT_NAMES = new Set(["lead-agent", "mc-agent", "nanobot", "low-agent"]);
 
+// Agents hidden from user-facing selectors (dropdowns, mentions, sidebar).
+// nanobot is intentionally excluded — it can be delegated to and mentioned.
+export const HIDDEN_AGENT_NAMES = new Set(["lead-agent", "mc-agent", "low-agent"]);
+
 // Derived TypeScript types for use in function signatures and component props
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];

@@ -21,7 +21,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Bot, ChevronDown, Paperclip, User, X, Eye, Zap } from "lucide-react";
-import { TAG_COLORS, SYSTEM_AGENT_NAMES } from "@/lib/constants";
+import { TAG_COLORS, HIDDEN_AGENT_NAMES } from "@/lib/constants";
 import { useBoard } from "@/components/BoardContext";
 
 const formatSize = (bytes: number) =>
@@ -591,7 +591,7 @@ export function TaskInput() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="auto">Auto (Lead Agent)</SelectItem>
-                  {agents?.filter((agent) => !agent.isSystem && !SYSTEM_AGENT_NAMES.has(agent.name)).map((agent) => (
+                  {agents?.filter((agent) => !HIDDEN_AGENT_NAMES.has(agent.name)).map((agent) => (
                     <SelectItem
                       key={agent.name}
                       value={agent.name}
@@ -629,7 +629,7 @@ export function TaskInput() {
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground font-medium">Reviewers</label>
                 <div className="space-y-1.5">
-                  {agents?.filter((agent) => !agent.isSystem && !SYSTEM_AGENT_NAMES.has(agent.name)).map((agent) => (
+                  {agents?.filter((agent) => !HIDDEN_AGENT_NAMES.has(agent.name)).map((agent) => (
                     <div key={agent.name} className="flex items-center gap-2">
                       <Checkbox
                         id={`reviewer-${agent.name}`}

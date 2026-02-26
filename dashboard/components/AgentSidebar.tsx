@@ -33,7 +33,7 @@ import {
 import { AgentSidebarItem } from "@/components/AgentSidebarItem";
 import { AgentConfigSheet } from "@/components/AgentConfigSheet";
 import { CreateAgentSheet } from "@/components/CreateAgentSheet";
-import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
+import { SYSTEM_AGENT_NAMES, HIDDEN_AGENT_NAMES } from "@/lib/constants";
 
 export function AgentSidebar() {
   const agents = useQuery(api.agents.list);
@@ -53,8 +53,8 @@ export function AgentSidebar() {
   const { regularAgents, systemAgents } = useMemo(() => {
     if (!agents) return { regularAgents: [], systemAgents: [] };
     return {
-      regularAgents: agents.filter((a) => !a.isSystem && !SYSTEM_AGENT_NAMES.has(a.name)),
-      systemAgents: agents.filter((a) => a.isSystem || SYSTEM_AGENT_NAMES.has(a.name)),
+      regularAgents: agents.filter((a) => !a.isSystem && !SYSTEM_AGENT_NAMES.has(a.name) && !HIDDEN_AGENT_NAMES.has(a.name)),
+      systemAgents: agents.filter((a) => (a.isSystem || SYSTEM_AGENT_NAMES.has(a.name)) && !HIDDEN_AGENT_NAMES.has(a.name)),
     };
   }, [agents]);
 
