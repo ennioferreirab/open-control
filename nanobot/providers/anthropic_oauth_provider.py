@@ -15,6 +15,12 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 ANTHROPIC_BETA = "oauth-2025-04-20,prompt-caching-2024-07-31"
 
+_REASONING_BUDGET_TOKENS: dict[str, int] = {
+    "low": 1024,
+    "medium": 8000,
+    "max": 16000,
+}
+
 
 class AnthropicOAuthProvider(LLMProvider):
     """Anthropic provider using OAuth tokens (Claude Pro/Max subscription)."""
@@ -30,6 +36,7 @@ class AnthropicOAuthProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        reasoning_level: str | None = None,
     ) -> LLMResponse:
         model = _strip_prefix(model or self.default_model)
         token = get_anthropic_token()
@@ -60,8 +67,14 @@ class AnthropicOAuthProvider(LLMProvider):
             body["tools"] = _convert_tools(tools)
             body["tool_choice"] = {"type": "auto"}
 
+        if reasoning_level:
+            budget = _REASONING_BUDGET_TOKENS.get(reasoning_level)
+            if budget:
+                body["thinking"] = {"type": "enabled", "budget_tokens": budget}
+                body["temperature"] = 1.0  # Anthropic requires temp=1.0 with thinking
+
         try:
-            content, tool_calls, finish_reason, usage = await _request_anthropic(
+            content, tool_calls, finish_reason, usage, reasoning_content = await _request_anthropic(
                 headers, body
             )
             return LLMResponse(
@@ -69,6 +82,7 @@ class AnthropicOAuthProvider(LLMProvider):
                 tool_calls=tool_calls,
                 finish_reason=finish_reason,
                 usage=usage,
+                reasoning_content=reasoning_content,
             )
         except Exception as e:
             logger.error(f"Anthropic OAuth error: {e}")
@@ -230,7 +244,7 @@ def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
 async def _request_anthropic(
     headers: dict[str, str],
     body: dict[str, Any],
-) -> tuple[str, list[ToolCallRequest], str, dict[str, int]]:
+) -> tuple[str, list[ToolCallRequest], str, dict[str, int], str | None]:
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream("POST", ANTHROPIC_API_URL, headers=headers, json=body) as resp:
             if resp.status_code != 200:
@@ -262,12 +276,13 @@ async def _iter_sse(response: httpx.Response) -> AsyncGenerator[dict[str, Any], 
 
 async def _consume_sse(
     response: httpx.Response,
-) -> tuple[str, list[ToolCallRequest], str, dict[str, int]]:
-    """Parse Anthropic SSE stream into content + tool calls."""
+) -> tuple[str, list[ToolCallRequest], str, dict[str, int], str | None]:
+    """Parse Anthropic SSE stream into content + tool calls + reasoning."""
     content = ""
+    thinking_text = ""
     tool_calls: list[ToolCallRequest] = []
-    # Buffer for tool_use blocks: index -> {id, name, arguments_json}
     tool_buffers: dict[int, dict[str, Any]] = {}
+    thinking_blocks: set[int] = set()
     finish_reason = "stop"
     usage: dict[str, int] = {}
 
@@ -283,6 +298,8 @@ async def _consume_sse(
                     "name": block.get("name", ""),
                     "arguments_json": "",
                 }
+            elif block.get("type") == "thinking":
+                thinking_blocks.add(idx)
 
         elif event_type == "content_block_delta":
             idx = event.get("index", 0)
@@ -294,9 +311,13 @@ async def _consume_sse(
             elif delta_type == "input_json_delta":
                 if idx in tool_buffers:
                     tool_buffers[idx]["arguments_json"] += delta.get("partial_json", "")
+            elif delta_type == "thinking_delta":
+                if idx in thinking_blocks:
+                    thinking_text += delta.get("thinking", "")
 
         elif event_type == "content_block_stop":
             idx = event.get("index", 0)
+            thinking_blocks.discard(idx)
             if idx in tool_buffers:
                 buf = tool_buffers.pop(idx)
                 raw = buf["arguments_json"]
@@ -330,7 +351,7 @@ async def _consume_sse(
             raise RuntimeError(f"Anthropic stream error: {error.get('message', event)}")
 
     usage["total_tokens"] = usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0)
-    return content, tool_calls, finish_reason, usage
+    return content, tool_calls, finish_reason, usage, thinking_text or None
 
 
 _STOP_REASON_MAP = {
