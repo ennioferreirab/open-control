@@ -11,11 +11,26 @@ class MessageBus:
 
     Channels push messages to the inbound queue, and the agent processes
     them and pushes responses to the outbound queue.
+
+    Queues are lazily created on first access to avoid requiring a running
+    event loop at instantiation time.
     """
 
     def __init__(self):
-        self.inbound: asyncio.Queue[InboundMessage] = asyncio.Queue()
-        self.outbound: asyncio.Queue[OutboundMessage] = asyncio.Queue()
+        self._inbound: asyncio.Queue[InboundMessage] | None = None
+        self._outbound: asyncio.Queue[OutboundMessage] | None = None
+
+    @property
+    def inbound(self) -> asyncio.Queue[InboundMessage]:
+        if self._inbound is None:
+            self._inbound = asyncio.Queue()
+        return self._inbound
+
+    @property
+    def outbound(self) -> asyncio.Queue[OutboundMessage]:
+        if self._outbound is None:
+            self._outbound = asyncio.Queue()
+        return self._outbound
 
     async def publish_inbound(self, msg: InboundMessage) -> None:
         """Publish a message from a channel to the agent."""
@@ -36,9 +51,13 @@ class MessageBus:
     @property
     def inbound_size(self) -> int:
         """Number of pending inbound messages."""
-        return self.inbound.qsize()
+        if self._inbound is None:
+            return 0
+        return self._inbound.qsize()
 
     @property
     def outbound_size(self) -> int:
         """Number of pending outbound messages."""
-        return self.outbound.qsize()
+        if self._outbound is None:
+            return 0
+        return self._outbound.qsize()
