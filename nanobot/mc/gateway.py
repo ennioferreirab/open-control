@@ -936,6 +936,12 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         _run_plan_negotiation_manager(bridge)
     )
 
+    # Chat handler — polls for pending direct-chat messages (Story 10.2)
+    from nanobot.mc.chat_handler import ChatHandler
+
+    chat_handler = ChatHandler(bridge)
+    chat_task = asyncio.create_task(chat_handler.run())
+
     # Wait for shutdown signal
     await stop_event.wait()
     logger.info("[gateway] Agent Gateway stopping...")
@@ -949,6 +955,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     execution_task.cancel()
     timeout_task.cancel()
     plan_negotiation_task.cancel()
+    chat_task.cancel()
     for task in (
         routing_task,
         review_task,
@@ -956,6 +963,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         execution_task,
         timeout_task,
         plan_negotiation_task,
+        chat_task,
     ):
         try:
             await task

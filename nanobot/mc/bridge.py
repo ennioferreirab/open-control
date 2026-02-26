@@ -928,6 +928,58 @@ class ConvexBridge:
         self._log_state_transition("board", "Ensured default board exists")
         return result
 
+    # ── Chat helpers (Story 10.2) ──────────────────────────────────────
+
+    def get_pending_chat_messages(self) -> list[dict[str, Any]]:
+        """Fetch all pending chat messages from Convex.
+
+        Returns:
+            List of chat dicts with snake_case keys.
+        """
+        result = self.query("chats:listPending")
+        return result if isinstance(result, list) else []
+
+    def send_chat_response(self, agent_name: str, content: str) -> Any:
+        """Send an agent response to a chat conversation.
+
+        Args:
+            agent_name: Name of the responding agent.
+            content: The agent's response text.
+        """
+        return self._mutation_with_retry(
+            "chats:send",
+            {
+                "agent_name": agent_name,
+                "author_name": agent_name,
+                "author_type": "agent",
+                "content": content,
+                "status": "done",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    def mark_chat_processing(self, chat_id: str) -> Any:
+        """Mark a chat message as processing.
+
+        Args:
+            chat_id: Convex _id of the chat message.
+        """
+        return self._mutation_with_retry(
+            "chats:updateStatus",
+            {"chat_id": chat_id, "status": "processing"},
+        )
+
+    def mark_chat_done(self, chat_id: str) -> Any:
+        """Mark a chat message as done.
+
+        Args:
+            chat_id: Convex _id of the chat message.
+        """
+        return self._mutation_with_retry(
+            "chats:updateStatus",
+            {"chat_id": chat_id, "status": "done"},
+        )
+
     def close(self) -> None:
         """Close the Convex client connection."""
         logger.info("ConvexBridge closing connection")

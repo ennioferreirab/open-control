@@ -11,6 +11,7 @@
 import type * as activities from "../activities.js";
 import type * as agents from "../agents.js";
 import type * as boards from "../boards.js";
+import type * as chats from "../chats.js";
 import type * as messages from "../messages.js";
 import type * as settings from "../settings.js";
 import type * as skills from "../skills.js";
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   activities: typeof activities;
   agents: typeof agents;
   boards: typeof boards;
+  chats: typeof chats;
   messages: typeof messages;
   settings: typeof settings;
   skills: typeof skills;
