@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Doc } from "../convex/_generated/dataModel";
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SendHorizontal, RotateCcw } from "lucide-react";
+import { AgentMentionAutocomplete } from "./AgentMentionAutocomplete";
 
 interface ThreadInputProps {
   task: Doc<"tasks">;
@@ -33,6 +34,9 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
   const [selectedAgent, setSelectedAgent] = useState(
     task.assignedAgent ?? ""
   );
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionStartIndex, setMentionStartIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const sendMessage = useMutation(api.messages.sendThreadMessage);
   const postPlanMessage = useMutation(api.messages.postUserPlanMessage);
@@ -73,10 +77,85 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     return enabledAgentNames.includes(a.name);
   });
 
+  const handleTextChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = e.target.value;
+      setContent(value);
+
+      const cursorPos = e.target.selectionStart ?? value.length;
+
+      // Find the last @ before cursor that is preceded by start-of-input or whitespace
+      let atIndex = -1;
+      for (let i = cursorPos - 1; i >= 0; i--) {
+        if (value[i] === "@") {
+          if (i === 0 || /\s/.test(value[i - 1])) {
+            atIndex = i;
+          }
+          break;
+        }
+        // If we hit whitespace before finding @, no active mention
+        if (/\s/.test(value[i])) break;
+      }
+
+      if (atIndex >= 0) {
+        const query = value.slice(atIndex + 1, cursorPos);
+        // Close if query contains invalid chars
+        if (/[^a-zA-Z0-9_-]/.test(query)) {
+          setMentionQuery(null);
+        } else {
+          setMentionStartIndex(atIndex);
+          setMentionQuery(query);
+        }
+      } else {
+        setMentionQuery(null);
+      }
+    },
+    []
+  );
+
+  const handleMentionSelect = useCallback(
+    (agentName: string) => {
+      const before = content.slice(0, mentionStartIndex);
+      const after = content.slice(
+        mentionStartIndex +
+          1 +
+          (mentionQuery?.length ?? 0)
+      );
+      const newContent = `${before}@${agentName} ${after}`;
+      setContent(newContent);
+      setSelectedAgent(agentName);
+      setMentionQuery(null);
+
+      // Restore focus and set cursor position after the inserted mention
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (el) {
+          el.focus();
+          const pos = before.length + 1 + agentName.length + 1; // @name + space
+          el.selectionStart = pos;
+          el.selectionEnd = pos;
+        }
+      });
+    },
+    [content, mentionStartIndex, mentionQuery]
+  );
+
   const handleSend = async () => {
     const trimmed = content.trim();
     if (!trimmed) return;
-    if (!isPlanChatMode && !selectedAgent) return;
+
+    // Parse @mentions: use the last mentioned agent name if it matches a known agent
+    let agentForSubmit = selectedAgent;
+    const mentionMatches = trimmed.match(/@(\w[\w-]*)/g);
+    if (mentionMatches && filteredAgents) {
+      const lastMention = mentionMatches[mentionMatches.length - 1].slice(1); // remove @
+      if (filteredAgents.some((a) => a.name === lastMention)) {
+        agentForSubmit = lastMention;
+        setSelectedAgent(lastMention);
+      }
+    }
+
+    if (!isPlanChatMode && !agentForSubmit) return;
     setIsSubmitting(true);
     setError("");
     try {
@@ -87,7 +166,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         await sendMessage({
           taskId: task._id,
           content: trimmed,
-          agentName: selectedAgent,
+          agentName: agentForSubmit,
         });
       }
       setContent("");
@@ -100,6 +179,37 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Intercept keys when autocomplete is open
+    if (mentionQuery !== null) {
+      const nav = (textareaRef.current as any)?.__mentionNav;
+      if (nav) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          e.stopPropagation();
+          nav.navigateDown();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          e.stopPropagation();
+          nav.navigateUp();
+          return;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          e.stopPropagation();
+          nav.selectFocused();
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          nav.close();
+          return;
+        }
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (canSend) handleSend();
@@ -203,12 +313,17 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
           </SelectContent>
         </Select>
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 relative">
         <Textarea
+          ref={textareaRef}
           placeholder="Send a message to the agent..."
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={handleTextChange}
           onKeyDown={handleKeyDown}
+          onBlur={() => {
+            // Delay close to allow click on autocomplete portal
+            setTimeout(() => setMentionQuery(null), 150);
+          }}
           className="text-sm min-h-[80px] max-h-[160px] resize-none"
           disabled={isSubmitting}
         />
@@ -221,6 +336,19 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         >
           <SendHorizontal className="h-4 w-4" />
         </Button>
+        {mentionQuery !== null && !isPlanChatMode && filteredAgents && (
+          <AgentMentionAutocomplete
+            agents={filteredAgents.map((a) => ({
+              name: a.name,
+              displayName: a.displayName ?? undefined,
+              role: a.role ?? undefined,
+            }))}
+            query={mentionQuery}
+            onSelect={handleMentionSelect}
+            onClose={() => setMentionQuery(null)}
+            anchorRef={textareaRef}
+          />
+        )}
       </div>
     </div>
   );
