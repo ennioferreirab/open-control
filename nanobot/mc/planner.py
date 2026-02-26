@@ -353,7 +353,7 @@ class TaskPlanner:
             timeout=LLM_TIMEOUT_SECONDS,
         )
 
-        return _parse_plan_response(response)
+        return _parse_plan_response(response.content)
 
     def _validate_agent_names(
         self, plan: ExecutionPlan, agents: list[AgentData]

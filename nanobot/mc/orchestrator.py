@@ -84,7 +84,9 @@ async def generate_title_via_low_agent(
     description = description[:5000]
 
     try:
+        logger.info("[orchestrator] Auto-title: creating provider with model=%r", low_model)
         provider, resolved_model = create_provider(model=low_model)
+        logger.info("[orchestrator] Auto-title: calling LLM with model=%s", resolved_model)
         response = await provider.chat(
             model=resolved_model,
             messages=[
@@ -98,6 +100,7 @@ async def generate_title_via_low_agent(
             return None
         title = (response.content or "").strip().lstrip("#").strip().strip('"').strip("'")
         if not title:
+            logger.warning("[orchestrator] Auto-title LLM returned empty content")
             return None
         logger.info("[orchestrator] Auto-title generated via low-agent: '%s'", title)
         return title
@@ -160,10 +163,11 @@ class TaskOrchestrator:
         auto_title = task_data.get("auto_title")
 
         logger.info(
-            "[orchestrator] Processing inbox task %s: auto_title=%s, has_description=%s",
+            "[orchestrator] Processing inbox task %s: auto_title=%r, has_description=%s, keys=%s",
             task_id,
             auto_title,
             bool(description),
+            list(task_data.keys()),
         )
 
         # Auto-title: generate a concise title from description if requested
@@ -181,6 +185,26 @@ class TaskOrchestrator:
                     task_id,
                     title,
                 )
+            else:
+                logger.warning(
+                    "[orchestrator] Auto-title generation returned None for task %s; "
+                    "keeping placeholder title",
+                    task_id,
+                )
+                try:
+                    await asyncio.to_thread(
+                        self._bridge.create_activity,
+                        "system_error",
+                        "Auto-title generation failed — check gateway logs for details",
+                        task_id,
+                    )
+                except Exception:
+                    pass  # best-effort
+        elif auto_title and not description:
+            logger.warning(
+                "[orchestrator] auto_title=True but no description for task %s",
+                task_id,
+            )
 
         # Transition: if already assigned, go to "assigned"; otherwise "planning"
         next_status = "assigned" if assigned_agent else "planning"
@@ -412,10 +436,6 @@ class TaskOrchestrator:
                 ),
                 MessageType.SYSTEM_EVENT,
             )
-
-    # Backwards-compatible shim while callers migrate to planning terminology.
-    async def _process_inbox_task(self, task_data: dict[str, Any]) -> None:
-        await self._process_planning_task(task_data)
 
     async def _store_execution_plan(
         self, task_id: str, plan: ExecutionPlan

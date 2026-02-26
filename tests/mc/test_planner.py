@@ -1,0 +1,721 @@
+"""Tests for the LLM-based task planner module (Story 4.5)."""
+
+import asyncio
+import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from nanobot.mc.types import AgentData, ExecutionPlan, ExecutionPlanStep
+from nanobot.providers.base import LLMResponse
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_agent(name: str, role: str, skills: list[str]) -> AgentData:
+    """Create a test AgentData instance."""
+    return AgentData(name=name, display_name=name, role=role, skills=skills)
+
+
+SAMPLE_AGENTS = [
+    _make_agent("code-agent", "developer", ["python", "javascript", "testing"]),
+    _make_agent("docs-agent", "writer", ["documentation", "markdown"]),
+    _make_agent("review-agent", "reviewer", ["code-review", "testing"]),
+]
+
+
+def _mock_llm_response(data: dict) -> LLMResponse:
+    """Create a mock LLM response from a dict."""
+    return LLMResponse(content=json.dumps(data))
+
+
+def _single_step_plan_json() -> dict:
+    """A valid single-step plan response."""
+    return {
+        "steps": [
+            {
+                "step_id": "step_1",
+                "description": "Write the Python utility function",
+                "assigned_agent": "code-agent",
+                "depends_on": [],
+            }
+        ]
+    }
+
+
+def _multi_step_plan_json() -> dict:
+    """A valid multi-step plan response with dependencies."""
+    return {
+        "steps": [
+            {
+                "step_id": "step_1",
+                "description": "Write the backend API endpoint",
+                "assigned_agent": "code-agent",
+                "depends_on": [],
+            },
+            {
+                "step_id": "step_2",
+                "description": "Write API documentation",
+                "assigned_agent": "docs-agent",
+                "depends_on": ["step_1"],
+            },
+            {
+                "step_id": "step_3",
+                "description": "Review the implementation",
+                "assigned_agent": "review-agent",
+                "depends_on": ["step_1", "step_2"],
+            },
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Task 1 Tests: Core planner module — plan generation
+# ---------------------------------------------------------------------------
+
+class TestTaskPlannerSingleStep:
+    """Test valid single-step plan generation (Task 4.2 / AC #1)."""
+
+    @pytest.mark.asyncio
+    async def test_single_step_plan_generation(self):
+        """A simple task should produce a 1-step plan via LLM."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Write a utility function",
+                description="Create a Python helper",
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert isinstance(plan, ExecutionPlan)
+        assert len(plan.steps) == 1
+        assert plan.steps[0].temp_id == "step_1"
+        assert plan.steps[0].assigned_agent == "code-agent"
+
+    @pytest.mark.asyncio
+    async def test_every_task_gets_a_plan(self):
+        """Even simple tasks should always produce a plan (AC #1)."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Fix a typo",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert isinstance(plan, ExecutionPlan)
+        assert len(plan.steps) >= 1
+
+
+class TestTaskPlannerMultiStep:
+    """Test valid multi-step plan with dependencies (Task 4.3 / AC #3, #6)."""
+
+    @pytest.mark.asyncio
+    async def test_multi_step_plan_with_dependencies(self):
+        """A complex task should produce a multi-step plan with dependencies."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _multi_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Build API endpoint with docs",
+                description="Create a REST endpoint, document it, then review",
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert isinstance(plan, ExecutionPlan)
+        assert len(plan.steps) == 3
+        assert plan.steps[0].blocked_by == []
+        assert plan.steps[1].blocked_by == ["step_1"]
+        assert plan.steps[2].blocked_by == ["step_1", "step_2"]
+
+    @pytest.mark.asyncio
+    async def test_multi_step_plan_assigns_different_agents(self):
+        """Multi-step plan should assign different agents to different steps."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _multi_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Build API endpoint with docs",
+                description="Create, document, review",
+                agents=SAMPLE_AGENTS,
+            )
+
+        agent_names = {s.assigned_agent for s in plan.steps}
+        assert len(agent_names) > 1  # Different agents for different steps
+
+
+class TestTaskPlannerPrompt:
+    """Test that the LLM receives a structured prompt (AC #2)."""
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_task_info_and_agent_roster(self):
+        """The LLM call should include task info and agent roster."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            await planner.plan_task(
+                title="Write tests",
+                description="Unit tests for auth module",
+                agents=SAMPLE_AGENTS,
+            )
+
+        # Verify chat was called
+        mock_provider.chat.assert_called_once()
+        call_kwargs = mock_provider.chat.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+
+        # Should have system and user messages
+        assert len(messages) == 2
+        system_msg = messages[0]["content"]
+        user_msg = messages[1]["content"]
+
+        # System prompt should mention JSON response format
+        assert "JSON" in system_msg or "json" in system_msg
+
+        # User message should include task title and agent info
+        assert "Write tests" in user_msg
+        assert "Unit tests for auth module" in user_msg
+        assert "code-agent" in user_msg
+        assert "docs-agent" in user_msg
+        assert "review-agent" in user_msg
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_agent_skills(self):
+        """Agent skills should be listed in the prompt for LLM reasoning."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        call_kwargs = mock_provider.chat.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        user_msg = messages[1]["content"]
+
+        # Should contain skill information
+        assert "python" in user_msg
+        assert "documentation" in user_msg
+        assert "code-review" in user_msg
+
+
+class TestTaskPlannerNanobotFallback:
+    """Test nanobot fallback for unmatched steps (AC #5)."""
+
+    @pytest.mark.asyncio
+    async def test_llm_assigns_nanobot_when_no_specialist(self):
+        """LLM plan with nanobot assignment should be preserved."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = {
+            "steps": [
+                {
+                    "step_id": "step_1",
+                    "description": "Do something obscure",
+                    "assigned_agent": "nanobot",
+                    "depends_on": [],
+                }
+            ]
+        }
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Obscure task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert plan.steps[0].assigned_agent == "nanobot"
+
+    @pytest.mark.asyncio
+    async def test_llm_lead_agent_assignment_is_rewritten_to_general(self):
+        """Lead-agent step assignments should be rewritten to nanobot."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = {
+            "steps": [
+                {
+                    "step_id": "step_1",
+                    "description": "Do something obscure",
+                    "assigned_agent": "lead-agent",
+                    "depends_on": [],
+                }
+            ]
+        }
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Obscure task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert plan.steps[0].assigned_agent == "nanobot"
+
+
+# ---------------------------------------------------------------------------
+# Task 2 Tests: Agent name validation and fallback
+# ---------------------------------------------------------------------------
+
+class TestAgentNameValidation:
+    """Test agent name validation — invalid names replaced with nanobot (Task 4.4 / AC #4)."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_agent_name_replaced_with_nanobot(self):
+        """Invalid agent names in LLM response should be replaced with nanobot."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = {
+            "steps": [
+                {
+                    "step_id": "step_1",
+                    "description": "Do something",
+                    "assigned_agent": "nonexistent-agent",
+                    "depends_on": [],
+                }
+            ]
+        }
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert plan.steps[0].assigned_agent == "nanobot"
+
+    @pytest.mark.asyncio
+    async def test_valid_agent_names_preserved(self):
+        """Valid agent names in LLM response should remain unchanged."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()  # uses "code-agent"
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert plan.steps[0].assigned_agent == "code-agent"
+
+
+class TestAgentNameNoneHandling:
+    """Test that None/missing assigned_agent defaults to nanobot (H1 fix)."""
+
+    @pytest.mark.asyncio
+    async def test_none_assigned_agent_defaults_to_nanobot(self):
+        """When LLM omits assigned_agent, it should default to nanobot."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = {
+            "steps": [
+                {
+                    "step_id": "step_1",
+                    "description": "Do something",
+                    "depends_on": [],
+                }
+            ]
+        }
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert plan.steps[0].assigned_agent == "nanobot"
+
+
+class TestExplicitAgentOverride:
+    """Test explicit agent override — all steps assigned to user-specified agent (Task 4.5 / AC #8)."""
+
+    @pytest.mark.asyncio
+    async def test_explicit_agent_overrides_all_steps(self):
+        """When explicit_agent is set, all steps should be assigned to that agent."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _multi_step_plan_json()  # 3 steps with different agents
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Multi-step task",
+                description="Complex task",
+                agents=SAMPLE_AGENTS,
+                explicit_agent="code-agent",
+            )
+
+        for step in plan.steps:
+            assert step.assigned_agent == "code-agent"
+
+    @pytest.mark.asyncio
+    async def test_explicit_lead_agent_override_rewritten_to_general(self):
+        """An explicit lead-agent override is blocked and replaced."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Task",
+                description="desc",
+                agents=SAMPLE_AGENTS,
+                explicit_agent="lead-agent",
+            )
+
+        assert plan.steps[0].assigned_agent == "nanobot"
+
+
+class TestLLMFailureFallback:
+    """Test LLM failure fallback — provider error triggers heuristic planning (Task 4.6 / AC #9)."""
+
+    @pytest.mark.asyncio
+    async def test_provider_error_falls_back_to_heuristic(self):
+        """When LLM provider raises an error, fallback to heuristic planning."""
+        from nanobot.mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(side_effect=RuntimeError("Provider unavailable"))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Write python tests",
+                description="Test the auth module",
+                agents=SAMPLE_AGENTS,
+            )
+
+        # Should still produce a valid plan (from heuristic fallback)
+        assert isinstance(plan, ExecutionPlan)
+        assert len(plan.steps) >= 1
+        # Heuristic fallback should still assign an agent
+        assert plan.steps[0].assigned_agent is not None
+
+    @pytest.mark.asyncio
+    async def test_timeout_error_falls_back_to_heuristic(self):
+        """When LLM times out, fallback to heuristic planning."""
+        from nanobot.mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(side_effect=TimeoutError("Request timed out"))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Write documentation",
+                description="Document the API",
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert isinstance(plan, ExecutionPlan)
+        assert len(plan.steps) >= 1
+
+    @pytest.mark.asyncio
+    async def test_heuristic_fallback_never_returns_lead_agent(self):
+        """Heuristic fallback should use nanobot when no specialist matches."""
+        from nanobot.mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(side_effect=RuntimeError("Provider unavailable"))
+        agents = [
+            _make_agent("finance-agent", "finance", ["boletos", "payments"]),
+            _make_agent("docs-agent", "docs", ["markdown"]),
+        ]
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Calibrate quantum transducer mesh",
+                description=None,
+                agents=agents,
+            )
+
+        assert plan.steps[0].assigned_agent == "nanobot"
+
+
+class TestMalformedJSONFallback:
+    """Test malformed JSON fallback — invalid LLM output triggers heuristic (Task 4.7 / AC #10)."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_json_falls_back_to_heuristic(self):
+        """When LLM returns invalid JSON, fallback to heuristic planning."""
+        from nanobot.mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=LLMResponse(content="This is not JSON at all"))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Write tests for auth",
+                description="Testing task",
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert isinstance(plan, ExecutionPlan)
+        assert len(plan.steps) >= 1
+
+    @pytest.mark.asyncio
+    async def test_json_missing_steps_key_falls_back(self):
+        """When LLM returns JSON without 'steps' key, fallback to heuristic."""
+        from nanobot.mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=LLMResponse(content='{"plan": "something"}'))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Write tests for auth",
+                description="Testing task",
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert isinstance(plan, ExecutionPlan)
+        assert len(plan.steps) >= 1
+
+    @pytest.mark.asyncio
+    async def test_markdown_fenced_json_is_parsed(self):
+        """LLM response with markdown code fencing should still be parsed."""
+        from nanobot.mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        fenced_response = f"```json\n{json.dumps(plan_json)}\n```"
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=LLMResponse(content=fenced_response))
+
+        planner = TaskPlanner()
+
+        with patch("nanobot.mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        assert isinstance(plan, ExecutionPlan)
+        assert len(plan.steps) == 1
+        assert plan.steps[0].temp_id == "step_1"
+
+
+# ---------------------------------------------------------------------------
+# Task 3 Tests: Orchestrator integration
+# ---------------------------------------------------------------------------
+
+class TestOrchestratorPlannerIntegration:
+    """Test that orchestrator calls planner instead of heuristic routing (Task 4.8 / AC #7, #12)."""
+
+    @pytest.mark.asyncio
+    async def test_planning_task_uses_planner(self):
+        """_process_planning_task should use TaskPlanner instead of heuristic scoring."""
+        from nanobot.mc.orchestrator import TaskOrchestrator
+
+        mock_bridge = MagicMock()
+        mock_bridge.update_task_status = MagicMock()
+        mock_bridge.create_activity = MagicMock()
+        mock_bridge.update_execution_plan = MagicMock()
+        mock_bridge.list_agents = MagicMock(return_value=[
+            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+        ])
+
+        plan = ExecutionPlan(steps=[
+            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
+        ])
+
+        orch = TaskOrchestrator(mock_bridge)
+        task_data = {
+            "id": "task_planner_1",
+            "title": "Write code",
+            "description": "Write some Python",
+        }
+
+        with patch("nanobot.mc.orchestrator.TaskPlanner") as MockPlanner, \
+             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+            mock_planner_instance = MockPlanner.return_value
+            mock_planner_instance.plan_task = AsyncMock(return_value=plan)
+
+            await orch._process_planning_task(task_data)
+
+            mock_planner_instance.plan_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_explicit_agent_passed_to_planner(self):
+        """When task has assigned_agent, it should be passed as explicit_agent to planner."""
+        from nanobot.mc.orchestrator import TaskOrchestrator
+
+        mock_bridge = MagicMock()
+        mock_bridge.update_task_status = MagicMock()
+        mock_bridge.create_activity = MagicMock()
+        mock_bridge.update_execution_plan = MagicMock()
+        mock_bridge.list_agents = MagicMock(return_value=[
+            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+        ])
+
+        plan = ExecutionPlan(steps=[
+            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
+        ])
+
+        orch = TaskOrchestrator(mock_bridge)
+        task_data = {
+            "id": "task_planner_2",
+            "title": "Write code",
+            "description": None,
+            "assigned_agent": "code-agent",
+        }
+
+        with patch("nanobot.mc.orchestrator.TaskPlanner") as MockPlanner, \
+             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+            mock_planner_instance = MockPlanner.return_value
+            mock_planner_instance.plan_task = AsyncMock(return_value=plan)
+
+            await orch._process_planning_task(task_data)
+
+            call_kwargs = mock_planner_instance.plan_task.call_args
+            assert call_kwargs.kwargs.get("explicit_agent") == "code-agent" or \
+                   (len(call_kwargs.args) >= 4 and call_kwargs.args[3] == "code-agent")
+
+    @pytest.mark.asyncio
+    async def test_plan_stored_and_dispatched(self):
+        """After planning, plan should be stored and steps dispatched."""
+        from nanobot.mc.orchestrator import TaskOrchestrator
+
+        mock_bridge = MagicMock()
+        mock_bridge.update_task_status = MagicMock()
+        mock_bridge.create_activity = MagicMock()
+        mock_bridge.update_execution_plan = MagicMock()
+        mock_bridge.list_agents = MagicMock(return_value=[
+            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+        ])
+
+        plan = ExecutionPlan(steps=[
+            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
+        ])
+
+        orch = TaskOrchestrator(mock_bridge)
+        task_data = {
+            "id": "task_planner_3",
+            "title": "Write code",
+            "description": None,
+        }
+
+        with patch("nanobot.mc.orchestrator.TaskPlanner") as MockPlanner, \
+             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+            mock_planner_instance = MockPlanner.return_value
+            mock_planner_instance.plan_task = AsyncMock(return_value=plan)
+
+            await orch._process_planning_task(task_data)
+
+        # Plan should be stored
+        mock_bridge.update_execution_plan.assert_called()
+        # Task should be assigned
+        mock_bridge.update_task_status.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_manual_task_still_skipped(self):
+        """Manual tasks should still be skipped (not sent to planner)."""
+        from nanobot.mc.orchestrator import TaskOrchestrator
+
+        mock_bridge = MagicMock()
+        mock_bridge.update_task_status = MagicMock()
+        mock_bridge.list_agents = MagicMock()
+
+        orch = TaskOrchestrator(mock_bridge)
+        task_data = {
+            "id": "task_manual_1",
+            "title": "Manual task",
+            "is_manual": True,
+        }
+
+        with patch("nanobot.mc.orchestrator.TaskPlanner") as MockPlanner, \
+             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+            await orch._process_planning_task(task_data)
+
+            MockPlanner.assert_not_called()
+        mock_bridge.update_task_status.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+async def _to_thread_passthrough(fn, *args, **kwargs):
+    """Replacement for asyncio.to_thread that calls synchronously."""
+    return fn(*args, **kwargs)

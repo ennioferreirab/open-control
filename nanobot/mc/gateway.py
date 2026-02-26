@@ -981,7 +981,17 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         logger.info("[gateway] Cron service started with %d job(s)", cron_status["jobs"])
 
     orchestrator = TaskOrchestrator(bridge)
-    inbox_task = asyncio.create_task(orchestrator.start_inbox_routing_loop())
+
+    async def _inbox_loop_with_crash_log() -> None:
+        try:
+            await orchestrator.start_inbox_routing_loop()
+        except Exception:
+            logger.critical(
+                "[gateway] Inbox routing loop CRASHED — auto-title will not work",
+                exc_info=True,
+            )
+
+    inbox_task = asyncio.create_task(_inbox_loop_with_crash_log())
     routing_task = asyncio.create_task(orchestrator.start_routing_loop())
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
     kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
@@ -1017,6 +1027,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     cron.stop()
 
     # Cancel all loops gracefully
+    inbox_task.cancel()
     routing_task.cancel()
     review_task.cancel()
     kickoff_task.cancel()
@@ -1026,6 +1037,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     chat_task.cancel()
     mention_task.cancel()
     for task in (
+        inbox_task,
         routing_task,
         review_task,
         kickoff_task,
