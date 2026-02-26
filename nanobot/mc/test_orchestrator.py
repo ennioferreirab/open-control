@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.mc.orchestrator import TaskOrchestrator
+from nanobot.mc.orchestrator import TaskOrchestrator, generate_title_via_low_agent
 from nanobot.mc.types import ActivityEventType, AuthorType, ExecutionPlan, ExecutionPlanStep, MessageType, TaskStatus
 
 
@@ -326,3 +326,95 @@ class TestHandleReviewTransitionPausedTask:
 
         # Task SHOULD be auto-completed (no steps = normal autonomous review)
         bridge.update_task_status.assert_called_once_with("task-1", TaskStatus.DONE)
+
+
+class TestGenerateTitleViaLowAgent:
+    @pytest.mark.asyncio
+    async def test_returns_title_from_llm(self):
+        bridge = _make_bridge()
+        bridge.get_agent_by_name.return_value = {"model": "tier:standard-low"}
+
+        mock_response = MagicMock()
+        mock_response.finish_reason = "stop"
+        mock_response.content = "  My Generated Title  "
+
+        mock_provider = AsyncMock()
+        mock_provider.chat.return_value = mock_response
+
+        with patch(
+            "nanobot.mc.orchestrator.create_provider",
+            return_value=(mock_provider, "anthropic/claude-haiku"),
+        ):
+            with patch(
+                "nanobot.mc.orchestrator.asyncio.to_thread",
+                side_effect=_sync_to_thread,
+            ):
+                result = await generate_title_via_low_agent(bridge, "Do something useful")
+
+        assert result == "My Generated Title"
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_llm_error(self):
+        bridge = _make_bridge()
+        bridge.get_agent_by_name.return_value = {"model": "tier:standard-low"}
+
+        mock_response = MagicMock()
+        mock_response.finish_reason = "error"
+        mock_response.content = "oops"
+
+        mock_provider = AsyncMock()
+        mock_provider.chat.return_value = mock_response
+
+        with patch(
+            "nanobot.mc.orchestrator.create_provider",
+            return_value=(mock_provider, "anthropic/claude-haiku"),
+        ):
+            with patch(
+                "nanobot.mc.orchestrator.asyncio.to_thread",
+                side_effect=_sync_to_thread,
+            ):
+                result = await generate_title_via_low_agent(bridge, "Do something useful")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_low_agent_not_found(self):
+        bridge = _make_bridge()
+        bridge.get_agent_by_name.return_value = None
+
+        with patch(
+            "nanobot.mc.orchestrator.asyncio.to_thread",
+            side_effect=_sync_to_thread,
+        ):
+            result = await generate_title_via_low_agent(bridge, "Do something useful")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_truncates_long_descriptions(self):
+        bridge = _make_bridge()
+        bridge.get_agent_by_name.return_value = {"model": "tier:standard-low"}
+
+        mock_response = MagicMock()
+        mock_response.finish_reason = "stop"
+        mock_response.content = "Short Title"
+
+        mock_provider = AsyncMock()
+        mock_provider.chat.return_value = mock_response
+
+        long_desc = "x" * 10000
+
+        with patch(
+            "nanobot.mc.orchestrator.create_provider",
+            return_value=(mock_provider, "anthropic/claude-haiku"),
+        ):
+            with patch(
+                "nanobot.mc.orchestrator.asyncio.to_thread",
+                side_effect=_sync_to_thread,
+            ):
+                result = await generate_title_via_low_agent(bridge, long_desc)
+
+        # Verify the prompt was truncated
+        call_messages = mock_provider.chat.call_args[1]["messages"]
+        assert len(call_messages[0]["content"]) <= 5100  # prompt header + 5000 char description
+        assert result == "Short Title"

@@ -21,6 +21,7 @@ from nanobot.mc.types import (
     AuthorType,
     ExecutionPlan,
     LEAD_AGENT_NAME,
+    LOW_AGENT_NAME,
     MessageType,
     TaskStatus,
     TrustLevel,
@@ -38,36 +39,51 @@ AUTO_TITLE_PROMPT = (
 )
 
 
-async def generate_auto_title(
+async def generate_title_via_low_agent(
     bridge: "ConvexBridge",
     description: str,
 ) -> str | None:
-    """Generate a concise title from a task description.
+    """Generate a concise title by delegating to the low-agent system agent.
 
-    Tries to use the standard-low tier model from model_tiers settings.
-    Falls back to the default provider if standard-low is not configured.
-    Returns None only if the LLM call itself fails.
+    Reads the model configured on the low-agent from Convex. If the agent is
+    not found or the LLM call fails, returns None.
     """
-    # Try to resolve standard-low model from settings (non-blocking)
-    low_model: str | None = None
+    # Fetch low-agent model config
+    agent_data: dict | None = None
     try:
-        raw_tiers = await asyncio.to_thread(
-            bridge.query, "settings:get", {"key": "model_tiers"}
+        agent_data = await asyncio.to_thread(
+            bridge.get_agent_by_name, LOW_AGENT_NAME
         )
-        if raw_tiers:
-            tiers = json.loads(raw_tiers)
-            low_model = tiers.get("standard-low") or None
-            if low_model:
-                logger.info("[orchestrator] Auto-title using standard-low model: %s", low_model)
-            else:
-                logger.info("[orchestrator] standard-low not configured — using default model for auto-title")
     except Exception:
-        logger.warning("[orchestrator] Failed to read model_tiers for auto-title, using default model")
+        logger.warning("[orchestrator] Failed to fetch low-agent config", exc_info=True)
+
+    if not agent_data:
+        logger.warning("[orchestrator] low-agent not found; skipping auto-title")
+        return None
+
+    low_model: str | None = agent_data.get("model") or None
+
+    # Resolve tier reference to concrete model string
+    if low_model and low_model.startswith("tier:"):
+        try:
+            raw_tiers = await asyncio.to_thread(
+                bridge.query, "settings:get", {"key": "model_tiers"}
+            )
+            if raw_tiers:
+                tiers = json.loads(raw_tiers)
+                tier_name = low_model[len("tier:"):]
+                low_model = tiers.get(tier_name) or None
+                if low_model:
+                    logger.info("[orchestrator] low-agent tier resolved to: %s", low_model)
+                else:
+                    logger.info("[orchestrator] tier '%s' not configured; using default", tier_name)
+        except Exception:
+            logger.warning("[orchestrator] Failed to resolve tier for low-agent", exc_info=True)
+            low_model = None
 
     description = description[:5000]
 
     try:
-        # low_model=None falls back to the user's configured default model
         provider, resolved_model = create_provider(model=low_model)
         response = await provider.chat(
             model=resolved_model,
@@ -80,10 +96,10 @@ async def generate_auto_title(
         if response.finish_reason == "error":
             logger.warning("[orchestrator] Auto-title LLM error: %s", response.content)
             return None
-        title = (response.content or "").strip().strip('"').strip("'")
+        title = (response.content or "").strip().lstrip("#").strip().strip('"').strip("'")
         if not title:
             return None
-        logger.info("[orchestrator] Auto-title generated: '%s'", title)
+        logger.info("[orchestrator] Auto-title generated via low-agent: '%s'", title)
         return title
     except Exception:
         logger.exception("[orchestrator] Auto-title generation failed")
@@ -141,7 +157,7 @@ class TaskOrchestrator:
 
         # Auto-title: generate a concise title from description if autoTitle is set
         if task_data.get("auto_title") and description:
-            generated_title = await generate_auto_title(self._bridge, description)
+            generated_title = await generate_title_via_low_agent(self._bridge, description)
             if generated_title:
                 title = generated_title
                 # Patch the title back to Convex
