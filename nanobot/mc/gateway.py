@@ -981,6 +981,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         logger.info("[gateway] Cron service started with %d job(s)", cron_status["jobs"])
 
     orchestrator = TaskOrchestrator(bridge)
+    inbox_task = asyncio.create_task(orchestrator.start_inbox_routing_loop())
     routing_task = asyncio.create_task(orchestrator.start_routing_loop())
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
     kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
