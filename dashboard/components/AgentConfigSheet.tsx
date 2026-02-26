@@ -25,6 +25,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Check, Lock, Pencil, Trash2 } from "lucide-react";
 import {
   Tooltip,
@@ -45,6 +56,32 @@ const STATUS_DOT_STYLES: Record<string, string> = {
   crashed: "bg-red-500",
 };
 
+type ModelMode = "default" | "tier" | "custom";
+
+const TIER_OPTIONS = [
+  { value: "tier:standard-low", label: "Standard Low" },
+  { value: "tier:standard-medium", label: "Standard Medium" },
+  { value: "tier:standard-high", label: "Standard High" },
+  { value: "tier:reasoning-low", label: "Reasoning Low" },
+  { value: "tier:reasoning-medium", label: "Reasoning Medium" },
+  { value: "tier:reasoning-high", label: "Reasoning High" },
+] as const;
+
+/** Parse a stored model string into modelMode + selectedTier + customModel. */
+function parseModelValue(model: string): {
+  modelMode: ModelMode;
+  selectedTier: string;
+  customModel: string;
+} {
+  if (!model) {
+    return { modelMode: "default", selectedTier: "", customModel: "" };
+  }
+  if (model.startsWith("tier:")) {
+    return { modelMode: "tier", selectedTier: model, customModel: "" };
+  }
+  return { modelMode: "custom", selectedTier: "", customModel: model };
+}
+
 interface AgentConfigSheetProps {
   agentName: string | null;
   onClose: () => void;
@@ -63,12 +100,38 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
   const updateConfig = useMutation(api.agents.updateConfig);
   const setEnabled = useMutation(api.agents.setEnabled);
 
+  // Settings queries for model selector
+  const rawConnectedModels = useQuery(api.settings.get, { key: "connected_models" });
+  const rawModelTiers = useQuery(api.settings.get, { key: "model_tiers" });
+
+  const connectedModels: string[] = useMemo(() => {
+    if (!rawConnectedModels) return [];
+    try {
+      const parsed = JSON.parse(rawConnectedModels);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [rawConnectedModels]);
+
+  const modelTiers: Record<string, string | null> = useMemo(() => {
+    if (!rawModelTiers) return {};
+    try {
+      const parsed = JSON.parse(rawModelTiers);
+      return typeof parsed === "object" && parsed !== null ? parsed : {};
+    } catch {
+      return {};
+    }
+  }, [rawModelTiers]);
+
   // Form state
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState("");
   const [prompt, setPrompt] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
-  const [model, setModel] = useState("");
+  const [modelMode, setModelMode] = useState<ModelMode>("default");
+  const [selectedTier, setSelectedTier] = useState("");
+  const [customModel, setCustomModel] = useState("");
   const [enabled, setEnabledState] = useState(true);
 
   // UI state
@@ -87,6 +150,18 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
+  // Compute the model string from the current mode
+  const computedModel = useMemo(() => {
+    switch (modelMode) {
+      case "tier":
+        return selectedTier; // "tier:standard-high" etc.
+      case "custom":
+        return customModel;
+      default:
+        return "";
+    }
+  }, [modelMode, selectedTier, customModel]);
+
   // Initialize form from agent data
   useEffect(() => {
     if (agent) {
@@ -94,7 +169,10 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
       setRole(agent.role);
       setPrompt(agent.prompt || "");
       setSkills(agent.skills);
-      setModel(agent.model || "");
+      const parsed = parseModelValue(agent.model || "");
+      setModelMode(parsed.modelMode);
+      setSelectedTier(parsed.selectedTier);
+      setCustomModel(parsed.customModel);
       setEnabledState(agent.enabled !== false);
       setErrors({});
       setSaveError(null);
@@ -167,11 +245,11 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
       role !== agent.role ||
       prompt !== (agent.prompt || "") ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills) ||
-      model !== (agent.model || "") ||
+      computedModel !== (agent.model || "") ||
       enabled !== (agent.enabled !== false) ||
       JSON.stringify(variables) !== JSON.stringify(agent.variables || [])
     );
-  }, [agent, displayName, role, prompt, skills, model, enabled, variables]);
+  }, [agent, displayName, role, prompt, skills, computedModel, enabled, variables]);
 
   // Validation
   const validate = useCallback((): boolean => {
@@ -197,7 +275,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
         role,
         prompt,
         skills,
-        model: model || undefined,
+        model: computedModel || undefined,
         variables,
       });
 
@@ -211,7 +289,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
     } catch {
       setSaveError("Failed to save. Please try again.");
     }
-  }, [agentName, agent, displayName, role, prompt, skills, model, enabled, variables, validate, updateConfig, setEnabled]);
+  }, [agentName, agent, displayName, role, prompt, skills, computedModel, enabled, variables, validate, updateConfig, setEnabled]);
 
   const handleClose = useCallback(() => {
     if (isDirty) {
@@ -397,13 +475,102 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                 </div>
 
                 {/* Model */}
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <label className="text-sm font-medium">Model</label>
-                  <Input
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder="System default (claude-sonnet-4-6)"
-                  />
+                  <Select
+                    value={
+                      modelMode === "default"
+                        ? "__default__"
+                        : modelMode === "tier"
+                          ? selectedTier
+                          : "__custom__"
+                    }
+                    onValueChange={(value) => {
+                      if (value === "__default__") {
+                        setModelMode("default");
+                        setSelectedTier("");
+                        setCustomModel("");
+                      } else if (value === "__custom__") {
+                        setModelMode("custom");
+                        setSelectedTier("");
+                        // Keep any existing customModel
+                      } else {
+                        // Must be a tier value
+                        setModelMode("tier");
+                        setSelectedTier(value);
+                        setCustomModel("");
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select model configuration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">System Default</SelectItem>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel>Tier Presets</SelectLabel>
+                        {TIER_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectSeparator />
+                      <SelectItem value="__custom__">Custom...</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Custom model selector — only visible in custom mode */}
+                  {modelMode === "custom" && (
+                    <Select
+                      value={customModel || "__none__"}
+                      onValueChange={(value) => {
+                        setCustomModel(value === "__none__" ? "" : value);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a connected model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__" disabled>
+                          Select a model...
+                        </SelectItem>
+                        {connectedModels.map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {/* Visual indicator badge */}
+                  {modelMode === "default" && (
+                    <Badge variant="secondary" className="bg-muted text-muted-foreground font-normal">
+                      System Default
+                    </Badge>
+                  )}
+                  {modelMode === "tier" && (() => {
+                    const tierName = selectedTier.replace("tier:", "");
+                    const tierLabel = TIER_OPTIONS.find((t) => t.value === selectedTier)?.label ?? tierName;
+                    const resolvedModel = modelTiers[tierName];
+                    const isConfigured = resolvedModel != null && resolvedModel !== "";
+                    return isConfigured ? (
+                      <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-normal">
+                        Tier: {tierLabel} &rarr; {resolvedModel}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal">
+                        Tier: {tierLabel} (not configured)
+                      </Badge>
+                    );
+                  })()}
+                  {modelMode === "custom" && customModel && (
+                    <Badge variant="secondary" className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal">
+                      Custom: {customModel}
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Skills */}
