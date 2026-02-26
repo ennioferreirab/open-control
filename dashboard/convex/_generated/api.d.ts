@@ -16,6 +16,8 @@ import type * as messages from "../messages.js";
 import type * as settings from "../settings.js";
 import type * as skills from "../skills.js";
 import type * as steps from "../steps.js";
+import type * as tagAttributeValues from "../tagAttributeValues.js";
+import type * as tagAttributes from "../tagAttributes.js";
 import type * as taskTags from "../taskTags.js";
 import type * as tasks from "../tasks.js";
 
@@ -34,6 +36,8 @@ declare const fullApi: ApiFromModules<{
   settings: typeof settings;
   skills: typeof skills;
   steps: typeof steps;
+  tagAttributeValues: typeof tagAttributeValues;
+  tagAttributes: typeof tagAttributes;
   taskTags: typeof taskTags;
   tasks: typeof tasks;
 }>;

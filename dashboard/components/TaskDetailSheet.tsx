@@ -27,6 +27,8 @@ import { STATUS_COLORS, TAG_COLORS, type TaskStatus } from "@/lib/constants";
 import { InlineRejection } from "./InlineRejection";
 import { DocumentViewerModal } from "./DocumentViewerModal";
 import { ThreadInput } from "./ThreadInput";
+import { TagAttributeEditor } from "./TagAttributeEditor";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 const formatSize = (bytes: number) =>
   bytes < 1024 * 1024
@@ -64,6 +66,11 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     taskId ? { taskId } : "skip",
   );
   const tagsList = useQuery(api.taskTags.list, taskId ? {} : "skip");
+  const tagAttributesList = useQuery(api.tagAttributes.list, taskId ? {} : "skip");
+  const tagAttrValues = useQuery(
+    api.tagAttributeValues.getByTask,
+    taskId ? { taskId } : "skip",
+  );
   const approveMutation = useMutation(api.tasks.approve);
   const kickOffMutation = useMutation(api.tasks.approveAndKickOff);
   const pauseTaskMutation = useMutation(api.tasks.pauseTask);
@@ -86,6 +93,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const [uploadError, setUploadError] = useState("");
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
   const [deleteError, setDeleteError] = useState("");
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const attachInputRef = useRef<HTMLInputElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -165,11 +173,15 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     tagsList?.map((t) => [t.name, t.color]) ?? []
   );
 
+  const removeTagAttrValues = useMutation(api.tagAttributeValues.removeByTaskAndTag);
+
   const handleRemoveTag = (tagToRemove: string) => {
     if (!task || !isTaskLoaded) return;
     const currentTags = task.tags ?? [];
     const newTags = currentTags.filter((t) => t !== tagToRemove);
     updateTagsMutation({ taskId: task._id, tags: newTags });
+    // Cascade-delete attribute values for the removed tag
+    removeTagAttrValues({ taskId: task._id, tagName: tagToRemove });
   };
 
   const handleAddTag = (tagToAdd: string) => {
@@ -653,6 +665,62 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                         </PopoverContent>
                       </Popover>
                     </div>
+
+                    {/* Tag Attributes (expandable per tag) */}
+                    {tagAttributesList && tagAttributesList.length > 0 && (task.tags ?? []).length > 0 && (
+                      <div className="mt-3 space-y-1">
+                        {(task.tags ?? []).map((tag) => {
+                          const isExpanded = expandedTags.has(tag);
+                          const toggleExpand = () => {
+                            setExpandedTags((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(tag)) next.delete(tag);
+                              else next.add(tag);
+                              return next;
+                            });
+                          };
+                          const colorKey = tagColorMap[tag];
+                          const color = colorKey ? TAG_COLORS[colorKey] : null;
+
+                          return (
+                            <div key={`attrs-${tag}`} className="rounded-md border border-border">
+                              <button
+                                onClick={toggleExpand}
+                                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors rounded-md"
+                              >
+                                {isExpanded
+                                  ? <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                  : <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                }
+                                {color && (
+                                  <span className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`} />
+                                )}
+                                <span className="font-medium">{tag}</span>
+                                <span className="text-muted-foreground">attributes</span>
+                              </button>
+                              {isExpanded && (
+                                <div className="px-3 pb-2 space-y-1.5">
+                                  {tagAttributesList.map((attr) => {
+                                    const val = tagAttrValues?.find(
+                                      (v) => v.tagName === tag && v.attributeId === attr._id
+                                    );
+                                    return (
+                                      <TagAttributeEditor
+                                        key={`${tag}-${attr._id}`}
+                                        taskId={task._id}
+                                        tagName={tag}
+                                        attribute={attr}
+                                        currentValue={val?.value ?? ""}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   </div>
                 </ScrollArea>

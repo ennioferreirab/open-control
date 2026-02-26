@@ -270,6 +270,67 @@ def _build_thread_context(messages: list[dict[str, Any]], max_messages: int = 20
     return ThreadContextBuilder().build(messages, max_messages=max_messages)
 
 
+def _build_tag_attributes_context(
+    tags: list[str],
+    attr_values: list[dict[str, Any]],
+    attr_catalog: list[dict[str, Any]],
+) -> str:
+    """Build a context section describing tag attribute values for the agent.
+
+    Args:
+        tags: List of tag name strings assigned to the task.
+        attr_values: List of tagAttributeValue records (snake_case keys from bridge).
+        attr_catalog: List of tagAttribute records (snake_case keys from bridge).
+
+    Returns:
+        A formatted string section like:
+        [Task Tag Attributes]
+        client-tag: priority=high, deadline=2026-03-01
+        ...
+        Returns empty string if no tags have non-empty attribute values.
+    """
+    if not tags or not attr_values or not attr_catalog:
+        return ""
+
+    # Build attribute id -> name lookup
+    attr_name_map: dict[str, str] = {}
+    for attr in attr_catalog:
+        attr_id = attr.get("id") or attr.get("_id") or ""
+        attr_name = attr.get("name", "")
+        if attr_id and attr_name:
+            attr_name_map[attr_id] = attr_name
+
+    # Group values by tag name
+    tag_attrs: dict[str, list[str]] = {}
+    for val in attr_values:
+        tag_name = val.get("tag_name", "")
+        value = val.get("value", "")
+        attr_id = val.get("attribute_id") or val.get("_attribute_id") or ""
+
+        # Skip empty values
+        if not tag_name or not value or tag_name not in tags:
+            continue
+
+        attr_name = attr_name_map.get(attr_id, "")
+        if not attr_name:
+            continue
+
+        if tag_name not in tag_attrs:
+            tag_attrs[tag_name] = []
+        tag_attrs[tag_name].append(f"{attr_name}={value}")
+
+    if not tag_attrs:
+        return ""
+
+    lines = ["[Task Tag Attributes]"]
+    for tag_name in tags:
+        if tag_name in tag_attrs:
+            pairs = ", ".join(tag_attrs[tag_name])
+            lines.append(f"{tag_name}: {pairs}")
+
+    return "\n".join(lines)
+
+
 class TaskExecutor:
     """Picks up assigned tasks and runs agent execution."""
 
@@ -717,6 +778,38 @@ class TaskExecutor:
         except Exception:
             logger.warning(
                 "[executor] Failed to fetch thread messages for '%s', continuing without thread context",
+                title,
+                exc_info=True,
+            )
+
+        # Inject tag attribute values context (Story 12.2)
+        try:
+            task_tags = (task_data or {}).get("tags") or []
+            if task_tags:
+                tag_attr_values = await asyncio.to_thread(
+                    self._bridge.query,
+                    "tagAttributeValues:getByTask",
+                    {"task_id": task_id},
+                )
+                tag_attr_catalog = await asyncio.to_thread(
+                    self._bridge.query,
+                    "tagAttributes:list",
+                    {},
+                )
+                tag_attrs_context = _build_tag_attributes_context(
+                    task_tags,
+                    tag_attr_values if isinstance(tag_attr_values, list) else [],
+                    tag_attr_catalog if isinstance(tag_attr_catalog, list) else [],
+                )
+                if tag_attrs_context:
+                    description = (description or "") + f"\n\n{tag_attrs_context}"
+                    logger.info(
+                        "[executor] Injected tag attributes context for task '%s'",
+                        title,
+                    )
+        except Exception:
+            logger.warning(
+                "[executor] Failed to fetch tag attributes for '%s', continuing without tag attributes context",
                 title,
                 exc_info=True,
             )

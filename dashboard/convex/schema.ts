@@ -240,6 +240,23 @@ export default defineSchema({
     .index("by_agentName", ["agentName"])
     .index("by_timestamp", ["timestamp"]),
 
+  tagAttributes: defineTable({
+    name: v.string(),
+    type: v.union(v.literal("text"), v.literal("number"), v.literal("date"), v.literal("select")),
+    options: v.optional(v.array(v.string())),
+    createdAt: v.string(),
+  }).index("by_name", ["name"]),
+
+  tagAttributeValues: defineTable({
+    taskId: v.id("tasks"),
+    tagName: v.string(),
+    attributeId: v.id("tagAttributes"),
+    value: v.string(),
+    updatedAt: v.string(),
+  }).index("by_taskId", ["taskId"])
+    .index("by_taskId_tagName", ["taskId", "tagName"])
+    .index("by_attributeId", ["attributeId"]),
+
   settings: defineTable({
     key: v.string(),
     value: v.string(),
