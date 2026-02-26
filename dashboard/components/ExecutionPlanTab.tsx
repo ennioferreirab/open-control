@@ -2,17 +2,23 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { Loader2 } from "lucide-react";
-import { ReactFlow } from "@xyflow/react";
+import { ReactFlow, Background, Controls } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { FlowStepNode, normalizeStatus, type FlowStepNodeData } from "./FlowStepNode";
+import { StartNode, EndNode } from "./StartEndNode";
 import { PlanEditor } from "./PlanEditor";
 import { stepsToNodesAndEdges, layoutWithDagre } from "@/lib/flowLayout";
 import type { ExecutionPlan, PlanStep } from "@/lib/types";
 
-const nodeTypes = { flowStep: FlowStepNode };
+const nodeTypes = { flowStep: FlowStepNode, start: StartNode, end: EndNode };
+
+const defaultEdgeOptions = {
+  animated: false,
+  style: { stroke: "hsl(var(--foreground))", strokeWidth: 2 },
+};
 
 /* ── Types ── */
 
@@ -216,19 +222,22 @@ export function ExecutionPlanTab({
     const planSteps = normalizedStepsToPlanSteps(steps);
     const { nodes: rawNodes, edges: rawEdges } = stepsToNodesAndEdges(planSteps);
 
-    // Inject status + accept handlers into node data
+    // Inject status + accept handlers into node data (skip START/END terminal nodes)
     const statusMap = new Map(steps.map((s) => [s.stepId, s.status]));
-    const nodesWithStatus = rawNodes.map((n) => ({
-      ...n,
-      data: {
-        ...(n.data as FlowStepNodeData),
-        status: statusMap.get(n.id) ?? "planned",
-        isEditMode: false as const,
-        onAccept: handleAccept,
-        isAccepting: acceptingStepId === n.id,
-        acceptError: acceptErrors[n.id],
-      },
-    }));
+    const nodesWithStatus = rawNodes.map((n) => {
+      if (n.id === "__start__" || n.id === "__end__") return n;
+      return {
+        ...n,
+        data: {
+          ...(n.data as FlowStepNodeData),
+          status: statusMap.get(n.id) ?? "planned",
+          isEditMode: false as const,
+          onAccept: handleAccept,
+          isAccepting: acceptingStepId === n.id,
+          acceptError: acceptErrors[n.id],
+        },
+      };
+    });
 
     const positioned = layoutWithDagre(nodesWithStatus, rawEdges);
     return { flowNodes: positioned, flowEdges: rawEdges };
@@ -283,6 +292,7 @@ export function ExecutionPlanTab({
           nodes={flowNodes}
           edges={flowEdges}
           nodeTypes={nodeTypes}
+          defaultEdgeOptions={defaultEdgeOptions}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
@@ -291,7 +301,10 @@ export function ExecutionPlanTab({
           fitView
           fitViewOptions={{ padding: 0.2 }}
           proOptions={{ hideAttribution: true }}
-        />
+        >
+          <Background color="hsl(var(--border))" gap={15} size={1} />
+          <Controls />
+        </ReactFlow>
       </div>
     </div>
   );

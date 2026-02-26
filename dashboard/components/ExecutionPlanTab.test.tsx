@@ -13,17 +13,21 @@ vi.mock("./PlanEditor", () => ({
 
 // Mock React Flow for read-only view
 vi.mock("@xyflow/react", () => ({
-  ReactFlow: ({ nodes }: { nodes: { id: string; data: { step: { title: string }; status?: string } }[]; [key: string]: unknown }) => (
+  ReactFlow: ({ nodes }: { nodes: { id: string; data: { step?: { title: string }; status?: string } }[]; [key: string]: unknown }) => (
     <div data-testid="react-flow-readonly">
-      {nodes.map((n) => (
-        <div key={n.id} data-testid={`flow-node-${n.id}`} data-status={n.data.status ?? "planned"}>
-          {n.data.step.title || n.data.step.title === "" ? n.data.step.title : "Untitled"}
-        </div>
-      ))}
+      {nodes
+        .filter((n) => n.id !== "__start__" && n.id !== "__end__")
+        .map((n) => (
+          <div key={n.id} data-testid={`flow-node-${n.id}`} data-status={n.data.status ?? "planned"}>
+            {n.data.step?.title || n.data.step?.title === "" ? n.data.step.title : "Untitled"}
+          </div>
+        ))}
     </div>
   ),
   Handle: () => null,
-  Position: { Top: "top", Bottom: "bottom" },
+  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
+  Background: () => null,
+  Controls: () => null,
 }));
 
 // Mock FlowStepNode

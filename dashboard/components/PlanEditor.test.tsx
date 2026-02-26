@@ -18,7 +18,7 @@ vi.mock("@xyflow/react", () => {
       onNodeClick,
       children,
     }: {
-      nodes: { id: string; data: { step: { tempId: string; title: string } } }[];
+      nodes: { id: string; data: { step?: { tempId: string; title: string } } }[];
       edges: { id: string; source: string; target: string }[];
       onConnect?: typeof connectHandler;
       onEdgesDelete?: typeof edgesDeleteHandler;
@@ -31,18 +31,22 @@ vi.mock("@xyflow/react", () => {
       nodeClickHandler = onNodeClick;
       return (
         <div data-testid="react-flow">
-          {nodes.map((n) => (
-            <div
-              key={n.id}
-              data-testid={`flow-node-${n.id}`}
-              onClick={(e) => nodeClickHandler?.(e, { id: n.id })}
-            >
-              {n.data.step.title || "Untitled"}
-            </div>
-          ))}
-          {edges.map((e) => (
-            <div key={e.id} data-testid={`flow-edge-${e.id}`} />
-          ))}
+          {nodes
+            .filter((n) => n.id !== "__start__" && n.id !== "__end__")
+            .map((n) => (
+              <div
+                key={n.id}
+                data-testid={`flow-node-${n.id}`}
+                onClick={(e) => nodeClickHandler?.(e, { id: n.id })}
+              >
+                {n.data.step?.title || "Untitled"}
+              </div>
+            ))}
+          {edges
+            .filter((e) => e.source !== "__start__" && e.target !== "__end__")
+            .map((e) => (
+              <div key={e.id} data-testid={`flow-edge-${e.id}`} />
+            ))}
           {children}
         </div>
       );
@@ -55,7 +59,9 @@ vi.mock("@xyflow/react", () => {
     useNodesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
     useEdgesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
     Handle: () => null,
-    Position: { Top: "top", Bottom: "bottom" },
+    Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
+    Background: () => null,
+    Controls: () => null,
     // Make simulateConnect and simulateEdgesDelete available for tests
     __test__: {
       getConnectHandler: () => connectHandler,

@@ -105,7 +105,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
       {/* Handles for edge connections */}
       <Handle
         type="target"
-        position={Position.Top}
+        position={Position.Left}
         className={cn(
           "!w-2 !h-2 !bg-muted-foreground/50 !border-background",
           !isEditMode && "!opacity-0 !pointer-events-none"
@@ -163,7 +163,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
 
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         className={cn(
           "!w-2 !h-2 !bg-muted-foreground/50 !border-background",
           !isEditMode && "!opacity-0 !pointer-events-none"

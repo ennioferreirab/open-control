@@ -5,6 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import {
   ReactFlow,
+  Background,
+  Controls,
   ConnectionMode,
   addEdge,
   useNodesState,
@@ -17,12 +19,18 @@ import "@xyflow/react/dist/style.css";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { FlowStepNode } from "./FlowStepNode";
+import { StartNode, EndNode } from "./StartEndNode";
 import { StepDetailPanel } from "./StepDetailPanel";
 import { hasCycle, recalcParallelGroups, recalcOrderFromDAG } from "@/lib/planUtils";
 import { stepsToNodesAndEdges, layoutWithDagre } from "@/lib/flowLayout";
 import type { ExecutionPlan, PlanStep } from "@/lib/types";
 
-const nodeTypes = { flowStep: FlowStepNode };
+const nodeTypes = { flowStep: FlowStepNode, start: StartNode, end: EndNode };
+
+const defaultEdgeOptions = {
+  animated: false,
+  style: { stroke: "hsl(var(--foreground))", strokeWidth: 2 },
+};
 
 export interface PlanEditorProps {
   plan: ExecutionPlan;
@@ -79,6 +87,13 @@ export function PlanEditor({ plan, taskId, onPlanChange }: PlanEditorProps) {
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
+      // Guard against connecting to/from terminal nodes
+      if (
+        connection.source === "__start__" ||
+        connection.target === "__end__" ||
+        connection.source === "__end__" ||
+        connection.target === "__start__"
+      ) return;
       // source → target means target is blocked by source
       const wouldCycle = hasCycle(localPlan.steps, {
         stepTempId: connection.target,
@@ -100,8 +115,12 @@ export function PlanEditor({ plan, taskId, onPlanChange }: PlanEditorProps) {
 
   const onEdgesDelete = useCallback(
     (deletedEdges: Edge[]) => {
+      // Filter out edges involving terminal START/END nodes
+      const relevantEdges = deletedEdges.filter(
+        (e) => e.source !== "__start__" && e.target !== "__end__"
+      );
       let updatedSteps = [...localPlan.steps];
-      for (const edge of deletedEdges) {
+      for (const edge of relevantEdges) {
         updatedSteps = updatedSteps.map((s) => {
           if (s.tempId !== edge.target) return s;
           return { ...s, blockedBy: s.blockedBy.filter((id) => id !== edge.source) };
@@ -113,6 +132,7 @@ export function PlanEditor({ plan, taskId, onPlanChange }: PlanEditorProps) {
   );
 
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (node.id === "__start__" || node.id === "__end__") return;
     setSelectedStepId(node.id);
   }, []);
 
@@ -219,11 +239,15 @@ export function PlanEditor({ plan, taskId, onPlanChange }: PlanEditorProps) {
           onEdgesDelete={onEdgesDelete}
           onNodeClick={onNodeClick}
           nodeTypes={nodeTypes}
+          defaultEdgeOptions={defaultEdgeOptions}
           connectionMode={ConnectionMode.Loose}
           fitView
           fitViewOptions={{ padding: 0.2 }}
           proOptions={{ hideAttribution: true }}
-        />
+        >
+          <Background color="hsl(var(--border))" gap={15} size={1} />
+          <Controls />
+        </ReactFlow>
       </div>
 
       {/* Detail panel for selected node */}
