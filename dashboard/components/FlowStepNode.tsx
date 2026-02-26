@@ -1,14 +1,17 @@
 "use client";
 
 import { memo } from "react";
-import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { Handle, NodeToolbar, Position, type NodeProps, type Node } from "@xyflow/react";
 import {
+  ArrowRight,
   CheckCircle,
   CheckCircle2,
   Circle,
   CircleDot,
+  GitMerge,
   Loader2,
   Lock,
+  Trash2,
   User,
   XCircle,
 } from "lucide-react";
@@ -77,6 +80,11 @@ export type FlowStepNodeData = {
   step: PlanStep;
   status?: string;
   isEditMode?: boolean;
+  hasParallelSiblings?: boolean;
+  onAddSequential?: (tempId: string) => void;
+  onAddParallel?: (tempId: string) => void;
+  onMergePaths?: (tempId: string) => void;
+  onDeleteStep?: (tempId: string) => void;
   onAccept?: (stepId: string) => void;
   isAccepting?: boolean;
   acceptError?: string;
@@ -86,8 +94,11 @@ export type FlowStepNodeType = Node<FlowStepNodeData, "flowStep">;
 
 /* ── Component ── */
 
+const addBtnClass =
+  "flex items-center justify-center w-5 h-5 rounded-full bg-muted hover:bg-primary hover:text-primary-foreground text-muted-foreground transition-colors shadow-sm border border-border cursor-pointer";
+
 function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) {
-  const { step, status, isEditMode, onAccept, isAccepting, acceptError } = data;
+  const { step, status, isEditMode, hasParallelSiblings, onAddSequential, onAddParallel, onMergePaths, onDeleteStep, onAccept, isAccepting, acceptError } = data;
   const resolvedStatus = status ?? "planned";
   const meta = getStatusMeta(resolvedStatus);
   const isWaitingHuman = normalizeStatus(resolvedStatus) === "waiting_human";
@@ -102,15 +113,78 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
         meta.runningPulse && "motion-safe:animate-pulse"
       )}
     >
-      {/* Handles for edge connections */}
+      {/* Handles — always present for edge rendering, hidden in edit mode */}
       <Handle
         type="target"
         position={Position.Left}
-        className={cn(
-          "!w-2 !h-2 !bg-muted-foreground/50 !border-background",
-          !isEditMode && "!opacity-0 !pointer-events-none"
-        )}
+        className="!opacity-0 !pointer-events-none !w-2 !h-2"
       />
+
+      {/* Edit-mode toolbars */}
+      {isEditMode && (
+        <>
+          {/* Trash button — left side, only when selected */}
+          <NodeToolbar position={Position.Left} offset={8} align="center" isVisible={selected}>
+            <button
+              type="button"
+              data-testid={`delete-step-${step.tempId}`}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-muted hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-colors shadow-sm border border-border cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); onDeleteStep?.(step.tempId); }}
+              title="Delete step"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </NodeToolbar>
+
+          {/* Sequential (→) and optionally merge (⎇) — right */}
+          <NodeToolbar position={Position.Right} offset={8} align="center">
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                data-testid={`add-sequential-${step.tempId}`}
+                className={addBtnClass}
+                onClick={(e) => { e.stopPropagation(); onAddSequential?.(step.tempId); }}
+                title="Add sequential step"
+              >
+                <ArrowRight className="h-3 w-3" />
+              </button>
+              {hasParallelSiblings && (
+                <button
+                  type="button"
+                  data-testid={`merge-paths-${step.tempId}`}
+                  className={addBtnClass}
+                  onClick={(e) => { e.stopPropagation(); onMergePaths?.(step.tempId); }}
+                  title="Merge parallel paths into one step"
+                >
+                  <GitMerge className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          </NodeToolbar>
+          <NodeToolbar position={Position.Top} offset={8} align="center">
+            <button
+              type="button"
+              data-testid={`add-parallel-top-${step.tempId}`}
+              className={addBtnClass}
+              onClick={(e) => { e.stopPropagation(); onAddParallel?.(step.tempId); }}
+              title="Add parallel step"
+            >
+              <ArrowRight className="h-3 w-3 -rotate-90" />
+            </button>
+          </NodeToolbar>
+          <NodeToolbar position={Position.Bottom} offset={8} align="center">
+            <button
+              type="button"
+              data-testid={`add-parallel-bottom-${step.tempId}`}
+              className={addBtnClass}
+              onClick={(e) => { e.stopPropagation(); onAddParallel?.(step.tempId); }}
+              title="Add parallel step"
+            >
+              <ArrowRight className="h-3 w-3 rotate-90" />
+            </button>
+          </NodeToolbar>
+        </>
+      )}
 
       {/* Header: status icon + title */}
       <div className="flex items-center gap-1.5 min-w-0">
@@ -164,10 +238,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
       <Handle
         type="source"
         position={Position.Right}
-        className={cn(
-          "!w-2 !h-2 !bg-muted-foreground/50 !border-background",
-          !isEditMode && "!opacity-0 !pointer-events-none"
-        )}
+        className="!opacity-0 !pointer-events-none !w-2 !h-2"
       />
     </div>
   );

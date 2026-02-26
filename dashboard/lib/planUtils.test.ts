@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { hasCycle, recalcParallelGroups, recalcOrderFromDAG, type PlanStep } from "./planUtils";
+import {
+  hasCycle,
+  recalcParallelGroups,
+  recalcOrderFromDAG,
+  insertSequentialStep,
+  insertParallelStep,
+  swapStepPositions,
+  insertMergeStep,
+  type PlanStep,
+} from "./planUtils";
 
 function makeStep(overrides: Partial<PlanStep> & { tempId: string }): PlanStep {
   return {
@@ -250,5 +259,260 @@ describe("recalcOrderFromDAG", () => {
     expect(() => recalcOrderFromDAG(steps)).not.toThrow();
     const result = recalcOrderFromDAG(steps);
     expect(result).toHaveLength(2);
+  });
+});
+
+describe("insertSequentialStep", () => {
+  it("inserts between a step and its single downstream dependent", () => {
+    // A → B (B.blockedBy = [A])
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: ["A"] }),
+    ];
+    const { steps: result, newStep } = insertSequentialStep(steps, "A");
+    // New step should be blocked by A
+    expect(newStep.blockedBy).toEqual(["A"]);
+    // B should now be blocked by the new step, not A
+    const b = result.find((s) => s.tempId === "B")!;
+    expect(b.blockedBy).toContain(newStep.tempId);
+    expect(b.blockedBy).not.toContain("A");
+  });
+
+  it("inserts between a step and multiple downstream dependents", () => {
+    // A → B, A → C
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: ["A"] }),
+      makeStep({ tempId: "C", blockedBy: ["A"] }),
+    ];
+    const { steps: result, newStep } = insertSequentialStep(steps, "A");
+    const b = result.find((s) => s.tempId === "B")!;
+    const c = result.find((s) => s.tempId === "C")!;
+    // Both B and C now depend on newStep
+    expect(b.blockedBy).toContain(newStep.tempId);
+    expect(c.blockedBy).toContain(newStep.tempId);
+    expect(b.blockedBy).not.toContain("A");
+    expect(c.blockedBy).not.toContain("A");
+  });
+
+  it("inserts after a leaf node (no downstream dependents)", () => {
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: ["A"] }),
+    ];
+    const { steps: result, newStep } = insertSequentialStep(steps, "B");
+    // New step blocked by B, no rewiring needed
+    expect(newStep.blockedBy).toEqual(["B"]);
+    expect(result).toHaveLength(3);
+    // B should be unchanged
+    const b = result.find((s) => s.tempId === "B")!;
+    expect(b.blockedBy).toEqual(["A"]);
+  });
+
+  it("inserts after a root step with no blockers", () => {
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+    ];
+    const { steps: result, newStep } = insertSequentialStep(steps, "A");
+    expect(newStep.blockedBy).toEqual(["A"]);
+    expect(result).toHaveLength(2);
+  });
+
+  it("recalculates parallelGroups and order", () => {
+    // A → B
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: ["A"] }),
+    ];
+    const { steps: result, newStep } = insertSequentialStep(steps, "A");
+    const a = result.find((s) => s.tempId === "A")!;
+    const n = result.find((s) => s.tempId === newStep.tempId)!;
+    const b = result.find((s) => s.tempId === "B")!;
+    // Chain: A(0) → New(1) → B(2)
+    expect(a.parallelGroup).toBe(0);
+    expect(n.parallelGroup).toBe(1);
+    expect(b.parallelGroup).toBe(2);
+    expect(a.order).toBeLessThan(n.order);
+    expect(n.order).toBeLessThan(b.order);
+  });
+});
+
+describe("insertParallelStep", () => {
+  it("creates a step with the same blockers as the source", () => {
+    // X → A → Y
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "X", blockedBy: [] }),
+      makeStep({ tempId: "A", blockedBy: ["X"] }),
+      makeStep({ tempId: "Y", blockedBy: ["A"] }),
+    ];
+    const { newStep } = insertParallelStep(steps, "A");
+    // New step should have same blockers as A
+    expect(newStep.blockedBy).toEqual(["X"]);
+  });
+
+  it("adds new step to downstream dependents' blockedBy", () => {
+    // X → A → Y
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "X", blockedBy: [] }),
+      makeStep({ tempId: "A", blockedBy: ["X"] }),
+      makeStep({ tempId: "Y", blockedBy: ["A"] }),
+    ];
+    const { steps: result, newStep } = insertParallelStep(steps, "A");
+    const y = result.find((s) => s.tempId === "Y")!;
+    // Y should now be blocked by both A and the new step
+    expect(y.blockedBy).toContain("A");
+    expect(y.blockedBy).toContain(newStep.tempId);
+  });
+
+  it("handles root step (no blockers) — new step is also a root", () => {
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: ["A"] }),
+    ];
+    const { newStep } = insertParallelStep(steps, "A");
+    expect(newStep.blockedBy).toEqual([]);
+  });
+
+  it("handles step with multiple downstreams", () => {
+    // A → B, A → C
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: ["A"] }),
+      makeStep({ tempId: "C", blockedBy: ["A"] }),
+    ];
+    const { steps: result, newStep } = insertParallelStep(steps, "A");
+    const b = result.find((s) => s.tempId === "B")!;
+    const c = result.find((s) => s.tempId === "C")!;
+    // Both B and C should also depend on newStep
+    expect(b.blockedBy).toContain(newStep.tempId);
+    expect(c.blockedBy).toContain(newStep.tempId);
+  });
+
+  it("places new step at same parallelGroup as source", () => {
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "X", blockedBy: [] }),
+      makeStep({ tempId: "A", blockedBy: ["X"] }),
+    ];
+    const { steps: result, newStep } = insertParallelStep(steps, "A");
+    const a = result.find((s) => s.tempId === "A")!;
+    const n = result.find((s) => s.tempId === newStep.tempId)!;
+    expect(n.parallelGroup).toBe(a.parallelGroup);
+  });
+});
+
+describe("swapStepPositions", () => {
+  it("swaps two independent steps' positions", () => {
+    // A(root), B(root), C blocked by A, D blocked by B
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: [] }),
+      makeStep({ tempId: "C", blockedBy: ["A"] }),
+      makeStep({ tempId: "D", blockedBy: ["B"] }),
+    ];
+    const result = swapStepPositions(steps, "A", "B");
+    const c = result.find((s) => s.tempId === "C")!;
+    const d = result.find((s) => s.tempId === "D")!;
+    // After swap: C should be blocked by B, D should be blocked by A
+    expect(c.blockedBy).toEqual(["B"]);
+    expect(d.blockedBy).toEqual(["A"]);
+  });
+
+  it("swaps adjacent steps (A → B becomes B → A)", () => {
+    // A → B (B.blockedBy = [A])
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: ["A"] }),
+    ];
+    const result = swapStepPositions(steps, "A", "B");
+    const a = result.find((s) => s.tempId === "A")!;
+    const b = result.find((s) => s.tempId === "B")!;
+    // After swap: B should have no blockers (was A's), A should be blocked by B
+    expect(b.blockedBy).toEqual([]);
+    expect(a.blockedBy).toEqual(["B"]);
+  });
+
+  it("swaps steps at different DAG levels", () => {
+    // A → B → C
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+      makeStep({ tempId: "B", blockedBy: ["A"] }),
+      makeStep({ tempId: "C", blockedBy: ["B"] }),
+    ];
+    const result = swapStepPositions(steps, "A", "C");
+    const a = result.find((s) => s.tempId === "A")!;
+    const b = result.find((s) => s.tempId === "B")!;
+    const c = result.find((s) => s.tempId === "C")!;
+    // After swap: C gets A's blockedBy (empty), A gets C's blockedBy (B), B stays blocked by C
+    expect(c.blockedBy).toEqual([]);
+    expect(a.blockedBy).toEqual(["B"]);
+    expect(b.blockedBy).toEqual(["C"]);
+  });
+
+  it("returns original steps if a tempId is not found", () => {
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [] }),
+    ];
+    const result = swapStepPositions(steps, "A", "Z");
+    expect(result).toEqual(steps);
+  });
+});
+
+describe("insertMergeStep", () => {
+  it("creates a step blocked by all parallel steps at the same group", () => {
+    // A(group 0), B(group 0) — two parallel roots
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [], parallelGroup: 0 }),
+      makeStep({ tempId: "B", blockedBy: [], parallelGroup: 0 }),
+    ];
+    const { newStep } = insertMergeStep(steps, "A");
+    expect(newStep.blockedBy).toContain("A");
+    expect(newStep.blockedBy).toContain("B");
+    expect(newStep.blockedBy).toHaveLength(2);
+  });
+
+  it("rewires downstream dependents to depend on the merge step", () => {
+    // A(group 0), B(group 0), C depends on A, D depends on B
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [], parallelGroup: 0 }),
+      makeStep({ tempId: "B", blockedBy: [], parallelGroup: 0 }),
+      makeStep({ tempId: "C", blockedBy: ["A"], parallelGroup: 1 }),
+      makeStep({ tempId: "D", blockedBy: ["B"], parallelGroup: 1 }),
+    ];
+    const { steps: result, newStep } = insertMergeStep(steps, "A");
+    const c = result.find((s) => s.tempId === "C")!;
+    const d = result.find((s) => s.tempId === "D")!;
+    // C and D should now depend on merge step, not A/B
+    expect(c.blockedBy).toContain(newStep.tempId);
+    expect(c.blockedBy).not.toContain("A");
+    expect(d.blockedBy).toContain(newStep.tempId);
+    expect(d.blockedBy).not.toContain("B");
+  });
+
+  it("shared downstream step is rewired once to merge step", () => {
+    // A(group 0), B(group 0) both → C
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [], parallelGroup: 0 }),
+      makeStep({ tempId: "B", blockedBy: [], parallelGroup: 0 }),
+      makeStep({ tempId: "C", blockedBy: ["A", "B"], parallelGroup: 1 }),
+    ];
+    const { steps: result, newStep } = insertMergeStep(steps, "B");
+    const c = result.find((s) => s.tempId === "C")!;
+    expect(c.blockedBy).toEqual([newStep.tempId]);
+  });
+
+  it("merge step gets a higher parallelGroup than the parallel steps", () => {
+    const steps: PlanStep[] = [
+      makeStep({ tempId: "A", blockedBy: [], parallelGroup: 0 }),
+      makeStep({ tempId: "B", blockedBy: [], parallelGroup: 0 }),
+    ];
+    const { steps: result, newStep } = insertMergeStep(steps, "A");
+    const a = result.find((s) => s.tempId === "A")!;
+    const n = result.find((s) => s.tempId === newStep.tempId)!;
+    expect(n.parallelGroup).toBeGreaterThan(a.parallelGroup);
+  });
+
+  it("throws if tempId is not found", () => {
+    const steps: PlanStep[] = [makeStep({ tempId: "A", blockedBy: [] })];
+    expect(() => insertMergeStep(steps, "Z")).toThrow();
   });
 });

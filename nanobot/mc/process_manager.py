@@ -32,6 +32,7 @@ class ProcessConfig:
     cwd: str
     env: dict[str, str] | None = None
     critical: bool = True  # If False, crash won't bring down other processes
+    restart_on_crash: bool = False  # If True, auto-restart on unexpected exit
 
 
 @dataclass
@@ -236,6 +237,9 @@ class ProcessManager:
                 command="npm",
                 args=["run", "dev"],
                 cwd=self._dashboard_dir,
+                env={"NODE_OPTIONS": "--max-old-space-size=1536"},
+                critical=False,
+                restart_on_crash=True,
             ),
             ProcessConfig(
                 label="gateway",
@@ -360,9 +364,10 @@ class ProcessManager:
         """
         Monitor all child processes for unexpected termination.
         Runs as a background task after startup.
+        Processes with restart_on_crash=True are restarted automatically.
         """
         while self._running:
-            for managed in self._processes:
+            for i, managed in enumerate(self._processes):
                 process = managed.process
                 if process.returncode is not None and self._running:
                     label = managed.config.label
@@ -377,9 +382,23 @@ class ProcessManager:
                             f"[MC] Process {label} (PID: {process.pid}) "
                             f"exited unexpectedly with code 0"
                         )
-                    if self._on_crash:
-                        await self._on_crash(label, exit_code)
-                    return
+
+                    if managed.config.restart_on_crash:
+                        logger.info(f"[MC] Restarting {label}...")
+                        try:
+                            restarted = await self._spawn_process(managed.config)
+                            self._processes[i] = restarted
+                            logger.info(
+                                f"[MC] Restarted {label} (PID: {restarted.process.pid})"
+                            )
+                        except Exception as exc:
+                            logger.error(f"[MC] Failed to restart {label}: {exc}")
+                        continue
+
+                    if managed.config.critical:
+                        if self._on_crash:
+                            await self._on_crash(label, exit_code)
+                        return
             await asyncio.sleep(1)
 
     def _register_signal_handlers(self) -> None:

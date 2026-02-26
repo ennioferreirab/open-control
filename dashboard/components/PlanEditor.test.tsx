@@ -3,32 +3,39 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { PlanEditor } from "./PlanEditor";
 import type { ExecutionPlan } from "@/lib/types";
 
+// Track onAddSequential / onAddParallel injected into node data
+let capturedNodeData: Record<string, {
+  onAddSequential?: (tempId: string) => void;
+  onAddParallel?: (tempId: string) => void;
+}> = {};
+
+let nodeClickHandler: ((event: React.MouseEvent, node: { id: string }) => void) | undefined;
+
 // Mock React Flow — render nodes as divs with data
 vi.mock("@xyflow/react", () => {
-  let connectHandler: ((conn: { source: string; target: string }) => void) | undefined;
-  let edgesDeleteHandler: ((edges: { id: string; source: string; target: string }[]) => void) | undefined;
-  let nodeClickHandler: ((event: React.MouseEvent, node: { id: string }) => void) | undefined;
-
   return {
     ReactFlow: ({
       nodes,
-      edges,
-      onConnect,
-      onEdgesDelete,
       onNodeClick,
       children,
     }: {
-      nodes: { id: string; data: { step?: { tempId: string; title: string } } }[];
+      nodes: { id: string; data: { step?: { tempId: string; title: string }; onAddSequential?: (id: string) => void; onAddParallel?: (id: string) => void } }[];
       edges: { id: string; source: string; target: string }[];
-      onConnect?: typeof connectHandler;
-      onEdgesDelete?: typeof edgesDeleteHandler;
       onNodeClick?: typeof nodeClickHandler;
       children?: React.ReactNode;
       [key: string]: unknown;
     }) => {
-      connectHandler = onConnect;
-      edgesDeleteHandler = onEdgesDelete;
       nodeClickHandler = onNodeClick;
+      // Capture callbacks from node data
+      capturedNodeData = {};
+      for (const n of nodes) {
+        if (n.data.step) {
+          capturedNodeData[n.id] = {
+            onAddSequential: n.data.onAddSequential,
+            onAddParallel: n.data.onAddParallel,
+          };
+        }
+      }
       return (
         <div data-testid="react-flow">
           {nodes
@@ -42,11 +49,6 @@ vi.mock("@xyflow/react", () => {
                 {n.data.step?.title || "Untitled"}
               </div>
             ))}
-          {edges
-            .filter((e) => e.source !== "__start__" && e.target !== "__end__")
-            .map((e) => (
-              <div key={e.id} data-testid={`flow-edge-${e.id}`} />
-            ))}
           {children}
         </div>
       );
@@ -58,16 +60,12 @@ vi.mock("@xyflow/react", () => {
     ],
     useNodesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
     useEdgesState: (initial: unknown[]) => [initial, vi.fn(), vi.fn()],
+    useOnSelectionChange: vi.fn(),
     Handle: () => null,
+    NodeToolbar: () => null,
     Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
     Background: () => null,
     Controls: () => null,
-    // Make simulateConnect and simulateEdgesDelete available for tests
-    __test__: {
-      getConnectHandler: () => connectHandler,
-      getEdgesDeleteHandler: () => edgesDeleteHandler,
-      getNodeClickHandler: () => nodeClickHandler,
-    },
   };
 });
 
@@ -119,8 +117,8 @@ vi.mock("./StepFileAttachment", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, ...rest }: React.PropsWithChildren<{ onClick?: () => void; [key: string]: unknown }>) => (
-    <button onClick={onClick} {...rest}>{children}</button>
+  Button: ({ children, onClick, disabled, ...rest }: React.PropsWithChildren<{ onClick?: () => void; disabled?: boolean; [key: string]: unknown }>) => (
+    <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
   ),
 }));
 
@@ -170,6 +168,7 @@ const basePlan: ExecutionPlan = {
 describe("PlanEditor", () => {
   afterEach(() => {
     cleanup();
+    capturedNodeData = {};
   });
 
   it("renders React Flow canvas with plan-editor testid", () => {
@@ -190,58 +189,25 @@ describe("PlanEditor", () => {
     expect(screen.getByText("Step Two")).toBeInTheDocument();
   });
 
-  it("renders edges for steps with blockedBy", () => {
-    const planWithDeps: ExecutionPlan = {
-      ...basePlan,
-      steps: [
-        { ...basePlan.steps[0] },
-        { ...basePlan.steps[1], blockedBy: ["step-1"] },
-      ],
-    };
-    render(<PlanEditor plan={planWithDeps} taskId="task-test" onPlanChange={vi.fn()} />);
-    expect(screen.getByTestId("flow-edge-e-step-1-step-2")).toBeInTheDocument();
-  });
-
-  it("renders an Add Step button", () => {
+  it("renders a Switch button (disabled with 0 selections)", () => {
     render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={vi.fn()} />);
-    expect(screen.getByText("Add Step")).toBeInTheDocument();
-  });
-
-  it("adds a new step when Add Step is clicked", () => {
-    const onPlanChange = vi.fn();
-    render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={onPlanChange} />);
-    fireEvent.click(screen.getByText("Add Step"));
-
-    expect(onPlanChange).toHaveBeenCalledTimes(1);
-    const result: ExecutionPlan = onPlanChange.mock.calls[0][0];
-    expect(result.steps).toHaveLength(3);
-    const newStep = result.steps[2];
-    expect(newStep.title).toBe("");
-    expect(newStep.description).toBe("");
-    expect(newStep.assignedAgent).toBe("nanobot");
-    expect(newStep.blockedBy).toEqual([]);
+    const switchBtn = screen.getByTestId("switch-position-btn");
+    expect(switchBtn).toBeInTheDocument();
+    expect(switchBtn).toBeDisabled();
   });
 
   it("opens detail panel when node is clicked", () => {
     render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={vi.fn()} />);
-
-    // No detail panel initially
     expect(screen.queryByTestId("step-detail-panel")).not.toBeInTheDocument();
-
-    // Click a node
     fireEvent.click(screen.getByTestId("flow-node-step-1"));
-
-    // Detail panel appears
     expect(screen.getByTestId("step-detail-panel")).toBeInTheDocument();
     expect(screen.getByTestId("detail-step-title")).toHaveTextContent("Step One");
   });
 
   it("closes detail panel when close is clicked", () => {
     render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={vi.fn()} />);
-
     fireEvent.click(screen.getByTestId("flow-node-step-1"));
     expect(screen.getByTestId("step-detail-panel")).toBeInTheDocument();
-
     fireEvent.click(screen.getByTestId("detail-close"));
     expect(screen.queryByTestId("step-detail-panel")).not.toBeInTheDocument();
   });
@@ -249,7 +215,6 @@ describe("PlanEditor", () => {
   it("deletes a step when delete is clicked in detail panel", () => {
     const onPlanChange = vi.fn();
     render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={onPlanChange} />);
-
     fireEvent.click(screen.getByTestId("flow-node-step-1"));
     fireEvent.click(screen.getByTestId("detail-delete"));
 
@@ -269,7 +234,6 @@ describe("PlanEditor", () => {
     };
     const onPlanChange = vi.fn();
     render(<PlanEditor plan={planWithDep} taskId="task-test" onPlanChange={onPlanChange} />);
-
     fireEvent.click(screen.getByTestId("flow-node-step-1"));
     fireEvent.click(screen.getByTestId("detail-delete"));
 
@@ -282,7 +246,8 @@ describe("PlanEditor", () => {
     const onPlanChange = vi.fn();
     render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={onPlanChange} />);
 
-    fireEvent.click(screen.getByText("Add Step"));
+    // Trigger a plan change via add sequential
+    capturedNodeData["step-1"]?.onAddSequential?.("step-1");
 
     const result: ExecutionPlan = onPlanChange.mock.calls[0][0];
     expect(result.generatedAt).toBe("2026-01-01T00:00:00Z");
@@ -294,7 +259,6 @@ describe("PlanEditor", () => {
     const { rerender } = render(
       <PlanEditor plan={basePlan} taskId="task-test" onPlanChange={onPlanChange} />
     );
-
     expect(screen.getByText("Step One")).toBeInTheDocument();
 
     const regeneratedPlan: ExecutionPlan = {
@@ -314,8 +278,31 @@ describe("PlanEditor", () => {
     };
 
     rerender(<PlanEditor plan={regeneratedPlan} taskId="task-test" onPlanChange={onPlanChange} />);
-
     expect(screen.getByText("New Step Alpha")).toBeInTheDocument();
     expect(screen.queryByText("Step One")).not.toBeInTheDocument();
+  });
+
+  it("injects onAddSequential callback that creates a sequential step", () => {
+    const onPlanChange = vi.fn();
+    render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={onPlanChange} />);
+    // Simulate what the "+" right button does
+    capturedNodeData["step-1"]?.onAddSequential?.("step-1");
+    expect(onPlanChange).toHaveBeenCalledTimes(1);
+    const result: ExecutionPlan = onPlanChange.mock.calls[0][0];
+    expect(result.steps.length).toBe(3);
+  });
+
+  it("injects onAddParallel callback that creates a parallel step", () => {
+    const onPlanChange = vi.fn();
+    render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={onPlanChange} />);
+    capturedNodeData["step-1"]?.onAddParallel?.("step-1");
+    expect(onPlanChange).toHaveBeenCalledTimes(1);
+    const result: ExecutionPlan = onPlanChange.mock.calls[0][0];
+    expect(result.steps.length).toBe(3);
+  });
+
+  it("shows hint text for switch", () => {
+    render(<PlanEditor plan={basePlan} taskId="task-test" onPlanChange={vi.fn()} />);
+    expect(screen.getByText("ctrl+click on 2 boxes")).toBeInTheDocument();
   });
 });

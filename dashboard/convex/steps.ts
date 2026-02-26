@@ -487,6 +487,36 @@ export const acceptHumanStep = mutation({
   },
 });
 
+export const deleteStep = mutation({
+  args: {
+    stepId: v.id("steps"),
+  },
+  handler: async (ctx, args) => {
+    const step = await ctx.db.get(args.stepId);
+    if (!step) {
+      throw new ConvexError("Step not found");
+    }
+
+    // Clean up blockedBy references in sibling steps
+    const taskSteps = await ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
+      .collect();
+
+    for (const sibling of taskSteps) {
+      if (sibling._id === args.stepId) continue;
+      if (sibling.blockedBy && sibling.blockedBy.includes(args.stepId)) {
+        const newBlockedBy = sibling.blockedBy.filter((id) => id !== args.stepId);
+        await ctx.db.patch(sibling._id, {
+          blockedBy: newBlockedBy.length > 0 ? newBlockedBy : undefined,
+        });
+      }
+    }
+
+    await ctx.db.delete(args.stepId);
+  },
+});
+
 export const checkAndUnblockDependents = mutation({
   args: {
     stepId: v.id("steps"),

@@ -100,12 +100,10 @@ export function TaskInput() {
     try {
       const taskId = await createTask(args);
       setTitle("");
-      setIsManual(false);
       setSelectedAgent("");
       setTrustLevel("autonomous");
       setSupervisionMode("autonomous");
       setSelectedReviewers([]);
-      setSelectedTags([]);
       setIsExpanded(false);
 
       // Upload actual files to disk (metadata already in Convex from createTask)

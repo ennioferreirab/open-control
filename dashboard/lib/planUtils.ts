@@ -7,6 +7,160 @@ export type { PlanStep } from "./types";
 import type { PlanStep } from "./types";
 
 /**
+ * Insert a new step sequentially after the given step.
+ * The new step sits between `afterTempId` and all its downstream dependents.
+ */
+export function insertSequentialStep(
+  steps: PlanStep[],
+  afterTempId: string
+): { steps: PlanStep[]; newStep: PlanStep } {
+  const newTempId = `step_new_${Date.now()}`;
+  const newStep: PlanStep = {
+    tempId: newTempId,
+    title: "",
+    description: "",
+    assignedAgent: "nanobot",
+    blockedBy: [afterTempId],
+    parallelGroup: 0,
+    order: 0,
+  };
+
+  // Rewire downstream dependents: any step that has afterTempId in blockedBy
+  // should now depend on newStep instead
+  const updatedSteps = steps.map((s) => {
+    if (!s.blockedBy.includes(afterTempId)) return s;
+    return {
+      ...s,
+      blockedBy: s.blockedBy.map((id) => (id === afterTempId ? newTempId : id)),
+    };
+  });
+
+  const result = recalcOrderFromDAG(recalcParallelGroups([...updatedSteps, newStep]));
+  return { steps: result, newStep: result.find((s) => s.tempId === newTempId)! };
+}
+
+/**
+ * Insert a new step in parallel with the given step.
+ * The new step shares the same blockers and downstream dependents.
+ */
+export function insertParallelStep(
+  steps: PlanStep[],
+  parallelToTempId: string
+): { steps: PlanStep[]; newStep: PlanStep } {
+  const sourceStep = steps.find((s) => s.tempId === parallelToTempId);
+  if (!sourceStep) throw new Error(`Step ${parallelToTempId} not found`);
+
+  const newTempId = `step_new_${Date.now()}`;
+  const newStep: PlanStep = {
+    tempId: newTempId,
+    title: "",
+    description: "",
+    assignedAgent: "nanobot",
+    blockedBy: [...sourceStep.blockedBy],
+    parallelGroup: 0,
+    order: 0,
+  };
+
+  // Add newStep to blockedBy of all downstream dependents of the source
+  const updatedSteps = steps.map((s) => {
+    if (!s.blockedBy.includes(parallelToTempId)) return s;
+    return {
+      ...s,
+      blockedBy: [...s.blockedBy, newTempId],
+    };
+  });
+
+  const result = recalcOrderFromDAG(recalcParallelGroups([...updatedSteps, newStep]));
+  return { steps: result, newStep: result.find((s) => s.tempId === newTempId)! };
+}
+
+/**
+ * Swap two steps' positions in the DAG by swapping their blockedBy arrays
+ * and updating all references to them in other steps.
+ */
+export function swapStepPositions(
+  steps: PlanStep[],
+  tempIdA: string,
+  tempIdB: string
+): PlanStep[] {
+  const stepA = steps.find((s) => s.tempId === tempIdA);
+  const stepB = steps.find((s) => s.tempId === tempIdB);
+  if (!stepA || !stepB) return steps;
+
+  const swapped = steps.map((s) => {
+    if (s.tempId === tempIdA) {
+      // A gets B's blockedBy, but replace any self-references
+      return {
+        ...s,
+        blockedBy: stepB.blockedBy.map((id) =>
+          id === tempIdA ? tempIdB : id === tempIdB ? tempIdA : id
+        ),
+      };
+    }
+    if (s.tempId === tempIdB) {
+      // B gets A's blockedBy, but replace any self-references
+      return {
+        ...s,
+        blockedBy: stepA.blockedBy.map((id) =>
+          id === tempIdA ? tempIdB : id === tempIdB ? tempIdA : id
+        ),
+      };
+    }
+    // For all other steps, swap references in blockedBy
+    return {
+      ...s,
+      blockedBy: s.blockedBy.map((id) =>
+        id === tempIdA ? tempIdB : id === tempIdB ? tempIdA : id
+      ),
+    };
+  });
+
+  return recalcOrderFromDAG(recalcParallelGroups(swapped));
+}
+
+/**
+ * Insert a merge step that converges all parallel steps at the same DAG level
+ * into a single downstream step.
+ *
+ * All steps at the same parallelGroup as `tempId` become blockers of the new step.
+ * Any existing downstream dependents of those parallel steps are rewired to depend
+ * on the new merge step instead.
+ */
+export function insertMergeStep(
+  steps: PlanStep[],
+  tempId: string
+): { steps: PlanStep[]; newStep: PlanStep } {
+  const sourceStep = steps.find((s) => s.tempId === tempId);
+  if (!sourceStep) throw new Error(`Step ${tempId} not found`);
+
+  const group = sourceStep.parallelGroup;
+  const parallelSteps = steps.filter((s) => s.parallelGroup === group);
+  const parallelIds = new Set(parallelSteps.map((s) => s.tempId));
+
+  const newTempId = `step_new_${Date.now()}`;
+  const newStep: PlanStep = {
+    tempId: newTempId,
+    title: "",
+    description: "",
+    assignedAgent: "nanobot",
+    blockedBy: parallelSteps.map((s) => s.tempId),
+    parallelGroup: 0,
+    order: 0,
+  };
+
+  // Rewire: any step that depends on any of the parallel steps now depends on the merge step
+  const updatedSteps = steps.map((s) => {
+    const hasParallelDep = s.blockedBy.some((id) => parallelIds.has(id));
+    if (!hasParallelDep) return s;
+    const cleaned = s.blockedBy.filter((id) => !parallelIds.has(id));
+    return { ...s, blockedBy: [...cleaned, newTempId] };
+  });
+
+  const result = recalcOrderFromDAG(recalcParallelGroups([...updatedSteps, newStep]));
+  return { steps: result, newStep: result.find((s) => s.tempId === newTempId)! };
+}
+
+/**
  * Checks if adding a proposed dependency edge would create a cycle.
  *
  * The dependency direction: step.blockedBy = [A, B] means A -> step and B -> step

@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import * as motion from "motion/react-client";
 import { useReducedMotion } from "motion/react";
 import type { KeyboardEvent } from "react";
+import { useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Lock, Paperclip } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, Lock, Paperclip, Trash2 } from "lucide-react";
 import { Doc } from "../convex/_generated/dataModel";
 import { STEP_STATUS_COLORS, type StepStatus } from "@/lib/constants";
 
@@ -17,6 +21,8 @@ interface StepCardProps {
 
 export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
   const shouldReduceMotion = useReducedMotion();
+  const deleteStepMutation = useMutation(api.steps.deleteStep);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const colors =
     STEP_STATUS_COLORS[step.status as StepStatus] ?? STEP_STATUS_COLORS.assigned;
   const assignedAgentName = step.assignedAgent ?? "Unassigned";
@@ -114,7 +120,51 @@ export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
               {step.attachedFiles.length}
             </span>
           )}
+          <Trash2
+            className="ml-auto h-3.5 w-3.5 cursor-pointer text-muted-foreground transition-colors hover:text-red-500"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDeleteConfirm((prev) => !prev);
+            }}
+          />
         </div>
+        {showDeleteConfirm && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-center gap-2 pt-2">
+                <span className="text-xs text-muted-foreground">Delete this step?</span>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-6 px-2 text-xs"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await deleteStepMutation({ stepId: step._id });
+                  }}
+                >
+                  Yes
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDeleteConfirm(false);
+                  }}
+                >
+                  No
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </Card>
     </motion.div>
   );
