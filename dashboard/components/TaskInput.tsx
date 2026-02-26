@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -139,12 +138,6 @@ export function TaskInput() {
     e.target.value = "";
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSubmit();
-    }
-  };
-
   const showReviewerSection = trustLevel !== "autonomous";
 
   return (
@@ -157,18 +150,52 @@ export function TaskInput() {
           onChange={handleFileSelect}
           className="hidden"
         />
-        <div className="flex-1">
-          <Input
-            placeholder="Create a new task..."
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              setError("");
-            }}
-            onKeyDown={handleKeyDown}
-            className={error ? "border-red-500" : ""}
-          />
-          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+        <div className="relative flex-1" style={{ height: 36 }}>
+          {isFocused ? (
+            <textarea
+              ref={textareaRef}
+              placeholder="Create a new task..."
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setError("");
+                // Auto-grow
+                const el = e.target;
+                el.style.height = "auto";
+                el.style.height = el.scrollHeight + "px";
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+                if (e.key === "Escape") {
+                  textareaRef.current?.blur();
+                }
+              }}
+              onBlur={() => setIsFocused(false)}
+              rows={1}
+              className={`absolute top-0 left-0 right-0 z-50 min-h-[36px] w-full resize-none rounded-md border bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring ${
+                error ? "border-red-500" : "border-input"
+              }`}
+              style={{ height: 36 }}
+            />
+          ) : (
+            <div
+              role="textbox"
+              aria-label="Create a new task"
+              tabIndex={0}
+              onClick={() => setIsFocused(true)}
+              onFocus={() => setIsFocused(true)}
+              className={`flex h-[36px] cursor-text items-center rounded-md border px-3 py-1.5 text-sm ${
+                error ? "border-red-500" : "border-input"
+              } ${title ? "text-foreground" : "text-muted-foreground"} overflow-hidden whitespace-nowrap`}
+              style={{ textOverflow: "ellipsis" }}
+            >
+              {title || "Create a new task..."}
+            </div>
+          )}
+          {error && <p className="absolute top-[38px] left-0 text-xs text-red-500">{error}</p>}
         </div>
 
         {/* Right-side action group */}
