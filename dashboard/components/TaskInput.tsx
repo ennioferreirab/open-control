@@ -41,6 +41,7 @@ export function TaskInput() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const { activeBoardId } = useBoard();
   const createTask = useMutation(api.tasks.create);
@@ -141,6 +142,7 @@ export function TaskInput() {
   const showReviewerSection = trustLevel !== "autonomous";
 
   return (
+    <div ref={wrapperRef}>
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
       <div className="flex gap-2 items-start">
         <input
@@ -173,24 +175,32 @@ export function TaskInput() {
                   textareaRef.current?.blur();
                 }
               }}
-              onBlur={() => setIsFocused(false)}
+              onBlur={(e) => {
+                if (wrapperRef.current?.contains(e.relatedTarget as Node)) return;
+                setIsFocused(false);
+              }}
               rows={1}
               className={`absolute top-0 left-0 right-0 z-50 min-h-[36px] w-full resize-none rounded-md border bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring ${
                 error ? "border-red-500" : "border-input"
               }`}
-              style={{ height: 36 }}
             />
           ) : (
             <div
               role="textbox"
               aria-label="Create a new task"
+              aria-multiline={false}
               tabIndex={0}
               onClick={() => setIsFocused(true)}
               onFocus={() => setIsFocused(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setIsFocused(true);
+                }
+              }}
               className={`flex h-[36px] cursor-text items-center rounded-md border px-3 py-1.5 text-sm ${
                 error ? "border-red-500" : "border-input"
-              } ${title ? "text-foreground" : "text-muted-foreground"} overflow-hidden whitespace-nowrap`}
-              style={{ textOverflow: "ellipsis" }}
+              } ${title ? "text-foreground" : "text-muted-foreground"} overflow-hidden whitespace-nowrap text-ellipsis`}
             >
               {title || "Create a new task..."}
             </div>
@@ -439,5 +449,6 @@ export function TaskInput() {
           </div>
       </CollapsibleContent>
     </Collapsible>
+    </div>
   );
 }
