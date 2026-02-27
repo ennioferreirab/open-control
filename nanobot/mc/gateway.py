@@ -881,8 +881,24 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     from nanobot.mc.executor import TaskExecutor
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
+    from nanobot.config.loader import load_config
+    from nanobot.bus.queue import MessageBus
+    from nanobot.channels.manager import ChannelManager
+    from nanobot.channels.mission_control import MissionControlChannel
 
     logger.info("[gateway] Agent Gateway started")
+
+    # Channel manager for outbound cron delivery
+    config = load_config()
+    bus = MessageBus()
+    channels = ChannelManager(config, bus)
+
+    # Register MC channel with bridge access (overrides config-only mc channel)
+    mc_channel = MissionControlChannel(config.channels.mc, bus, bridge=bridge)
+    channels.register_channel("mc", mc_channel)
+
+    if channels.enabled_channels:
+        logger.info("[gateway] Channels enabled: %s", ", ".join(channels.enabled_channels))
 
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -957,14 +973,16 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         logger.info("[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name)
 
     async def on_cron_job(job: CronJob) -> str | None:
-        """Re-queue the originating task (if linked) or create a new task when a cron job fires."""
+        """Re-queue the originating task (if linked) or create a new task when a cron job fires.
+
+        Additionally, if the job has deliver=True and a channel, publish a
+        notification to that channel via the ChannelManager.
+        """
         logger.info("[gateway] Cron job '%s' fired", job.name)
         try:
             if job.payload.task_id:
-                # Re-queue the original task so history accumulates in one place
                 await _requeue_cron_task(bridge, job.payload.task_id, job.payload.message)
             else:
-                # No linked task — create a new task (classic cron behavior)
                 await asyncio.to_thread(
                     bridge.mutation,
                     "tasks:create",
@@ -972,6 +990,23 @@ async def run_gateway(bridge: ConvexBridge) -> None:
                 )
         except Exception:
             logger.exception("[gateway] Failed to handle cron job '%s'", job.name)
+
+        # Deliver notification to external channel if configured
+        if job.payload.deliver and job.payload.to and job.payload.channel:
+            try:
+                from nanobot.bus.events import OutboundMessage
+
+                await bus.publish_outbound(OutboundMessage(
+                    channel=job.payload.channel,
+                    chat_id=job.payload.to,
+                    content=f"\U0001f514 Cron triggered: {job.payload.message}",
+                ))
+            except Exception:
+                logger.exception(
+                    "[gateway] Failed to deliver cron notification to %s",
+                    job.payload.channel,
+                )
+
         return None
 
     cron.on_job = on_cron_job
@@ -1020,11 +1055,14 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     mention_watcher = MentionWatcher(bridge)
     mention_task = asyncio.create_task(mention_watcher.run())
 
+    channel_task = asyncio.create_task(channels.start_all())
+
     # Wait for shutdown signal
     await stop_event.wait()
     logger.info("[gateway] Agent Gateway stopping...")
 
     cron.stop()
+    await channels.stop_all()
 
     # Cancel all loops gracefully
     inbox_task.cancel()
@@ -1036,6 +1074,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     plan_negotiation_task.cancel()
     chat_task.cancel()
     mention_task.cancel()
+    channel_task.cancel()
     for task in (
         inbox_task,
         routing_task,
@@ -1046,6 +1085,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         plan_negotiation_task,
         chat_task,
         mention_task,
+        channel_task,
     ):
         try:
             await task

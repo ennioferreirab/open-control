@@ -109,10 +109,22 @@ class TestRunGateway:
 
         mock_bridge = MagicMock()
 
+        mock_channels_instance = MagicMock()
+        mock_channels_instance.start_all = AsyncMock()
+        mock_channels_instance.stop_all = AsyncMock()
+        mock_channels_instance.enabled_channels = []
+
+        mock_channel_manager_cls = MagicMock(return_value=mock_channels_instance)
+        mock_mc_channel = MagicMock()
+
         with patch("nanobot.mc.gateway.TaskOrchestrator") as MockOrch, \
              patch("nanobot.mc.gateway.TimeoutChecker") as MockTC, \
              patch("nanobot.mc.executor.TaskExecutor") as MockExec, \
-             patch("nanobot.mc.chat_handler.ChatHandler") as MockCH:
+             patch("nanobot.mc.chat_handler.ChatHandler") as MockCH, \
+             patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls), \
+             patch("nanobot.config.loader.load_config"), \
+             patch("nanobot.bus.queue.MessageBus"), \
+             patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel):
             mock_orch_instance = MockOrch.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
