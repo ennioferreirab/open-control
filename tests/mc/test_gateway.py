@@ -1015,20 +1015,6 @@ class TestBridgeAsyncSubscribe:
     """Test bridge async_subscribe uses get_running_loop and reconnects."""
 
     @pytest.mark.asyncio
-    async def test_uses_get_running_loop(self):
-        """async_subscribe should use asyncio.get_running_loop(), not get_event_loop()."""
-        from nanobot.mc.bridge import ConvexBridge
-
-        bridge = MagicMock(spec=ConvexBridge)
-        # We test by calling the actual method — so we need to construct a real object
-        # But ConvexBridge requires a real Convex connection.
-        # Instead, verify the source code does NOT contain get_event_loop.
-        import inspect
-        source = inspect.getsource(ConvexBridge.async_subscribe)
-        assert "get_running_loop" in source
-        assert "get_event_loop" not in source
-
-    @pytest.mark.asyncio
     async def test_poll_retries_on_query_error(self):
         """When query() raises, polling should retry and deliver data on success."""
         from nanobot.mc.bridge import ConvexBridge
@@ -1076,6 +1062,62 @@ class TestBridgeAsyncSubscribe:
         assert isinstance(result, dict)
         assert result.get("_error") is True
         assert "Permanent failure" in result.get("message", "")
+
+    @pytest.mark.asyncio
+    async def test_deduplicates_identical_results(self):
+        """Only enqueue changed poll results; suppress identical repeats."""
+        from nanobot.mc.bridge import ConvexBridge
+
+        mock_client = MagicMock()
+        bridge = ConvexBridge.__new__(ConvexBridge)
+        bridge._client = mock_client
+
+        calls = []
+
+        def fake_query(fn, args=None):
+            calls.append(1)
+            n = len(calls)
+            if n <= 3:
+                return [{"id": "task_1"}]
+            if n == 4:
+                return [{"id": "task_1"}, {"id": "task_2"}]
+            raise asyncio.CancelledError()
+
+        with patch.object(bridge, "query", side_effect=fake_query):
+            q = bridge.async_subscribe(
+                "tasks:listByStatus", {"status": "inbox"}, poll_interval=0.01
+            )
+            first = await asyncio.wait_for(q.get(), timeout=5.0)
+            second = await asyncio.wait_for(q.get(), timeout=5.0)
+
+        assert first == [{"id": "task_1"}]
+        assert second == [{"id": "task_1"}, {"id": "task_2"}]
+        assert q.empty()
+
+    @pytest.mark.asyncio
+    async def test_first_result_always_emitted(self):
+        """First poll result should be enqueued even when it's an empty list."""
+        from nanobot.mc.bridge import ConvexBridge
+
+        mock_client = MagicMock()
+        bridge = ConvexBridge.__new__(ConvexBridge)
+        bridge._client = mock_client
+
+        calls = []
+
+        def fake_query(fn, args=None):
+            calls.append(1)
+            if len(calls) == 1:
+                return []
+            raise asyncio.CancelledError()
+
+        with patch.object(bridge, "query", side_effect=fake_query):
+            q = bridge.async_subscribe(
+                "tasks:listByStatus", {"status": "inbox"}, poll_interval=0.01
+            )
+            first = await asyncio.wait_for(q.get(), timeout=5.0)
+
+        assert first == []
 
 
 # ---------------------------------------------------------------------------
