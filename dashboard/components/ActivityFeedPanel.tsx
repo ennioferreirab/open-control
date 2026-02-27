@@ -62,7 +62,7 @@ export function ActivityFeedPanel() {
           </Button>
         </div>
       </div>
-      <Tabs defaultValue="activity" className="flex flex-1 min-h-0 flex-col">
+      <Tabs defaultValue="chats" className="flex flex-1 min-h-0 flex-col">
         <div className="px-3 pt-2">
           <TabsList className="w-full">
             <TabsTrigger value="activity" className="flex-1 text-xs">
