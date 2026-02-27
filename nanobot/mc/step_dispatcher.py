@@ -112,6 +112,7 @@ async def _run_step_agent(
     agent_name: str,
     agent_prompt: str | None,
     agent_model: str | None,
+    reasoning_level: str | None = None,
     task_title: str,
     task_description: str,
     agent_skills: list[str] | None,
@@ -119,6 +120,7 @@ async def _run_step_agent(
     memory_workspace: Path | None,
     task_id: str,
     cron_service: Any | None = None,
+    bridge: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
     from nanobot.mc.executor import _run_agent_on_task
@@ -127,6 +129,7 @@ async def _run_step_agent(
         agent_name=agent_name,
         agent_prompt=agent_prompt,
         agent_model=agent_model,
+        reasoning_level=reasoning_level,
         task_title=task_title,
         task_description=task_description,
         agent_skills=agent_skills,
@@ -134,6 +137,7 @@ async def _run_step_agent(
         memory_workspace=memory_workspace,
         task_id=task_id,
         cron_service=cron_service,
+        bridge=bridge,
     )
 
 
@@ -379,10 +383,15 @@ class StepDispatcher:
                 )
 
             # Resolve tier references (Story 11.1, AC5)
+            reasoning_level: str | None = None
             if agent_model and is_tier_reference(agent_model):
                 try:
+                    tier_ref = agent_model
                     agent_model = self._get_tier_resolver().resolve_model(agent_model)
                     logger.info("[dispatcher] Resolved tier for agent '%s': %s", agent_name, agent_model)
+                    reasoning_level = self._get_tier_resolver().resolve_reasoning_level(tier_ref)
+                    if reasoning_level:
+                        logger.info("[dispatcher] Reasoning level for agent '%s': %s", agent_name, reasoning_level)
                 except ValueError as exc:
                     error_msg = f"Model tier resolution failed for agent '{agent_name}': {exc}"
                     logger.error("[dispatcher] %s", error_msg)
@@ -497,6 +506,7 @@ class StepDispatcher:
                 agent_name=agent_name,
                 agent_prompt=agent_prompt,
                 agent_model=agent_model,
+                reasoning_level=reasoning_level,
                 task_title=step_title,
                 task_description=execution_description,
                 agent_skills=agent_skills,
@@ -504,6 +514,7 @@ class StepDispatcher:
                 memory_workspace=memory_workspace,
                 task_id=task_id,
                 cron_service=self._cron_service,
+                bridge=self._bridge,
             )
 
             # Collect artifacts and post structured completion message (Story 2.5).
