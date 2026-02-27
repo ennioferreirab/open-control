@@ -65,7 +65,14 @@ export async function PATCH(
       version?: number;
       jobs?: Array<{
         id: string;
-        payload?: { channel?: string | null; to?: string | null };
+        payload?: {
+          kind?: string;
+          message?: string;
+          deliver?: boolean;
+          channel?: string | null;
+          to?: string | null;
+          taskId?: string | null;
+        };
         updatedAtMs?: number;
         [key: string]: unknown;
       }>;
