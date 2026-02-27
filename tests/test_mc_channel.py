@@ -75,3 +75,21 @@ class TestMissionControlChannel:
         ch._running = True
         await ch.stop()
         assert ch._running is False
+
+    @pytest.mark.asyncio
+    async def test_send_uses_to_thread(self) -> None:
+        """Verify bridge calls are wrapped in asyncio.to_thread."""
+        bus = MessageBus()
+        bridge = MagicMock()
+        bridge.query = MagicMock(return_value={"_id": "t1", "status": "done"})
+        bridge.send_message = MagicMock()
+        ch = MissionControlChannel(config=MagicMock(), bus=bus, bridge=bridge)
+
+        msg = OutboundMessage(channel="mc", chat_id="t1", content="test")
+        with patch("nanobot.channels.mission_control.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
+            mock_to_thread.side_effect = [
+                {"_id": "t1", "status": "done"},  # query result
+                None,  # send_message result
+            ]
+            await ch.send(msg)
+            assert mock_to_thread.call_count == 2

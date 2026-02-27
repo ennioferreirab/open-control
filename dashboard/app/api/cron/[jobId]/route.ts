@@ -77,7 +77,7 @@ export async function PATCH(
     }
 
     if (!job.payload) {
-      job.payload = {};
+      job.payload = { kind: "agent_turn", message: "", deliver: false, channel: null, to: null, taskId: null };
     }
     if ("channel" in body) job.payload.channel = body.channel ?? null;
     if ("to" in body) job.payload.to = body.to ?? null;

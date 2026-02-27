@@ -27,7 +27,7 @@ class TestRegisterChannel:
         config = MagicMock()
         # Disable all channels in config so _init_channels is a no-op
         for ch_name in ("telegram", "whatsapp", "discord", "feishu",
-                        "mochat", "dingtalk", "email", "slack", "qq", "mc"):
+                        "mochat", "dingtalk", "email", "slack", "qq"):
             getattr(config.channels, ch_name).enabled = False
 
         bus = MessageBus()
@@ -42,7 +42,7 @@ class TestRegisterChannel:
     def test_register_channel_appears_in_enabled_list(self) -> None:
         config = MagicMock()
         for ch_name in ("telegram", "whatsapp", "discord", "feishu",
-                        "mochat", "dingtalk", "email", "slack", "qq", "mc"):
+                        "mochat", "dingtalk", "email", "slack", "qq"):
             getattr(config.channels, ch_name).enabled = False
 
         bus = MessageBus()
