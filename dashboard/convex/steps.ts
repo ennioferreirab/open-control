@@ -357,7 +357,9 @@ export const updateStatus = mutation({
   handler: async (ctx, args) => {
     const step = await ctx.db.get(args.stepId);
     if (!step) {
-      throw new ConvexError("Step not found");
+      // Step may have been deleted as part of task cleanup while the agent was
+      // still running. Treat late-arriving status updates as a no-op.
+      return;
     }
 
     if (!isValidStepStatus(args.status)) {
