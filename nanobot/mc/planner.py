@@ -181,13 +181,13 @@ STANDARD_TOOLS = [
 def _build_agent_roster(agents: list[AgentData]) -> str:
     """Build the agent roster string for the LLM prompt.
 
-    System agents (is_system=True) are excluded — they are for internal use
-    only (e.g. auto-title) and must never be assigned to task steps.
+    System agents (is_system=True) and lead-agent are excluded — they are for
+    internal use only and must never be assigned to task steps.
     """
     tools_str = ", ".join(STANDARD_TOOLS)
     lines = []
     for agent in agents:
-        if getattr(agent, "is_system", False):
+        if getattr(agent, "is_system", False) or is_lead_agent(agent.name):
             continue
         skills_str = ", ".join(agent.skills) if agent.skills else "general"
         lines.append(
