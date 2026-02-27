@@ -1185,6 +1185,12 @@ class TaskExecutor:
         except _PROVIDER_ERRORS as exc:
             # Provider/OAuth errors get surfaced with clear actionable message
             await self._handle_provider_error(task_id, title, agent_name, exc)
+            # Pop pending delivery entry to prevent dict leak (empty → skips actual send)
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id, "")
+                except Exception:
+                    pass
 
         except Exception as exc:
             logger.error(
@@ -1192,6 +1198,12 @@ class TaskExecutor:
                 agent_name, title, exc,
             )
             await self._agent_gateway.handle_agent_crash(agent_name, task_id, exc)
+            # Pop pending delivery entry to prevent dict leak (empty → skips actual send)
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id, "")
+                except Exception:
+                    pass
         finally:
             # Allow re-pickup if task returns to assigned (e.g. after retry)
             self._known_assigned_ids.discard(task_id)

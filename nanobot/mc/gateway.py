@@ -914,6 +914,9 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         delivery = pending_deliveries.pop(task_id, None)
         if not delivery:
             return
+        if not result.strip():
+            logger.info("[gateway] Skipping delivery for task %s — empty result (task may have failed)", task_id)
+            return
         channel, to = delivery
         try:
             if channel == "telegram":
@@ -928,12 +931,14 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     cron_store_path = Path.home() / ".nanobot" / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
 
-    async def _requeue_cron_task(b: "ConvexBridge", task_id: str, message: str) -> None:
+    async def _requeue_cron_task(b: "ConvexBridge", task_id: str, message: str) -> bool:
         """Re-queue an existing task for cron execution.
 
         Injects the cron trigger message into the task's thread so the agent
         sees it as a new user turn, then resets status to 'assigned' so the
         executor picks it up again. Skips if the task is already active.
+
+        Returns True if the task was actually re-queued, False otherwise.
         """
         from nanobot.mc.types import (
             AuthorType,
@@ -946,12 +951,12 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         except Exception:
             logger.warning("[gateway] Could not fetch cron origin task %s — creating new task instead", task_id)
             await asyncio.to_thread(b.mutation, "tasks:create", {"title": message})
-            return
+            return False
 
         if not task:
             logger.warning("[gateway] Cron origin task %s not found — creating new task", task_id)
             await asyncio.to_thread(b.mutation, "tasks:create", {"title": message})
-            return
+            return False
 
         current_status = task.get("status", "")
         if current_status in ("in_progress", "assigned", "deleted"):
@@ -959,7 +964,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
                 "[gateway] Cron origin task %s is '%s' — skipping re-queue",
                 task_id, current_status,
             )
-            return
+            return False
 
         agent_name = task.get("assigned_agent") or NANOBOT_AGENT_NAME
         if is_lead_agent(agent_name):
@@ -990,6 +995,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             f"Cron re-queued task to {agent_name}",
         )
         logger.info("[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name)
+        return True
 
     async def on_cron_job(job: CronJob) -> str | None:
         """Re-queue the originating task (if linked) or create a new task when a cron job fires."""
@@ -997,8 +1003,9 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         task_id_for_delivery: str | None = None
         try:
             if job.payload.task_id:
-                await _requeue_cron_task(bridge, job.payload.task_id, job.payload.message)
-                task_id_for_delivery = job.payload.task_id
+                requeued = await _requeue_cron_task(bridge, job.payload.task_id, job.payload.message)
+                if requeued:
+                    task_id_for_delivery = job.payload.task_id
             else:
                 new_id = await asyncio.to_thread(
                     bridge.mutation, "tasks:create", {"title": job.payload.message},
