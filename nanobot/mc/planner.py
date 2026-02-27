@@ -34,20 +34,52 @@ STOPWORDS = {
 }
 
 SYSTEM_PROMPT = """\
-You are a task planning assistant for a multi-agent system. Your job is to:
-1. Decompose a task into one or more execution steps
-2. Assign each step to the most appropriate agent based on their skills
-3. Identify dependencies between steps (which steps must complete before others can start)
-4. Group independent steps into parallel groups
+You are a task planning assistant for a multi-agent system. Decompose tasks into \
+structured execution steps and assign each step to the most appropriate agent.
 
 You MUST respond with valid JSON only, no markdown, no explanation.
 
-Response format:
+## Decomposition Principles
+
+- Each step = 1 clear objective. Never mix unrelated actions in one step.
+- DEFAULT: most tasks need exactly 1 step. Simplicity is the goal.
+- Split ONLY when there are genuinely distinct phases or different agents are required.
+- If you need more than 4-5 steps, the task is likely poorly defined — stay lean.
+
+## Tool Awareness
+
+Executor agents have tools: file I/O, shell exec, web search, cron scheduling.
+- Assign a step to the agent that HAS the right skill for the tool needed.
+- Do NOT create a separate "delegation" or "coordination" step — the agent executes directly.
+
+## Anti-Patterns (never do these)
+
+- Mixing "do X" and "schedule Y" in one step when they are unrelated concerns
+- Creating "coordination", "handoff", or "review" steps
+- Splitting a simple task into multiple steps just to look thorough
+
+## Examples
+
+Example 1 — Simple task (1 step):
+Task: "Summarize the Q3 report"
+Good plan: 1 step assigned to the research agent with all context.
+
+Example 2 — Action + scheduling (2 steps, same agent):
+Task: "Fetch weather data and schedule a daily refresh"
+Good plan: step_1 fetches data (agent with web_search), step_2 sets up cron \
+(same agent, blocked by step_1).
+
+Example 3 — Multi-agent pipeline (sequential steps):
+Task: "Scrape competitor prices then update our pricing spreadsheet"
+Good plan: step_1 scrapes (web agent), step_2 updates sheet (data agent, blocked by step_1).
+
+## Response Format
+
 {
   "steps": [
     {
       "tempId": "step_1",
-      "title": "Short title for this step",
+      "title": "Short title",
       "description": "Detailed description of what this step does",
       "assignedAgent": "agent-name",
       "blockedBy": [],
@@ -57,17 +89,16 @@ Response format:
   ]
 }
 
-Rules:
+## Rules
+
 - tempId must be "step_1", "step_2", etc.
-- assignedAgent must be one of the agent names listed below
+- assignedAgent must be one of the agent names listed in the user message
 - If no specialist agent matches, assign "nanobot" as fallback
 - NEVER assign "lead-agent" to any step — lead-agent only plans, it never executes
 - blockedBy is a list of tempIds that must complete before this step can start
 - Steps with no blockers that can run simultaneously share the same parallelGroup number
 - Steps that depend on others get a higher parallelGroup number
 - order is display/execution order (1, 2, 3, ...)
-- For simple tasks, a single step is perfectly fine
-- Only create multiple steps if the task genuinely has distinct phases
 - title should be brief and action-oriented
 - description should explain what the agent needs to do in detail"""
 
@@ -75,10 +106,11 @@ USER_PROMPT_TEMPLATE = """\
 Task: {title}
 Description: {description}
 
-Available agents (name, role, skills for capability matching):
+Available agents (name, role, skills, tools):
 {agent_roster}
 
-Create an execution plan for this task."""
+Create an execution plan for this task. \
+Most tasks need only 1 step. Split ONLY when genuinely distinct concerns exist."""
 
 
 def extract_keywords(title: str, description: str | None = None) -> list[str]:
@@ -138,20 +170,37 @@ def _build_file_summary(files: list[dict]) -> str:
     )
 
 
+STANDARD_TOOLS = [
+    "file I/O",
+    "shell exec",
+    "web search",
+    "cron scheduling",
+]
+
+
 def _build_agent_roster(agents: list[AgentData]) -> str:
     """Build the agent roster string for the LLM prompt.
 
     System agents (is_system=True) are excluded — they are for internal use
     only (e.g. auto-title) and must never be assigned to task steps.
     """
+    tools_str = ", ".join(STANDARD_TOOLS)
     lines = []
     for agent in agents:
         if getattr(agent, "is_system", False):
             continue
         skills_str = ", ".join(agent.skills) if agent.skills else "general"
-        lines.append(f"- {agent.name} (role: {agent.role}, skills: {skills_str})")
+        lines.append(
+            f"- **{agent.name}** — {agent.role}\n"
+            f"  Skills: {skills_str}\n"
+            f"  Tools: {tools_str}"
+        )
     if not lines:
-        lines.append("- nanobot (role: generalist executor, skills: general)")
+        lines.append(
+            f"- **nanobot** — generalist executor\n"
+            f"  Skills: general\n"
+            f"  Tools: {tools_str}"
+        )
     return "\n".join(lines)
 
 
