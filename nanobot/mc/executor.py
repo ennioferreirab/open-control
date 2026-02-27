@@ -408,11 +408,13 @@ def _build_tag_attributes_context(
 class TaskExecutor:
     """Picks up assigned tasks and runs agent execution."""
 
-    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None) -> None:
+    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None,
+                 on_task_completed: Any | None = None) -> None:
         self._bridge = bridge
         self._agent_gateway = AgentGateway(bridge)
         self._known_assigned_ids: set[str] = set()
         self._cron_service = cron_service
+        self._on_task_completed = on_task_completed
         self._tier_resolver: Any | None = None
 
     def _get_tier_resolver(self) -> Any:
@@ -1172,6 +1174,13 @@ class TaskExecutor:
                 logger.info("[executor] Written task '%s' completion to global HEARTBEAT.md", title)
             except Exception as hb_exc:
                 logger.warning("[executor] Failed to write to HEARTBEAT.md for task '%s': %s", title, hb_exc)
+
+            # Deliver cron result to external channel if pending
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id, result or "")
+                except Exception:
+                    logger.exception("[executor] on_task_completed failed for task '%s'", title)
 
         except _PROVIDER_ERRORS as exc:
             # Provider/OAuth errors get surfaced with clear actionable message

@@ -882,28 +882,47 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
     from nanobot.config.loader import load_config
-    from nanobot.bus.queue import MessageBus
-    from nanobot.channels.manager import ChannelManager
-    from nanobot.channels.mission_control import MissionControlChannel
 
     logger.info("[gateway] Agent Gateway started")
-
-    # Channel manager for outbound cron delivery
-    config = load_config()
-    bus = MessageBus()
-    channels = ChannelManager(config, bus)
-
-    # Register MC channel with bridge access (overrides config-only mc channel)
-    mc_channel = MissionControlChannel(config.channels.mc, bus, bridge=bridge)
-    channels.register_channel("mc", mc_channel)
-
-    if channels.enabled_channels:
-        logger.info("[gateway] Channels enabled: %s", ", ".join(channels.enabled_channels))
 
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop_event.set)
+
+    config = load_config()
+
+    # Lightweight delivery: dict tracks pending cron deliveries, callback sends after completion
+    pending_deliveries: dict[str, tuple[str, str]] = {}  # task_id → (channel, to)
+
+    async def _send_telegram_direct(chat_id: str, content: str) -> None:
+        """Send message to Telegram without polling — direct Bot API call."""
+        from telegram import Bot
+        from nanobot.channels.telegram import _markdown_to_telegram_html, _split_message
+
+        token = config.channels.telegram.token
+        if not token:
+            logger.warning("[gateway] No Telegram token — skipping delivery")
+            return
+        bot = Bot(token=token)
+        html = _markdown_to_telegram_html(content)
+        for chunk in _split_message(html):
+            await bot.send_message(chat_id=int(chat_id), text=chunk, parse_mode="HTML")
+
+    async def on_task_completed(task_id: str, result: str) -> None:
+        """Callback invoked by executor after agent completes — delivers result if pending."""
+        delivery = pending_deliveries.pop(task_id, None)
+        if not delivery:
+            return
+        channel, to = delivery
+        try:
+            if channel == "telegram":
+                await _send_telegram_direct(to, result)
+                logger.info("[gateway] Delivered cron result for task %s → telegram:%s", task_id, to)
+            else:
+                logger.warning("[gateway] Delivery to '%s' not supported", channel)
+        except Exception:
+            logger.exception("[gateway] Failed to deliver result for task %s", task_id)
 
     # Cron service — when a job fires, create a task in Convex (enters normal MC flow)
     cron_store_path = Path.home() / ".nanobot" / "cron" / "jobs.json"
@@ -973,48 +992,30 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         logger.info("[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name)
 
     async def on_cron_job(job: CronJob) -> str | None:
-        """Re-queue the originating task (if linked) or create a new task when a cron job fires.
-
-        Additionally, if the job has deliver=True and a channel, publish a
-        notification to that channel via the ChannelManager.
-        """
+        """Re-queue the originating task (if linked) or create a new task when a cron job fires."""
         logger.info("[gateway] Cron job '%s' fired", job.name)
-        task_handled = False
+        task_id_for_delivery: str | None = None
         try:
             if job.payload.task_id:
                 await _requeue_cron_task(bridge, job.payload.task_id, job.payload.message)
+                task_id_for_delivery = job.payload.task_id
             else:
-                await asyncio.to_thread(
-                    bridge.mutation,
-                    "tasks:create",
-                    {"title": job.payload.message},
+                new_id = await asyncio.to_thread(
+                    bridge.mutation, "tasks:create", {"title": job.payload.message},
                 )
-            task_handled = True
+                task_id_for_delivery = new_id
         except Exception:
             logger.exception("[gateway] Failed to handle cron job '%s'", job.name)
 
-        # Deliver notification to external channel if configured and task was handled
-        # Skip MC channel when task_id is set — re-queue already posted to task thread
+        # Register pending delivery (executor will call on_task_completed after agent finishes)
         if (
-            task_handled
+            task_id_for_delivery
             and job.payload.deliver
-            and job.payload.to
             and job.payload.channel
-            and not (job.payload.channel == "mc" and job.payload.task_id)
+            and job.payload.to
+            and job.payload.channel != "mc"
         ):
-            try:
-                from nanobot.bus.events import OutboundMessage
-
-                await bus.publish_outbound(OutboundMessage(
-                    channel=job.payload.channel,
-                    chat_id=job.payload.to,
-                    content=f"\U0001f514 Cron triggered: {job.payload.message}",
-                ))
-            except Exception:
-                logger.exception(
-                    "[gateway] Failed to deliver cron notification to %s",
-                    job.payload.channel,
-                )
+            pending_deliveries[task_id_for_delivery] = (job.payload.channel, job.payload.to)
 
         return None
 
@@ -1040,7 +1041,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
     kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
 
-    executor = TaskExecutor(bridge, cron_service=cron)
+    executor = TaskExecutor(bridge, cron_service=cron, on_task_completed=on_task_completed)
     execution_task = asyncio.create_task(executor.start_execution_loop())
 
     timeout_checker = TimeoutChecker(bridge)
@@ -1064,14 +1065,11 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     mention_watcher = MentionWatcher(bridge)
     mention_task = asyncio.create_task(mention_watcher.run())
 
-    channel_task = asyncio.create_task(channels.start_all())
-
     # Wait for shutdown signal
     await stop_event.wait()
     logger.info("[gateway] Agent Gateway stopping...")
 
     cron.stop()
-    await channels.stop_all()
 
     # Cancel all loops gracefully
     inbox_task.cancel()
@@ -1083,7 +1081,6 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     plan_negotiation_task.cancel()
     chat_task.cancel()
     mention_task.cancel()
-    channel_task.cancel()
     for task in (
         inbox_task,
         routing_task,
@@ -1094,7 +1091,6 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         plan_negotiation_task,
         chat_task,
         mention_task,
-        channel_task,
     ):
         try:
             await task
