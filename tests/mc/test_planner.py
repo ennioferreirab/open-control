@@ -713,6 +713,113 @@ class TestOrchestratorPlannerIntegration:
 
 
 # ---------------------------------------------------------------------------
+# TestEnrichedPlannerFeatures: new roster format and SYSTEM_PROMPT content
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichedPlannerFeatures:
+    """Verify enriched planner features: roster format and SYSTEM_PROMPT content."""
+
+    def test_enriched_roster_includes_tools(self):
+        """_build_agent_roster output must include a 'Tools:' line with STANDARD_TOOLS."""
+        from nanobot.mc.planner import _build_agent_roster, STANDARD_TOOLS
+
+        agents = [_make_agent("test-agent", "tester", ["python", "testing"])]
+        roster = _build_agent_roster(agents)
+
+        assert "Tools:" in roster
+        for tool in STANDARD_TOOLS:
+            assert tool in roster
+
+    def test_enriched_roster_multiline_format(self):
+        """_build_agent_roster uses bold-name multi-line format with Skills: line."""
+        from nanobot.mc.planner import _build_agent_roster
+
+        agents = [_make_agent("code-agent", "developer", ["python", "javascript"])]
+        roster = _build_agent_roster(agents)
+
+        assert "**code-agent**" in roster
+        assert "Skills: python, javascript" in roster
+
+    def test_system_prompt_has_decomposition_principles(self):
+        """SYSTEM_PROMPT must contain key conceptual sections."""
+        from nanobot.mc.planner import SYSTEM_PROMPT
+
+        assert "Decomposition Principles" in SYSTEM_PROMPT
+        assert "Anti-Patterns" in SYSTEM_PROMPT
+        assert "Examples" in SYSTEM_PROMPT
+        assert "Tool Awareness" in SYSTEM_PROMPT
+
+    def test_system_prompt_has_few_shot_examples(self):
+        """SYSTEM_PROMPT must include at least three numbered examples."""
+        from nanobot.mc.planner import SYSTEM_PROMPT
+
+        assert "Example 1" in SYSTEM_PROMPT
+        assert "Example 2" in SYSTEM_PROMPT
+        assert "Example 3" in SYSTEM_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# TestOrientationRosterInterpolation: {agent_roster} placeholder substitution
+# ---------------------------------------------------------------------------
+
+
+class TestOrientationRosterInterpolation:
+    """Verify that _maybe_inject_orientation interpolates {agent_roster} correctly."""
+
+    def test_orientation_roster_interpolation(self):
+        """{agent_roster} placeholder in orientation file is replaced with roster text."""
+        from nanobot.mc.step_dispatcher import _maybe_inject_orientation
+        from unittest.mock import patch, MagicMock
+
+        orientation_content = "# Orientation\n\n{agent_roster}\n\nEnd."
+
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.read_text.return_value = orientation_content
+
+        with patch("nanobot.mc.step_dispatcher.Path") as MockPath, \
+             patch(
+                 "nanobot.mc.executor.build_executor_agent_roster",
+                 return_value="- **test-agent** — tester (skills: testing)",
+             ):
+            (
+                MockPath.home.return_value
+                .__truediv__.return_value
+                .__truediv__.return_value
+                .__truediv__.return_value
+            ) = mock_path
+            result = _maybe_inject_orientation("test-agent", None)
+
+        assert result is not None
+        assert "test-agent" in result
+        assert "{agent_roster}" not in result
+
+    def test_orientation_without_placeholder(self):
+        """Orientation files without {agent_roster} are returned unchanged (backwards compat)."""
+        from nanobot.mc.step_dispatcher import _maybe_inject_orientation
+        from unittest.mock import patch, MagicMock
+
+        orientation_content = "# Orientation\n\nNo placeholder here.\n\nEnd."
+
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.read_text.return_value = orientation_content
+
+        with patch("nanobot.mc.step_dispatcher.Path") as MockPath:
+            (
+                MockPath.home.return_value
+                .__truediv__.return_value
+                .__truediv__.return_value
+                .__truediv__.return_value
+            ) = mock_path
+            result = _maybe_inject_orientation("test-agent", None)
+
+        assert result is not None
+        assert "No placeholder here" in result
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
