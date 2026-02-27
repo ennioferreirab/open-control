@@ -980,7 +980,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     if cron_status["jobs"] > 0:
         logger.info("[gateway] Cron service started with %d job(s)", cron_status["jobs"])
 
-    orchestrator = TaskOrchestrator(bridge)
+    orchestrator = TaskOrchestrator(bridge, cron_service=cron)
 
     async def _inbox_loop_with_crash_log() -> None:
         try:

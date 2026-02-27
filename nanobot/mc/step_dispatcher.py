@@ -118,6 +118,7 @@ async def _run_step_agent(
     board_name: str | None,
     memory_workspace: Path | None,
     task_id: str,
+    cron_service: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
     from nanobot.mc.executor import _run_agent_on_task
@@ -132,14 +133,16 @@ async def _run_step_agent(
         board_name=board_name,
         memory_workspace=memory_workspace,
         task_id=task_id,
+        cron_service=cron_service,
     )
 
 
 class StepDispatcher:
     """Dispatches and executes materialized task steps."""
 
-    def __init__(self, bridge: ConvexBridge) -> None:
+    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None) -> None:
         self._bridge = bridge
+        self._cron_service = cron_service
         self._tier_resolver: Any | None = None
 
     def _get_tier_resolver(self) -> Any:
@@ -500,6 +503,7 @@ class StepDispatcher:
                 board_name=board_name,
                 memory_workspace=memory_workspace,
                 task_id=task_id,
+                cron_service=self._cron_service,
             )
 
             # Collect artifacts and post structured completion message (Story 2.5).
