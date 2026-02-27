@@ -979,6 +979,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         notification to that channel via the ChannelManager.
         """
         logger.info("[gateway] Cron job '%s' fired", job.name)
+        task_handled = False
         try:
             if job.payload.task_id:
                 await _requeue_cron_task(bridge, job.payload.task_id, job.payload.message)
@@ -988,11 +989,19 @@ async def run_gateway(bridge: ConvexBridge) -> None:
                     "tasks:create",
                     {"title": job.payload.message},
                 )
+            task_handled = True
         except Exception:
             logger.exception("[gateway] Failed to handle cron job '%s'", job.name)
 
-        # Deliver notification to external channel if configured
-        if job.payload.deliver and job.payload.to and job.payload.channel:
+        # Deliver notification to external channel if configured and task was handled
+        # Skip MC channel when task_id is set — re-queue already posted to task thread
+        if (
+            task_handled
+            and job.payload.deliver
+            and job.payload.to
+            and job.payload.channel
+            and not (job.payload.channel == "mc" and job.payload.task_id)
+        ):
             try:
                 from nanobot.bus.events import OutboundMessage
 

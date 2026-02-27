@@ -54,13 +54,15 @@ class MissionControlChannel(BaseChannel):
 
         if task:
             try:
+                from nanobot.mc.types import AuthorType, MessageType
+
                 await asyncio.to_thread(
                     self._bridge.send_message,
                     task_id,
                     "Cron",
-                    "system",
+                    AuthorType.SYSTEM,
                     msg.content,
-                    "system",
+                    MessageType.SYSTEM_EVENT,
                 )
                 logger.info("[mc-channel] Posted to task thread %s", task_id)
             except Exception:
