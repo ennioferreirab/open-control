@@ -305,6 +305,13 @@ class TaskOrchestrator:
 
         await asyncio.to_thread(
             self._bridge.create_activity,
+            ActivityEventType.TASK_ASSIGNED,
+            f"Task assigned to Lead Agent",
+            task_id,
+            self._lead_agent_name,
+        )
+        await asyncio.to_thread(
+            self._bridge.create_activity,
             ActivityEventType.TASK_PLANNING,
             f"Lead Agent started planning for '{title}'",
             task_id,
@@ -400,6 +407,9 @@ class TaskOrchestrator:
             return
 
         try:
+            # Pre-register task_id so start_kickoff_watch_loop won't treat the
+            # newly-in_progress task as a "resumed" task and double-dispatch it.
+            self._known_kickoff_ids.add(task_id)
             created_step_ids = await asyncio.to_thread(
                 self._plan_materializer.materialize,
                 task_id,

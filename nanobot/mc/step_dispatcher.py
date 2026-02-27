@@ -301,6 +301,13 @@ class StepDispatcher:
             agent_name = NANOBOT_AGENT_NAME
 
         await asyncio.to_thread(
+            self._bridge.create_activity,
+            ActivityEventType.STEP_DISPATCHED,
+            f"Step assigned to {agent_name}: {step_title}",
+            task_id,
+            agent_name,
+        )
+        await asyncio.to_thread(
             self._bridge.update_step_status,
             step_id,
             StepStatus.RUNNING,
