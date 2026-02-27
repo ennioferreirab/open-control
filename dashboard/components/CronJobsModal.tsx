@@ -129,6 +129,11 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
   const [confirmDeleteJob, setConfirmDeleteJob] = useState<CronJob | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [enabledChannels, setEnabledChannels] = useState<string[]>([]);
+  const [editingJob, setEditingJob] = useState<string | null>(null);
+  const [editChannel, setEditChannel] = useState<string>("");
+  const [editTo, setEditTo] = useState<string>("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -153,6 +158,12 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
           setLoading(false);
         }
       });
+    fetch("/api/channels")
+      .then((res) => res.ok ? res.json() as Promise<{ channels: string[] }> : { channels: [] })
+      .then((data) => {
+        if (!cancelled) setEnabledChannels(data.channels);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -178,9 +189,18 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-4xl w-full max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
         <DialogHeader className="flex flex-row items-center justify-between px-6 py-4 border-b shrink-0">
-          <DialogTitle className="text-base font-medium">
-            Scheduled Cron Jobs
-          </DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle className="text-base font-medium">
+              Scheduled Cron Jobs
+            </DialogTitle>
+            <div className="flex items-center gap-1 ml-4">
+              {enabledChannels.map((ch) => (
+                <Badge key={ch} variant="outline" className="text-[10px] px-1.5 py-0">
+                  {ch}
+                </Badge>
+              ))}
+            </div>
+          </div>
           <Button
             aria-label="Close cron jobs"
             variant="ghost"
@@ -269,9 +289,86 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                       })()}
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground text-xs">
-                      {job.payload.channel && job.payload.to
-                        ? `${job.payload.channel} → ${job.payload.to}`
-                        : "—"}
+                      {editingJob === job.id ? (
+                        <div className="flex flex-col gap-1">
+                          <select
+                            className="text-xs border rounded px-1 py-0.5 bg-background"
+                            value={editChannel}
+                            onChange={(e) => setEditChannel(e.target.value)}
+                          >
+                            <option value="">— none —</option>
+                            {enabledChannels.map((ch) => (
+                              <option key={ch} value={ch}>{ch}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            className="text-xs border rounded px-1 py-0.5 bg-background w-24"
+                            placeholder="to"
+                            value={editTo}
+                            onChange={(e) => setEditTo(e.target.value)}
+                          />
+                          <div className="flex gap-1">
+                            <button
+                              className="text-[10px] text-green-600 hover:underline disabled:opacity-50"
+                              disabled={saving}
+                              onClick={async () => {
+                                setSaving(true);
+                                try {
+                                  const res = await fetch(`/api/cron/${job.id}`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      channel: editChannel || null,
+                                      to: editTo || null,
+                                    }),
+                                  });
+                                  if (res.ok) {
+                                    setJobs((prev) =>
+                                      prev.map((j) =>
+                                        j.id === job.id
+                                          ? {
+                                              ...j,
+                                              payload: {
+                                                ...j.payload,
+                                                channel: editChannel || null,
+                                                to: editTo || null,
+                                              },
+                                            }
+                                          : j,
+                                      ),
+                                    );
+                                    setEditingJob(null);
+                                  }
+                                } finally {
+                                  setSaving(false);
+                                }
+                              }}
+                            >
+                              {saving ? "..." : "save"}
+                            </button>
+                            <button
+                              className="text-[10px] text-muted-foreground hover:underline"
+                              onClick={() => setEditingJob(null)}
+                            >
+                              cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          className="hover:underline text-left"
+                          onClick={() => {
+                            setEditingJob(job.id);
+                            setEditChannel(job.payload.channel ?? "");
+                            setEditTo(job.payload.to ?? "");
+                          }}
+                        >
+                          {job.payload.channel && job.payload.to
+                            ? `${job.payload.channel} \u2192 ${job.payload.to}`
+                            : "\u2014"}
+                        </button>
+                      )}
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground text-xs">
                       {formatRelative(job.state.lastRunAtMs)}
