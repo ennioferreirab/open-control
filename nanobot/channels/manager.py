@@ -30,7 +30,12 @@ class ChannelManager:
         self._dispatch_task: asyncio.Task | None = None
         
         self._init_channels()
-    
+
+    def register_channel(self, name: str, channel: BaseChannel) -> None:
+        """Register a channel programmatically (e.g., MC channel with bridge)."""
+        self.channels[name] = channel
+        logger.info("Registered channel: {}", name)
+
     def _init_channels(self) -> None:
         """Initialize channels based on config."""
         
@@ -136,7 +141,18 @@ class ChannelManager:
                 logger.info("QQ channel enabled")
             except ImportError as e:
                 logger.warning("QQ channel not available: {}", e)
-    
+
+        # Mission Control channel (no external deps — just config flag)
+        if self.config.channels.mc.enabled:
+            try:
+                from nanobot.channels.mission_control import MissionControlChannel
+                self.channels["mc"] = MissionControlChannel(
+                    self.config.channels.mc, self.bus
+                )
+                logger.info("Mission Control channel enabled")
+            except ImportError as e:
+                logger.warning("Mission Control channel not available: {}", e)
+
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""
         try:
