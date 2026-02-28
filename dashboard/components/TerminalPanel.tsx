@@ -5,9 +5,11 @@ import { api } from "../convex/_generated/api";
 
 interface TerminalPanelProps {
   sessionId: string;
+  agentName?: string;
+  ipAddress?: string;
 }
 
-export function TerminalPanel({ sessionId }: TerminalPanelProps) {
+export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanelProps) {
   const [input, setInput] = useState("");
   const outputEndRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +70,10 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
       {/* Terminal header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 bg-zinc-900">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-zinc-300">{sessionId}</span>
+          <span className="text-xs font-medium text-zinc-300">{agentName || sessionId}</span>
+          {ipAddress && (
+            <span className="text-[10px] font-mono text-zinc-500">{ipAddress}</span>
+          )}
         </div>
       </div>
 

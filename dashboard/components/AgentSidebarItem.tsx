@@ -135,7 +135,11 @@ export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentS
             {agent.displayName}
           </span>
           {ipAddress ? (
-            <span className={`truncate text-xs font-mono ${isDisabled ? "" : "text-sidebar-foreground/60"}`}>
+            <span
+              className={`truncate text-xs font-mono cursor-pointer hover:underline ${isDisabled ? "" : "text-sidebar-foreground/60"}`}
+              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(ipAddress); }}
+              title="Click to copy IP"
+            >
               {ipAddress}
             </span>
           ) : (

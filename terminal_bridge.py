@@ -16,6 +16,7 @@ No polling — purely event-driven on the input side.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import os
 import signal
 import socket
@@ -175,6 +176,7 @@ def write_output_to_convex(output: str, status: str = "idle"):
         "output": output,
         "pending_input": "",
         "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     })
     print(f"[bridge] Output written to Convex ({len(output)} chars, status={status}).", flush=True)
 
@@ -192,6 +194,7 @@ def set_status(status: str):
         "session_id": SESSION_ID,
         "output": captured or _last_good_output,
         "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     })
     print(f"[bridge] Status updated: {status}", flush=True)
 

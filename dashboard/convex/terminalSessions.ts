@@ -76,18 +76,35 @@ export const sendInput = mutation({
 });
 
 // T3: listSessions — returns all sessions, optionally filtered by agentName
+// Filters out sessions whose agent has been soft-deleted
 export const listSessions = query({
   args: {
     agentName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    let sessions;
     if (args.agentName !== undefined) {
-      return await ctx.db
+      sessions = await ctx.db
         .query("terminalSessions")
         .withIndex("by_agentName", (q) => q.eq("agentName", args.agentName))
         .collect();
+    } else {
+      sessions = await ctx.db.query("terminalSessions").collect();
     }
-    return await ctx.db.query("terminalSessions").collect();
+    // Filter out sessions from soft-deleted agents
+    const filtered = [];
+    for (const session of sessions) {
+      const name = session.agentName;
+      if (!name) { filtered.push(session); continue; }
+      const agent = await ctx.db
+        .query("agents")
+        .withIndex("by_name", (q) => q.eq("name", name))
+        .first();
+      if (agent && !agent.deletedAt) {
+        filtered.push(session);
+      }
+    }
+    return filtered;
   },
 });
 
