@@ -77,11 +77,27 @@ def wait_for_claude_response() -> str:
         time.sleep(POLL_INTERVAL)
 
 def inject_input(text: str):
-    """Injeta input no Claude via tmux (sequencial: texto → Enter)."""
+    """Injeta input no Claude via tmux. Suporta !!keys: protocol para teclas TUI."""
     print(f"[bridge] Injetando input: {repr(text)}", flush=True)
-    tmux_send(text)
-    time.sleep(0.2)
-    tmux_enter()
+
+    if text.startswith("!!keys:"):
+        # Parse key sequence: "!!keys:Up,Down,Enter" → individual keystrokes
+        keys = text[7:].split(",")
+        for key in keys:
+            key = key.strip()
+            if not key:
+                continue
+            subprocess.run(
+                ["tmux", "send-keys", "-t", TMUX_PANE, key],
+                check=True
+            )
+            print(f"[bridge] Key enviada: {key}", flush=True)
+            time.sleep(0.3)
+    else:
+        # Regular text input
+        tmux_send(text)
+        time.sleep(0.2)
+        tmux_enter()
 
 _last_good_output: str = ""
 

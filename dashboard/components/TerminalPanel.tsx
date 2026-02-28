@@ -70,6 +70,32 @@ export function TerminalPanel() {
         <div ref={outputEndRef} />
       </div>
 
+      {/* TUI Navigation */}
+      <div className="flex items-center gap-1 border-t border-zinc-800 bg-zinc-900 px-2 py-1">
+        <span className="text-[10px] text-zinc-500 mr-1">TUI</span>
+        {[
+          { label: "↑", key: "Up" },
+          { label: "↓", key: "Down" },
+          { label: "←", key: "Left" },
+          { label: "→", key: "Right" },
+          { label: "Enter", key: "Enter" },
+          { label: "Tab", key: "Tab" },
+          { label: "Space", key: "Space" },
+          { label: "Esc", key: "Escape" },
+        ].map(({ label, key }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              sendInput({ sessionId: "poc-bridge-001", input: `!!keys:${key}` }).catch(() => {});
+            }}
+            className="rounded bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Input bar */}
       <form
         onSubmit={(e) => {
