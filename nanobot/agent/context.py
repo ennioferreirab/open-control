@@ -14,7 +14,6 @@ from nanobot.agent.skills import SkillsLoader
 
 def _get_iana_timezone() -> str | None:
     """Resolve IANA timezone name from system (e.g. 'America/Vancouver')."""
-    from pathlib import Path
     import os
     try:
         resolved = str(Path("/etc/localtime").resolve())
