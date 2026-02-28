@@ -3,14 +3,14 @@
 Terminal Bridge — Production-ready bridge between Convex and a local tmux/Claude session.
 
 Architecture:
-  [Convex DB] --subscribe--> [Bridge] --send-keys--> [tmux/Claude]
-  [tmux/Claude] --capture-pane--> [Bridge] --mutation--> [Convex DB]
+  [Convex DB] <--poll/mutation--> [Bridge] <--send-keys/capture--> [tmux/Claude]
 
-The bridge uses `ConvexBridge.subscribe()` (blocking iterator via Convex SDK WebSocket)
-in a separate thread. When Convex notifies a new `pendingInput`, the bridge injects it
-into tmux. When Claude responds, the bridge writes the output back to Convex.
+Two polling loops run as daemon threads:
+  - input_poll_loop: polls Convex for pendingInput every 300ms
+  - screen_monitor_loop: polls tmux screen every 300ms and pushes changes to Convex
 
-No polling — purely event-driven on the input side.
+Note: We use polling instead of ConvexBridge.subscribe() because the Convex Python
+SDK's Rust/Tokio backend captures SIGINT at the OS level, making Ctrl+C non-functional.
 """
 
 from __future__ import annotations
@@ -108,8 +108,8 @@ class TerminalBridge:
         self.agent_name = f"remote-{session_id[:8]}"
 
         # Two separate ConvexBridge instances for thread safety:
-        # - bridge: used by the main/subscription thread for mutations and subscribe
-        # - monitor_bridge: used by the background screen monitor thread
+        # - bridge: used by the input poll loop thread
+        # - monitor_bridge: used by the screen monitor thread and cleanup
         self.bridge = ConvexBridge(convex_url, admin_key=admin_key)
         self.monitor_bridge = ConvexBridge(convex_url, admin_key=admin_key)
 
@@ -238,9 +238,8 @@ class TerminalBridge:
         """Create tmux session, open Claude, and bypass the welcome screen."""
         print("[setup] Creating tmux session...", flush=True)
 
-        # Kill any existing sessions
+        # Kill any existing session with the same name (does NOT affect other sessions)
         subprocess.run(["tmux", "kill-session", "-t", self.tmux_session], capture_output=True)
-        subprocess.run(["tmux", "kill-server"], capture_output=True)
         time.sleep(0.3)
 
         # Create new detached session
@@ -278,22 +277,35 @@ class TerminalBridge:
     def cleanup(self, signum=None, frame=None) -> None:
         """Kill the tmux session, notify Convex, and exit the process.
 
-        Protected by a _cleaned_up flag to prevent double-execution from
-        both a signal handler and the atexit fallback firing.
+        If called a second time (e.g., repeated Ctrl+C), force-exits immediately.
         """
         if self._cleaned_up:
-            return
+            # Second signal: force exit NOW
+            print("\n[bridge] Force exit.", flush=True)
+            os._exit(1)
         self._cleaned_up = True
 
-        print("\n[bridge] Shutting down tmux session...", flush=True)
-        try:
-            self.bridge.mutation("terminalSessions:disconnectTerminal", {
-                "agent_name": self.agent_name,
-            })
-        except Exception:
-            pass  # best effort on shutdown
+        print("\n[bridge] Shutting down...", flush=True)
+
+        # 1. Kill tmux FIRST (local, always fast)
         subprocess.run(["tmux", "kill-session", "-t", self.tmux_session], capture_output=True)
-        print("[bridge] tmux session killed. Bye!", flush=True)
+        print("[bridge] tmux killed.", flush=True)
+
+        # 2. Notify Convex in a daemon thread with timeout
+        def _notify():
+            try:
+                self.monitor_bridge.mutation("terminalSessions:disconnectTerminal", {
+                    "agent_name": self.agent_name,
+                })
+                print("[bridge] Convex notified.", flush=True)
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_notify, daemon=True)
+        t.start()
+        t.join(timeout=3)
+
+        print("[bridge] Bye!", flush=True)
         os._exit(0)
 
     # ── Background threads ─────────────────────────────────────────────────────
@@ -318,27 +330,38 @@ class TerminalBridge:
                     print(f"[monitor] Error: {e}", flush=True)
             time.sleep(0.3)  # 300ms polling
 
-    def subscription_loop(self) -> None:
+    def input_poll_loop(self) -> None:
         """
-        Runs in a separate thread.
-        Uses ConvexBridge.subscribe() — blocking iterator via Convex SDK WebSocket.
-        Receives INSTANT notification when pendingInput changes in Convex.
-        No polling — purely event-driven.
+        Polls Convex for new pendingInput every 300ms.
+
+        We use polling instead of ConvexBridge.subscribe() because the Convex
+        Python SDK's Rust/Tokio backend captures SIGINT at the OS level, making
+        Ctrl+C and all signal handlers non-functional while a subscription is active.
+        300ms polling is imperceptible for human-typed input.
         """
-        print("[subscription] Starting subscription on terminalSessions:get...", flush=True)
+        print("[input] Polling for pendingInput...", flush=True)
         last_input = ""
 
-        for snapshot in self.bridge.subscribe("terminalSessions:get", {"session_id": self.session_id}):
+        while True:
+            try:
+                snapshot = self.bridge.query("terminalSessions:get", {"session_id": self.session_id})
+            except Exception as e:
+                print(f"[input] Poll error: {e}", flush=True)
+                time.sleep(1)
+                continue
+
             if snapshot is None:
+                time.sleep(0.3)
                 continue
 
             pending = snapshot.get("pending_input", "") or ""
 
             # Skip if empty or same as last processed
             if not pending or pending == last_input:
+                time.sleep(0.3)
                 continue
 
-            print(f"[subscription] New input detected via Convex: {repr(pending)}", flush=True)
+            print(f"[input] New input detected: {repr(pending)}", flush=True)
 
             if pending.startswith("!!keys:"):
                 # Keystroke: fire-and-forget, no wait, no deduplication
@@ -349,7 +372,7 @@ class TerminalBridge:
                     output = self.tmux_capture()
                     self.write_output_to_convex(output, status="idle")
                 except Exception as e:
-                    print(f"[subscription] Error sending key: {e}", flush=True)
+                    print(f"[input] Error sending key: {e}", flush=True)
                 finally:
                     self._screen_monitor_paused = False
                 last_input = ""  # allow repeating the same key
@@ -362,7 +385,7 @@ class TerminalBridge:
                     self.inject_input(pending)
                     output = self.wait_for_claude_response()
                     self.write_output_to_convex(output, status="idle")
-                    print("[subscription] Cycle complete. Post-response watch...", flush=True)
+                    print("[input] Cycle complete. Post-response watch...", flush=True)
 
                     # Post-response watch: Claude Code may render a TUI question
                     # widget AFTER the main response stabilizes. Poll for 5s to
@@ -373,18 +396,18 @@ class TerminalBridge:
                             fresh = self.tmux_capture()
                             if fresh and fresh != output:
                                 self.write_output_to_convex(fresh, status="idle")
-                                print(f"[subscription] Post-response update #{i+1} ({len(fresh)} chars)", flush=True)
+                                print(f"[input] Post-response update #{i+1} ({len(fresh)} chars)", flush=True)
                                 output = fresh
                         except Exception:
                             pass
 
-                    print("[subscription] Waiting for next input...\n", flush=True)
+                    print("[input] Waiting for next input...\n", flush=True)
                 except Exception as e:
-                    print(f"[subscription] Error in cycle: {e}", flush=True)
+                    print(f"[input] Error in cycle: {e}", flush=True)
                     try:
                         self.set_status("error")
                     except Exception:
-                        print("[subscription] Failed to set error status in Convex", flush=True)
+                        print("[input] Failed to set error status in Convex", flush=True)
                 finally:
                     self._screen_monitor_paused = False
 
@@ -409,8 +432,8 @@ class TerminalBridge:
         monitor = threading.Thread(target=self.screen_monitor_loop, daemon=True)
         monitor.start()
 
-        # Subscription runs in daemon thread
-        t = threading.Thread(target=self.subscription_loop, daemon=True)
+        # Input polling runs in daemon thread
+        t = threading.Thread(target=self.input_poll_loop, daemon=True)
         t.start()
 
         print("=" * 60)

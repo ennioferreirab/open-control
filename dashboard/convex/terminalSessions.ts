@@ -65,7 +65,8 @@ export const sendInput = mutation({
       .first();
 
     if (!session) {
-      throw new Error(`Session '${args.sessionId}' not found`);
+      // Session was deleted (bridge disconnected) — silently ignore
+      return;
     }
 
     await ctx.db.patch(session._id, {

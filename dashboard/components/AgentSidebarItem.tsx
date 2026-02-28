@@ -132,11 +132,16 @@ export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentS
         </div>
         <div className={`flex flex-1 flex-col overflow-hidden ${isDisabled ? "text-muted-foreground opacity-60" : ""}`}>
           {isRemoteTerminal ? (
-            <span
-              className={`truncate text-xs font-mono ${isDisabled ? "" : "text-sidebar-foreground/70"}`}
-            >
-              {ipAddress || agent.displayName}
-            </span>
+            <>
+              <span
+                className={`truncate text-xs font-mono ${isDisabled ? "" : "text-sidebar-foreground/70"}`}
+              >
+                {ipAddress || agent.displayName}
+              </span>
+              <span className={`truncate text-xs ${isDisabled ? "" : "text-sidebar-foreground/50"}`}>
+                {agent.displayName}
+              </span>
+            </>
           ) : (
             <>
               <span className={`truncate text-sm font-medium ${isDisabled ? "" : "text-sidebar-foreground"}`}>
