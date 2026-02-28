@@ -133,9 +133,7 @@ export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentS
         <div className={`flex flex-1 flex-col overflow-hidden ${isDisabled ? "text-muted-foreground opacity-60" : ""}`}>
           {isRemoteTerminal ? (
             <span
-              className={`truncate text-xs font-mono cursor-pointer hover:underline ${isDisabled ? "" : "text-sidebar-foreground/70"}`}
-              onClick={(e) => { e.stopPropagation(); if (ipAddress) navigator.clipboard.writeText(ipAddress); }}
-              title={ipAddress ? "Click to copy IP" : undefined}
+              className={`truncate text-xs font-mono ${isDisabled ? "" : "text-sidebar-foreground/70"}`}
             >
               {ipAddress || agent.displayName}
             </span>
