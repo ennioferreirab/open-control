@@ -208,6 +208,29 @@ def set_status(status: str):
     print(f"[bridge] Status updated: {status}", flush=True)
 
 
+# ── Background screen monitor ─────────────────────────────────────────────────
+
+_screen_monitor_paused = False  # Paused during active input processing
+
+def screen_monitor_loop():
+    """
+    Continuously polls tmux screen and pushes changes to Convex.
+    Runs independently of input/output cycles so the dashboard stays
+    up-to-date even when Claude shows follow-up questions or TUI prompts.
+    """
+    last_sent = ""
+    while True:
+        if not _screen_monitor_paused:
+            try:
+                current = tmux_capture()
+                if current and current != last_sent:
+                    write_output_to_convex(current, status="idle")
+                    last_sent = current
+            except Exception:
+                pass  # best effort
+        time.sleep(POLL_INTERVAL * 5)  # 0.5s — light background polling
+
+
 # ── Subscription thread ────────────────────────────────────────────────────────
 
 def subscription_loop():
@@ -232,8 +255,11 @@ def subscription_loop():
 
         print(f"[subscription] New input detected via Convex: {repr(pending)}", flush=True)
 
+        global _screen_monitor_paused
+
         if pending.startswith("!!keys:"):
             # Keystroke: fire-and-forget, no wait, no deduplication
+            _screen_monitor_paused = True
             try:
                 inject_input(pending)
                 time.sleep(0.1)
@@ -241,10 +267,13 @@ def subscription_loop():
                 write_output_to_convex(output, status="idle")
             except Exception as e:
                 print(f"[subscription] Error sending key: {e}", flush=True)
+            finally:
+                _screen_monitor_paused = False
             last_input = ""  # allow repeating the same key
         else:
             # Normal text: full cycle with wait
             last_input = pending
+            _screen_monitor_paused = True
             try:
                 set_status("processing")
                 inject_input(pending)
@@ -257,6 +286,8 @@ def subscription_loop():
                     set_status("error")
                 except Exception:
                     print("[subscription] Failed to set error status in Convex", flush=True)
+            finally:
+                _screen_monitor_paused = False
 
 
 # ── Initial setup ──────────────────────────────────────────────────────────────
@@ -340,6 +371,10 @@ if __name__ == "__main__":
 
     setup_tmux_and_claude()
     register_terminal()
+
+    # Background screen monitor (catches changes between input cycles)
+    monitor = threading.Thread(target=screen_monitor_loop, daemon=True)
+    monitor.start()
 
     # Subscription runs in daemon thread
     t = threading.Thread(target=subscription_loop, daemon=True)
