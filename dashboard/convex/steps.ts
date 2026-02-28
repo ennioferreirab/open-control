@@ -210,14 +210,17 @@ export const listByBoard = query({
         "planning", "ready", "failed", "inbox", "assigned",
         "in_progress", "review", "done", "retrying", "crashed",
       ] as const;
-      for (const status of NON_DELETED_STATUSES) {
-        const batch = await ctx.db
-          .query("tasks")
-          .withIndex("by_status", (q) => q.eq("status", status))
-          .filter((q) => q.eq(q.field("boardId"), undefined))
-          .collect();
+      const batches = await Promise.all(
+        NON_DELETED_STATUSES.map((status) =>
+          ctx.db
+            .query("tasks")
+            .withIndex("by_status", (q) => q.eq("status", status))
+            .collect()
+        )
+      );
+      for (const batch of batches) {
         for (const task of batch) {
-          taskIds.add(task._id);
+          if (!task.boardId) taskIds.add(task._id);
         }
       }
     }
