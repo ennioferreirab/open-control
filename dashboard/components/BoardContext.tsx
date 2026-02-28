@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { useQuery } from "convex/react";
@@ -47,11 +48,18 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
   const [initialized, setInitialized] = useState(false);
   const [openTerminals, setOpenTerminals] = useState<TerminalEntry[]>([]);
 
+  const mountedRef = useRef(false);
   const boards = useQuery(api.boards.list);
   const defaultBoard = useQuery(api.boards.getDefault);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // On first load: restore from localStorage or fall back to default board
   useEffect(() => {
+    if (!mountedRef.current) return;
     if (initialized) return;
     if (boards === undefined || defaultBoard === undefined) return; // still loading
 
