@@ -65,6 +65,21 @@ def _collect_provider_error_types() -> tuple[type[Exception], ...]:
 _PROVIDER_ERRORS = _collect_provider_error_types()
 
 
+def _get_iana_timezone() -> str | None:
+    """Resolve IANA timezone name from system (e.g. 'America/Vancouver')."""
+    import os
+    try:
+        resolved = str(Path("/etc/localtime").resolve())
+        if "zoneinfo/" in resolved:
+            return resolved.split("zoneinfo/")[-1]
+    except OSError:
+        pass
+    tz_env = os.environ.get("TZ")
+    if tz_env and "/" in tz_env:
+        return tz_env.lstrip(":")
+    return None
+
+
 def build_executor_agent_roster() -> str:
     """Build a roster of available agents for injection into executor orientation.
 
@@ -776,6 +791,11 @@ class TaskExecutor:
             orientation = orientation.replace(
                 "{agent_roster}", build_executor_agent_roster()
             )
+
+        # Interpolate {host_timezone} placeholder if present
+        if "{host_timezone}" in orientation:
+            iana_tz = _get_iana_timezone() or "UTC"
+            orientation = orientation.replace("{host_timezone}", iana_tz)
 
         logger.info(
             "[executor] Global orientation injected for agent '%s'", agent_name
