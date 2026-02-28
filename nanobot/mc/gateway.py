@@ -848,6 +848,21 @@ async def _run_plan_negotiation_manager(bridge: "ConvexBridge") -> None:
             if task_status == "in_progress" or (
                 task_status == "review" and awaiting_kickoff
             ):
+                # Skip plan negotiation for re-entered tasks where all steps
+                # are already completed (e.g. cron requeue of a "done" task).
+                if task_data.get("execution_plan"):
+                    steps = await asyncio.to_thread(
+                        bridge.get_steps_by_task, task_id
+                    )
+                    if steps and all(
+                        s.get("status") == "completed" for s in steps
+                    ):
+                        logger.info(
+                            "[gateway] Skipping plan negotiation for task %s "
+                            "(all steps already completed)",
+                            task_id,
+                        )
+                        continue
                 await _spawn_loop_if_needed(task_id)
 
     # Drain both queues by creating persistent reader tasks so no queue.get()
