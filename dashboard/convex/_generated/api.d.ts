@@ -20,6 +20,7 @@ import type * as tagAttributeValues from "../tagAttributeValues.js";
 import type * as tagAttributes from "../tagAttributes.js";
 import type * as taskTags from "../taskTags.js";
 import type * as tasks from "../tasks.js";
+import type * as terminalSessions from "../terminalSessions.js";
 
 import type {
   ApiFromModules,
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   tagAttributes: typeof tagAttributes;
   taskTags: typeof taskTags;
   tasks: typeof tasks;
+  terminalSessions: typeof terminalSessions;
 }>;
 
 /**
