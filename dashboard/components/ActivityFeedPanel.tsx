@@ -12,10 +12,6 @@ const ChatPanel = lazy(() =>
   import("@/components/ChatPanel").then((mod) => ({ default: mod.ChatPanel }))
 );
 
-const TerminalPanel = lazy(() =>
-  import("@/components/TerminalPanel").then((mod) => ({ default: mod.TerminalPanel }))
-);
-
 export function ActivityFeedPanel() {
   const [collapsed, setCollapsed] = useState(true);
   const clearActivities = useMutation(api.activities.clearAll);
@@ -75,9 +71,6 @@ export function ActivityFeedPanel() {
             <TabsTrigger value="chats" className="flex-1 text-xs">
               Chats
             </TabsTrigger>
-            <TabsTrigger value="terminal" className="flex-1 text-xs">
-              Terminal
-            </TabsTrigger>
           </TabsList>
         </div>
         <TabsContent
@@ -100,22 +93,6 @@ export function ActivityFeedPanel() {
             }
           >
             <ChatPanel />
-          </Suspense>
-        </TabsContent>
-        <TabsContent
-          value="terminal"
-          className="flex-1 min-h-0 overflow-hidden data-[state=active]:flex flex-col m-0"
-        >
-          <Suspense
-            fallback={
-              <div className="flex-1 p-4">
-                <p className="text-xs text-muted-foreground italic">
-                  Loading...
-                </p>
-              </div>
-            }
-          >
-            <TerminalPanel />
           </Suspense>
         </TabsContent>
       </Tabs>
