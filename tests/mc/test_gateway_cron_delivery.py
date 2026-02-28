@@ -289,8 +289,7 @@ class TestOnCronJobDelivery:
         async def _fake_telegram(chat_id: str, content: str) -> None:
             sent_messages.append(content)
 
-        with patch("nanobot.mc.gateway.run_gateway.__wrapped__", create=True), \
-             patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x), \
+        with patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x), \
              patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]):
             # Directly test that on_task_completed calls _send_telegram_direct
             # by verifying it pops the pending delivery and sends the result.

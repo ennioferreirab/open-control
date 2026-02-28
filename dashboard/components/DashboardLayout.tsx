@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Id } from "../convex/_generated/dataModel";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { ActivityFeedPanel } from "@/components/ActivityFeedPanel";
 import { TaskInput } from "@/components/TaskInput";
@@ -58,6 +62,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
         <div className="flex h-screen flex-col overflow-hidden bg-background">
           <header className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
+              <SidebarTrigger className="md:hidden" />
               <h1 className="text-2xl font-bold text-foreground">
                 Mission Control
               </h1>
@@ -111,7 +116,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
         onClose={() => setSelectedTaskId(null)}
       />
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <SheetContent side="right" className="w-[600px] sm:w-[600px] p-0">
+        <SheetContent side="right" className="w-full sm:w-[600px] p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Settings</SheetTitle>
             <SheetDescription>Configure global system defaults</SheetDescription>
@@ -120,7 +125,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
         </SheetContent>
       </Sheet>
       <Sheet open={tagsOpen} onOpenChange={setTagsOpen}>
-        <SheetContent side="right" className="w-[400px] sm:w-[400px] p-0">
+        <SheetContent side="right" className="w-full sm:w-[400px] p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Tags</SheetTitle>
             <SheetDescription>Manage predefined task tags</SheetDescription>
@@ -142,7 +147,6 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
 }
 
 export function DashboardLayout() {
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
   const isXl = useMediaQuery("(min-width: 1280px)");
   const [mounted, setMounted] = useState(false);
 
@@ -153,17 +157,6 @@ export function DashboardLayout() {
   // Prevent flash of wrong layout during hydration
   if (!mounted) {
     return null;
-  }
-
-  // Viewport < 1024px: show banner
-  if (!isDesktop) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background p-8">
-        <p className="text-center text-sm text-muted-foreground">
-          Mission Control is designed for desktop browsers (1024px+)
-        </p>
-      </div>
-    );
   }
 
   return (

@@ -113,6 +113,7 @@ class AgentLoop:
         self._consolidation_tasks: set[asyncio.Task] = set()  # Strong refs to in-flight tasks
         self._consolidation_locks: dict[str, asyncio.Lock] = {}
         self._current_task_id: str | None = None
+        self._last_turn_content: str = ""
         self._register_default_tools()
 
     def _register_default_tools(self) -> None:
@@ -553,4 +554,4 @@ class AgentLoop:
         # prevent double-sending through the channel bus). In direct mode (MC
         # executor / CLI), no bus consumer exists, so we return the agent's
         # actual final text so the caller can use it (e.g. cron delivery).
-        return getattr(self, "_last_turn_content", "") or ""
+        return self._last_turn_content

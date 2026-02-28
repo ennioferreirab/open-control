@@ -344,7 +344,7 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
           </div>
         )}
         <div className="flex-1 flex gap-4 overflow-hidden">
-          <div className="flex-1 grid grid-cols-5 gap-4 min-w-0">
+          <div className="flex min-w-0 gap-4 overflow-x-auto snap-x snap-mandatory pb-1 md:flex-1 md:grid md:grid-cols-5 md:overflow-hidden md:snap-none md:pb-0">
             {tasksByStatus.map((col) => (
               <KanbanColumn
                 key={col.status}

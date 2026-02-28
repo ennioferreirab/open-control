@@ -19,6 +19,10 @@ vi.mock("@/components/TaskInput", () => ({
   TaskInput: () => <div data-testid="task-input">Task Input</div>,
 }));
 
+vi.mock("@/components/SearchBar", () => ({
+  SearchBar: () => <div data-testid="search-bar">Search Bar</div>,
+}));
+
 vi.mock("@/components/KanbanBoard", () => ({
   KanbanBoard: ({ onTaskClick }: { onTaskClick?: (id: string) => void }) => (
     <div data-testid="kanban-board" onClick={() => onTaskClick?.("task1")}>
@@ -39,6 +43,7 @@ vi.mock("@/components/SettingsPanel", () => ({
 
 vi.mock("@/components/BoardContext", () => ({
   BoardProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
+  useBoard: () => ({ openTerminals: [] }),
 }));
 
 vi.mock("@/components/BoardSelector", () => ({
@@ -116,14 +121,10 @@ describe("DashboardLayout", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the small viewport banner when width < 1024px", () => {
+  it("renders dashboard content when width < 1024px", () => {
     window.matchMedia = createMatchMedia(800);
     render(<DashboardLayout />);
-    expect(
-      screen.getByText(
-        "Mission Control is designed for desktop browsers (1024px+)"
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText("Mission Control")).toBeInTheDocument();
   });
 
   it("renders the Mission Control title on desktop", () => {
@@ -165,7 +166,7 @@ describe("DashboardLayout", () => {
   it("renders the search input in header on desktop", () => {
     window.matchMedia = createMatchMedia(1280);
     render(<DashboardLayout />);
-    expect(screen.getByLabelText("Search tasks")).toBeInTheDocument();
+    expect(screen.getByTestId("search-bar")).toBeInTheDocument();
   });
 
   it("does not render settings sheet by default", () => {

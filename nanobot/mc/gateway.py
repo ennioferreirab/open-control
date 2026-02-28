@@ -780,6 +780,12 @@ class AgentGateway:
         return self._retry_counts.get(task_id, 0)
 
 
+# Task IDs requeued by cron — plan negotiation manager skips these.
+# Must be module-level so _process_batch (nested in _run_plan_negotiation_manager)
+# and run_gateway() can both access it without a NameError.
+_cron_requeued_ids: set[str] = set()
+
+
 async def _run_plan_negotiation_manager(bridge: "ConvexBridge") -> None:
     """Manage per-task plan negotiation loops.
 
@@ -910,9 +916,6 @@ async def run_gateway(bridge: ConvexBridge) -> None:
 
     # Lightweight delivery: dict tracks pending cron deliveries, callback sends after completion
     pending_deliveries: dict[str, tuple[str, str]] = {}  # task_id → (channel, to)
-
-    # Task IDs requeued by cron — plan negotiation manager skips these
-    _cron_requeued_ids: set[str] = set()
 
     async def _send_telegram_direct(chat_id: str, content: str) -> None:
         """Send message to Telegram without polling — direct Bot API call."""
