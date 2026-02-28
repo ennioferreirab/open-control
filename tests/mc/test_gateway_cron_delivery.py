@@ -124,45 +124,64 @@ class TestOnCronJobDelivery:
 
     @pytest.mark.asyncio
     async def test_cron_job_with_deliver_registers_pending_delivery(self):
-        """Job with deliver=True, channel, and to → pending_deliveries has entry."""
+        """Job with deliver=True, channel, and to → on_task_completed actually delivers."""
         captured: dict = {}
         await _run_gateway_and_capture(captured)
 
         on_job = captured.get("on_job")
         assert on_job is not None, "on_job callback was not captured"
 
-        job = _make_cron_job(deliver=True, channel="telegram", to="123", message="hi")
+        job = _make_cron_job(deliver=True, channel="telegram", to="123456", message="hi")
+        captured["bridge"].mutation = MagicMock(return_value="task-reg-1")
         await on_job(job)
 
-        # The executor should have received on_task_completed callback
-        assert "executor_kwargs" in captured
         on_task_completed = captured["executor_kwargs"].get("on_task_completed")
-        assert on_task_completed is not None, "on_task_completed callback was not passed to executor"
+        assert on_task_completed is not None
+
+        # Verify the delivery is actually registered: calling on_task_completed triggers send
+        with patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x), \
+             patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]), \
+             patch("telegram.Bot") as MockBot, \
+             patch("nanobot.config.loader.load_config") as mock_cfg:
+            mock_cfg.return_value.channels.telegram.token = "tok"
+            mock_bot = AsyncMock()
+            MockBot.return_value = mock_bot
+            await on_task_completed("task-reg-1", "result text")
+            mock_bot.send_message.assert_called_once()
+            assert mock_bot.send_message.call_args[1]["chat_id"] == 123456
 
     @pytest.mark.asyncio
     async def test_cron_job_deliver_skipped_when_task_fails(self):
-        """When task creation raises, pending_deliveries should NOT have entry."""
+        """When task creation raises, on_task_completed does NOT deliver (no pending entry)."""
         captured: dict = {}
         await _run_gateway_and_capture(captured)
 
         on_job = captured.get("on_job")
         assert on_job is not None
 
-        # Make bridge.mutation raise so task_id_for_delivery stays None
+        # bridge.mutation raises → task_id is never returned → no entry in pending_deliveries
         captured["bridge"].mutation = MagicMock(side_effect=RuntimeError("db error"))
 
-        job = _make_cron_job(deliver=True, channel="telegram", to="123")
+        job = _make_cron_job(deliver=True, channel="telegram", to="123456")
         await on_job(job)
 
-        # Since mutation failed, task_id_for_delivery is None, no delivery registered
-        # (We can't directly inspect pending_deliveries since it's a local in run_gateway,
-        # but the on_task_completed callback should exist and calling it shouldn't crash)
         on_task_completed = captured["executor_kwargs"].get("on_task_completed")
         assert on_task_completed is not None
 
+        # Calling on_task_completed with ANY task_id should NOT trigger delivery
+        # because the failed mutation means no task_id was registered.
+        with patch("telegram.Bot") as MockBot, \
+             patch("nanobot.config.loader.load_config") as mock_cfg:
+            mock_cfg.return_value.channels.telegram.token = "tok"
+            mock_bot = AsyncMock()
+            MockBot.return_value = mock_bot
+            # Use a plausible task_id — it was never registered, so delivery must not happen
+            await on_task_completed("any-task-id", "result text")
+            mock_bot.send_message.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_cron_job_mc_channel_with_task_id_skips_delivery(self):
-        """Job with channel='mc' and task_id set → no pending delivery registered."""
+        """Job with channel='mc' and task_id set → on_task_completed does NOT deliver."""
         captured: dict = {}
         await _run_gateway_and_capture(captured)
 
@@ -175,29 +194,47 @@ class TestOnCronJobDelivery:
         )
         captured["bridge"].send_message = MagicMock()
         captured["bridge"].update_task_status = MagicMock()
+        captured["bridge"].mutation = MagicMock(return_value="t1")
 
         job = _make_cron_job(deliver=True, channel="mc", to="t1", task_id="t1")
         await on_job(job)
 
-        # MC channel with task_id is excluded from pending deliveries (channel != "mc" check)
         on_task_completed = captured["executor_kwargs"].get("on_task_completed")
         assert on_task_completed is not None
 
+        # MC channel requeues tasks directly — no Telegram delivery should happen
+        with patch("telegram.Bot") as MockBot, \
+             patch("nanobot.config.loader.load_config") as mock_cfg:
+            mock_cfg.return_value.channels.telegram.token = "tok"
+            mock_bot = AsyncMock()
+            MockBot.return_value = mock_bot
+            await on_task_completed("t1", "result text")
+            mock_bot.send_message.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_cron_job_deliver_false_skips_delivery(self):
-        """Job with deliver=False → no pending delivery registered."""
+        """Job with deliver=False → on_task_completed does NOT deliver."""
         captured: dict = {}
         await _run_gateway_and_capture(captured)
 
         on_job = captured.get("on_job")
         assert on_job is not None
 
-        job = _make_cron_job(deliver=False, channel="telegram", to="123")
+        captured["bridge"].mutation = MagicMock(return_value="task-nodeliver")
+        job = _make_cron_job(deliver=False, channel="telegram", to="123456")
         await on_job(job)
 
-        # deliver=False means no pending delivery registered
         on_task_completed = captured["executor_kwargs"].get("on_task_completed")
         assert on_task_completed is not None
+
+        # deliver=False means no entry in pending_deliveries — send_message must not be called
+        with patch("telegram.Bot") as MockBot, \
+             patch("nanobot.config.loader.load_config") as mock_cfg:
+            mock_cfg.return_value.channels.telegram.token = "tok"
+            mock_bot = AsyncMock()
+            MockBot.return_value = mock_bot
+            await on_task_completed("task-nodeliver", "result text")
+            mock_bot.send_message.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_task_completed_callback_passed_to_executor(self):
