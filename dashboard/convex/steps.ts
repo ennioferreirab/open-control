@@ -195,25 +195,45 @@ export const listByBoard = query({
     includeNoBoardId: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const taskIdsForBoard = new Set(
-      (await ctx.db.query("tasks").collect())
-        .filter((task) => task.status !== "deleted")
-        .filter((task) => {
-          if (task.boardId === args.boardId) {
-            return true;
-          }
-          return args.includeNoBoardId === true && task.boardId === undefined;
-        })
-        .map((task) => task._id)
-    );
+    // Use by_boardId index instead of full tasks scan
+    const boardTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_boardId", (q) => q.eq("boardId", args.boardId))
+      .filter((q) => q.neq(q.field("status"), "deleted"))
+      .collect();
 
-    if (taskIdsForBoard.size === 0) {
-      return [];
+    const taskIds: Set<Id<"tasks">> = new Set(boardTasks.map((t) => t._id));
+
+    // Orphan tasks (no boardId) — needed for the default board
+    if (args.includeNoBoardId) {
+      const NON_DELETED_STATUSES = [
+        "planning", "ready", "failed", "inbox", "assigned",
+        "in_progress", "review", "done", "retrying", "crashed",
+      ] as const;
+      for (const status of NON_DELETED_STATUSES) {
+        const batch = await ctx.db
+          .query("tasks")
+          .withIndex("by_status", (q) => q.eq("status", status))
+          .filter((q) => q.eq(q.field("boardId"), undefined))
+          .collect();
+        for (const task of batch) {
+          taskIds.add(task._id);
+        }
+      }
     }
 
-    return (await ctx.db.query("steps").collect()).filter((step) =>
-      taskIdsForBoard.has(step.taskId)
+    if (taskIds.size === 0) return [];
+
+    // Use by_taskId index per task instead of full steps scan
+    const stepBatches = await Promise.all(
+      Array.from(taskIds).map((taskId) =>
+        ctx.db
+          .query("steps")
+          .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+          .collect()
+      )
     );
+    return stepBatches.flat();
   },
 });
 
