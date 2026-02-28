@@ -16,6 +16,7 @@ No polling — purely event-driven on the input side.
 from __future__ import annotations
 
 import argparse
+import atexit
 from datetime import datetime, timezone
 import os
 import signal
@@ -87,339 +88,350 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-# ── Global state (set after arg parse) ────────────────────────────────────────
-# These are module-level variables populated in main() before use.
-bridge: ConvexBridge
-monitor_bridge: ConvexBridge  # Separate instance for the monitor thread (thread-safety)
-SESSION_ID: str
-AGENT_NAME: str
-DISPLAY_NAME: str
-TMUX_SESSION: str
-TMUX_PANE: str
+# ── TerminalBridge class ───────────────────────────────────────────────────────
 
-_last_good_output: str = ""
+class TerminalBridge:
+    """Encapsulates all state and logic for the terminal bridge."""
 
+    def __init__(
+        self,
+        session_id: str,
+        display_name: str,
+        convex_url: str,
+        admin_key: str | None,
+        tmux_session: str,
+    ) -> None:
+        self.session_id = session_id
+        self.display_name = display_name
+        self.tmux_session = tmux_session
+        self.tmux_pane = f"{tmux_session}:0"
+        self.agent_name = f"remote-{session_id[:8]}"
 
-# ── tmux helpers ───────────────────────────────────────────────────────────────
+        # Two separate ConvexBridge instances for thread safety:
+        # - bridge: used by the main/subscription thread for mutations and subscribe
+        # - monitor_bridge: used by the background screen monitor thread
+        self.bridge = ConvexBridge(convex_url, admin_key=admin_key)
+        self.monitor_bridge = ConvexBridge(convex_url, admin_key=admin_key)
 
-def tmux_send(text: str):
-    """Send text to the tmux pane."""
-    subprocess.run(["tmux", "send-keys", "-t", TMUX_PANE, text, ""], check=True)
+        self._last_good_output: str = ""
+        self._screen_monitor_paused: bool = False
+        self._cleaned_up: bool = False  # guard against double-cleanup
 
+    # ── tmux operations ────────────────────────────────────────────────────────
 
-def tmux_enter():
-    """Send Enter to the tmux pane."""
-    subprocess.run(["tmux", "send-keys", "-t", TMUX_PANE, "", "Enter"], check=True)
+    def tmux_send(self, text: str) -> None:
+        """Send text to the tmux pane."""
+        subprocess.run(["tmux", "send-keys", "-t", self.tmux_pane, text, ""], check=True)
 
+    def tmux_enter(self) -> None:
+        """Send Enter to the tmux pane."""
+        subprocess.run(["tmux", "send-keys", "-t", self.tmux_pane, "", "Enter"], check=True)
 
-def tmux_capture() -> str:
-    """Capture the current content of the tmux pane."""
-    result = subprocess.run(
-        ["tmux", "capture-pane", "-t", TMUX_PANE, "-p", "-S", "-50"],
-        capture_output=True, text=True
-    )
-    return result.stdout.strip()
+    def tmux_capture(self) -> str:
+        """Capture the current content of the tmux pane."""
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", self.tmux_pane, "-p", "-S", "-50"],
+            capture_output=True, text=True
+        )
+        return result.stdout.strip()
 
+    def inject_input(self, text: str) -> None:
+        """Inject input into Claude via tmux. Supports !!keys: protocol for TUI keystrokes."""
+        print(f"[bridge] Injecting input: {repr(text)}", flush=True)
 
-def wait_for_claude_response() -> str:
-    """
-    Wait for Claude to finish responding.
-    Detects stability: output hasn't changed for STABLE_SECONDS.
-    Streams intermediate output to Convex so the dashboard updates in real-time.
-    100% local — zero LLM calls.
-    """
-    print("[bridge] Waiting for Claude response...", flush=True)
-    last_output = ""
-    last_streamed = ""
-    stable_since = None
-
-    while True:
-        current = tmux_capture()
-        if current != last_output:
-            last_output = current
-            stable_since = time.time()
-            # Stream intermediate output to Convex for real-time dashboard updates
-            if current != last_streamed:
-                try:
-                    write_output_to_convex(current, status="processing")
-                    last_streamed = current
-                except Exception:
-                    pass  # best effort streaming
+        if text.startswith("!!keys:"):
+            # Parse key sequence: "!!keys:Up,Down,Enter" → individual keystrokes
+            keys = text[7:].split(",")
+            for key in keys:
+                key = key.strip()
+                if not key:
+                    continue
+                subprocess.run(
+                    ["tmux", "send-keys", "-t", self.tmux_pane, key],
+                    check=True
+                )
+                print(f"[bridge] Key sent: {key}", flush=True)
+                time.sleep(0.05)
         else:
-            if stable_since and (time.time() - stable_since) >= STABLE_SECONDS:
-                print("[bridge] Claude finished responding.", flush=True)
-                return current
-        time.sleep(POLL_INTERVAL)
-
-
-def inject_input(text: str):
-    """Inject input into Claude via tmux. Supports !!keys: protocol for TUI keystrokes."""
-    print(f"[bridge] Injecting input: {repr(text)}", flush=True)
-
-    if text.startswith("!!keys:"):
-        # Parse key sequence: "!!keys:Up,Down,Enter" → individual keystrokes
-        keys = text[7:].split(",")
-        for key in keys:
-            key = key.strip()
-            if not key:
-                continue
-            subprocess.run(
-                ["tmux", "send-keys", "-t", TMUX_PANE, key],
-                check=True
-            )
-            print(f"[bridge] Key sent: {key}", flush=True)
+            # Regular text input
+            self.tmux_send(text)
             time.sleep(0.05)
-    else:
-        # Regular text input
-        tmux_send(text)
-        time.sleep(0.05)
-        tmux_enter()
+            self.tmux_enter()
 
+    def wait_for_claude_response(self) -> str:
+        """
+        Wait for Claude to finish responding.
+        Detects stability: output hasn't changed for STABLE_SECONDS.
+        Streams intermediate output to Convex so the dashboard updates in real-time.
+        100% local — zero LLM calls.
+        """
+        print("[bridge] Waiting for Claude response...", flush=True)
+        last_output = ""
+        last_streamed = ""
+        stable_since = None
 
-def write_output_to_convex(output: str, status: str = "idle"):
-    """Write Claude's output to Convex."""
-    global _last_good_output
-    if output:
-        _last_good_output = output
-    bridge.mutation("terminalSessions:upsert", {
-        "session_id": SESSION_ID,
-        "output": output,
-        "pending_input": "",
-        "status": status,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    })
-    print(f"[bridge] Output written to Convex ({len(output)} chars, status={status}).", flush=True)
-
-
-def set_status(status: str):
-    """Update only the status in Convex, preserving the last known good output."""
-    global _last_good_output
-    try:
-        captured = tmux_capture()
-        if captured:
-            _last_good_output = captured
-    except Exception:
-        captured = ""
-    bridge.mutation("terminalSessions:upsert", {
-        "session_id": SESSION_ID,
-        "output": captured or _last_good_output,
-        "status": status,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    })
-    print(f"[bridge] Status updated: {status}", flush=True)
-
-
-# ── Background screen monitor ─────────────────────────────────────────────────
-
-_screen_monitor_paused = False  # Paused during active input processing
-
-
-def update_screen_only(output: str):
-    """Lightweight output-only update for the background monitor.
-
-    Uses monitor_bridge (separate ConvexClient) for thread safety.
-    Does NOT touch pending_input to avoid interfering with subscription loop.
-    """
-    monitor_bridge.mutation("terminalSessions:upsert", {
-        "session_id": SESSION_ID,
-        "output": output,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "status": "idle",
-    })
-
-
-def screen_monitor_loop():
-    """
-    Continuously polls tmux screen and pushes changes to Convex.
-    Uses its own ConvexBridge instance for thread safety.
-    Runs independently of input/output cycles so the dashboard stays
-    up-to-date even when Claude shows follow-up questions or TUI prompts.
-    """
-    last_sent = ""
-    while True:
-        if not _screen_monitor_paused:
-            try:
-                current = tmux_capture()
-                if current and current != last_sent:
-                    print(f"[monitor] Screen changed ({len(current)} chars), pushing...", flush=True)
-                    update_screen_only(current)
-                    last_sent = current
-            except Exception as e:
-                print(f"[monitor] Error: {e}", flush=True)
-        time.sleep(0.3)  # 300ms polling
-
-
-# ── Subscription thread ────────────────────────────────────────────────────────
-
-def subscription_loop():
-    """
-    Runs in a separate thread.
-    Uses ConvexBridge.subscribe() — blocking iterator via Convex SDK WebSocket.
-    Receives INSTANT notification when pendingInput changes in Convex.
-    No polling — purely event-driven.
-    """
-    print("[subscription] Starting subscription on terminalSessions:get...", flush=True)
-    last_input = ""
-
-    for snapshot in bridge.subscribe("terminalSessions:get", {"session_id": SESSION_ID}):
-        if snapshot is None:
-            continue
-
-        pending = snapshot.get("pending_input", "") or ""
-
-        # Skip if empty or same as last processed
-        if not pending or pending == last_input:
-            continue
-
-        print(f"[subscription] New input detected via Convex: {repr(pending)}", flush=True)
-
-        global _screen_monitor_paused
-
-        if pending.startswith("!!keys:"):
-            # Keystroke: fire-and-forget, no wait, no deduplication
-            _screen_monitor_paused = True
-            try:
-                inject_input(pending)
-                time.sleep(0.1)
-                output = tmux_capture()
-                write_output_to_convex(output, status="idle")
-            except Exception as e:
-                print(f"[subscription] Error sending key: {e}", flush=True)
-            finally:
-                _screen_monitor_paused = False
-            last_input = ""  # allow repeating the same key
-        else:
-            # Normal text: full cycle with wait
-            last_input = pending
-            _screen_monitor_paused = True
-            try:
-                set_status("processing")
-                inject_input(pending)
-                output = wait_for_claude_response()
-                write_output_to_convex(output, status="idle")
-                print("[subscription] Cycle complete. Post-response watch...", flush=True)
-
-                # Post-response watch: Claude Code may render a TUI question
-                # widget AFTER the main response stabilizes. Poll for 5s to
-                # catch any late screen changes (same thread/bridge = reliable).
-                for i in range(25):  # 25 × 200ms = 5s max
-                    time.sleep(0.2)
+        while True:
+            current = self.tmux_capture()
+            if current != last_output:
+                last_output = current
+                stable_since = time.time()
+                # Stream intermediate output to Convex for real-time dashboard updates
+                if current != last_streamed:
                     try:
-                        fresh = tmux_capture()
-                        if fresh and fresh != output:
-                            write_output_to_convex(fresh, status="idle")
-                            print(f"[subscription] Post-response update #{i+1} ({len(fresh)} chars)", flush=True)
-                            output = fresh
+                        self.write_output_to_convex(current, status="processing")
+                        last_streamed = current
                     except Exception:
-                        pass
+                        pass  # best effort streaming
+            else:
+                if stable_since and (time.time() - stable_since) >= STABLE_SECONDS:
+                    print("[bridge] Claude finished responding.", flush=True)
+                    return current
+            time.sleep(POLL_INTERVAL)
 
-                print("[subscription] Waiting for next input...\n", flush=True)
-            except Exception as e:
-                print(f"[subscription] Error in cycle: {e}", flush=True)
+    # ── Convex operations ──────────────────────────────────────────────────────
+
+    def write_output_to_convex(self, output: str, status: str = "idle") -> None:
+        """Write Claude's output to Convex."""
+        if output:
+            self._last_good_output = output
+        self.bridge.mutation("terminalSessions:upsert", {
+            "session_id": self.session_id,
+            "output": output,
+            "pending_input": "",
+            "status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        print(f"[bridge] Output written to Convex ({len(output)} chars, status={status}).", flush=True)
+
+    def set_status(self, status: str) -> None:
+        """Update only the status in Convex, preserving the last known good output."""
+        try:
+            captured = self.tmux_capture()
+            if captured:
+                self._last_good_output = captured
+        except Exception:
+            captured = ""
+        self.bridge.mutation("terminalSessions:upsert", {
+            "session_id": self.session_id,
+            "output": captured or self._last_good_output,
+            "status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        print(f"[bridge] Status updated: {status}", flush=True)
+
+    def update_screen_only(self, output: str) -> None:
+        """Lightweight output-only update for the background monitor.
+
+        Uses monitor_bridge (separate ConvexClient) for thread safety.
+        Does NOT touch pending_input to avoid interfering with subscription loop.
+        """
+        self.monitor_bridge.mutation("terminalSessions:upsert", {
+            "session_id": self.session_id,
+            "output": output,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "status": "idle",
+        })
+
+    # ── Lifecycle management ───────────────────────────────────────────────────
+
+    def setup_tmux_and_claude(self) -> None:
+        """Create tmux session, open Claude, and bypass the welcome screen."""
+        print("[setup] Creating tmux session...", flush=True)
+
+        # Kill any existing sessions
+        subprocess.run(["tmux", "kill-session", "-t", self.tmux_session], capture_output=True)
+        subprocess.run(["tmux", "kill-server"], capture_output=True)
+        time.sleep(0.3)
+
+        # Create new detached session
+        subprocess.run(["tmux", "new-session", "-d", "-s", self.tmux_session], check=True)
+        time.sleep(0.5)
+
+        # Open Claude
+        print("[setup] Opening Claude Code...", flush=True)
+        self.tmux_send("claude")
+        self.tmux_enter()
+        time.sleep(4)
+
+        # Bypass welcome screen (Enter confirms default)
+        print("[setup] Bypassing initial screen...", flush=True)
+        self.tmux_enter()
+        time.sleep(2)
+
+        # Register initial state in Convex
+        initial_output = self.tmux_capture()
+        self.write_output_to_convex(initial_output, status="idle")
+        print("[setup] Initial state registered in Convex.", flush=True)
+        print("[setup] Claude ready. Bridge waiting for inputs via Convex.\n", flush=True)
+
+    def register_terminal(self) -> None:
+        """Register this terminal session in Convex after setup."""
+        print(f"[setup] Registering terminal '{self.agent_name}' in Convex...", flush=True)
+        self.bridge.mutation("terminalSessions:registerTerminal", {
+            "session_id": self.session_id,
+            "agent_name": self.agent_name,
+            "display_name": self.display_name,
+            "ip_address": get_local_ip(),
+        })
+        print(f"[setup] Terminal registered (session={self.session_id}, agent={self.agent_name}).", flush=True)
+
+    def cleanup(self, signum=None, frame=None) -> None:
+        """Kill the tmux session, notify Convex, and exit the process.
+
+        Protected by a _cleaned_up flag to prevent double-execution from
+        both a signal handler and the atexit fallback firing.
+        """
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+
+        print("\n[bridge] Shutting down tmux session...", flush=True)
+        try:
+            self.bridge.mutation("terminalSessions:disconnectTerminal", {
+                "agent_name": self.agent_name,
+            })
+        except Exception:
+            pass  # best effort on shutdown
+        subprocess.run(["tmux", "kill-session", "-t", self.tmux_session], capture_output=True)
+        print("[bridge] tmux session killed. Bye!", flush=True)
+        os._exit(0)
+
+    # ── Background threads ─────────────────────────────────────────────────────
+
+    def screen_monitor_loop(self) -> None:
+        """
+        Continuously polls tmux screen and pushes changes to Convex.
+        Uses its own ConvexBridge instance for thread safety.
+        Runs independently of input/output cycles so the dashboard stays
+        up-to-date even when Claude shows follow-up questions or TUI prompts.
+        """
+        last_sent = ""
+        while True:
+            if not self._screen_monitor_paused:
                 try:
-                    set_status("error")
-                except Exception:
-                    print("[subscription] Failed to set error status in Convex", flush=True)
-            finally:
-                _screen_monitor_paused = False
+                    current = self.tmux_capture()
+                    if current and current != last_sent:
+                        print(f"[monitor] Screen changed ({len(current)} chars), pushing...", flush=True)
+                        self.update_screen_only(current)
+                        last_sent = current
+                except Exception as e:
+                    print(f"[monitor] Error: {e}", flush=True)
+            time.sleep(0.3)  # 300ms polling
 
+    def subscription_loop(self) -> None:
+        """
+        Runs in a separate thread.
+        Uses ConvexBridge.subscribe() — blocking iterator via Convex SDK WebSocket.
+        Receives INSTANT notification when pendingInput changes in Convex.
+        No polling — purely event-driven.
+        """
+        print("[subscription] Starting subscription on terminalSessions:get...", flush=True)
+        last_input = ""
 
-# ── Initial setup ──────────────────────────────────────────────────────────────
+        for snapshot in self.bridge.subscribe("terminalSessions:get", {"session_id": self.session_id}):
+            if snapshot is None:
+                continue
 
-def setup_tmux_and_claude():
-    """Create tmux session, open Claude, and bypass the welcome screen."""
-    print("[setup] Creating tmux session...", flush=True)
+            pending = snapshot.get("pending_input", "") or ""
 
-    # Kill any existing sessions
-    subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION], capture_output=True)
-    subprocess.run(["tmux", "kill-server"], capture_output=True)
-    time.sleep(0.3)
+            # Skip if empty or same as last processed
+            if not pending or pending == last_input:
+                continue
 
-    # Create new detached session
-    subprocess.run(["tmux", "new-session", "-d", "-s", TMUX_SESSION], check=True)
-    time.sleep(0.5)
+            print(f"[subscription] New input detected via Convex: {repr(pending)}", flush=True)
 
-    # Open Claude
-    print("[setup] Opening Claude Code...", flush=True)
-    tmux_send("claude")
-    tmux_enter()
-    time.sleep(4)
+            if pending.startswith("!!keys:"):
+                # Keystroke: fire-and-forget, no wait, no deduplication
+                self._screen_monitor_paused = True
+                try:
+                    self.inject_input(pending)
+                    time.sleep(0.1)
+                    output = self.tmux_capture()
+                    self.write_output_to_convex(output, status="idle")
+                except Exception as e:
+                    print(f"[subscription] Error sending key: {e}", flush=True)
+                finally:
+                    self._screen_monitor_paused = False
+                last_input = ""  # allow repeating the same key
+            else:
+                # Normal text: full cycle with wait
+                last_input = pending
+                self._screen_monitor_paused = True
+                try:
+                    self.set_status("processing")
+                    self.inject_input(pending)
+                    output = self.wait_for_claude_response()
+                    self.write_output_to_convex(output, status="idle")
+                    print("[subscription] Cycle complete. Post-response watch...", flush=True)
 
-    # Bypass welcome screen (Enter confirms default)
-    print("[setup] Bypassing initial screen...", flush=True)
-    tmux_enter()
-    time.sleep(2)
+                    # Post-response watch: Claude Code may render a TUI question
+                    # widget AFTER the main response stabilizes. Poll for 5s to
+                    # catch any late screen changes (same thread/bridge = reliable).
+                    for i in range(25):  # 25 × 200ms = 5s max
+                        time.sleep(0.2)
+                        try:
+                            fresh = self.tmux_capture()
+                            if fresh and fresh != output:
+                                self.write_output_to_convex(fresh, status="idle")
+                                print(f"[subscription] Post-response update #{i+1} ({len(fresh)} chars)", flush=True)
+                                output = fresh
+                        except Exception:
+                            pass
 
-    # Register initial state in Convex
-    initial_output = tmux_capture()
-    write_output_to_convex(initial_output, status="idle")
-    print("[setup] Initial state registered in Convex.", flush=True)
-    print("[setup] Claude ready. Bridge waiting for inputs via Convex.\n", flush=True)
+                    print("[subscription] Waiting for next input...\n", flush=True)
+                except Exception as e:
+                    print(f"[subscription] Error in cycle: {e}", flush=True)
+                    try:
+                        self.set_status("error")
+                    except Exception:
+                        print("[subscription] Failed to set error status in Convex", flush=True)
+                finally:
+                    self._screen_monitor_paused = False
 
+    # ── Entry point ────────────────────────────────────────────────────────────
 
-# ── Terminal registration ──────────────────────────────────────────────────────
+    def run(self) -> None:
+        """Set up signal handlers, register atexit, start threads, and enter main loop."""
+        # Signal handlers for graceful shutdown
+        signal.signal(signal.SIGINT, self.cleanup)
+        signal.signal(signal.SIGTERM, self.cleanup)
+        # SIGHUP: sent when the controlling terminal is closed
+        if hasattr(signal, "SIGHUP"):
+            signal.signal(signal.SIGHUP, self.cleanup)
 
-def register_terminal():
-    """Register this terminal session in Convex after setup."""
-    print(f"[setup] Registering terminal '{AGENT_NAME}' in Convex...", flush=True)
-    bridge.mutation("terminalSessions:registerTerminal", {
-        "session_id": SESSION_ID,
-        "agent_name": AGENT_NAME,
-        "display_name": DISPLAY_NAME,
-        "ip_address": get_local_ip(),
-    })
-    print(f"[setup] Terminal registered (session={SESSION_ID}, agent={AGENT_NAME}).", flush=True)
+        # atexit fallback: catches unhandled exceptions and other non-signal exits
+        atexit.register(self.cleanup)
+
+        self.setup_tmux_and_claude()
+        self.register_terminal()
+
+        # Background screen monitor (catches changes between input cycles)
+        monitor = threading.Thread(target=self.screen_monitor_loop, daemon=True)
+        monitor.start()
+
+        # Subscription runs in daemon thread
+        t = threading.Thread(target=self.subscription_loop, daemon=True)
+        t.start()
+
+        print("=" * 60)
+        print(f"Bridge active — session={self.session_id}, agent={self.agent_name}")
+        print(f"Display name: {self.display_name} | tmux: {self.tmux_session}")
+        print("Ctrl+C to stop.")
+        print("=" * 60 + "\n")
+
+        while True:
+            time.sleep(1)
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
-def cleanup_and_exit(signum=None, frame=None):
-    """Kill the tmux session, notify Convex, and exit the process."""
-    print("\n[bridge] Shutting down tmux session...", flush=True)
-    try:
-        bridge.mutation("terminalSessions:disconnectTerminal", {
-            "agent_name": AGENT_NAME,
-        })
-    except Exception:
-        pass  # best effort on shutdown
-    subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION], capture_output=True)
-    print("[bridge] tmux session killed. Bye!", flush=True)
-    os._exit(0)
-
-
 if __name__ == "__main__":
     args = parse_args()
-
-    # Populate globals from parsed args
-    SESSION_ID = args.session_id
-    DISPLAY_NAME = args.display_name
-    TMUX_SESSION = args.tmux_session
-    TMUX_PANE = f"{TMUX_SESSION}:0"
-    AGENT_NAME = f"remote-{SESSION_ID[:8]}"
-
-    # Initialize bridges — separate instances for thread safety
-    bridge = ConvexBridge(args.convex_url, admin_key=args.admin_key)
-    monitor_bridge = ConvexBridge(args.convex_url, admin_key=args.admin_key)
-
-    signal.signal(signal.SIGINT, cleanup_and_exit)
-    signal.signal(signal.SIGTERM, cleanup_and_exit)
-
-    setup_tmux_and_claude()
-    register_terminal()
-
-    # Background screen monitor (catches changes between input cycles)
-    monitor = threading.Thread(target=screen_monitor_loop, daemon=True)
-    monitor.start()
-
-    # Subscription runs in daemon thread
-    t = threading.Thread(target=subscription_loop, daemon=True)
-    t.start()
-
-    print("=" * 60)
-    print(f"Bridge active — session={SESSION_ID}, agent={AGENT_NAME}")
-    print(f"Display name: {DISPLAY_NAME} | tmux: {TMUX_SESSION}")
-    print("Ctrl+C to stop.")
-    print("=" * 60 + "\n")
-
-    while True:
-        time.sleep(1)
+    tb = TerminalBridge(
+        session_id=args.session_id,
+        display_name=args.display_name,
+        convex_url=args.convex_url,
+        admin_key=args.admin_key,
+        tmux_session=args.tmux_session,
+    )
+    tb.run()

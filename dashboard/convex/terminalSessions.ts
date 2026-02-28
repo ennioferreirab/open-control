@@ -183,7 +183,7 @@ export const registerTerminal = mutation({
   },
 });
 
-// T5: disconnectTerminal — marks agent as crashed and sessions as error
+// T5: disconnectTerminal — soft-deletes the agent and removes terminal session documents
 export const disconnectTerminal = mutation({
   args: {
     agentName: v.string(),
@@ -191,7 +191,7 @@ export const disconnectTerminal = mutation({
   handler: async (ctx, args) => {
     const timestamp = new Date().toISOString();
 
-    // Update agent status to crashed
+    // Soft-delete the agent so it disappears from the sidebar (agents.list filters by !deletedAt)
     const agent = await ctx.db
       .query("agents")
       .withIndex("by_name", (q) => q.eq("name", args.agentName))
@@ -199,22 +199,19 @@ export const disconnectTerminal = mutation({
 
     if (agent) {
       await ctx.db.patch(agent._id, {
-        status: "crashed",
+        deletedAt: timestamp,
         lastActiveAt: timestamp,
       });
     }
 
-    // Update terminal session status to error
+    // Hard-delete terminal session documents so they don't accumulate in the DB
     const sessions = await ctx.db
       .query("terminalSessions")
       .withIndex("by_agentName", (q) => q.eq("agentName", args.agentName))
       .collect();
 
     for (const session of sessions) {
-      await ctx.db.patch(session._id, {
-        status: "error",
-        updatedAt: timestamp,
-      });
+      await ctx.db.delete(session._id);
     }
 
     // Activity event
