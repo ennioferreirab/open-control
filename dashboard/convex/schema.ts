@@ -275,4 +275,16 @@ export default defineSchema({
     key: v.string(),
     value: v.string(),
   }).index("by_key", ["key"]),
+
+  terminalSessions: defineTable({
+    sessionId: v.string(),
+    output: v.string(),
+    updatedAt: v.string(),
+    pendingInput: v.optional(v.string()),
+    status: v.optional(v.union(
+      v.literal("idle"),
+      v.literal("processing"),
+      v.literal("error"),
+    )),
+  }).index("by_sessionId", ["sessionId"]),
 });
