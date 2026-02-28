@@ -275,4 +275,17 @@ export default defineSchema({
     key: v.string(),
     value: v.string(),
   }).index("by_key", ["key"]),
+
+  terminalSessions: defineTable({
+    sessionId: v.string(),
+    agentName: v.string(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("closed"),
+    ),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_agentName", ["agentName"])
+    .index("by_sessionId", ["sessionId"]),
 });
