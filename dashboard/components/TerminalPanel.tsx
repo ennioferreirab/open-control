@@ -98,6 +98,7 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
           { label: "Tab", key: "Tab" },
           { label: "Space", key: "Space" },
           { label: "Esc", key: "Escape" },
+          { label: "Ctrl+C", key: "C-c" },
         ].map(({ label, key }) => (
           <button
             key={key}
