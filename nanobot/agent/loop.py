@@ -460,6 +460,10 @@ class AgentLoop:
                             tools_used=tools_used if tools_used else None)
         self.sessions.save(session)
 
+        # Always store final_content so process_direct can retrieve it even
+        # when we return None below (prevents empty result in MC executor).
+        self._last_turn_content = final_content
+
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
                 return None
@@ -543,4 +547,10 @@ class AgentLoop:
         await self._connect_mcp()
         msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
         response = await self._process_message(msg, session_key=session_key, on_progress=on_progress)
-        return response.content if response else ""
+        if response:
+            return response.content
+        # _process_message returns None when MessageTool was used in turn (to
+        # prevent double-sending through the channel bus). In direct mode (MC
+        # executor / CLI), no bus consumer exists, so we return the agent's
+        # actual final text so the caller can use it (e.g. cron delivery).
+        return getattr(self, "_last_turn_content", "") or ""

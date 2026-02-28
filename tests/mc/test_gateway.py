@@ -129,6 +129,7 @@ class TestRunGateway:
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
             mock_orch_instance.start_kickoff_watch_loop = AsyncMock()
+            mock_orch_instance.start_inbox_routing_loop = AsyncMock()
 
             mock_tc_instance = MockTC.return_value
             mock_tc_instance.start = AsyncMock()

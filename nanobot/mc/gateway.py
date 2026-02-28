@@ -870,10 +870,10 @@ async def _run_plan_negotiation_manager(bridge: "ConvexBridge") -> None:
                 await _process_batch(batch)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 logger.warning(
-                    "[gateway] Plan negotiation manager: error reading queue",
-                    exc_info=True,
+                    "[gateway] Plan negotiation manager: error reading queue: %s",
+                    exc,
                 )
 
     reader_tasks = [
@@ -1069,10 +1069,10 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     async def _inbox_loop_with_crash_log() -> None:
         try:
             await orchestrator.start_inbox_routing_loop()
-        except Exception:
+        except Exception as exc:
             logger.critical(
-                "[gateway] Inbox routing loop CRASHED — auto-title will not work",
-                exc_info=True,
+                "[gateway] Inbox routing loop CRASHED — auto-title will not work: %s",
+                exc,
             )
 
     inbox_task = asyncio.create_task(_inbox_loop_with_crash_log())
