@@ -124,10 +124,12 @@ def wait_for_claude_response() -> str:
     """
     Wait for Claude to finish responding.
     Detects stability: output hasn't changed for STABLE_SECONDS.
+    Streams intermediate output to Convex so the dashboard updates in real-time.
     100% local — zero LLM calls.
     """
     print("[bridge] Waiting for Claude response...", flush=True)
     last_output = ""
+    last_streamed = ""
     stable_since = None
 
     while True:
@@ -135,6 +137,13 @@ def wait_for_claude_response() -> str:
         if current != last_output:
             last_output = current
             stable_since = time.time()
+            # Stream intermediate output to Convex for real-time dashboard updates
+            if current != last_streamed:
+                try:
+                    write_output_to_convex(current, status="processing")
+                    last_streamed = current
+                except Exception:
+                    pass  # best effort streaming
         else:
             if stable_since and (time.time() - stable_since) >= STABLE_SECONDS:
                 print("[bridge] Claude finished responding.", flush=True)
