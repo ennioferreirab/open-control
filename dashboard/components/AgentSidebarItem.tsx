@@ -131,19 +131,21 @@ export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentS
           {isRemoteTerminal ? <Terminal className="h-4 w-4" /> : initials}
         </div>
         <div className={`flex flex-1 flex-col overflow-hidden ${isDisabled ? "text-muted-foreground opacity-60" : ""}`}>
-          <span className={`truncate text-sm font-medium ${isDisabled ? "" : "text-sidebar-foreground"}`}>
-            {agent.displayName}
-          </span>
-          {ipAddress ? (
+          {isRemoteTerminal ? (
             <span
-              className={`truncate text-xs font-mono cursor-pointer hover:underline ${isDisabled ? "" : "text-sidebar-foreground/60"}`}
-              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(ipAddress); }}
-              title="Click to copy IP"
+              className={`truncate text-xs font-mono cursor-pointer hover:underline ${isDisabled ? "" : "text-sidebar-foreground/70"}`}
+              onClick={(e) => { e.stopPropagation(); if (ipAddress) navigator.clipboard.writeText(ipAddress); }}
+              title={ipAddress ? "Click to copy IP" : undefined}
             >
-              {ipAddress}
+              {ipAddress || agent.displayName}
             </span>
           ) : (
-            <span className={`truncate text-xs ${isDisabled ? "" : "text-sidebar-foreground/70"}`}>{agent.role}</span>
+            <>
+              <span className={`truncate text-sm font-medium ${isDisabled ? "" : "text-sidebar-foreground"}`}>
+                {agent.displayName}
+              </span>
+              <span className={`truncate text-xs ${isDisabled ? "" : "text-sidebar-foreground/70"}`}>{agent.role}</span>
+            </>
           )}
         </div>
         {!onDelete && !onRestore && (

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
-import { Bot, Plus, Shield, ChevronDown, Trash2 } from "lucide-react";
+import { Bot, Plus, Shield, ChevronDown, Trash2, Terminal } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,11 +50,14 @@ export function AgentSidebar() {
   const [agentToRestore, setAgentToRestore] = useState<{ name: string; displayName: string } | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  const { regularAgents, systemAgents } = useMemo(() => {
-    if (!agents) return { regularAgents: [], systemAgents: [] };
+  const [remoteOpen, setRemoteOpen] = useState(true);
+
+  const { regularAgents, systemAgents, remoteAgents } = useMemo(() => {
+    if (!agents) return { regularAgents: [], systemAgents: [], remoteAgents: [] };
     return {
-      regularAgents: agents.filter((a) => !a.isSystem && !SYSTEM_AGENT_NAMES.has(a.name) && a.name !== "low-agent"),
+      regularAgents: agents.filter((a) => !a.isSystem && !SYSTEM_AGENT_NAMES.has(a.name) && a.name !== "low-agent" && a.role !== "remote-terminal"),
       systemAgents: agents.filter((a) => (a.isSystem || SYSTEM_AGENT_NAMES.has(a.name)) && a.name !== "low-agent"),
+      remoteAgents: agents.filter((a) => a.role === "remote-terminal"),
     };
   }, [agents]);
 
@@ -144,6 +147,33 @@ export function AgentSidebar() {
                       key={agent._id}
                       agent={agent}
                       onClick={() => setSelectedAgent(agent.name)}
+                    />
+                  ))}
+                </SidebarMenu>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+        )}
+
+        {/* Remote terminal agents */}
+        {remoteAgents.length > 0 && (
+          <SidebarGroup>
+            <Collapsible open={remoteOpen} onOpenChange={setRemoteOpen}>
+              <CollapsibleTrigger asChild>
+                <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
+                  <Terminal className="mr-1 h-3 w-3" />
+                  Remoto
+                  <ChevronDown className={`ml-auto h-3 w-3 transition-transform ${remoteOpen ? "" : "-rotate-90"}`} />
+                </SidebarGroupLabel>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarMenu>
+                  {remoteAgents.map((agent) => (
+                    <AgentSidebarItem
+                      key={agent._id}
+                      agent={agent}
+                      onClick={() => setSelectedAgent(agent.name)}
+                      onDelete={deleteMode ? () => setAgentToDelete({ name: agent.name, displayName: agent.displayName }) : undefined}
                     />
                   ))}
                 </SidebarMenu>
