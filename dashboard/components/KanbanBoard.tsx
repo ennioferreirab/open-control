@@ -84,7 +84,17 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
   );
   const [attributeMatchedTaskIds, setAttributeMatchedTaskIds] = useState<Set<Id<"tasks">> | null>(null);
   const [isAttributeFiltering, setIsAttributeFiltering] = useState(false);
-  const allStepsResult = useQuery(api.steps.listAll);
+  const boardStepsResult = useQuery(
+    api.steps.listByBoard,
+    activeBoardId
+      ? { boardId: activeBoardId, includeNoBoardId: isDefaultBoard }
+      : "skip"
+  );
+  const globalStepsResult = useQuery(
+    api.steps.listAll,
+    activeBoardId ? "skip" : {}
+  );
+  const allStepsResult = activeBoardId ? boardStepsResult : globalStepsResult;
 
   const tagFilteredTasks = useMemo(() => {
     if (!baseTasks) return undefined;
