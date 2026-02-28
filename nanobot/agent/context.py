@@ -12,6 +12,22 @@ from nanobot.agent.memory import MemoryStore
 from nanobot.agent.skills import SkillsLoader
 
 
+def _get_iana_timezone() -> str | None:
+    """Resolve IANA timezone name from system (e.g. 'America/Vancouver')."""
+    from pathlib import Path
+    import os
+    try:
+        resolved = str(Path("/etc/localtime").resolve())
+        if "zoneinfo/" in resolved:
+            return resolved.split("zoneinfo/")[-1]
+    except OSError:
+        pass
+    tz_env = os.environ.get("TZ")
+    if tz_env and "/" in tz_env:
+        return tz_env.lstrip(":")
+    return None
+
+
 class ContextBuilder:
     """
     Builds the context (system prompt + messages) for the agent.
@@ -93,7 +109,9 @@ Skills with available="false" need dependencies installed first - you can try in
         from datetime import datetime
         import time as _time
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
-        tz = _time.strftime("%Z") or "UTC"
+        tz_abbrev = _time.strftime("%Z") or "UTC"
+        iana_tz = _get_iana_timezone()
+        tz_display = f"{tz_abbrev} ({iana_tz})" if iana_tz else tz_abbrev
         workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
@@ -103,7 +121,7 @@ Skills with available="false" need dependencies installed first - you can try in
 You are nanobot, a helpful AI assistant. 
 
 ## Current Time
-{now} ({tz})
+{now} ({tz_display})
 
 ## Runtime
 {runtime}

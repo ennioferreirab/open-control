@@ -30,7 +30,14 @@ class CronTool(Tool):
     
     @property
     def description(self) -> str:
-        return "Schedule reminders and recurring tasks. Actions: add, list, remove."
+        base = (
+            "Schedule reminders and recurring tasks. Actions: add, list, remove. "
+            "Supports: cron_expr (recurring), every_seconds (interval), at (one-time). "
+            "Use tz with cron_expr for IANA timezone (e.g. 'America/Vancouver')."
+        )
+        if self._channel:
+            base += f" Results are delivered to the current channel ({self._channel})."
+        return base
     
     @property
     def parameters(self) -> dict[str, Any]:
