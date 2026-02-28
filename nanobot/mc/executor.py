@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Strong references to fire-and-forget background tasks to prevent GC cancellation.
+# See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
+_background_tasks: set[asyncio.Task[None]] = set()
+
 
 def _collect_provider_error_types() -> tuple[type[Exception], ...]:
     """Collect provider-specific exception types for targeted catching.
@@ -1157,7 +1161,9 @@ class TaskExecutor:
                         title, exc_info=True,
                     )
 
-            asyncio.create_task(_post_task_consolidate())
+            _task = asyncio.create_task(_post_task_consolidate())
+            _background_tasks.add(_task)
+            _task.add_done_callback(_background_tasks.discard)
 
             # Write completion to global HEARTBEAT.md for the main agent (Owl) to pick up
             try:
