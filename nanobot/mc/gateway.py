@@ -977,7 +977,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             )
             return False
 
-        agent_name = task.get("assigned_agent") or NANOBOT_AGENT_NAME
+        agent_name = agent or task.get("assigned_agent") or NANOBOT_AGENT_NAME
         if is_lead_agent(agent_name):
             logger.warning(
                 "[gateway] Cron task %s had lead-agent assignment; using %s "
