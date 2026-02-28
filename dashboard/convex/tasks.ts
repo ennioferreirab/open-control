@@ -245,10 +245,27 @@ export const listByBoard = query({
     let result = boardTasks.filter((t) => t.status !== "deleted");
 
     if (args.includeNoBoardId) {
-      const all = await ctx.db.query("tasks").collect();
-      const orphans = all.filter((t) => t.status !== "deleted" && !t.boardId);
+      const NON_DELETED_STATUSES = [
+        "planning", "ready", "failed", "inbox", "assigned",
+        "in_progress", "review", "done", "retrying", "crashed",
+      ] as const;
       const ids = new Set(result.map((t) => t._id));
-      result = [...result, ...orphans.filter((t) => !ids.has(t._id))];
+      const batches = await Promise.all(
+        NON_DELETED_STATUSES.map((status) =>
+          ctx.db
+            .query("tasks")
+            .withIndex("by_status", (q) => q.eq("status", status))
+            .collect()
+        )
+      );
+      for (const batch of batches) {
+        for (const task of batch) {
+          if (!task.boardId && !ids.has(task._id)) {
+            result.push(task);
+            ids.add(task._id);
+          }
+        }
+      }
     }
 
     return result;
