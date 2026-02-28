@@ -60,36 +60,39 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
       <AgentSidebar />
       <SidebarInset className="h-screen min-w-0 overflow-hidden">
         <div className="flex h-screen flex-col overflow-hidden bg-background">
-          <header className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex min-w-0 items-center gap-3">
+          <header className="flex h-[60px] items-center justify-between border-b border-border px-4">
+            <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
               <SidebarTrigger className="md:hidden" />
-              <h1 className="text-2xl font-bold text-foreground">
-                Mission Control
+              <h1 className="text-base md:text-xl font-bold text-foreground whitespace-nowrap">
+                <span className="md:hidden">M</span>
+                <span className="hidden md:inline">Mission Control</span>
               </h1>
+            </div>
+            <div className="flex items-center gap-2 md:gap-3 flex-1 justify-center px-2 md:px-4 max-w-2xl">
               <BoardSelector onOpenSettings={() => setBoardSettingsOpen(true)} />
               <SearchBar onSearchChange={setSearchQuery} />
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0 ml-auto">
               <button
                 aria-label="Open cron jobs"
                 onClick={() => setCronOpen(true)}
-                className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               >
-                <Clock className="h-5 w-5" />
+                <Clock className="h-4 w-4" />
               </button>
               <button
                 aria-label="Open tags"
                 onClick={() => setTagsOpen(true)}
-                className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               >
-                <Tag className="h-5 w-5" />
+                <Tag className="h-4 w-4" />
               </button>
               <button
                 aria-label="Open settings"
                 onClick={() => setSettingsOpen(true)}
-                className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               >
-                <Settings className="h-5 w-5" />
+                <Settings className="h-4 w-4" />
               </button>
             </div>
           </header>

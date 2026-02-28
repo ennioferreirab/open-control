@@ -18,24 +18,21 @@ export function ActivityFeedPanel() {
 
   if (collapsed) {
     return (
-      <div className="flex h-screen w-12 shrink-0 flex-col border-l border-border bg-muted/70">
-        <div className="flex items-center justify-center p-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setCollapsed(false)}
-            aria-label="Show activity feed"
-          >
-            <PanelRightOpen className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setCollapsed(false)}
+        aria-label="Show activity feed"
+        className="absolute right-2 top-3 z-10 h-8 w-8 rounded-md border border-border bg-background shadow-sm"
+      >
+        <PanelRightOpen className="h-4 w-4" />
+      </Button>
     );
   }
 
   return (
-    <div className="flex h-screen w-[280px] shrink-0 flex-col overflow-hidden border-l border-border bg-muted">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div className="fixed inset-0 z-50 flex h-screen w-full flex-col overflow-hidden border-l border-border bg-muted md:relative md:inset-auto md:z-auto md:w-[280px] md:shrink-0">
+      <div className="flex h-[60px] items-center justify-between border-b border-border px-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Activity Feed
         </h2>
