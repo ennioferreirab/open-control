@@ -881,6 +881,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     from nanobot.mc.executor import TaskExecutor
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
+    from nanobot.config.loader import load_config
 
     logger.info("[gateway] Agent Gateway started")
 
@@ -889,16 +890,55 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop_event.set)
 
+    config = load_config()
+
+    # Lightweight delivery: dict tracks pending cron deliveries, callback sends after completion
+    pending_deliveries: dict[str, tuple[str, str]] = {}  # task_id → (channel, to)
+
+    async def _send_telegram_direct(chat_id: str, content: str) -> None:
+        """Send message to Telegram without polling — direct Bot API call."""
+        from telegram import Bot
+        from nanobot.channels.telegram import _markdown_to_telegram_html, _split_message
+
+        token = config.channels.telegram.token
+        if not token:
+            logger.warning("[gateway] No Telegram token — skipping delivery")
+            return
+        bot = Bot(token=token)
+        html = _markdown_to_telegram_html(content)
+        for chunk in _split_message(html):
+            await bot.send_message(chat_id=int(chat_id), text=chunk, parse_mode="HTML")
+
+    async def on_task_completed(task_id: str, result: str) -> None:
+        """Callback invoked by executor after agent completes — delivers result if pending."""
+        delivery = pending_deliveries.pop(task_id, None)
+        if not delivery:
+            return
+        if not result.strip():
+            logger.info("[gateway] Skipping delivery for task %s — empty result (task may have failed)", task_id)
+            return
+        channel, to = delivery
+        try:
+            if channel == "telegram":
+                await _send_telegram_direct(to, result)
+                logger.info("[gateway] Delivered cron result for task %s → telegram:%s", task_id, to)
+            else:
+                logger.warning("[gateway] Delivery to '%s' not supported", channel)
+        except Exception:
+            logger.exception("[gateway] Failed to deliver result for task %s", task_id)
+
     # Cron service — when a job fires, create a task in Convex (enters normal MC flow)
     cron_store_path = Path.home() / ".nanobot" / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
 
-    async def _requeue_cron_task(b: "ConvexBridge", task_id: str, message: str, agent: str | None = None) -> None:
+    async def _requeue_cron_task(b: "ConvexBridge", task_id: str, message: str, agent: str | None = None) -> bool:
         """Re-queue an existing task for cron execution.
 
         Injects the cron trigger message into the task's thread so the agent
         sees it as a new user turn, then resets status to 'assigned' so the
         executor picks it up again. Skips if the task is already active.
+
+        Returns True if the task was actually re-queued, False otherwise.
         """
         from nanobot.mc.types import (
             AuthorType,
@@ -914,7 +954,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             if agent:
                 create_args["assigned_agent"] = agent
             await asyncio.to_thread(b.mutation, "tasks:create", create_args)
-            return
+            return False
 
         if not task:
             logger.warning("[gateway] Cron origin task %s not found — creating new task", task_id)
@@ -922,7 +962,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             if agent:
                 create_args["assigned_agent"] = agent
             await asyncio.to_thread(b.mutation, "tasks:create", create_args)
-            return
+            return False
 
         current_status = task.get("status", "")
         if current_status in ("in_progress", "assigned", "deleted"):
@@ -930,7 +970,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
                 "[gateway] Cron origin task %s is '%s' — skipping re-queue",
                 task_id, current_status,
             )
-            return
+            return False
 
         agent_name = task.get("assigned_agent") or NANOBOT_AGENT_NAME
         if is_lead_agent(agent_name):
@@ -961,26 +1001,41 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             f"Cron re-queued task to {agent_name}",
         )
         logger.info("[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name)
+        return True
 
     async def on_cron_job(job: CronJob) -> str | None:
         """Re-queue the originating task (if linked) or create a new task when a cron job fires."""
         logger.info("[gateway] Cron job '%s' fired", job.name)
+        task_id_for_delivery: str | None = None
         try:
             if job.payload.task_id:
-                # Re-queue the original task so history accumulates in one place
-                await _requeue_cron_task(bridge, job.payload.task_id, job.payload.message, agent=job.payload.agent)
+                requeued = await _requeue_cron_task(bridge, job.payload.task_id, job.payload.message, agent=job.payload.agent)
+                if requeued:
+                    task_id_for_delivery = job.payload.task_id
             else:
                 # No linked task — create a new task (classic cron behavior)
                 create_args: dict = {"title": job.payload.message}
                 if job.payload.agent:
                     create_args["assigned_agent"] = job.payload.agent
-                await asyncio.to_thread(
+                new_id = await asyncio.to_thread(
                     bridge.mutation,
                     "tasks:create",
                     create_args,
                 )
+                task_id_for_delivery = new_id
         except Exception:
             logger.exception("[gateway] Failed to handle cron job '%s'", job.name)
+
+        # Register pending delivery (executor will call on_task_completed after agent finishes)
+        if (
+            task_id_for_delivery
+            and job.payload.deliver
+            and job.payload.channel
+            and job.payload.to
+            and job.payload.channel != "mc"
+        ):
+            pending_deliveries[task_id_for_delivery] = (job.payload.channel, job.payload.to)
+
         return None
 
     cron.on_job = on_cron_job
@@ -1005,7 +1060,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
     kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
 
-    executor = TaskExecutor(bridge, cron_service=cron)
+    executor = TaskExecutor(bridge, cron_service=cron, on_task_completed=on_task_completed)
     execution_task = asyncio.create_task(executor.start_execution_loop())
 
     timeout_checker = TimeoutChecker(bridge)

@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Strong references to fire-and-forget background tasks to prevent GC cancellation.
+# See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
+_background_tasks: set[asyncio.Task[None]] = set()
+
 
 def _collect_provider_error_types() -> tuple[type[Exception], ...]:
     """Collect provider-specific exception types for targeted catching.
@@ -145,7 +149,7 @@ async def _run_agent_on_task(
     cron_service: Any | None = None,
     task_id: str | None = None,
     bridge: "ConvexBridge | None" = None,
-) -> str:
+) -> tuple[str, str, "AgentLoop"]:
     """Run the nanobot agent loop on a task and return the result.
 
     Uses AgentLoop.process_direct() with the agent's system prompt and model.
@@ -185,11 +189,11 @@ async def _run_agent_on_task(
         agent_name, len(message), repr(message[:500]),
     )
 
-    # Board-scoped session key format (AC6)
+    # Board-scoped session key format (AC6); include task_id for per-task isolation
     if board_name:
-        session_key = f"mc:board:{board_name}:task:{agent_name}"
+        session_key = f"mc:board:{board_name}:task:{agent_name}:{task_id}" if task_id else f"mc:board:{board_name}:task:{agent_name}"
     else:
-        session_key = f"mc:task:{agent_name}"
+        session_key = f"mc:task:{agent_name}:{task_id}" if task_id else f"mc:task:{agent_name}"
     logger.info(
         "[_run_agent_on_task] Agent '%s': session_key='%s', board_name=%s",
         agent_name, session_key, board_name,
@@ -247,10 +251,7 @@ async def _run_agent_on_task(
         chat_id=agent_name,
         task_id=task_id,
     )
-    # TODO: revisit task-based consolidation — may be better than message-count
-    # Consolidate memory and clear session (mirrors /new behavior)
-    # await loop.end_task_session(session_key)
-    return result
+    return result, session_key, loop
 
 
 def _human_size(b: int) -> str:
@@ -409,11 +410,13 @@ def _build_tag_attributes_context(
 class TaskExecutor:
     """Picks up assigned tasks and runs agent execution."""
 
-    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None) -> None:
+    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None,
+                 on_task_completed: Any | None = None) -> None:
         self._bridge = bridge
         self._agent_gateway = AgentGateway(bridge)
         self._known_assigned_ids: set[str] = set()
         self._cron_service = cron_service
+        self._on_task_completed = on_task_completed
         self._tier_resolver: Any | None = None
 
     def _get_tier_resolver(self) -> Any:
@@ -1057,7 +1060,7 @@ class TaskExecutor:
             )
 
         try:
-            result = await _run_agent_on_task(
+            result, session_key, loop = await _run_agent_on_task(
                 agent_name=agent_name,
                 agent_prompt=agent_prompt,
                 agent_model=agent_model,
@@ -1149,6 +1152,22 @@ class TaskExecutor:
                 title, agent_name, final_status,
             )
 
+            # Fire-and-forget memory consolidation after task status is updated.
+            # Runs async so user sees completion immediately.
+            async def _post_task_consolidate():
+                try:
+                    await loop.end_task_session(session_key)
+                    logger.info("[executor] Post-task memory consolidation done for '%s'", title)
+                except Exception:
+                    logger.warning(
+                        "[executor] Post-task memory consolidation failed for '%s'",
+                        title, exc_info=True,
+                    )
+
+            _task = asyncio.create_task(_post_task_consolidate())
+            _background_tasks.add(_task)
+            _task.add_done_callback(_background_tasks.discard)
+
             # Write completion to global HEARTBEAT.md for the main agent (Owl) to pick up
             try:
                 from filelock import FileLock
@@ -1174,9 +1193,22 @@ class TaskExecutor:
             except Exception as hb_exc:
                 logger.warning("[executor] Failed to write to HEARTBEAT.md for task '%s': %s", title, hb_exc)
 
+            # Deliver cron result to external channel if pending
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id, result or "")
+                except Exception:
+                    logger.exception("[executor] on_task_completed failed for task '%s'", title)
+
         except _PROVIDER_ERRORS as exc:
             # Provider/OAuth errors get surfaced with clear actionable message
             await self._handle_provider_error(task_id, title, agent_name, exc)
+            # Pop pending delivery entry to prevent dict leak (empty → skips actual send)
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id, "")
+                except Exception:
+                    pass
 
         except Exception as exc:
             logger.error(
@@ -1184,6 +1216,12 @@ class TaskExecutor:
                 agent_name, title, exc,
             )
             await self._agent_gateway.handle_agent_crash(agent_name, task_id, exc)
+            # Pop pending delivery entry to prevent dict leak (empty → skips actual send)
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id, "")
+                except Exception:
+                    pass
         finally:
             # Allow re-pickup if task returns to assigned (e.g. after retry)
             self._known_assigned_ids.discard(task_id)
