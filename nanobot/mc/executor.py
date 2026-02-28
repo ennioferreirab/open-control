@@ -248,6 +248,18 @@ async def _run_agent_on_task(
     # Remove delegate_task to prevent circular delegation loops.
     loop.tools.unregister("delegate_task")
 
+    # Inject Telegram default chat_id into CronTool so agents running in MC
+    # context can schedule cron jobs that deliver to Telegram without needing
+    # to know the numeric chat_id explicitly.
+    if cron_tool := loop.tools.get("cron"):
+        from nanobot.agent.tools.cron import CronTool as _CronTool
+        if isinstance(cron_tool, _CronTool):
+            from nanobot.config.loader import load_config as _load_config
+            _cfg = _load_config()
+            _tg_ids = [x for x in _cfg.channels.telegram.allow_from if x.lstrip("-").isdigit()]
+            if _tg_ids:
+                cron_tool.set_telegram_default(_tg_ids[0])
+
     # Set MC context on ask_agent tool for inter-agent conversations (Story 10.3)
     if ask_tool := loop.tools.get("ask_agent"):
         from nanobot.agent.tools.ask_agent import AskAgentTool
