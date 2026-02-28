@@ -44,42 +44,67 @@ _MENTION_RE = re.compile(
 MENTION_TIMEOUT_SECONDS = 120
 
 
+def _known_agent_names() -> set[str]:
+    """Return lowercase names of all agents with a config.yaml on disk."""
+    agents_dir = Path.home() / ".nanobot" / "agents"
+    if not agents_dir.is_dir():
+        return set()
+    return {
+        d.name.lower()
+        for d in agents_dir.iterdir()
+        if d.is_dir() and (d / "config.yaml").exists()
+    }
+
+
 def extract_mentions(content: str) -> list[tuple[str, str]]:
-    """Extract all @mentions from a message.
+    """Extract @mentions that match known agent names.
 
     Returns a list of (agent_name, query) tuples.
-    The query is the full message with the @mention removed (trimmed).
+    The query is the full message with only valid agent @mentions removed (trimmed).
+    Non-agent @handles (e.g. YouTube channel handles like @AIJasonZ) are left
+    intact in the query text.
 
     If the message has multiple @mentions (e.g. "@alice @bob help me"),
-    each agent receives the same query (message without any @mentions).
+    each agent receives the same query (message without any agent @mentions).
 
     Args:
         content: Raw message text from the user.
 
     Returns:
-        List of (agent_name, query) tuples. Empty list if no @mentions found.
+        List of (agent_name, query) tuples. Empty list if no known-agent @mentions found.
     """
     mentions = _MENTION_RE.findall(content)
     if not mentions:
         return []
 
-    # Strip all @mentions from the message to get the clean query
-    query = _MENTION_RE.sub("", content).strip()
+    # Only keep mentions that match actual agent names
+    known = _known_agent_names()
+    valid_mentions = [m for m in mentions if m.lower() in known]
+    if not valid_mentions:
+        return []
+
+    # Strip only VALID agent mentions from the message to get the clean query
+    # (leave non-agent @handles like @AIJasonZ intact in the query)
+    query = content
+    for agent_name in valid_mentions:
+        query = re.sub(rf"@{re.escape(agent_name)}\b", "", query, flags=re.IGNORECASE)
+    query = query.strip()
 
     # Deduplicate while preserving order
     seen: set[str] = set()
     result: list[tuple[str, str]] = []
-    for agent_name in mentions:
-        if agent_name not in seen:
-            seen.add(agent_name)
-            result.append((agent_name.lower(), query))
+    for agent_name in valid_mentions:
+        lower_name = agent_name.lower()
+        if lower_name not in seen:
+            seen.add(lower_name)
+            result.append((lower_name, query))
 
     return result
 
 
 def is_mention_message(content: str) -> bool:
-    """Return True if the message contains at least one @mention."""
-    return bool(_MENTION_RE.search(content))
+    """Return True if content contains @mentions of known agents."""
+    return bool(extract_mentions(content))
 
 
 async def handle_mention(

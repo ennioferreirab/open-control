@@ -7,11 +7,6 @@ import { Id } from "../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,8 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Bot, ChevronDown, Paperclip, User, X, Eye, Zap } from "lucide-react";
+import { Bot, Paperclip, User, X, Eye, Zap, ShieldCheck } from "lucide-react";
+// ShieldCheck used in taskMode=auto_review button
 import { TAG_COLORS, HIDDEN_AGENT_NAMES } from "@/lib/constants";
 import { useBoard } from "@/components/BoardContext";
 
@@ -33,12 +28,9 @@ export function TaskInput() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
-  const [isExpanded, setIsExpanded] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState("");
-  const [trustLevel, setTrustLevel] = useState<string>("autonomous");
-  const [supervisionMode, setSupervisionMode] = useState<"autonomous" | "supervised">("autonomous");
+  const [taskMode, setTaskMode] = useState<"autonomous" | "supervised" | "auto_review">("autonomous");
   const [isManual, setIsManual] = useState(false);
-  const [selectedReviewers, setSelectedReviewers] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,15 +97,10 @@ export function TaskInput() {
         args.isManual = true;
         args.supervisionMode = "autonomous";
       } else {
-        args.supervisionMode = supervisionMode;
+        args.supervisionMode = taskMode === "supervised" ? "supervised" : "autonomous";
+        if (taskMode === "auto_review") args.trustLevel = "agent_reviewed";
         if (selectedAgent && selectedAgent !== "auto") {
           args.assignedAgent = selectedAgent;
-        }
-        if (trustLevel !== "autonomous") {
-          args.trustLevel = trustLevel;
-        }
-        if (selectedReviewers.length > 0) {
-          args.reviewers = selectedReviewers;
         }
       }
       if (pendingFiles.length > 0) {
@@ -140,13 +127,10 @@ export function TaskInput() {
         setDescription("");
         setIsFocused(false);
         setSelectedAgent("");
-        setTrustLevel("autonomous");
-        setSupervisionMode("autonomous");
-        setSelectedReviewers([]);
+        setTaskMode("autonomous");
         setSelectedTags([]);
         setTagAttrValues({});
         setOpenAttrPopover(null);
-        setIsExpanded(false);
 
         if (pendingFiles.length > 0) {
           const formData = new FormData();
@@ -197,15 +181,10 @@ export function TaskInput() {
         args.isManual = true;
         args.supervisionMode = "autonomous";
       } else {
-        args.supervisionMode = supervisionMode;
+        args.supervisionMode = taskMode === "supervised" ? "supervised" : "autonomous";
+        if (taskMode === "auto_review") args.trustLevel = "agent_reviewed";
         if (selectedAgent && selectedAgent !== "auto") {
           args.assignedAgent = selectedAgent;
-        }
-        if (trustLevel !== "autonomous") {
-          args.trustLevel = trustLevel;
-        }
-        if (selectedReviewers.length > 0) {
-          args.reviewers = selectedReviewers;
         }
       }
       if (pendingFiles.length > 0) {
@@ -233,13 +212,10 @@ export function TaskInput() {
         setDescription("");
         setIsFocused(false);
         setSelectedAgent("");
-        setTrustLevel("autonomous");
-        setSupervisionMode("autonomous");
-        setSelectedReviewers([]);
+        setTaskMode("autonomous");
         setSelectedTags([]);
         setTagAttrValues({});
         setOpenAttrPopover(null);
-        setIsExpanded(false);
 
         if (pendingFiles.length > 0) {
           const formData = new FormData();
@@ -279,12 +255,9 @@ export function TaskInput() {
     e.target.value = "";
   };
 
-  const showReviewerSection = trustLevel !== "autonomous";
-
   return (
     <div ref={wrapperRef}>
-    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-      <div className="flex gap-2 items-start">
+      <div className="space-y-1.5">
         <input
           type="file"
           multiple
@@ -292,164 +265,177 @@ export function TaskInput() {
           onChange={handleFileSelect}
           className="hidden"
         />
-        <div className="flex-1 min-w-0 space-y-1.5">
-          {/* Title input — only in manual mode, stays as a simple Input */}
-          {!isAutoTitle && (
-            <Input
-              placeholder="Task title..."
-              value={title}
-              onChange={(e) => { setTitle(e.target.value); setError(""); }}
-              onKeyDown={handleKeyDown}
-              className={error && !title.trim() ? "border-red-500" : ""}
-            />
-          )}
 
-          {/* Description field — expand-on-focus in both modes */}
-          <div className="relative" style={{ height: 36 }}>
-            {isFocused ? (
-              <textarea
-                ref={textareaRef}
-                placeholder={isAutoTitle ? "Describe your task..." : "Description..."}
-                value={description}
-                onChange={(e) => {
-                  setDescription(e.target.value);
-                  setError("");
-                  const el = e.target;
-                  el.style.height = "auto";
-                  el.style.height = el.scrollHeight + "px";
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit();
-                  }
-                  if (e.key === "Escape") {
-                    textareaRef.current?.blur();
-                  }
-                }}
-                onBlur={(e) => {
-                  if (wrapperRef.current?.contains(e.relatedTarget as Node)) return;
-                  setIsFocused(false);
-                }}
-                rows={1}
-                className={`absolute top-0 left-0 right-0 z-50 min-h-[36px] w-full resize-none rounded-md border bg-background px-3 py-1.5 text-sm shadow-md focus:outline-none focus:ring-1 focus:ring-ring ${
-                  error && isAutoTitle && !description.trim() ? "border-red-500" : "border-input"
-                }`}
+        {/* Row 1: title (manual) or description (auto-title) + action buttons */}
+        <div className="flex gap-2 items-start">
+          {/* Left Column: Text Bars */}
+          <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+            {!isAutoTitle ? (
+              <Input
+                placeholder="Task title..."
+                value={title}
+                onChange={(e) => { setTitle(e.target.value); setError(""); }}
+                onKeyDown={handleKeyDown}
+                className={`w-full h-9 ${error && !title.trim() ? "border-red-500" : ""}`}
               />
             ) : (
-              <div
-                role="textbox"
-                aria-label={isAutoTitle ? "Describe your task" : "Task description (optional)"}
-                aria-multiline={false}
-                tabIndex={0}
-                onClick={() => setIsFocused(true)}
-                onFocus={() => setIsFocused(true)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setIsFocused(true);
-                  }
-                }}
-                className={`flex h-[36px] cursor-text items-center rounded-md border px-3 py-1.5 text-sm overflow-hidden ${
-                  error && isAutoTitle && !description.trim() ? "border-red-500" : "border-input"
-                } ${description ? "text-foreground" : "text-muted-foreground"}`}
-              >
-                <span className="min-w-0 truncate">
-                  {description || (isAutoTitle ? "Describe your task..." : "Description...")}
-                </span>
+              <div className="w-full min-w-0 relative" style={{ height: 36 }}>
+                {isFocused ? (
+                  <textarea
+                    ref={textareaRef}
+                    placeholder="Describe your task..."
+                    value={description}
+                    onChange={(e) => {
+                      setDescription(e.target.value);
+                      setError("");
+                      const el = e.target;
+                      el.style.height = "auto";
+                      el.style.height = el.scrollHeight + "px";
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+                      if (e.key === "Escape") textareaRef.current?.blur();
+                    }}
+                    onBlur={(e) => {
+                      if (wrapperRef.current?.contains(e.relatedTarget as Node)) return;
+                      setIsFocused(false);
+                    }}
+                    rows={1}
+                    className={`absolute top-0 left-0 right-0 z-50 min-h-[36px] w-full resize-none rounded-md border bg-background px-3 py-1.5 text-sm shadow-md focus:outline-none focus:ring-1 focus:ring-ring ${
+                      error && !description.trim() ? "border-red-500" : "border-input"
+                    }`}
+                  />
+                ) : (
+                  <div
+                    role="textbox"
+                    aria-label="Describe your task"
+                    aria-multiline={false}
+                    tabIndex={0}
+                    onClick={() => setIsFocused(true)}
+                    onFocus={() => setIsFocused(true)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setIsFocused(true); } }}
+                    className={`flex h-[36px] cursor-text items-center rounded-md border px-3 py-1.5 text-sm overflow-hidden ${
+                      error && !description.trim() ? "border-red-500" : "border-input"
+                    } ${description ? "text-foreground" : "text-muted-foreground"}`}
+                  >
+                    <span className="min-w-0 truncate">{description || "Describe your task..."}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isAutoTitle && (
+              <div className="w-full min-w-0 relative" style={{ height: 36 }}>
+                {isFocused ? (
+                  <textarea
+                    ref={textareaRef}
+                    placeholder="Description..."
+                    value={description}
+                    onChange={(e) => {
+                      setDescription(e.target.value);
+                      setError("");
+                      const el = e.target;
+                      el.style.height = "auto";
+                      el.style.height = el.scrollHeight + "px";
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+                      if (e.key === "Escape") textareaRef.current?.blur();
+                    }}
+                    onBlur={(e) => {
+                      if (wrapperRef.current?.contains(e.relatedTarget as Node)) return;
+                      setIsFocused(false);
+                    }}
+                    rows={1}
+                    className="absolute top-0 left-0 right-0 z-50 min-h-[36px] w-full resize-none rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-md focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                ) : (
+                  <div
+                    role="textbox"
+                    aria-label="Task description (optional)"
+                    aria-multiline={false}
+                    tabIndex={0}
+                    onClick={() => setIsFocused(true)}
+                    onFocus={() => setIsFocused(true)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setIsFocused(true); } }}
+                    className={`flex h-[36px] cursor-text items-center rounded-md border border-input px-3 py-1.5 text-sm overflow-hidden ${description ? "text-foreground" : "text-muted-foreground"}`}
+                  >
+                    <span className="min-w-0 truncate">{description || "Description..."}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-        </div>
-
-        {/* Right-side action group */}
-        <div className="flex gap-1 items-center">
-            <Button onClick={handleSubmit} className="h-9">Create</Button>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="Attach files"
-              onClick={() => fileInputRef.current?.click()}
-              className="h-9 w-9 p-0"
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-            </Button>
-
-          {/* Mode + Supervision + Options */}
-          <div className="flex gap-1 items-center">
-            <Button
-              variant={isManual ? "secondary" : "outline"}
-              size="sm"
-              aria-label={isManual ? "Switch to AI mode" : "Switch to manual mode"}
-              onClick={() => {
-                setIsManual((prev) => !prev);
-                if (!isManual) {
-                  setSelectedAgent("");
-                  setTrustLevel("autonomous");
-                  setSupervisionMode("autonomous");
-                  setSelectedReviewers([]);
-                  setSelectedTags([]);
-                  setTagAttrValues({});
-                  setOpenAttrPopover(null);
-                  setIsExpanded(false);
-                }
-              }}
-              className="h-8 gap-1.5 px-3"
-            >
-              {isManual ? (
-                <User className="h-3.5 w-3.5" />
-              ) : (
-                <Bot className="h-3.5 w-3.5" />
-              )}
-              <span className="text-xs">{isManual ? "Manual" : "AI"}</span>
-            </Button>
-
-            <button
-              type="button"
-              aria-label={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
-              title={supervisionMode === "autonomous" ? "Autonomous mode" : "Supervised mode"}
-              onClick={() =>
-                setSupervisionMode((prev) =>
-                  prev === "autonomous" ? "supervised" : "autonomous"
-                )
-              }
-              tabIndex={isManual ? -1 : undefined}
-              aria-hidden={isManual ? true : undefined}
-              className={`inline-flex items-center gap-1.5 rounded-md text-xs font-medium h-8 px-3 transition-all duration-200 ${
-                isManual ? "opacity-0 pointer-events-none" : ""
-              } ${
-                supervisionMode === "supervised"
-                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-300 dark:border-amber-700"
-                  : "border border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              }`}
-            >
-              {supervisionMode === "supervised" ? (
-                <Eye className="h-3.5 w-3.5" />
-              ) : (
-                <Zap className="h-3.5 w-3.5" />
-              )}
-              <span>{supervisionMode === "supervised" ? "Supervised" : "Autonomous"}</span>
-            </button>
-
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label="Toggle options"
-                tabIndex={isManual ? -1 : undefined}
-                aria-hidden={isManual ? true : undefined}
-                className={`h-8 gap-1.5 px-3 transition-opacity duration-200 ${isManual ? "opacity-0 pointer-events-none" : ""}`}
-              >
-                <ChevronDown
-                  className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                />
-                <span className="text-xs">Options</span>
+          {/* Right Column: Buttons */}
+          <div className="flex flex-col gap-1.5 shrink-0 items-end">
+            {/* Row 1 */}
+            <div className="flex gap-1 items-center w-full">
+              <Button onClick={handleSubmit} className="flex-1">Create</Button>
+              <Button variant="outline" size="icon" aria-label="Attach files" onClick={() => fileInputRef.current?.click()} className="shrink-0">
+                <Paperclip className="h-5 w-5" />
               </Button>
-            </CollapsibleTrigger>
+              <Button
+                variant={isManual ? "secondary" : "outline"}
+                aria-label={isManual ? "Switch to AI mode" : "Switch to manual mode"}
+                onClick={() => {
+                  setIsManual((prev) => !prev);
+                  if (!isManual) {
+                    setSelectedAgent("");
+                    setTaskMode("autonomous");
+                    setSelectedTags([]);
+                    setTagAttrValues({});
+                    setOpenAttrPopover(null);
+                  }
+                }}
+                className="gap-1.5 px-3 flex-1"
+              >
+                {isManual ? <User className="h-5 w-5" /> : <Bot className="h-5 w-5" />}
+                <span className="text-sm">{isManual ? "Manual" : "AI"}</span>
+              </Button>
+            </div>
+
+            {/* Row 2 */}
+            {!isManual && (
+              <div className="flex gap-1 items-center">
+                <button
+                  type="button"
+                  title={taskMode === "autonomous" ? "Autonomous" : taskMode === "supervised" ? "Supervised" : "Auto Review"}
+                  onClick={() =>
+                    setTaskMode((prev) =>
+                      prev === "autonomous" ? "supervised" : prev === "supervised" ? "auto_review" : "autonomous"
+                    )
+                  }
+                  className={`inline-flex items-center gap-1.5 rounded-md text-sm font-medium h-9 px-4 transition-all duration-200 ${
+                    taskMode === "supervised"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-300 dark:border-amber-700"
+                      : taskMode === "auto_review"
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border border-blue-300 dark:border-blue-700"
+                      : "border border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  {taskMode === "supervised" ? <Eye className="h-5 w-5" /> : taskMode === "auto_review" ? <ShieldCheck className="h-5 w-5" /> : <Zap className="h-5 w-5" />}
+                  <span>{taskMode === "supervised" ? "Supervised" : taskMode === "auto_review" ? "Auto Review" : "Autonomous"}</span>
+                </button>
+
+                <Select value={selectedAgent || "auto"} onValueChange={(v) => setSelectedAgent(v === "auto" ? "" : v)}>
+                  <SelectTrigger className="h-9 w-36 text-sm">
+                    <SelectValue placeholder="Auto (Lead Agent)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto (Lead Agent)</SelectItem>
+                    {agents?.filter((agent) => !HIDDEN_AGENT_NAMES.has(agent.name)).map((agent) => (
+                      <SelectItem key={agent.name} value={agent.name} disabled={agent.enabled === false} className={agent.enabled === false ? "text-muted-foreground opacity-60" : ""}>
+                        {agent.displayName}{agent.enabled === false ? " (Deactivated)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </div>
+        {error && <p className="text-xs text-red-500">{error}</p>}
       </div>
 
       {/* Pending file chips */}
@@ -579,99 +565,6 @@ export function TaskInput() {
         </div>
       )}
 
-      <CollapsibleContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 overflow-hidden transition-all">
-          <div className="mt-2 p-3 border rounded-md space-y-3">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-muted-foreground whitespace-nowrap">
-                Agent:
-              </label>
-              <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Auto (Lead Agent)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Auto (Lead Agent)</SelectItem>
-                  {agents?.filter((agent) => !HIDDEN_AGENT_NAMES.has(agent.name)).map((agent) => (
-                    <SelectItem
-                      key={agent.name}
-                      value={agent.name}
-                      disabled={agent.enabled === false}
-                      className={agent.enabled === false ? "text-muted-foreground opacity-60" : ""}
-                    >
-                      {agent.displayName}{agent.enabled === false ? " (Deactivated)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">Trust Level</label>
-              <Select
-                value={trustLevel}
-                onValueChange={(val) => {
-                  setTrustLevel(val);
-                  if (val === "autonomous") setSelectedReviewers([]);
-                }}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="autonomous">Autonomous</SelectItem>
-                  <SelectItem value="agent_reviewed">Agent Reviewed</SelectItem>
-                  <SelectItem value="human_approved">Human Approved</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {showReviewerSection && (
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground font-medium">Reviewers</label>
-                <div className="space-y-1.5">
-                  {agents?.filter((agent) => !HIDDEN_AGENT_NAMES.has(agent.name)).map((agent) => (
-                    <div key={agent.name} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`reviewer-${agent.name}`}
-                        checked={selectedReviewers.includes(agent.name)}
-                        onCheckedChange={(checked) => {
-                          setSelectedReviewers((prev) =>
-                            checked
-                              ? [...prev, agent.name]
-                              : prev.filter((r) => r !== agent.name)
-                          );
-                        }}
-                      />
-                      <label
-                        htmlFor={`reviewer-${agent.name}`}
-                        className="text-sm cursor-pointer"
-                      >
-                        {agent.displayName || agent.name}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-
-                {trustLevel === "human_approved" && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <Checkbox
-                      id="human-approval-gate"
-                      checked={true}
-                      disabled
-                    />
-                    <label
-                      htmlFor="human-approval-gate"
-                      className="text-sm text-muted-foreground"
-                    >
-                      Require human approval
-                    </label>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-      </CollapsibleContent>
-    </Collapsible>
     </div>
   );
 }

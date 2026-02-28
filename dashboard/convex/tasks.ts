@@ -242,7 +242,7 @@ export const listByBoard = query({
       .withIndex("by_boardId", (q) => q.eq("boardId", args.boardId))
       .collect();
 
-    let result = boardTasks.filter((t) => t.status !== "deleted");
+    const result = boardTasks.filter((t) => t.status !== "deleted");
 
     if (args.includeNoBoardId) {
       const NON_DELETED_STATUSES = [

@@ -227,12 +227,12 @@ export const TAG_COLORS: Record<
   string,
   { bg: string; text: string; dot: string }
 > = {
-  blue:   { bg: "bg-blue-100",   text: "text-blue-700",   dot: "bg-blue-500" },
-  green:  { bg: "bg-green-100",  text: "text-green-700",  dot: "bg-green-500" },
-  red:    { bg: "bg-red-100",    text: "text-red-700",    dot: "bg-red-500" },
-  amber:  { bg: "bg-amber-100",  text: "text-amber-700",  dot: "bg-amber-500" },
-  violet: { bg: "bg-violet-100", text: "text-violet-700", dot: "bg-violet-500" },
-  pink:   { bg: "bg-pink-100",   text: "text-pink-700",   dot: "bg-pink-500" },
-  orange: { bg: "bg-orange-100", text: "text-orange-700", dot: "bg-orange-500" },
-  teal:   { bg: "bg-teal-100",   text: "text-teal-700",   dot: "bg-teal-500" },
+  blue:   { bg: "bg-blue-100 dark:bg-blue-950",   text: "text-blue-700 dark:text-blue-300",   dot: "bg-blue-500" },
+  green:  { bg: "bg-green-100 dark:bg-green-950",  text: "text-green-700 dark:text-green-300",  dot: "bg-green-500" },
+  red:    { bg: "bg-red-100 dark:bg-red-950",    text: "text-red-700 dark:text-red-300",    dot: "bg-red-500" },
+  amber:  { bg: "bg-amber-100 dark:bg-amber-950",  text: "text-amber-700 dark:text-amber-300",  dot: "bg-amber-500" },
+  violet: { bg: "bg-violet-100 dark:bg-violet-950", text: "text-violet-700 dark:text-violet-300", dot: "bg-violet-500" },
+  pink:   { bg: "bg-pink-100 dark:bg-pink-950",   text: "text-pink-700 dark:text-pink-300",   dot: "bg-pink-500" },
+  orange: { bg: "bg-orange-100 dark:bg-orange-950", text: "text-orange-700 dark:text-orange-300", dot: "bg-orange-500" },
+  teal:   { bg: "bg-teal-100 dark:bg-teal-950",   text: "text-teal-700 dark:text-teal-300",   dot: "bg-teal-500" },
 };
