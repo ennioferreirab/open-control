@@ -267,3 +267,137 @@ class TestOnCronJobDelivery:
         assert call_args[0][0] == "tasks:create"
         create_args = call_args[0][1]
         assert create_args.get("assigned_agent") == "youtube-summarizer"
+
+    @pytest.mark.asyncio
+    async def test_on_task_completed_delivers_when_result_non_empty(self):
+        """on_task_completed sends to Telegram when result is non-empty."""
+        captured: dict = {}
+        await _run_gateway_and_capture(captured)
+
+        on_job = captured.get("on_job")
+        assert on_job is not None
+
+        # Register a pending delivery
+        job = _make_cron_job(deliver=True, channel="telegram", to="123456", message="summary")
+        captured["bridge"].mutation = MagicMock(return_value="task-abc")
+        await on_job(job)
+
+        on_task_completed = captured["executor_kwargs"]["on_task_completed"]
+
+        sent_messages: list[str] = []
+
+        async def _fake_telegram(chat_id: str, content: str) -> None:
+            sent_messages.append(content)
+
+        with patch("nanobot.mc.gateway.run_gateway.__wrapped__", create=True), \
+             patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x), \
+             patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]):
+            # Directly test that on_task_completed calls _send_telegram_direct
+            # by verifying it pops the pending delivery and sends the result.
+            # We patch at the telegram Bot level to avoid real network calls.
+            with patch("telegram.Bot") as MockBot:
+                mock_bot_instance = AsyncMock()
+                MockBot.return_value = mock_bot_instance
+                mock_bot_instance.send_message = AsyncMock()
+
+                from nanobot.config.loader import load_config
+                with patch("nanobot.config.loader.load_config") as mock_cfg:
+                    mock_cfg.return_value.channels.telegram.token = "fake-token"
+                    await on_task_completed("task-abc", "YouTube summary result")
+
+                mock_bot_instance.send_message.assert_called_once()
+                call_kw = mock_bot_instance.send_message.call_args[1]
+                assert call_kw["chat_id"] == 123456
+
+    @pytest.mark.asyncio
+    async def test_on_task_completed_skips_delivery_when_result_empty(self):
+        """on_task_completed skips delivery when result is empty (agent failed)."""
+        captured: dict = {}
+        await _run_gateway_and_capture(captured)
+
+        on_job = captured.get("on_job")
+        assert on_job is not None
+
+        job = _make_cron_job(deliver=True, channel="telegram", to="123456", message="summary")
+        captured["bridge"].mutation = MagicMock(return_value="task-xyz")
+        await on_job(job)
+
+        on_task_completed = captured["executor_kwargs"]["on_task_completed"]
+
+        with patch("telegram.Bot") as MockBot:
+            mock_bot_instance = AsyncMock()
+            MockBot.return_value = mock_bot_instance
+
+            with patch("nanobot.config.loader.load_config") as mock_cfg:
+                mock_cfg.return_value.channels.telegram.token = "fake-token"
+                await on_task_completed("task-xyz", "")  # empty result
+
+            mock_bot_instance.send_message.assert_not_called()
+
+
+class TestProcessDirectReturnsContentWhenMessageToolUsed:
+    """Regression tests for the empty-result bug in process_direct.
+
+    When an MC agent calls the message() tool, _process_message returns None
+    to avoid double-sending through the bus. Before the fix, process_direct
+    returned "" (empty), causing on_task_completed to skip cron delivery.
+
+    Fix: _process_message stores final_content in _last_turn_content, and
+    process_direct falls back to it when response is None.
+    """
+
+    @pytest.mark.asyncio
+    async def test_process_direct_returns_content_when_message_tool_used(self, tmp_path):
+        """process_direct returns final_content even when MessageTool sent in turn."""
+        from nanobot.agent.loop import AgentLoop
+        from nanobot.agent.tools.message import MessageTool
+        from nanobot.bus.queue import MessageBus
+
+        bus = MessageBus()
+        sent_messages: list = []
+
+        async def _fake_send(msg):
+            sent_messages.append(msg)
+
+        # Minimal provider mock
+        mock_provider = AsyncMock()
+        mock_provider.chat = AsyncMock(return_value=("Hello from MC agent", []))
+
+        loop = AgentLoop(
+            bus=bus,
+            provider=mock_provider,
+            workspace=tmp_path / "agent",
+            model="mock-model",
+        )
+
+        # Override MessageTool callback to capture sends
+        if msg_tool := loop.tools.get("message"):
+            if isinstance(msg_tool, MessageTool):
+                msg_tool.set_send_callback(_fake_send)
+                msg_tool.set_context(channel="telegram", chat_id="123456")
+
+        # Patch _run_agent_loop to simulate agent using message tool
+        async def _fake_agent_loop(messages, on_progress=None):
+            # Simulate the agent calling message() tool
+            if msg_tool := loop.tools.get("message"):
+                if isinstance(msg_tool, MessageTool):
+                    await msg_tool.execute("Hello from MC agent")
+            return "Hello from MC agent", []
+
+        loop._run_agent_loop = _fake_agent_loop
+
+        result = await loop.process_direct(
+            content="Send a test message",
+            session_key="test:session",
+            channel="mc",
+            chat_id="test-agent",
+            task_id="task-001",
+        )
+
+        # Before fix: result would be "" (empty)
+        # After fix: result is the agent's final text content
+        assert result == "Hello from MC agent", (
+            f"process_direct returned empty string — fix broken. Got: {result!r}"
+        )
+        # MessageTool was indeed called
+        assert len(sent_messages) == 1

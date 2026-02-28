@@ -3,7 +3,7 @@
 import asyncio
 import dataclasses
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -124,7 +124,9 @@ class TestRunGateway:
              patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls), \
              patch("nanobot.config.loader.load_config"), \
              patch("nanobot.bus.queue.MessageBus"), \
-             patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel):
+             patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel), \
+             patch("nanobot.mc.gateway._run_plan_negotiation_manager", new=AsyncMock()), \
+             patch("nanobot.mc.mention_watcher.MentionWatcher") as MockMW:
             mock_orch_instance = MockOrch.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
@@ -139,6 +141,8 @@ class TestRunGateway:
 
             mock_ch_instance = MockCH.return_value
             mock_ch_instance.run = AsyncMock()
+
+            MockMW.return_value.run = AsyncMock()
 
             # run_gateway waits on a stop_event; we need to trigger it
             async def trigger_stop():
@@ -159,7 +163,7 @@ class TestRunGateway:
                 except asyncio.CancelledError:
                     pass
 
-            MockOrch.assert_called_once_with(mock_bridge)
+            MockOrch.assert_called_once_with(mock_bridge, cron_service=ANY)
             MockTC.assert_called_once_with(mock_bridge)
             mock_orch_instance.start_routing_loop.assert_called_once()
             mock_orch_instance.start_review_routing_loop.assert_called_once()
