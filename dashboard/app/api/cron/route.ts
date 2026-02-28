@@ -35,6 +35,7 @@ function normalizeJob(raw: RawJob): RawJob {
       channel: null,
       to: null,
       taskId: null,
+      agent: null,
     },
     state: {
       nextRunAtMs: null,

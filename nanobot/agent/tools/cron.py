@@ -15,12 +15,14 @@ class CronTool(Tool):
         self._channel = ""
         self._chat_id = ""
         self._task_id: str | None = None
+        self._agent_name: str | None = None
 
-    def set_context(self, channel: str, chat_id: str, task_id: str | None = None) -> None:
+    def set_context(self, channel: str, chat_id: str, task_id: str | None = None, agent_name: str | None = None) -> None:
         """Set the current session context for delivery."""
         self._channel = channel
         self._chat_id = chat_id
         self._task_id = task_id
+        self._agent_name = agent_name
     
     @property
     def name(self) -> str:
@@ -132,6 +134,7 @@ class CronTool(Tool):
             to=self._chat_id,
             delete_after_run=delete_after,
             task_id=self._task_id,
+            agent=self._agent_name,
         )
         return f"Created job '{job.name}' (id: {job.id})"
     

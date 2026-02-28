@@ -19,6 +19,7 @@ def _make_cron_job(
     to: str | None = None,
     task_id: str | None = None,
     message: str = "hello",
+    agent: str | None = None,
 ) -> CronJob:
     """Helper to build a CronJob with the given payload fields."""
     return CronJob(
@@ -33,6 +34,7 @@ def _make_cron_job(
             channel=channel,
             to=to,
             task_id=task_id,
+            agent=agent,
         ),
     )
 
@@ -206,3 +208,62 @@ class TestOnCronJobDelivery:
         assert "executor_kwargs" in captured
         assert "on_task_completed" in captured["executor_kwargs"]
         assert callable(captured["executor_kwargs"]["on_task_completed"])
+
+    @pytest.mark.asyncio
+    async def test_cron_job_with_agent_passes_assigned_agent_to_task_create(self):
+        """Job with agent set → tasks:create includes assigned_agent."""
+        captured: dict = {}
+        await _run_gateway_and_capture(captured)
+
+        on_job = captured.get("on_job")
+        assert on_job is not None
+
+        job = _make_cron_job(agent="youtube-summarizer", message="summarize videos")
+        await on_job(job)
+
+        # Verify bridge.mutation was called with assigned_agent
+        captured["bridge"].mutation.assert_called_once()
+        call_args = captured["bridge"].mutation.call_args
+        assert call_args[0][0] == "tasks:create"
+        create_args = call_args[0][1]
+        assert create_args["title"] == "summarize videos"
+        assert create_args["assigned_agent"] == "youtube-summarizer"
+
+    @pytest.mark.asyncio
+    async def test_cron_job_without_agent_creates_task_without_assigned_agent(self):
+        """Job without agent → tasks:create has no assigned_agent key (backward compat)."""
+        captured: dict = {}
+        await _run_gateway_and_capture(captured)
+
+        on_job = captured.get("on_job")
+        assert on_job is not None
+
+        job = _make_cron_job(message="do something")
+        await on_job(job)
+
+        captured["bridge"].mutation.assert_called_once()
+        call_args = captured["bridge"].mutation.call_args
+        create_args = call_args[0][1]
+        assert "assigned_agent" not in create_args
+
+    @pytest.mark.asyncio
+    async def test_cron_job_requeue_fallback_with_agent(self):
+        """When _requeue_cron_task can't find the task, fallback create includes agent."""
+        captured: dict = {}
+        await _run_gateway_and_capture(captured)
+
+        on_job = captured.get("on_job")
+        assert on_job is not None
+
+        # bridge.query returns None → task not found → fallback to create
+        captured["bridge"].query = MagicMock(return_value=None)
+
+        job = _make_cron_job(task_id="old-task", agent="youtube-summarizer", message="summarize")
+        await on_job(job)
+
+        # Verify fallback task creation includes assigned_agent
+        captured["bridge"].mutation.assert_called()
+        call_args = captured["bridge"].mutation.call_args
+        assert call_args[0][0] == "tasks:create"
+        create_args = call_args[0][1]
+        assert create_args.get("assigned_agent") == "youtube-summarizer"

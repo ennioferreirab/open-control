@@ -78,6 +78,7 @@ def _parse_raw_job(j: dict) -> CronJob:
             channel=raw_payload.get("channel"),
             to=raw_payload.get("to"),
             task_id=raw_payload.get("taskId"),
+            agent=raw_payload.get("agent"),
         )
     else:
         # Flat formats use "task" or "message" as the message text
@@ -197,6 +198,7 @@ class CronService:
                         "channel": j.payload.channel,
                         "to": j.payload.to,
                         "taskId": j.payload.task_id,
+                        "agent": j.payload.agent,
                     },
                     "state": {
                         "nextRunAtMs": j.state.next_run_at_ms,
@@ -335,6 +337,7 @@ class CronService:
         to: str | None = None,
         delete_after_run: bool = False,
         task_id: str | None = None,
+        agent: str | None = None,
     ) -> CronJob:
         """Add a new job."""
         store = self._load_store()
@@ -353,6 +356,7 @@ class CronService:
                 channel=channel,
                 to=to,
                 task_id=task_id,
+                agent=agent,
             ),
             state=CronJobState(next_run_at_ms=_compute_next_run(schedule, now)),
             created_at_ms=now,

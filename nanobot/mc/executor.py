@@ -213,6 +213,7 @@ async def _run_agent_on_task(
         global_skills_dir=global_skills_dir,
         memory_workspace=memory_workspace,
         cron_service=cron_service,
+        agent_name=agent_name,
         mc_consolidation_system_prompt=(
             "You are a memory consolidation agent processing MC task history. "
             "User messages may contain <title>...</title> and <description>...</description> XML tags identifying the task. "

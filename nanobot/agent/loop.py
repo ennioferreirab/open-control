@@ -65,6 +65,7 @@ class AgentLoop:
         memory_workspace: Path | None = None,
         mc_consolidation_system_prompt: str | None = None,
         reasoning_level: str | None = None,
+        agent_name: str | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.bus = bus
@@ -79,6 +80,7 @@ class AgentLoop:
         self.memory_window = memory_window
         self.mc_consolidation_system_prompt = mc_consolidation_system_prompt
         self.reasoning_level = reasoning_level
+        self._agent_name = agent_name
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
@@ -177,7 +179,7 @@ class AgentLoop:
 
         if cron_tool := self.tools.get("cron"):
             if isinstance(cron_tool, CronTool):
-                cron_tool.set_context(channel, chat_id, task_id=self._current_task_id)
+                cron_tool.set_context(channel, chat_id, task_id=self._current_task_id, agent_name=self._agent_name)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
