@@ -16,6 +16,7 @@ class CronTool(Tool):
         self._chat_id = ""
         self._task_id: str | None = None
         self._agent_name: str | None = None
+        self._telegram_default_chat_id: str = ""
 
     def set_context(self, channel: str, chat_id: str, task_id: str | None = None, agent_name: str | None = None) -> None:
         """Set the current session context for delivery."""
@@ -23,6 +24,10 @@ class CronTool(Tool):
         self._chat_id = chat_id
         self._task_id = task_id
         self._agent_name = agent_name
+
+    def set_telegram_default(self, chat_id: str) -> None:
+        """Set the default Telegram chat_id for cron delivery (used when running in MC context)."""
+        self._telegram_default_chat_id = chat_id
     
     @property
     def name(self) -> str:
@@ -38,7 +43,12 @@ class CronTool(Tool):
         if self._channel:
             base += (
                 f" Results are delivered to the current channel ({self._channel})."
-                " Use deliver_channel and deliver_to to override (e.g. deliver_channel='telegram')."
+                " Use deliver_channel and deliver_to to override delivery destination."
+            )
+        if self._telegram_default_chat_id:
+            base += (
+                f" To deliver to Telegram, set deliver_channel='telegram'"
+                f" (deliver_to defaults to '{self._telegram_default_chat_id}')."
             )
         return base
     
@@ -124,7 +134,11 @@ class CronTool(Tool):
         if not self._channel or not self._chat_id:
             return "Error: no session context (channel/chat_id)"
         if deliver_channel and not deliver_to:
-            return "Error: deliver_to is required when deliver_channel is set"
+            # For telegram, fall back to the configured default chat_id if available
+            if deliver_channel == "telegram" and self._telegram_default_chat_id:
+                deliver_to = self._telegram_default_chat_id
+            else:
+                return "Error: deliver_to is required when deliver_channel is set"
         if deliver_to and not deliver_channel:
             return "Error: deliver_channel is required when deliver_to is set"
         if deliver_channel == "telegram":
