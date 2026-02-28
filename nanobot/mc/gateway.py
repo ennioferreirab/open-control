@@ -262,6 +262,10 @@ def _write_back_convex_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
         if not name:
             continue
 
+        # System agents (e.g. low-agent) are Convex-only — skip local write-back
+        if agent_data.get("is_system"):
+            continue
+
         config_path = agents_dir / name / "config.yaml"
         last_active = agent_data.get("last_active_at")
         if not last_active:
@@ -422,6 +426,7 @@ def ensure_low_agent(bridge: "ConvexBridge") -> None:
         name=LOW_AGENT_NAME,
         display_name="Low Agent",
         role="Lightweight system utility agent",
+        prompt="You are a lightweight system utility agent for internal tasks.",
         model="tier:standard-low",
         is_system=True,
     )

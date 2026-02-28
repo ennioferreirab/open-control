@@ -54,6 +54,7 @@ class AgentLoop:
         temperature: float = 0.7,
         max_tokens: int = 4096,
         memory_window: int = 50,
+        memory_consolidation_max_tokens: int = 4096,
         brave_api_key: str | None = None,
         exec_config: ExecToolConfig | None = None,
         cron_service: CronService | None = None,
@@ -78,6 +79,7 @@ class AgentLoop:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.memory_window = memory_window
+        self.memory_consolidation_max_tokens = memory_consolidation_max_tokens
         self.mc_consolidation_system_prompt = mc_consolidation_system_prompt
         self.reasoning_level = reasoning_level
         self._agent_name = agent_name
@@ -130,13 +132,6 @@ class AgentLoop:
         self.tools.register(McDelegateTool())
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
-
-        # Register MC delegation tool if Convex is available
-        try:
-            from nanobot.agent.tools.mc_delegate import McDelegateTool
-            self.tools.register(McDelegateTool())
-        except Exception:
-            pass  # MC not configured — tool not available
 
         # Register ask_agent tool for inter-agent synchronous conversations (Story 10.3)
         try:
@@ -368,7 +363,8 @@ class AgentLoop:
             self._consolidating.add(session.key)
             try:
                 async with lock:
-                    snapshot = session.messages[session.last_consolidated:]
+                    cap = self.memory_window + 10
+                    snapshot = session.messages[session.last_consolidated:][-cap:]
                     if snapshot:
                         temp = Session(key=session.key)
                         temp.messages = list(snapshot)
@@ -478,6 +474,7 @@ class AgentLoop:
         return await MemoryStore(self.memory_workspace).consolidate(
             session, self.provider, self.model,
             archive_all=archive_all, memory_window=self.memory_window,
+            max_tokens=self.memory_consolidation_max_tokens,
             mc_system_prompt=self.mc_consolidation_system_prompt,
         )
 

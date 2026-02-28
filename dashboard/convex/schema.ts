@@ -286,5 +286,8 @@ export default defineSchema({
       v.literal("processing"),
       v.literal("error"),
     )),
-  }).index("by_sessionId", ["sessionId"]),
+    agentName: v.optional(v.string()),
+  })
+    .index("by_sessionId", ["sessionId"])
+    .index("by_agentName", ["agentName"]),
 });

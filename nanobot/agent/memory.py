@@ -83,6 +83,7 @@ class MemoryStore:
         *,
         archive_all: bool = False,
         memory_window: int = 50,
+        max_tokens: int = 4096,
         mc_system_prompt: str | None = None,
     ) -> bool:
         """Consolidate old messages into MEMORY.md + HISTORY.md via LLM tool call.
@@ -129,6 +130,7 @@ class MemoryStore:
                 ],
                 tools=_SAVE_MEMORY_TOOL,
                 model=model,
+                max_tokens=max_tokens,
             )
 
             if not response.has_tool_calls:

@@ -15,6 +15,8 @@ Sem polling — event-driven puro no lado do input.
 
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
 import sys
 import time
@@ -32,8 +34,8 @@ CONVEX_URL = "https://affable-clownfish-908.convex.cloud"
 SESSION_ID = "poc-bridge-001"
 TMUX_SESSION = "claude-poc"
 TMUX_PANE = f"{TMUX_SESSION}:0"
-STABLE_SECONDS = 2.5   # segundos sem mudança no output = Claude terminou
-POLL_INTERVAL = 0.4    # intervalo de leitura do pane (local, não chama LLM)
+STABLE_SECONDS = 0.0   # segundos sem mudança no output = Claude terminou
+POLL_INTERVAL = 0.1    # intervalo de leitura do pane (local, não chama LLM)
 
 bridge = ConvexBridge(CONVEX_URL)
 
@@ -92,11 +94,11 @@ def inject_input(text: str):
                 check=True
             )
             print(f"[bridge] Key enviada: {key}", flush=True)
-            time.sleep(0.3)
+            time.sleep(0.05)
     else:
         # Regular text input
         tmux_send(text)
-        time.sleep(0.2)
+        time.sleep(0.05)
         tmux_enter()
 
 _last_good_output: str = ""
@@ -153,28 +155,32 @@ def subscription_loop():
             continue
 
         print(f"[subscription] 🔔 Novo input detectado via Convex: {repr(pending)}", flush=True)
-        last_input = pending
 
-        try:
-            # Set processing status
-            set_status("processing")
-
-            # Injeta no Claude
-            inject_input(pending)
-
-            # Aguarda resposta (local, sem LLM)
-            output = wait_for_claude_response()
-
-            # Escreve output no Convex com status idle
-            write_output_to_convex(output, status="idle")
-
-            print("[subscription] ✅ Ciclo completo. Aguardando próximo input...\n", flush=True)
-        except Exception as e:
-            print(f"[subscription] ❌ Erro no ciclo: {e}", flush=True)
+        if pending.startswith("!!keys:"):
+            # Keystroke: fire-and-forget, sem wait, sem deduplicação
             try:
-                set_status("error")
-            except Exception:
-                print("[subscription] ❌ Falha ao setar status de erro no Convex", flush=True)
+                inject_input(pending)
+                time.sleep(0.1)
+                output = tmux_capture()
+                write_output_to_convex(output, status="idle")
+            except Exception as e:
+                print(f"[subscription] ❌ Erro ao enviar tecla: {e}", flush=True)
+            last_input = ""  # permite repetir a mesma tecla
+        else:
+            # Texto normal: ciclo completo com wait
+            last_input = pending
+            try:
+                set_status("processing")
+                inject_input(pending)
+                output = wait_for_claude_response()
+                write_output_to_convex(output, status="idle")
+                print("[subscription] ✅ Ciclo completo. Aguardando próximo input...\n", flush=True)
+            except Exception as e:
+                print(f"[subscription] ❌ Erro no ciclo: {e}", flush=True)
+                try:
+                    set_status("error")
+                except Exception:
+                    print("[subscription] ❌ Falha ao setar status de erro no Convex", flush=True)
 
 # ── Setup inicial ──────────────────────────────────────────────────────────────
 
@@ -182,14 +188,14 @@ def setup_tmux_and_claude():
     """Cria sessão tmux, abre Claude e passa pela tela de boas-vindas."""
     print("[setup] Criando sessão tmux...", flush=True)
 
-    # Mata sessão anterior se existir
-    subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION],
-                   capture_output=True)
-    time.sleep(0.5)
+    # Mata sessões anteriores se existirem
+    subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION], capture_output=True)
+    subprocess.run(["tmux", "kill-server"], capture_output=True)
+    time.sleep(0.3)
 
     # Cria nova sessão detached
     subprocess.run(["tmux", "new-session", "-d", "-s", TMUX_SESSION], check=True)
-    time.sleep(1)
+    time.sleep(0.5)
 
     # Abre Claude
     print("[setup] Abrindo Claude Code...", flush=True)
@@ -210,7 +216,18 @@ def setup_tmux_and_claude():
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
+def cleanup_and_exit(signum=None, frame=None):
+    """Mata a sessão tmux e força saída do processo."""
+    print("\n[bridge] Encerrando sessão tmux...", flush=True)
+    subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION], capture_output=True)
+    print("[bridge] Sessão tmux encerrada. Bye!", flush=True)
+    os._exit(0)
+
+
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, cleanup_and_exit)
+    signal.signal(signal.SIGTERM, cleanup_and_exit)
+
     setup_tmux_and_claude()
 
     # Subscription roda em thread daemon
@@ -218,20 +235,8 @@ if __name__ == "__main__":
     t.start()
 
     print("=" * 60)
-    print("Bridge ativa. Para enviar input, use:")
-    print(f'  python -c "')
-    print(f'    import sys; sys.path.insert(0, \\"{ROOT}\\")')
-    print(f'    from nanobot.mc.bridge import ConvexBridge')
-    print(f'    b = ConvexBridge(\\"{CONVEX_URL}\\")')
-    print(f'    b.mutation(\\"terminalSessions:sendInput\\", {{\\\"session_id\\\": \\\"{SESSION_ID}\\\", \\\"input\\\": \\\"sua pergunta aqui\\\"}})')
-    print(f'  "')
-    print("=" * 60)
-    print("Pressione Ctrl+C para encerrar.\n")
+    print("Bridge ativa. Ctrl+C para encerrar.")
+    print("=" * 60 + "\n")
 
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\n[bridge] Encerrando...")
-        subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION], capture_output=True)
-        print("[bridge] Sessão tmux encerrada. Bye!")
+    while True:
+        time.sleep(1)
