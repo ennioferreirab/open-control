@@ -123,8 +123,7 @@ async def _run_step_agent(
     bridge: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
-    import asyncio as _asyncio
-    from nanobot.mc.executor import _run_agent_on_task
+    from nanobot.mc.executor import _run_agent_on_task, _background_tasks
 
     result, session_key, loop = await _run_agent_on_task(
         agent_name=agent_name,
@@ -156,7 +155,9 @@ async def _run_step_agent(
                 agent_name, session_key, exc_info=True,
             )
 
-    _asyncio.create_task(_post_step_consolidate())
+    _task = asyncio.create_task(_post_step_consolidate())
+    _background_tasks.add(_task)
+    _task.add_done_callback(_background_tasks.discard)
     return result
 
 
