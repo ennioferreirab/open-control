@@ -16,28 +16,21 @@ struct KanbanColumnView: View {
                 Text(columnTitle)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
                 Text("\(tasks.count)")
                     .font(.caption)
                     .fontWeight(.bold)
-                    .foregroundStyle(columnColor)
+                    .foregroundStyle(.primary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(.white.opacity(0.2))
-                    .clipShape(Capsule())
+                    .glassEffect(.regular.tint(columnColor), in: .capsule)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(
-                LinearGradient(
-                    colors: [columnColor, columnColor.opacity(0.8)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .glassEffect(.regular.tint(columnColor), in: .rect(cornerRadius: 8))
 
             // Task list
             ScrollView(.vertical, showsIndicators: false) {
@@ -54,9 +47,7 @@ struct KanbanColumnView: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 
     private var emptyColumnView: some View {

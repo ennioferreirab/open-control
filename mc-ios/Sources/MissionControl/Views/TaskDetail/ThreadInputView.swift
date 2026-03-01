@@ -18,8 +18,7 @@ struct ThreadInputView: View {
                 .lineLimit(1...6)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
                 .focused($isFocused)
                 .submitLabel(.send)
                 .onSubmit {
@@ -42,7 +41,7 @@ struct ThreadInputView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.regularMaterial)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 
     private func sendMessage() {

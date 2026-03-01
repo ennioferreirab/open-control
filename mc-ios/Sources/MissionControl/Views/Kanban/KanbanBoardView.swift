@@ -86,6 +86,35 @@ struct KanbanBoardView: View {
 
     private var compactBoard: some View {
         ScrollView(.horizontal, showsIndicators: false) {
+            GlassEffectContainer(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(visibleStatuses, id: \.self) { status in
+                        KanbanColumnView(
+                            status: status,
+                            tasks: filteredTasks(for: status),
+                            onTaskTap: { task in
+                                if let onTaskSelected {
+                                    onTaskSelected(task)
+                                } else {
+                                    selectedTask = task
+                                }
+                            }
+                        )
+                        .containerRelativeFrame(.horizontal) { width, _ in
+                            min(280, width * 0.75)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - Regular (iPad/Mac) layout
+
+    private var regularBoard: some View {
+        GlassEffectContainer(spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(visibleStatuses, id: \.self) { status in
                     KanbanColumnView(
@@ -99,32 +128,7 @@ struct KanbanBoardView: View {
                             }
                         }
                     )
-                    .containerRelativeFrame(.horizontal) { width, _ in
-                        min(280, width * 0.75)
-                    }
                 }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-        }
-    }
-
-    // MARK: - Regular (iPad/Mac) layout
-
-    private var regularBoard: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ForEach(visibleStatuses, id: \.self) { status in
-                KanbanColumnView(
-                    status: status,
-                    tasks: filteredTasks(for: status),
-                    onTaskTap: { task in
-                        if let onTaskSelected {
-                            onTaskSelected(task)
-                        } else {
-                            selectedTask = task
-                        }
-                    }
-                )
             }
         }
         .padding(.horizontal, 16)

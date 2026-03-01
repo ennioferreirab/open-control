@@ -34,6 +34,9 @@ struct BoardSelectorView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .glassEffect(.regular, in: .capsule)
         }
         .task {
             boardStore.startSubscription()

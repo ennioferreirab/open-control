@@ -37,7 +37,7 @@ struct LoginView: View {
                     .textContentType(.password)
                     .font(.body)
                     .padding()
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+                    .glassEffect(.regular, in: .rect(cornerRadius: 12))
                     .submitLabel(.go)
                     .onSubmit { submitLogin() }
 
@@ -56,7 +56,7 @@ struct LoginView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .controlSize(.large)
                 .disabled(token.trimmingCharacters(in: .whitespaces).isEmpty || auth.isLoading)
             }

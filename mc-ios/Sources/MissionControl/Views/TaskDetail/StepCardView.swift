@@ -120,9 +120,7 @@ struct StepCardView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+            .glassEffect(.regular, in: .rect(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showDetail) {

@@ -36,21 +36,12 @@ struct TagFilterBar: View {
             Text(tag)
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundStyle(isSelected ? .white : .accentColor)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(
-                    isSelected
-                        ? Color.accentColor
-                        : Color.accentColor.opacity(0.12)
-                )
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .strokeBorder(
-                            Color.accentColor.opacity(isSelected ? 0 : 0.3),
-                            lineWidth: 1
-                        )
+                .glassEffect(
+                    isSelected ? .regular.tint(.accentColor) : .clear,
+                    in: .capsule
                 )
         }
         .buttonStyle(.plain)

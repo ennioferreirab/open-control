@@ -39,11 +39,10 @@ struct TaskCardView: View {
                                 Text(tag)
                                     .font(.caption2)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.primary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(Color.accentColor.opacity(0.75))
-                                    .clipShape(Capsule())
+                                    .glassEffect(.regular.tint(.accentColor), in: .capsule)
                             }
                         }
                     }
@@ -74,9 +73,7 @@ struct TaskCardView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .shadow(color: .black.opacity(0.06), radius: 2, x: 0, y: 1)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .contextMenu {

@@ -189,11 +189,13 @@ private struct TagChipButton: View {
             Text(tag)
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundStyle(isSelected ? .white : .primary)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.15))
-                .clipShape(Capsule())
+                .glassEffect(
+                    isSelected ? .regular.tint(.accentColor) : .clear,
+                    in: .capsule
+                )
                 .animation(.spring(duration: 0.2), value: isSelected)
         }
         .buttonStyle(.plain)

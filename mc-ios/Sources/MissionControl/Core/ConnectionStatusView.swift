@@ -15,7 +15,7 @@ struct ConnectionStatusView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(.regularMaterial, in: Capsule())
+        .glassEffect(.regular.tint(statusColor), in: .capsule)
     }
 
     private var symbolName: String {

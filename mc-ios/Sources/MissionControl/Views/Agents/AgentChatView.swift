@@ -59,8 +59,7 @@ struct AgentChatView: View {
                 .lineLimit(1...6)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
                 .focused($isFocused)
                 .submitLabel(.send)
                 .onSubmit {
@@ -81,7 +80,7 @@ struct AgentChatView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.regularMaterial)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 
     // MARK: - Empty state
@@ -180,8 +179,7 @@ struct ChatMessageView: View {
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .glassEffect(.regular, in: .rect(cornerRadius: 18))
 
                 Text(relativeTimestamp(message.timestamp))
                     .font(.caption2)
