@@ -43,12 +43,14 @@ struct KanbanBoardView: View {
             }
         }
         .navigationTitle("Board")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            ToolbarItem(placement: .cancellationAction) {
                 BoardSelectorView()
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     // TODO: new task creation
                 } label: {

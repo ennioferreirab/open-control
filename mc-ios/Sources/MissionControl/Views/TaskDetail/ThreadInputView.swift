@@ -29,7 +29,7 @@ struct ThreadInputView: View {
             Button(action: sendMessage) {
                 Image(systemName: "paperplane.fill")
                     .font(.body)
-                    .foregroundStyle(canSend ? .white : .tertiary)
+                    .foregroundStyle(canSend ? Color.white : Color.secondary)
                     .frame(width: 36, height: 36)
                     .background(
                         canSend ? Color.accentColor : Color.secondary.opacity(0.2)

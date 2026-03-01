@@ -9,7 +9,9 @@ struct FilesTabView: View {
                 List(files, id: \.name) { file in
                     FileRowView(file: file)
                 }
+                #if os(iOS)
                 .listStyle(.insetGrouped)
+                #endif
             } else {
                 emptyState
             }

@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import ConvexMobile
+@preconcurrency import ConvexMobile
 
 @Observable
 @MainActor
@@ -9,7 +9,7 @@ final class ActivityStore {
     var isLoading = false
     var error: String?
 
-    private var subscriptionTask: Task<Void, Never>?
+    nonisolated(unsafe) private var subscriptionTask: Task<Void, Never>?
 
     deinit {
         subscriptionTask?.cancel()
@@ -28,7 +28,7 @@ final class ActivityStore {
             .sorted { $0.timestamp > $1.timestamp }
     }
 
-    func activities(for agentName: String) -> [MCActivity] {
+    func activities(forAgent agentName: String) -> [MCActivity] {
         activities
             .filter { $0.agentName == agentName }
             .sorted { $0.timestamp > $1.timestamp }

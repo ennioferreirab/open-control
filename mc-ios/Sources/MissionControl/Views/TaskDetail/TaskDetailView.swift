@@ -37,12 +37,14 @@ struct TaskDetailView: View {
                     .animation(.spring(duration: 0.3), value: selectedTab)
             }
             .navigationTitle(task.title)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .primaryAction) {
                     toolbarActions
                 }
             }

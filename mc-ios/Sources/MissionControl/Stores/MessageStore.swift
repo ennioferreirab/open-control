@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import ConvexMobile
+@preconcurrency import ConvexMobile
 
 @Observable
 @MainActor
@@ -10,7 +10,7 @@ final class MessageStore {
     var error: String?
     private(set) var currentTaskId: String?
 
-    private var subscriptionTask: Task<Void, Never>?
+    nonisolated(unsafe) private var subscriptionTask: Task<Void, Never>?
 
     deinit {
         subscriptionTask?.cancel()

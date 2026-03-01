@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import ConvexMobile
+@preconcurrency import ConvexMobile
 
 @Observable
 @MainActor
@@ -9,7 +9,7 @@ final class BoardStore {
     var isLoading = false
     var error: String?
 
-    private var subscriptionTask: Task<Void, Never>?
+    nonisolated(unsafe) private var subscriptionTask: Task<Void, Never>?
 
     deinit {
         subscriptionTask?.cancel()

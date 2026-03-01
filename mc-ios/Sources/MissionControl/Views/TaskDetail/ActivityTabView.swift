@@ -22,7 +22,9 @@ struct ActivityTabView: View {
                         }
                     }
                 }
+                #if os(iOS)
                 .listStyle(.insetGrouped)
+                #endif
             }
         }
     }
@@ -133,22 +135,22 @@ struct ActivityRowView: View {
 
     private func eventIcon(_ eventType: ActivityEventType) -> String {
         switch eventType {
-        case .task_created: return "plus.circle.fill"
-        case .task_completed: return "checkmark.circle.fill"
-        case .task_crashed: return "exclamationmark.triangle.fill"
-        case .task_assigned: return "person.badge.plus"
-        case .review_requested: return "eye.fill"
+        case .taskCreated: return "plus.circle.fill"
+        case .taskCompleted: return "checkmark.circle.fill"
+        case .taskCrashed: return "exclamationmark.triangle.fill"
+        case .taskAssigned: return "person.badge.plus"
+        case .reviewRequested: return "eye.fill"
         default: return "circle.fill"
         }
     }
 
     private func eventColor(_ eventType: ActivityEventType) -> Color {
         switch eventType {
-        case .task_created: return .blue
-        case .task_completed: return .green
-        case .task_crashed: return .red
-        case .task_assigned: return .cyan
-        case .review_requested: return .orange
+        case .taskCreated: return .blue
+        case .taskCompleted: return .green
+        case .taskCrashed: return .red
+        case .taskAssigned: return .cyan
+        case .reviewRequested: return .orange
         default: return .secondary
         }
     }

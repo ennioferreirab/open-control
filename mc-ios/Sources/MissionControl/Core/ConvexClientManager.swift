@@ -1,5 +1,5 @@
 import SwiftUI
-import ConvexMobile
+@preconcurrency import ConvexMobile
 import Combine
 
 // Replace this with your actual Convex deployment URL
@@ -51,8 +51,6 @@ final class ConvexClientManager {
                     self?.connectionStatus = .connecting
                 case .connected:
                     self?.connectionStatus = .connected
-                case .disconnected:
-                    self?.connectionStatus = .disconnected
                 @unknown default:
                     self?.connectionStatus = .disconnected
                 }
