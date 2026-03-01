@@ -54,9 +54,9 @@ final class TaskStore {
             .replaceError(with: [])
             .values
 
-        isLoading = false
         for await updatedTasks in stream {
             guard !Task.isCancelled else { break }
+            if isLoading { isLoading = false }
             tasks = updatedTasks
         }
     }
@@ -65,7 +65,7 @@ final class TaskStore {
 
     func createTask(title: String, boardId: String, description: String? = nil) async throws {
         guard let client = ConvexClientManager.shared.client else { return }
-        var args: [String: Any] = ["title": title, "boardId": boardId]
+        var args: [String: ConvexEncodable?] = ["title": title, "boardId": boardId]
         if let description { args["description"] = description }
         try await client.mutation("tasks:create", with: args)
     }

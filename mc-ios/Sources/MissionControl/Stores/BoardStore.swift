@@ -45,9 +45,9 @@ final class BoardStore {
             .replaceError(with: [])
             .values
 
-        isLoading = false
         for await updatedBoards in stream {
             guard !Task.isCancelled else { break }
+            if isLoading { isLoading = false }
             boards = updatedBoards
         }
     }
@@ -56,14 +56,14 @@ final class BoardStore {
 
     func createBoard(name: String, displayName: String, description: String? = nil) async throws {
         guard let client = ConvexClientManager.shared.client else { return }
-        var args: [String: Any] = ["name": name, "displayName": displayName]
+        var args: [String: ConvexEncodable?] = ["name": name, "displayName": displayName]
         if let description { args["description"] = description }
         try await client.mutation("boards:create", with: args)
     }
 
     func updateBoard(boardId: String, displayName: String, description: String?) async throws {
         guard let client = ConvexClientManager.shared.client else { return }
-        var args: [String: Any] = ["boardId": boardId, "displayName": displayName]
+        var args: [String: ConvexEncodable?] = ["boardId": boardId, "displayName": displayName]
         if let description { args["description"] = description }
         try await client.mutation("boards:update", with: args)
     }

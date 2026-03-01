@@ -54,9 +54,9 @@ final class MessageStore {
             .replaceError(with: [])
             .values
 
-        isLoading = false
         for await updatedMessages in stream {
             guard !Task.isCancelled else { break }
+            if isLoading { isLoading = false }
             messages = updatedMessages
         }
     }

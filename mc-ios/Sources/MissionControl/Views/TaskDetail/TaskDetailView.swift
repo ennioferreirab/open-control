@@ -58,13 +58,13 @@ struct TaskDetailView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(statusDisplayName(task.status))
+                Text(task.status.displayName)
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(statusColor(task.status))
+                    .background(task.status.color)
                     .clipShape(Capsule())
 
                 if let agent = task.assignedAgent {
@@ -121,7 +121,11 @@ struct TaskDetailView: View {
     private var toolbarActions: some View {
         if task.status == .review {
             Button {
-                Task { await taskStore.updateStatus(taskId: task.id, status: .done) }
+                Task {
+                    do {
+                        try await taskStore.updateStatus(taskId: task.id, status: .done)
+                    } catch {}
+                }
             } label: {
                 Image(systemName: "checkmark")
                     .foregroundStyle(.green)
@@ -129,9 +133,13 @@ struct TaskDetailView: View {
             .accessibilityLabel("Approve task")
         }
 
-        if task.status == .in_progress || task.status == .assigned {
+        if task.status == .inProgress || task.status == .assigned {
             Button {
-                Task { await taskStore.updateStatus(taskId: task.id, status: .review) }
+                Task {
+                    do {
+                        try await taskStore.updateStatus(taskId: task.id, status: .review)
+                    } catch {}
+                }
             } label: {
                 Image(systemName: "pause")
                     .foregroundStyle(.orange)
@@ -141,7 +149,11 @@ struct TaskDetailView: View {
 
         if task.status == .failed || task.status == .crashed {
             Button {
-                Task { await taskStore.updateStatus(taskId: task.id, status: .ready) }
+                Task {
+                    do {
+                        try await taskStore.updateStatus(taskId: task.id, status: .ready)
+                    } catch {}
+                }
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .foregroundStyle(.blue)
@@ -151,8 +163,10 @@ struct TaskDetailView: View {
 
         Button(role: .destructive) {
             Task {
-                await taskStore.softDelete(taskId: task.id)
-                dismiss()
+                do {
+                    try await taskStore.softDelete(taskId: task.id)
+                    dismiss()
+                } catch {}
             }
         } label: {
             Image(systemName: "trash")
@@ -161,35 +175,4 @@ struct TaskDetailView: View {
         .accessibilityLabel("Delete task")
     }
 
-    // MARK: - Helpers
-
-    private func statusDisplayName(_ status: TaskStatus) -> String {
-        switch status {
-        case .inbox: return "Inbox"
-        case .assigned: return "Assigned"
-        case .in_progress: return "In Progress"
-        case .review: return "Review"
-        case .done: return "Done"
-        case .planning: return "Planning"
-        case .ready: return "Ready"
-        case .failed: return "Failed"
-        case .retrying: return "Retrying"
-        case .crashed: return "Crashed"
-        case .deleted: return "Deleted"
-        }
-    }
-
-    private func statusColor(_ status: TaskStatus) -> Color {
-        switch status {
-        case .inbox: return .purple
-        case .assigned: return .cyan
-        case .in_progress: return .blue
-        case .review: return .orange
-        case .done: return .green
-        case .failed, .crashed: return .red
-        case .retrying: return .yellow
-        case .planning, .ready: return .gray
-        case .deleted: return .gray
-        }
-    }
 }

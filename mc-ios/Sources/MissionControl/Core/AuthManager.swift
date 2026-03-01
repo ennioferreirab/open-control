@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 
 enum AuthError: LocalizedError {
     case invalidToken
@@ -41,13 +40,8 @@ final class AuthManager {
             throw AuthError.invalidToken
         }
 
-        // Hash token with SHA256 before storing
-        let hashed = SHA256.hash(data: Data(trimmed.utf8))
-            .compactMap { String(format: "%02x", $0) }
-            .joined()
-
         do {
-            try KeychainManager.saveToken(hashed)
+            try KeychainManager.saveToken(trimmed)
         } catch {
             throw AuthError.keychainError(error)
         }

@@ -9,7 +9,7 @@ struct KanbanBoardView: View {
     @State private var selectedTags: Set<String> = []
     @State private var selectedTask: MCTask?
 
-    private let visibleStatuses: [TaskStatus] = [.inbox, .assigned, .in_progress, .review, .done]
+    private let visibleStatuses: [TaskStatus] = [.inbox, .assigned, .inProgress, .review, .done]
 
     // Collect unique tag names across all visible tasks for the filter bar
     private var allUniqueTags: [String] {

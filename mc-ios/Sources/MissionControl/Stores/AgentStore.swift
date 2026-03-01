@@ -63,9 +63,9 @@ final class AgentStore {
             .replaceError(with: [])
             .values
 
-        isLoading = false
         for await updatedAgents in stream {
             guard !Task.isCancelled else { break }
+            if isLoading { isLoading = false }
             agents = updatedAgents
         }
     }
@@ -74,7 +74,7 @@ final class AgentStore {
 
     func updateConfig(agentId: String, prompt: String?, soul: String?, model: String?) async throws {
         guard let client = ConvexClientManager.shared.client else { return }
-        var args: [String: Any] = ["agentId": agentId]
+        var args: [String: ConvexEncodable?] = ["agentId": agentId]
         if let prompt { args["prompt"] = prompt }
         if let soul { args["soul"] = soul }
         if let model { args["model"] = model }

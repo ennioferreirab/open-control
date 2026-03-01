@@ -54,9 +54,9 @@ final class ActivityStore {
             .replaceError(with: [])
             .values
 
-        isLoading = false
         for await updatedActivities in stream {
             guard !Task.isCancelled else { break }
+            if isLoading { isLoading = false }
             activities = updatedActivities
         }
     }

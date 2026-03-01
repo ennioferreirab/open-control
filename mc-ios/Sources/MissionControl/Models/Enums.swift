@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Task
 
@@ -147,6 +148,45 @@ enum TagColor: String, Codable, Hashable, Sendable, CaseIterable {
 }
 
 // MARK: - Chat
+
+// MARK: - TaskStatus Helpers
+
+extension TaskStatus {
+    var displayName: String {
+        switch self {
+        case .planning: return "Planning"
+        case .ready: return "Ready"
+        case .failed: return "Failed"
+        case .inbox: return "Inbox"
+        case .assigned: return "Assigned"
+        case .inProgress: return "In Progress"
+        case .review: return "Review"
+        case .done: return "Done"
+        case .retrying: return "Retrying"
+        case .crashed: return "Crashed"
+        case .deleted: return "Deleted"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .inbox: return .purple
+        case .assigned: return .cyan
+        case .inProgress: return .blue
+        case .review: return .orange
+        case .done: return .green
+        case .crashed, .failed: return .red
+        case .retrying: return .yellow
+        case .planning, .ready: return .gray
+        case .deleted: return .secondary
+        }
+    }
+}
+
+enum ChatAuthorType: String, Codable, Hashable, Sendable, CaseIterable {
+    case user
+    case agent
+}
 
 enum ChatStatus: String, Codable, Hashable, Sendable, CaseIterable {
     case pending

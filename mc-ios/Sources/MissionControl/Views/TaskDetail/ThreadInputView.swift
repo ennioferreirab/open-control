@@ -47,7 +47,11 @@ struct ThreadInputView: View {
     private func sendMessage() {
         let trimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        // TODO: call messageStore.sendMessage(trimmed, taskId: taskId) when API is defined
         messageText = ""
+        Task {
+            do {
+                try await messageStore.sendMessage(taskId: taskId, content: trimmed, authorName: "user")
+            } catch {}
+        }
     }
 }

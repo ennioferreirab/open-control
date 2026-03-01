@@ -37,7 +37,7 @@ struct FilesTabView: View {
 // MARK: - File Row
 
 struct FileRowView: View {
-    let file: MCFile
+    let file: TaskFile
 
     var body: some View {
         HStack(spacing: 12) {
