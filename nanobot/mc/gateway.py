@@ -1162,6 +1162,13 @@ async def main() -> None:
         return
 
     admin_key = os.environ.get("CONVEX_ADMIN_KEY")
+    if not admin_key:
+        logger.error(
+            "[gateway] Cannot start: CONVEX_ADMIN_KEY not set. "
+            "Set CONVEX_ADMIN_KEY env var for server-side auth."
+        )
+        return
+
     bridge = ConvexBridge(convex_url, admin_key)
 
     try:

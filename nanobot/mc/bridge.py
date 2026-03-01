@@ -75,6 +75,11 @@ class ConvexBridge:
         self._client = ConvexClient(deployment_url)
         if admin_key:
             self._client.set_admin_auth(admin_key)
+        else:
+            logger.warning(
+                "ConvexBridge initialized WITHOUT admin key — "
+                "internal mutations will fail. Set CONVEX_ADMIN_KEY."
+            )
         logger.info("ConvexBridge connected to %s", deployment_url)
 
     def query(self, function_name: str, args: dict[str, Any] | None = None) -> Any:

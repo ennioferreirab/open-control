@@ -117,3 +117,7 @@ development_status:
   # Epic 9: Task Enhancements & Search
   epic-9: in-progress
   9-4-text-search-tasks: done
+
+  # Epic 10: Security Hardening
+  epic-10: in-progress
+  10-3-harden-python-startup-admin-key: review

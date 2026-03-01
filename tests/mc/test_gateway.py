@@ -82,17 +82,30 @@ class TestMainFunction:
         mock_bridge = MagicMock()
         mock_bridge.close = MagicMock()
 
+        monkeypatch.setenv("CONVEX_ADMIN_KEY", "test-admin-key")
         with patch("nanobot.mc.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
              patch("nanobot.mc.bridge.ConvexBridge", return_value=mock_bridge) as mock_bridge_cls, \
              patch("nanobot.mc.gateway.sync_agent_registry", return_value=([], {})) as mock_sync, \
              patch("nanobot.mc.gateway.run_gateway", new_callable=AsyncMock) as mock_run, \
              patch("nanobot.mc.gateway.AGENTS_DIR", Path("/nonexistent")):
-            monkeypatch.delenv("CONVEX_ADMIN_KEY", raising=False)
             await main()
 
-            mock_bridge_cls.assert_called_once_with("https://test.convex.cloud", None)
+            mock_bridge_cls.assert_called_once_with("https://test.convex.cloud", "test-admin-key")
             mock_run.assert_called_once_with(mock_bridge)
             mock_bridge.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_main_logs_error_and_exits_when_no_admin_key(self, monkeypatch):
+        """main() should log error and exit if CONVEX_ADMIN_KEY is not set."""
+        from nanobot.mc.gateway import main
+
+        monkeypatch.delenv("CONVEX_ADMIN_KEY", raising=False)
+        with patch("nanobot.mc.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
+             patch("nanobot.mc.gateway.logger") as mock_logger, \
+             patch("nanobot.mc.bridge.ConvexBridge") as mock_bridge_cls:
+            await main()
+            mock_logger.error.assert_called()
+            mock_bridge_cls.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
