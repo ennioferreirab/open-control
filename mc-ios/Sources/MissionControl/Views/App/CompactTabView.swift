@@ -12,7 +12,7 @@ struct CompactTabView: View {
             .tag("tasks")
 
             NavigationStack {
-                AgentsPlaceholderView()
+                AgentListView()
             }
             .tabItem { Label("Agents", systemImage: "cpu") }
             .tag("agents")

@@ -7,6 +7,8 @@ struct MCApp: App {
     @State private var boardStore = BoardStore()
     @State private var tagStore = TagStore()
     @State private var settingsStore = SettingsStore()
+    @State private var agentStore = AgentStore()
+    @State private var chatStore = ChatStore()
 
     var body: some Scene {
         WindowGroup {
@@ -16,6 +18,8 @@ struct MCApp: App {
                 .environment(boardStore)
                 .environment(tagStore)
                 .environment(settingsStore)
+                .environment(agentStore)
+                .environment(chatStore)
         }
     }
 }

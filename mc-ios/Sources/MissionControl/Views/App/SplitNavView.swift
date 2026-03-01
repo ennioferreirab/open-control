@@ -59,7 +59,7 @@ struct SplitNavView: View {
         case .tasks:
             TasksPlaceholderView()
         case .agents:
-            AgentsPlaceholderView()
+            AgentListView()
         case .chat:
             ChatPlaceholderView()
         case .settings:
