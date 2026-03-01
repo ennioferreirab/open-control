@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 
 // --- State Machine Constants ---
@@ -413,7 +413,7 @@ async function markPlanStepsCompleted(
   });
 }
 
-export const updateExecutionPlan = mutation({
+export const updateExecutionPlan = internalMutation({
   args: {
     taskId: v.id("tasks"),
     executionPlan: v.any(),
@@ -446,7 +446,7 @@ export const updateTags = mutation({
   },
 });
 
-export const kickOff = mutation({
+export const kickOff = internalMutation({
   args: {
     taskId: v.id("tasks"),
     stepCount: v.number(),
@@ -767,7 +767,7 @@ export const manualMove = mutation({
   },
 });
 
-export const updateStatus = mutation({
+export const updateStatus = internalMutation({
   args: {
     taskId: v.id("tasks"),
     status: v.string(),
@@ -970,7 +970,7 @@ export const returnToLeadAgent = mutation({
  * Mark a task as stalled by setting the stalledAt timestamp.
  * Called by the gateway timeout checker when a task exceeds its timeout.
  */
-export const markStalled = mutation({
+export const markStalled = internalMutation({
   args: {
     taskId: v.id("tasks"),
     stalledAt: v.string(),
@@ -1062,7 +1062,7 @@ export const clearAllDone = mutation({
  * Replace the output section of a task's files array with a fresh manifest
  * scanned from the filesystem. Attachment entries are preserved unchanged.
  */
-export const updateTaskOutputFiles = mutation({
+export const updateTaskOutputFiles = internalMutation({
   args: {
     taskId: v.id("tasks"),
     outputFiles: v.array(

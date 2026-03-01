@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { isValidTransition } from "./tasks";
 
@@ -34,7 +34,7 @@ export const listByTask = query({
   },
 });
 
-export const create = mutation({
+export const create = internalMutation({
   args: {
     taskId: v.id("tasks"),
     authorName: v.string(),
@@ -78,7 +78,7 @@ export const create = mutation({
  * Post a step-completion message to the unified task thread.
  * Called by agents when they finish executing a step.
  */
-export const postStepCompletion = mutation({
+export const postStepCompletion = internalMutation({
   args: {
     taskId: v.id("tasks"),
     stepId: v.id("steps"),
@@ -117,7 +117,7 @@ export const postStepCompletion = mutation({
  * Post a system-error message to the unified task thread.
  * Called when a step crashes or an unhandled system error occurs.
  */
-export const postSystemError = mutation({
+export const postSystemError = internalMutation({
   args: {
     taskId: v.id("tasks"),
     content: v.string(),
@@ -152,7 +152,7 @@ export const postSystemError = mutation({
  * Post a Lead Agent message (plan or chat) to the unified task thread.
  * Used when the Lead Agent generates/updates a plan or sends a chat message.
  */
-export const postLeadAgentMessage = mutation({
+export const postLeadAgentMessage = internalMutation({
   args: {
     taskId: v.id("tasks"),
     content: v.string(),
