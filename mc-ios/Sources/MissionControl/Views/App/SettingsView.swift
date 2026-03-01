@@ -82,8 +82,7 @@ struct SettingsView: View {
     }
 
     private var convexURL: String {
-        // Read from ConvexClientManager if exposed; fallback to placeholder
-        "your-deployment.convex.cloud"
+        "affable-clownfish-908.convex.cloud"
     }
 
     private var appVersion: String {

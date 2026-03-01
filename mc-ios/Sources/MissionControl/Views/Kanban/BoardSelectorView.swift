@@ -32,14 +32,18 @@ struct BoardSelectorView: View {
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
         }
         .task {
-            guard !boardStore.boards.isEmpty else { return }
+            boardStore.startSubscription()
+        }
+        .onChange(of: boardStore.boards) { _, boards in
+            guard !boards.isEmpty else { return }
             if selectedBoardId.isEmpty, let defaultBoard = boardStore.defaultBoard {
                 selectedBoardId = defaultBoard.id
                 taskStore.setBoard(defaultBoard.id)
-            } else if !selectedBoardId.isEmpty {
+            } else if !selectedBoardId.isEmpty, taskStore.currentBoardId == nil {
                 taskStore.setBoard(selectedBoardId)
             }
         }

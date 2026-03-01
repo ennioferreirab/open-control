@@ -45,6 +45,7 @@ struct BoardSettingsView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add board")
             }
         }
         .sheet(isPresented: $showAddBoard) {

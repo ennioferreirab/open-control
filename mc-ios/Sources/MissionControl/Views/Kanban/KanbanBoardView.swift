@@ -99,8 +99,9 @@ struct KanbanBoardView: View {
                             }
                         }
                     )
-                    .frame(width: 280)
-                    .frame(maxHeight: 600)
+                    .containerRelativeFrame(.horizontal) { width, _ in
+                        min(280, width * 0.75)
+                    }
                 }
             }
             .padding(.horizontal, 16)

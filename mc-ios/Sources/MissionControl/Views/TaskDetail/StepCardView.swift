@@ -40,12 +40,12 @@ struct StepCardView: View {
                     if isRunning {
                         Image(systemName: "circle.fill")
                             .foregroundStyle(statusColor.opacity(0.25))
-                            .font(.system(size: 22))
+                            .font(.title2)
                             .symbolEffect(.pulse, isActive: true)
                     }
                     Image(systemName: "circle.fill")
                         .foregroundStyle(statusColor)
-                        .font(.system(size: 12))
+                        .font(.caption)
                 }
                 .frame(width: 24, height: 24)
                 .padding(.top, 2)

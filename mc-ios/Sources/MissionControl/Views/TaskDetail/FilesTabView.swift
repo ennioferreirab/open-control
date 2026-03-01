@@ -73,6 +73,7 @@ struct FileRowView: View {
             Image(systemName: "arrow.down.circle")
                 .font(.body)
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Download file")
         }
         .contentShape(Rectangle())
         .onTapGesture {

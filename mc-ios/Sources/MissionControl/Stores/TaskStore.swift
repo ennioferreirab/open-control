@@ -48,9 +48,7 @@ final class TaskStore {
         }
         isLoading = true
 
-        // TODO: Verify exact subscribe(to:with:yielding:) signature in convex-swift SDK.
-        // The Combine publisher is converted to an AsyncSequence via .values.
-        let stream = client.subscribe(to: "tasks:listByBoard", with: ["boardId": boardId], yielding: [MCTask].self)
+            let stream = client.subscribe(to: "tasks:listByBoard", with: ["boardId": boardId], yielding: [MCTask].self)
             .replaceError(with: [])
             .values
 

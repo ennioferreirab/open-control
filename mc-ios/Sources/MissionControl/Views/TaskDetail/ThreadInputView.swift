@@ -37,6 +37,7 @@ struct ThreadInputView: View {
                     .clipShape(Circle())
             }
             .disabled(!canSend)
+            .accessibilityLabel("Send message")
             .animation(.spring(duration: 0.2), value: canSend)
         }
         .padding(.horizontal, 12)

@@ -37,6 +37,7 @@ struct TagSettingsView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add tag")
             }
         }
         .sheet(isPresented: $showAddTag) {

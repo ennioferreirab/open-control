@@ -15,7 +15,8 @@ struct LoginView: View {
             // App identity
             VStack(spacing: 12) {
                 Image(systemName: "cpu.fill")
-                    .font(.system(size: 64))
+                    .font(.largeTitle)
+                    .imageScale(.large)
                     .foregroundStyle(.tint)
                     .symbolEffect(.pulse)
 
