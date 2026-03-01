@@ -85,6 +85,11 @@ def parse_args() -> argparse.Namespace:
         default="claude-terminal",
         help="tmux session name (default: claude-terminal)",
     )
+    parser.add_argument(
+        "--dangerous-skip",
+        action="store_true",
+        help="Skip tmux/Claude setup (DANGEROUS: assumes session already exists)",
+    )
     return parser.parse_args()
 
 
@@ -100,10 +105,12 @@ class TerminalBridge:
         convex_url: str,
         admin_key: str | None,
         tmux_session: str,
+        dangerous_skip: bool = False,
     ) -> None:
         self.session_id = session_id
         self.display_name = display_name
         self.tmux_session = tmux_session
+        self.dangerous_skip = dangerous_skip
         self.tmux_pane = f"{tmux_session}:0"
         self.agent_name = f"remote-{session_id[:8]}"
 
@@ -425,7 +432,10 @@ class TerminalBridge:
         # atexit fallback: catches unhandled exceptions and other non-signal exits
         atexit.register(self.cleanup)
 
-        self.setup_tmux_and_claude()
+        if self.dangerous_skip:
+            print("[setup] --dangerous-skip: skipping tmux/Claude setup (assuming session exists).", flush=True)
+        else:
+            self.setup_tmux_and_claude()
         self.register_terminal()
 
         # Background screen monitor (catches changes between input cycles)
@@ -456,5 +466,6 @@ if __name__ == "__main__":
         convex_url=args.convex_url,
         admin_key=args.admin_key,
         tmux_session=args.tmux_session,
+        dangerous_skip=args.dangerous_skip,
     )
     tb.run()
