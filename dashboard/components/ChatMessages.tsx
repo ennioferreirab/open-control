@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 function relativeTime(timestamp: string): string {
   const diff = Date.now() - new Date(timestamp).getTime();
@@ -98,9 +99,16 @@ export function ChatMessages({ agentName }: ChatMessagesProps) {
                     {relativeTime(msg.timestamp)}
                   </span>
                 </div>
-                <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">
-                  {msg.content}
-                </p>
+                {isUser ? (
+                  <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">
+                    {msg.content}
+                  </p>
+                ) : (
+                  <MarkdownRenderer
+                    content={msg.content}
+                    className="text-xs [&_pre]:max-w-full [&_pre]:overflow-x-auto"
+                  />
+                )}
               </div>
             </div>
           );
