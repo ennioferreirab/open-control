@@ -35,7 +35,6 @@ sys.path.insert(0, str(ROOT))
 from nanobot.mc.bridge import ConvexBridge
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-_DEFAULT_CONVEX_URL = "https://affable-clownfish-908.convex.cloud"
 STABLE_SECONDS = 0.0   # seconds without output change = Claude finished
 POLL_INTERVAL = 0.1    # local pane read interval (no LLM calls)
 
@@ -72,8 +71,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--convex-url",
-        default=os.environ.get("CONVEX_URL", _DEFAULT_CONVEX_URL),
-        help="Convex deployment URL (default: $CONVEX_URL or hardcoded fallback)",
+        default=os.environ.get("CONVEX_URL"),
+        help="Convex deployment URL (default: $CONVEX_URL)",
     )
     parser.add_argument(
         "--admin-key",
@@ -461,6 +460,23 @@ class TerminalBridge:
 
 if __name__ == "__main__":
     args = parse_args()
+
+    if args.convex_url is None:
+        print(
+            "[bridge] ERROR: Convex URL is required. "
+            "Set $CONVEX_URL or pass --convex-url.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if args.admin_key is None:
+        print(
+            "[bridge] ERROR: Convex admin key is required. "
+            "Set $CONVEX_ADMIN_KEY or pass --admin-key.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     tb = TerminalBridge(
         session_id=args.session_id,
         display_name=args.display_name,

@@ -122,7 +122,7 @@ development_status:
   # Converts backend-only mutations to internalMutation and hardens
   # Python startup to require CONVEX_ADMIN_KEY for server-side auth.
   epic-10: in-progress
-  10-1-lock-down-terminal-session-mutations: ready-for-dev
+  10-1-lock-down-terminal-session-mutations: review
   10-2-convert-backend-mutations-to-internal: review
   10-3-harden-python-startup-admin-key: review
   epic-10-retrospective: optional

@@ -1,8 +1,8 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
 // T2: upsert — creates or updates a terminal session (agentName optional)
-export const upsert = mutation({
+export const upsert = internalMutation({
   args: {
     sessionId: v.string(),
     output: v.string(),
@@ -110,7 +110,7 @@ export const listSessions = query({
 });
 
 // T4: registerTerminal — atomically creates/updates an agent and a terminal session
-export const registerTerminal = mutation({
+export const registerTerminal = internalMutation({
   args: {
     sessionId: v.string(),
     agentName: v.string(),
@@ -185,7 +185,7 @@ export const registerTerminal = mutation({
 });
 
 // T5: disconnectTerminal — soft-deletes the agent and removes terminal session documents
-export const disconnectTerminal = mutation({
+export const disconnectTerminal = internalMutation({
   args: {
     agentName: v.string(),
   },
