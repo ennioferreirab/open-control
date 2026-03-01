@@ -8,6 +8,7 @@ struct KanbanBoardView: View {
     @State private var searchText = ""
     @State private var selectedTags: Set<String> = []
     @State private var selectedTask: MCTask?
+    @State private var showCreateTask = false
 
     private let visibleStatuses: [TaskStatus] = [.inbox, .assigned, .inProgress, .review, .done]
 
@@ -52,10 +53,11 @@ struct KanbanBoardView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    // TODO: new task creation
+                    showCreateTask = true
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Create new task")
             }
         }
         .searchable(text: $searchText, prompt: "Search tasks…")
@@ -66,6 +68,9 @@ struct KanbanBoardView: View {
         }
         .sheet(item: $selectedTask) { task in
             TaskDetailView(task: task)
+        }
+        .sheet(isPresented: $showCreateTask) {
+            CreateTaskView()
         }
     }
 

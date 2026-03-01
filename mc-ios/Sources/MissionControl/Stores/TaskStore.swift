@@ -87,4 +87,12 @@ final class TaskStore {
         guard let client = ConvexClientManager.shared.client else { return }
         try await client.mutation("tasks:softDelete", with: ["taskId": taskId])
     }
+
+    func denyTask(taskId: String, feedback: String) async throws {
+        guard let client = ConvexClientManager.shared.client else { return }
+        try await client.mutation("tasks:deny", with: [
+            "taskId": taskId,
+            "feedback": feedback
+        ])
+    }
 }
