@@ -5,7 +5,7 @@ struct MCChat: Identifiable, Codable, Hashable, Sendable {
     let creationTime: Double
     let agentName: String
     let authorName: String
-    let authorType: AuthorType
+    let authorType: ChatAuthorType
     let content: String
     let status: ChatStatus?
     let timestamp: String

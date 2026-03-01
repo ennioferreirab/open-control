@@ -5,27 +5,9 @@ struct KanbanColumnView: View {
     let tasks: [MCTask]
     let onTaskTap: (MCTask) -> Void
 
-    var columnColor: Color {
-        switch status {
-        case .inbox: return .purple
-        case .assigned: return .cyan
-        case .in_progress: return .blue
-        case .review: return .orange
-        case .done: return .green
-        default: return .gray
-        }
-    }
+    var columnColor: Color { status.color }
 
-    var columnTitle: String {
-        switch status {
-        case .inbox: return "Inbox"
-        case .assigned: return "Assigned"
-        case .in_progress: return "In Progress"
-        case .review: return "Review"
-        case .done: return "Done"
-        default: return status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
-        }
-    }
+    var columnTitle: String { status.displayName }
 
     var body: some View {
         VStack(spacing: 0) {

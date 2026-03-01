@@ -78,7 +78,11 @@ struct TaskCardView: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button {
-                Task { await taskStore.toggleFavorite(taskId: task.id) }
+                Task {
+                    do {
+                        try await taskStore.toggleFavorite(taskId: task.id)
+                    } catch {}
+                }
             } label: {
                 Label(
                     task.isFavorite == true ? "Remove from Favorites" : "Add to Favorites",
@@ -89,8 +93,12 @@ struct TaskCardView: View {
             Menu("Move to...") {
                 ForEach(kanbanStatuses, id: \.self) { status in
                     if status != task.status {
-                        Button(statusDisplayName(status)) {
-                            Task { await taskStore.updateStatus(taskId: task.id, status: status) }
+                        Button(status.displayName) {
+                            Task {
+                                do {
+                                    try await taskStore.updateStatus(taskId: task.id, status: status)
+                                } catch {}
+                            }
                         }
                     }
                 }
@@ -99,7 +107,11 @@ struct TaskCardView: View {
             Divider()
 
             Button(role: .destructive) {
-                Task { await taskStore.softDelete(taskId: task.id) }
+                Task {
+                    do {
+                        try await taskStore.softDelete(taskId: task.id)
+                    } catch {}
+                }
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -107,22 +119,6 @@ struct TaskCardView: View {
     }
 
     private let kanbanStatuses: [TaskStatus] = [
-        .inbox, .assigned, .in_progress, .review, .done
+        .inbox, .assigned, .inProgress, .review, .done
     ]
-
-    private func statusDisplayName(_ status: TaskStatus) -> String {
-        switch status {
-        case .inbox: return "Inbox"
-        case .assigned: return "Assigned"
-        case .in_progress: return "In Progress"
-        case .review: return "Review"
-        case .done: return "Done"
-        case .planning: return "Planning"
-        case .ready: return "Ready"
-        case .failed: return "Failed"
-        case .retrying: return "Retrying"
-        case .crashed: return "Crashed"
-        case .deleted: return "Deleted"
-        }
-    }
 }

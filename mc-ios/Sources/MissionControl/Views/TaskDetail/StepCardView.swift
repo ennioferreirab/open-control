@@ -12,7 +12,7 @@ struct StepCardView: View {
         case .completed: return .green
         case .crashed: return .red
         case .blocked: return .orange
-        case .waiting_human: return .yellow
+        case .waitingHuman: return .yellow
         }
     }
 
@@ -24,7 +24,7 @@ struct StepCardView: View {
         case .completed: return "Completed"
         case .crashed: return "Crashed"
         case .blocked: return "Blocked"
-        case .waiting_human: return "Waiting"
+        case .waitingHuman: return "Waiting"
         }
     }
 

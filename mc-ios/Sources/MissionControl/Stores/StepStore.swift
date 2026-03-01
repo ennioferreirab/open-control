@@ -71,9 +71,9 @@ final class StepStore {
             .replaceError(with: [])
             .values
 
-        isLoading = false
         for await updatedSteps in stream {
             guard !Task.isCancelled else { break }
+            if isLoading { isLoading = false }
             steps = updatedSteps
         }
     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import ConvexMobile
+import Combine
 
 // Replace this with your actual Convex deployment URL
 private let CONVEX_URL = "https://your-deployment.convex.cloud"
@@ -32,6 +33,7 @@ final class ConvexClientManager {
 
     private(set) var connectionStatus: ConnectionStatus = .disconnected
     private(set) var client: ConvexClient?
+    private var cancellable: AnyCancellable?
 
     private init() {
         connect()
@@ -41,11 +43,24 @@ final class ConvexClientManager {
         connectionStatus = .connecting
         let newClient = ConvexClient(deploymentUrl: CONVEX_URL)
         client = newClient
-        // ConvexClient connects lazily on first use; mark as connected
-        connectionStatus = .connected
+        cancellable = newClient.watchWebSocketState()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                switch state {
+                case .connecting:
+                    self?.connectionStatus = .connecting
+                case .connected:
+                    self?.connectionStatus = .connected
+                case .disconnected:
+                    self?.connectionStatus = .disconnected
+                @unknown default:
+                    self?.connectionStatus = .disconnected
+                }
+            }
     }
 
     func disconnect() {
+        cancellable = nil
         client = nil
         connectionStatus = .disconnected
     }

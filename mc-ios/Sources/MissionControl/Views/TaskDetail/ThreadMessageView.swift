@@ -98,7 +98,7 @@ struct ThreadMessageView: View {
 
     // MARK: - Artifacts
 
-    private func artifactsDisclosure(_ artifacts: [MCMessageArtifact]) -> some View {
+    private func artifactsDisclosure(_ artifacts: [MessageArtifact]) -> some View {
         DisclosureGroup("Attachments (\(artifacts.count))") {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(artifacts.enumerated()), id: \.offset) { _, artifact in
@@ -106,7 +106,7 @@ struct ThreadMessageView: View {
                         Image(systemName: "doc")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(artifact.name ?? "Attachment")
+                        Text(artifact.path)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

@@ -5,29 +5,29 @@ struct CompactTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab("Tasks", systemImage: "square.grid.2x2", value: "tasks") {
-                NavigationStack {
-                    TasksPlaceholderView()
-                }
+            NavigationStack {
+                TasksPlaceholderView()
             }
+            .tabItem { Label("Tasks", systemImage: "square.grid.2x2") }
+            .tag("tasks")
 
-            Tab("Agents", systemImage: "cpu", value: "agents") {
-                NavigationStack {
-                    AgentsPlaceholderView()
-                }
+            NavigationStack {
+                AgentsPlaceholderView()
             }
+            .tabItem { Label("Agents", systemImage: "cpu") }
+            .tag("agents")
 
-            Tab("Chat", systemImage: "bubble.left.and.bubble.right", value: "chat") {
-                NavigationStack {
-                    ChatPlaceholderView()
-                }
+            NavigationStack {
+                ChatPlaceholderView()
             }
+            .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+            .tag("chat")
 
-            Tab("Settings", systemImage: "gear", value: "settings") {
-                NavigationStack {
-                    SettingsView()
-                }
+            NavigationStack {
+                SettingsView()
             }
+            .tabItem { Label("Settings", systemImage: "gear") }
+            .tag("settings")
         }
     }
 }
