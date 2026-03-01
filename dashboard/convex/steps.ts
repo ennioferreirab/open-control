@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 
 const STEP_STATUSES = [
   "planned",
@@ -241,7 +241,7 @@ export const listByBoard = query({
   },
 });
 
-export const create = mutation({
+export const create = internalMutation({
   args: {
     taskId: v.id("tasks"),
     title: v.string(),
@@ -300,7 +300,7 @@ export const create = mutation({
   },
 });
 
-export const batchCreate = mutation({
+export const batchCreate = internalMutation({
   args: {
     taskId: v.id("tasks"),
     steps: v.array(v.object({
@@ -372,7 +372,7 @@ export const batchCreate = mutation({
   },
 });
 
-export const updateStatus = mutation({
+export const updateStatus = internalMutation({
   args: {
     stepId: v.id("steps"),
     status: v.string(),
@@ -543,7 +543,7 @@ export const deleteStep = mutation({
   },
 });
 
-export const checkAndUnblockDependents = mutation({
+export const checkAndUnblockDependents = internalMutation({
   args: {
     stepId: v.id("steps"),
   },

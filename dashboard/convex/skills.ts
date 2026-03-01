@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const list = query({
@@ -8,7 +8,7 @@ export const list = query({
   },
 });
 
-export const upsertByName = mutation({
+export const upsertByName = internalMutation({
   args: {
     name: v.string(),
     description: v.string(),
@@ -50,7 +50,7 @@ export const upsertByName = mutation({
   },
 });
 
-export const deactivateExcept = mutation({
+export const deactivateExcept = internalMutation({
   args: {
     activeNames: v.array(v.string()),
   },

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 
 const KEBAB_CASE_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -173,7 +173,7 @@ export const setDefault = mutation({
   },
 });
 
-export const ensureDefaultBoard = mutation({
+export const ensureDefaultBoard = internalMutation({
   args: {},
   handler: async (ctx) => {
     const existing = await ctx.db

@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const list = query({
@@ -9,7 +9,7 @@ export const list = query({
   },
 });
 
-export const upsertByName = mutation({
+export const upsertByName = internalMutation({
   args: {
     name: v.string(),
     displayName: v.string(),
@@ -82,7 +82,7 @@ export const upsertByName = mutation({
   },
 });
 
-export const updateStatus = mutation({
+export const updateStatus = internalMutation({
   args: {
     agentName: v.string(),
     status: v.string(),
@@ -237,7 +237,7 @@ export const listDeleted = query({
   },
 });
 
-export const archiveAgentData = mutation({
+export const archiveAgentData = internalMutation({
   args: {
     agentName: v.string(),
     memoryContent: v.optional(v.string()),
@@ -326,7 +326,7 @@ export const getArchive = query({
   },
 });
 
-export const clearAgentArchive = mutation({
+export const clearAgentArchive = internalMutation({
   args: {
     agentName: v.string(),
   },
@@ -348,7 +348,7 @@ export const clearAgentArchive = mutation({
   },
 });
 
-export const deactivateExcept = mutation({
+export const deactivateExcept = internalMutation({
   args: {
     activeNames: v.array(v.string()),
   },

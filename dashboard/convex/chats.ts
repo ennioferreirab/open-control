@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 /**
@@ -57,7 +57,7 @@ export const listPending = query({
 /**
  * Update the status of a chat message.
  */
-export const updateStatus = mutation({
+export const updateStatus = internalMutation({
   args: {
     chatId: v.id("chats"),
     status: v.union(
