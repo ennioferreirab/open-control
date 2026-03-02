@@ -18,7 +18,7 @@ function TerminalEntry({ sessionId, agentName, onClose }: { sessionId: string; a
   return (
     <div className="relative flex-1 min-h-0">
       <Suspense fallback={<div className="flex-1 p-4 text-muted-foreground text-xs">Loading...</div>}>
-        <TerminalPanel sessionId={sessionId} agentName={agent?.displayName || agentName} ipAddress={ipAddress} />
+        <TerminalPanel sessionId={sessionId} agentName={agentName} ipAddress={ipAddress} />
       </Suspense>
       <button
         onClick={onClose}
