@@ -19,6 +19,8 @@ import signal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import yaml
+
 from nanobot.mc.orchestrator import TaskOrchestrator
 from nanobot.mc.timeout_checker import TimeoutChecker
 from nanobot.mc.yaml_validator import validate_agent_file
@@ -91,6 +93,31 @@ def _resolve_convex_url(dashboard_dir: Path | None = None) -> str | None:
         if env_local.exists():
             for line in env_local.read_text().splitlines():
                 if line.startswith("NEXT_PUBLIC_CONVEX_URL="):
+                    return line.split("=", 1)[1].strip().strip('"')
+
+    return None
+
+
+def _resolve_admin_key(dashboard_dir: Path | None = None) -> str | None:
+    """Resolve the Convex admin key from dashboard/.env.local.
+
+    Only used as fallback when CONVEX_ADMIN_KEY env var is not set.
+    """
+    if dashboard_dir is None:
+        candidates = [
+            Path.cwd() / "dashboard",
+            Path(__file__).resolve().parents[2] / "dashboard",
+        ]
+        for candidate in candidates:
+            if candidate.is_dir() and (candidate / ".env.local").exists():
+                dashboard_dir = candidate
+                break
+
+    if dashboard_dir is not None:
+        env_local = dashboard_dir / ".env.local"
+        if env_local.exists():
+            for line in env_local.read_text().splitlines():
+                if line.startswith("CONVEX_ADMIN_KEY="):
                     return line.split("=", 1)[1].strip().strip('"')
 
     return None
@@ -538,10 +565,25 @@ def sync_agent_registry(
     valid_agents: list[AgentData] = []
     errors: dict[str, list[str]] = {}
 
+    # Roles that represent non-delegatable sessions (e.g. tmux terminals)
+    _NON_AGENT_ROLES = {"remote-terminal"}
+
     if agents_dir.is_dir():
         for child in sorted(agents_dir.iterdir()):
             config_file = child / "config.yaml"
             if child.is_dir() and config_file.is_file():
+                # Quick-check: skip non-agent roles (tmux sessions, etc.)
+                try:
+                    raw = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+                    if isinstance(raw, dict) and raw.get("role") in _NON_AGENT_ROLES:
+                        logger.debug(
+                            "Skipping non-agent directory %s (role=%s)",
+                            child.name, raw.get("role"),
+                        )
+                        continue
+                except Exception:
+                    pass  # Fall through to normal validation which reports errors
+
                 result = validate_agent_file(config_file)
                 if isinstance(result, list):
                     errors[child.name] = result
@@ -1161,11 +1203,11 @@ async def main() -> None:
         )
         return
 
-    admin_key = os.environ.get("CONVEX_ADMIN_KEY")
+    admin_key = os.environ.get("CONVEX_ADMIN_KEY") or _resolve_admin_key()
     if not admin_key:
         logger.error(
             "[gateway] Cannot start: CONVEX_ADMIN_KEY not set. "
-            "Set CONVEX_ADMIN_KEY env var for server-side auth."
+            "Set CONVEX_ADMIN_KEY env var or add it to dashboard/.env.local."
         )
         return
 
