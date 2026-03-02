@@ -19,6 +19,8 @@ import hashlib
 import json
 import os
 import secrets
+import subprocess
+import sys
 import time
 import webbrowser
 from pathlib import Path
@@ -132,8 +134,44 @@ def _save_tokens(token_data: dict) -> None:
     os.chmod(_TOKEN_FILE, 0o600)
 
 
+def _load_from_claude_code_keychain() -> dict | None:
+    """Try to load OAuth tokens from Claude Code's macOS Keychain entry.
+
+    Returns a token dict in nanobot format, or None on any failure.
+    This is best-effort and completely silent on failure.
+    """
+    if sys.platform != "darwin":
+        return None
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout.strip())
+        oauth = data.get("claudeAiOauth")
+        if not oauth:
+            return None
+        return {
+            "access_token": oauth["accessToken"],
+            "refresh_token": oauth.get("refreshToken", ""),
+            "expires_at": int(oauth["expiresAt"] / 1000),
+            "scope": " ".join(oauth.get("scopes", [])),
+        }
+    except Exception:
+        return None
+
+
 def _load_tokens() -> dict | None:
-    """Load stored tokens, or None if missing."""
+    """Load stored tokens — Claude Code keychain first, then local file."""
+    # Try Claude Code keychain (macOS only)
+    keychain_tokens = _load_from_claude_code_keychain()
+    if keychain_tokens:
+        return keychain_tokens
+    # Fallback to local file
     if not _TOKEN_FILE.exists():
         return None
     try:
