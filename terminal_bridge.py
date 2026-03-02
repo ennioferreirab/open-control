@@ -124,6 +124,11 @@ def parse_args() -> argparse.Namespace:
         help="Launch Claude with --dangerously-skip-permissions",
     )
     parser.add_argument(
+        "-r", "--raw",
+        action="store_true",
+        help="Raw tmux mode: create session without launching Claude (for manual setup)",
+    )
+    parser.add_argument(
         "-k", "--kill",
         action="store_true",
         help="Kill existing bridge session and exit",
@@ -152,12 +157,14 @@ class TerminalBridge:
         admin_key: str | None,
         tmux_session: str,
         dangerous_skip: bool = False,
+        raw: bool = False,
         pid_file: Path | None = None,
     ) -> None:
         self.session_id = session_id
         self.display_name = display_name
         self.tmux_session = tmux_session
         self._dangerous_skip = dangerous_skip
+        self._raw = raw
         self._pid_file = pid_file
         self.tmux_pane = f"{tmux_session}:0"
         self.agent_name = f"remote-{session_id[:8]}"
@@ -290,7 +297,7 @@ class TerminalBridge:
     # ── Lifecycle management ───────────────────────────────────────────────────
 
     def setup_tmux_and_claude(self, dangerous_skip: bool = False) -> None:
-        """Create tmux session, open Claude, and bypass the welcome screen."""
+        """Create tmux session, optionally open Claude, and bypass the welcome screen."""
         print("[setup] Creating tmux session...", flush=True)
 
         # Kill any existing session with the same name (does NOT affect other sessions)
@@ -301,23 +308,28 @@ class TerminalBridge:
         subprocess.run(["tmux", "new-session", "-d", "-s", self.tmux_session], check=True)
         time.sleep(0.5)
 
-        # Open Claude (with --dangerously-skip-permissions if requested)
-        claude_cmd = "claude --dangerously-skip-permissions" if dangerous_skip else "claude"
-        print(f"[setup] Opening Claude Code ({claude_cmd})...", flush=True)
-        self.tmux_send(claude_cmd)
-        self.tmux_enter()
-        time.sleep(4)
+        if self._raw:
+            # Raw mode: bare tmux shell, no Claude launched
+            print("[setup] Raw mode — tmux ready, Claude not launched.", flush=True)
+            print(f"[setup] Attach with: tmux attach -t {self.tmux_session}", flush=True)
+        else:
+            # Open Claude (with --dangerously-skip-permissions if requested)
+            claude_cmd = "claude --dangerously-skip-permissions" if dangerous_skip else "claude"
+            print(f"[setup] Opening Claude Code ({claude_cmd})...", flush=True)
+            self.tmux_send(claude_cmd)
+            self.tmux_enter()
+            time.sleep(4)
 
-        # Bypass welcome screen (Enter confirms default)
-        print("[setup] Bypassing initial screen...", flush=True)
-        self.tmux_enter()
-        time.sleep(2)
+            # Bypass welcome screen (Enter confirms default)
+            print("[setup] Bypassing initial screen...", flush=True)
+            self.tmux_enter()
+            time.sleep(2)
 
         # Register initial state in Convex
         initial_output = self.tmux_capture()
         self.write_output_to_convex(initial_output, status="idle")
         print("[setup] Initial state registered in Convex.", flush=True)
-        print("[setup] Claude ready. Bridge waiting for inputs via Convex.\n", flush=True)
+        print("[setup] Bridge waiting for inputs via Convex.\n", flush=True)
 
     def register_terminal(self) -> None:
         """Register this terminal session in Convex after setup."""
@@ -578,6 +590,7 @@ if __name__ == "__main__":
         admin_key=args.admin_key,
         tmux_session=args.tmux_session,
         dangerous_skip=args.dangerous_skip,
+        raw=args.raw,
         pid_file=pid_file,
     )
     tb.run()

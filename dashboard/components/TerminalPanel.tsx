@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
+import { Pencil } from "lucide-react";
 
 interface TerminalPanelProps {
   sessionId: string;
@@ -12,9 +13,19 @@ interface TerminalPanelProps {
 export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanelProps) {
   const [input, setInput] = useState("");
   const outputEndRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const session = useQuery(api.terminalSessions.get, { sessionId });
   const sendInput = useMutation(api.terminalSessions.sendInput);
+
+  const agentDoc = useQuery(
+    api.agents.getByName,
+    agentName ? { name: agentName } : "skip"
+  );
+  const updateConfig = useMutation(api.agents.updateConfig);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     if (session?.output) {
@@ -37,6 +48,28 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
   };
 
   const isProcessing = session?.status === "processing";
+
+  const displayName = agentDoc?.displayName || agentName || sessionId;
+
+  const startEditing = () => {
+    setEditValue(displayName);
+    setIsEditing(true);
+    // Focus the input on next render
+    setTimeout(() => renameInputRef.current?.focus(), 0);
+  };
+
+  const commitEdit = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== displayName && agentName) {
+      updateConfig({ name: agentName, displayName: trimmed }).catch(() => {});
+    }
+    setIsEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setEditValue("");
+  };
 
   // Determine status badge appearance
   let dotColor: string;
@@ -70,7 +103,39 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
       {/* Terminal header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 bg-zinc-900">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-zinc-300">{agentName || sessionId}</span>
+          {isEditing ? (
+            <input
+              ref={renameInputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitEdit();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelEdit();
+                }
+              }}
+              className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-medium text-zinc-100 outline-none focus:ring-1 focus:ring-zinc-500 w-40"
+            />
+          ) : (
+            <div className="flex items-center gap-1 group">
+              <span className="text-xs font-medium text-zinc-300">{displayName}</span>
+              {agentName && (
+                <button
+                  type="button"
+                  onClick={startEditing}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300"
+                  title="Rename agent"
+                >
+                  <Pencil size={10} />
+                </button>
+              )}
+            </div>
+          )}
           {ipAddress && (
             <span className="text-[10px] font-mono text-zinc-500">{ipAddress}</span>
           )}
