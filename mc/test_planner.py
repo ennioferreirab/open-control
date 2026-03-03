@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from nanobot.mc.planner import TaskPlanner, _build_file_summary, _parse_plan_response
-from nanobot.mc.types import AgentData, ExecutionPlan, ExecutionPlanStep, NANOBOT_AGENT_NAME, LEAD_AGENT_NAME
+from mc.planner import TaskPlanner, _build_file_summary, _parse_plan_response
+from mc.types import AgentData, ExecutionPlan, ExecutionPlanStep, NANOBOT_AGENT_NAME, LEAD_AGENT_NAME
 
 
 def _agent(name: str, skills: list[str] | None = None) -> AgentData:
@@ -211,7 +211,7 @@ def test_system_agent_is_never_assigned_as_step_executor() -> None:
 
 def test_system_agents_excluded_from_planner_roster() -> None:
     """System agents must not appear in the agent roster shown to the planner LLM."""
-    from nanobot.mc.planner import _build_agent_roster
+    from mc.planner import _build_agent_roster
 
     agents = [
         _agent("youtube-summarizer", ["youtube"]),
@@ -394,7 +394,7 @@ async def test_llm_plan_includes_file_summary_in_prompt_when_files_present() -> 
 
     fake_provider = type("FakeProvider", (), {"chat": staticmethod(_fake_chat)})()
 
-    with patch("nanobot.mc.provider_factory.create_provider", return_value=(fake_provider, "fake-model")):
+    with patch("mc.provider_factory.create_provider", return_value=(fake_provider, "fake-model")):
         await planner._llm_plan("Process invoice", "Analyze the attached invoice", agents, files=files)
 
     assert len(captured_messages) == 1
@@ -432,7 +432,7 @@ async def test_llm_plan_excludes_file_summary_when_no_files() -> None:
 
     for files_arg in [[], None]:
         captured_messages.clear()
-        with patch("nanobot.mc.provider_factory.create_provider", return_value=(fake_provider, "fake-model")):
+        with patch("mc.provider_factory.create_provider", return_value=(fake_provider, "fake-model")):
             await planner._llm_plan("Write report", "Write a status report", agents, files=files_arg)
 
         assert len(captured_messages) == 1

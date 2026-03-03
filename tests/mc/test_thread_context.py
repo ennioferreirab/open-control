@@ -2,8 +2,8 @@
 
 import pytest
 
-from nanobot.mc.executor import _build_thread_context
-from nanobot.mc.thread_context import ThreadContextBuilder
+from mc.executor import _build_thread_context
+from mc.thread_context import ThreadContextBuilder
 
 
 def _msg(author_name: str, author_type: str, content: str, message_type: str = "work", ts: str = "2026-02-23T10:00:00Z"):

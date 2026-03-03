@@ -19,7 +19,7 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
-from nanobot.mc.types import AgentData
+from mc.types import AgentData
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""Tests for crash-handling and human-step behaviors in nanobot.mc.step_dispatcher."""
+"""Tests for crash-handling and human-step behaviors in mc.step_dispatcher."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.mc.step_dispatcher import StepDispatcher
-from nanobot.mc.types import StepStatus
+from mc.step_dispatcher import StepDispatcher
+from mc.types import StepStatus
 
 
 # ---------------------------------------------------------------------------
@@ -71,13 +71,13 @@ class TestExecuteStepCrashHandler:
 
         with (
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=exc),
             ),
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("nanobot.mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("nanobot.mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
+            patch("mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
+            patch("mc.step_dispatcher._build_step_thread_context", return_value=""),
+            patch("mc.executor._snapshot_output_dir", return_value={}),
         ):
             with pytest.raises(RuntimeError):
                 await dispatcher._execute_step("task-abc", step)
@@ -100,13 +100,13 @@ class TestExecuteStepCrashHandler:
 
         with (
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=exc),
             ),
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("nanobot.mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("nanobot.mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
+            patch("mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
+            patch("mc.step_dispatcher._build_step_thread_context", return_value=""),
+            patch("mc.executor._snapshot_output_dir", return_value={}),
         ):
             with pytest.raises(RuntimeError):
                 await dispatcher._execute_step("task-abc", step)
@@ -129,13 +129,13 @@ class TestExecuteStepCrashHandler:
 
         with (
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=exc),
             ),
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("nanobot.mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("nanobot.mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
+            patch("mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
+            patch("mc.step_dispatcher._build_step_thread_context", return_value=""),
+            patch("mc.executor._snapshot_output_dir", return_value={}),
         ):
             with pytest.raises(ValueError):
                 await dispatcher._execute_step("task-abc", step)
@@ -155,13 +155,13 @@ class TestExecuteStepCrashHandler:
 
         with (
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=RuntimeError("boom")),
             ),
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("nanobot.mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("nanobot.mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
+            patch("mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
+            patch("mc.step_dispatcher._build_step_thread_context", return_value=""),
+            patch("mc.executor._snapshot_output_dir", return_value={}),
         ):
             with pytest.raises(RuntimeError, match="boom"):
                 await dispatcher._execute_step("task-abc", step)
@@ -174,10 +174,10 @@ class TestExecuteStepCrashHandler:
 
 
 _SUCCESS_PATCHES = (
-    "nanobot.mc.step_dispatcher._maybe_inject_orientation",
-    "nanobot.mc.step_dispatcher._build_step_thread_context",
-    "nanobot.mc.executor._snapshot_output_dir",
-    "nanobot.mc.executor._collect_output_artifacts",
+    "mc.step_dispatcher._maybe_inject_orientation",
+    "mc.step_dispatcher._build_step_thread_context",
+    "mc.executor._snapshot_output_dir",
+    "mc.executor._collect_output_artifacts",
 )
 
 
@@ -205,8 +205,8 @@ class TestConvexVariableInterpolation:
             return "done"
 
         with (
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(yaml_prompt, None, None)),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", new=capture),
+            patch("mc.step_dispatcher._load_agent_config", return_value=(yaml_prompt, None, None)),
+            patch("mc.step_dispatcher._run_step_agent", new=capture),
             patch(_SUCCESS_PATCHES[0], side_effect=lambda n, p: p),
             patch(_SUCCESS_PATCHES[1], return_value=""),
             patch(_SUCCESS_PATCHES[2], return_value={}),
@@ -240,8 +240,8 @@ class TestConvexVariableInterpolation:
             return "done"
 
         with (
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(yaml_prompt, None, None)),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", new=capture),
+            patch("mc.step_dispatcher._load_agent_config", return_value=(yaml_prompt, None, None)),
+            patch("mc.step_dispatcher._run_step_agent", new=capture),
             patch(_SUCCESS_PATCHES[0], side_effect=lambda n, p: p),
             patch(_SUCCESS_PATCHES[1], return_value=""),
             patch(_SUCCESS_PATCHES[2], return_value={}),

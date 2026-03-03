@@ -728,7 +728,7 @@ class ConvexBridge:
         """
         import yaml
 
-        from nanobot.mc.agent_assist import ensure_soul_md
+        from mc.agent_assist import ensure_soul_md
 
         name = agent_data["name"]
         agent_dir = agents_dir / name

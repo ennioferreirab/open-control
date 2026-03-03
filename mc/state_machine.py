@@ -7,7 +7,7 @@ The Convex side is authoritative; this module is for bridge-side pre-validation.
 
 from __future__ import annotations
 
-from nanobot.mc.types import TaskStatus, StepStatus, ActivityEventType
+from mc.types import TaskStatus, StepStatus, ActivityEventType
 
 # Valid transitions: current_status -> [allowed_next_statuses]
 VALID_TRANSITIONS: dict[str, list[str]] = {

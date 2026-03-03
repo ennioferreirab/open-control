@@ -32,7 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from nanobot.mc.bridge import ConvexBridge
+from mc.bridge import ConvexBridge
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 STABLE_SECONDS = 0.0   # seconds without output change = Claude finished

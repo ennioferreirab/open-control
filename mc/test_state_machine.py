@@ -2,8 +2,8 @@
 
 import pytest
 
-from nanobot.mc.types import TaskStatus, ActivityEventType
-from nanobot.mc.state_machine import (
+from mc.types import TaskStatus, ActivityEventType
+from mc.state_machine import (
     VALID_TRANSITIONS,
     UNIVERSAL_TARGETS,
     is_valid_transition,

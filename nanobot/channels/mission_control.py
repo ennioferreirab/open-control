@@ -55,7 +55,7 @@ class MissionControlChannel(BaseChannel):
 
         if task:
             try:
-                from nanobot.mc.types import AuthorType, MessageType
+                from mc.types import AuthorType, MessageType
 
                 await asyncio.to_thread(
                     self._bridge.send_message,

@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nanobot.mc.types import (
+from mc.types import (
     ActivityEventType,
     AuthorType,
     NANOBOT_AGENT_NAME,
@@ -26,7 +26,7 @@ from nanobot.mc.types import (
 )
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,8 @@ def _load_agent_config(
     agent_name: str,
 ) -> tuple[str | None, str | None, list[str] | None]:
     """Load prompt, model and skills from an agent config."""
-    from nanobot.mc.gateway import AGENTS_DIR
-    from nanobot.mc.yaml_validator import validate_agent_file
+    from mc.gateway import AGENTS_DIR
+    from mc.yaml_validator import validate_agent_file
 
     config_file = AGENTS_DIR / agent_name / "config.yaml"
     if not config_file.exists():
@@ -79,7 +79,7 @@ def _maybe_inject_orientation(
 
     # Interpolate {agent_roster} placeholder if present
     if "{agent_roster}" in orientation:
-        from nanobot.mc.executor import build_executor_agent_roster
+        from mc.executor import build_executor_agent_roster
         orientation = orientation.replace("{agent_roster}", build_executor_agent_roster())
 
     if agent_prompt:
@@ -98,7 +98,7 @@ def _build_step_thread_context(
     When predecessor_step_ids is provided, ensures their completion messages
     are always included even outside the 20-message window.
     """
-    from nanobot.mc.thread_context import ThreadContextBuilder
+    from mc.thread_context import ThreadContextBuilder
 
     return ThreadContextBuilder().build(
         messages,
@@ -123,7 +123,7 @@ async def _run_step_agent(
     bridge: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
-    from nanobot.mc.executor import _run_agent_on_task, _background_tasks
+    from mc.executor import _run_agent_on_task, _background_tasks
 
     result, session_key, loop = await _run_agent_on_task(
         agent_name=agent_name,
@@ -172,7 +172,7 @@ class StepDispatcher:
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance (shared across steps)."""
         if self._tier_resolver is None:
-            from nanobot.mc.tier_resolver import TierResolver
+            from mc.tier_resolver import TierResolver
             self._tier_resolver = TierResolver(self._bridge)
         return self._tier_resolver
 
@@ -313,8 +313,8 @@ class StepDispatcher:
         """Execute one assigned step and return any newly unblocked step IDs."""
         # Deferred imports to break circular dependency:
         # step_dispatcher -> executor -> gateway -> orchestrator -> step_dispatcher
-        from nanobot.mc.executor import _human_size, _snapshot_output_dir, _collect_output_artifacts
-        from nanobot.mc.planner import _build_file_summary
+        from mc.executor import _human_size, _snapshot_output_dir, _collect_output_artifacts
+        from mc.planner import _build_file_summary
 
         step_id = step.get("id")
         if not step_id:
@@ -475,7 +475,7 @@ class StepDispatcher:
                 if isinstance(board, dict):
                     board_name = board.get("name")
                     if board_name:
-                        from nanobot.mc.board_utils import resolve_board_workspace, get_agent_memory_mode
+                        from mc.board_utils import resolve_board_workspace, get_agent_memory_mode
                         mode = get_agent_memory_mode(board, agent_name) if isinstance(board, dict) else "clean"
                         memory_workspace = resolve_board_workspace(board_name, agent_name, mode=mode)
 

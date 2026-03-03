@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.mc.step_dispatcher import StepDispatcher
-from nanobot.mc.types import ActivityEventType, AuthorType, MessageType, StepStatus, TaskStatus
+from mc.step_dispatcher import StepDispatcher
+from mc.types import ActivityEventType, AuthorType, MessageType, StepStatus, TaskStatus
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -93,11 +93,11 @@ def _patch_executor_helpers():
     """Return a context manager stack that stubs out executor artifact helpers."""
     return (
         patch(
-            "nanobot.mc.executor._snapshot_output_dir",
+            "mc.executor._snapshot_output_dir",
             return_value={},
         ),
         patch(
-            "nanobot.mc.executor._collect_output_artifacts",
+            "mc.executor._collect_output_artifacts",
             return_value=[],
         ),
     )
@@ -111,17 +111,17 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="step output"),
             ),
             snap_patch,
@@ -182,16 +182,16 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -218,16 +218,16 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -257,16 +257,16 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -308,16 +308,16 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -339,17 +339,17 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="ok"),
             ),
             snap_patch,
@@ -372,17 +372,17 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="Report written."),
             ),
             snap_patch,
@@ -407,22 +407,22 @@ class TestStepDispatcher:
         fake_artifacts = [{"path": "output/report.pdf", "action": "created", "description": "PDF, 10 KB"}]
 
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="Analysis done."),
             ),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.executor._snapshot_output_dir", return_value={}),
             patch(
-                "nanobot.mc.executor._collect_output_artifacts",
+                "mc.executor._collect_output_artifacts",
                 return_value=fake_artifacts,
             ),
         ):
@@ -441,17 +441,17 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="Computation done."),
             ),
             snap_patch,
@@ -472,7 +472,7 @@ class TestStepDispatcher:
         bridge.send_message.return_value = None
         dispatcher = StepDispatcher(bridge)
 
-        with patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         bridge.send_message.assert_called_once()
@@ -519,16 +519,16 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -559,16 +559,16 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -594,16 +594,16 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -655,16 +655,16 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -703,16 +703,16 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -737,17 +737,17 @@ class TestStepOutputFileSync:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="analysis done"),
             ),
             snap_patch,
@@ -774,17 +774,17 @@ class TestStepOutputFileSync:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="build done"),
             ),
             snap_patch,
@@ -827,17 +827,17 @@ class TestStepOutputFileSync:
         dispatcher = StepDispatcher(bridge)
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="report done"),
             ),
             snap_patch,
@@ -863,17 +863,17 @@ class TestStepOutputFileSync:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
+                "mc.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=RuntimeError("agent exploded")),
             ),
             snap_patch,
@@ -892,8 +892,8 @@ class TestSupervisedModeSkipsDispatch:
 
     @pytest.mark.asyncio
     async def test_supervised_mode_does_not_trigger_dispatch(self) -> None:
-        from nanobot.mc.orchestrator import TaskOrchestrator
-        from nanobot.mc.types import ExecutionPlan, ExecutionPlanStep
+        from mc.orchestrator import TaskOrchestrator
+        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         bridge = MagicMock()
         bridge.list_agents.return_value = [
@@ -928,9 +928,9 @@ class TestSupervisedModeSkipsDispatch:
         )
 
         with (
-            patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("nanobot.mc.orchestrator.asyncio.create_task") as mock_create_task,
-            patch("nanobot.mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.orchestrator.asyncio.create_task") as mock_create_task,
+            patch("mc.orchestrator.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -968,16 +968,16 @@ class TestPausedTaskDispatch:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_should_not_run),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_should_not_run),
             snap_patch,
             collect_patch,
         ):
@@ -1033,16 +1033,16 @@ class TestTaskLevelFileSummaryInDelegationContext:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -1079,16 +1079,16 @@ class TestTaskLevelFileSummaryInDelegationContext:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._load_agent_config",
+                "mc.step_dispatcher._load_agent_config",
                 return_value=(None, None, None),
             ),
             patch(
-                "nanobot.mc.step_dispatcher._maybe_inject_orientation",
+                "mc.step_dispatcher._maybe_inject_orientation",
                 side_effect=lambda agent_name, prompt: prompt,
             ),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):

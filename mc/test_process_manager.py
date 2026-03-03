@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.mc.process_manager import (
+from mc.process_manager import (
     SHUTDOWN_TIMEOUT_SECONDS,
     STARTUP_TIMEOUT_SECONDS,
     ManagedProcess,
@@ -58,7 +58,7 @@ async def test_startup_order(dashboard_dir, project_root):
         return _make_mock_process()
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
     ):
         pm = ProcessManager(dashboard_dir, project_root)
@@ -91,7 +91,7 @@ async def test_process_configs(dashboard_dir, project_root):
     assert configs[1].cwd == dashboard_dir
 
     assert configs[2].label == "gateway"
-    assert configs[2].args == ["-m", "nanobot.mc.gateway"]
+    assert configs[2].args == ["-m", "mc.gateway"]
     assert configs[2].cwd == project_root
 
 
@@ -115,7 +115,7 @@ async def test_shutdown_reverse_order(dashboard_dir, project_root):
         return proc
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
     ):
         pm = ProcessManager(dashboard_dir, project_root)
@@ -157,10 +157,10 @@ async def test_force_kill_after_timeout(dashboard_dir, project_root):
         return proc
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
     ), patch(
-        "nanobot.mc.process_manager.SHUTDOWN_TIMEOUT_SECONDS", 0.3
+        "mc.process_manager.SHUTDOWN_TIMEOUT_SECONDS", 0.3
     ):
         pm = ProcessManager(dashboard_dir, project_root)
         await pm.start()
@@ -187,7 +187,7 @@ async def test_crash_callback(dashboard_dir, project_root):
         return proc
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
     ):
         pm = ProcessManager(dashboard_dir, project_root, on_crash=on_crash)
@@ -215,10 +215,10 @@ async def test_startup_timeout(dashboard_dir, project_root):
         return _make_mock_process()
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=slow_create_subprocess,
     ), patch(
-        "nanobot.mc.process_manager.STARTUP_TIMEOUT_SECONDS", 0.2
+        "mc.process_manager.STARTUP_TIMEOUT_SECONDS", 0.2
     ):
         pm = ProcessManager(dashboard_dir, project_root)
         with pytest.raises(RuntimeError, match="Startup failed"):
@@ -244,9 +244,9 @@ async def test_output_forwarding(dashboard_dir, project_root, caplog):
         return proc
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
-    ), caplog.at_level("INFO", logger="nanobot.mc.process_manager"):
+    ), caplog.at_level("INFO", logger="mc.process_manager"):
         pm = ProcessManager(dashboard_dir, project_root)
         await pm.start()
 
@@ -273,7 +273,7 @@ async def test_is_running_property(dashboard_dir, project_root):
         return _make_mock_process()
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
     ):
         pm = ProcessManager(dashboard_dir, project_root)
@@ -293,7 +293,7 @@ async def test_double_start_raises(dashboard_dir, project_root):
         return _make_mock_process()
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
     ):
         pm = ProcessManager(dashboard_dir, project_root)
@@ -314,7 +314,7 @@ async def test_immediate_exit_aborts_startup(dashboard_dir, project_root):
         return proc
 
     with patch(
-        "nanobot.mc.process_manager.asyncio.create_subprocess_exec",
+        "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
     ):
         pm = ProcessManager(dashboard_dir, project_root)

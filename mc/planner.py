@@ -15,7 +15,7 @@ import json
 import logging
 import re
 
-from nanobot.mc.types import (
+from mc.types import (
     AgentData,
     ExecutionPlan,
     ExecutionPlanStep,
@@ -382,7 +382,7 @@ class TaskPlanner:
         files: list[dict] | None = None,
     ) -> ExecutionPlan:
         """Call LLM to generate the plan."""
-        from nanobot.mc.provider_factory import create_provider
+        from mc.provider_factory import create_provider
 
         agent_roster = _build_agent_roster(agents)
         user_prompt = USER_PROMPT_TEMPLATE.format(

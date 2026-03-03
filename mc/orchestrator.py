@@ -11,11 +11,11 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from nanobot.mc.plan_materializer import PlanMaterializer
-from nanobot.mc.planner import TaskPlanner
-from nanobot.mc.provider_factory import create_provider
-from nanobot.mc.step_dispatcher import StepDispatcher
-from nanobot.mc.types import (
+from mc.plan_materializer import PlanMaterializer
+from mc.planner import TaskPlanner
+from mc.provider_factory import create_provider
+from mc.step_dispatcher import StepDispatcher
+from mc.types import (
     AgentData,
     ActivityEventType,
     AuthorType,
@@ -28,7 +28,7 @@ from nanobot.mc.types import (
 )
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +270,7 @@ class TaskOrchestrator:
             return
 
         # Fetch all enabled agents (filter extra Convex fields)
-        from nanobot.mc.gateway import filter_agent_fields
+        from mc.gateway import filter_agent_fields
 
         agents_data = await asyncio.to_thread(self._bridge.list_agents)
         agents = [AgentData(**filter_agent_fields(a)) for a in agents_data]
@@ -541,7 +541,7 @@ class TaskOrchestrator:
                     # "assigned" steps are ready to run immediately.
                     # "pending" steps whose all blockers are "completed" are also dispatchable —
                     # they were waiting for a dependency that completed before the pause.
-                    from nanobot.mc.types import StepStatus as _StepStatus
+                    from mc.types import StepStatus as _StepStatus
                     completed_step_ids = {
                         str(step.get("id"))
                         for step in steps

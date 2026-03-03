@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nanobot.mc.types import (
+from mc.types import (
     ActivityEventType,
     AuthorType,
     MessageType,
@@ -28,7 +28,7 @@ from nanobot.mc.types import (
 )
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +148,8 @@ async def handle_mention(
         return
 
     # Load agent config
-    from nanobot.mc.gateway import AGENTS_DIR
-    from nanobot.mc.yaml_validator import validate_agent_file
+    from mc.gateway import AGENTS_DIR
+    from mc.yaml_validator import validate_agent_file
 
     config_file = AGENTS_DIR / agent_name / "config.yaml"
     if not config_file.exists():
@@ -186,10 +186,10 @@ async def handle_mention(
     display_name = config_result.display_name or agent_name
 
     # Resolve tier references
-    from nanobot.mc.types import is_tier_reference
+    from mc.types import is_tier_reference
     if agent_model and is_tier_reference(agent_model):
         try:
-            from nanobot.mc.tier_resolver import TierResolver
+            from mc.tier_resolver import TierResolver
             resolver = TierResolver(bridge)
             agent_model = resolver.resolve_model(agent_model)
         except ValueError as exc:
@@ -201,7 +201,7 @@ async def handle_mention(
             agent_model = None
 
     # Inject global orientation for non-lead agents
-    from nanobot.mc.executor import _maybe_inject_orientation
+    from mc.executor import _maybe_inject_orientation
     agent_prompt = _maybe_inject_orientation(agent_name, agent_prompt)
 
     # System agent (nanobot) uses SOUL.md identity — skip prompt injection
@@ -256,7 +256,7 @@ async def handle_mention(
 
     # Create provider and run agent
     try:
-        from nanobot.mc.provider_factory import create_provider
+        from mc.provider_factory import create_provider
         from nanobot.agent.loop import AgentLoop
         from nanobot.bus.queue import MessageBus
 

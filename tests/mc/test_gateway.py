@@ -17,14 +17,14 @@ class TestResolveConvexUrl:
 
     def test_returns_env_var_when_set(self, monkeypatch, tmp_path):
         """CONVEX_URL env var takes precedence."""
-        from nanobot.mc.gateway import _resolve_convex_url
+        from mc.gateway import _resolve_convex_url
 
         monkeypatch.setenv("CONVEX_URL", "https://test.convex.cloud")
         assert _resolve_convex_url() == "https://test.convex.cloud"
 
     def test_falls_back_to_env_local(self, monkeypatch, tmp_path):
         """When no CONVEX_URL env var, reads from dashboard/.env.local."""
-        from nanobot.mc.gateway import _resolve_convex_url
+        from mc.gateway import _resolve_convex_url
 
         monkeypatch.delenv("CONVEX_URL", raising=False)
         env_local = tmp_path / "dashboard" / ".env.local"
@@ -36,7 +36,7 @@ class TestResolveConvexUrl:
 
     def test_returns_none_when_neither(self, monkeypatch, tmp_path):
         """Returns None when no env var and no .env.local file."""
-        from nanobot.mc.gateway import _resolve_convex_url
+        from mc.gateway import _resolve_convex_url
 
         monkeypatch.delenv("CONVEX_URL", raising=False)
         result = _resolve_convex_url(dashboard_dir=tmp_path / "nonexistent")
@@ -44,7 +44,7 @@ class TestResolveConvexUrl:
 
     def test_env_local_without_quotes(self, monkeypatch, tmp_path):
         """Handles .env.local values without surrounding quotes."""
-        from nanobot.mc.gateway import _resolve_convex_url
+        from mc.gateway import _resolve_convex_url
 
         monkeypatch.delenv("CONVEX_URL", raising=False)
         env_local = tmp_path / "dashboard" / ".env.local"
@@ -65,11 +65,11 @@ class TestMainFunction:
     @pytest.mark.asyncio
     async def test_main_logs_error_and_exits_when_no_url(self, monkeypatch):
         """main() should log error and exit if Convex URL cannot be resolved."""
-        from nanobot.mc.gateway import main
+        from mc.gateway import main
 
         monkeypatch.delenv("CONVEX_URL", raising=False)
-        with patch("nanobot.mc.gateway._resolve_convex_url", return_value=None), \
-             patch("nanobot.mc.gateway.logger") as mock_logger:
+        with patch("mc.gateway._resolve_convex_url", return_value=None), \
+             patch("mc.gateway.logger") as mock_logger:
             # main() should return early (not hang) when URL is unresolvable
             await main()
             mock_logger.error.assert_called()
@@ -77,17 +77,17 @@ class TestMainFunction:
     @pytest.mark.asyncio
     async def test_main_creates_bridge_and_calls_run_gateway(self, monkeypatch):
         """main() should create ConvexBridge, sync agents, and call run_gateway."""
-        from nanobot.mc.gateway import main
+        from mc.gateway import main
 
         mock_bridge = MagicMock()
         mock_bridge.close = MagicMock()
 
         monkeypatch.setenv("CONVEX_ADMIN_KEY", "test-admin-key")
-        with patch("nanobot.mc.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
-             patch("nanobot.mc.bridge.ConvexBridge", return_value=mock_bridge) as mock_bridge_cls, \
-             patch("nanobot.mc.gateway.sync_agent_registry", return_value=([], {})) as mock_sync, \
-             patch("nanobot.mc.gateway.run_gateway", new_callable=AsyncMock) as mock_run, \
-             patch("nanobot.mc.gateway.AGENTS_DIR", Path("/nonexistent")):
+        with patch("mc.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
+             patch("mc.bridge.ConvexBridge", return_value=mock_bridge) as mock_bridge_cls, \
+             patch("mc.gateway.sync_agent_registry", return_value=([], {})) as mock_sync, \
+             patch("mc.gateway.run_gateway", new_callable=AsyncMock) as mock_run, \
+             patch("mc.gateway.AGENTS_DIR", Path("/nonexistent")):
             await main()
 
             mock_bridge_cls.assert_called_once_with("https://test.convex.cloud", "test-admin-key")
@@ -97,12 +97,12 @@ class TestMainFunction:
     @pytest.mark.asyncio
     async def test_main_logs_error_and_exits_when_no_admin_key(self, monkeypatch):
         """main() should log error and exit if CONVEX_ADMIN_KEY is not set."""
-        from nanobot.mc.gateway import main
+        from mc.gateway import main
 
         monkeypatch.delenv("CONVEX_ADMIN_KEY", raising=False)
-        with patch("nanobot.mc.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
-             patch("nanobot.mc.gateway.logger") as mock_logger, \
-             patch("nanobot.mc.bridge.ConvexBridge") as mock_bridge_cls:
+        with patch("mc.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
+             patch("mc.gateway.logger") as mock_logger, \
+             patch("mc.bridge.ConvexBridge") as mock_bridge_cls:
             await main()
             mock_logger.error.assert_called()
             mock_bridge_cls.assert_not_called()
@@ -118,7 +118,7 @@ class TestRunGateway:
     @pytest.mark.asyncio
     async def test_run_gateway_starts_all_loops(self):
         """run_gateway should start orchestrator (routing + review), executor, and timeout."""
-        from nanobot.mc.gateway import run_gateway
+        from mc.gateway import run_gateway
 
         mock_bridge = MagicMock()
 
@@ -130,16 +130,16 @@ class TestRunGateway:
         mock_channel_manager_cls = MagicMock(return_value=mock_channels_instance)
         mock_mc_channel = MagicMock()
 
-        with patch("nanobot.mc.gateway.TaskOrchestrator") as MockOrch, \
-             patch("nanobot.mc.gateway.TimeoutChecker") as MockTC, \
-             patch("nanobot.mc.executor.TaskExecutor") as MockExec, \
-             patch("nanobot.mc.chat_handler.ChatHandler") as MockCH, \
+        with patch("mc.gateway.TaskOrchestrator") as MockOrch, \
+             patch("mc.gateway.TimeoutChecker") as MockTC, \
+             patch("mc.executor.TaskExecutor") as MockExec, \
+             patch("mc.chat_handler.ChatHandler") as MockCH, \
              patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls), \
              patch("nanobot.config.loader.load_config"), \
              patch("nanobot.bus.queue.MessageBus"), \
              patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel), \
-             patch("nanobot.mc.gateway._run_plan_negotiation_manager", new=AsyncMock()), \
-             patch("nanobot.mc.mention_watcher.MentionWatcher") as MockMW:
+             patch("mc.gateway._run_plan_negotiation_manager", new=AsyncMock()), \
+             patch("mc.mention_watcher.MentionWatcher") as MockMW:
             mock_orch_instance = MockOrch.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
@@ -195,7 +195,7 @@ class TestAgentDataFiltering:
 
     def test_agent_data_rejects_unknown_fields(self):
         """Baseline: raw AgentData(**dict) crashes with extra fields."""
-        from nanobot.mc.types import AgentData
+        from mc.types import AgentData
 
         data = {
             "name": "test-agent",
@@ -209,8 +209,8 @@ class TestAgentDataFiltering:
 
     def test_filter_agent_data_fields(self):
         """filter_agent_fields should strip unknown fields for safe construction."""
-        from nanobot.mc.gateway import filter_agent_fields
-        from nanobot.mc.types import AgentData
+        from mc.gateway import filter_agent_fields
+        from mc.types import AgentData
 
         data = {
             "name": "test-agent",
@@ -237,7 +237,7 @@ class TestExecutionLoop:
     @pytest.mark.asyncio
     async def test_assigned_task_transitions_to_in_progress(self):
         """When an assigned task is detected, it should transition to in_progress."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -279,7 +279,7 @@ class TestExecutionLoop:
         Updated in Story 8.4: activity events for status transitions are
         written only by the Convex tasks:updateStatus mutation.
         """
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -312,7 +312,7 @@ class TestExecutionLoop:
     @pytest.mark.asyncio
     async def test_assigned_task_writes_thread_message(self):
         """Picking up should write a system message to the task thread."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -351,8 +351,8 @@ class TestExecutionLoop:
     @pytest.mark.asyncio
     async def test_pickup_task_reroutes_lead_agent(self):
         """Lead-agent pickup is intercepted and re-routed via planner."""
-        from nanobot.mc.executor import TaskExecutor
-        from nanobot.mc.types import ExecutionPlan, ExecutionPlanStep
+        from mc.executor import TaskExecutor
+        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -380,7 +380,7 @@ class TestExecutionLoop:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("nanobot.mc.executor.TaskPlanner") as MockPlanner, \
+        with patch("mc.executor.TaskPlanner") as MockPlanner, \
              patch.object(executor, "_execute_task", new_callable=AsyncMock) as mock_execute, \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             MockPlanner.return_value.plan_task = AsyncMock(return_value=plan)
@@ -406,7 +406,7 @@ class TestTaskExecution:
     @pytest.mark.asyncio
     async def test_autonomous_task_transitions_to_done(self):
         """Autonomous trust level should complete to 'done'."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -416,7 +416,7 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Task completed successfully"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Task completed successfully"), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -430,7 +430,7 @@ class TestTaskExecution:
     @pytest.mark.asyncio
     async def test_human_approved_task_transitions_to_review(self):
         """Human-approved trust level should complete to 'review'."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -440,7 +440,7 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -454,7 +454,7 @@ class TestTaskExecution:
     @pytest.mark.asyncio
     async def test_execution_writes_work_message(self):
         """Execution output should be written as a 'work' message to the thread."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -464,7 +464,7 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Here is my work output"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Here is my work output"), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -486,7 +486,7 @@ class TestTaskExecution:
         Updated in Story 8.4: activity events for status transitions are
         written only by the Convex tasks:updateStatus mutation.
         """
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -496,7 +496,7 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -508,7 +508,7 @@ class TestTaskExecution:
     @pytest.mark.asyncio
     async def test_execution_crash_delegates_to_agent_gateway(self):
         """On agent error, should delegate to AgentGateway.handle_agent_crash()."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -519,7 +519,7 @@ class TestTaskExecution:
         executor = TaskExecutor(mock_bridge)
 
         crash_error = RuntimeError("Agent exploded")
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, side_effect=crash_error), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, side_effect=crash_error), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough), \
              patch.object(executor, "_agent_gateway") as mock_gw:
@@ -541,8 +541,8 @@ class TestLeadAgentExecutionGuards:
 
     @pytest.mark.asyncio
     async def test_executor_rejects_lead_agent_in_execute_task(self):
-        from nanobot.mc.executor import TaskExecutor
-        from nanobot.mc.types import LeadAgentExecutionError
+        from mc.executor import TaskExecutor
+        from mc.types import LeadAgentExecutionError
 
         executor = TaskExecutor(MagicMock())
 
@@ -560,8 +560,8 @@ class TestLeadAgentExecutionGuards:
 
     @pytest.mark.asyncio
     async def test_executor_rejects_lead_agent_in_run_agent_on_task(self):
-        from nanobot.mc.executor import _run_agent_on_task
-        from nanobot.mc.types import LeadAgentExecutionError
+        from mc.executor import _run_agent_on_task
+        from mc.types import LeadAgentExecutionError
 
         with pytest.raises(
             LeadAgentExecutionError,
@@ -586,7 +586,7 @@ class TestTrustLevelStatus:
     @pytest.mark.asyncio
     async def test_agent_reviewed_transitions_to_review(self):
         """agent_reviewed trust level should transition to 'review'."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -596,7 +596,7 @@ class TestTrustLevelStatus:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Reviewed"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Reviewed"), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -617,7 +617,7 @@ class TestLoadAgentConfig:
 
     def test_loads_prompt_and_model_from_yaml(self, tmp_path):
         """Should return prompt and model from a valid agent config."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         executor = TaskExecutor(mock_bridge)
@@ -633,7 +633,7 @@ class TestLoadAgentConfig:
             "model: anthropic/claude-haiku-3\n"
         )
 
-        with patch("nanobot.mc.gateway.AGENTS_DIR", tmp_path):
+        with patch("mc.gateway.AGENTS_DIR", tmp_path):
             prompt, model, skills = executor._load_agent_config("test-agent")
 
         assert prompt == "You are a test agent."
@@ -642,12 +642,12 @@ class TestLoadAgentConfig:
 
     def test_returns_none_when_no_config(self, tmp_path):
         """Should return (None, None, None) when agent dir doesn't exist."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         executor = TaskExecutor(mock_bridge)
 
-        with patch("nanobot.mc.gateway.AGENTS_DIR", tmp_path):
+        with patch("mc.gateway.AGENTS_DIR", tmp_path):
             prompt, model, skills = executor._load_agent_config("nonexistent")
 
         assert prompt is None
@@ -661,7 +661,7 @@ class TestKnownAssignedIdsCleanup:
     @pytest.mark.asyncio
     async def test_task_id_removed_after_success(self):
         """Task ID should be removed from _known_assigned_ids after successful execution."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -672,7 +672,7 @@ class TestKnownAssignedIdsCleanup:
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_cleanup")
 
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -684,7 +684,7 @@ class TestKnownAssignedIdsCleanup:
     @pytest.mark.asyncio
     async def test_task_id_removed_after_crash(self):
         """Task ID should be removed from _known_assigned_ids even after crash."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -695,7 +695,7 @@ class TestKnownAssignedIdsCleanup:
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_crash_cleanup")
 
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, side_effect=RuntimeError("boom")), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, side_effect=RuntimeError("boom")), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough), \
              patch.object(executor._agent_gateway, "handle_agent_crash", new_callable=AsyncMock):
@@ -722,8 +722,8 @@ class TestOrchestratorNoDuplicateActivity:
         (AC #8). create_activity is called for step dispatch (TASK_STARTED),
         which is expected — only duplicate STATUS TRANSITION events are avoided.
         """
-        from nanobot.mc.orchestrator import TaskOrchestrator
-        from nanobot.mc.types import ExecutionPlan, ExecutionPlanStep
+        from mc.orchestrator import TaskOrchestrator
+        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -744,7 +744,7 @@ class TestOrchestratorNoDuplicateActivity:
             "assigned_agent": "agent-a",
         }
 
-        with patch("nanobot.mc.orchestrator.TaskPlanner") as MockPlanner, \
+        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             MockPlanner.return_value.plan_task = AsyncMock(return_value=plan)
             await orch._process_inbox_task(task_data)
@@ -761,8 +761,8 @@ class TestOrchestratorNoDuplicateActivity:
 
         Updated in Story 4.5: all tasks go through the LLM planner now.
         """
-        from nanobot.mc.orchestrator import TaskOrchestrator
-        from nanobot.mc.types import ExecutionPlan, ExecutionPlanStep
+        from mc.orchestrator import TaskOrchestrator
+        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -783,7 +783,7 @@ class TestOrchestratorNoDuplicateActivity:
             "description": None,
         }
 
-        with patch("nanobot.mc.orchestrator.TaskPlanner") as MockPlanner, \
+        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             MockPlanner.return_value.plan_task = AsyncMock(return_value=plan)
             await orch._process_inbox_task(task_data)
@@ -799,8 +799,8 @@ class TestOrchestratorNoDuplicateActivity:
 
         Updated in Story 4.5: all tasks go through the LLM planner now.
         """
-        from nanobot.mc.orchestrator import TaskOrchestrator
-        from nanobot.mc.types import ExecutionPlan, ExecutionPlanStep
+        from mc.orchestrator import TaskOrchestrator
+        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -819,7 +819,7 @@ class TestOrchestratorNoDuplicateActivity:
             "description": None,
         }
 
-        with patch("nanobot.mc.orchestrator.TaskPlanner") as MockPlanner, \
+        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             MockPlanner.return_value.plan_task = AsyncMock(return_value=plan)
             await orch._process_inbox_task(task_data)
@@ -833,7 +833,7 @@ class TestOrchestratorNoDuplicateActivity:
     async def test_review_keeps_standalone_activity_events(self):
         """Review routing should still create standalone activity events
         (review_requested, hitl_requested) that have no status transition."""
-        from nanobot.mc.orchestrator import TaskOrchestrator
+        from mc.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -860,7 +860,7 @@ class TestOrchestratorNoDuplicateActivity:
     async def test_auto_complete_review_no_create_activity(self):
         """Autonomous task with no reviewers transitions directly to done
         via update_task_status — should NOT call create_activity."""
-        from nanobot.mc.orchestrator import TaskOrchestrator
+        from mc.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -892,7 +892,7 @@ class TestExecutorNoDuplicateActivity:
     @pytest.mark.asyncio
     async def test_pickup_does_not_call_create_activity(self):
         """_pickup_task should NOT call create_activity (Convex handles task_started)."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -919,7 +919,7 @@ class TestExecutorNoDuplicateActivity:
     async def test_completion_does_not_call_create_activity(self):
         """_execute_task should NOT call create_activity on success
         (Convex handles task_completed)."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -929,7 +929,7 @@ class TestExecutorNoDuplicateActivity:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("nanobot.mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -941,7 +941,7 @@ class TestExecutorNoDuplicateActivity:
     @pytest.mark.asyncio
     async def test_send_message_still_called_on_pickup(self):
         """_pickup_task should still write a system message (messages != activities)."""
-        from nanobot.mc.executor import TaskExecutor
+        from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -975,7 +975,7 @@ class TestOrchestratorDeduplication:
     @pytest.mark.asyncio
     async def test_duplicate_inbox_task_skipped(self):
         """Same task ID appearing twice should only be processed once."""
-        from nanobot.mc.orchestrator import TaskOrchestrator
+        from mc.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -1007,7 +1007,7 @@ class TestOrchestratorDeduplication:
     @pytest.mark.asyncio
     async def test_process_inbox_error_does_not_crash_loop(self):
         """An error in _process_inbox_task should not crash the routing loop."""
-        from nanobot.mc.orchestrator import TaskOrchestrator
+        from mc.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock(side_effect=RuntimeError("Convex down"))
@@ -1047,7 +1047,7 @@ class TestBridgeAsyncSubscribe:
     @pytest.mark.asyncio
     async def test_poll_retries_on_query_error(self):
         """When query() raises, polling should retry and deliver data on success."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         mock_client = MagicMock()
         bridge = ConvexBridge.__new__(ConvexBridge)
@@ -1074,7 +1074,7 @@ class TestBridgeAsyncSubscribe:
     @pytest.mark.asyncio
     async def test_poll_exhausted_sends_error_sentinel(self):
         """When max consecutive errors are hit, push an error sentinel."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         mock_client = MagicMock()
         bridge = ConvexBridge.__new__(ConvexBridge)
@@ -1096,7 +1096,7 @@ class TestBridgeAsyncSubscribe:
     @pytest.mark.asyncio
     async def test_deduplicates_identical_results(self):
         """Only enqueue changed poll results; suppress identical repeats."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         mock_client = MagicMock()
         bridge = ConvexBridge.__new__(ConvexBridge)
@@ -1127,7 +1127,7 @@ class TestBridgeAsyncSubscribe:
     @pytest.mark.asyncio
     async def test_first_result_always_emitted(self):
         """First poll result should be enqueued even when it's an empty list."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         mock_client = MagicMock()
         bridge = ConvexBridge.__new__(ConvexBridge)
@@ -1159,7 +1159,7 @@ class TestBridgeAgentNameHandling:
 
     def test_agent_name_none_omitted(self):
         """When agent_name is None, it should not be in mutation args."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         mock_client = MagicMock()
         mock_client.mutation = MagicMock(return_value=None)
@@ -1174,7 +1174,7 @@ class TestBridgeAgentNameHandling:
 
     def test_agent_name_provided_included(self):
         """When agent_name is provided, it should be in mutation args."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         mock_client = MagicMock()
         mock_client.mutation = MagicMock(return_value=None)
@@ -1198,7 +1198,7 @@ class TestCleanupDeletedAgents:
 
     def test_archives_and_removes_local_folder(self, tmp_path):
         """Given a deleted agent with a local folder, archive its data and remove the folder."""
-        from nanobot.mc.gateway import _cleanup_deleted_agents
+        from mc.gateway import _cleanup_deleted_agents
 
         agent_dir = tmp_path / "test-agent"
         memory_dir = agent_dir / "memory"
@@ -1225,7 +1225,7 @@ class TestCleanupDeletedAgents:
 
     def test_skips_if_no_local_folder(self, tmp_path):
         """Deleted agent with no local folder: no archive call, no error."""
-        from nanobot.mc.gateway import _cleanup_deleted_agents
+        from mc.gateway import _cleanup_deleted_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_deleted_agents.return_value = [{"name": "ghost-agent"}]
@@ -1236,7 +1236,7 @@ class TestCleanupDeletedAgents:
 
     def test_preserves_folder_on_archive_failure(self, tmp_path):
         """If archive call fails, local folder must NOT be deleted (fail-safe)."""
-        from nanobot.mc.gateway import _cleanup_deleted_agents
+        from mc.gateway import _cleanup_deleted_agents
 
         agent_dir = tmp_path / "fragile-agent"
         (agent_dir / "memory").mkdir(parents=True)
@@ -1252,7 +1252,7 @@ class TestCleanupDeletedAgents:
 
     def test_skips_agents_with_no_name(self, tmp_path):
         """Agent dicts without a 'name' key are silently skipped."""
-        from nanobot.mc.gateway import _cleanup_deleted_agents
+        from mc.gateway import _cleanup_deleted_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_deleted_agents.return_value = [{"name": ""}, {}]
@@ -1263,7 +1263,7 @@ class TestCleanupDeletedAgents:
 
     def test_handles_list_failure_gracefully(self, tmp_path):
         """If list_deleted_agents raises, cleanup exits without crashing."""
-        from nanobot.mc.gateway import _cleanup_deleted_agents
+        from mc.gateway import _cleanup_deleted_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_deleted_agents.side_effect = RuntimeError("Convex down")
@@ -1273,7 +1273,7 @@ class TestCleanupDeletedAgents:
 
     def test_idempotent_for_already_cleaned_agents(self, tmp_path):
         """Running cleanup twice for the same agent (folder already gone) is a no-op."""
-        from nanobot.mc.gateway import _cleanup_deleted_agents
+        from mc.gateway import _cleanup_deleted_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_deleted_agents.return_value = [{"name": "already-gone"}]
@@ -1286,7 +1286,7 @@ class TestCleanupDeletedAgents:
 
     def test_skips_archive_call_when_no_content(self, tmp_path):
         """If agent folder exists but has no memory/history/session files, archive is NOT called."""
-        from nanobot.mc.gateway import _cleanup_deleted_agents
+        from mc.gateway import _cleanup_deleted_agents
 
         agent_dir = tmp_path / "empty-agent"
         agent_dir.mkdir()  # Folder exists but no files inside
@@ -1301,7 +1301,7 @@ class TestCleanupDeletedAgents:
 
     def test_continues_after_rmtree_failure(self, tmp_path):
         """If shutil.rmtree fails, logs error but continues cleanup for subsequent agents."""
-        from nanobot.mc.gateway import _cleanup_deleted_agents
+        from mc.gateway import _cleanup_deleted_agents
 
         # Give each agent a MEMORY.md so archive_agent_data is called (non-empty content)
         for agent_name in ("agent-one", "agent-two"):
@@ -1325,7 +1325,7 @@ class TestRestoreArchivedFiles:
 
     def test_writes_memory_and_history(self, tmp_path):
         """memory_content and history_content are written to memory/ subdirectory."""
-        from nanobot.mc.gateway import _restore_archived_files
+        from mc.gateway import _restore_archived_files
 
         agent_dir = tmp_path / "my-agent"
         agent_dir.mkdir()
@@ -1343,7 +1343,7 @@ class TestRestoreArchivedFiles:
 
     def test_writes_session_data(self, tmp_path):
         """session_data is written to sessions/mc_task_{name}.jsonl."""
-        from nanobot.mc.gateway import _restore_archived_files
+        from mc.gateway import _restore_archived_files
 
         agent_dir = tmp_path / "session-agent"
         agent_dir.mkdir()
@@ -1360,7 +1360,7 @@ class TestRestoreArchivedFiles:
 
     def test_skips_none_values(self, tmp_path):
         """Fields that are None are not written."""
-        from nanobot.mc.gateway import _restore_archived_files
+        from mc.gateway import _restore_archived_files
 
         agent_dir = tmp_path / "empty-agent"
         agent_dir.mkdir()
@@ -1376,7 +1376,7 @@ class TestWriteBackRestoresArchive:
 
     def test_calls_restore_for_new_agent(self, tmp_path):
         """When writing back a new agent (no local YAML), get_agent_archive is called."""
-        from nanobot.mc.gateway import _write_back_convex_agents
+        from mc.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_agents.return_value = [{
@@ -1395,7 +1395,7 @@ class TestWriteBackRestoresArchive:
 
     def test_restores_files_when_archive_present(self, tmp_path):
         """When archive data exists, _restore_archived_files is called for the new agent."""
-        from nanobot.mc.gateway import _write_back_convex_agents
+        from mc.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_agents.return_value = [{
@@ -1417,7 +1417,7 @@ class TestWriteBackRestoresArchive:
         agent_dir.mkdir()
         (agent_dir / "memory").mkdir()
 
-        with patch("nanobot.mc.gateway._restore_archived_files") as mock_restore:
+        with patch("mc.gateway._restore_archived_files") as mock_restore:
             _write_back_convex_agents(mock_bridge, tmp_path)
 
         mock_restore.assert_called_once()
@@ -1426,7 +1426,7 @@ class TestWriteBackRestoresArchive:
 
     def test_does_not_call_restore_for_existing_agent(self, tmp_path):
         """For agents with existing local YAML (update path), archive is NOT fetched."""
-        from nanobot.mc.gateway import _write_back_convex_agents
+        from mc.gateway import _write_back_convex_agents
         import time
 
         # Create existing local YAML
@@ -1457,14 +1457,14 @@ class TestSyncAgentRegistryCallsCleanup:
 
     def test_cleanup_called_before_write_back(self, tmp_path):
         """_cleanup_deleted_agents should be called before _write_back_convex_agents."""
-        from nanobot.mc.gateway import sync_agent_registry
+        from mc.gateway import sync_agent_registry
 
         mock_bridge = MagicMock()
         call_order = []
 
-        with patch("nanobot.mc.gateway._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
-             patch("nanobot.mc.gateway._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
-             patch("nanobot.mc.gateway._config_default_model", return_value="anthropic/claude-haiku-4-5"):
+        with patch("mc.gateway._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
+             patch("mc.gateway._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
+             patch("mc.gateway._config_default_model", return_value="anthropic/claude-haiku-4-5"):
             sync_agent_registry(mock_bridge, tmp_path)
 
         assert call_order[0] == "cleanup", "cleanup must run before write_back"

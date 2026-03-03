@@ -9,7 +9,7 @@ from typing import Any, TYPE_CHECKING
 from nanobot.agent.tools.base import Tool
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class AskAgentTool(Tool):
             return "Error: ask_agent can only be used during MC task execution (no caller context set)."
 
         # AC5: Lead agent protection
-        from nanobot.mc.types import LEAD_AGENT_NAME, is_lead_agent
+        from mc.types import LEAD_AGENT_NAME, is_lead_agent
 
         if is_lead_agent(target_agent) or target_agent == "lead-agent":
             return (
@@ -90,8 +90,8 @@ class AskAgentTool(Tool):
             )
 
         # Load target agent config
-        from nanobot.mc.gateway import AGENTS_DIR
-        from nanobot.mc.yaml_validator import validate_agent_file
+        from mc.gateway import AGENTS_DIR
+        from mc.yaml_validator import validate_agent_file
 
         config_file = AGENTS_DIR / target_agent / "config.yaml"
         if not config_file.exists():
@@ -114,11 +114,11 @@ class AskAgentTool(Tool):
         agent_skills = result.skills
 
         # Resolve tier reference to actual model ID (e.g. tier:standard-medium → claude-sonnet-4-6)
-        from nanobot.mc.types import is_tier_reference
+        from mc.types import is_tier_reference
         if agent_model and is_tier_reference(agent_model):
             if self._bridge:
                 try:
-                    from nanobot.mc.tier_resolver import TierResolver
+                    from mc.tier_resolver import TierResolver
                     agent_model = TierResolver(self._bridge).resolve_model(agent_model)
                 except Exception as exc:
                     return f"Failed to resolve model tier '{agent_model}' for '{target_agent}': {exc}"
@@ -130,7 +130,7 @@ class AskAgentTool(Tool):
 
         # Create provider
         try:
-            from nanobot.mc.provider_factory import create_provider
+            from mc.provider_factory import create_provider
 
             provider, resolved_model = create_provider(agent_model)
         except Exception as exc:

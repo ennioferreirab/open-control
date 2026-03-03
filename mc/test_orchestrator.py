@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.mc.orchestrator import TaskOrchestrator, generate_title_via_low_agent
-from nanobot.mc.types import ActivityEventType, AuthorType, ExecutionPlan, ExecutionPlanStep, MessageType, TaskStatus
+from mc.orchestrator import TaskOrchestrator, generate_title_via_low_agent
+from mc.types import ActivityEventType, AuthorType, ExecutionPlan, ExecutionPlanStep, MessageType, TaskStatus
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -109,9 +109,9 @@ class TestProcessPlanningTask:
             return MagicMock()
 
         with (
-            patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("nanobot.mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
-            patch("nanobot.mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
+            patch("mc.orchestrator.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -158,9 +158,9 @@ class TestProcessPlanningTask:
         )
 
         with (
-            patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("nanobot.mc.orchestrator.asyncio.create_task") as create_task_mock,
-            patch("nanobot.mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.orchestrator.asyncio.create_task") as create_task_mock,
+            patch("mc.orchestrator.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -180,8 +180,8 @@ class TestProcessPlanningTask:
         task = _make_task(task_id="task-fail", title="Failing plan")
 
         with (
-            patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("nanobot.mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.orchestrator.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(side_effect=RuntimeError("planner exploded"))
@@ -256,9 +256,9 @@ class TestProcessPlanningTask:
             return MagicMock()
 
         with (
-            patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("nanobot.mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
-            patch("nanobot.mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
+            patch("mc.orchestrator.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(side_effect=_capture_plan_task)
@@ -300,7 +300,7 @@ class TestHandleReviewTransitionPausedTask:
             "awaiting_kickoff": None,
         }
 
-        with patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread):
             await orchestrator._handle_review_transition("task-1", paused_task)
 
         # Task must NOT be auto-completed to done
@@ -323,7 +323,7 @@ class TestHandleReviewTransitionPausedTask:
             "awaiting_kickoff": None,
         }
 
-        with patch("nanobot.mc.orchestrator.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread):
             await orchestrator._handle_review_transition("task-1", review_task)
 
         # Task SHOULD be auto-completed (no steps = normal autonomous review)
@@ -344,11 +344,11 @@ class TestGenerateTitleViaLowAgent:
         mock_provider.chat.return_value = mock_response
 
         with patch(
-            "nanobot.mc.orchestrator.create_provider",
+            "mc.orchestrator.create_provider",
             return_value=(mock_provider, "anthropic/claude-haiku"),
         ):
             with patch(
-                "nanobot.mc.orchestrator.asyncio.to_thread",
+                "mc.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
                 result = await generate_title_via_low_agent(bridge, "Do something useful")
@@ -368,11 +368,11 @@ class TestGenerateTitleViaLowAgent:
         mock_provider.chat.return_value = mock_response
 
         with patch(
-            "nanobot.mc.orchestrator.create_provider",
+            "mc.orchestrator.create_provider",
             return_value=(mock_provider, "anthropic/claude-haiku"),
         ):
             with patch(
-                "nanobot.mc.orchestrator.asyncio.to_thread",
+                "mc.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
                 result = await generate_title_via_low_agent(bridge, "Do something useful")
@@ -385,7 +385,7 @@ class TestGenerateTitleViaLowAgent:
         bridge.get_agent_by_name.return_value = None
 
         with patch(
-            "nanobot.mc.orchestrator.asyncio.to_thread",
+            "mc.orchestrator.asyncio.to_thread",
             side_effect=_sync_to_thread,
         ):
             result = await generate_title_via_low_agent(bridge, "Do something useful")
@@ -407,11 +407,11 @@ class TestGenerateTitleViaLowAgent:
         long_desc = "x" * 10000
 
         with patch(
-            "nanobot.mc.orchestrator.create_provider",
+            "mc.orchestrator.create_provider",
             return_value=(mock_provider, "anthropic/claude-haiku"),
         ):
             with patch(
-                "nanobot.mc.orchestrator.asyncio.to_thread",
+                "mc.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
                 result = await generate_title_via_low_agent(bridge, long_desc)

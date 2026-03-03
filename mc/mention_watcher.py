@@ -19,7 +19,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +168,7 @@ class MentionWatcher:
                     continue
 
                 # Check for @mentions
-                from nanobot.mc.mention_handler import is_mention_message, handle_all_mentions
+                from mc.mention_handler import is_mention_message, handle_all_mentions
 
                 if not is_mention_message(content):
                     continue

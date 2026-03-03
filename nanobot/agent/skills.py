@@ -275,7 +275,7 @@ class SkillsLoader:
         return None
 
     # ------------------------------------------------------------------
-    # Public API (used by nanobot.mc.gateway sync_skills)
+    # Public API (used by mc.gateway sync_skills)
     # ------------------------------------------------------------------
 
     def get_skill_body(self, name: str) -> str | None:

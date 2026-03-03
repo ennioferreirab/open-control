@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +89,9 @@ class ChatHandler:
             bus_spec.loader.exec_module(bus_mod)  # type: ignore[union-attr]
             MessageBus = bus_mod.MessageBus
 
-            from nanobot.mc.provider_factory import create_provider
-            from nanobot.mc.gateway import AGENTS_DIR
-            from nanobot.mc.yaml_validator import validate_agent_file
+            from mc.provider_factory import create_provider
+            from mc.gateway import AGENTS_DIR
+            from mc.yaml_validator import validate_agent_file
 
             # Load agent config
             config_file = AGENTS_DIR / agent_name / "config.yaml"
@@ -108,10 +108,10 @@ class ChatHandler:
                     agent_display_name = result.display_name or agent_name
 
             # Resolve tier references
-            from nanobot.mc.types import is_tier_reference
+            from mc.types import is_tier_reference
 
             if agent_model and is_tier_reference(agent_model):
-                from nanobot.mc.tier_resolver import TierResolver
+                from mc.tier_resolver import TierResolver
 
                 resolver = TierResolver(self._bridge)
                 agent_model = resolver.resolve_model(agent_model)

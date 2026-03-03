@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from nanobot.cli.mc import mc_app, _get_bridge, _get_status_color
+from mc.cli import mc_app, _get_bridge, _get_status_color
 
 runner = CliRunner()
 
@@ -44,14 +44,14 @@ class TestGetStatusColor:
 
 
 class TestGetBridge:
-    @patch("nanobot.cli.mc.ConvexBridge" if False else "nanobot.mc.bridge.ConvexClient")
+    @patch("mc.cli.ConvexBridge" if False else "mc.bridge.ConvexClient")
     def test_get_bridge_from_env(self, MockClient):
         with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
             bridge = _get_bridge()
             MockClient.assert_called_once_with("https://test.convex.cloud")
             bridge.close()
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_get_bridge_with_admin_key(self, MockClient):
         mock_client = MockClient.return_value
         with patch.dict(
@@ -66,20 +66,20 @@ class TestGetBridge:
         from click.exceptions import Exit
 
         with patch.dict(os.environ, {}, clear=True):
-            with patch("nanobot.cli.mc._find_dashboard_dir") as mock_find:
+            with patch("mc.cli._find_dashboard_dir") as mock_find:
                 from pathlib import Path
 
                 mock_find.return_value = Path("/nonexistent/dashboard")
                 with pytest.raises(Exit):
                     _get_bridge()
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_get_bridge_from_env_local(self, MockClient, tmp_path):
         env_file = tmp_path / ".env.local"
         env_file.write_text('NEXT_PUBLIC_CONVEX_URL="https://from-env-local.convex.cloud"\n')
 
         with patch.dict(os.environ, {}, clear=True):
-            with patch("nanobot.cli.mc._find_dashboard_dir", return_value=tmp_path):
+            with patch("mc.cli._find_dashboard_dir", return_value=tmp_path):
                 bridge = _get_bridge()
                 MockClient.assert_called_once_with("https://from-env-local.convex.cloud")
                 bridge.close()
@@ -89,7 +89,7 @@ class TestGetBridge:
 
 
 class TestTasksCreate:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_with_title(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = {"_id": "abc123"}
@@ -107,7 +107,7 @@ class TestTasksCreate:
         assert call_args[0] == "tasks:create"
         assert call_args[1]["title"] == "Research AI trends"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_with_description_and_tags(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = {"_id": "abc123"}
@@ -132,7 +132,7 @@ class TestTasksCreate:
         assert call_args[1]["description"] == "A test description"
         assert call_args[1]["tags"] == ["tag1", "tag2", "tag3"]
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_tags_trimmed(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -147,7 +147,7 @@ class TestTasksCreate:
         call_args = mock_client.mutation.call_args[0]
         assert call_args[1]["tags"] == ["tag1", "tag2"]
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_without_title_prompts(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -160,7 +160,7 @@ class TestTasksCreate:
         call_args = mock_client.mutation.call_args[0]
         assert call_args[1]["title"] == "Prompted title"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_closes_bridge(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -170,18 +170,18 @@ class TestTasksCreate:
 
         mock_client.close.assert_called_once()
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_closes_bridge_on_error(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.side_effect = Exception("Connection failed")
 
         with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
-            with patch("nanobot.mc.bridge.time.sleep"):
+            with patch("mc.bridge.time.sleep"):
                 result = runner.invoke(mc_app, ["tasks", "create", "Test"])
 
         mock_client.close.assert_called_once()
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_no_description_omits_key(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -198,7 +198,7 @@ class TestTasksCreate:
 
 
 class TestTasksList:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_list_no_tasks(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
@@ -209,7 +209,7 @@ class TestTasksList:
         assert result.exit_code == 0
         assert "No tasks found." in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_list_none_result(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = None
@@ -220,7 +220,7 @@ class TestTasksList:
         assert result.exit_code == 0
         assert "No tasks found." in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_list_displays_tasks(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = [
@@ -249,7 +249,7 @@ class TestTasksList:
         assert "Build API" in result.output
         assert "dev-agent" in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_list_sorted_by_status(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = [
@@ -268,7 +268,7 @@ class TestTasksList:
         done_pos = result.output.find("Done task")
         assert inbox_pos < ip_pos < done_pos
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_list_truncates_long_title(self, MockClient):
         mock_client = MockClient.return_value
         long_title = "A" * 60
@@ -283,7 +283,7 @@ class TestTasksList:
         # Rich truncates with ellipsis character, and our code truncates with "..."
         assert long_title not in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_list_closes_bridge(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
@@ -293,7 +293,7 @@ class TestTasksList:
 
         mock_client.close.assert_called_once()
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_list_missing_fields_handled(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = [

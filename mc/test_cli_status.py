@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from nanobot.cli.mc import mc_app
+from mc.cli import mc_app
 
 runner = CliRunner()
 
@@ -19,7 +19,7 @@ runner = CliRunner()
 class TestStatusNotRunning:
     def test_no_pid_file(self, tmp_path):
         fake_pid = tmp_path / "mc.pid"
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             result = runner.invoke(mc_app, ["status"])
 
         assert result.exit_code == 0
@@ -30,7 +30,7 @@ class TestStatusNotRunning:
         fake_pid = tmp_path / "mc.pid"
         fake_pid.write_text("999999999")  # non-existent PID
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             result = runner.invoke(mc_app, ["status"])
 
         assert result.exit_code == 0
@@ -41,7 +41,7 @@ class TestStatusNotRunning:
         fake_pid = tmp_path / "mc.pid"
         fake_pid.write_text("not-a-number")
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             result = runner.invoke(mc_app, ["status"])
 
         assert result.exit_code == 0
@@ -58,43 +58,43 @@ class TestStatusRunning:
         fake_pid.write_text(str(os.getpid()))
         return fake_pid
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_displays_running_status(self, MockClient, tmp_path):
         fake_pid = self._setup_running_pid(tmp_path)
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 result = runner.invoke(mc_app, ["status"])
 
         assert "Mission Control is running" in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_displays_dashboard_url(self, MockClient, tmp_path):
         fake_pid = self._setup_running_pid(tmp_path)
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 result = runner.invoke(mc_app, ["status"])
 
         assert "http://localhost:3000" in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_displays_uptime(self, MockClient, tmp_path):
         fake_pid = self._setup_running_pid(tmp_path)
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 result = runner.invoke(mc_app, ["status"])
 
         assert "Uptime:" in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_displays_agent_table(self, MockClient, tmp_path):
         fake_pid = self._setup_running_pid(tmp_path)
         mock_client = MockClient.return_value
@@ -116,7 +116,7 @@ class TestStatusRunning:
             [],
         ]
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 result = runner.invoke(mc_app, ["status"])
 
@@ -124,7 +124,7 @@ class TestStatusRunning:
         assert "reviewer" in result.output
         assert "Agents" in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_displays_no_agents_message(self, MockClient, tmp_path):
         fake_pid = self._setup_running_pid(tmp_path)
         mock_client = MockClient.return_value
@@ -133,13 +133,13 @@ class TestStatusRunning:
             [],  # tasks:list
         ]
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 result = runner.invoke(mc_app, ["status"])
 
         assert "No agents registered" in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_displays_task_counts(self, MockClient, tmp_path):
         fake_pid = self._setup_running_pid(tmp_path)
         mock_client = MockClient.return_value
@@ -156,32 +156,32 @@ class TestStatusRunning:
             ],
         ]
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 result = runner.invoke(mc_app, ["status"])
 
         assert "Tasks" in result.output
         assert "Total tasks: 6" in result.output
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_closes_bridge(self, MockClient, tmp_path):
         fake_pid = self._setup_running_pid(tmp_path)
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 runner.invoke(mc_app, ["status"])
 
         mock_client.close.assert_called_once()
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_handles_query_error(self, MockClient, tmp_path):
         fake_pid = self._setup_running_pid(tmp_path)
         mock_client = MockClient.return_value
         mock_client.query.side_effect = Exception("Connection refused")
 
-        with patch("nanobot.cli.mc.PID_FILE", fake_pid):
+        with patch("mc.cli.PID_FILE", fake_pid):
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 result = runner.invoke(mc_app, ["status"])
 
@@ -194,7 +194,7 @@ class TestStatusRunning:
 
 class TestDocsCommand:
     def test_docs_no_convex_dir(self, tmp_path):
-        with patch("nanobot.cli.mc._find_dashboard_dir", return_value=tmp_path):
+        with patch("mc.cli._find_dashboard_dir", return_value=tmp_path):
             result = runner.invoke(mc_app, ["docs"])
 
         assert result.exit_code == 1
@@ -218,7 +218,7 @@ export default defineSchema({
 """
         )
 
-        with patch("nanobot.cli.mc._find_dashboard_dir", return_value=tmp_path):
+        with patch("mc.cli._find_dashboard_dir", return_value=tmp_path):
             result = runner.invoke(mc_app, ["docs"])
 
         assert result.exit_code == 0
@@ -241,7 +241,7 @@ export const create = mutation({
 """
         )
 
-        with patch("nanobot.cli.mc._find_dashboard_dir", return_value=tmp_path):
+        with patch("mc.cli._find_dashboard_dir", return_value=tmp_path):
             result = runner.invoke(mc_app, ["docs"])
 
         assert result.exit_code == 0
@@ -257,7 +257,7 @@ export const create = mutation({
         public = convex_dir / "agents.ts"
         public.write_text("export const list = query({});")
 
-        with patch("nanobot.cli.mc._find_dashboard_dir", return_value=tmp_path):
+        with patch("mc.cli._find_dashboard_dir", return_value=tmp_path):
             result = runner.invoke(mc_app, ["docs"])
 
         assert result.exit_code == 0

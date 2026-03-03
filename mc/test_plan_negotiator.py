@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.mc.plan_negotiator import (
+from mc.plan_negotiator import (
     _parse_negotiation_response,
     handle_plan_negotiation,
     start_plan_negotiation_loop,
@@ -142,7 +142,7 @@ class TestHandlePlanNegotiation:
         })
 
         with patch(
-            "nanobot.mc.provider_factory.create_provider"
+            "mc.provider_factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
@@ -177,7 +177,7 @@ class TestHandlePlanNegotiation:
         })
 
         with patch(
-            "nanobot.mc.provider_factory.create_provider"
+            "mc.provider_factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
@@ -218,7 +218,7 @@ class TestHandlePlanNegotiation:
         })
 
         with patch(
-            "nanobot.mc.provider_factory.create_provider"
+            "mc.provider_factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
@@ -252,10 +252,10 @@ class TestHandlePlanNegotiation:
             raise asyncio.TimeoutError
 
         with patch(
-            "nanobot.mc.plan_negotiator.asyncio.wait_for",
+            "mc.plan_negotiator.asyncio.wait_for",
             new=AsyncMock(side_effect=_timeout_wait_for),
         ), patch(
-            "nanobot.mc.provider_factory.create_provider"
+            "mc.provider_factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_create_provider.return_value = (mock_provider, "test-model")
@@ -288,7 +288,7 @@ class TestHandlePlanNegotiation:
         })
 
         with patch(
-            "nanobot.mc.provider_factory.create_provider"
+            "mc.provider_factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
@@ -359,7 +359,7 @@ class TestHandlePlanNegotiationExecutionContext:
         mock_provider.chat = _fake_chat
 
         with patch(
-            "nanobot.mc.provider_factory.create_provider",
+            "mc.provider_factory.create_provider",
             return_value=(mock_provider, "test-model"),
         ):
             self._run(
@@ -413,7 +413,7 @@ class TestHandlePlanNegotiationExecutionContext:
         mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
 
         with patch(
-            "nanobot.mc.provider_factory.create_provider",
+            "mc.provider_factory.create_provider",
             return_value=(mock_provider, "test-model"),
         ):
             self._run(
@@ -461,7 +461,7 @@ class TestHandlePlanNegotiationExecutionContext:
         mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
 
         with patch(
-            "nanobot.mc.provider_factory.create_provider",
+            "mc.provider_factory.create_provider",
             return_value=(mock_provider, "test-model"),
         ):
             self._run(
@@ -522,10 +522,10 @@ class TestHandlePlanNegotiationExecutionContext:
         # We verify by checking that query was called (status check happened) and
         # that the loop didn't stop before the first message was processed.
         with patch(
-            "nanobot.mc.plan_negotiator.asyncio.to_thread",
+            "mc.plan_negotiator.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
         ), patch(
-            "nanobot.mc.plan_negotiator.handle_plan_negotiation",
+            "mc.plan_negotiator.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle:
             try:
@@ -565,10 +565,10 @@ class TestHandlePlanNegotiationExecutionContext:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "nanobot.mc.plan_negotiator.asyncio.to_thread",
+            "mc.plan_negotiator.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
         ), patch(
-            "nanobot.mc.plan_negotiator.handle_plan_negotiation",
+            "mc.plan_negotiator.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle:
             _asyncio.run(
@@ -599,7 +599,7 @@ class TestHandlePlanNegotiationExecutionContext:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "nanobot.mc.plan_negotiator.asyncio.to_thread",
+            "mc.plan_negotiator.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
         ):
             _asyncio.run(

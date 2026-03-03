@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from nanobot.mc.types import AgentData
-from nanobot.mc.yaml_validator import (
+from mc.types import AgentData
+from mc.yaml_validator import (
     validate_agent_file,
     validate_agents_dir,
 )

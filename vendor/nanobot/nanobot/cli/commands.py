@@ -285,7 +285,7 @@ def _make_provider(config: Config):
     Delegates to the shared provider_factory.create_provider() and adds
     CLI-specific API-key validation for LiteLLM providers.
     """
-    from nanobot.mc.provider_factory import ProviderError, create_provider
+    from mc.provider_factory import ProviderError, create_provider
 
     model = config.agents.defaults.model
 
@@ -1153,7 +1153,7 @@ def _login_github_copilot() -> None:
 # Mission Control Commands
 # ============================================================================
 
-from nanobot.cli.mc import mc_app
+from mc.cli import mc_app
 app.add_typer(mc_app, name="mc")
 
 

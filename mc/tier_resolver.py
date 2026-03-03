@@ -14,10 +14,10 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from nanobot.mc.types import extract_tier_name, is_tier_reference
+from mc.types import extract_tier_name, is_tier_reference
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 

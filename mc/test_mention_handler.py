@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nanobot.mc.mention_handler import (
+from mc.mention_handler import (
     extract_mentions,
     is_mention_message,
     _build_mention_context,

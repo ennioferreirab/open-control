@@ -44,7 +44,7 @@ def _kill_stale_processes() -> None:
     dashboard_dir = str(_find_dashboard_dir())
     # Always-kill patterns (nanobot-specific, safe to match globally)
     patterns = [
-        "nanobot.mc.gateway",
+        "mc.gateway",
         "-m nanobot gateway",
     ]
     # Dashboard-scoped patterns (only kill if the command references our dashboard)
@@ -117,7 +117,7 @@ def start(
     ),
 ):
     """Start Mission Control (dashboard + agent gateway + nanobot channels)."""
-    from nanobot.mc.process_manager import ProcessManager
+    from mc.process_manager import ProcessManager
 
     resolved_dir = Path(dashboard_dir) if dashboard_dir else _find_dashboard_dir()
 
@@ -430,7 +430,7 @@ def init(
     """Guided setup wizard — create a full agent team in one go."""
     from rich.rule import Rule
 
-    from nanobot.mc.init_wizard import (
+    from mc.init_wizard import (
         PRESETS,
         AgentPlan,
         agent_exists,
@@ -653,7 +653,7 @@ def init(
 async def _generate_custom_agent_safe(description: str) -> tuple[str | None, list[str]]:
     """Wrapper around generate_custom_agent that catches provider errors."""
     try:
-        from nanobot.mc.init_wizard import generate_custom_agent
+        from mc.init_wizard import generate_custom_agent
         return await generate_custom_agent(description)
     except SystemExit as exc:
         return None, [str(exc)]
@@ -668,7 +668,7 @@ async def _generate_custom_agent_safe(description: str) -> tuple[str | None, lis
 
 def _get_bridge():
     """Create a ConvexBridge from environment variables."""
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
     convex_url = os.environ.get("CONVEX_URL")
     if not convex_url:
@@ -824,7 +824,7 @@ mc_app.add_typer(agents_app, name="agents")
 
 def _sync_to_convex() -> None:
     """Try to sync local agents and skills to Convex. Silently skip if Convex is unavailable."""
-    from nanobot.mc.gateway import sync_agent_registry, sync_skills
+    from mc.gateway import sync_agent_registry, sync_skills
 
     try:
         bridge = _get_bridge()
@@ -860,7 +860,7 @@ def _sync_to_convex() -> None:
 @agents_app.command("sync")
 def sync_agents():
     """Sync local agent YAML files and skills to Convex."""
-    from nanobot.mc.gateway import sync_agent_registry, sync_skills
+    from mc.gateway import sync_agent_registry, sync_skills
 
     if not AGENTS_DIR.is_dir():
         console.print("No agents directory found. Nothing to sync.")
@@ -904,7 +904,7 @@ def sync_agents():
 @agents_app.command("list")
 def list_agents():
     """List all registered agents."""
-    from nanobot.mc.yaml_validator import validate_agent_file
+    from mc.yaml_validator import validate_agent_file
 
     # Scan agent directories for config.yaml files
     agents_dir = AGENTS_DIR
@@ -947,7 +947,7 @@ def list_agents():
 @agents_app.command("create")
 def create_agent():
     """Create a new agent via interactive prompts."""
-    from nanobot.mc.yaml_validator import validate_agent_file
+    from mc.yaml_validator import validate_agent_file
 
     console.print("[bold]Create a new agent[/bold]\n")
 
@@ -1011,7 +1011,7 @@ def create_agent():
         memory_file.write_text("")
 
     # Write SOUL.md
-    from nanobot.mc.agent_assist import ensure_soul_md
+    from mc.agent_assist import ensure_soul_md
     ensure_soul_md(agent_dir, name, role)
 
     # Write config.yaml
@@ -1041,7 +1041,7 @@ def create_agent():
 def assist_agent():
     """Create an agent from a natural language description (LLM-assisted)."""
     from rich.syntax import Syntax
-    from nanobot.mc.agent_assist import (
+    from mc.agent_assist import (
         build_llm_provider, create_agent_workspace,
         extract_yaml_from_response, generate_agent_yaml, validate_yaml_content,
     )
@@ -1110,7 +1110,7 @@ def assist_agent():
 
 def _save_assisted_agent(agent_name, yaml_text, create_fn):
     """Save an assisted-generated agent, checking for overwrites."""
-    from nanobot.mc.yaml_validator import validate_agent_file
+    from mc.yaml_validator import validate_agent_file
 
     agent_dir = Path.home() / ".nanobot" / "agents" / agent_name
     if agent_dir.exists():

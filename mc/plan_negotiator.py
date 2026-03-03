@@ -22,14 +22,14 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from nanobot.mc.types import (
+from mc.types import (
     ExecutionPlan,
     LEAD_AGENT_NAME,
     ThreadMessageType,
 )
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ async def handle_plan_negotiation(
     )
 
     try:
-        from nanobot.mc.provider_factory import create_provider
+        from mc.provider_factory import create_provider
 
         current_plan_json = json.dumps(current_plan, indent=2)
         user_prompt = NEGOTIATION_USER_PROMPT.format(
@@ -506,7 +506,7 @@ async def start_plan_negotiation_loop(
             # messages).
             # A message with both @mentions and plan-change text is handled by
             # the mention_handler only — the @mention takes priority.
-            from nanobot.mc.mention_handler import is_mention_message, handle_all_mentions
+            from mc.mention_handler import is_mention_message, handle_all_mentions
 
             if is_mention_message(content):
                 task_title = task.get("title", "")

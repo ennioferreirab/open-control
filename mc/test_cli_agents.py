@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from nanobot.cli.mc import mc_app, _get_agent_status_color
+from mc.cli import mc_app, _get_agent_status_color
 
 runner = CliRunner()
 
@@ -50,7 +50,7 @@ class TestAgentsHelp:
 
 class TestAgentsList:
     def test_list_no_agents_dir(self, tmp_path):
-        with patch("nanobot.cli.mc.AGENTS_DIR", tmp_path / "nonexistent"):
+        with patch("mc.cli.AGENTS_DIR", tmp_path / "nonexistent"):
             result = runner.invoke(mc_app, ["agents", "list"])
         assert result.exit_code == 0
         assert "No agents found" in result.output
@@ -59,7 +59,7 @@ class TestAgentsList:
     def test_list_empty_dir(self, tmp_path):
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        with patch("nanobot.cli.mc.AGENTS_DIR", agents_dir):
+        with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(mc_app, ["agents", "list"])
         assert result.exit_code == 0
         assert "No agents found" in result.output
@@ -77,7 +77,7 @@ class TestAgentsList:
             "name: researcher\nrole: Research Analyst\nprompt: You research.\n"
         )
 
-        with patch("nanobot.cli.mc.AGENTS_DIR", agents_dir):
+        with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(mc_app, ["agents", "list"])
 
         assert result.exit_code == 0
@@ -100,7 +100,7 @@ class TestAgentsList:
         bad.mkdir()
         (bad / "config.yaml").write_text("invalid: yaml: content: [")
 
-        with patch("nanobot.cli.mc.AGENTS_DIR", agents_dir):
+        with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(mc_app, ["agents", "list"])
 
         assert result.exit_code == 0
@@ -111,7 +111,7 @@ class TestAgentsList:
         agent = agents_dir / "no-config"
         agent.mkdir(parents=True)
 
-        with patch("nanobot.cli.mc.AGENTS_DIR", agents_dir):
+        with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(mc_app, ["agents", "list"])
 
         assert result.exit_code == 0
@@ -124,7 +124,7 @@ class TestAgentsList:
 class TestAgentsCreate:
     def test_create_agent(self, tmp_path):
         agents_dir = tmp_path / "agents"
-        with patch("nanobot.cli.mc.AGENTS_DIR", agents_dir):
+        with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(
                 mc_app,
                 ["agents", "create"],
@@ -144,7 +144,7 @@ class TestAgentsCreate:
 
     def test_create_agent_yaml_valid(self, tmp_path):
         agents_dir = tmp_path / "agents"
-        with patch("nanobot.cli.mc.AGENTS_DIR", agents_dir):
+        with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(
                 mc_app,
                 ["agents", "create"],
@@ -155,7 +155,7 @@ class TestAgentsCreate:
         config_path = agents_dir / "my-agent" / "config.yaml"
 
         # Validate using the same validator
-        from nanobot.mc.yaml_validator import validate_agent_file
+        from mc.yaml_validator import validate_agent_file
 
         validation_result = validate_agent_file(config_path)
         assert not isinstance(validation_result, list), f"Validation failed: {validation_result}"
@@ -164,7 +164,7 @@ class TestAgentsCreate:
 
     def test_create_agent_no_model(self, tmp_path):
         agents_dir = tmp_path / "agents"
-        with patch("nanobot.cli.mc.AGENTS_DIR", agents_dir):
+        with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(
                 mc_app,
                 ["agents", "create"],
@@ -179,7 +179,7 @@ class TestAgentsCreate:
 
     def test_create_agent_invalid_name_retry(self, tmp_path):
         agents_dir = tmp_path / "agents"
-        with patch("nanobot.cli.mc.AGENTS_DIR", agents_dir):
+        with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(
                 mc_app,
                 ["agents", "create"],

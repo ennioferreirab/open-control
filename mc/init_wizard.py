@@ -2,7 +2,7 @@
 Init Wizard — business logic for `nanobot mc init`.
 
 Pure functions and data structures for the guided agent setup wizard.
-No CLI interaction, no I/O — all user-facing prompts live in ``nanobot.cli.mc``.
+No CLI interaction, no I/O — all user-facing prompts live in ``mc.cli``.
 """
 
 from __future__ import annotations
@@ -12,14 +12,14 @@ from pathlib import Path
 
 import yaml
 
-from nanobot.mc.agent_assist import (
+from mc.agent_assist import (
     build_llm_provider,
     create_agent_workspace,
     extract_yaml_from_response,
     generate_agent_yaml,
     validate_yaml_content,
 )
-from nanobot.mc.yaml_validator import validate_agent_file
+from mc.yaml_validator import validate_agent_file
 
 # ---------------------------------------------------------------------------
 # Constants

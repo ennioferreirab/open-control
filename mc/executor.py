@@ -16,9 +16,9 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nanobot.mc.gateway import AgentGateway
-from nanobot.mc.planner import TaskPlanner
-from nanobot.mc.types import (
+from mc.gateway import AgentGateway
+from mc.planner import TaskPlanner
+from mc.types import (
     ActivityEventType,
     AuthorType,
     AgentData,
@@ -33,7 +33,7 @@ from nanobot.mc.types import (
 )
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def _collect_provider_error_types() -> tuple[type[Exception], ...]:
     separately in _execute_task so they get surfaced with actionable
     instructions instead of being buried in generic crash handling.
     """
-    from nanobot.mc.provider_factory import ProviderError
+    from mc.provider_factory import ProviderError
 
     types: list[type[Exception]] = [ProviderError]
     try:
@@ -86,8 +86,8 @@ def build_executor_agent_roster() -> str:
     Reads ~/.nanobot/agents/*/config.yaml, excludes system agents and lead-agent.
     Returns formatted list for agent orientation interpolation.
     """
-    from nanobot.mc.gateway import AGENTS_DIR
-    from nanobot.mc.yaml_validator import validate_agent_file
+    from mc.gateway import AGENTS_DIR
+    from mc.yaml_validator import validate_agent_file
 
     lines: list[str] = []
     if not AGENTS_DIR.is_dir():
@@ -117,7 +117,7 @@ def _provider_error_action(exc: Exception) -> str:
     For ProviderError the action is explicit. For AnthropicOAuthExpired
     the message itself contains the command. Falls back to a generic hint.
     """
-    from nanobot.mc.provider_factory import ProviderError
+    from mc.provider_factory import ProviderError
 
     if isinstance(exc, ProviderError) and exc.action:
         return exc.action
@@ -134,7 +134,7 @@ def _make_provider(model: str | None = None):
     Delegates to the shared provider_factory.create_provider() to avoid
     duplication with nanobot/cli/commands.py.
     """
-    from nanobot.mc.provider_factory import create_provider
+    from mc.provider_factory import create_provider
 
     return create_provider(model)
 
@@ -368,7 +368,7 @@ def _build_thread_context(messages: list[dict[str, Any]], max_messages: int = 20
     For step-aware context with predecessor injection, use ThreadContextBuilder
     directly with predecessor_step_ids parameter.
     """
-    from nanobot.mc.thread_context import ThreadContextBuilder
+    from mc.thread_context import ThreadContextBuilder
 
     return ThreadContextBuilder().build(messages, max_messages=max_messages)
 
@@ -449,7 +449,7 @@ class TaskExecutor:
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance."""
         if self._tier_resolver is None:
-            from nanobot.mc.tier_resolver import TierResolver
+            from mc.tier_resolver import TierResolver
             self._tier_resolver = TierResolver(self._bridge)
         return self._tier_resolver
 
@@ -577,7 +577,7 @@ class TaskExecutor:
 
     async def _handle_lead_agent_task(self, task_data: dict[str, Any]) -> None:
         """Re-route lead-agent tasks through the planner."""
-        from nanobot.mc.gateway import filter_agent_fields
+        from mc.gateway import filter_agent_fields
 
         task_id = task_data["id"]
         title = task_data.get("title", "Untitled")
@@ -666,8 +666,8 @@ class TaskExecutor:
             filtering"), or the actual list from config (possibly empty,
             meaning "only always-on skills").
         """
-        from nanobot.mc.gateway import AGENTS_DIR
-        from nanobot.mc.yaml_validator import validate_agent_file
+        from mc.gateway import AGENTS_DIR
+        from mc.yaml_validator import validate_agent_file
 
         config_file = AGENTS_DIR / agent_name / "config.yaml"
         if not config_file.exists():
@@ -753,8 +753,8 @@ class TaskExecutor:
         extract name, display_name, role, and skills. Returns a formatted
         string suitable for injection into the lead-agent context.
         """
-        from nanobot.mc.gateway import AGENTS_DIR
-        from nanobot.mc.yaml_validator import validate_agent_file
+        from mc.gateway import AGENTS_DIR
+        from mc.yaml_validator import validate_agent_file
 
         lines: list[str] = ["## Available Agents\n"]
         if not AGENTS_DIR.is_dir():
@@ -942,7 +942,7 @@ class TaskExecutor:
 
         # Convex is the source of truth for model, prompt, and variables — override YAML
         try:
-            from nanobot.mc.gateway import AGENTS_DIR
+            from mc.gateway import AGENTS_DIR
             convex_agent = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
             if convex_agent:
                 # Sync model
@@ -1064,7 +1064,7 @@ class TaskExecutor:
                 if board:
                     board_name = board.get("name")
                     if board_name:
-                        from nanobot.mc.board_utils import resolve_board_workspace, get_agent_memory_mode
+                        from mc.board_utils import resolve_board_workspace, get_agent_memory_mode
                         mode = get_agent_memory_mode(board, agent_name)
                         memory_workspace = resolve_board_workspace(
                             board_name, agent_name, mode=mode

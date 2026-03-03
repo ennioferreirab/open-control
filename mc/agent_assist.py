@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from nanobot.mc.yaml_validator import AgentConfig, format_validation_errors
+from mc.yaml_validator import AgentConfig, format_validation_errors
 
 # ---------------------------------------------------------------------------
 # LLM System Prompt

@@ -20,10 +20,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
-from nanobot.mc.types import ActivityEventType, AuthorType, MessageType
+from mc.types import ActivityEventType, AuthorType, MessageType
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 

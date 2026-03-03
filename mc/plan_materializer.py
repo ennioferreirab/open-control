@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from nanobot.mc.types import (
+from mc.types import (
     ActivityEventType,
     ExecutionPlan,
     NANOBOT_AGENT_NAME,
@@ -13,7 +13,7 @@ from nanobot.mc.types import (
 )
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 

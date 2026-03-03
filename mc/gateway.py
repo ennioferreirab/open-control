@@ -21,13 +21,13 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from nanobot.mc.orchestrator import TaskOrchestrator
-from nanobot.mc.timeout_checker import TimeoutChecker
-from nanobot.mc.yaml_validator import validate_agent_file
+from mc.orchestrator import TaskOrchestrator
+from mc.timeout_checker import TimeoutChecker
+from mc.yaml_validator import validate_agent_file
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
-    from nanobot.mc.types import AgentData
+    from mc.bridge import ConvexBridge
+    from mc.types import AgentData
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ def filter_agent_fields(data: dict[str, Any]) -> dict[str, Any]:
     Convex returns extra system fields (e.g. creation_time from _creationTime)
     that are not part of the AgentData dataclass. This function strips them.
     """
-    from nanobot.mc.types import AgentData
+    from mc.types import AgentData
 
     valid_fields = {f.name for f in dataclasses.fields(AgentData)}
     return {k: v for k, v in data.items() if k in valid_fields}
@@ -447,7 +447,7 @@ def ensure_low_agent(bridge: "ConvexBridge") -> None:
 
     isSystem=True protects it from being deactivated by deactivateExcept.
     """
-    from nanobot.mc.types import LOW_AGENT_NAME, AgentData
+    from mc.types import LOW_AGENT_NAME, AgentData
 
     agent = AgentData(
         name=LOW_AGENT_NAME,
@@ -473,7 +473,7 @@ def _sync_model_tiers(bridge: ConvexBridge) -> None:
     import json
 
     # Collect available models from provider config
-    from nanobot.mc.provider_factory import list_available_models
+    from mc.provider_factory import list_available_models
 
     models_list = list_available_models()
 
@@ -841,7 +841,7 @@ async def _run_plan_negotiation_manager(bridge: "ConvexBridge") -> None:
 
     Story 7.3 — Task 4.3 / 4.4.
     """
-    from nanobot.mc.plan_negotiator import start_plan_negotiation_loop
+    from mc.plan_negotiator import start_plan_negotiation_loop
 
     logger.info("[gateway] Plan negotiation manager started")
 
@@ -942,7 +942,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     Args:
         bridge: ConvexBridge instance used by all components.
     """
-    from nanobot.mc.executor import TaskExecutor
+    from mc.executor import TaskExecutor
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
     from nanobot.config.loader import load_config
@@ -1013,7 +1013,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
 
         Returns True if the task was actually re-queued, False otherwise.
         """
-        from nanobot.mc.types import (
+        from mc.types import (
             AuthorType,
             MessageType,
             is_lead_agent,
@@ -1146,14 +1146,14 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     )
 
     # Chat handler — polls for pending direct-chat messages (Story 10.2)
-    from nanobot.mc.chat_handler import ChatHandler
+    from mc.chat_handler import ChatHandler
 
     chat_handler = ChatHandler(bridge)
     chat_task = asyncio.create_task(chat_handler.run())
 
     # Mention watcher — detects @agent-name mentions in all task threads
     # (covers tasks not handled by plan_negotiator: done, crashed, inbox, etc.)
-    from nanobot.mc.mention_watcher import MentionWatcher
+    from mc.mention_watcher import MentionWatcher
 
     mention_watcher = MentionWatcher(bridge)
     mention_task = asyncio.create_task(mention_watcher.run())
@@ -1193,7 +1193,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
 
 async def main() -> None:
     """Gateway entry point — resolves Convex URL, creates bridge, syncs agents, runs gateway."""
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
     convex_url = _resolve_convex_url()
     if not convex_url:

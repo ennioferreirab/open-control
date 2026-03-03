@@ -9,7 +9,7 @@ from loguru import logger
 from nanobot.agent.tools.base import Tool
 
 if TYPE_CHECKING:
-    from nanobot.mc.bridge import ConvexBridge
+    from mc.bridge import ConvexBridge
 
 
 class McDelegateTool(Tool):
@@ -27,8 +27,8 @@ class McDelegateTool(Tool):
 
     def _init_bridge(self) -> None:
         try:
-            from nanobot.mc.gateway import _resolve_convex_url
-            from nanobot.mc.bridge import ConvexBridge
+            from mc.gateway import _resolve_convex_url
+            from mc.bridge import ConvexBridge
 
             url = _resolve_convex_url()
             if url:
