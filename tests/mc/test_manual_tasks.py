@@ -98,7 +98,8 @@ class TestOrchestratorSkipsManualTasks:
             return fn(*args, **kwargs)
 
         with patch("asyncio.to_thread", side_effect=passthrough):
-            loop_task = asyncio.create_task(orch.start_routing_loop())
+            # Use the inbox routing loop (subscribes to inbox tasks)
+            loop_task = asyncio.create_task(orch.start_inbox_routing_loop())
             await asyncio.sleep(0.2)
             loop_task.cancel()
             try:
@@ -106,7 +107,7 @@ class TestOrchestratorSkipsManualTasks:
             except asyncio.CancelledError:
                 pass
 
-        # Only the agent task should be routed
+        # Only the agent task should be routed (manual task skipped)
         assert mock_bridge.update_task_status.call_count == 1
 
 

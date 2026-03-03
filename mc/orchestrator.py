@@ -157,6 +157,12 @@ class TaskOrchestrator:
     async def _process_inbox_task(self, task_data: dict[str, Any]) -> None:
         """Handle an inbox task: generate auto-title then transition to planning or assigned."""
         task_id = task_data.get("id")
+
+        # Skip manual tasks — stay in inbox, user manages them via dashboard
+        if task_data.get("is_manual"):
+            logger.info("[orchestrator] Skipping manual inbox task %s", task_id)
+            return
+
         title = task_data.get("title", "")
         description = task_data.get("description")
         assigned_agent = task_data.get("assigned_agent")

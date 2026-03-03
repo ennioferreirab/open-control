@@ -49,7 +49,7 @@ def project_root(tmp_path):
 
 @pytest.mark.asyncio
 async def test_startup_order(dashboard_dir, project_root):
-    """Processes start in correct order: convex, next.js, gateway."""
+    """Processes start in correct order: dashboard (npm), gateway (python mc.gateway), nanobot."""
     spawn_order = []
 
     async def mock_create_subprocess(*args, **kwargs):
@@ -65,9 +65,9 @@ async def test_startup_order(dashboard_dir, project_root):
         await pm.start()
 
         assert len(spawn_order) == 3
-        assert spawn_order[0] == "npx"       # Convex first
-        assert spawn_order[1] == "npm"       # Next.js second
-        assert "python" in spawn_order[2]     # Gateway third
+        assert spawn_order[0] == "npm"        # Dashboard first
+        assert "python" in spawn_order[1]     # Gateway (mc.gateway) second
+        assert "python" in spawn_order[2]     # Nanobot gateway third
 
         await pm.stop()
 
@@ -80,18 +80,17 @@ async def test_process_configs(dashboard_dir, project_root):
 
     assert len(configs) == 3
 
-    assert configs[0].label == "convex"
-    assert configs[0].command == "npx"
-    assert configs[0].args == ["convex", "dev"]
+    assert configs[0].label == "dashboard"
+    assert configs[0].command == "npm"
+    assert configs[0].args == ["run", "dev"]
     assert configs[0].cwd == dashboard_dir
 
-    assert configs[1].label == "next.js"
-    assert configs[1].command == "npm"
-    assert configs[1].args == ["run", "dev"]
-    assert configs[1].cwd == dashboard_dir
+    assert configs[1].label == "gateway"
+    assert configs[1].args == ["-m", "mc.gateway"]
+    assert configs[1].cwd == project_root
 
-    assert configs[2].label == "gateway"
-    assert configs[2].args == ["-m", "mc.gateway"]
+    assert configs[2].label == "nanobot"
+    assert configs[2].args == ["-m", "nanobot", "gateway"]
     assert configs[2].cwd == project_root
 
 
@@ -122,7 +121,7 @@ async def test_shutdown_reverse_order(dashboard_dir, project_root):
         await pm.start()
         await pm.stop()
 
-    # Reverse of startup: gateway (300), next.js (200), convex (100)
+    # Reverse of startup: nanobot (300), gateway (200), dashboard (100)
     assert terminate_order == [300, 200, 100]
 
 
@@ -193,14 +192,14 @@ async def test_crash_callback(dashboard_dir, project_root):
         pm = ProcessManager(dashboard_dir, project_root, on_crash=on_crash)
         await pm.start()
 
-        # Simulate the first process (convex) crashing
-        procs[0].returncode = 1
+        # Simulate the second process (gateway) crashing — it is critical
+        procs[1].returncode = 1
 
         # Give the monitor loop time to detect the crash
         await asyncio.sleep(1.5)
 
         assert len(crash_reports) == 1
-        assert crash_reports[0] == ("convex", 1)
+        assert crash_reports[0] == ("gateway", 1)
 
         await pm.stop()
 
@@ -226,7 +225,7 @@ async def test_startup_timeout(dashboard_dir, project_root):
 
 
 @pytest.mark.asyncio
-async def test_output_forwarding(dashboard_dir, project_root, caplog):
+async def test_output_forwarding(dashboard_dir, project_root, capsys):
     """Child stdout is forwarded with process label prefix."""
     call_count = 0
 
@@ -235,7 +234,7 @@ async def test_output_forwarding(dashboard_dir, project_root, caplog):
         call_count += 1
         proc = _make_mock_process()
         if call_count == 1:
-            # First process (convex) gets custom output
+            # First process (dashboard) gets custom output
             lines = iter([b"hello world\n", b"second line\n", b""])
             proc.stdout.readline = AsyncMock(
                 side_effect=lambda: next(lines, b"")
@@ -246,22 +245,18 @@ async def test_output_forwarding(dashboard_dir, project_root, caplog):
     with patch(
         "mc.process_manager.asyncio.create_subprocess_exec",
         side_effect=mock_create_subprocess,
-    ), caplog.at_level("INFO", logger="mc.process_manager"):
+    ):
         pm = ProcessManager(dashboard_dir, project_root)
         await pm.start()
 
         # Give time for output forwarding tasks to process
         await asyncio.sleep(0.2)
 
-        # Check that output lines include label prefix
-        output_lines = [
-            r.message
-            for r in caplog.records
-            if "] hello world" in r.message
-            or "] second line" in r.message
-        ]
-        assert any("[convex] hello world" in line for line in output_lines)
-        assert any("[convex] second line" in line for line in output_lines)
+        # Check that stderr output includes process label prefix
+        # _forward_output uses print(..., file=sys.stderr) to pipe child output
+        captured = capsys.readouterr()
+        assert "[dashboard] hello world" in captured.err
+        assert "[dashboard] second line" in captured.err
 
         await pm.stop()
 
