@@ -201,7 +201,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
     # OpenAI Codex: uses OAuth, not API key.
     ProviderSpec(
         name="openai_codex",
-        keywords=("openai-codex",),
+        keywords=("openai-codex", "codex"),
         env_key="",                         # OAuth-based, no API key
         display_name="OpenAI Codex",
         litellm_prefix="",                  # Not routed through LiteLLM
@@ -234,6 +234,27 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         strip_model_prefix=False,
         model_overrides=(),
         is_oauth=True,                      # OAuth-based authentication
+    ),
+
+    # Anthropic OAuth: uses OAuth (Claude Pro/Max subscription), not API key.
+    ProviderSpec(
+        name="anthropic_oauth",
+        keywords=("anthropic-oauth", "claude-oauth"),
+        env_key="",                         # OAuth-based, no API key
+        display_name="Anthropic (OAuth)",
+        litellm_prefix="",
+        skip_prefixes=(),
+        env_extras=(),
+        is_gateway=False,
+        is_local=False,
+        detect_by_key_prefix="",
+        detect_by_base_keyword="",
+        default_api_base="https://api.anthropic.com",
+        strip_model_prefix=False,
+        model_overrides=(),
+        is_oauth=True,
+        is_direct=True,
+        supports_prompt_caching=True,
     ),
 
     # DeepSeek: needs "deepseek/" prefix for LiteLLM routing.

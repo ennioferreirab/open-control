@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
+from filelock import FileLock
 
 from loguru import logger
 
@@ -49,21 +50,29 @@ class MemoryStore:
         self.memory_dir = ensure_dir(workspace / "memory")
         self.memory_file = self.memory_dir / "MEMORY.md"
         self.history_file = self.memory_dir / "HISTORY.md"
+        self._lock = FileLock(self.memory_dir / ".memory.lock", timeout=10)
 
     def read_long_term(self) -> str:
-        if self.memory_file.exists():
-            return self.memory_file.read_text(encoding="utf-8")
-        return ""
+        with self._lock:
+            if self.memory_file.exists():
+                return self.memory_file.read_text(encoding="utf-8")
+            return ""
 
     def write_long_term(self, content: str) -> None:
-        self.memory_file.write_text(content, encoding="utf-8")
+        with self._lock:
+            self.memory_file.write_text(content, encoding="utf-8")
 
     def append_history(self, entry: str) -> None:
-        with open(self.history_file, "a", encoding="utf-8") as f:
-            f.write(entry.rstrip() + "\n\n")
+        with self._lock:
+            with open(self.history_file, "a", encoding="utf-8") as f:
+                f.write(entry.rstrip() + "\n\n")
 
     def get_memory_context(self) -> str:
         long_term = self.read_long_term()
+        logger.info(
+            "[memory] get_memory_context from '{}': len={}, preview={}",
+            self.memory_file, len(long_term), repr(long_term[:300]) if long_term else "(empty)",
+        )
         return f"## Long-term Memory\n{long_term}" if long_term else ""
 
     async def consolidate(
@@ -74,6 +83,8 @@ class MemoryStore:
         *,
         archive_all: bool = False,
         memory_window: int = 50,
+        max_tokens: int = 4096,
+        mc_system_prompt: str | None = None,
     ) -> bool:
         """Consolidate old messages into MEMORY.md + HISTORY.md via LLM tool call.
 
@@ -110,14 +121,16 @@ class MemoryStore:
 ## Conversation to Process
 {chr(10).join(lines)}"""
 
+        _system_content = mc_system_prompt or "You are a memory consolidation agent. Call the save_memory tool with your consolidation of the conversation."
         try:
             response = await provider.chat(
                 messages=[
-                    {"role": "system", "content": "You are a memory consolidation agent. Call the save_memory tool with your consolidation of the conversation."},
+                    {"role": "system", "content": _system_content},
                     {"role": "user", "content": prompt},
                 ],
                 tools=_SAVE_MEMORY_TOOL,
                 model=model,
+                max_tokens=max_tokens,
             )
 
             if not response.has_tool_calls:
@@ -125,13 +138,6 @@ class MemoryStore:
                 return False
 
             args = response.tool_calls[0].arguments
-            # Some providers return arguments as a JSON string instead of dict
-            if isinstance(args, str):
-                args = json.loads(args)
-            if not isinstance(args, dict):
-                logger.warning("Memory consolidation: unexpected arguments type {}", type(args).__name__)
-                return False
-
             if entry := args.get("history_entry"):
                 if not isinstance(entry, str):
                     entry = json.dumps(entry, ensure_ascii=False)

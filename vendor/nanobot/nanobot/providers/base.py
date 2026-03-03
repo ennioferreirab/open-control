@@ -21,7 +21,6 @@ class LLMResponse:
     finish_reason: str = "stop"
     usage: dict[str, int] = field(default_factory=dict)
     reasoning_content: str | None = None  # Kimi, DeepSeek-R1 etc.
-    thinking_blocks: list[dict] | None = None  # Anthropic extended thinking
     
     @property
     def has_tool_calls(self) -> bool:
@@ -36,7 +35,7 @@ class LLMProvider(ABC):
     Implementations should handle the specifics of each provider's API
     while maintaining a consistent interface.
     """
-
+    
     def __init__(self, api_key: str | None = None, api_base: str | None = None):
         self.api_key = api_key
         self.api_base = api_base
@@ -78,15 +77,9 @@ class LLMProvider(ABC):
                     result.append(clean)
                     continue
 
-            if isinstance(content, dict):
-                clean = dict(msg)
-                clean["content"] = [content]
-                result.append(clean)
-                continue
-
             result.append(msg)
         return result
-
+    
     @abstractmethod
     async def chat(
         self,
@@ -95,24 +88,34 @@ class LLMProvider(ABC):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
-        reasoning_effort: str | None = None,
+        reasoning_level: str | None = None,
     ) -> LLMResponse:
         """
         Send a chat completion request.
-        
+
         Args:
             messages: List of message dicts with 'role' and 'content'.
             tools: Optional list of tool definitions.
             model: Model identifier (provider-specific).
             max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
-        
+            reasoning_level: Optional reasoning effort ("low", "medium", "max").
+                Translated to provider-native params (thinking/reasoning_effort).
+
         Returns:
             LLMResponse with content and/or tool calls.
         """
         pass
-
+    
     @abstractmethod
     def get_default_model(self) -> str:
         """Get the default model for this provider."""
         pass
+
+    def list_models(self) -> list[str]:
+        """Return available model IDs for this provider.
+
+        Override in subclasses that can query the provider's API.
+        Returns an empty list by default (caller falls back to default model).
+        """
+        return []
