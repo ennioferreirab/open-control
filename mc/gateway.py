@@ -626,7 +626,7 @@ def sync_skills(
     """
     # Lazy import to avoid heavy dependency chain through nanobot.agent.__init__
     import importlib.util
-    _skills_path = Path(__file__).parent.parent / "agent" / "skills.py"
+    _skills_path = Path(__file__).parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
     spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
     skills_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(skills_mod)
