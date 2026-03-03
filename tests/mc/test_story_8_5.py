@@ -265,7 +265,7 @@ class TestSyncSkillsPublicAPI:
 
         # Wrap a real SkillsLoader to track method calls
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "nanobot" / "agent" / "skills.py"
+        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -307,7 +307,7 @@ class TestSkillsLoaderPublicMethods:
     def test_get_skill_body_strips_frontmatter(self, tmp_path):
         """get_skill_body() should return content without frontmatter."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "nanobot" / "agent" / "skills.py"
+        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -328,7 +328,7 @@ class TestSkillsLoaderPublicMethods:
     def test_get_skill_body_returns_none_for_missing(self, tmp_path):
         """get_skill_body() should return None for nonexistent skill."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "nanobot" / "agent" / "skills.py"
+        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -340,7 +340,7 @@ class TestSkillsLoaderPublicMethods:
     def test_is_skill_available_with_met_requirements(self, tmp_path):
         """is_skill_available() returns True when requirements are met."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "nanobot" / "agent" / "skills.py"
+        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -358,7 +358,7 @@ class TestSkillsLoaderPublicMethods:
     def test_is_skill_available_with_unmet_requirements(self, tmp_path):
         """is_skill_available() returns False when a required binary is missing."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "nanobot" / "agent" / "skills.py"
+        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -377,7 +377,7 @@ class TestSkillsLoaderPublicMethods:
     def test_get_missing_requirements_returns_description(self, tmp_path):
         """get_missing_requirements() returns human-readable missing items."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "nanobot" / "agent" / "skills.py"
+        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -398,7 +398,7 @@ class TestSkillsLoaderPublicMethods:
     def test_get_missing_requirements_returns_none_when_met(self, tmp_path):
         """get_missing_requirements() returns None when all requirements are met."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "nanobot" / "agent" / "skills.py"
+        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)

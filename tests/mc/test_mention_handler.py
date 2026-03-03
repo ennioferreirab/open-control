@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from mc.mention_handler import (
@@ -10,6 +12,26 @@ from mc.mention_handler import (
     _build_mention_context,
     _list_available_agents,
 )
+
+# All agent names used across tests — returned by the mocked _known_agent_names
+_ALL_TEST_AGENTS = {
+    "researcher",
+    "alice",
+    "bob",
+    "life-secretary",
+    "agent",
+    "my_agent",
+}
+
+
+@pytest.fixture(autouse=True)
+def _mock_known_agent_names():
+    """Patch _known_agent_names so tests do not depend on ~/.nanobot/agents/."""
+    with patch(
+        "mc.mention_handler._known_agent_names",
+        return_value=_ALL_TEST_AGENTS,
+    ):
+        yield
 
 
 class TestExtractMentions:
