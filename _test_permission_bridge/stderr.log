@@ -1,0 +1,1 @@
+Error: MCP tool mcp__permbridge__permission_prompt (passed via --permission-prompt-tool) not found. Available MCP tools: mcp__plugin_context7_context7__resolve-library-id, mcp__plugin_context7_context7__query-docs
