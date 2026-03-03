@@ -177,7 +177,7 @@ class TestBuildMentionContext:
         result = _build_mention_context(messages, max_messages=5)
         # Only last 5 messages should appear
         assert "msg19" in result
-        assert "msg14" in result
+        assert "msg15" in result
         assert "msg0" not in result
 
 
