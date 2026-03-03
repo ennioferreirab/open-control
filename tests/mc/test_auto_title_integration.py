@@ -1,4 +1,4 @@
-"""Integration tests for auto-title wiring inside _process_planning_task."""
+"""Integration tests for auto-title wiring inside _process_inbox_task."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -41,26 +41,20 @@ def _make_task(auto_title: bool = True, description: str = "Some task descriptio
 async def test_auto_title_updates_title_and_continues():
     """When auto_title=True and LLM returns a title, updateTitle mutation is called before planning."""
     bridge = _make_bridge()
-    orchestrator = TaskOrchestrator(bridge)
 
-    fake_plan = MagicMock()
-    fake_plan.steps = [MagicMock()]
-    fake_plan.to_dict.return_value = {}
+    async def passthrough(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
 
     with (
         patch(
             "mc.orchestrator.generate_title_via_low_agent",
             new=AsyncMock(return_value="A Força dos Poemas Curtos"),
         ),
-        patch("mc.orchestrator.TaskPlanner") as MockPlanner,
-        patch("mc.orchestrator.PlanMaterializer") as MockMaterializer,
-        patch("mc.orchestrator.StepDispatcher"),
+        patch("asyncio.to_thread", side_effect=passthrough),
     ):
-        MockPlanner.return_value.plan_task = AsyncMock(return_value=fake_plan)
-        MockMaterializer.return_value.materialize = MagicMock(return_value=["step1"])
-
+        orchestrator = TaskOrchestrator(bridge)
         task = _make_task(auto_title=True, description="Poemas curtos revelam a força...")
-        await orchestrator._process_planning_task(task)
+        await orchestrator._process_inbox_task(task)
 
     # updateTitle mutation must have been called with the generated title
     bridge.mutation.assert_called_once_with(
@@ -73,26 +67,20 @@ async def test_auto_title_updates_title_and_continues():
 async def test_auto_title_skipped_when_llm_returns_none():
     """When generate_title_via_low_agent returns None, updateTitle is NOT called and planning uses original title."""
     bridge = _make_bridge()
-    orchestrator = TaskOrchestrator(bridge)
 
-    fake_plan = MagicMock()
-    fake_plan.steps = [MagicMock()]
-    fake_plan.to_dict.return_value = {}
+    async def passthrough(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
 
     with (
         patch(
             "mc.orchestrator.generate_title_via_low_agent",
             new=AsyncMock(return_value=None),
         ),
-        patch("mc.orchestrator.TaskPlanner") as MockPlanner,
-        patch("mc.orchestrator.PlanMaterializer") as MockMaterializer,
-        patch("mc.orchestrator.StepDispatcher"),
+        patch("asyncio.to_thread", side_effect=passthrough),
     ):
-        MockPlanner.return_value.plan_task = AsyncMock(return_value=fake_plan)
-        MockMaterializer.return_value.materialize = MagicMock(return_value=["step1"])
-
+        orchestrator = TaskOrchestrator(bridge)
         task = _make_task(auto_title=True, description="Poemas curtos revelam a força...")
-        await orchestrator._process_planning_task(task)
+        await orchestrator._process_inbox_task(task)
 
     # updateTitle must NOT have been called
     bridge.mutation.assert_not_called()
@@ -102,26 +90,20 @@ async def test_auto_title_skipped_when_llm_returns_none():
 async def test_auto_title_not_called_when_flag_false():
     """When auto_title is False, generate_title_via_low_agent is never invoked."""
     bridge = _make_bridge()
-    orchestrator = TaskOrchestrator(bridge)
 
-    fake_plan = MagicMock()
-    fake_plan.steps = [MagicMock()]
-    fake_plan.to_dict.return_value = {}
+    async def passthrough(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
 
     with (
         patch(
             "mc.orchestrator.generate_title_via_low_agent",
             new=AsyncMock(return_value="Should Not Be Called"),
         ) as mock_gen,
-        patch("mc.orchestrator.TaskPlanner") as MockPlanner,
-        patch("mc.orchestrator.PlanMaterializer") as MockMaterializer,
-        patch("mc.orchestrator.StepDispatcher"),
+        patch("asyncio.to_thread", side_effect=passthrough),
     ):
-        MockPlanner.return_value.plan_task = AsyncMock(return_value=fake_plan)
-        MockMaterializer.return_value.materialize = MagicMock(return_value=["step1"])
-
+        orchestrator = TaskOrchestrator(bridge)
         task = _make_task(auto_title=False, description="Poemas curtos revelam a força...")
-        await orchestrator._process_planning_task(task)
+        await orchestrator._process_inbox_task(task)
 
     mock_gen.assert_not_called()
     bridge.mutation.assert_not_called()
@@ -131,27 +113,21 @@ async def test_auto_title_not_called_when_flag_false():
 async def test_auto_title_not_called_when_no_description():
     """When auto_title=True but description is empty/None, generate_title_via_low_agent is skipped."""
     bridge = _make_bridge()
-    orchestrator = TaskOrchestrator(bridge)
 
-    fake_plan = MagicMock()
-    fake_plan.steps = [MagicMock()]
-    fake_plan.to_dict.return_value = {}
+    async def passthrough(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
 
     with (
         patch(
             "mc.orchestrator.generate_title_via_low_agent",
             new=AsyncMock(return_value="Should Not Be Called"),
         ) as mock_gen,
-        patch("mc.orchestrator.TaskPlanner") as MockPlanner,
-        patch("mc.orchestrator.PlanMaterializer") as MockMaterializer,
-        patch("mc.orchestrator.StepDispatcher"),
+        patch("asyncio.to_thread", side_effect=passthrough),
     ):
-        MockPlanner.return_value.plan_task = AsyncMock(return_value=fake_plan)
-        MockMaterializer.return_value.materialize = MagicMock(return_value=["step1"])
-
+        orchestrator = TaskOrchestrator(bridge)
         task = _make_task(auto_title=True, description=None)
         task["description"] = None
-        await orchestrator._process_planning_task(task)
+        await orchestrator._process_inbox_task(task)
 
     mock_gen.assert_not_called()
     bridge.mutation.assert_not_called()

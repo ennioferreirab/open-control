@@ -15,7 +15,7 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
     TaskStatus.INBOX: [TaskStatus.ASSIGNED],
     TaskStatus.ASSIGNED: [TaskStatus.IN_PROGRESS],
     TaskStatus.IN_PROGRESS: [TaskStatus.REVIEW, TaskStatus.DONE],
-    TaskStatus.REVIEW: [TaskStatus.DONE, TaskStatus.INBOX, TaskStatus.IN_PROGRESS],
+    TaskStatus.REVIEW: [TaskStatus.DONE, TaskStatus.INBOX],
     TaskStatus.RETRYING: [TaskStatus.IN_PROGRESS, TaskStatus.CRASHED],
     TaskStatus.CRASHED: [TaskStatus.INBOX],
 }
@@ -33,7 +33,6 @@ TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
     (TaskStatus.IN_PROGRESS, TaskStatus.DONE): ActivityEventType.TASK_COMPLETED,
     (TaskStatus.REVIEW, TaskStatus.DONE): ActivityEventType.TASK_COMPLETED,
     (TaskStatus.REVIEW, TaskStatus.INBOX): ActivityEventType.TASK_RETRYING,
-    (TaskStatus.REVIEW, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_STARTED,
     (TaskStatus.RETRYING, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_RETRYING,
     (TaskStatus.RETRYING, TaskStatus.CRASHED): ActivityEventType.TASK_CRASHED,
     (TaskStatus.CRASHED, TaskStatus.INBOX): ActivityEventType.TASK_RETRYING,
