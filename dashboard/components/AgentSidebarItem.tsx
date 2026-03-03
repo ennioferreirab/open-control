@@ -56,8 +56,8 @@ interface AgentSidebarItemProps {
 }
 
 export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentSidebarItemProps) {
-  const { state } = useSidebar();
-  const isCollapsed = state === "collapsed";
+  const { state, isMobile } = useSidebar();
+  const isCollapsed = state === "collapsed" && !isMobile;
   const initials = getInitials(agent.displayName);
   const avatarColor = getAvatarColor(agent.name);
   const isDisabled = agent.enabled === false;

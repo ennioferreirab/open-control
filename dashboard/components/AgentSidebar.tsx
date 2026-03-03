@@ -114,12 +114,10 @@ export function AgentSidebar() {
                 size="lg"
                 tooltip="Create Agent"
                 onClick={() => setShowCreateSheet(true)}
-                className="!h-auto cursor-pointer group-data-[collapsible=icon]:!w-full group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center"
+                className="!h-auto cursor-pointer"
               >
-                <div className="relative">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
-                    <Plus className="h-4 w-4 text-muted-foreground" />
-                  </div>
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40">
+                  <Plus className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <span className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                   Create Agent
