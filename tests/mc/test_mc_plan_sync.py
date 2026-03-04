@@ -89,3 +89,83 @@ class TestSyncIPCClient:
         with pytest.raises(ConnectionError):
             client.request("report_progress", {"message": "hello"})
         Path(sock_path).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# MC context discovery tests
+# ---------------------------------------------------------------------------
+
+class TestMCContextDiscovery:
+    """Tests for _discover_mc_context in MCPlanSyncHandler."""
+
+    def _make_handler(self, payload):
+        from mc.hooks.handlers.mc_plan_sync import MCPlanSyncHandler
+        from mc.hooks.context import HookContext
+        ctx = HookContext("test-session")
+        return MCPlanSyncHandler(ctx, payload)
+
+    def test_returns_none_when_no_mcp_json_and_no_env(self, tmp_path):
+        """No MC context available — should return None."""
+        handler = self._make_handler({"cwd": str(tmp_path)})
+        assert handler._discover_mc_context() is None
+
+    def test_reads_mcp_json_from_cwd(self, tmp_path):
+        """Discovers MC context from .mcp.json in cwd."""
+        sock_path = str(tmp_path / "mc.sock")
+        Path(sock_path).touch()
+
+        mcp_config = {
+            "mcpServers": {
+                "nanobot": {
+                    "command": "uv",
+                    "args": ["run", "python", "-m", "claude_code.mcp_bridge"],
+                    "env": {
+                        "MC_SOCKET_PATH": sock_path,
+                        "AGENT_NAME": "test-agent",
+                        "TASK_ID": "task-123",
+                    },
+                }
+            }
+        }
+        (tmp_path / ".mcp.json").write_text(json.dumps(mcp_config))
+
+        handler = self._make_handler({"cwd": str(tmp_path)})
+        mc_ctx = handler._discover_mc_context()
+        assert mc_ctx is not None
+        assert mc_ctx["socket_path"] == sock_path
+        assert mc_ctx["agent_name"] == "test-agent"
+        assert mc_ctx["task_id"] == "task-123"
+
+    def test_env_var_takes_precedence(self, tmp_path):
+        """MC_SOCKET_PATH env var is preferred over .mcp.json."""
+        sock_path = str(tmp_path / "env.sock")
+        Path(sock_path).touch()
+
+        with patch.dict(os.environ, {
+            "MC_SOCKET_PATH": sock_path,
+            "AGENT_NAME": "env-agent",
+            "TASK_ID": "env-task",
+        }):
+            handler = self._make_handler({"cwd": str(tmp_path)})
+            mc_ctx = handler._discover_mc_context()
+            assert mc_ctx is not None
+            assert mc_ctx["socket_path"] == sock_path
+            assert mc_ctx["agent_name"] == "env-agent"
+
+    def test_returns_none_when_socket_file_missing(self, tmp_path):
+        """Socket path in .mcp.json but file doesn't exist — no MC."""
+        mcp_config = {
+            "mcpServers": {
+                "nanobot": {
+                    "env": {
+                        "MC_SOCKET_PATH": "/tmp/nonexistent-mc-test.sock",
+                        "AGENT_NAME": "agent",
+                        "TASK_ID": "task",
+                    },
+                }
+            }
+        }
+        (tmp_path / ".mcp.json").write_text(json.dumps(mcp_config))
+
+        handler = self._make_handler({"cwd": str(tmp_path)})
+        assert handler._discover_mc_context() is None
