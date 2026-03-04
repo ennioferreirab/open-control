@@ -341,8 +341,8 @@ class TestReportProgressTool:
 # ---------------------------------------------------------------------------
 
 class TestListTools:
-    async def test_list_tools_returns_all_five(self):
-        """list_tools returns all 5 expected tools."""
+    async def test_list_tools_returns_all_six(self):
+        """list_tools returns all 6 expected tools."""
         import claude_code.mcp_bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
@@ -354,6 +354,7 @@ class TestListTools:
             "delegate_task",
             "ask_agent",
             "report_progress",
+            "cron",
         }
 
     async def test_tools_have_required_fields(self):
@@ -376,3 +377,82 @@ class TestListTools:
             result = await bridge_mod.call_tool("nonexistent_tool", {})
 
         assert result[0].text == "Unknown tool: nonexistent_tool"
+
+
+# ---------------------------------------------------------------------------
+# Test cron tool
+# ---------------------------------------------------------------------------
+
+class TestCronTool:
+    async def test_cron_list_returns_jobs(self):
+        """cron list action returns the job listing from IPC."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"cron": {"result": "No scheduled jobs."}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("cron", {"action": "list"})
+
+        assert len(result) == 1
+        assert "No scheduled jobs" in result[0].text
+
+    async def test_cron_add_returns_confirmation(self):
+        """cron add action returns creation confirmation."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc(
+            {"cron": {"result": "Created job 'daily report' (id: abc123)"}}
+        )
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "cron",
+                {
+                    "action": "add",
+                    "message": "daily report",
+                    "cron_expr": "0 9 * * *",
+                },
+            )
+
+        assert len(result) == 1
+        assert "Created job" in result[0].text
+        assert "abc123" in result[0].text
+
+    async def test_cron_remove_returns_confirmation(self):
+        """cron remove action returns removal confirmation."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"cron": {"result": "Removed job abc123"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "cron", {"action": "remove", "job_id": "abc123"}
+            )
+
+        assert len(result) == 1
+        assert "Removed job abc123" in result[0].text
+
+    async def test_cron_ipc_failure(self):
+        """cron handles IPC ConnectionError gracefully."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        async def failing_request(method, params):
+            raise ConnectionError("socket not found")
+
+        mock_ipc = MagicMock()
+        mock_ipc.request = failing_request
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("cron", {"action": "list"})
+
+        assert len(result) == 1
+        assert "Mission Control not reachable" in result[0].text
+
+    async def test_cron_in_tool_list(self):
+        """list_tools includes the cron tool."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        tools = await bridge_mod.list_tools()
+        names = {t.name for t in tools}
+
+        assert "cron" in names
