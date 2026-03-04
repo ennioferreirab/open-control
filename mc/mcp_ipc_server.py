@@ -70,6 +70,9 @@ class MCSocketServer:
         self._server = await asyncio.start_unix_server(
             self._handle_connection, path=socket_path
         )
+        # M2: Restrict socket to owner-only access so other local users cannot
+        # connect and invoke MC operations.
+        os.chmod(socket_path, 0o600)
         logger.info("MCSocketServer listening on %s", socket_path)
 
     async def stop(self) -> None:

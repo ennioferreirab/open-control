@@ -59,7 +59,7 @@ def _get_ipc():
     if _ipc_client is None:
         from mc.mcp_ipc import MCSocketClient
 
-        _ipc_client = MCSocketClient(MC_SOCKET_PATH)
+        _ipc_client = MCSocketClient(_get_socket_path())
     return _ipc_client
 
 
