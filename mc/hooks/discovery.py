@@ -40,3 +40,9 @@ def discover_handlers() -> list[type[BaseHandler]]:
 
     _cache = result
     return _cache
+
+
+def reset_cache() -> None:
+    """Reset the handler cache. Used in tests."""
+    global _cache
+    _cache = None

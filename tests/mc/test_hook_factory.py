@@ -212,18 +212,19 @@ class TestDiscovery:
     def test_discovers_all_handlers(self):
         # Clear cache to force re-discovery
         import mc.hooks.discovery as disc
-        disc._cache = None
+        disc.reset_cache()
         handlers = disc.discover_handlers()
         names = {h.__name__ for h in handlers}
         assert "PlanTrackerHandler" in names
         assert "SkillTrackerHandler" in names
         assert "PlanCaptureHandler" in names
         assert "AgentTrackerHandler" in names
-        assert len(handlers) == 4
+        assert "MCPlanSyncHandler" in names
+        assert len(handlers) == 5
 
     def test_cache_works(self):
         import mc.hooks.discovery as disc
-        disc._cache = None
+        disc.reset_cache()
         h1 = disc.discover_handlers()
         h2 = disc.discover_handlers()
         assert h1 is h2  # same object, cached

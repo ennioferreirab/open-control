@@ -390,3 +390,65 @@ class TestTaskCompletedSync:
 
         assert result is not None
         assert "Build API" in result
+
+
+# ---------------------------------------------------------------------------
+# Integration: full dispatch test
+# ---------------------------------------------------------------------------
+
+class TestMCPlanSyncIntegration:
+    """End-to-end test through the dispatcher."""
+
+    def test_plan_write_dispatches_to_both_handlers(self, tmp_path):
+        """PostToolUse/Write dispatches to both PlanTracker AND MCPlanSync."""
+        from mc.hooks.dispatcher import _dispatch
+        from mc.hooks.config import HookConfig
+        from mc.hooks.discovery import reset_cache
+
+        plan_content = "### Task 1: Setup\n\n### Task 2: Build\n\n**Blocked by:** Task 1\n"
+        plans_dir = tmp_path / "docs" / "plans"
+        plans_dir.mkdir(parents=True)
+        tracker_dir = tmp_path / ".claude" / "plan-tracker"
+        tracker_dir.mkdir(parents=True)
+        state_dir = tmp_path / ".claude" / "hook-state"
+        state_dir.mkdir(parents=True)
+
+        config = HookConfig(
+            plan_pattern="docs/plans/*.md",
+            tracker_dir=".claude/plan-tracker",
+            state_dir=".claude/hook-state",
+        )
+
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Write",
+            "session_id": "integration-test",
+            "cwd": str(tmp_path),
+            "tool_input": {
+                "file_path": str(tmp_path / "docs" / "plans" / "test-plan.md"),
+                "content": plan_content,
+            },
+        }
+
+        reset_cache()
+
+        with (
+            patch("mc.hooks.config.get_project_root", return_value=tmp_path),
+            patch("mc.hooks.config.get_config", return_value=config),
+            patch("mc.hooks.context.get_project_root", return_value=tmp_path),
+            patch("mc.hooks.context.get_config", return_value=config),
+            patch("mc.hooks.handlers.plan_tracker.get_project_root", return_value=tmp_path),
+            patch("mc.hooks.handlers.plan_tracker.get_config", return_value=config),
+            patch("mc.hooks.handlers.plan_capture.get_project_root", return_value=tmp_path),
+            patch("mc.hooks.handlers.plan_capture.get_config", return_value=config),
+        ):
+            result = _dispatch(payload)
+
+        # PlanTracker should have created a tracker file
+        assert (tracker_dir / "test-plan.json").exists()
+        # Result should contain PlanTracker output (MCPlanSync skips — no MC context)
+        assert result is not None
+        parsed = json.loads(result)
+        assert "Plan tracker created" in parsed["hookSpecificOutput"]["additionalContext"]
+
+        reset_cache()
