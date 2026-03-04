@@ -36,10 +36,13 @@ class AnthropicOAuthProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        reasoning_effort: str | None = None,
         reasoning_level: str | None = None,
     ) -> LLMResponse:
         model = _strip_prefix(model or self.default_model)
         token = get_anthropic_token()
+        # reasoning_level (MC alias) takes precedence over reasoning_effort (upstream param)
+        reasoning_level = reasoning_level or reasoning_effort
 
         headers = {
             "Authorization": f"Bearer {token}",
