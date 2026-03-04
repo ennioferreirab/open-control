@@ -49,7 +49,7 @@ class TestWorkspaceContext:
         assert ctx.cwd == expected_workspace
         assert ctx.mcp_config == expected_workspace / ".mcp.json"
         assert ctx.claude_md == expected_workspace / "CLAUDE.md"
-        assert ctx.socket_path == "/tmp/mc-test-agent.sock"
+        assert ctx.socket_path == "/tmp/mc-test-agent-task123.sock"
 
     def test_returns_workspace_context_type(self, tmp_path: Path) -> None:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
@@ -353,7 +353,7 @@ class TestMcpConfigGeneration:
         data = json.loads(ctx.mcp_config.read_text())
         env = data["mcpServers"]["nanobot"]["env"]
 
-        assert env["MC_SOCKET_PATH"] == "/tmp/mc-my-agent.sock"
+        assert env["MC_SOCKET_PATH"] == "/tmp/mc-my-agent-task-abc.sock"
         assert env["AGENT_NAME"] == "my-agent"
         assert env["TASK_ID"] == "task-abc"
 
@@ -397,9 +397,9 @@ class TestInputValidation:
         """H3: Agent name that produces a socket path >104 chars must raise ValueError."""
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent()
-        # "/tmp/mc-" is 8 chars, ".sock" is 5 chars, total overhead = 13.
-        # Need >104 total, so name must be >91 chars.
-        long_name = "a" * 95
+        # "/tmp/mc-" is 8 chars, "-task123" is 8 chars, ".sock" is 5 chars,
+        # total overhead = 21.  Need >104 total, so name must be >83 chars.
+        long_name = "a" * 85
         with pytest.raises(ValueError, match="Socket path too long"):
             manager.prepare(long_name, agent, "task123")
 

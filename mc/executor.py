@@ -1304,7 +1304,7 @@ class TaskExecutor:
             ws_mgr = CCWorkspaceManager()
             ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id)
         except Exception as exc:
-            await self._crash_task(task_id, title, f"Workspace preparation failed: {exc}")
+            await self._crash_task(task_id, title, f"Workspace preparation failed: {exc}", agent_name)
             return
 
         # 2. Start IPC server (MCSocketServer.start() already removes stale socket)
@@ -1313,7 +1313,7 @@ class TaskExecutor:
         try:
             await ipc_server.start(ws_ctx.socket_path)
         except Exception as exc:
-            await self._crash_task(task_id, title, f"MCP IPC server failed: {exc}")
+            await self._crash_task(task_id, title, f"MCP IPC server failed: {exc}", agent_name)
             return
 
         # 3. Look up existing session for resume (CC-6 AC2)
@@ -1336,7 +1336,12 @@ class TaskExecutor:
 
         # 4. Execute via CC provider
         try:
-            provider = ClaudeCodeProvider()
+            from nanobot.config.loader import load_config
+            _cfg = load_config()
+            provider = ClaudeCodeProvider(
+                cli_path=_cfg.claude_code.cli_path,
+                defaults=_cfg.claude_code,
+            )
             prompt = f"{title}\n\n{description}" if description else title
 
             def on_stream(msg: dict) -> None:
@@ -1356,14 +1361,14 @@ class TaskExecutor:
                 on_stream=on_stream,
             )
         except Exception as exc:
-            await self._crash_task(task_id, title, f"Claude Code execution failed: {exc}")
+            await self._crash_task(task_id, title, f"Claude Code execution failed: {exc}", agent_name)
             return
         finally:
             await ipc_server.stop()
 
         # 5. Process result
         if result.is_error:
-            await self._crash_task(task_id, title, f"Claude Code error: {result.output[:1000]}")
+            await self._crash_task(task_id, title, f"Claude Code error: {result.output[:1000]}", agent_name)
         else:
             await self._complete_cc_task(task_id, title, agent_name, result)
             if self._on_task_completed:
@@ -1400,13 +1405,16 @@ class TaskExecutor:
         """Post completion message, cost activity, store session, and transition task to DONE."""
         from mc.types import CCTaskResult  # noqa: F401 — type annotation only
 
-        # Post agent work message to thread
+        # Post agent work message to thread (M5: include truncation notice)
+        _output = result.output
+        if len(_output) > 2000:
+            _output = _output[:2000] + f"\n\n... [truncated, full output: {len(result.output)} chars]"
         await asyncio.to_thread(
             self._bridge.send_message,
             task_id,
             agent_name,
             AuthorType.AGENT,
-            result.output[:2000],
+            _output,
             MessageType.WORK,
         )
 
@@ -1472,6 +1480,7 @@ class TaskExecutor:
         task_id: str,
         title: str,
         error: str,
+        agent_name: str = "System",
     ) -> None:
         """Post a crash message and transition the task to CRASHED."""
         logger.error("[executor] CC task crashed: %s — %s", title, error)
@@ -1480,7 +1489,7 @@ class TaskExecutor:
             await asyncio.to_thread(
                 self._bridge.send_message,
                 task_id,
-                "System",
+                agent_name,
                 AuthorType.SYSTEM,
                 f"Task crashed: {error}",
                 MessageType.SYSTEM_EVENT,
@@ -1493,7 +1502,7 @@ class TaskExecutor:
                 self._bridge.update_task_status,
                 task_id,
                 TaskStatus.CRASHED,
-                "System",
+                agent_name,
                 f"Task crashed: {error}",
             )
         except Exception:
@@ -1556,7 +1565,12 @@ class TaskExecutor:
             return None
 
         try:
-            provider = ClaudeCodeProvider()
+            from nanobot.config.loader import load_config
+            _cfg = load_config()
+            provider = ClaudeCodeProvider(
+                cli_path=_cfg.claude_code.cli_path,
+                defaults=_cfg.claude_code,
+            )
             result = await provider.execute_task(
                 prompt=user_message,
                 agent_config=agent_data,
@@ -1595,15 +1609,18 @@ class TaskExecutor:
                     "[executor] CC thread reply: failed to update session for %s", agent_name
                 )
 
-        # Post response back to the task thread (M3)
+        # Post response back to the task thread (M3, M5: include truncation notice)
         if result and not result.is_error:
+            _reply_output = result.output
+            if len(_reply_output) > 2000:
+                _reply_output = _reply_output[:2000] + f"\n\n... [truncated, full output: {len(result.output)} chars]"
             try:
                 await asyncio.to_thread(
                     self._bridge.send_message,
                     task_id,
                     agent_name,
                     AuthorType.AGENT,
-                    result.output[:2000],
+                    _reply_output,
                     MessageType.WORK,
                 )
             except Exception:

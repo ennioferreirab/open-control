@@ -94,7 +94,9 @@ class CCWorkspaceManager:
         self._map_skills(workspace, agent_config.skills)
 
         # H3: Validate socket path length (macOS limit ~104 chars)
-        socket_path = f"/tmp/mc-{agent_name}.sock"
+        # Include first 8 chars of task_id to prevent socket clobber when the
+        # same agent runs concurrent tasks (HIGH-2 fix).
+        socket_path = f"/tmp/mc-{agent_name}-{task_id[:8]}.sock"
         if len(socket_path) > _MAX_SOCKET_PATH_LEN:
             raise ValueError(
                 f"Socket path too long ({len(socket_path)} chars, max {_MAX_SOCKET_PATH_LEN}): {socket_path}"
