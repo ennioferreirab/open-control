@@ -5,12 +5,11 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from mc.cc_workspace import CCWorkspaceManager
-from mc.types import AgentData, ClaudeCodeOpts, WorkspaceContext
+from mc.types import AgentData, WorkspaceContext
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +81,27 @@ class TestDirectoryStructure:
         ctx = manager.prepare("test-agent", agent, "task123")
         assert (ctx.cwd / "sessions").is_dir()
 
+    def test_memory_and_sessions_preserved_on_second_prepare(self, tmp_path: Path) -> None:
+        """AC5: memory/ and sessions/ directories are never touched on subsequent prepare()."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        ctx = manager.prepare("test-agent", agent, "task1")
+
+        # Write sentinel files into memory/ and sessions/
+        memory_file = ctx.cwd / "memory" / "test.txt"
+        sessions_file = ctx.cwd / "sessions" / "session.dat"
+        memory_file.write_text("preserved memory")
+        sessions_file.write_text("preserved session")
+
+        # Second prepare() must not remove these files
+        manager.prepare("test-agent", agent, "task2")
+
+        assert memory_file.exists(), "memory/test.txt was deleted by prepare()"
+        assert memory_file.read_text() == "preserved memory"
+        assert sessions_file.exists(), "sessions/session.dat was deleted by prepare()"
+        assert sessions_file.read_text() == "preserved session"
+
 
 # ---------------------------------------------------------------------------
 # CLAUDE.md generation (AC1)
@@ -118,6 +138,15 @@ class TestClaudeMdGeneration:
         assert "AskUserQuestion" in content
         assert "does NOT work" in content
 
+    def test_claude_md_contains_conventions_section(self, tmp_path: Path) -> None:
+        """AC1: CLAUDE.md must include a Project Conventions section."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        ctx = manager.prepare("test-agent", agent, "task123")
+
+        content = ctx.claude_md.read_text()
+        assert "## Project Conventions" in content
+
     def test_claude_md_contains_soul_when_present(self, tmp_path: Path) -> None:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent(soul="## Soul\n\nI am deeply thoughtful.")
@@ -132,8 +161,8 @@ class TestClaudeMdGeneration:
         ctx = manager.prepare("test-agent", agent, "task123")
 
         content = ctx.claude_md.read_text()
-        # Soul content block should not appear (though "Soul" might appear in section headers)
-        # Ensure the file is written and contains agent identity
+        # Soul content block must not appear when soul is absent
+        assert "## Soul" not in content
         assert ctx.claude_md.exists()
         assert agent.name in content
 
@@ -194,6 +223,20 @@ class TestSkillsMapping:
         link = ctx.cwd / ".claude" / "skills" / "global-skill"
         assert link.is_symlink()
 
+    def test_vendor_skills_dir_injectable(self, tmp_path: Path) -> None:
+        """vendor_skills_dir constructor parameter is used as the builtin skills fallback."""
+        vendor_dir = tmp_path / "vendor-skills"
+        vendor_skill = vendor_dir / "vendor-skill"
+        vendor_skill.mkdir(parents=True)
+        (vendor_skill / "SKILL.md").write_text("# Vendor Skill")
+
+        manager = CCWorkspaceManager(workspace_root=tmp_path, vendor_skills_dir=vendor_dir)
+        agent = _make_agent(skills=["vendor-skill"])
+        ctx = manager.prepare("test-agent", agent, "task123")
+
+        link = ctx.cwd / ".claude" / "skills" / "vendor-skill"
+        assert link.is_symlink()
+
     def test_broken_symlinks_cleaned_up(self, tmp_path: Path) -> None:
         """Pre-existing broken symlinks in .claude/skills/ are removed."""
         workspace = tmp_path / "agents" / "test-agent"
@@ -244,6 +287,37 @@ class TestSkillsMapping:
         link = ctx.cwd / ".claude" / "skills" / "my-skill"
         assert link.is_symlink()
 
+    def test_invalid_skill_name_with_slash_skipped(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """C2: Skill names with '/' are rejected with a warning."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent(skills=["../../etc/passwd"])
+
+        with caplog.at_level(logging.WARNING, logger="mc.cc_workspace"):
+            ctx = manager.prepare("test-agent", agent, "task123")
+
+        assert ctx is not None
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("../../etc/passwd" in msg for msg in warning_messages)
+        # No symlink must have been created
+        skills_dir = ctx.cwd / ".claude" / "skills"
+        assert not any(skills_dir.iterdir()) if skills_dir.exists() else True
+
+    def test_invalid_skill_name_with_dot_prefix_skipped(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """C2: Skill names starting with '.' are rejected with a warning."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent(skills=[".hidden-skill"])
+
+        with caplog.at_level(logging.WARNING, logger="mc.cc_workspace"):
+            ctx = manager.prepare("test-agent", agent, "task123")
+
+        assert ctx is not None
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any(".hidden-skill" in msg for msg in warning_messages)
+
 
 # ---------------------------------------------------------------------------
 # MCP config generation (AC3)
@@ -291,6 +365,43 @@ class TestMcpConfigGeneration:
         # json.loads will raise if invalid
         data = json.loads(ctx.mcp_config.read_text())
         assert isinstance(data, dict)
+
+
+# ---------------------------------------------------------------------------
+# Input validation (C1, H3)
+# ---------------------------------------------------------------------------
+
+class TestInputValidation:
+    def test_invalid_agent_name_with_slash_raises(self, tmp_path: Path) -> None:
+        """C1: agent_name containing '/' must raise ValueError."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        with pytest.raises(ValueError, match="Invalid agent name"):
+            manager.prepare("../../etc/passwd", agent, "task123")
+
+    def test_invalid_agent_name_dot_prefix_raises(self, tmp_path: Path) -> None:
+        """C1: agent_name starting with '.' must raise ValueError."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        with pytest.raises(ValueError, match="Invalid agent name"):
+            manager.prepare(".hidden", agent, "task123")
+
+    def test_empty_agent_name_raises(self, tmp_path: Path) -> None:
+        """C1: Empty agent_name must raise ValueError."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        with pytest.raises(ValueError, match="Invalid agent name"):
+            manager.prepare("", agent, "task123")
+
+    def test_socket_path_too_long_raises(self, tmp_path: Path) -> None:
+        """H3: Agent name that produces a socket path >104 chars must raise ValueError."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        # "/tmp/mc-" is 8 chars, ".sock" is 5 chars, total overhead = 13.
+        # Need >104 total, so name must be >91 chars.
+        long_name = "a" * 95
+        with pytest.raises(ValueError, match="Socket path too long"):
+            manager.prepare(long_name, agent, "task123")
 
 
 # ---------------------------------------------------------------------------

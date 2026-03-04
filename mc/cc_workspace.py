@@ -17,8 +17,14 @@ from mc.types import AgentData, WorkspaceContext
 
 logger = logging.getLogger(__name__)
 
-# Path to the vendor nanobot skills directory (builtin skills)
-_VENDOR_SKILLS_DIR = Path(__file__).parent.parent / "vendor" / "nanobot" / "nanobot" / "skills"
+# Path to the vendor nanobot skills directory (builtin skills).
+# Try to import the canonical constant from upstream; fall back to the
+# path computed from __file__ so this module keeps working if the
+# vendor package layout changes.
+try:
+    from nanobot.agent.skills import BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR  # type: ignore[import]
+except ImportError:  # pragma: no cover – vendor package not on path
+    _VENDOR_SKILLS_DIR = Path(__file__).parent.parent / "vendor" / "nanobot" / "nanobot" / "skills"
 
 _MCP_TOOLS_GUIDE = """\
 ## Available MCP Tools (nanobot server)
@@ -34,12 +40,28 @@ Use these tools via the `mcp__nanobot__` prefix:
 > **IMPORTANT**: `AskUserQuestion` does NOT work. You MUST use `mcp__nanobot__ask_user` instead.
 """
 
+_DEFAULT_CONVENTIONS = """\
+## Project Conventions
+
+- Use `uv run python` instead of `python3`
+- Use `uv run pytest` for running tests
+- Follow the project's existing code patterns and style
+"""
+
+# Maximum safe Unix socket path length (macOS limit ~104 chars).
+_MAX_SOCKET_PATH_LEN = 104
+
 
 class CCWorkspaceManager:
     """Prepares Claude Code agent workspaces."""
 
-    def __init__(self, workspace_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        workspace_root: Path | None = None,
+        vendor_skills_dir: Path | None = None,
+    ) -> None:
         self._root = workspace_root or Path.home() / ".nanobot"
+        self._vendor_skills = vendor_skills_dir or _VENDOR_SKILLS_DIR
 
     def prepare(self, agent_name: str, agent_config: AgentData, task_id: str) -> WorkspaceContext:
         """Set up the workspace directory for an agent and return its context.
@@ -54,7 +76,15 @@ class CCWorkspaceManager:
 
         Returns:
             WorkspaceContext with all resolved paths.
+
+        Raises:
+            ValueError: If agent_name is invalid (path traversal protection) or
+                        if the resulting socket path exceeds the OS limit.
         """
+        # C1: Validate agent_name to prevent path traversal
+        if not agent_name or "/" in agent_name or agent_name.startswith("."):
+            raise ValueError(f"Invalid agent name: {agent_name!r}")
+
         workspace = self._root / "agents" / agent_name
         workspace.mkdir(parents=True, exist_ok=True)
         (workspace / "memory").mkdir(exist_ok=True)
@@ -63,7 +93,12 @@ class CCWorkspaceManager:
         self._generate_claude_md(workspace, agent_config)
         self._map_skills(workspace, agent_config.skills)
 
+        # H3: Validate socket path length (macOS limit ~104 chars)
         socket_path = f"/tmp/mc-{agent_name}.sock"
+        if len(socket_path) > _MAX_SOCKET_PATH_LEN:
+            raise ValueError(
+                f"Socket path too long ({len(socket_path)} chars, max {_MAX_SOCKET_PATH_LEN}): {socket_path}"
+            )
         self._generate_mcp_json(workspace, agent_name, task_id, socket_path)
 
         return WorkspaceContext(
@@ -93,6 +128,9 @@ class CCWorkspaceManager:
             lines.append("## System Prompt\n")
             lines.append(config.prompt.strip())
             lines.append("")
+
+        # H1: Project conventions section (AC1 requirement)
+        lines.append(_DEFAULT_CONVENTIONS)
 
         # MCP tools guide
         lines.append(_MCP_TOOLS_GUIDE)
@@ -124,6 +162,11 @@ class CCWorkspaceManager:
                 entry.unlink()
 
         for skill_name in skills:
+            # C2: Validate skill name to prevent path traversal
+            if "/" in skill_name or skill_name.startswith("."):
+                logger.warning("Skipping invalid skill name: %s", skill_name)
+                continue
+
             target = self._find_skill(workspace, skill_name)
             if target is None:
                 logger.warning("Skill '%s' not found in any search location — skipping", skill_name)
@@ -150,7 +193,7 @@ class CCWorkspaceManager:
         candidates = [
             workspace / "skills" / skill_name,
             self._root / "workspace" / "skills" / skill_name,
-            _VENDOR_SKILLS_DIR / skill_name,
+            self._vendor_skills / skill_name,
         ]
         for candidate in candidates:
             if candidate.exists():
