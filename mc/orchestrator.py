@@ -325,6 +325,15 @@ class TaskOrchestrator:
         )
 
         try:
+            # Resolve a fast model for planning (Sonnet-tier, not Opus).
+            planning_model = None
+            try:
+                from mc.tier_resolver import TierResolver
+                tier_resolver = TierResolver(self._bridge)
+                planning_model = tier_resolver.resolve_model("tier:standard-medium")
+            except (ValueError, Exception) as exc:
+                logger.debug("[orchestrator] Could not resolve planning tier: %s", exc)
+
             # Use LLM-based planner (falls back to heuristic on failure).
             planner = TaskPlanner()
             plan = await planner.plan_task(
@@ -333,6 +342,7 @@ class TaskOrchestrator:
                 agents,
                 explicit_agent=assigned_agent,
                 files=task_data.get("files") or [],
+                model=planning_model,
             )
 
             # Prevent circular delegation: if a step would route back to the
