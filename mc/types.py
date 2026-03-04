@@ -392,3 +392,13 @@ class WorkspaceContext:
     mcp_config: Path
     claude_md: Path
     socket_path: str
+
+
+@dataclass
+class CCTaskResult:
+    """Result of a Claude Code CLI task execution."""
+    output: str            # final result text from the CLI
+    session_id: str        # CC session ID (for resume on next turn)
+    cost_usd: float        # total cost from the result message
+    usage: dict            # {input_tokens, output_tokens, ...}
+    is_error: bool         # True if the CLI reported an error
