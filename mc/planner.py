@@ -25,7 +25,7 @@ from mc.types import (
 
 logger = logging.getLogger(__name__)
 
-LLM_TIMEOUT_SECONDS = 10
+LLM_TIMEOUT_SECONDS = 30
 
 STOPWORDS = {
     "a", "an", "the", "is", "are", "was", "were", "be", "been",
