@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import json
 import logging
+import platform
+import time
+from datetime import datetime
 from pathlib import Path
 
 from mc.types import AgentData
@@ -52,6 +55,10 @@ _DEFAULT_CONVENTIONS = """\
 # Maximum safe Unix socket path length (macOS limit ~104 chars).
 _MAX_SOCKET_PATH_LEN = 104
 
+# Bootstrap files to load from the workspace (SOUL.md is excluded — it is
+# handled via config.soul to keep the personality override at the end).
+_BOOTSTRAP_FILES = ["AGENTS.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
+
 
 class CCWorkspaceManager:
     """Prepares Claude Code agent workspaces."""
@@ -91,8 +98,10 @@ class CCWorkspaceManager:
         (workspace / "memory").mkdir(exist_ok=True)
         (workspace / "sessions").mkdir(exist_ok=True)
 
-        self._generate_claude_md(workspace, agent_config)
+        # Skills must be mapped BEFORE generating CLAUDE.md so the skills
+        # summary in _generate_claude_md() can reference the mapped symlinks.
         self._map_skills(workspace, agent_config.skills)
+        self._generate_claude_md(workspace, agent_config)
 
         # H3: Validate socket path length (macOS limit ~104 chars)
         # Include first 8 chars of task_id to prevent socket clobber when the
@@ -116,36 +125,182 @@ class CCWorkspaceManager:
     # ------------------------------------------------------------------
 
     def _generate_claude_md(self, workspace: Path, config: AgentData) -> None:
-        """Write CLAUDE.md with agent identity and MCP tools guide."""
-        lines: list[str] = []
+        """Write CLAUDE.md with agent identity, context, and MCP tools guide.
 
-        # Agent identity section
-        lines.append("# Agent Identity\n")
-        lines.append(f"**Name**: {config.name}")
-        lines.append(f"**Role**: {config.role}")
+        Section order:
+          1. Agent Identity (name, role, display_name)
+          2. Workspace guidance
+          3. Runtime context
+          4. System Prompt (config.prompt)
+          5. Bootstrap files (AGENTS.md, USER.md, TOOLS.md, IDENTITY.md)
+          6. Memory (MEMORY.md content)
+          7. Project Conventions
+          8. MCP Tools Guide
+          9. Skills summary
+         10. Soul (config.soul) — last for personality override
+        """
+        parts: list[str] = []
+
+        # 1. Agent identity section
+        identity_lines: list[str] = []
+        identity_lines.append("# Agent Identity\n")
+        identity_lines.append(f"**Name**: {config.name}")
+        identity_lines.append(f"**Role**: {config.role}")
         if config.display_name:
-            lines.append(f"**Display name**: {config.display_name}")
-        lines.append("")
+            identity_lines.append(f"**Display name**: {config.display_name}")
+        parts.append("\n".join(identity_lines))
 
+        # 2. Workspace guidance
+        parts.append(self._workspace_guidance(workspace))
+
+        # 3. Runtime context
+        parts.append(self._runtime_context())
+
+        # 4. System Prompt
         if config.prompt:
-            lines.append("## System Prompt\n")
-            lines.append(config.prompt.strip())
-            lines.append("")
+            parts.append(f"## System Prompt\n\n{config.prompt.strip()}")
 
-        # H1: Project conventions section (AC1 requirement)
-        lines.append(_DEFAULT_CONVENTIONS)
+        # 5. Bootstrap files
+        bootstrap = self._load_bootstrap_files(workspace)
+        if bootstrap:
+            parts.append(bootstrap)
 
-        # MCP tools guide
-        lines.append(_MCP_TOOLS_GUIDE)
+        # 6. Memory
+        memory = self._load_memory(workspace)
+        if memory:
+            parts.append(f"## Memory\n\n{memory}")
 
-        # Soul (personality / long-term memory)
+        # 7. Project conventions
+        parts.append(_DEFAULT_CONVENTIONS)
+
+        # 8. MCP tools guide
+        parts.append(_MCP_TOOLS_GUIDE)
+
+        # 9. Skills summary
+        skills_summary = self._build_skills_summary(workspace, config.skills)
+        if skills_summary:
+            parts.append(
+                f"## Skills\n\n"
+                f"The following skills extend your capabilities. "
+                f"To use a skill, read its SKILL.md file.\n\n"
+                f"{skills_summary}"
+            )
+
+        # 10. Soul (personality override — keep last)
         if config.soul:
-            lines.append("## Soul\n")
-            lines.append(config.soul.strip())
-            lines.append("")
+            parts.append(f"## Soul\n\n{config.soul.strip()}")
 
-        content = "\n".join(lines)
+        content = "\n\n".join(parts)
         (workspace / "CLAUDE.md").write_text(content, encoding="utf-8")
+
+    def _read_file_with_fallback(self, workspace: Path, filename: str) -> str | None:
+        """Read file from agent workspace, falling back to global workspace.
+
+        Args:
+            workspace: The agent-specific workspace directory.
+            filename: The file name to look for.
+
+        Returns:
+            File content (stripped) or None if not found in either location.
+        """
+        agent_file = workspace / filename
+        if agent_file.exists():
+            return agent_file.read_text(encoding="utf-8").strip()
+        global_file = self._root / "workspace" / filename
+        if global_file.exists():
+            return global_file.read_text(encoding="utf-8").strip()
+        return None
+
+    def _load_bootstrap_files(self, workspace: Path) -> str:
+        """Load bootstrap files from workspace (agent-local, then global fallback).
+
+        Reads AGENTS.md, USER.md, TOOLS.md, IDENTITY.md in that order.
+        SOUL.md is intentionally excluded — handled via config.soul.
+
+        Args:
+            workspace: The agent-specific workspace directory.
+
+        Returns:
+            Formatted bootstrap content string, or empty string if none found.
+        """
+        parts: list[str] = []
+        for filename in _BOOTSTRAP_FILES:
+            content = self._read_file_with_fallback(workspace, filename)
+            if content:
+                parts.append(f"## {filename}\n\n{content}")
+        return "\n\n".join(parts) if parts else ""
+
+    def _load_memory(self, workspace: Path) -> str | None:
+        """Read {workspace}/memory/MEMORY.md and return its content.
+
+        Args:
+            workspace: The agent-specific workspace directory.
+
+        Returns:
+            Memory content string or None if empty/missing.
+        """
+        memory_file = workspace / "memory" / "MEMORY.md"
+        if not memory_file.exists():
+            return None
+        content = memory_file.read_text(encoding="utf-8").strip()
+        return content if content else None
+
+    def _build_skills_summary(self, workspace: Path, skill_names: list[str]) -> str:
+        """Build skills summary from mapped skill symlinks.
+
+        Tries to use SkillsLoader from nanobot.agent.skills for rich XML output;
+        falls back to a simple listing from the .claude/skills/ symlinks.
+
+        Args:
+            workspace: The agent-specific workspace directory.
+            skill_names: List of skill names configured for the agent.
+
+        Returns:
+            Skills summary string, or empty string if no skills.
+        """
+        try:
+            from nanobot.agent.skills import SkillsLoader  # type: ignore[import]
+            loader = SkillsLoader(workspace, global_skills_dir=self._root / "workspace" / "skills")
+            return loader.build_skills_summary(allowed_names=skill_names)
+        except ImportError:
+            # Fallback: simple listing from symlinks
+            skills_dir = workspace / ".claude" / "skills"
+            if not skills_dir.exists():
+                return ""
+            entries = []
+            for entry in sorted(skills_dir.iterdir()):
+                if entry.is_dir() or entry.is_symlink():
+                    entries.append(f"- **{entry.name}**: {entry}")
+            return "\n".join(entries) if entries else ""
+
+    def _runtime_context(self) -> str:
+        """Build runtime metadata section.
+
+        Returns:
+            Runtime section string with OS, architecture, Python version, and time.
+        """
+        system = platform.system()
+        runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}"
+        now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
+        tz = time.strftime("%Z") or "UTC"
+        return f"## Runtime\n\n{runtime}, Python {platform.python_version()}\nCurrent Time: {now} ({tz})\n"
+
+    def _workspace_guidance(self, workspace: Path) -> str:
+        """Build workspace guidance section.
+
+        Args:
+            workspace: The agent-specific workspace directory.
+
+        Returns:
+            Workspace guidance section string.
+        """
+        ws = str(workspace.expanduser().resolve())
+        return (
+            f"## Workspace\n\n"
+            f"Your workspace is at: {ws}\n"
+            f"- Long-term memory: {ws}/memory/MEMORY.md\n"
+            f"- Custom skills: .claude/skills/{{skill-name}}/SKILL.md\n"
+        )
 
     def _map_skills(self, workspace: Path, skills: list[str]) -> None:
         """Create symlinks under .claude/skills/ for each requested skill.
