@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
-from filelock import FileLock
 
+from filelock import FileLock
 from loguru import logger
 
 from nanobot.utils.helpers import ensure_dir
@@ -69,10 +69,6 @@ class MemoryStore:
 
     def get_memory_context(self) -> str:
         long_term = self.read_long_term()
-        logger.info(
-            "[memory] get_memory_context from '{}': len={}, preview={}",
-            self.memory_file, len(long_term), repr(long_term[:300]) if long_term else "(empty)",
-        )
         return f"## Long-term Memory\n{long_term}" if long_term else ""
 
     async def consolidate(
@@ -83,7 +79,7 @@ class MemoryStore:
         *,
         archive_all: bool = False,
         memory_window: int = 50,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
         mc_system_prompt: str | None = None,
     ) -> bool:
         """Consolidate old messages into MEMORY.md + HISTORY.md via LLM tool call.
@@ -122,22 +118,32 @@ class MemoryStore:
 {chr(10).join(lines)}"""
 
         _system_content = mc_system_prompt or "You are a memory consolidation agent. Call the save_memory tool with your consolidation of the conversation."
+        chat_kwargs: dict = dict(
+            messages=[
+                {"role": "system", "content": _system_content},
+                {"role": "user", "content": prompt},
+            ],
+            tools=_SAVE_MEMORY_TOOL,
+            model=model,
+        )
+        if max_tokens is not None:
+            chat_kwargs["max_tokens"] = max_tokens
+
         try:
-            response = await provider.chat(
-                messages=[
-                    {"role": "system", "content": _system_content},
-                    {"role": "user", "content": prompt},
-                ],
-                tools=_SAVE_MEMORY_TOOL,
-                model=model,
-                max_tokens=max_tokens,
-            )
+            response = await provider.chat(**chat_kwargs)
 
             if not response.has_tool_calls:
                 logger.warning("Memory consolidation: LLM did not call save_memory, skipping")
                 return False
 
             args = response.tool_calls[0].arguments
+            # Some providers return arguments as a JSON string instead of dict
+            if isinstance(args, str):
+                args = json.loads(args)
+            if not isinstance(args, dict):
+                logger.warning("Memory consolidation: unexpected arguments type {}", type(args).__name__)
+                return False
+
             if entry := args.get("history_entry"):
                 if not isinstance(entry, str):
                     entry = json.dumps(entry, ensure_ascii=False)

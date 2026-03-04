@@ -418,7 +418,7 @@ class TestProcessDirectReturnsContentWhenMessageToolUsed:
             if msg_tool := loop.tools.get("message"):
                 if isinstance(msg_tool, MessageTool):
                     await msg_tool.execute("Hello from MC agent")
-            return "Hello from MC agent", []
+            return "Hello from MC agent", [], []
 
         loop._run_agent_loop = _fake_agent_loop
 

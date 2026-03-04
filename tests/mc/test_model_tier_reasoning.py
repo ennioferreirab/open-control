@@ -179,7 +179,8 @@ class TestReasoningPropagationToProviderChat:
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=MagicMock(
-            content="done", has_tool_calls=False, tool_calls=[], reasoning_content=None
+            content="done", has_tool_calls=False, tool_calls=[], reasoning_content=None,
+            thinking_blocks=None, finish_reason="stop",
         ))
         mock_provider.get_default_model = MagicMock(return_value=SONNET_MODEL)
 
@@ -218,7 +219,8 @@ class TestReasoningPropagationToProviderChat:
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=MagicMock(
-            content="done", has_tool_calls=False, tool_calls=[], reasoning_content=None
+            content="done", has_tool_calls=False, tool_calls=[], reasoning_content=None,
+            thinking_blocks=None, finish_reason="stop",
         ))
         mock_provider.get_default_model = MagicMock(return_value=SONNET_MODEL)
 
