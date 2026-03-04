@@ -770,25 +770,14 @@ class TestOrientationRosterInterpolation:
     def test_orientation_roster_interpolation(self):
         """{agent_roster} placeholder in orientation file is replaced with roster text."""
         from mc.step_dispatcher import _maybe_inject_orientation
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
 
-        orientation_content = "# Orientation\n\n{agent_roster}\n\nEnd."
-
-        mock_path = MagicMock()
-        mock_path.exists.return_value = True
-        mock_path.read_text.return_value = orientation_content
-
-        with patch("mc.step_dispatcher.Path") as MockPath, \
-             patch(
-                 "mc.executor.build_executor_agent_roster",
-                 return_value="- **test-agent** — tester (skills: testing)",
-             ):
-            (
-                MockPath.home.return_value
-                .__truediv__.return_value
-                .__truediv__.return_value
-                .__truediv__.return_value
-            ) = mock_path
+        # Mock load_orientation to return interpolated text (roster interpolation
+        # is tested in tests/mc/test_orientation.py; here we test delegation).
+        with patch(
+            "mc.orientation.load_orientation",
+            return_value="# Orientation\n\n- **test-agent** — tester (skills: testing)\n\nEnd.",
+        ):
             result = _maybe_inject_orientation("test-agent", None)
 
         assert result is not None
@@ -798,21 +787,12 @@ class TestOrientationRosterInterpolation:
     def test_orientation_without_placeholder(self):
         """Orientation files without {agent_roster} are returned unchanged (backwards compat)."""
         from mc.step_dispatcher import _maybe_inject_orientation
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
 
-        orientation_content = "# Orientation\n\nNo placeholder here.\n\nEnd."
-
-        mock_path = MagicMock()
-        mock_path.exists.return_value = True
-        mock_path.read_text.return_value = orientation_content
-
-        with patch("mc.step_dispatcher.Path") as MockPath:
-            (
-                MockPath.home.return_value
-                .__truediv__.return_value
-                .__truediv__.return_value
-                .__truediv__.return_value
-            ) = mock_path
+        with patch(
+            "mc.orientation.load_orientation",
+            return_value="# Orientation\n\nNo placeholder here.\n\nEnd.",
+        ):
             result = _maybe_inject_orientation("test-agent", None)
 
         assert result is not None
