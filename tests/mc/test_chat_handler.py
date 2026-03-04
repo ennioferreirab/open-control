@@ -348,3 +348,218 @@ class TestBridgeChatHelpers:
             "chats:updateStatus",
             {"chat_id": "chat789", "status": "done"},
         )
+
+
+# ---------------------------------------------------------------------------
+# Test: CC model routing
+# ---------------------------------------------------------------------------
+
+
+class TestCCModelRouting:
+    """Test that cc/ model prefix routes messages to ClaudeCodeProvider."""
+
+    def _make_cc_bridge(self) -> MagicMock:
+        bridge = _make_bridge()
+        bridge.get_agent_by_name = MagicMock(return_value=None)
+        return bridge
+
+    def _make_validate_result(self, model: str) -> MagicMock:
+        return MagicMock(
+            prompt="Be helpful.",
+            model=model,
+            skills=[],
+            display_name="CC Test Agent",
+        )
+
+    @pytest.mark.asyncio
+    async def test_cc_model_routes_to_cc_provider(self, tmp_path):
+        """When model resolves to cc/*, route to ClaudeCodeProvider and bypass AgentLoop."""
+        from mc.chat_handler import ChatHandler
+        from mc.types import CCTaskResult, WorkspaceContext
+
+        bridge = self._make_cc_bridge()
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(agent_name="cc-agent", content="Hello CC!")
+
+        # Set up agents dir
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "cc-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
+
+        ws_ctx = WorkspaceContext(
+            cwd=tmp_path / "ws",
+            mcp_config=tmp_path / "ws" / ".mcp.json",
+            claude_md=tmp_path / "ws" / "CLAUDE.md",
+            socket_path="/tmp/test-cc-chat.sock",
+        )
+
+        cc_result = CCTaskResult(
+            output="CC response",
+            session_id="sess-1",
+            cost_usd=0.01,
+            usage={},
+            is_error=False,
+        )
+
+        mock_ws_mgr = MagicMock()
+        mock_ws_mgr.prepare.return_value = ws_ctx
+
+        mock_ipc_server = MagicMock()
+        mock_ipc_server.start = AsyncMock()
+        mock_ipc_server.stop = AsyncMock()
+
+        mock_provider = MagicMock()
+        mock_provider.execute_task = AsyncMock(return_value=cc_result)
+
+        mock_cfg = MagicMock()
+        mock_cfg.claude_code.cli_path = "/usr/bin/claude"
+
+        with (
+            patch(
+                "mc.yaml_validator.validate_agent_file",
+                return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
+            ),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.cc_workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
+            patch("mc.mcp_ipc_server.MCSocketServer", return_value=mock_ipc_server),
+            patch("mc.cc_provider.ClaudeCodeProvider", return_value=mock_provider),
+            patch("nanobot.config.loader.load_config", return_value=mock_cfg),
+            patch("importlib.util.spec_from_file_location") as mock_spec_from,
+        ):
+            await handler._process_chat_message(msg)
+
+        # execute_task was called
+        mock_provider.execute_task.assert_called_once()
+
+        # send_chat_response called with the CC response
+        bridge.send_chat_response.assert_called_once()
+        call_args = bridge.send_chat_response.call_args[0]
+        assert call_args[0] == "cc-agent"
+        assert call_args[1] == "CC response"
+
+        # mark_chat_done called
+        bridge.mark_chat_done.assert_called_once_with("chat123")
+
+    @pytest.mark.asyncio
+    async def test_cc_prefix_stripped_in_agent_data(self, tmp_path):
+        """AgentData passed to execute_task must have model without cc/ prefix."""
+        from mc.chat_handler import ChatHandler
+        from mc.types import CCTaskResult, WorkspaceContext
+
+        bridge = self._make_cc_bridge()
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(agent_name="cc-agent", content="Strip prefix test")
+
+        # Set up agents dir
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "cc-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
+
+        ws_ctx = WorkspaceContext(
+            cwd=tmp_path / "ws",
+            mcp_config=tmp_path / "ws" / ".mcp.json",
+            claude_md=tmp_path / "ws" / "CLAUDE.md",
+            socket_path="/tmp/test-cc-chat2.sock",
+        )
+
+        cc_result = CCTaskResult(
+            output="response",
+            session_id="sess-2",
+            cost_usd=0.0,
+            usage={},
+            is_error=False,
+        )
+
+        captured_agent_config = {}
+
+        async def capture_execute_task(**kwargs):
+            captured_agent_config.update({"agent_config": kwargs.get("agent_config")})
+            return cc_result
+
+        mock_ws_mgr = MagicMock()
+        mock_ws_mgr.prepare.return_value = ws_ctx
+
+        mock_ipc_server = MagicMock()
+        mock_ipc_server.start = AsyncMock()
+        mock_ipc_server.stop = AsyncMock()
+
+        mock_provider = MagicMock()
+        mock_provider.execute_task = AsyncMock(side_effect=capture_execute_task)
+
+        mock_cfg = MagicMock()
+        mock_cfg.claude_code.cli_path = "/usr/bin/claude"
+
+        with (
+            patch(
+                "mc.yaml_validator.validate_agent_file",
+                return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
+            ),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.cc_workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
+            patch("mc.mcp_ipc_server.MCSocketServer", return_value=mock_ipc_server),
+            patch("mc.cc_provider.ClaudeCodeProvider", return_value=mock_provider),
+            patch("nanobot.config.loader.load_config", return_value=mock_cfg),
+            patch("importlib.util.spec_from_file_location"),
+        ):
+            await handler._process_chat_message(msg)
+
+        agent_config = captured_agent_config.get("agent_config")
+        assert agent_config is not None
+        assert agent_config.model == "claude-sonnet-4-6", (
+            f"Expected 'claude-sonnet-4-6', got {agent_config.model!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_non_cc_model_falls_through(self, tmp_path):
+        """Non cc/ model goes through the nanobot AgentLoop path, not CC provider."""
+        from mc.chat_handler import ChatHandler
+
+        bridge = self._make_cc_bridge()
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(agent_name="gpt-agent", content="Hello GPT!")
+
+        # Set up agents dir
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "gpt-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("name: gpt-agent\nmodel: gpt-4")
+
+        mock_agent_loop = MagicMock()
+        mock_agent_loop.process_direct = AsyncMock(return_value="GPT response")
+
+        with (
+            patch(
+                "importlib.util.spec_from_file_location"
+            ) as mock_spec_from,
+            patch("importlib.util.module_from_spec") as mock_mod_from,
+            patch(
+                "mc.provider_factory.create_provider",
+                return_value=(MagicMock(), "gpt-4"),
+            ),
+            patch(
+                "mc.yaml_validator.validate_agent_file",
+                return_value=self._make_validate_result("gpt-4"),
+            ),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.cc_provider.ClaudeCodeProvider") as mock_cc_provider_cls,
+        ):
+            mock_spec = MagicMock()
+            mock_spec_from.return_value = mock_spec
+
+            mock_loop_module = MagicMock()
+            mock_loop_module.AgentLoop = MagicMock(return_value=mock_agent_loop)
+            mock_bus_module = MagicMock()
+            mock_bus_module.MessageBus = MagicMock
+
+            mock_mod_from.side_effect = [mock_loop_module, mock_bus_module]
+            mock_spec.loader = MagicMock()
+
+            await handler._process_chat_message(msg)
+
+        # AgentLoop path was used (spec_from_file_location called for loop.py and bus)
+        assert mock_spec_from.call_count >= 1
+
+        # ClaudeCodeProvider was NOT instantiated
+        mock_cc_provider_cls.assert_not_called()
