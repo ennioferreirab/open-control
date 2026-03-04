@@ -192,6 +192,7 @@ class MCSocketServer:
         content: str,
         channel: str | None = None,
         chat_id: str | None = None,
+        media: list[str] | None = None,
         agent_name: str = "agent",
         task_id: str | None = None,
     ) -> dict[str, Any]:
@@ -199,7 +200,7 @@ class MCSocketServer:
         if self._bus and channel and chat_id:
             from nanobot.bus.events import OutboundMessage
 
-            msg = OutboundMessage(channel=channel, chat_id=chat_id, content=content)
+            msg = OutboundMessage(channel=channel, chat_id=chat_id, content=content, media=media or [])
             try:
                 # C2: use publish_outbound() not publish()
                 await self._bus.publish_outbound(msg)

@@ -124,6 +124,30 @@ class TestSendMessageTool:
         assert received["channel"] == "telegram"
         assert received["chat_id"] == "123"
 
+    async def test_send_message_passes_media(self):
+        """send_message includes media paths in IPC params when given."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        received: dict = {}
+
+        async def capture(method, params):
+            received.update(params)
+            return {"status": "Message sent"}
+
+        mock_ipc = MagicMock()
+        mock_ipc.request = capture
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            await bridge_mod.call_tool(
+                "send_message",
+                {
+                    "content": "here are the results",
+                    "media": ["/tmp/output.png", "/tmp/report.pdf"],
+                },
+            )
+
+        assert received["media"] == ["/tmp/output.png", "/tmp/report.pdf"]
+
 
 # ---------------------------------------------------------------------------
 # Test delegate_task tool
