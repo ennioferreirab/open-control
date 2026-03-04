@@ -12,6 +12,81 @@ from ..config import get_config, get_project_root
 from ..handler import BaseHandler
 
 
+def is_plan_file(file_path: str) -> bool:
+    """Check if a file path matches the plan pattern."""
+    root = get_project_root()
+    root_str = str(root)
+    rel_path = file_path
+    if file_path.startswith(root_str):
+        rel_path = file_path[len(root_str):].lstrip("/")
+    config = get_config()
+    return fnmatch.fnmatch(rel_path, config.plan_pattern)
+
+
+def parse_plan_tasks(content: str) -> list[dict]:
+    """Parse task definitions from plan file content."""
+    tasks: list[dict] = []
+    current: dict | None = None
+
+    for line in content.splitlines():
+        m = re.match(r"^###\s+Task\s+(\d+):\s+(.+)", line)
+        if m:
+            if current is not None:
+                tasks.append(current)
+            current = {
+                "id": int(m.group(1)),
+                "name": m.group(2).strip(),
+                "blocked_by": [],
+            }
+            continue
+
+        if current is not None:
+            b = re.match(r"^\*\*Blocked by:\*\*\s+(.+)", line.strip())
+            if b:
+                ids = [int(x) for x in re.findall(r"Task\s+(\d+)", b.group(1))]
+                current["blocked_by"] = ids
+
+    if current is not None:
+        tasks.append(current)
+    return tasks
+
+
+def compute_parallel_groups(tasks: list[dict]) -> list[dict]:
+    """Compute parallel execution groups for a list of tasks."""
+    by_id = {t["id"]: t for t in tasks}
+    all_ids = set(by_id.keys())
+    group_of: dict[int, int] = {}
+    remaining = set(all_ids)
+    group_num = 1
+
+    while remaining:
+        ready = []
+        for tid in sorted(remaining):
+            blocked_by = [b for b in by_id[tid]["blocked_by"] if b in all_ids]
+            if all(b not in remaining for b in blocked_by):
+                ready.append(tid)
+        if not ready:
+            for tid in sorted(remaining):
+                group_of[tid] = group_num
+            break
+        for tid in ready:
+            group_of[tid] = group_num
+            remaining.remove(tid)
+        group_num += 1
+
+    steps = []
+    for i, t in enumerate(tasks):
+        steps.append({
+            "id": t["id"],
+            "name": t["name"],
+            "order": i + 1,
+            "status": "pending",
+            "blocked_by": t["blocked_by"],
+            "parallel_group": group_of.get(t["id"], 1),
+        })
+    return steps
+
+
 class PlanTrackerHandler(BaseHandler):
     events = [("PostToolUse", "Write"), ("TaskCompleted", None)]
 
@@ -51,12 +126,12 @@ class PlanTrackerHandler(BaseHandler):
             content = abs_path.read_text()
 
         # Parse tasks
-        tasks = self._parse_tasks(content)
+        tasks = parse_plan_tasks(content)
         if not tasks:
             return None
 
         # Compute parallel groups
-        steps = self._compute_parallel_groups(tasks)
+        steps = compute_parallel_groups(tasks)
 
         # Preserve completed statuses
         tracker_dir = root / config.tracker_dir
@@ -151,68 +226,6 @@ class PlanTrackerHandler(BaseHandler):
             return msg
 
         return None
-
-    @staticmethod
-    def _parse_tasks(content: str) -> list[dict]:
-        tasks: list[dict] = []
-        current: dict | None = None
-
-        for line in content.splitlines():
-            m = re.match(r"^###\s+Task\s+(\d+):\s+(.+)", line)
-            if m:
-                if current is not None:
-                    tasks.append(current)
-                current = {
-                    "id": int(m.group(1)),
-                    "name": m.group(2).strip(),
-                    "blocked_by": [],
-                }
-                continue
-
-            if current is not None:
-                b = re.match(r"^\*\*Blocked by:\*\*\s+(.+)", line.strip())
-                if b:
-                    ids = [int(x) for x in re.findall(r"Task\s+(\d+)", b.group(1))]
-                    current["blocked_by"] = ids
-
-        if current is not None:
-            tasks.append(current)
-        return tasks
-
-    @staticmethod
-    def _compute_parallel_groups(tasks: list[dict]) -> list[dict]:
-        by_id = {t["id"]: t for t in tasks}
-        all_ids = set(by_id.keys())
-        group_of: dict[int, int] = {}
-        remaining = set(all_ids)
-        group_num = 1
-
-        while remaining:
-            ready = []
-            for tid in sorted(remaining):
-                blocked_by = [b for b in by_id[tid]["blocked_by"] if b in all_ids]
-                if all(b not in remaining for b in blocked_by):
-                    ready.append(tid)
-            if not ready:
-                for tid in sorted(remaining):
-                    group_of[tid] = group_num
-                break
-            for tid in ready:
-                group_of[tid] = group_num
-                remaining.remove(tid)
-            group_num += 1
-
-        steps = []
-        for i, t in enumerate(tasks):
-            steps.append({
-                "id": t["id"],
-                "name": t["name"],
-                "order": i + 1,
-                "status": "pending",
-                "blocked_by": t["blocked_by"],
-                "parallel_group": group_of.get(t["id"], 1),
-            })
-        return steps
 
     @staticmethod
     def _build_summary(steps: list[dict]) -> str:
