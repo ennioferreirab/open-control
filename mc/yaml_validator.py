@@ -231,18 +231,65 @@ def validate_agents_dir(
     return valid_agents, errors
 
 
-def _config_to_agent_data(config: AgentConfig) -> AgentData:
-    """Convert a validated AgentConfig pydantic model to an AgentData dataclass."""
+_VALID_PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions"}
+
+
+def _parse_claude_code_opts(raw: dict) -> ClaudeCodeOpts:
+    """Parse and type-validate a claude_code dict into a ClaudeCodeOpts instance.
+
+    Raises ValueError with an actionable message if any value has the wrong type.
+    """
+    budget = raw.get("max_budget_usd")
+    if budget is not None:
+        try:
+            budget = float(budget)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"claude_code.max_budget_usd must be a number, got: {budget!r}"
+            )
+
+    turns = raw.get("max_turns")
+    if turns is not None:
+        try:
+            turns = int(turns)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"claude_code.max_turns must be an integer, got: {turns!r}"
+            )
+
+    pm = raw.get("permission_mode", "acceptEdits")
+    if not isinstance(pm, str):
+        raise ValueError(
+            f"claude_code.permission_mode must be a string, got: {pm!r}"
+        )
+    if pm not in _VALID_PERMISSION_MODES:
+        raise ValueError(
+            f"claude_code.permission_mode must be one of "
+            f"{sorted(_VALID_PERMISSION_MODES)}, got: {pm!r}"
+        )
+
+    return ClaudeCodeOpts(
+        max_budget_usd=budget,
+        max_turns=turns,
+        permission_mode=pm,
+        allowed_tools=raw.get("allowed_tools"),
+        disallowed_tools=raw.get("disallowed_tools"),
+    )
+
+
+def _config_to_agent_data(config: AgentConfig) -> AgentData | list[str]:
+    """Convert a validated AgentConfig pydantic model to an AgentData dataclass.
+
+    Returns AgentData on success, or a list of error strings if claude_code values
+    fail type validation.
+    """
     backend = config.backend or "nanobot"
     cc_opts = None
     if backend == "claude-code" and config.claude_code:
-        cc_opts = ClaudeCodeOpts(
-            max_budget_usd=config.claude_code.get("max_budget_usd"),
-            max_turns=config.claude_code.get("max_turns"),
-            permission_mode=config.claude_code.get("permission_mode", "acceptEdits"),
-            allowed_tools=config.claude_code.get("allowed_tools"),
-            disallowed_tools=config.claude_code.get("disallowed_tools"),
-        )
+        try:
+            cc_opts = _parse_claude_code_opts(config.claude_code)
+        except ValueError as exc:
+            return [f"Field 'claude_code': {exc}"]
     return AgentData(
         name=config.name,
         display_name=config.display_name or config.name,

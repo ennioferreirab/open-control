@@ -554,7 +554,7 @@ class ConvexBridge:
             args["soul"] = agent_data.soul
         if agent_data.is_system:
             args["is_system"] = True
-        if hasattr(agent_data, 'backend') and agent_data.backend != "nanobot":
+        if agent_data.backend != "nanobot":
             args["backend"] = agent_data.backend
         return self.mutation("agents:upsertByName", args)
 
@@ -760,6 +760,14 @@ class ConvexBridge:
         soul = agent_data.get("soul")
         if soul:
             config["soul"] = soul
+
+        backend = agent_data.get("backend")
+        if backend and backend != "nanobot":
+            config["backend"] = backend
+
+        claude_code = agent_data.get("claude_code_opts") or agent_data.get("claude_code")
+        if claude_code and isinstance(claude_code, dict):
+            config["claude_code"] = claude_code
 
         config_path.write_text(
             yaml.dump(config, default_flow_style=False, allow_unicode=True, sort_keys=False),

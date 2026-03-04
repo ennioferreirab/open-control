@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from mc.types import AgentData, ClaudeCodeOpts
+from nanobot.config.schema import ClaudeCodeConfig
 
 
 class TestClaudeCodeOpts:
@@ -95,3 +97,51 @@ class TestAgentDataBackendFields:
         )
         assert agent.backend == "claude-code"
         assert agent.claude_code_opts is None
+
+
+class TestClaudeCodeConfig:
+    """Tests for the ClaudeCodeConfig global schema model (CC-1)."""
+
+    def test_default_values(self) -> None:
+        cfg = ClaudeCodeConfig()
+        assert cfg.cli_path == "claude"
+        assert cfg.default_model == "claude-sonnet-4-6"
+        assert cfg.default_max_budget_usd == 5.0
+        assert cfg.default_max_turns == 50
+        assert cfg.default_permission_mode == "acceptEdits"
+        assert cfg.auth_method == "oauth"
+
+    def test_valid_auth_method_api_key(self) -> None:
+        cfg = ClaudeCodeConfig(auth_method="api_key")
+        assert cfg.auth_method == "api_key"
+
+    def test_invalid_auth_method_raises_error(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            ClaudeCodeConfig(auth_method="token")
+        assert "auth_method" in str(exc_info.value)
+
+    def test_negative_budget_raises_error(self) -> None:
+        with pytest.raises(ValidationError):
+            ClaudeCodeConfig(default_max_budget_usd=-1.0)
+
+    def test_zero_budget_is_valid(self) -> None:
+        cfg = ClaudeCodeConfig(default_max_budget_usd=0.0)
+        assert cfg.default_max_budget_usd == 0.0
+
+    def test_zero_max_turns_raises_error(self) -> None:
+        with pytest.raises(ValidationError):
+            ClaudeCodeConfig(default_max_turns=0)
+
+    def test_negative_max_turns_raises_error(self) -> None:
+        with pytest.raises(ValidationError):
+            ClaudeCodeConfig(default_max_turns=-5)
+
+    def test_invalid_permission_mode_raises_error(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            ClaudeCodeConfig(default_permission_mode="superAdmin")
+        assert "default_permission_mode" in str(exc_info.value)
+
+    def test_valid_permission_modes(self) -> None:
+        for mode in ("default", "acceptEdits", "bypassPermissions"):
+            cfg = ClaudeCodeConfig(default_permission_mode=mode)
+            assert cfg.default_permission_mode == mode

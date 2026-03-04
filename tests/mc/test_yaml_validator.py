@@ -308,6 +308,64 @@ class TestBackendField:
         # claude_code section is ignored when backend is nanobot
         assert result.claude_code_opts is None
 
+    def test_claude_code_section_with_backend_omitted_ignored(self, tmp_path: Path) -> None:
+        """When backend is omitted, it defaults to nanobot and claude_code is ignored."""
+        path = _write_yaml(tmp_path, "agent.yaml", """\
+            name: my-agent
+            role: Agent
+            prompt: "You are an agent."
+            claude_code:
+              max_budget_usd: 5.0
+              max_turns: 10
+        """)
+        result = validate_agent_file(path)
+        assert isinstance(result, AgentData)
+        assert result.backend == "nanobot"
+        # claude_code section is ignored when backend is not explicitly "claude-code"
+        assert result.claude_code_opts is None
+
+    def test_claude_code_invalid_budget_type_returns_error(self, tmp_path: Path) -> None:
+        """Non-numeric max_budget_usd should return a validation error."""
+        path = _write_yaml(tmp_path, "agent.yaml", """\
+            name: cc-agent
+            role: Agent
+            prompt: "You are a claude-code agent."
+            backend: claude-code
+            claude_code:
+              max_budget_usd: "abc"
+        """)
+        result = validate_agent_file(path)
+        assert isinstance(result, list)
+        assert any("max_budget_usd" in e for e in result)
+
+    def test_claude_code_invalid_turns_type_returns_error(self, tmp_path: Path) -> None:
+        """Non-integer max_turns should return a validation error."""
+        path = _write_yaml(tmp_path, "agent.yaml", """\
+            name: cc-agent
+            role: Agent
+            prompt: "You are a claude-code agent."
+            backend: claude-code
+            claude_code:
+              max_turns: "notanint"
+        """)
+        result = validate_agent_file(path)
+        assert isinstance(result, list)
+        assert any("max_turns" in e for e in result)
+
+    def test_claude_code_invalid_permission_mode_returns_error(self, tmp_path: Path) -> None:
+        """Invalid permission_mode should return a validation error."""
+        path = _write_yaml(tmp_path, "agent.yaml", """\
+            name: cc-agent
+            role: Agent
+            prompt: "You are a claude-code agent."
+            backend: claude-code
+            claude_code:
+              permission_mode: superAdmin
+        """)
+        result = validate_agent_file(path)
+        assert isinstance(result, list)
+        assert any("permission_mode" in e for e in result)
+
 
 # ---------------------------------------------------------------------------
 # Directory validation tests

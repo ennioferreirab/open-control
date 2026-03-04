@@ -323,10 +323,10 @@ class ClaudeCodeConfig(Base):
 
     cli_path: str = "claude"
     default_model: str = "claude-sonnet-4-6"
-    default_max_budget_usd: float = 5.0
-    default_max_turns: int = 50
-    default_permission_mode: str = "acceptEdits"
-    auth_method: str = "oauth"  # "oauth" | "api_key"
+    default_max_budget_usd: float = Field(default=5.0, ge=0)
+    default_max_turns: int = Field(default=50, ge=1)
+    default_permission_mode: Literal["default", "acceptEdits", "bypassPermissions"] = "acceptEdits"
+    auth_method: Literal["oauth", "api_key"] = "oauth"
 
 
 class Config(BaseSettings):
