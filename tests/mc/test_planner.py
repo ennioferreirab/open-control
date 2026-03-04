@@ -842,14 +842,21 @@ class TestEnrichedPlannerFeatures:
         assert "**code-agent**" in roster
         assert "Skills: python, javascript" in roster
 
-    def test_system_prompt_has_decomposition_principles(self):
+    def test_system_prompt_has_decomposition_guidance(self):
         """SYSTEM_PROMPT must contain key conceptual sections."""
         from mc.planner import SYSTEM_PROMPT
 
-        assert "Decomposition Principles" in SYSTEM_PROMPT
+        assert "Decomposition" in SYSTEM_PROMPT
         assert "Anti-Patterns" in SYSTEM_PROMPT
         assert "Examples" in SYSTEM_PROMPT
         assert "Tool Awareness" in SYSTEM_PROMPT
+
+    def test_system_prompt_encourages_multi_step_for_complex_tasks(self):
+        """SYSTEM_PROMPT should NOT say 'most tasks need 1 step'."""
+        from mc.planner import SYSTEM_PROMPT
+
+        assert "most tasks need exactly 1 step" not in SYSTEM_PROMPT
+        assert "most tasks need only 1 step" not in SYSTEM_PROMPT
 
     def test_system_prompt_has_few_shot_examples(self):
         """SYSTEM_PROMPT must include at least three numbered examples."""
@@ -858,6 +865,14 @@ class TestEnrichedPlannerFeatures:
         assert "Example 1" in SYSTEM_PROMPT
         assert "Example 2" in SYSTEM_PROMPT
         assert "Example 3" in SYSTEM_PROMPT
+
+    def test_user_prompt_template_does_not_bias_single_step(self):
+        """USER_PROMPT_TEMPLATE should not bias toward single-step plans."""
+        from mc.planner import USER_PROMPT_TEMPLATE
+
+        lower = USER_PROMPT_TEMPLATE.lower()
+        assert "most tasks need only 1 step" not in lower
+        assert "most tasks need exactly 1 step" not in lower
 
 
 # ---------------------------------------------------------------------------

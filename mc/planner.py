@@ -39,12 +39,17 @@ structured execution steps and assign each step to the most appropriate agent.
 
 You MUST respond with valid JSON only, no markdown, no explanation.
 
-## Decomposition Principles
+## Decomposition Guidelines
 
 - Each step = 1 clear objective. Never mix unrelated actions in one step.
-- DEFAULT: most tasks need exactly 1 step. Simplicity is the goal.
-- Split ONLY when there are genuinely distinct phases or different agents are required.
-- If you need more than 4-5 steps, the task is likely poorly defined — stay lean.
+- Analyze the task complexity and decompose accordingly:
+  - **Simple tasks** (single lookup, quick edit, direct question): 1 step is fine.
+  - **Moderate tasks** (research + synthesize, build + test): 2-3 steps with clear phases.
+  - **Complex tasks** (multi-source research, create + iterate, plan + execute): 3-5 steps.
+- Each step description must be thorough and self-contained — it is the ONLY instruction \
+the executor agent will receive. Include: what to do, how to approach it, what sources \
+to check, and what output to produce.
+- Keep plans under 6 steps. If you need more, the task is likely poorly defined.
 
 ## Tool Awareness
 
@@ -55,23 +60,33 @@ Executor agents have tools: file I/O, shell exec, web search, cron scheduling.
 ## Anti-Patterns (never do these)
 
 - Mixing "do X" and "schedule Y" in one step when they are unrelated concerns
-- Creating "coordination", "handoff", or "review" steps
-- Splitting a simple task into multiple steps just to look thorough
+- Creating "coordination", "handoff", or "review" steps — agents work autonomously
+- Creating a single vague step that just restates the task title
+- Writing step descriptions that are too brief for the agent to act on
 
 ## Examples
 
 Example 1 — Simple task (1 step):
 Task: "Summarize the Q3 report"
-Good plan: 1 step assigned to the research agent with all context.
+Good plan: 1 step assigned to the research agent. Description explains what to summarize \
+and the expected output format.
 
-Example 2 — Action + scheduling (2 steps, same agent):
+Example 2 — Research + creation task (3 steps):
+Task: "Research competitor pricing and create a comparison document"
+Good plan: step_1 researches competitor A pricing (web agent), step_2 researches competitor B \
+pricing (web agent, parallel with step_1), step_3 creates comparison document (docs agent, \
+blocked by step_1 and step_2).
+
+Example 3 — Action + scheduling (2 steps, same agent):
 Task: "Fetch weather data and schedule a daily refresh"
 Good plan: step_1 fetches data (agent with web_search), step_2 sets up cron \
 (same agent, blocked by step_1).
 
-Example 3 — Multi-agent pipeline (sequential steps):
-Task: "Scrape competitor prices then update our pricing spreadsheet"
-Good plan: step_1 scrapes (web agent), step_2 updates sheet (data agent, blocked by step_1).
+Example 4 — Multi-phase content creation (3 steps):
+Task: "Create a marketing plan for AI product launch based on YouTube and blog references"
+Good plan: step_1 researches YouTube creator references and copy patterns (web agent), \
+step_2 researches blog references and launch copy examples (web agent, parallel with step_1), \
+step_3 synthesizes findings into a structured marketing plan (docs agent, blocked by step_1 and step_2).
 
 ## Response Format
 
@@ -79,8 +94,8 @@ Good plan: step_1 scrapes (web agent), step_2 updates sheet (data agent, blocked
   "steps": [
     {
       "tempId": "step_1",
-      "title": "Short title",
-      "description": "Detailed description of what this step does",
+      "title": "Short action-oriented title",
+      "description": "Detailed, self-contained instructions for the executor agent. Include: objective, approach, sources to check, and expected output.",
       "assignedAgent": "agent-name",
       "blockedBy": [],
       "parallelGroup": 1,
@@ -100,7 +115,8 @@ Good plan: step_1 scrapes (web agent), step_2 updates sheet (data agent, blocked
 - Steps that depend on others get a higher parallelGroup number
 - order is display/execution order (1, 2, 3, ...)
 - title should be brief and action-oriented
-- description should explain what the agent needs to do in detail"""
+- description MUST be detailed enough for the agent to work autonomously — \
+think of it as a complete task brief"""
 
 USER_PROMPT_TEMPLATE = """\
 Task: {title}
@@ -109,8 +125,9 @@ Description: {description}
 Available agents (name, role, skills, tools):
 {agent_roster}
 
-Create an execution plan for this task. \
-Most tasks need only 1 step. Split ONLY when genuinely distinct concerns exist."""
+Create an execution plan for this task. Decompose into as many steps as the task \
+genuinely requires — use 1 step for simple tasks, 2-5 steps for complex ones. \
+Write detailed step descriptions that the executor agent can act on autonomously."""
 
 
 def extract_keywords(title: str, description: str | None = None) -> list[str]:
