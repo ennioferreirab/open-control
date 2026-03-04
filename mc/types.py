@@ -387,7 +387,7 @@ class ActivityData:
 
 @dataclass
 class WorkspaceContext:
-    """Paths and socket info for a Claude Code agent workspace (CC-3)."""
+    """Context for a Claude Code agent workspace, returned by CCWorkspaceManager.prepare()."""
     cwd: Path
     mcp_config: Path
     claude_md: Path
