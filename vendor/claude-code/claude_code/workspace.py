@@ -71,7 +71,13 @@ class CCWorkspaceManager:
         self._root = workspace_root or Path.home() / ".nanobot"
         self._vendor_skills = vendor_skills_dir or _VENDOR_SKILLS_DIR
 
-    def prepare(self, agent_name: str, agent_config: AgentData, task_id: str) -> WorkspaceContext:
+    def prepare(
+        self,
+        agent_name: str,
+        agent_config: AgentData,
+        task_id: str,
+        orientation: str | None = None,
+    ) -> WorkspaceContext:
         """Set up the workspace directory for an agent and return its context.
 
         Creates directory structure, generates CLAUDE.md, maps skill symlinks,
@@ -81,6 +87,7 @@ class CCWorkspaceManager:
             agent_name: Unique agent identifier (used for paths and socket name).
             agent_config: Agent configuration data including prompt, soul, and skills.
             task_id: The Convex task _id being executed.
+            orientation: Optional global orientation text to inject into CLAUDE.md.
 
         Returns:
             WorkspaceContext with all resolved paths.
@@ -101,7 +108,7 @@ class CCWorkspaceManager:
         # Skills must be mapped BEFORE generating CLAUDE.md so the skills
         # summary in _generate_claude_md() can reference the mapped symlinks.
         self._map_skills(workspace, agent_config.skills)
-        self._generate_claude_md(workspace, agent_config)
+        self._generate_claude_md(workspace, agent_config, orientation=orientation)
 
         # H3: Validate socket path length (macOS limit ~104 chars)
         # Include first 8 chars of task_id to prevent socket clobber when the
@@ -124,7 +131,9 @@ class CCWorkspaceManager:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _generate_claude_md(self, workspace: Path, config: AgentData) -> None:
+    def _generate_claude_md(
+        self, workspace: Path, config: AgentData, orientation: str | None = None
+    ) -> None:
         """Write CLAUDE.md with agent identity, context, and MCP tools guide.
 
         Section order:
@@ -132,6 +141,7 @@ class CCWorkspaceManager:
           2. Workspace guidance
           3. Runtime context
           4. System Prompt (config.prompt)
+          4.5. Orientation (global agent context from MC)
           5. Bootstrap files (AGENTS.md, USER.md, TOOLS.md, IDENTITY.md)
           6. Memory (MEMORY.md content)
           7. Project Conventions
@@ -159,6 +169,10 @@ class CCWorkspaceManager:
         # 4. System Prompt
         if config.prompt:
             parts.append(f"## System Prompt\n\n{config.prompt.strip()}")
+
+        # 4.5. Orientation (global agent context from MC)
+        if orientation:
+            parts.append(f"## Orientation\n\n{orientation}")
 
         # 5. Bootstrap files
         bootstrap = self._load_bootstrap_files(workspace)

@@ -796,35 +796,12 @@ class TaskExecutor:
     def _maybe_inject_orientation(
         self, agent_name: str, agent_prompt: str | None
     ) -> str | None:
-        """Prepend global orientation for non-lead-agent MC agents.
+        """Prepend global orientation for non-lead-agent MC agents."""
+        from mc.orientation import load_orientation
 
-        Reads ~/.nanobot/mc/agent-orientation.md and prepends its content
-        before the agent's own prompt. Returns prompt unchanged if:
-        - agent is 'lead-agent'
-        - orientation file does not exist
-        - orientation file is empty
-        """
-        if is_lead_agent(agent_name):
-            return agent_prompt
-
-        orientation_path = Path.home() / ".nanobot" / "mc" / "agent-orientation.md"
-        if not orientation_path.exists():
-            return agent_prompt
-
-        orientation = orientation_path.read_text(encoding="utf-8").strip()
+        orientation = load_orientation(agent_name)
         if not orientation:
             return agent_prompt
-
-        # Interpolate {agent_roster} placeholder if present
-        if "{agent_roster}" in orientation:
-            orientation = orientation.replace(
-                "{agent_roster}", build_executor_agent_roster()
-            )
-
-        # Interpolate {host_timezone} placeholder if present
-        if "{host_timezone}" in orientation:
-            iana_tz = _get_iana_timezone() or "UTC"
-            orientation = orientation.replace("{host_timezone}", iana_tz)
 
         logger.info(
             "[executor] Global orientation injected for agent '%s'", agent_name
@@ -1323,7 +1300,9 @@ class TaskExecutor:
         # 1. Prepare workspace
         try:
             ws_mgr = CCWorkspaceManager()
-            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id)
+            from mc.orientation import load_orientation
+            orientation = load_orientation(agent_name)
+            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id, orientation=orientation)
         except Exception as exc:
             await self._crash_task(task_id, title, f"Workspace preparation failed: {exc}", agent_name)
             return

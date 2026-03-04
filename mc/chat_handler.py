@@ -111,9 +111,11 @@ class ChatHandler:
             agent_model = None
             agent_skills = None
             agent_display_name = agent_name
+            agent_data_full = None
             if config_file.exists():
                 result = validate_agent_file(config_file)
                 if not isinstance(result, list):
+                    agent_data_full = result
                     agent_prompt = result.prompt
                     agent_model = result.model
                     agent_skills = result.skills
@@ -132,14 +134,19 @@ class ChatHandler:
             if agent_model and is_cc_model(agent_model):
                 cc_model_name = extract_cc_model_name(agent_model)
                 from mc.types import AgentData
-                agent_data_for_cc = AgentData(
-                    name=agent_name,
-                    display_name=agent_display_name,
-                    role="agent",
-                    model=cc_model_name,
-                    backend="claude-code",
-                )
-                # Enrich from Convex agent data
+                if agent_data_full:
+                    agent_data_for_cc = agent_data_full
+                    agent_data_for_cc.model = cc_model_name
+                    agent_data_for_cc.backend = "claude-code"
+                else:
+                    agent_data_for_cc = AgentData(
+                        name=agent_name,
+                        display_name=agent_display_name,
+                        role="agent",
+                        model=cc_model_name,
+                        backend="claude-code",
+                    )
+                # Enrich from Convex agent data (for claude_code_opts not in config.yaml)
                 try:
                     convex_agent_raw = await asyncio.to_thread(
                         self._bridge.get_agent_by_name, agent_name
@@ -168,7 +175,9 @@ class ChatHandler:
 
                 try:
                     ws_mgr = CCWorkspaceManager()
-                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id)
+                    from mc.orientation import load_orientation
+                    orientation = load_orientation(agent_name)
+                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation)
                 except Exception as exc:
                     raise RuntimeError(f"CC workspace preparation failed: {exc}")
 

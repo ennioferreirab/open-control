@@ -242,9 +242,9 @@ class TestSkillsSummary:
             call_log.append("_map_skills")
             original_map_skills(workspace, skills)
 
-        def patched_gen_claude_md(workspace: Path, config: AgentData) -> None:
+        def patched_gen_claude_md(workspace: Path, config: AgentData, **kwargs) -> None:
             call_log.append("_generate_claude_md")
-            original_gen_claude_md(workspace, config)
+            original_gen_claude_md(workspace, config, **kwargs)
 
         manager._map_skills = patched_map_skills  # type: ignore[method-assign]
         manager._generate_claude_md = patched_gen_claude_md  # type: ignore[method-assign]
@@ -405,3 +405,52 @@ class TestContextParityRegression:
         # New sections
         assert "## Runtime" in content
         assert "## Workspace" in content
+
+
+# ---------------------------------------------------------------------------
+# Orientation section (CC-9)
+# ---------------------------------------------------------------------------
+
+class TestOrientationSection:
+    def test_orientation_included_when_provided(self, tmp_path: Path) -> None:
+        """Orientation text appears as ## Orientation in CLAUDE.md."""
+        agent = _make_agent()
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        ctx = manager.prepare("test-agent", agent, "task123", orientation="You work for Acme Corp.")
+        content = ctx.claude_md.read_text(encoding="utf-8")
+
+        assert "## Orientation" in content
+        assert "You work for Acme Corp." in content
+
+    def test_orientation_omitted_when_none(self, tmp_path: Path) -> None:
+        """No ## Orientation section when orientation is None."""
+        agent = _make_agent()
+        content = _prepare_and_read(tmp_path, agent)
+
+        assert "## Orientation" not in content
+
+    def test_orientation_between_prompt_and_bootstrap(self, tmp_path: Path) -> None:
+        """Orientation section appears after System Prompt and before bootstrap files."""
+        agent_workspace = tmp_path / "agents" / "test-agent"
+        agent_workspace.mkdir(parents=True, exist_ok=True)
+        (agent_workspace / "AGENTS.md").write_text("Agent roster", encoding="utf-8")
+
+        agent = _make_agent(prompt="My prompt")
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        ctx = manager.prepare("test-agent", agent, "task123", orientation="Orientation text")
+        content = ctx.claude_md.read_text(encoding="utf-8")
+
+        prompt_pos = content.index("## System Prompt")
+        orientation_pos = content.index("## Orientation")
+        bootstrap_pos = content.index("## AGENTS.md")
+
+        assert prompt_pos < orientation_pos < bootstrap_pos
+
+    def test_orientation_empty_string_not_included(self, tmp_path: Path) -> None:
+        """Empty orientation string should not produce an Orientation section."""
+        agent = _make_agent()
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        ctx = manager.prepare("test-agent", agent, "task123", orientation="")
+        content = ctx.claude_md.read_text(encoding="utf-8")
+
+        assert "## Orientation" not in content

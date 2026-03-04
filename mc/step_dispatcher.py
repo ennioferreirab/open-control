@@ -69,21 +69,11 @@ def _maybe_inject_orientation(
     agent_name: str, agent_prompt: str | None
 ) -> str | None:
     """Prepend global orientation for non-lead agents."""
-    if is_lead_agent(agent_name):
-        return agent_prompt
+    from mc.orientation import load_orientation
 
-    orientation_path = Path.home() / ".nanobot" / "mc" / "agent-orientation.md"
-    if not orientation_path.exists():
-        return agent_prompt
-
-    orientation = orientation_path.read_text(encoding="utf-8").strip()
+    orientation = load_orientation(agent_name)
     if not orientation:
         return agent_prompt
-
-    # Interpolate {agent_roster} placeholder if present
-    if "{agent_roster}" in orientation:
-        from mc.executor import build_executor_agent_roster
-        orientation = orientation.replace("{agent_roster}", build_executor_agent_roster())
 
     if agent_prompt:
         return f"{orientation}\n\n---\n\n{agent_prompt}"
@@ -528,14 +518,32 @@ class StepDispatcher:
             # Route to Claude Code backend when model starts with cc/ (e.g. set via tier dropdown)
             if agent_model and is_cc_model(agent_model):
                 cc_model_name = extract_cc_model_name(agent_model)
-                agent_data_for_cc = AgentData(
-                    name=agent_name,
-                    display_name=agent_name,
-                    role="agent",
-                    model=cc_model_name,
-                    backend="claude-code",
-                )
-                # Try to enrich from Convex agent data
+
+                # Load full AgentData from config.yaml for CC context enrichment (CC-9)
+                from mc.gateway import AGENTS_DIR
+                from mc.yaml_validator import validate_agent_file
+
+                config_path = AGENTS_DIR / agent_name / "config.yaml"
+                full_agent_data = None
+                if config_path.exists():
+                    result = validate_agent_file(config_path)
+                    if isinstance(result, AgentData):
+                        full_agent_data = result
+
+                if full_agent_data:
+                    agent_data_for_cc = full_agent_data
+                    agent_data_for_cc.model = cc_model_name
+                    agent_data_for_cc.backend = "claude-code"
+                else:
+                    agent_data_for_cc = AgentData(
+                        name=agent_name,
+                        display_name=agent_name,
+                        role="agent",
+                        model=cc_model_name,
+                        backend="claude-code",
+                    )
+
+                # Try to enrich from Convex agent data (for claude_code_opts not in config.yaml)
                 try:
                     convex_agent_raw = await asyncio.to_thread(
                         self._bridge.get_agent_by_name, agent_name
@@ -563,7 +571,9 @@ class StepDispatcher:
 
                 try:
                     ws_mgr = CCWorkspaceManager()
-                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id)
+                    from mc.orientation import load_orientation
+                    orientation = load_orientation(agent_name)
+                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation)
                 except Exception as exc:
                     error_msg = f"CC workspace preparation failed for step '{step_title}': {exc}"
                     logger.error("[dispatcher] %s", error_msg)
