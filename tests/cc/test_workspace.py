@@ -432,3 +432,74 @@ class TestIdempotentPreparation:
         data = json.loads(ctx.mcp_config.read_text())
         env = data["mcpServers"]["nanobot"]["env"]
         assert env["TASK_ID"] == "task-second"
+
+
+# ---------------------------------------------------------------------------
+# Skill availability check (via SkillsLoader)
+# ---------------------------------------------------------------------------
+
+class TestSkillAvailabilityCheck:
+    """Verify that _map_skills() skips unavailable skills detected by SkillsLoader."""
+
+    def _make_vendor_skill(self, vendor_dir: Path, skill_name: str, skill_md_content: str) -> Path:
+        """Helper: create a skill directory under vendor_dir with given SKILL.md content."""
+        skill_dir = vendor_dir / skill_name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(skill_md_content)
+        return skill_dir
+
+    def test_unavailable_skill_not_symlinked(self, tmp_path: Path) -> None:
+        """A skill whose binary requirement is missing must NOT have its symlink created."""
+        vendor_dir = tmp_path / "vendor-skills"
+        self._make_vendor_skill(
+            vendor_dir,
+            "needs-nonexistent-bin",
+            '---\nmetadata: \'{"nanobot":{"requires":{"bins":["__nonexistent_binary_xyz__"]}}}\'\n---\n# Skill\n',
+        )
+
+        manager = CCWorkspaceManager(workspace_root=tmp_path, vendor_skills_dir=vendor_dir)
+        agent = _make_agent(skills=["needs-nonexistent-bin"])
+        ctx = manager.prepare("test-agent", agent, "task123")
+
+        link = ctx.cwd / ".claude" / "skills" / "needs-nonexistent-bin"
+        assert not link.exists(), "Symlink must not be created for an unavailable skill"
+        assert not link.is_symlink(), "Broken symlink must not be created for an unavailable skill"
+
+    def test_available_skill_still_symlinked(self, tmp_path: Path) -> None:
+        """A skill with no requirements (always available) must have its symlink created normally."""
+        vendor_dir = tmp_path / "vendor-skills"
+        self._make_vendor_skill(
+            vendor_dir,
+            "no-requirements-skill",
+            "# No Requirements Skill\n\nThis skill has no special requirements.\n",
+        )
+
+        manager = CCWorkspaceManager(workspace_root=tmp_path, vendor_skills_dir=vendor_dir)
+        agent = _make_agent(skills=["no-requirements-skill"])
+        ctx = manager.prepare("test-agent", agent, "task123")
+
+        link = ctx.cwd / ".claude" / "skills" / "no-requirements-skill"
+        assert link.is_symlink(), "Symlink must be created for an available skill"
+
+    def test_unavailable_skill_logged_as_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Skipping an unavailable skill must produce a WARNING log with the skill name and 'unavailable'."""
+        vendor_dir = tmp_path / "vendor-skills"
+        self._make_vendor_skill(
+            vendor_dir,
+            "missing-binary-skill",
+            '---\nmetadata: \'{"nanobot":{"requires":{"bins":["__nonexistent_binary_xyz__"]}}}\'\n---\n# Skill\n',
+        )
+
+        manager = CCWorkspaceManager(workspace_root=tmp_path, vendor_skills_dir=vendor_dir)
+        agent = _make_agent(skills=["missing-binary-skill"])
+
+        with caplog.at_level(logging.WARNING, logger="claude_code.workspace"):
+            manager.prepare("test-agent", agent, "task123")
+
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any(
+            "missing-binary-skill" in msg and "unavailable" in msg
+            for msg in warning_messages
+        ), f"Expected WARNING containing 'missing-binary-skill' and 'unavailable', got: {warning_messages}"

@@ -190,6 +190,11 @@ class CCWorkspaceManager:
         # 8. MCP tools guide
         parts.append(_MCP_TOOLS_GUIDE)
 
+        # 8.5. Always-on skills
+        always_content = self._build_always_skills_content(workspace)
+        if always_content:
+            parts.append(f"## Active Skills\n\n{always_content}")
+
         # 9. Skills summary
         skills_summary = self._build_skills_summary(workspace, config.skills)
         if skills_summary:
@@ -258,6 +263,18 @@ class CCWorkspaceManager:
             return None
         content = memory_file.read_text(encoding="utf-8").strip()
         return content if content else None
+
+    def _build_always_skills_content(self, workspace: Path) -> str:
+        """Load always-on skills content for injection into CLAUDE.md."""
+        try:
+            from nanobot.agent.skills import SkillsLoader  # type: ignore[import]
+            loader = SkillsLoader(workspace, global_skills_dir=self._root / "workspace" / "skills")
+            always_names = loader.get_always_skills()
+            if not always_names:
+                return ""
+            return loader.load_skills_for_context(always_names)
+        except ImportError:
+            return ""
 
     def _build_skills_summary(self, workspace: Path, skill_names: list[str]) -> str:
         """Build skills summary from mapped skill symlinks.
@@ -333,6 +350,17 @@ class CCWorkspaceManager:
                 logger.debug("Removing broken symlink: %s", entry)
                 entry.unlink()
 
+        _loader = None
+        try:
+            from nanobot.agent.skills import SkillsLoader
+            _loader = SkillsLoader(
+                workspace,
+                global_skills_dir=self._root / "workspace" / "skills",
+                builtin_skills_dir=self._vendor_skills,
+            )
+        except ImportError:
+            pass
+
         for skill_name in skills:
             # C2: Validate skill name to prevent path traversal
             if "/" in skill_name or skill_name.startswith("."):
@@ -342,6 +370,14 @@ class CCWorkspaceManager:
             target = self._find_skill(workspace, skill_name)
             if target is None:
                 logger.warning("Skill '%s' not found in any search location — skipping", skill_name)
+                continue
+
+            if _loader and not _loader.is_skill_available(skill_name):
+                missing = _loader.get_missing_requirements(skill_name) or "unknown"
+                logger.warning(
+                    "Skill '%s' is unavailable (missing: %s) — skipping symlink",
+                    skill_name, missing,
+                )
                 continue
 
             link_path = skills_dir / skill_name
