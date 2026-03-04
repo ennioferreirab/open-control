@@ -1293,6 +1293,7 @@ class TaskExecutor:
 
         Orchestrates workspace preparation, IPC server startup, CC provider
         execution, and result posting.  Any phase failure crashes the task.
+        Session resume (CC-6 AC2): looks up a stored session_id before executing.
         """
         from mc.cc_workspace import CCWorkspaceManager
         from mc.cc_provider import ClaudeCodeProvider
@@ -1315,7 +1316,23 @@ class TaskExecutor:
             await self._crash_task(task_id, title, f"MCP IPC server failed: {exc}")
             return
 
-        # 3. Execute via CC provider
+        # 3. Look up existing session for resume (CC-6 AC2)
+        session_id: str | None = None
+        try:
+            stored = await asyncio.to_thread(
+                self._bridge.query,
+                "settings:get",
+                {"key": f"cc_session:{agent_name}:{task_id}"},
+            )
+            if stored and isinstance(stored, str):
+                session_id = stored
+                logger.info(
+                    "[executor] Resuming CC session %s for %s", session_id, agent_name
+                )
+        except Exception:
+            pass  # No session stored — start fresh
+
+        # 4. Execute via CC provider
         try:
             provider = ClaudeCodeProvider()
             prompt = f"{title}\n\n{description}" if description else title
@@ -1333,6 +1350,7 @@ class TaskExecutor:
                 agent_config=agent_data,
                 task_id=task_id,
                 workspace_ctx=ws_ctx,
+                session_id=session_id,
                 on_stream=on_stream,
             )
         except Exception as exc:
@@ -1341,7 +1359,7 @@ class TaskExecutor:
         finally:
             await ipc_server.stop()
 
-        # 4. Process result
+        # 5. Process result
         if result.is_error:
             await self._crash_task(task_id, title, f"Claude Code error: {result.output[:1000]}")
         else:
@@ -1377,8 +1395,8 @@ class TaskExecutor:
         agent_name: str,
         result: "CCTaskResult",
     ) -> None:
-        """Post completion message, cost activity, and transition task to DONE."""
-        from mc.types import CCTaskResult
+        """Post completion message, cost activity, store session, and transition task to DONE."""
+        from mc.types import CCTaskResult  # noqa: F401 — type annotation only
 
         # Post agent work message to thread
         await asyncio.to_thread(
@@ -1399,6 +1417,36 @@ class TaskExecutor:
             agent_name,
         )
 
+        # Store session_id for future resume (CC-6 AC1)
+        if result.session_id:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "settings:set",
+                    {
+                        "key": f"cc_session:{agent_name}:{task_id}",
+                        "value": result.session_id,
+                    },
+                )
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "settings:set",
+                    {
+                        "key": f"cc_session:{agent_name}:latest",
+                        "value": result.session_id,
+                    },
+                )
+                logger.info(
+                    "[executor] Stored CC session %s for agent %s task %s",
+                    result.session_id, agent_name, task_id,
+                )
+            except Exception:
+                logger.warning(
+                    "[executor] Failed to store CC session ID for %s",
+                    agent_name,
+                    exc_info=True,
+                )
+
         # Transition to DONE
         await asyncio.to_thread(
             self._bridge.update_task_status,
@@ -1407,6 +1455,23 @@ class TaskExecutor:
             agent_name,
             f"Agent {agent_name} completed task '{title}'",
         )
+
+        # Soft-delete task-scoped session entry after task is done (CC-6 AC4)
+        try:
+            await asyncio.to_thread(
+                self._bridge.mutation,
+                "settings:set",
+                {
+                    "key": f"cc_session:{agent_name}:{task_id}",
+                    "value": "",
+                },
+            )
+        except Exception:
+            logger.warning(
+                "[executor] Failed to clean up CC session for %s task %s",
+                agent_name, task_id,
+                exc_info=True,
+            )
 
         logger.info(
             "[executor] CC task '%s' done (cost=$%.4f)", title, result.cost_usd
@@ -1443,3 +1508,92 @@ class TaskExecutor:
             )
         except Exception:
             logger.exception("[executor] Failed to crash task '%s'", title)
+
+    async def handle_cc_thread_reply(
+        self,
+        task_id: str,
+        agent_name: str,
+        user_message: str,
+        agent_data: "AgentData",
+    ) -> str | None:
+        """Handle a user follow-up message in a CC agent's task thread (CC-6 AC3).
+
+        Resumes the latest CC session for this agent+task with the user's
+        message as a new prompt.  Returns the CC response text, or None on
+        failure.
+
+        This is a helper intended to be called from the thread reply handler
+        when a user sends a message to a task assigned to a claude-code agent.
+        Integration with the message routing layer is handled separately.
+        """
+        from mc.cc_workspace import CCWorkspaceManager
+        from mc.cc_provider import ClaudeCodeProvider
+        from mc.mcp_ipc_server import MCSocketServer
+
+        # Look up stored session for resume
+        session_id: str | None = None
+        try:
+            stored = await asyncio.to_thread(
+                self._bridge.query,
+                "settings:get",
+                {"key": f"cc_session:{agent_name}:{task_id}"},
+            )
+            if stored and isinstance(stored, str):
+                session_id = stored
+                logger.info(
+                    "[executor] CC thread reply: resuming session %s for %s task %s",
+                    session_id, agent_name, task_id,
+                )
+        except Exception:
+            logger.warning(
+                "[executor] CC thread reply: could not look up session for %s task %s",
+                agent_name, task_id,
+            )
+
+        # Prepare workspace and IPC server
+        try:
+            ws_mgr = CCWorkspaceManager()
+            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id)
+        except Exception as exc:
+            logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
+            return None
+
+        ipc_server = MCSocketServer(self._bridge, None)
+        try:
+            await ipc_server.start(ws_ctx.socket_path)
+        except Exception as exc:
+            logger.error("[executor] CC thread reply: IPC server failed: %s", exc)
+            return None
+
+        try:
+            provider = ClaudeCodeProvider()
+            result = await provider.execute_task(
+                prompt=user_message,
+                agent_config=agent_data,
+                task_id=task_id,
+                workspace_ctx=ws_ctx,
+                session_id=session_id,
+            )
+        except Exception as exc:
+            logger.error("[executor] CC thread reply: execution failed: %s", exc)
+            return None
+        finally:
+            await ipc_server.stop()
+
+        # Update stored session with the new session_id from this turn
+        if result.session_id:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "settings:set",
+                    {
+                        "key": f"cc_session:{agent_name}:{task_id}",
+                        "value": result.session_id,
+                    },
+                )
+            except Exception:
+                logger.warning(
+                    "[executor] CC thread reply: failed to update session for %s", agent_name
+                )
+
+        return result.output if not result.is_error else None

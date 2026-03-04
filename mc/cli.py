@@ -812,6 +812,43 @@ def tasks_list():
 
 
 # ============================================================================
+# Sessions Command (CC-6 AC5)
+# ============================================================================
+
+
+@mc_app.command()
+def sessions():
+    """List active Claude Code agent sessions."""
+    bridge = _get_bridge()
+    try:
+        all_settings = bridge.query("settings:list") or []
+        cc_sessions = [
+            s for s in all_settings
+            if isinstance(s.get("key"), str)
+            and s["key"].startswith("cc_session:")
+            and s.get("value")
+        ]
+
+        if not cc_sessions:
+            console.print("No active CC sessions found.")
+            return
+
+        table = Table(title="Claude Code Sessions")
+        table.add_column("Key", style="bold")
+        table.add_column("Session ID")
+
+        for entry in sorted(cc_sessions, key=lambda x: x.get("key", "")):
+            key = entry.get("key", "")
+            value = entry.get("value", "")
+            table.add_row(key, value[:40] + "..." if len(value) > 40 else value)
+
+        console.print(table)
+        console.print(f"\n  Total: {len(cc_sessions)} session(s)")
+    finally:
+        bridge.close()
+
+
+# ============================================================================
 # Agent Commands
 # ============================================================================
 
