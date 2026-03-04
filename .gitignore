@@ -22,3 +22,5 @@ botpy.log
 dashboard/components/ActivityFeedPanel.tsx
 start-bridge.sh
 tmux_claude_control
+.claude/*
+.worktrees/
