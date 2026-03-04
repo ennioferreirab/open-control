@@ -486,6 +486,9 @@ def _sync_model_tiers(bridge: ConvexBridge) -> None:
     from mc.types import CC_AVAILABLE_MODELS
 
     models_list = list_available_models()
+    # Append cc/ models AFTER provider models so _pick_tier() prefers provider
+    # models for default tier assignments (cc/ models are only used when
+    # explicitly selected in the dashboard).
     models_list.extend(m for m in CC_AVAILABLE_MODELS if m not in models_list)
 
     bridge.mutation(

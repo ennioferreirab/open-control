@@ -594,6 +594,10 @@ class StepDispatcher:
                         workspace_ctx=ws_ctx,
                         session_id=None,
                     )
+                    if result_obj.is_error:
+                        raise RuntimeError(
+                            f"Claude Code error: {result_obj.output[:1000]}"
+                        )
                     result = result_obj.output
                 except Exception as exc:
                     error_msg = f"CC execution failed for step '{step_title}': {exc}"
