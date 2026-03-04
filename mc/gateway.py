@@ -1170,7 +1170,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     # Chat handler — polls for pending direct-chat messages (Story 10.2)
     from mc.chat_handler import ChatHandler
 
-    chat_handler = ChatHandler(bridge)
+    chat_handler = ChatHandler(bridge, ask_user_registry=ask_user_registry)
     chat_task = asyncio.create_task(chat_handler.run())
 
     # Mention watcher — detects @agent-name mentions in all task threads

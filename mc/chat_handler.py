@@ -38,8 +38,9 @@ POLL_INTERVAL_SECONDS = 2
 class ChatHandler:
     """Polls for pending chat messages and dispatches them to agents."""
 
-    def __init__(self, bridge: ConvexBridge) -> None:
+    def __init__(self, bridge: ConvexBridge, ask_user_registry: Any | None = None) -> None:
         self._bridge = bridge
+        self._ask_user_registry = ask_user_registry
 
     async def run(self) -> None:
         """Polling loop: fetch pending chats every POLL_INTERVAL_SECONDS."""
@@ -182,6 +183,8 @@ class ChatHandler:
                     raise RuntimeError(f"CC workspace preparation failed: {exc}")
 
                 ipc_server = MCSocketServer(self._bridge, None)
+                if self._ask_user_registry is not None:
+                    self._ask_user_registry.register(task_id, ipc_server)
                 try:
                     await ipc_server.start(ws_ctx.socket_path)
                 except Exception as exc:
@@ -242,6 +245,8 @@ class ChatHandler:
                         logger.warning("[chat] Failed to persist CC session for %s", agent_name)
 
                 finally:
+                    if self._ask_user_registry is not None:
+                        self._ask_user_registry.unregister(task_id)
                     await ipc_server.stop()
 
                 # Send response and mark done
