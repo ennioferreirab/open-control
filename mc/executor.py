@@ -437,13 +437,15 @@ class TaskExecutor:
     """Picks up assigned tasks and runs agent execution."""
 
     def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None,
-                 on_task_completed: Any | None = None) -> None:
+                 on_task_completed: Any | None = None,
+                 ask_user_registry: Any | None = None) -> None:
         self._bridge = bridge
         self._agent_gateway = AgentGateway(bridge)
         self._known_assigned_ids: set[str] = set()
         self._cron_service = cron_service
         self._on_task_completed = on_task_completed
         self._tier_resolver: Any | None = None
+        self._ask_user_registry = ask_user_registry
 
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance."""
@@ -1500,6 +1502,8 @@ class TaskExecutor:
         # 2. Start IPC server (MCSocketServer.start() already removes stale socket)
         # bus=None: MCP bridge tools use IPC, not the in-process MessageBus
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
+        if self._ask_user_registry is not None:
+            self._ask_user_registry.register(task_id, ipc_server)
         try:
             await ipc_server.start(ws_ctx.socket_path)
         except Exception as exc:
@@ -1557,6 +1561,8 @@ class TaskExecutor:
             await self._crash_task(task_id, title, f"Claude Code execution failed: {exc}", agent_name)
             return
         finally:
+            if self._ask_user_registry is not None:
+                self._ask_user_registry.unregister(task_id)
             await ipc_server.stop()
 
         # 5. Process result
@@ -1809,6 +1815,8 @@ class TaskExecutor:
             return None
 
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
+        if self._ask_user_registry is not None:
+            self._ask_user_registry.register(task_id, ipc_server)
         try:
             await ipc_server.start(ws_ctx.socket_path)
         except Exception as exc:
@@ -1833,6 +1841,8 @@ class TaskExecutor:
             logger.error("[executor] CC thread reply: execution failed: %s", exc)
             return None
         finally:
+            if self._ask_user_registry is not None:
+                self._ask_user_registry.unregister(task_id)
             await ipc_server.stop()
 
         # Update stored session with the new session_id from this turn (CC-6 AC3)

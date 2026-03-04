@@ -157,10 +157,12 @@ async def _run_step_agent(
 class StepDispatcher:
     """Dispatches and executes materialized task steps."""
 
-    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None) -> None:
+    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None,
+                 ask_user_registry: Any | None = None) -> None:
         self._bridge = bridge
         self._cron_service = cron_service
         self._tier_resolver: Any | None = None
+        self._ask_user_registry = ask_user_registry
 
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance (shared across steps)."""
@@ -580,6 +582,8 @@ class StepDispatcher:
                     raise
 
                 ipc_server = MCSocketServer(self._bridge, None)
+                if self._ask_user_registry is not None:
+                    self._ask_user_registry.register(task_id, ipc_server)
                 try:
                     await ipc_server.start(ws_ctx.socket_path)
                 except Exception as exc:
@@ -614,6 +618,8 @@ class StepDispatcher:
                     logger.error("[dispatcher] %s", error_msg)
                     raise
                 finally:
+                    if self._ask_user_registry is not None:
+                        self._ask_user_registry.unregister(task_id)
                     await ipc_server.stop()
 
                 # Post completion — same as nanobot path
