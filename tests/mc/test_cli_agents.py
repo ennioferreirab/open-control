@@ -121,8 +121,9 @@ class TestAgentsList:
 # ── agents create tests ──────────────────────────────────────────────
 
 
+@patch("mc.cli._sync_to_convex")
 class TestAgentsCreate:
-    def test_create_agent(self, tmp_path):
+    def test_create_agent(self, mock_sync, tmp_path):
         agents_dir = tmp_path / "agents"
         with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(
@@ -142,7 +143,7 @@ class TestAgentsCreate:
         assert (agent_dir / "skills").is_dir()
         assert (agent_dir / "memory" / "MEMORY.md").is_file()
 
-    def test_create_agent_yaml_valid(self, tmp_path):
+    def test_create_agent_yaml_valid(self, mock_sync, tmp_path):
         agents_dir = tmp_path / "agents"
         with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(
@@ -162,7 +163,7 @@ class TestAgentsCreate:
         assert validation_result.name == "my-agent"
         assert validation_result.role == "Researcher"
 
-    def test_create_agent_no_model(self, tmp_path):
+    def test_create_agent_no_model(self, mock_sync, tmp_path):
         agents_dir = tmp_path / "agents"
         with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(
@@ -177,7 +178,7 @@ class TestAgentsCreate:
         config = yaml.safe_load((agents_dir / "no-model" / "config.yaml").read_text())
         assert "model" not in config
 
-    def test_create_agent_invalid_name_retry(self, tmp_path):
+    def test_create_agent_invalid_name_retry(self, mock_sync, tmp_path):
         agents_dir = tmp_path / "agents"
         with patch("mc.cli.AGENTS_DIR", agents_dir):
             result = runner.invoke(
