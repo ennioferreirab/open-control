@@ -101,6 +101,7 @@ class TestMainFunction:
 
         monkeypatch.delenv("CONVEX_ADMIN_KEY", raising=False)
         with patch("mc.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
+             patch("mc.gateway._resolve_admin_key", return_value=None), \
              patch("mc.gateway.logger") as mock_logger, \
              patch("mc.bridge.ConvexBridge") as mock_bridge_cls:
             await main()
@@ -416,7 +417,7 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Task completed successfully"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Task completed successfully", "mock_session_key", MagicMock())), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -440,7 +441,7 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Done", "mock_session_key", MagicMock())), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -464,7 +465,7 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Here is my work output"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Here is my work output", "mock_session_key", MagicMock())), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -496,7 +497,7 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Done", "mock_session_key", MagicMock())), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -596,7 +597,7 @@ class TestTrustLevelStatus:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Reviewed"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Reviewed", "mock_session_key", MagicMock())), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -672,7 +673,7 @@ class TestKnownAssignedIdsCleanup:
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_cleanup")
 
-        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Done", "mock_session_key", MagicMock())), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -929,7 +930,7 @@ class TestExecutorNoDuplicateActivity:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value="Done"), \
+        with patch("mc.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Done", "mock_session_key", MagicMock())), \
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
@@ -993,7 +994,7 @@ class TestOrchestratorDeduplication:
         orch = TaskOrchestrator(mock_bridge)
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            loop_task = asyncio.create_task(orch.start_routing_loop())
+            loop_task = asyncio.create_task(orch.start_inbox_routing_loop())
             await asyncio.sleep(0.05)
             loop_task.cancel()
             try:
@@ -1025,7 +1026,7 @@ class TestOrchestratorDeduplication:
         orch = TaskOrchestrator(mock_bridge)
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            loop_task = asyncio.create_task(orch.start_routing_loop())
+            loop_task = asyncio.create_task(orch.start_inbox_routing_loop())
             await asyncio.sleep(0.05)
             loop_task.cancel()
             try:
