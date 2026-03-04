@@ -1,7 +1,7 @@
 """Tests for ensure_low_agent in gateway."""
 from unittest.mock import MagicMock
-from nanobot.mc.gateway import ensure_low_agent
-from nanobot.mc.types import LOW_AGENT_NAME, AgentData
+from mc.gateway import ensure_low_agent
+from mc.types import LOW_AGENT_NAME, AgentData
 
 
 def _make_bridge():

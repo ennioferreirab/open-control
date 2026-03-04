@@ -84,9 +84,18 @@ After all stories pass review, merge each worktree branch back into the main bra
 
 ## Project Structure
 
+- `mc/` — Mission Control Python backend (100% our code, extracted from upstream)
+- `vendor/nanobot/` — git subtree of upstream HKUDS/nanobot (with patches documented in PATCHES.md)
+- `vendor/nanobot/nanobot/` — upstream Python package (agent, bus, channels, cli, config, etc.)
+- `boot.py` — entry point that wires vendor path + CLI
 - `dashboard/` — Next.js + Convex frontend (TypeScript)
-- `nanobot/mc/` — Mission Control Python backend (bridge, gateway, types)
-- `nanobot/agent/` — Agent runtime (heavy deps: loguru, etc.)
 - `tests/mc/` — Python tests for MC module
 - Test runners: pytest (Python), vitest (TypeScript/dashboard)
-- `nanobot/agent/__init__.py` imports AgentLoop (heavy deps) — avoid importing `nanobot.agent` package in MC module; use `importlib.util` for direct file imports if needed
+- `PATCHES.md` — documents all modifications to vendor/nanobot/ for upstream sync
+
+### Upstream Sync
+```bash
+git fetch upstream
+git subtree pull --prefix=vendor/nanobot upstream main --squash
+# Resolve conflicts using PATCHES.md as guide
+```

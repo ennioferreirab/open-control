@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from nanobot.agent.tools.ask_agent import AskAgentTool
-from nanobot.mc.types import AgentData, LEAD_AGENT_NAME
+from mc.types import AgentData, LEAD_AGENT_NAME
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ class TestAskAgentLeadAgentProtection:
         tool = _make_tool()
 
         with patch(
-            "nanobot.mc.yaml_validator.validate_agent_file",
+            "mc.yaml_validator.validate_agent_file",
         ) as mock_validate:
             result = await tool.execute(
                 target_agent="lead-agent",
@@ -190,13 +190,13 @@ class TestAskAgentDepthLimit:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -221,13 +221,13 @@ class TestAskAgentDepthLimit:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -253,13 +253,13 @@ class TestAskAgentDepthLimit:
         child_ask_tool = AskAgentTool()
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -295,13 +295,13 @@ class TestAskAgentSuccess:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -328,13 +328,13 @@ class TestAskAgentSuccess:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -379,13 +379,13 @@ class TestAskAgentTimeout:
             return "Too late"
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -430,13 +430,13 @@ class TestAskAgentThreadLogging:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -465,13 +465,13 @@ class TestAskAgentThreadLogging:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -498,13 +498,13 @@ class TestAskAgentThreadLogging:
         long_response = "A" * 1000
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -538,13 +538,13 @@ class TestAskAgentThreadLogging:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -578,7 +578,7 @@ class TestAskAgentNotFound:
         _setup_agent_dir(agents_dir, "researcher")
         _setup_agent_dir(agents_dir, "writer")
 
-        with patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir):
+        with patch("mc.gateway.AGENTS_DIR", agents_dir):
             result = await tool.execute(
                 target_agent="nonexistent",
                 question="Any question?",
@@ -599,9 +599,9 @@ class TestAskAgentNotFound:
         _setup_agent_dir(agents_dir, "good-agent")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=["Missing required field: name"],
             ),
         ):
@@ -645,13 +645,13 @@ class TestAskAgentProviderError:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 side_effect=Exception("OAuth expired"),
             ),
         ):
@@ -670,13 +670,13 @@ class TestAskAgentProviderError:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -714,13 +714,13 @@ class TestAskAgentPromptConstruction:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -752,13 +752,13 @@ class TestAskAgentPromptConstruction:
         agent_data.prompt = None
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -786,13 +786,13 @@ class TestAskAgentPromptConstruction:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.gateway.AGENTS_DIR", agents_dir),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
             ),
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "anthropic/claude-sonnet-4-6"),
             ),
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
@@ -845,10 +845,10 @@ class TestAskAgentTierResolution:
         agent_data.model = "tier:standard-medium"  # real tier string triggers resolution
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir_with_nanobot),
-            patch("nanobot.mc.yaml_validator.validate_agent_file", return_value=agent_data),
-            patch("nanobot.mc.tier_resolver.TierResolver") as MockResolver,
-            patch("nanobot.mc.provider_factory.create_provider", return_value=(MagicMock(), "claude-sonnet-4-6")) as mock_create,
+            patch("mc.gateway.AGENTS_DIR", agents_dir_with_nanobot),
+            patch("mc.yaml_validator.validate_agent_file", return_value=agent_data),
+            patch("mc.tier_resolver.TierResolver") as MockResolver,
+            patch("mc.provider_factory.create_provider", return_value=(MagicMock(), "claude-sonnet-4-6")) as mock_create,
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
             patch("nanobot.bus.queue.MessageBus"),
         ):
@@ -877,8 +877,8 @@ class TestAskAgentTierResolution:
         agent_data.model = "tier:standard-medium"
 
         with (
-            patch("nanobot.mc.gateway.AGENTS_DIR", agents_dir_with_nanobot),
-            patch("nanobot.mc.yaml_validator.validate_agent_file", return_value=agent_data),
+            patch("mc.gateway.AGENTS_DIR", agents_dir_with_nanobot),
+            patch("mc.yaml_validator.validate_agent_file", return_value=agent_data),
         ):
             result = await tool.execute(target_agent="nanobot", question="Help?")
 
