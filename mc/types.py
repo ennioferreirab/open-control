@@ -396,9 +396,9 @@ class WorkspaceContext:
 
 @dataclass
 class CCTaskResult:
-    """Result returned by ClaudeCodeProvider.execute_task() (CC-4)."""
-    output: str       # result text from type=result message
+    """Result returned by ClaudeCodeProvider.execute_task()."""
+    output: str       # final result text from the CLI
     session_id: str   # CC session ID for resume
     cost_usd: float   # total cost from result message
     usage: dict       # {input_tokens, output_tokens, ...}
-    is_error: bool    # True if result.is_error or non-zero exit with no output
+    is_error: bool    # True if result.is_error or non-zero exit

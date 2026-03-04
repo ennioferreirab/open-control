@@ -683,6 +683,21 @@ class TaskExecutor:
 
         return result.prompt, result.model, result.skills
 
+    def _load_agent_data(self, agent_name: str) -> "AgentData | None":
+        """Load full AgentData from an agent's YAML config file.
+
+        Returns the validated AgentData (including backend field) or None when
+        the config file does not exist or fails validation.
+        """
+        from mc.gateway import AGENTS_DIR
+        from mc.yaml_validator import validate_agent_file
+
+        config_path = AGENTS_DIR / agent_name / "config.yaml"
+        if not config_path.exists():
+            return None
+        result = validate_agent_file(config_path)
+        return result if isinstance(result, AgentData) else None
+
     async def _handle_provider_error(
         self,
         task_id: str,
@@ -834,6 +849,12 @@ class TaskExecutor:
                 "This is a bug - the _pickup_task guard should have intercepted "
                 "this dispatch."
             )
+
+        # Route to Claude Code backend if agent is configured with backend: claude-code
+        agent_data = self._load_agent_data(agent_name)
+        if agent_data and agent_data.backend == "claude-code":
+            await self._execute_cc_task(task_id, title, description, agent_name, agent_data)
+            return
 
         import re
 
@@ -1257,3 +1278,168 @@ class TaskExecutor:
         finally:
             # Allow re-pickup if task returns to assigned (e.g. after retry)
             self._known_assigned_ids.discard(task_id)
+
+    # ── Claude Code backend methods ────────────────────────────────────────
+
+    async def _execute_cc_task(
+        self,
+        task_id: str,
+        title: str,
+        description: str | None,
+        agent_name: str,
+        agent_data: "AgentData",
+    ) -> None:
+        """Execute a task using the Claude Code CLI backend.
+
+        Orchestrates workspace preparation, IPC server startup, CC provider
+        execution, and result posting.  Any phase failure crashes the task.
+        """
+        from mc.cc_workspace import CCWorkspaceManager
+        from mc.cc_provider import ClaudeCodeProvider
+        from mc.mcp_ipc_server import MCSocketServer
+
+        # 1. Prepare workspace
+        try:
+            ws_mgr = CCWorkspaceManager()
+            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id)
+        except Exception as exc:
+            await self._crash_task(task_id, title, f"Workspace preparation failed: {exc}")
+            return
+
+        # 2. Start IPC server (MCSocketServer.start() already removes stale socket)
+        # bus=None: MCP bridge tools use IPC, not the in-process MessageBus
+        ipc_server = MCSocketServer(self._bridge, None)
+        try:
+            await ipc_server.start(ws_ctx.socket_path)
+        except Exception as exc:
+            await self._crash_task(task_id, title, f"MCP IPC server failed: {exc}")
+            return
+
+        # 3. Execute via CC provider
+        try:
+            provider = ClaudeCodeProvider()
+            prompt = f"{title}\n\n{description}" if description else title
+
+            def on_stream(msg: dict) -> None:
+                if msg.get("type") == "text":
+                    task = asyncio.create_task(
+                        self._post_cc_activity(task_id, agent_name, msg["text"])
+                    )
+                    _background_tasks.add(task)
+                    task.add_done_callback(_background_tasks.discard)
+
+            result = await provider.execute_task(
+                prompt=prompt,
+                agent_config=agent_data,
+                task_id=task_id,
+                workspace_ctx=ws_ctx,
+                on_stream=on_stream,
+            )
+        except Exception as exc:
+            await self._crash_task(task_id, title, f"Claude Code execution failed: {exc}")
+            return
+        finally:
+            await ipc_server.stop()
+
+        # 4. Process result
+        if result.is_error:
+            await self._crash_task(task_id, title, f"Claude Code error: {result.output[:1000]}")
+        else:
+            await self._complete_cc_task(task_id, title, agent_name, result)
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id)
+                except Exception:
+                    logger.exception("[executor] on_task_completed failed for CC task '%s'", title)
+
+    async def _post_cc_activity(
+        self,
+        task_id: str,
+        agent_name: str,
+        text: str,
+    ) -> None:
+        """Post a streaming text chunk as a step_started activity (best-effort)."""
+        try:
+            await asyncio.to_thread(
+                self._bridge.create_activity,
+                ActivityEventType.STEP_STARTED,
+                text[:500],
+                task_id,
+                agent_name,
+            )
+        except Exception:
+            pass  # Non-critical — streaming activity failures must not crash the task
+
+    async def _complete_cc_task(
+        self,
+        task_id: str,
+        title: str,
+        agent_name: str,
+        result: "CCTaskResult",
+    ) -> None:
+        """Post completion message, cost activity, and transition task to DONE."""
+        from mc.types import CCTaskResult
+
+        # Post agent work message to thread
+        await asyncio.to_thread(
+            self._bridge.send_message,
+            task_id,
+            agent_name,
+            AuthorType.AGENT,
+            result.output[:2000],
+            MessageType.WORK,
+        )
+
+        # Post cost summary as activity
+        await asyncio.to_thread(
+            self._bridge.create_activity,
+            ActivityEventType.TASK_COMPLETED,
+            f"Task completed. Cost: ${result.cost_usd:.4f}",
+            task_id,
+            agent_name,
+        )
+
+        # Transition to DONE
+        await asyncio.to_thread(
+            self._bridge.update_task_status,
+            task_id,
+            TaskStatus.DONE,
+            agent_name,
+            f"Agent {agent_name} completed task '{title}'",
+        )
+
+        logger.info(
+            "[executor] CC task '%s' done (cost=$%.4f)", title, result.cost_usd
+        )
+
+    async def _crash_task(
+        self,
+        task_id: str,
+        title: str,
+        error: str,
+    ) -> None:
+        """Post a crash message and transition the task to CRASHED."""
+        logger.error("[executor] CC task crashed: %s — %s", title, error)
+
+        try:
+            await asyncio.to_thread(
+                self._bridge.send_message,
+                task_id,
+                "System",
+                AuthorType.SYSTEM,
+                f"Task crashed: {error}",
+                MessageType.SYSTEM_EVENT,
+            )
+        except Exception:
+            logger.exception("[executor] Failed to post crash message for task '%s'", title)
+
+        try:
+            await asyncio.to_thread(
+                self._bridge.update_task_status,
+                task_id,
+                TaskStatus.CRASHED,
+                "System",
+                f"Task crashed: {error}",
+            )
+        except Exception:
+            logger.exception("[executor] Failed to crash task '%s'", title)
