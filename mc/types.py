@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 if sys.version_info >= (3, 11):
@@ -382,3 +383,12 @@ class ActivityData:
     task_id: str | None = None
     agent_name: str | None = None
     id: str | None = None  # Convex _id (populated on read)
+
+
+@dataclass
+class WorkspaceContext:
+    """Context for a Claude Code agent workspace, returned by CCWorkspaceManager.prepare()."""
+    cwd: Path
+    mcp_config: Path
+    claude_md: Path
+    socket_path: str
