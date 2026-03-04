@@ -875,6 +875,55 @@ class TestEnrichedPlannerFeatures:
         assert "most tasks need exactly 1 step" not in lower
 
 
+class TestRemoteTerminalExclusion:
+    """Verify remote-terminal agents are excluded from planning."""
+
+    def test_roster_excludes_remote_terminal(self):
+        """Agents with role='remote-terminal' must not appear in roster."""
+        from mc.planner import _build_agent_roster
+
+        agents = [
+            _make_agent("nanobot", "generalist", ["general"]),
+            _make_agent("Macbook", "remote-terminal", ["shell"]),
+        ]
+        roster = _build_agent_roster(agents)
+
+        assert "nanobot" in roster
+        assert "Macbook" not in roster
+
+    @pytest.mark.asyncio
+    async def test_remote_terminal_agent_replaced_with_nanobot(self):
+        """If LLM assigns a remote-terminal agent, it should be replaced."""
+        from mc.planner import TaskPlanner
+
+        plan_json = {
+            "steps": [{
+                "step_id": "step_1",
+                "description": "Research something",
+                "assigned_agent": "Macbook",
+                "depends_on": [],
+            }]
+        }
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        agents = [
+            _make_agent("nanobot", "generalist", ["general"]),
+            AgentData(name="Macbook", display_name="Macbook", role="remote-terminal", skills=["shell"]),
+        ]
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+            plan = await planner.plan_task(
+                title="Research task",
+                description=None,
+                agents=agents,
+            )
+
+        assert plan.steps[0].assigned_agent == "nanobot"
+
+
 # ---------------------------------------------------------------------------
 # TestOrientationRosterInterpolation: {agent_roster} placeholder substitution
 # ---------------------------------------------------------------------------

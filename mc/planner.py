@@ -25,7 +25,7 @@ from mc.types import (
 
 logger = logging.getLogger(__name__)
 
-LLM_TIMEOUT_SECONDS = 30
+LLM_TIMEOUT_SECONDS = 300
 
 STOPWORDS = {
     "a", "an", "the", "is", "are", "was", "were", "be", "been",
@@ -195,16 +195,35 @@ STANDARD_TOOLS = [
 ]
 
 
+NON_DELEGATABLE_ROLES = {"remote-terminal"}
+
+
+def _is_delegatable(agent: AgentData) -> bool:
+    """Return True if an agent can receive delegated task steps.
+
+    Excludes system agents, lead-agent, and non-delegatable roles
+    (e.g. remote-terminal sessions) — mirroring the dashboard's
+    useSelectableAgents hook.
+    """
+    if getattr(agent, "is_system", False):
+        return False
+    if is_lead_agent(agent.name):
+        return False
+    if getattr(agent, "role", "") in NON_DELEGATABLE_ROLES:
+        return False
+    return True
+
+
 def _build_agent_roster(agents: list[AgentData]) -> str:
     """Build the agent roster string for the LLM prompt.
 
-    System agents (is_system=True) and lead-agent are excluded — they are for
-    internal use only and must never be assigned to task steps.
+    Non-delegatable agents are excluded so the LLM never sees them
+    as candidate assignees.
     """
     tools_str = ", ".join(STANDARD_TOOLS)
     lines = []
     for agent in agents:
-        if getattr(agent, "is_system", False) or is_lead_agent(agent.name):
+        if not _is_delegatable(agent):
             continue
         skills_str = ", ".join(agent.skills) if agent.skills else "general"
         lines.append(
@@ -442,14 +461,11 @@ class TaskPlanner:
     ) -> None:
         """Replace invalid/disallowed agent names with nanobot."""
         fallback_agent = self._fallback_agent_name(agents)
-        valid_names = {a.name for a in agents} | {NANOBOT_AGENT_NAME}
-        system_names = {a.name for a in agents if getattr(a, "is_system", False)}
+        delegatable_names = {a.name for a in agents if _is_delegatable(a)} | {NANOBOT_AGENT_NAME}
         for step in plan.steps:
             if (
                 not step.assigned_agent
-                or step.assigned_agent not in valid_names
-                or is_lead_agent(step.assigned_agent)
-                or step.assigned_agent in system_names
+                or step.assigned_agent not in delegatable_names
             ):
                 if step.assigned_agent:
                     logger.warning(
@@ -514,7 +530,7 @@ class TaskPlanner:
             scored = [
                 (agent, score_agent(agent, keywords))
                 for agent in agents
-                if not is_lead_agent(agent.name)
+                if _is_delegatable(agent)
             ]
             scored.sort(key=lambda x: x[1], reverse=True)
 
