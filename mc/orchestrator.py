@@ -275,12 +275,13 @@ class TaskOrchestrator:
             logger.info("[orchestrator] Skipping manual task '%s' (%s)", title, task_id)
             return
 
-        # Fetch all enabled agents (filter extra Convex fields)
+        # Fetch all enabled, delegatable agents (filter extra Convex fields)
         from mc.gateway import filter_agent_fields
+        from mc.planner import _is_delegatable
 
         agents_data = await asyncio.to_thread(self._bridge.list_agents)
         agents = [AgentData(**filter_agent_fields(a)) for a in agents_data]
-        agents = [a for a in agents if a.enabled is not False]
+        agents = [a for a in agents if a.enabled is not False and _is_delegatable(a)]
 
         # Filter agents by board's enabledAgents (AC5)
         board_id = task_data.get("board_id")
