@@ -40,6 +40,7 @@ Use these tools via the `mcp__nanobot__` prefix:
 - **mcp__nanobot__delegate_task** — Delegate a subtask to a specialist agent.
 - **mcp__nanobot__ask_agent** — Ask a specific agent a question and get a reply.
 - **mcp__nanobot__report_progress** — Report task progress back to Mission Control.
+- **mcp__nanobot__cron** — Schedule reminders and recurring tasks (add/list/remove).
 
 > **IMPORTANT**: `AskUserQuestion` does NOT work. You MUST use `mcp__nanobot__ask_user` instead.
 """

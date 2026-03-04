@@ -32,9 +32,11 @@ ASK_AGENT_MAX_DEPTH = 2
 class MCSocketServer:
     """IPC server that listens on a Unix socket and dispatches to registered handlers."""
 
-    def __init__(self, bridge: "ConvexBridge | None", bus: "MessageBus | None") -> None:
+    def __init__(self, bridge: "ConvexBridge | None", bus: "MessageBus | None",
+                 cron_service: Any | None = None) -> None:
         self._bridge = bridge
         self._bus = bus
+        self._cron_service = cron_service
         self._handlers: dict[str, Callable[..., Any]] = {}
         self._server: asyncio.AbstractServer | None = None
         self._socket_path: str | None = None
@@ -49,6 +51,7 @@ class MCSocketServer:
         self.register("delegate_task", self._handle_delegate_task)
         self.register("ask_agent", self._handle_ask_agent)
         self.register("report_progress", self._handle_report_progress)
+        self.register("cron", self._handle_cron)
 
     # ── Registration ──────────────────────────────────────────────────
 
@@ -414,3 +417,74 @@ class MCSocketServer:
             logger.warning("report_progress failed to create activity: %s", exc)
 
         return {"status": "Progress reported"}
+
+    async def _handle_cron(
+        self,
+        action: str = "list",
+        message: str | None = None,
+        every_seconds: int | None = None,
+        cron_expr: str | None = None,
+        tz: str | None = None,
+        at: str | None = None,
+        job_id: str | None = None,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy cron operations to the CronService."""
+        if not self._cron_service:
+            return {"error": "Cron service not available."}
+
+        if action == "list":
+            jobs = self._cron_service.list_jobs()
+            if not jobs:
+                return {"result": "No scheduled jobs."}
+            lines = [f"- {j.name} (id: {j.id}, {j.schedule.kind})" for j in jobs]
+            return {"result": "Scheduled jobs:\n" + "\n".join(lines)}
+
+        elif action == "add":
+            if not message:
+                return {"error": "message is required for add"}
+            from nanobot.cron.types import CronSchedule
+            delete_after = False
+            if every_seconds:
+                schedule = CronSchedule(kind="every", every_ms=every_seconds * 1000)
+            elif cron_expr:
+                if tz:
+                    from zoneinfo import ZoneInfo
+                    try:
+                        ZoneInfo(tz)
+                    except (KeyError, Exception):
+                        return {"error": f"Unknown timezone '{tz}'"}
+                schedule = CronSchedule(kind="cron", expr=cron_expr, tz=tz)
+            elif at:
+                from datetime import datetime as _dt
+                try:
+                    dt = _dt.fromisoformat(at)
+                except ValueError:
+                    return {"error": f"Invalid ISO datetime: {at}"}
+                at_ms = int(dt.timestamp() * 1000)
+                schedule = CronSchedule(kind="at", at_ms=at_ms)
+                delete_after = True
+            else:
+                return {"error": "One of every_seconds, cron_expr, or at is required"}
+            job = self._cron_service.add_job(
+                name=message[:30],
+                schedule=schedule,
+                message=message,
+                deliver=True,
+                channel="mc",
+                to=agent_name,
+                delete_after_run=delete_after,
+                task_id=task_id,
+                agent=agent_name,
+            )
+            return {"result": f"Created job '{job.name}' (id: {job.id})"}
+
+        elif action == "remove":
+            if not job_id:
+                return {"error": "job_id is required for remove"}
+            if self._cron_service.remove_job(job_id):
+                return {"result": f"Removed job {job_id}"}
+            return {"error": f"Job {job_id} not found"}
+
+        return {"error": f"Unknown cron action: {action}"}

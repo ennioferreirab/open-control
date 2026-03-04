@@ -163,6 +163,23 @@ async def list_tools() -> list[Tool]:
                 "required": ["message"],
             },
         ),
+        Tool(
+            name="cron",
+            description="Schedule reminders and recurring tasks. Actions: add, list, remove.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["add", "list", "remove"], "description": "Action to perform."},
+                    "message": {"type": "string", "description": "Reminder message (required for add)."},
+                    "every_seconds": {"type": "integer", "description": "Interval in seconds (for recurring tasks)."},
+                    "cron_expr": {"type": "string", "description": "Cron expression like '0 9 * * *'."},
+                    "tz": {"type": "string", "description": "IANA timezone for cron expressions."},
+                    "at": {"type": "string", "description": "ISO datetime for one-time execution."},
+                    "job_id": {"type": "string", "description": "Job ID (required for remove)."},
+                },
+                "required": ["action"],
+            },
+        ),
     ]
 
 
@@ -272,6 +289,28 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 text="Mission Control not reachable. Is the gateway running?",
             )]
         return [TextContent(type="text", text=result.get("status", "Progress reported"))]
+
+    elif name == "cron":
+        try:
+            result = await ipc.request(
+                "cron",
+                {
+                    "action": arguments["action"],
+                    "message": arguments.get("message"),
+                    "every_seconds": arguments.get("every_seconds"),
+                    "cron_expr": arguments.get("cron_expr"),
+                    "tz": arguments.get("tz"),
+                    "at": arguments.get("at"),
+                    "job_id": arguments.get("job_id"),
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [TextContent(type="text", text="Mission Control not reachable. Is the gateway running?")]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=result.get("result", "Done"))]
 
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]

@@ -1309,7 +1309,7 @@ class TaskExecutor:
 
         # 2. Start IPC server (MCSocketServer.start() already removes stale socket)
         # bus=None: MCP bridge tools use IPC, not the in-process MessageBus
-        ipc_server = MCSocketServer(self._bridge, None)
+        ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
         try:
             await ipc_server.start(ws_ctx.socket_path)
         except Exception as exc:
@@ -1557,7 +1557,7 @@ class TaskExecutor:
             logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
             return None
 
-        ipc_server = MCSocketServer(self._bridge, None)
+        ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
         try:
             await ipc_server.start(ws_ctx.socket_path)
         except Exception as exc:
