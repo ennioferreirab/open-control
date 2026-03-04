@@ -6,20 +6,18 @@ import json
 import sys
 
 
-def main() -> None:
-    try:
-        payload = json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError):
-        sys.exit(0)
+def _dispatch(payload: dict) -> str | None:
+    """Route a hook event payload to matching handlers.
 
+    Returns the combined JSON string output, or None if no handlers matched.
+    """
     event_name = payload.get("hook_event_name", "")
     if not event_name:
-        sys.exit(0)
+        return None
 
     matcher_value = payload.get("tool_name", "")
     session_id = payload.get("session_id", "unknown")
 
-    # Import here to avoid import overhead when payload is invalid
     from .context import HookContext
     from .discovery import discover_handlers
 
@@ -40,15 +38,26 @@ def main() -> None:
 
     if results:
         combined = "; ".join(results)
-        json.dump(
+        return json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": event_name,
                     "additionalContext": combined,
                 }
-            },
-            sys.stdout,
+            }
         )
+    return None
+
+
+def main() -> None:
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, ValueError):
+        sys.exit(0)
+
+    result = _dispatch(payload)
+    if result:
+        sys.stdout.write(result)
 
 
 if __name__ == "__main__":
