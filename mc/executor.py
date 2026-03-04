@@ -1330,7 +1330,9 @@ class TaskExecutor:
                     "[executor] Resuming CC session %s for %s", session_id, agent_name
                 )
         except Exception:
-            pass  # No session stored — start fresh
+            logger.debug(
+                "[executor] No stored CC session for %s:%s", agent_name, task_id
+            )  # No session stored — start fresh
 
         # 4. Execute via CC provider
         try:
@@ -1456,22 +1458,10 @@ class TaskExecutor:
             f"Agent {agent_name} completed task '{title}'",
         )
 
-        # Soft-delete task-scoped session entry after task is done (CC-6 AC4)
-        try:
-            await asyncio.to_thread(
-                self._bridge.mutation,
-                "settings:set",
-                {
-                    "key": f"cc_session:{agent_name}:{task_id}",
-                    "value": "",
-                },
-            )
-        except Exception:
-            logger.warning(
-                "[executor] Failed to clean up CC session for %s task %s",
-                agent_name, task_id,
-                exc_info=True,
-            )
+        # NOTE: Session is intentionally NOT deleted here (CC-6 AC1).
+        # The session_id must persist after task completion so that follow-up
+        # messages can resume the CC session. Cleanup happens only when the
+        # agent is deleted (see _cleanup_deleted_agents in gateway.py).
 
         logger.info(
             "[executor] CC task '%s' done (cost=$%.4f)", title, result.cost_usd
@@ -1580,7 +1570,7 @@ class TaskExecutor:
         finally:
             await ipc_server.stop()
 
-        # Update stored session with the new session_id from this turn
+        # Update stored session with the new session_id from this turn (CC-6 AC3)
         if result.session_id:
             try:
                 await asyncio.to_thread(
@@ -1591,9 +1581,34 @@ class TaskExecutor:
                         "value": result.session_id,
                     },
                 )
+                # Also update the :latest key (L1 — keep latest in sync)
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "settings:set",
+                    {
+                        "key": f"cc_session:{agent_name}:latest",
+                        "value": result.session_id,
+                    },
+                )
             except Exception:
                 logger.warning(
                     "[executor] CC thread reply: failed to update session for %s", agent_name
+                )
+
+        # Post response back to the task thread (M3)
+        if result and not result.is_error:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.send_message,
+                    task_id,
+                    agent_name,
+                    AuthorType.AGENT,
+                    result.output[:2000],
+                    MessageType.WORK,
+                )
+            except Exception:
+                logger.warning(
+                    "[executor] CC thread reply: failed to post response for %s", agent_name
                 )
 
         return result.output if not result.is_error else None

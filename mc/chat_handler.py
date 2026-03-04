@@ -5,6 +5,18 @@ Polls Convex for pending chat messages and routes them through the agent
 runtime. Sessions persist across messages (no end_task_session call).
 
 Story 10.2 -- Task 5.
+
+TODO (CC-6 H2): Thread replies to tasks assigned to claude-code (backend="claude-code")
+agents are currently not routed to TaskExecutor.handle_cc_thread_reply(). The
+MentionWatcher in mention_watcher.py handles @mention messages across tasks, but
+plain (non-mention) user replies to a done/crashed CC task thread are not forwarded
+to the CC provider for session resumption.
+
+To integrate: in MentionWatcher._poll_all_tasks() (or a new dedicated poller), detect
+user messages on tasks whose assigned agent has backend="claude-code", and call
+TaskExecutor.handle_cc_thread_reply(task_id, agent_name, content, agent_data) instead
+of (or in addition to) the @mention flow. The TaskExecutor method already implements
+the full resume + session update + response posting logic (CC-6 AC3).
 """
 
 from __future__ import annotations

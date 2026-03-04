@@ -834,16 +834,42 @@ def sessions():
             return
 
         table = Table(title="Claude Code Sessions")
-        table.add_column("Key", style="bold")
+        table.add_column("Agent", style="bold")
+        table.add_column("Task ID")
         table.add_column("Session ID")
 
-        for entry in sorted(cc_sessions, key=lambda x: x.get("key", "")):
+        # Key format: cc_session:{agent_name}:{task_id}  (or :latest)
+        regular_sessions = []
+        latest_sessions = []
+        for entry in cc_sessions:
+            key = entry.get("key", "")
+            parts = key.split(":", 2)  # ["cc_session", agent_name, task_id_or_latest]
+            if len(parts) == 3:
+                _, agent_name_part, task_id_part = parts
+                if task_id_part == "latest":
+                    latest_sessions.append(entry)
+                else:
+                    regular_sessions.append(entry)
+
+        for entry in sorted(regular_sessions, key=lambda x: x.get("key", "")):
             key = entry.get("key", "")
             value = entry.get("value", "")
-            table.add_row(key, value[:40] + "..." if len(value) > 40 else value)
+            parts = key.split(":", 2)
+            agent_col = parts[1] if len(parts) > 1 else key
+            task_col = parts[2] if len(parts) > 2 else ""
+            session_col = value[:40] + "..." if len(value) > 40 else value
+            table.add_row(agent_col, task_col, session_col)
+
+        for entry in sorted(latest_sessions, key=lambda x: x.get("key", "")):
+            key = entry.get("key", "")
+            value = entry.get("value", "")
+            parts = key.split(":", 2)
+            agent_col = parts[1] if len(parts) > 1 else key
+            session_col = value[:40] + "..." if len(value) > 40 else value
+            table.add_row(agent_col, "[dim]:latest[/dim]", session_col)
 
         console.print(table)
-        console.print(f"\n  Total: {len(cc_sessions)} session(s)")
+        console.print(f"\n  Total: {len(regular_sessions)} task session(s), {len(latest_sessions)} latest pointer(s)")
     finally:
         bridge.close()
 

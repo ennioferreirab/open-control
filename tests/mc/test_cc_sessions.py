@@ -4,15 +4,14 @@ Covers:
 - AC1: session_id stored on task completion (both task-scoped and latest keys)
 - AC2: session looked up for resume on task execution
 - AC3: handle_cc_thread_reply routes follow-up with correct session
-- AC4: session soft-deleted (set to empty string) after task done
+- AC4: session PERSISTS after task done (no soft-delete on completion — C1 fix)
 - Fresh session when no stored session exists
 """
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -22,10 +21,6 @@ from mc.types import (
     CCTaskResult,
     ClaudeCodeOpts,
     WorkspaceContext,
-    TaskStatus,
-    ActivityEventType,
-    AuthorType,
-    MessageType,
 )
 
 
@@ -153,7 +148,7 @@ class TestSessionStorageOnCompletion:
             result=result,
         )
 
-        # Only the cleanup call (soft-delete) should write to settings, not a store call
+        # No session should be stored when session_id is empty
         mutation_calls = bridge.mutation.call_args_list
         store_calls = [
             c for c in mutation_calls
@@ -378,15 +373,27 @@ class TestThreadFollowUp:
                 agent_data=agent_data,
             )
 
-        # Session should be updated with the new session_id
+        # Task-scoped session key should be updated with the new session_id
         mutation_calls = bridge.mutation.call_args_list
-        update_calls = [
+        task_update_calls = [
             c for c in mutation_calls
             if c[0][0] == "settings:set"
             and c[0][1].get("key") == "cc_session:my-cc-agent:task-333"
             and c[0][1].get("value") == "sess-new-after-reply"
         ]
-        assert update_calls, f"Expected session update call, got: {mutation_calls}"
+        assert task_update_calls, (
+            f"Expected task-scoped session update call, got: {mutation_calls}"
+        )
+        # The :latest key should also be updated (L1 fix)
+        latest_update_calls = [
+            c for c in mutation_calls
+            if c[0][0] == "settings:set"
+            and c[0][1].get("key") == "cc_session:my-cc-agent:latest"
+            and c[0][1].get("value") == "sess-new-after-reply"
+        ]
+        assert latest_update_calls, (
+            f"Expected :latest key update after thread reply, got: {mutation_calls}"
+        )
 
     @pytest.mark.asyncio
     async def test_reply_returns_none_on_error_result(self):
@@ -440,19 +447,25 @@ class TestThreadFollowUp:
 
 
 # ---------------------------------------------------------------------------
-# AC4: Session cleanup after task done
+# AC4: Session persists after task done (C1 fix — no soft-delete on completion)
 # ---------------------------------------------------------------------------
 
 
 class TestSessionCleanupOnDone:
-    """AC4: _complete_cc_task soft-deletes the task-scoped session key."""
+    """AC4: Session PERSISTS after task completion for follow-up resume.
+
+    The original implementation incorrectly soft-deleted the task-scoped
+    session key immediately after storing it (store-then-delete in the same
+    function). That bug was fixed: _complete_cc_task no longer clears the
+    session. Session cleanup is deferred until agent deletion.
+    """
 
     @pytest.mark.asyncio
-    async def test_task_scoped_session_cleared_after_done(self):
-        """After transitioning to DONE, the task-scoped session key is set to empty."""
+    async def test_task_scoped_session_persists_after_done(self):
+        """After transitioning to DONE, the task-scoped session key is NOT cleared."""
         bridge = _make_bridge()
         executor = _make_executor(bridge)
-        result = _cc_result(session_id="sess-to-clean")
+        result = _cc_result(session_id="sess-to-persist")
 
         await executor._complete_cc_task(
             task_id="task-999",
@@ -462,14 +475,25 @@ class TestSessionCleanupOnDone:
         )
 
         mutation_calls = bridge.mutation.call_args_list
-        cleanup_calls = [
+        # Verify no soft-delete (empty value) was written for the task-scoped key
+        soft_delete_calls = [
             c for c in mutation_calls
             if c[0][0] == "settings:set"
             and c[0][1].get("key") == "cc_session:my-cc-agent:task-999"
             and c[0][1].get("value") == ""
         ]
-        assert cleanup_calls, (
-            f"Expected soft-delete (empty value) for task-scoped key, got: {mutation_calls}"
+        assert not soft_delete_calls, (
+            f"Session must NOT be cleared on task done (C1 fix); got: {mutation_calls}"
+        )
+        # Verify the session was stored with the correct value
+        store_calls = [
+            c for c in mutation_calls
+            if c[0][0] == "settings:set"
+            and c[0][1].get("key") == "cc_session:my-cc-agent:task-999"
+            and c[0][1].get("value") == "sess-to-persist"
+        ]
+        assert store_calls, (
+            f"Session must be stored with session_id after done; got: {mutation_calls}"
         )
 
     @pytest.mark.asyncio
@@ -498,27 +522,16 @@ class TestSessionCleanupOnDone:
         )
 
     @pytest.mark.asyncio
-    async def test_cleanup_failure_does_not_affect_task_done(self):
-        """If cleanup fails, the task is still DONE (cleanup is best-effort)."""
+    async def test_session_storage_failure_still_completes_task(self):
+        """If session storage fails, the task still transitions to DONE."""
         bridge = _make_bridge()
-        # First call to mutation succeeds (store), subsequent ones raise
-        call_count = [0]
-
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            # Fail cleanup calls (those with empty value) but pass store calls
-            if args and isinstance(args[0], str) and args[0] == "settings:set":
-                if isinstance(args[1], dict) and args[1].get("value") == "":
-                    raise Exception("Cleanup failed")
-            return None
-
-        bridge.mutation.side_effect = side_effect
+        bridge.mutation.side_effect = Exception("Storage failed")
         executor = _make_executor(bridge)
         result = _cc_result(session_id="sess-x")
 
         # Should not raise
         await executor._complete_cc_task(
-            task_id="task-clean-fail",
+            task_id="task-store-fail",
             title="Task",
             agent_name="my-cc-agent",
             result=result,
