@@ -1132,7 +1132,14 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     if cron_status["jobs"] > 0:
         logger.info("[gateway] Cron service started with %d job(s)", cron_status["jobs"])
 
-    orchestrator = TaskOrchestrator(bridge, cron_service=cron)
+    # Ask-user reply routing — registry + watcher (CC agents only)
+    from mc.ask_user_registry import AskUserRegistry
+    from mc.ask_user_watcher import AskUserReplyWatcher
+
+    ask_user_registry = AskUserRegistry()
+
+    orchestrator = TaskOrchestrator(bridge, cron_service=cron,
+                                     ask_user_registry=ask_user_registry)
 
     async def _inbox_loop_with_crash_log() -> None:
         try:
@@ -1148,7 +1155,8 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
     kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
 
-    executor = TaskExecutor(bridge, cron_service=cron, on_task_completed=on_task_completed)
+    executor = TaskExecutor(bridge, cron_service=cron, on_task_completed=on_task_completed,
+                            ask_user_registry=ask_user_registry)
     execution_task = asyncio.create_task(executor.start_execution_loop())
 
     timeout_checker = TimeoutChecker(bridge)
@@ -1172,6 +1180,10 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     mention_watcher = MentionWatcher(bridge)
     mention_task = asyncio.create_task(mention_watcher.run())
 
+    # Ask-user reply watcher — delivers user replies to pending ask_user calls
+    ask_user_watcher = AskUserReplyWatcher(bridge, ask_user_registry)
+    ask_user_watcher_task = asyncio.create_task(ask_user_watcher.run())
+
     # Wait for shutdown signal
     await stop_event.wait()
     logger.info("[gateway] Agent Gateway stopping...")
@@ -1188,6 +1200,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     plan_negotiation_task.cancel()
     chat_task.cancel()
     mention_task.cancel()
+    ask_user_watcher_task.cancel()
     for task in (
         inbox_task,
         routing_task,
@@ -1198,6 +1211,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         plan_negotiation_task,
         chat_task,
         mention_task,
+        ask_user_watcher_task,
     ):
         try:
             await task

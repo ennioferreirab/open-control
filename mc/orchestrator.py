@@ -112,11 +112,13 @@ async def generate_title_via_low_agent(
 class TaskOrchestrator:
     """Routes planning tasks and handles review transitions."""
 
-    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None) -> None:
+    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None,
+                 ask_user_registry: Any | None = None) -> None:
         self._bridge = bridge
         self._lead_agent_name = LEAD_AGENT_NAME
         self._plan_materializer = PlanMaterializer(bridge)
-        self._step_dispatcher = StepDispatcher(bridge, cron_service=cron_service)
+        self._step_dispatcher = StepDispatcher(bridge, cron_service=cron_service,
+                                                ask_user_registry=ask_user_registry)
         self._known_inbox_ids: set[str] = set()
         self._known_planning_ids: set[str] = set()
         self._known_review_task_ids: set[str] = set()
