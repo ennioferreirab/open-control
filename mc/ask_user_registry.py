@@ -23,6 +23,10 @@ class AskUserRegistry:
     - register() when IPC server starts (before CC execution)
     - unregister() when IPC server stops (in finally block)
     - get() / deliver_reply() used by AskUserReplyWatcher
+
+    Note: If multiple CC steps for the same task_id run concurrently and both
+    call ask_user, only the last-registered server receives replies. This is
+    acceptable because concurrent ask_user from the same task is rare.
     """
 
     def __init__(self) -> None:
@@ -64,6 +68,8 @@ class AskUserRegistry:
         """
         server = self._servers.get(task_id)
         if not server:
+            return False
+        if not self.has_pending_ask(task_id):
             return False
         server.deliver_user_reply(task_id, answer)
         logger.info("[ask_user_registry] Delivered reply for task %s", task_id)
