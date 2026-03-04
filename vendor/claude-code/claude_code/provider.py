@@ -125,7 +125,7 @@ class ClaudeCodeProvider:
         session_id: str | None,
     ) -> list[str]:
         """Build the CLI command list for this execution."""
-        cmd = [self._cli, "-p", prompt, "--output-format", "stream-json"]
+        cmd = [self._cli, "-p", prompt, "--output-format", "stream-json", "--verbose"]
         cmd.extend(["--mcp-config", str(workspace_ctx.mcp_config)])
 
         # Model: per-agent overrides global default
