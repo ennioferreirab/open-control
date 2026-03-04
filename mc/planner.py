@@ -363,16 +363,24 @@ class TaskPlanner:
             self._validate_agent_names(plan, agents)
             self._prevent_lead_agent_steps(plan, agents)
             return plan
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[planner] LLM planning timed out after %ds, using heuristic fallback",
+                LLM_TIMEOUT_SECONDS,
+            )
         except Exception as exc:
             logger.warning(
-                "[planner] LLM planning failed, using heuristic fallback: %s", exc
+                "[planner] LLM planning failed (%s), using heuristic fallback",
+                type(exc).__name__,
+                exc_info=True,
             )
-            plan = self._fallback_heuristic_plan(
-                title, description, agents, explicit_agent
-            )
-            self._validate_agent_names(plan, agents)
-            self._prevent_lead_agent_steps(plan, agents)
-            return plan
+
+        plan = self._fallback_heuristic_plan(
+            title, description, agents, explicit_agent
+        )
+        self._validate_agent_names(plan, agents)
+        self._prevent_lead_agent_steps(plan, agents)
+        return plan
 
     async def _llm_plan(
         self,

@@ -509,6 +509,62 @@ class TestLLMFailureFallback:
         assert plan.steps[0].assigned_agent == "nanobot"
 
 
+class TestPlannerDiagnosticLogging:
+    """Verify planner logs diagnostic details on failure."""
+
+    @pytest.mark.asyncio
+    async def test_timeout_logs_specific_message(self):
+        """Timeout should log a distinct warning with timeout duration."""
+        from mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(side_effect=asyncio.TimeoutError())
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")), \
+             patch("mc.planner.logger") as mock_logger:
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        # Should log timeout specifically
+        timeout_calls = [
+            c for c in mock_logger.warning.call_args_list
+            if "timed out" in str(c)
+        ]
+        assert len(timeout_calls) >= 1
+
+    @pytest.mark.asyncio
+    async def test_general_error_logs_with_traceback(self):
+        """General errors should log with exc_info=True."""
+        from mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(side_effect=RuntimeError("API exploded"))
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")), \
+             patch("mc.planner.logger") as mock_logger:
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        # Should log with exc_info=True
+        error_calls = [
+            c for c in mock_logger.warning.call_args_list
+            if "LLM planning failed" in str(c)
+        ]
+        assert len(error_calls) >= 1
+        # Verify exc_info=True was passed
+        assert error_calls[0].kwargs.get("exc_info") is True
+
+
 class TestMalformedJSONFallback:
     """Test malformed JSON fallback — invalid LLM output triggers heuristic (Task 4.7 / AC #10)."""
 
