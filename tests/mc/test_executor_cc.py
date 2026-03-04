@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch, call
 
+import mc.executor as _executor_module
+
 import pytest
 
 from mc.executor import TaskExecutor
@@ -90,6 +92,18 @@ def _cc_result(
         usage={"input_tokens": 100, "output_tokens": 50},
         is_error=is_error,
     )
+
+
+async def _drain_background_tasks() -> None:
+    """Await all module-level background tasks to completion.
+
+    Uses asyncio.gather on the current snapshot of _background_tasks rather
+    than asyncio.sleep(0), which is fragile and may not yield enough times to
+    let all tasks schedule and complete.
+    """
+    pending = list(_executor_module._background_tasks)
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 # ---------------------------------------------------------------------------
@@ -498,9 +512,8 @@ class TestStreamCallback:
 
         assert len(captured_callback) == 1
 
-        # Drain any pending asyncio tasks (the create_task from on_stream callback)
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
+        # Drain any pending asyncio background tasks (the create_task from on_stream callback)
+        await _drain_background_tasks()
 
         # An activity should have been created for the stream text
         activity_calls = bridge.create_activity.call_args_list
@@ -542,7 +555,7 @@ class TestStreamCallback:
                 "t1", "tool use task", None, "agent", agent_data
             )
 
-        await asyncio.sleep(0)
+        await _drain_background_tasks()
 
         # Only the completion activity should be posted
         activity_calls = bridge.create_activity.call_args_list
@@ -661,6 +674,81 @@ class TestCompleteCCTask:
         bridge.update_task_status.assert_called_once()
         status_args = bridge.update_task_status.call_args[0]
         assert status_args[1] == TaskStatus.DONE
+
+
+# ---------------------------------------------------------------------------
+# _on_task_completed callback
+# ---------------------------------------------------------------------------
+
+
+class TestOnTaskCompletedCallback:
+
+    @pytest.mark.asyncio
+    async def test_on_task_completed_called_after_successful_cc_execution(self):
+        """_on_task_completed must be called after a successful CC task (M1)."""
+        bridge = _make_bridge()
+        executor = _make_executor(bridge)
+        agent_data = _cc_agent()
+        ws_ctx = _ws_ctx()
+        result = _cc_result(output="Done", cost_usd=0.001)
+
+        completed_task_ids: list[str] = []
+
+        async def on_completed(task_id: str) -> None:
+            completed_task_ids.append(task_id)
+
+        executor._on_task_completed = on_completed
+
+        mock_ws_mgr = MagicMock()
+        mock_ws_mgr.prepare.return_value = ws_ctx
+
+        mock_ipc = AsyncMock()
+        mock_provider = MagicMock()
+        mock_provider.execute_task = AsyncMock(return_value=result)
+
+        with (
+            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
+            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
+            patch(_PATCH_PROVIDER, return_value=mock_provider),
+        ):
+            await executor._execute_cc_task(
+                "t42", "Successful task", "desc", "my-cc-agent", agent_data
+            )
+
+        assert completed_task_ids == ["t42"]
+
+    @pytest.mark.asyncio
+    async def test_on_task_completed_not_called_on_error_result(self):
+        """_on_task_completed must NOT be called when CC task crashes (is_error=True)."""
+        executor = _make_executor()
+        agent_data = _cc_agent()
+        ws_ctx = _ws_ctx()
+        error_result = _cc_result(output="failed", is_error=True)
+
+        completed_task_ids: list[str] = []
+
+        async def on_completed(task_id: str) -> None:
+            completed_task_ids.append(task_id)
+
+        executor._on_task_completed = on_completed
+
+        mock_ws_mgr = MagicMock()
+        mock_ws_mgr.prepare.return_value = ws_ctx
+
+        mock_ipc = AsyncMock()
+        mock_provider = MagicMock()
+        mock_provider.execute_task = AsyncMock(return_value=error_result)
+
+        with (
+            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
+            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
+            patch(_PATCH_PROVIDER, return_value=mock_provider),
+        ):
+            await executor._execute_cc_task(
+                "t43", "Error task", None, "my-cc-agent", agent_data
+            )
+
+        assert completed_task_ids == []
 
 
 # ---------------------------------------------------------------------------

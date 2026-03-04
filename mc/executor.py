@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -1308,6 +1307,7 @@ class TaskExecutor:
             return
 
         # 2. Start IPC server (MCSocketServer.start() already removes stale socket)
+        # bus=None: MCP bridge tools use IPC, not the in-process MessageBus
         ipc_server = MCSocketServer(self._bridge, None)
         try:
             await ipc_server.start(ws_ctx.socket_path)
@@ -1346,6 +1346,11 @@ class TaskExecutor:
             await self._crash_task(task_id, title, f"Claude Code error: {result.output[:1000]}")
         else:
             await self._complete_cc_task(task_id, title, agent_name, result)
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id)
+                except Exception:
+                    logger.exception("[executor] on_task_completed failed for CC task '%s'", title)
 
     async def _post_cc_activity(
         self,
@@ -1370,7 +1375,7 @@ class TaskExecutor:
         task_id: str,
         title: str,
         agent_name: str,
-        result: "Any",
+        result: "CCTaskResult",
     ) -> None:
         """Post completion message, cost activity, and transition task to DONE."""
         from mc.types import CCTaskResult
