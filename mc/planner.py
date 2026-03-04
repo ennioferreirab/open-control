@@ -350,6 +350,7 @@ class TaskPlanner:
         agents: list[AgentData],
         explicit_agent: str | None = None,
         files: list[dict] | None = None,
+        model: str | None = None,
     ) -> ExecutionPlan:
         """Create an execution plan for a task.
 
@@ -357,7 +358,7 @@ class TaskPlanner:
         On LLM failure, falls back to heuristic planning.
         """
         try:
-            plan = await self._llm_plan(title, description, agents, files=files)
+            plan = await self._llm_plan(title, description, agents, files=files, model=model)
             if explicit_agent:
                 self._override_agents(plan, explicit_agent)
             self._validate_agent_names(plan, agents)
@@ -388,6 +389,7 @@ class TaskPlanner:
         description: str | None,
         agents: list[AgentData],
         files: list[dict] | None = None,
+        model: str | None = None,
     ) -> ExecutionPlan:
         """Call LLM to generate the plan."""
         from mc.provider_factory import create_provider
@@ -402,10 +404,10 @@ class TaskPlanner:
         if file_summary:
             user_prompt = user_prompt + "\n\n" + file_summary
 
-        provider, model = create_provider()
+        provider, resolved_model = create_provider(model=model)
         response = await asyncio.wait_for(
             provider.chat(
-                model=model,
+                model=resolved_model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},

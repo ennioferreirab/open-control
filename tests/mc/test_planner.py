@@ -565,6 +565,51 @@ class TestPlannerDiagnosticLogging:
         assert error_calls[0].kwargs.get("exc_info") is True
 
 
+class TestPlannerModelParameter:
+    """Verify planner passes model to create_provider."""
+
+    @pytest.mark.asyncio
+    async def test_model_param_passed_to_provider(self):
+        """When model is specified, it should be passed to create_provider."""
+        from mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "anthropic/claude-sonnet-4-6")) as mock_create:
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+                model="anthropic/claude-sonnet-4-6",
+            )
+
+        mock_create.assert_called_once_with(model="anthropic/claude-sonnet-4-6")
+
+    @pytest.mark.asyncio
+    async def test_no_model_param_passes_none(self):
+        """When no model specified, create_provider gets model=None."""
+        from mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")) as mock_create:
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        mock_create.assert_called_once_with(model=None)
+
+
 class TestMalformedJSONFallback:
     """Test malformed JSON fallback — invalid LLM output triggers heuristic (Task 4.7 / AC #10)."""
 
