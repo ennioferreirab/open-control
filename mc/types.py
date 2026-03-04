@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 if sys.version_info >= (3, 11):
@@ -382,3 +383,22 @@ class ActivityData:
     task_id: str | None = None
     agent_name: str | None = None
     id: str | None = None  # Convex _id (populated on read)
+
+
+@dataclass
+class WorkspaceContext:
+    """Paths and socket info for a Claude Code agent workspace (CC-3)."""
+    cwd: Path
+    mcp_config: Path
+    claude_md: Path
+    socket_path: str
+
+
+@dataclass
+class CCTaskResult:
+    """Result returned by ClaudeCodeProvider.execute_task() (CC-4)."""
+    output: str       # result text from type=result message
+    session_id: str   # CC session ID for resume
+    cost_usd: float   # total cost from result message
+    usage: dict       # {input_tokens, output_tokens, ...}
+    is_error: bool    # True if result.is_error or non-zero exit with no output
