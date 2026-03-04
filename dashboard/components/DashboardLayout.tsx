@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { TagsPanel } from "@/components/TagsPanel";
-import { Settings, Tag, Clock } from "lucide-react";
+import { Settings, Tag, Clock, PanelRightOpen } from "lucide-react";
 import { BoardProvider, useBoard } from "@/components/BoardContext";
 import { BoardSelector } from "@/components/BoardSelector";
 import { BoardSettingsSheet } from "@/components/BoardSettingsSheet";
@@ -51,6 +51,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
   const [cronOpen, setCronOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activityPanelCollapsed, setActivityPanelCollapsed] = useState(true);
 
   const parsedSearch = useMemo(() => parseSearch(searchQuery), [searchQuery]);
   const { openTerminals, closeAllTerminals } = useBoard();
@@ -97,6 +98,15 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
               >
                 <Settings className="h-4 w-4" />
               </button>
+              {activityPanelCollapsed && (
+                <button
+                  aria-label="Show activity feed"
+                  onClick={() => setActivityPanelCollapsed(false)}
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  <PanelRightOpen className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </header>
 
@@ -116,7 +126,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
           </div>
         </div>
       </SidebarInset>
-      <ActivityFeedPanel />
+      <ActivityFeedPanel collapsed={activityPanelCollapsed} onCollapse={() => setActivityPanelCollapsed(true)} />
       <TaskDetailSheet
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}

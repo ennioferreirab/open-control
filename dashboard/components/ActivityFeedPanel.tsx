@@ -1,7 +1,7 @@
 "use client";
 
 import { lazy, Suspense, useState } from "react";
-import { PanelRightClose, PanelRightOpen, Trash2 } from "lucide-react";
+import { PanelRightClose, Trash2 } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -12,23 +12,17 @@ const ChatPanel = lazy(() =>
   import("@/components/ChatPanel").then((mod) => ({ default: mod.ChatPanel }))
 );
 
-export function ActivityFeedPanel() {
-  const [collapsed, setCollapsed] = useState(true);
+interface ActivityFeedPanelProps {
+  collapsed: boolean;
+  onCollapse: () => void;
+}
+
+export function ActivityFeedPanel({ collapsed, onCollapse }: ActivityFeedPanelProps) {
   const [activeTab, setActiveTab] = useState("chats");
   const clearActivities = useMutation(api.activities.clearAll);
 
   if (collapsed) {
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setCollapsed(false)}
-        aria-label="Show activity feed"
-        className="absolute right-2 top-3 z-10 h-8 w-8 rounded-md border border-border bg-background shadow-sm"
-      >
-        <PanelRightOpen className="h-4 w-4" />
-      </Button>
-    );
+    return null;
   }
 
   return (
@@ -53,7 +47,7 @@ export function ActivityFeedPanel() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCollapsed(true)}
+            onClick={onCollapse}
             aria-label="Hide activity feed"
           >
             <PanelRightClose className="h-4 w-4" />
