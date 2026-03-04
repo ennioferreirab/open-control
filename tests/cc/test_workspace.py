@@ -1,4 +1,4 @@
-"""Unit tests for mc.cc_workspace.CCWorkspaceManager."""
+"""Unit tests for claude_code.workspace.CCWorkspaceManager."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from mc.cc_workspace import CCWorkspaceManager
-from mc.types import AgentData, WorkspaceContext
+from claude_code.workspace import CCWorkspaceManager
+from mc.types import AgentData
+from claude_code.types import WorkspaceContext
 
 
 # ---------------------------------------------------------------------------
@@ -262,7 +263,7 @@ class TestSkillsMapping:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent(skills=["nonexistent-skill"])
 
-        with caplog.at_level(logging.WARNING, logger="mc.cc_workspace"):
+        with caplog.at_level(logging.WARNING, logger="claude_code.workspace"):
             # Should NOT raise
             ctx = manager.prepare("test-agent", agent, "task123")
 
@@ -294,7 +295,7 @@ class TestSkillsMapping:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent(skills=["../../etc/passwd"])
 
-        with caplog.at_level(logging.WARNING, logger="mc.cc_workspace"):
+        with caplog.at_level(logging.WARNING, logger="claude_code.workspace"):
             ctx = manager.prepare("test-agent", agent, "task123")
 
         assert ctx is not None
@@ -311,7 +312,7 @@ class TestSkillsMapping:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent(skills=[".hidden-skill"])
 
-        with caplog.at_level(logging.WARNING, logger="mc.cc_workspace"):
+        with caplog.at_level(logging.WARNING, logger="claude_code.workspace"):
             ctx = manager.prepare("test-agent", agent, "task123")
 
         assert ctx is not None
@@ -342,7 +343,7 @@ class TestMcpConfigGeneration:
         server = data["mcpServers"]["nanobot"]
 
         assert server["command"] == "uv"
-        assert server["args"] == ["run", "python", "-m", "mc.mcp_bridge"]
+        assert server["args"] == ["run", "python", "-m", "claude_code.mcp_bridge"]
         assert "env" in server
 
     def test_mcp_json_env_vars(self, tmp_path: Path) -> None:

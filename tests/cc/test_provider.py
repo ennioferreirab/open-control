@@ -1,5 +1,5 @@
 """
-Tests for ClaudeCodeProvider (mc/cc_provider.py).
+Tests for ClaudeCodeProvider (claude_code/provider.py).
 
 Coverage:
 - _build_command: model, budget, turns, tools, permission mode, session resume
@@ -20,8 +20,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.cc_provider import ClaudeCodeProvider
-from mc.types import AgentData, CCTaskResult, ClaudeCodeOpts, WorkspaceContext
+from claude_code.provider import ClaudeCodeProvider
+from mc.types import AgentData
+from claude_code.types import CCTaskResult, ClaudeCodeOpts, WorkspaceContext
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +294,7 @@ class TestParseStream:
     async def test_malformed_json_skipped_with_warning(self, caplog):
         """Malformed JSON lines are skipped (with a warning)."""
         lines = [b"not-json\n", b'{"type":"result"}\n']
-        with caplog.at_level(logging.WARNING, logger="mc.cc_provider"):
+        with caplog.at_level(logging.WARNING, logger="claude_code.provider"):
             msgs = await self._collect(lines)
         assert len(msgs) == 1
         assert "malformed" in caplog.text.lower() or "Malformed" in caplog.text

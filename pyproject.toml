@@ -7,6 +7,7 @@ license = {text = "MIT"}
 
 dependencies = [
     "nanobot-ai",
+    "claude-code-backend",
     "convex>=0.7.0,<1.0.0",
     "filelock>=3.24.3",
 ]
@@ -23,6 +24,7 @@ packages = ["mc", "boot", "tmux_claude_control"]
 
 [tool.uv.sources]
 nanobot-ai = { path = "vendor/nanobot", editable = true }
+claude-code-backend = { path = "vendor/claude-code", editable = true }
 
 [tool.ruff]
 line-length = 100

@@ -1316,9 +1316,9 @@ class TaskExecutor:
         execution, and result posting.  Any phase failure crashes the task.
         Session resume (CC-6 AC2): looks up a stored session_id before executing.
         """
-        from mc.cc_workspace import CCWorkspaceManager
-        from mc.cc_provider import ClaudeCodeProvider
-        from mc.mcp_ipc_server import MCSocketServer
+        from claude_code.workspace import CCWorkspaceManager
+        from claude_code.provider import ClaudeCodeProvider
+        from claude_code.ipc_server import MCSocketServer
 
         # 1. Prepare workspace
         try:
@@ -1546,9 +1546,9 @@ class TaskExecutor:
         when a user sends a message to a task assigned to a claude-code agent.
         Integration with the message routing layer is handled separately.
         """
-        from mc.cc_workspace import CCWorkspaceManager
-        from mc.cc_provider import ClaudeCodeProvider
-        from mc.mcp_ipc_server import MCSocketServer
+        from claude_code.workspace import CCWorkspaceManager
+        from claude_code.provider import ClaudeCodeProvider
+        from claude_code.ipc_server import MCSocketServer
 
         # Look up stored session for resume
         session_id: str | None = None

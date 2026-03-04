@@ -162,9 +162,9 @@ class ChatHandler:
 
                 task_id = f"chat-{agent_name}"
 
-                from mc.cc_workspace import CCWorkspaceManager
-                from mc.cc_provider import ClaudeCodeProvider
-                from mc.mcp_ipc_server import MCSocketServer
+                from claude_code.workspace import CCWorkspaceManager
+                from claude_code.provider import ClaudeCodeProvider
+                from claude_code.ipc_server import MCSocketServer
 
                 try:
                     ws_mgr = CCWorkspaceManager()

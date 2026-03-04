@@ -37,9 +37,9 @@ from mc.types import (
 
 # Patch targets for lazy-imported CC modules (imported inside _execute_cc_task).
 # These must match the location where the name is looked up (the source module).
-_PATCH_WS_MGR = "mc.cc_workspace.CCWorkspaceManager"
-_PATCH_IPC_SRV = "mc.mcp_ipc_server.MCSocketServer"
-_PATCH_PROVIDER = "mc.cc_provider.ClaudeCodeProvider"
+_PATCH_WS_MGR = "claude_code.workspace.CCWorkspaceManager"
+_PATCH_IPC_SRV = "claude_code.ipc_server.MCSocketServer"
+_PATCH_PROVIDER = "claude_code.provider.ClaudeCodeProvider"
 
 
 # ---------------------------------------------------------------------------

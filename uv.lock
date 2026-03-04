@@ -354,6 +354,11 @@ wheels = [
 ]
 
 [[package]]
+name = "claude-code-backend"
+version = "0.1.0"
+source = { editable = "vendor/claude-code" }
+
+[[package]]
 name = "click"
 version = "8.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1597,6 +1602,7 @@ name = "nanobot-ennio"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "claude-code-backend" },
     { name = "convex" },
     { name = "filelock" },
     { name = "nanobot-ai" },
@@ -1620,6 +1626,7 @@ skills = [
 
 [package.metadata]
 requires-dist = [
+    { name = "claude-code-backend", editable = "vendor/claude-code" },
     { name = "convex", specifier = ">=0.7.0,<1.0.0" },
     { name = "filelock", specifier = ">=3.24.3" },
     { name = "nanobot-ai", editable = "vendor/nanobot" },

@@ -1,7 +1,7 @@
 """MCP bridge server — runs as a separate stdio subprocess.
 
-Launched by: python -m mc.mcp_bridge
-Or via:      uv run python -m mc.mcp_bridge
+Launched by: python -m claude_code.mcp_bridge
+Or via:      uv run python -m claude_code.mcp_bridge
 
 Environment variables:
     MC_SOCKET_PATH  Path to the Unix socket served by MCSocketServer (required).
@@ -57,7 +57,7 @@ def _get_ipc():
     """Return the singleton IPC client, creating it if needed."""
     global _ipc_client
     if _ipc_client is None:
-        from mc.mcp_ipc import MCSocketClient
+        from claude_code.ipc_client import MCSocketClient
 
         _ipc_client = MCSocketClient(_get_socket_path())
     return _ipc_client

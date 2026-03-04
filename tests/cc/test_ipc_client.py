@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.mcp_ipc import MCSocketClient
-from mc.mcp_ipc_server import MCSocketServer
+from claude_code.ipc_client import MCSocketClient
+from claude_code.ipc_server import MCSocketServer
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +235,7 @@ class TestMCSocketServerHandlers:
 
         srv = MCSocketServer(mock_bridge, None)
         # Shrink the timeout to near-zero for the test
-        import mc.mcp_ipc_server as ipc_srv_mod
+        import claude_code.ipc_server as ipc_srv_mod
         original_timeout = ipc_srv_mod.ASK_USER_TIMEOUT
         ipc_srv_mod.ASK_USER_TIMEOUT = 0.05
 

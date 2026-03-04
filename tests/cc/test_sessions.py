@@ -16,12 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mc.executor import TaskExecutor
-from mc.types import (
-    AgentData,
-    CCTaskResult,
-    ClaudeCodeOpts,
-    WorkspaceContext,
-)
+from mc.types import AgentData
+from claude_code.types import CCTaskResult, ClaudeCodeOpts, WorkspaceContext
 
 
 # ---------------------------------------------------------------------------
@@ -201,9 +197,9 @@ class TestSessionLookupOnExecution:
         result = _cc_result(session_id="sess-stored-123")
 
         with (
-            patch("mc.cc_workspace.CCWorkspaceManager") as MockWsMgr,
-            patch("mc.mcp_ipc_server.MCSocketServer") as MockIpc,
-            patch("mc.cc_provider.ClaudeCodeProvider") as MockProvider,
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
         ):
             MockWsMgr.return_value.prepare.return_value = ws_ctx
             mock_ipc = MockIpc.return_value
@@ -238,9 +234,9 @@ class TestSessionLookupOnExecution:
         result = _cc_result(session_id="sess-new-456")
 
         with (
-            patch("mc.cc_workspace.CCWorkspaceManager") as MockWsMgr,
-            patch("mc.mcp_ipc_server.MCSocketServer") as MockIpc,
-            patch("mc.cc_provider.ClaudeCodeProvider") as MockProvider,
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
         ):
             MockWsMgr.return_value.prepare.return_value = ws_ctx
             mock_ipc = MockIpc.return_value
@@ -274,9 +270,9 @@ class TestSessionLookupOnExecution:
         result = _cc_result()
 
         with (
-            patch("mc.cc_workspace.CCWorkspaceManager") as MockWsMgr,
-            patch("mc.mcp_ipc_server.MCSocketServer") as MockIpc,
-            patch("mc.cc_provider.ClaudeCodeProvider") as MockProvider,
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
         ):
             MockWsMgr.return_value.prepare.return_value = ws_ctx
             mock_ipc = MockIpc.return_value
@@ -319,9 +315,9 @@ class TestThreadFollowUp:
         result = _cc_result(session_id="sess-thread-abc", output="Here is my response")
 
         with (
-            patch("mc.cc_workspace.CCWorkspaceManager") as MockWsMgr,
-            patch("mc.mcp_ipc_server.MCSocketServer") as MockIpc,
-            patch("mc.cc_provider.ClaudeCodeProvider") as MockProvider,
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
         ):
             MockWsMgr.return_value.prepare.return_value = ws_ctx
             mock_ipc = MockIpc.return_value
@@ -355,9 +351,9 @@ class TestThreadFollowUp:
         result = _cc_result(session_id="sess-new-after-reply")
 
         with (
-            patch("mc.cc_workspace.CCWorkspaceManager") as MockWsMgr,
-            patch("mc.mcp_ipc_server.MCSocketServer") as MockIpc,
-            patch("mc.cc_provider.ClaudeCodeProvider") as MockProvider,
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
         ):
             MockWsMgr.return_value.prepare.return_value = ws_ctx
             mock_ipc = MockIpc.return_value
@@ -406,9 +402,9 @@ class TestThreadFollowUp:
         error_result = _cc_result(output="Error occurred", is_error=True)
 
         with (
-            patch("mc.cc_workspace.CCWorkspaceManager") as MockWsMgr,
-            patch("mc.mcp_ipc_server.MCSocketServer") as MockIpc,
-            patch("mc.cc_provider.ClaudeCodeProvider") as MockProvider,
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
         ):
             MockWsMgr.return_value.prepare.return_value = ws_ctx
             mock_ipc = MockIpc.return_value
@@ -433,7 +429,7 @@ class TestThreadFollowUp:
         executor = _make_executor(bridge)
         agent_data = _cc_agent()
 
-        with patch("mc.cc_workspace.CCWorkspaceManager") as MockWsMgr:
+        with patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr:
             MockWsMgr.return_value.prepare.side_effect = RuntimeError("disk full")
 
             output = await executor.handle_cc_thread_reply(
@@ -560,9 +556,9 @@ class TestFreshSession:
         result = _cc_result(session_id="sess-brand-new")
 
         with (
-            patch("mc.cc_workspace.CCWorkspaceManager") as MockWsMgr,
-            patch("mc.mcp_ipc_server.MCSocketServer") as MockIpc,
-            patch("mc.cc_provider.ClaudeCodeProvider") as MockProvider,
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
         ):
             MockWsMgr.return_value.prepare.return_value = ws_ctx
             mock_ipc = MockIpc.return_value

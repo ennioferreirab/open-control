@@ -4,7 +4,7 @@ Prepares per-agent workspaces for Claude Code execution:
   - Creates directory structure (memory/, sessions/)
   - Generates CLAUDE.md with agent identity and MCP tools guide
   - Maps skill symlinks into .claude/skills/
-  - Generates .mcp.json pointing at the mc.mcp_bridge subprocess
+  - Generates .mcp.json pointing at the claude_code.mcp_bridge subprocess
 """
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ import json
 import logging
 from pathlib import Path
 
-from mc.types import AgentData, WorkspaceContext
+from mc.types import AgentData
+from claude_code.types import WorkspaceContext
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 try:
     from nanobot.agent.skills import BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR  # type: ignore[import]
 except ImportError:  # pragma: no cover – vendor package not on path
-    _VENDOR_SKILLS_DIR = Path(__file__).parent.parent / "vendor" / "nanobot" / "nanobot" / "skills"
+    _VENDOR_SKILLS_DIR = Path(__file__).parent.parent.parent / "nanobot" / "nanobot" / "skills"
 
 _MCP_TOOLS_GUIDE = """\
 ## Available MCP Tools (nanobot server)
@@ -214,7 +215,7 @@ class CCWorkspaceManager:
             "mcpServers": {
                 "nanobot": {
                     "command": "uv",
-                    "args": ["run", "python", "-m", "mc.mcp_bridge"],
+                    "args": ["run", "python", "-m", "claude_code.mcp_bridge"],
                     "env": {
                         "MC_SOCKET_PATH": socket_path,
                         "AGENT_NAME": agent_name,

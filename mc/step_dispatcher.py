@@ -557,9 +557,9 @@ class StepDispatcher:
                     logger.warning("[dispatcher] Could not enrich agent data for CC routing")
 
                 # Execute step via CC backend
-                from mc.cc_workspace import CCWorkspaceManager
-                from mc.cc_provider import ClaudeCodeProvider
-                from mc.mcp_ipc_server import MCSocketServer
+                from claude_code.workspace import CCWorkspaceManager
+                from claude_code.provider import ClaudeCodeProvider
+                from claude_code.ipc_server import MCSocketServer
 
                 try:
                     ws_mgr = CCWorkspaceManager()

@@ -32,7 +32,7 @@ def _make_mock_ipc(responses: dict) -> MagicMock:
 class TestAskUserTool:
     async def test_ask_user_returns_answer(self):
         """ask_user forwards question to IPC and returns the answer."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"ask_user": {"answer": "Yes!"}})
 
@@ -44,7 +44,7 @@ class TestAskUserTool:
 
     async def test_ask_user_with_options(self):
         """ask_user passes options to IPC."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         received_params: dict = {}
 
@@ -69,7 +69,7 @@ class TestAskUserTool:
 
         M4: Verify the friendly error message is returned (not a raised exception).
         """
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         async def failing_request(method, params):
             raise ConnectionError("socket not found")
@@ -91,7 +91,7 @@ class TestAskUserTool:
 class TestSendMessageTool:
     async def test_send_message_returns_status(self):
         """send_message returns the IPC status string."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"send_message": {"status": "Message sent"}})
 
@@ -104,7 +104,7 @@ class TestSendMessageTool:
 
     async def test_send_message_passes_optional_channel(self):
         """send_message includes channel/chat_id in IPC params when given."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         received: dict = {}
 
@@ -132,7 +132,7 @@ class TestSendMessageTool:
 class TestDelegateTaskTool:
     async def test_delegate_task_success(self):
         """delegate_task returns task_id and status on success."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc(
             {"delegate_task": {"task_id": "abc123", "status": "created"}}
@@ -148,7 +148,7 @@ class TestDelegateTaskTool:
 
     async def test_delegate_task_error_propagated(self):
         """delegate_task surfaces IPC errors."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc(
             {"delegate_task": {"error": "Self-delegation prevented"}}
@@ -169,7 +169,7 @@ class TestDelegateTaskTool:
         The bridge itself does not enforce this; the server-side handler does.
         We test that the server returns the correct error which the bridge surfaces.
         """
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         received: dict = {}
 
@@ -201,7 +201,7 @@ class TestDelegateTaskTool:
 class TestAskAgentTool:
     async def test_ask_agent_returns_response(self):
         """ask_agent returns the IPC response string."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc(
             {"ask_agent": {"response": "The answer is 42."}}
@@ -216,7 +216,7 @@ class TestAskAgentTool:
 
     async def test_ask_agent_error_response(self):
         """ask_agent surfaces IPC errors in the result text."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc(
             {"ask_agent": {"error": "Agent 'ghost' not found."}}
@@ -232,7 +232,7 @@ class TestAskAgentTool:
 
     async def test_ask_agent_passes_caller_and_task(self):
         """ask_agent passes AGENT_NAME and TASK_ID to IPC."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         received: dict = {}
 
@@ -262,7 +262,7 @@ class TestAskAgentTool:
 class TestReportProgressTool:
     async def test_report_progress_returns_status(self):
         """report_progress returns 'Progress reported'."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc(
             {"report_progress": {"status": "Progress reported"}}
@@ -277,7 +277,7 @@ class TestReportProgressTool:
 
     async def test_report_progress_passes_percentage(self):
         """report_progress includes percentage in IPC params."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         received: dict = {}
 
@@ -298,7 +298,7 @@ class TestReportProgressTool:
 
     async def test_report_progress_without_percentage(self):
         """report_progress works without the optional percentage."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc(
             {"report_progress": {"status": "Progress reported"}}
@@ -319,7 +319,7 @@ class TestReportProgressTool:
 class TestListTools:
     async def test_list_tools_returns_all_five(self):
         """list_tools returns all 5 expected tools."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
         names = {t.name for t in tools}
@@ -334,7 +334,7 @@ class TestListTools:
 
     async def test_tools_have_required_fields(self):
         """Each tool has name, description, and inputSchema."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
         for tool in tools:
@@ -344,7 +344,7 @@ class TestListTools:
 
     async def test_unknown_tool_returns_error_text(self):
         """Calling an unregistered tool name returns an error text content."""
-        import mc.mcp_bridge as bridge_mod
+        import claude_code.mcp_bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({})
 

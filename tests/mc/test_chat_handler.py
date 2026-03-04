@@ -421,9 +421,9 @@ class TestCCModelRouting:
                 return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
             ),
             patch("mc.gateway.AGENTS_DIR", agents_dir),
-            patch("mc.cc_workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
-            patch("mc.mcp_ipc_server.MCSocketServer", return_value=mock_ipc_server),
-            patch("mc.cc_provider.ClaudeCodeProvider", return_value=mock_provider),
+            patch("claude_code.workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
+            patch("claude_code.ipc_server.MCSocketServer", return_value=mock_ipc_server),
+            patch("claude_code.provider.ClaudeCodeProvider", return_value=mock_provider),
             patch("nanobot.config.loader.load_config", return_value=mock_cfg),
             patch("importlib.util.spec_from_file_location") as mock_spec_from,
         ):
@@ -497,9 +497,9 @@ class TestCCModelRouting:
                 return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
             ),
             patch("mc.gateway.AGENTS_DIR", agents_dir),
-            patch("mc.cc_workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
-            patch("mc.mcp_ipc_server.MCSocketServer", return_value=mock_ipc_server),
-            patch("mc.cc_provider.ClaudeCodeProvider", return_value=mock_provider),
+            patch("claude_code.workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
+            patch("claude_code.ipc_server.MCSocketServer", return_value=mock_ipc_server),
+            patch("claude_code.provider.ClaudeCodeProvider", return_value=mock_provider),
             patch("nanobot.config.loader.load_config", return_value=mock_cfg),
             patch("importlib.util.spec_from_file_location"),
         ):
@@ -543,7 +543,7 @@ class TestCCModelRouting:
                 return_value=self._make_validate_result("gpt-4"),
             ),
             patch("mc.gateway.AGENTS_DIR", agents_dir),
-            patch("mc.cc_provider.ClaudeCodeProvider") as mock_cc_provider_cls,
+            patch("claude_code.provider.ClaudeCodeProvider") as mock_cc_provider_cls,
         ):
             mock_spec = MagicMock()
             mock_spec_from.return_value = mock_spec

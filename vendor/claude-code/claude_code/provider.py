@@ -14,7 +14,8 @@ import logging
 import signal
 from typing import TYPE_CHECKING, Any, AsyncIterator, Callable
 
-from mc.types import AgentData, CCTaskResult, WorkspaceContext
+from mc.types import AgentData
+from claude_code.types import CCTaskResult, WorkspaceContext
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ClaudeCodeConfig
