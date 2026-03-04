@@ -2,7 +2,7 @@
 
 import pytest
 
-from nanobot.mc.executor import _build_tag_attributes_context
+from mc.executor import _build_tag_attributes_context
 
 
 class TestBuildTagAttributesContextEmpty:

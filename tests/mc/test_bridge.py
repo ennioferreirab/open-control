@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from nanobot.mc.bridge import (
+from mc.bridge import (
     ConvexBridge,
     _convert_keys_to_camel,
     _convert_keys_to_snake,
@@ -187,7 +187,7 @@ class TestConvertKeysToSnake:
 # ── ConvexBridge.query tests ──────────────────────────────────────────
 
 class TestBridgeQuery:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_query_converts_result_keys(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = [
@@ -208,7 +208,7 @@ class TestBridgeQuery:
         assert result[0]["created_at"] == "2026-02-22T10:00:00Z"
         mock_client.query.assert_called_once_with("tasks:list", {})
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_query_converts_arg_keys(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
@@ -220,7 +220,7 @@ class TestBridgeQuery:
             "messages:listByTask", {"taskId": "abc123"}
         )
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_query_with_no_args(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
@@ -231,7 +231,7 @@ class TestBridgeQuery:
         assert result == []
         mock_client.query.assert_called_once_with("tasks:list", {})
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_query_returns_none(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = None
@@ -245,7 +245,7 @@ class TestBridgeQuery:
 # ── ConvexBridge.mutation tests ───────────────────────────────────────
 
 class TestBridgeMutation:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_mutation_converts_arg_keys(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = "new_id_123"
@@ -269,7 +269,7 @@ class TestBridgeMutation:
         # Status value "inbox" should NOT be key-converted
         assert call_args[1]["status"] == "inbox"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_mutation_with_no_args(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -280,7 +280,7 @@ class TestBridgeMutation:
         assert result is None
         mock_client.mutation.assert_called_once_with("system:reset", {})
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_mutation_returns_dict_converted(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = {"_id": "abc", "createdAt": "2026-01-01"}
@@ -294,7 +294,7 @@ class TestBridgeMutation:
 # ── ConvexBridge.subscribe tests ──────────────────────────────────────
 
 class TestBridgeSubscribe:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_subscribe_converts_results(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.subscribe.return_value = iter([
@@ -310,7 +310,7 @@ class TestBridgeSubscribe:
         assert results[0][0]["assigned_agent"] == "bob"
         assert results[1][0]["assigned_agent"] == "alice"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_subscribe_converts_args(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.subscribe.return_value = iter([])
@@ -326,24 +326,24 @@ class TestBridgeSubscribe:
 # ── ConvexBridge initialization tests ─────────────────────────────────
 
 class TestBridgeInit:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_init_creates_client(self, MockClient):
         bridge = ConvexBridge("https://test.convex.cloud")
         MockClient.assert_called_once_with("https://test.convex.cloud")
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_init_with_admin_key(self, MockClient):
         mock_client = MockClient.return_value
         bridge = ConvexBridge("https://test.convex.cloud", admin_key="secret123")
         mock_client.set_admin_auth.assert_called_once_with("secret123")
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_init_without_admin_key(self, MockClient):
         mock_client = MockClient.return_value
         bridge = ConvexBridge("https://test.convex.cloud")
         mock_client.set_admin_auth.assert_not_called()
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_close(self, MockClient):
         mock_client = MockClient.return_value
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -354,7 +354,7 @@ class TestBridgeInit:
 # ── Edge case tests ───────────────────────────────────────────────────
 
 class TestEdgeCases:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_query_with_empty_dict_args(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = []
@@ -364,8 +364,8 @@ class TestEdgeCases:
 
         mock_client.query.assert_called_once_with("tasks:list", {})
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_error_propagation(self, MockClient, mock_sleep):
         from convex import ConvexError
 
@@ -380,8 +380,8 @@ class TestEdgeCases:
 # ── Retry logic tests (Story 1.4) ───────────────────────────────────
 
 class TestMutationRetry:
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_retry_succeeds_on_attempt_2(self, MockClient, mock_sleep):
         """Mutation fails once, succeeds on retry."""
         mock_client = MockClient.return_value
@@ -397,8 +397,8 @@ class TestMutationRetry:
         mock_sleep.assert_called_once_with(1)
         assert result == {"id": "abc123"}
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_retry_succeeds_on_attempt_3(self, MockClient, mock_sleep):
         """Mutation fails twice, succeeds on third attempt."""
         mock_client = MockClient.return_value
@@ -415,8 +415,8 @@ class TestMutationRetry:
         assert mock_sleep.call_args_list == [call(1), call(2)]
         assert result == {"id": "xyz"}
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_retry_succeeds_on_attempt_4(self, MockClient, mock_sleep):
         """Mutation fails three times, succeeds on fourth (last) attempt."""
         mock_client = MockClient.return_value
@@ -434,8 +434,8 @@ class TestMutationRetry:
         assert mock_sleep.call_args_list == [call(1), call(2), call(4)]
         assert result == {"id": "recovered"}
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_retry_exhaustion_raises(self, MockClient, mock_sleep):
         """All 4 attempts fail -- exception is re-raised."""
         mock_client = MockClient.return_value
@@ -448,8 +448,8 @@ class TestMutationRetry:
         # 4 mutation attempts + 1 best-effort error activity
         assert mock_client.mutation.call_count == 5
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_retry_exhaustion_best_effort_activity(self, MockClient, mock_sleep):
         """On exhaustion, best-effort error activity is written to Convex."""
         mock_client = MockClient.return_value
@@ -472,8 +472,8 @@ class TestMutationRetry:
         assert activity_call[0][1]["eventType"] == "system_error"
         assert "tasks:create" in activity_call[0][1]["description"]
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_best_effort_activity_failure_silent(self, MockClient, mock_sleep):
         """Best-effort error activity write also fails -- no cascading exception."""
         mock_client = MockClient.return_value
@@ -487,8 +487,8 @@ class TestMutationRetry:
         # 4 retry attempts + 1 best-effort (also fails, silently caught)
         assert mock_client.mutation.call_count == 5
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_exponential_backoff_timing(self, MockClient, mock_sleep):
         """Verify backoff delays: 1s, 2s, 4s per AC #1."""
         mock_client = MockClient.return_value
@@ -502,8 +502,8 @@ class TestMutationRetry:
         # No sleep after attempt 4 (exhaustion)
         assert mock_sleep.call_args_list == [call(1), call(2), call(4)]
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_successful_retry_no_error_activity(self, MockClient, mock_sleep):
         """When retry succeeds, no error activity event is written."""
         mock_client = MockClient.return_value
@@ -518,7 +518,7 @@ class TestMutationRetry:
         # Only 2 calls: the failed attempt and the success -- no best-effort activity
         assert mock_client.mutation.call_count == 2
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_query_not_retried(self, MockClient):
         """Query failures are NOT retried."""
         mock_client = MockClient.return_value
@@ -534,8 +534,8 @@ class TestMutationRetry:
 # ── Dual logging tests (Story 1.4) ──────────────────────────────────
 
 class TestDualLogging:
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_retry_success_logs_attempt(self, MockClient, mock_sleep, caplog):
         """Successful retry logs which attempt succeeded."""
         mock_client = MockClient.return_value
@@ -545,36 +545,36 @@ class TestDualLogging:
         ]
 
         import logging
-        with caplog.at_level(logging.INFO, logger="nanobot.mc.bridge"):
+        with caplog.at_level(logging.INFO, logger="mc.bridge"):
             bridge = ConvexBridge("https://test.convex.cloud")
             bridge.mutation("tasks:create", {"title": "Test"})
 
         assert any("succeeded on attempt 2/4" in r.message for r in caplog.records)
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_retry_failure_logs_error(self, MockClient, mock_sleep, caplog):
         """Retry exhaustion logs error with context."""
         mock_client = MockClient.return_value
         mock_client.mutation.side_effect = Exception("Network error")
 
         import logging
-        with caplog.at_level(logging.ERROR, logger="nanobot.mc.bridge"):
+        with caplog.at_level(logging.ERROR, logger="mc.bridge"):
             bridge = ConvexBridge("https://test.convex.cloud")
             with pytest.raises(Exception):
                 bridge.mutation("tasks:create", {"title": "Test"})
 
         assert any("failed after 4 attempts" in r.message for r in caplog.records)
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_state_transition_logging(self, MockClient, mock_sleep, caplog):
         """Convenience methods log state transitions with [MC] prefix."""
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
 
         import logging
-        with caplog.at_level(logging.INFO, logger="nanobot.mc.bridge"):
+        with caplog.at_level(logging.INFO, logger="mc.bridge"):
             bridge = ConvexBridge("https://test.convex.cloud")
             bridge.update_task_status("task123", "in_progress", agent_name="dev")
 
@@ -584,7 +584,7 @@ class TestDualLogging:
 # ── Convenience method tests (Story 1.4) ─────────────────────────────
 
 class TestConvenienceMethods:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_update_task_status(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -598,7 +598,7 @@ class TestConvenienceMethods:
         assert call_args[1]["status"] == "in_progress"
         assert call_args[1]["agentName"] == "dev"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_update_agent_status(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -611,7 +611,7 @@ class TestConvenienceMethods:
         assert call_args[1]["agentName"] == "financeiro"
         assert call_args[1]["status"] == "active"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_activity(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -629,7 +629,7 @@ class TestConvenienceMethods:
         assert call_args[1]["agentName"] == "lead"
         assert "timestamp" in call_args[1]
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_send_message(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -646,7 +646,7 @@ class TestConvenienceMethods:
         assert call_args[1]["messageType"] == "work"
         assert "timestamp" in call_args[1]
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_step(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = "step-123"
@@ -669,7 +669,7 @@ class TestConvenienceMethods:
         assert call_args[1]["assignedAgent"] == "nanobot"
         assert call_args[1]["parallelGroup"] == 1
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_batch_create_steps(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = ["step-1", "step-2"]
@@ -706,7 +706,7 @@ class TestConvenienceMethods:
         assert call_args[1]["steps"][0]["tempId"] == "step_1"
         assert call_args[1]["steps"][1]["blockedByTempIds"] == ["step_1"]
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_kick_off_task(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -719,7 +719,7 @@ class TestConvenienceMethods:
         assert call_args[1]["taskId"] == "task-123"
         assert call_args[1]["stepCount"] == 3
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_update_step_status(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = None
@@ -733,7 +733,7 @@ class TestConvenienceMethods:
         assert call_args[1]["status"] == "running"
         assert "errorMessage" not in call_args[1]
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_get_steps_by_task(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.query.return_value = [{"_id": "step-123", "taskId": "task-123"}]
@@ -746,7 +746,7 @@ class TestConvenienceMethods:
             "steps:getByTask", {"taskId": "task-123"}
         )
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_check_and_unblock_dependents(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = ["step-2", "step-3"]
@@ -759,7 +759,7 @@ class TestConvenienceMethods:
         assert call_args[0] == "steps:checkAndUnblockDependents"
         assert call_args[1]["stepId"] == "step-1"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_create_activity_optional_fields(self, MockClient):
         """Activity without task_id and agent_name omits those fields."""
         mock_client = MockClient.return_value
@@ -772,8 +772,8 @@ class TestConvenienceMethods:
         assert "taskId" not in call_args[1]
         assert "agentName" not in call_args[1]
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_convenience_methods_use_retry(self, MockClient, mock_sleep):
         """Convenience methods retry on failure."""
         mock_client = MockClient.return_value
@@ -788,7 +788,7 @@ class TestConvenienceMethods:
         assert mock_client.mutation.call_count == 2
         mock_sleep.assert_called_once_with(1)
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_send_message_without_type(self, MockClient):
         """send_message without type omits the type field (backward compat)."""
         mock_client = MockClient.return_value
@@ -802,7 +802,7 @@ class TestConvenienceMethods:
         assert "type" not in call_args[1]
         assert call_args[1]["messageType"] == "work"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_send_message_with_type(self, MockClient):
         """send_message with type includes the type field in args."""
         mock_client = MockClient.return_value
@@ -820,7 +820,7 @@ class TestConvenienceMethods:
 # ── Story 2.4: Unified Thread Bridge Methods ─────────────────────────
 
 class TestPostStepCompletion:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_post_step_completion_basic(self, MockClient):
         """post_step_completion calls postStepCompletion with correct camelCase args."""
         mock_client = MockClient.return_value
@@ -842,7 +842,7 @@ class TestPostStepCompletion:
         assert call_args[1]["content"] == "Step completed successfully."
         assert "artifacts" not in call_args[1]
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_post_step_completion_with_artifacts(self, MockClient):
         """post_step_completion with artifacts includes them in the mutation args."""
         mock_client = MockClient.return_value
@@ -871,7 +871,7 @@ class TestPostStepCompletion:
         assert sent_artifacts[1]["path"] == "README.md"
         assert sent_artifacts[1]["action"] == "created"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_post_step_completion_no_artifacts_when_none(self, MockClient):
         """post_step_completion with artifacts=None omits artifacts from args."""
         mock_client = MockClient.return_value
@@ -883,7 +883,7 @@ class TestPostStepCompletion:
         call_args = mock_client.mutation.call_args[0]
         assert "artifacts" not in call_args[1]
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_post_step_completion_no_artifacts_when_empty(self, MockClient):
         """post_step_completion with artifacts=[] omits artifacts from args."""
         mock_client = MockClient.return_value
@@ -895,8 +895,8 @@ class TestPostStepCompletion:
         call_args = mock_client.mutation.call_args[0]
         assert "artifacts" not in call_args[1]
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_post_step_completion_uses_retry(self, MockClient, mock_sleep):
         """post_step_completion retries on transient failure."""
         mock_client = MockClient.return_value
@@ -909,7 +909,7 @@ class TestPostStepCompletion:
 
 
 class TestPostLeadAgentMessage:
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_post_lead_agent_plan(self, MockClient):
         """post_lead_agent_message with lead_agent_plan type calls correct mutation."""
         mock_client = MockClient.return_value
@@ -928,7 +928,7 @@ class TestPostLeadAgentMessage:
         assert call_args[1]["content"] == "Here is the execution plan..."
         assert call_args[1]["type"] == "lead_agent_plan"
 
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.ConvexClient")
     def test_post_lead_agent_chat(self, MockClient):
         """post_lead_agent_message with lead_agent_chat type sends correct type value."""
         mock_client = MockClient.return_value
@@ -944,8 +944,8 @@ class TestPostLeadAgentMessage:
         call_args = mock_client.mutation.call_args[0]
         assert call_args[1]["type"] == "lead_agent_chat"
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.ConvexClient")
     def test_post_lead_agent_message_uses_retry(self, MockClient, mock_sleep):
         """post_lead_agent_message retries on transient failure."""
         mock_client = MockClient.return_value
@@ -963,8 +963,8 @@ class TestPostLeadAgentMessage:
 class TestCreateTaskDirectory:
     """Unit tests for ConvexBridge.create_task_directory."""
 
-    @patch("nanobot.mc.bridge.os.makedirs")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.os.makedirs")
+    @patch("mc.bridge.ConvexClient")
     def test_creates_attachments_and_output_dirs(self, MockClient, mock_makedirs):
         """Happy path: makedirs is called for both attachments and output subdirs."""
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -975,8 +975,8 @@ class TestCreateTaskDirectory:
         mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)
         assert mock_makedirs.call_count == 2
 
-    @patch("nanobot.mc.bridge.os.makedirs")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.os.makedirs")
+    @patch("mc.bridge.ConvexClient")
     def test_filesystem_safe_id_conversion(self, MockClient, mock_makedirs):
         """Special characters in task_id are replaced with underscores."""
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -986,8 +986,8 @@ class TestCreateTaskDirectory:
         mock_makedirs.assert_any_call(expected_base / "attachments", exist_ok=True)
         mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)
 
-    @patch("nanobot.mc.bridge.os.makedirs")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.os.makedirs")
+    @patch("mc.bridge.ConvexClient")
     def test_idempotent_no_error_on_existing_dir(self, MockClient, mock_makedirs):
         """Calling create_task_directory twice raises no exception (idempotent)."""
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -997,8 +997,8 @@ class TestCreateTaskDirectory:
         bridge.create_task_directory("jd7abc123xyz")
         assert mock_makedirs.call_count == 4  # 2 dirs x 2 calls
 
-    @patch("nanobot.mc.bridge.os.makedirs")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.os.makedirs")
+    @patch("mc.bridge.ConvexClient")
     def test_oserror_logs_activity_event(self, MockClient, mock_makedirs):
         """OSError on makedirs logs a system_error activity event and does not raise."""
         mock_makedirs.side_effect = OSError("Permission denied")
@@ -1020,9 +1020,9 @@ class TestCreateTaskDirectory:
             assert "Permission denied" in activity_args["description"]
             assert activity_args["taskId"] == "jd7abc123xyz"
 
-    @patch("nanobot.mc.bridge.time.sleep")
-    @patch("nanobot.mc.bridge.os.makedirs")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.time.sleep")
+    @patch("mc.bridge.os.makedirs")
+    @patch("mc.bridge.ConvexClient")
     def test_oserror_activity_failure_does_not_raise(self, MockClient, mock_makedirs, mock_sleep):
         """Double-fault tolerance: OSError on makedirs + Exception on create_activity still does not raise."""
         mock_makedirs.side_effect = OSError("Disk full")
@@ -1034,8 +1034,8 @@ class TestCreateTaskDirectory:
         # Must NOT raise even when both makedirs and create_activity fail
         bridge.create_task_directory("jd7abc123xyz")
 
-    @patch("nanobot.mc.bridge.os.makedirs")
-    @patch("nanobot.mc.bridge.ConvexClient")
+    @patch("mc.bridge.os.makedirs")
+    @patch("mc.bridge.ConvexClient")
     def test_filesystem_safe_preserves_alphanumeric_and_hyphens(self, MockClient, mock_makedirs):
         """Alphanumeric characters and hyphens are preserved in safe task ID."""
         bridge = ConvexBridge("https://test.convex.cloud")

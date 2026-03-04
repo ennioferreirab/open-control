@@ -53,7 +53,7 @@ class TestProcessChatMessage:
     @pytest.mark.asyncio
     async def test_happy_path_sends_response_and_marks_done(self, tmp_path):
         """Process a pending message: mark processing, run agent, send response, mark done."""
-        from nanobot.mc.chat_handler import ChatHandler
+        from mc.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -77,17 +77,17 @@ class TestProcessChatMessage:
             ) as mock_spec_from,
             patch("importlib.util.module_from_spec") as mock_mod_from,
             patch(
-                "nanobot.mc.provider_factory.create_provider",
+                "mc.provider_factory.create_provider",
                 return_value=(MagicMock(), "test-model"),
             ),
             patch(
-                "nanobot.mc.yaml_validator.validate_agent_file",
+                "mc.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     prompt="Test prompt", model=None, skills=[]
                 ),
             ),
             patch(
-                "nanobot.mc.gateway.AGENTS_DIR",
+                "mc.gateway.AGENTS_DIR",
                 agents_dir,
             ),
         ):
@@ -121,7 +121,7 @@ class TestProcessChatMessage:
     @pytest.mark.asyncio
     async def test_skips_message_without_id(self):
         """Messages without an id are skipped silently."""
-        from nanobot.mc.chat_handler import ChatHandler
+        from mc.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -135,7 +135,7 @@ class TestProcessChatMessage:
     @pytest.mark.asyncio
     async def test_skips_message_without_agent_name(self):
         """Messages without an agent_name are skipped."""
-        from nanobot.mc.chat_handler import ChatHandler
+        from mc.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -157,7 +157,7 @@ class TestProcessChatMessageErrors:
     @pytest.mark.asyncio
     async def test_error_marks_done_and_sends_error_response(self):
         """On processing error, mark original done and send error response."""
-        from nanobot.mc.chat_handler import ChatHandler
+        from mc.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -191,7 +191,7 @@ class TestChatHandlerPollingLoop:
     @pytest.mark.asyncio
     async def test_run_polls_and_dispatches(self):
         """The run() loop polls for pending messages and processes them."""
-        from nanobot.mc.chat_handler import ChatHandler
+        from mc.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -218,7 +218,7 @@ class TestChatHandlerPollingLoop:
         handler._process_chat_message = mock_process
 
         # Patch POLL_INTERVAL_SECONDS to 0 so the loop iterates fast
-        with patch("nanobot.mc.chat_handler.POLL_INTERVAL_SECONDS", 0):
+        with patch("mc.chat_handler.POLL_INTERVAL_SECONDS", 0):
             task = asyncio.create_task(handler.run())
             # Wait for processing to happen (with timeout)
             try:
@@ -236,7 +236,7 @@ class TestChatHandlerPollingLoop:
     @pytest.mark.asyncio
     async def test_run_handles_poll_error_gracefully(self):
         """Errors during polling don't crash the loop."""
-        from nanobot.mc.chat_handler import ChatHandler
+        from mc.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -255,7 +255,7 @@ class TestChatHandlerPollingLoop:
 
         bridge.get_pending_chat_messages = failing_get_pending
 
-        with patch("nanobot.mc.chat_handler.POLL_INTERVAL_SECONDS", 0):
+        with patch("mc.chat_handler.POLL_INTERVAL_SECONDS", 0):
             task = asyncio.create_task(handler.run())
             try:
                 await asyncio.wait_for(second_poll_done.wait(), timeout=5.0)
@@ -281,7 +281,7 @@ class TestBridgeChatHelpers:
 
     def test_get_pending_chat_messages_calls_query(self):
         """get_pending_chat_messages calls chats:listPending query."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         bridge = MagicMock(spec=ConvexBridge)
         bridge.query = MagicMock(return_value=[])
@@ -294,7 +294,7 @@ class TestBridgeChatHelpers:
 
     def test_get_pending_returns_list_or_empty(self):
         """get_pending_chat_messages returns empty list for None."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         bridge = MagicMock(spec=ConvexBridge)
         bridge.query = MagicMock(return_value=None)
@@ -304,7 +304,7 @@ class TestBridgeChatHelpers:
 
     def test_send_chat_response_calls_mutation(self):
         """send_chat_response calls chats:send mutation."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         bridge = MagicMock(spec=ConvexBridge)
         bridge._mutation_with_retry = MagicMock()
@@ -323,7 +323,7 @@ class TestBridgeChatHelpers:
 
     def test_mark_chat_processing_calls_mutation(self):
         """mark_chat_processing calls chats:updateStatus with processing."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         bridge = MagicMock(spec=ConvexBridge)
         bridge._mutation_with_retry = MagicMock()
@@ -337,7 +337,7 @@ class TestBridgeChatHelpers:
 
     def test_mark_chat_done_calls_mutation(self):
         """mark_chat_done calls chats:updateStatus with done."""
-        from nanobot.mc.bridge import ConvexBridge
+        from mc.bridge import ConvexBridge
 
         bridge = MagicMock(spec=ConvexBridge)
         bridge._mutation_with_retry = MagicMock()

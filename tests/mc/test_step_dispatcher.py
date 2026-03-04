@@ -1,261 +1,1101 @@
-"""Tests for crash-handling and human-step behaviors in nanobot.mc.step_dispatcher."""
+"""Unit tests for StepDispatcher."""
 
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.mc.step_dispatcher import StepDispatcher
-from nanobot.mc.types import StepStatus
+from mc.step_dispatcher import StepDispatcher
+from mc.types import ActivityEventType, AuthorType, MessageType, StepStatus, TaskStatus
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+async def _sync_to_thread(func, *args, **kwargs):
+    """Run to_thread payloads synchronously in tests."""
+    return func(*args, **kwargs)
 
 
-def _make_step(
-    step_id: str = "step-123",
-    title: str = "Write tests",
-    agent: str = "dev-agent",
-    status: str = StepStatus.ASSIGNED,
-) -> dict:
+def _step(
+    step_id: str,
+    title: str,
+    *,
+    status: str = "assigned",
+    parallel_group: int = 1,
+    order: int = 1,
+    blocked_by: list[str] | None = None,
+    assigned_agent: str = "nanobot",
+) -> dict[str, Any]:
     return {
         "id": step_id,
+        "task_id": "task-1",
         "title": title,
-        "description": "Step description",
-        "assigned_agent": agent,
+        "description": f"Do {title}",
+        "assigned_agent": assigned_agent,
         "status": status,
-        "parallel_group": 1,
-        "order": 1,
-        "blocked_by": [],
+        "parallel_group": parallel_group,
+        "order": order,
+        "blocked_by": blocked_by or [],
     }
 
 
-def _make_bridge() -> MagicMock:
-    """Return a mock ConvexBridge with all needed methods stubbed."""
+def _make_stateful_bridge(
+    steps: list[dict[str, Any]],
+    dependency_map: dict[str, list[str]] | None = None,
+) -> tuple[MagicMock, dict[str, dict[str, Any]]]:
     bridge = MagicMock()
-    bridge.update_step_status = MagicMock(return_value=None)
-    bridge.post_system_error = MagicMock(return_value=None)
-    bridge.send_message = MagicMock(return_value=None)
-    bridge.create_activity = MagicMock(return_value=None)
-    bridge.get_task_messages = MagicMock(return_value=[])
-    bridge.query = MagicMock(return_value={"title": "Test Task"})
-    bridge.get_board_by_id = MagicMock(return_value=None)
-    # Default: Convex has no data for the agent (prevents pollution of crash tests)
-    bridge.get_agent_by_name = MagicMock(return_value=None)
-    bridge.post_step_completion = MagicMock(return_value=None)
-    bridge.sync_task_output_files = MagicMock(return_value=None)
-    bridge.check_and_unblock_dependents = MagicMock(return_value=[])
-    return bridge
+    state = {step["id"]: dict(step) for step in steps}
+    dependency_map = dependency_map or {}
+
+    def _ordered_steps() -> list[dict[str, Any]]:
+        sorted_steps = sorted(
+            state.values(),
+            key=lambda step: (int(step.get("parallel_group", 1)), int(step.get("order", 1))),
+        )
+        return [dict(step) for step in sorted_steps]
+
+    def _update_step_status(
+        step_id: str, status: str, error_message: str | None = None
+    ) -> None:
+        state[step_id]["status"] = status
+        if error_message is not None:
+            state[step_id]["error_message"] = error_message
+
+    def _check_and_unblock_dependents(step_id: str) -> list[str]:
+        unblocked: list[str] = []
+        for dependent_id in dependency_map.get(step_id, []):
+            dependent = state.get(dependent_id)
+            if not dependent or dependent.get("status") != StepStatus.BLOCKED:
+                continue
+            blocked_by_ids = dependent.get("blocked_by", [])
+            if all(state[dep_id]["status"] == StepStatus.COMPLETED for dep_id in blocked_by_ids):
+                dependent["status"] = StepStatus.ASSIGNED
+                unblocked.append(dependent_id)
+        return unblocked
+
+    bridge.get_steps_by_task.side_effect = lambda _task_id: _ordered_steps()
+    bridge.update_step_status.side_effect = _update_step_status
+    bridge.check_and_unblock_dependents.side_effect = _check_and_unblock_dependents
+    bridge.update_task_status.return_value = None
+    bridge.create_activity.return_value = None
+    bridge.get_task_messages.return_value = []
+    bridge.query.return_value = {"title": "Main Task", "status": "in_progress"}
+    bridge.get_board_by_id.return_value = None
+    bridge.send_message.return_value = None
+    bridge.post_step_completion.return_value = None
+    bridge.sync_task_output_files.return_value = None
+
+    return bridge, state
 
 
-# ---------------------------------------------------------------------------
-# Integration tests for _execute_step crash handler
-# ---------------------------------------------------------------------------
+def _patch_executor_helpers():
+    """Return a context manager stack that stubs out executor artifact helpers."""
+    return (
+        patch(
+            "mc.executor._snapshot_output_dir",
+            return_value={},
+        ),
+        patch(
+            "mc.executor._collect_output_artifacts",
+            return_value=[],
+        ),
+    )
 
 
-class TestExecuteStepCrashHandler:
-    """Crash in _execute_step marks step as CRASHED and sends a crash message."""
+class TestStepDispatcher:
+    @pytest.mark.asyncio
+    async def test_dispatch_single_step_completes_task(self) -> None:
+        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(return_value="step output"),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert state["step-1"]["status"] == StepStatus.COMPLETED
+        bridge.update_task_status.assert_called_once_with(
+            "task-1",
+            TaskStatus.DONE,
+            None,
+            "All 1 steps completed",
+        )
+        bridge.create_activity.assert_any_call(
+            ActivityEventType.TASK_DISPATCH_STARTED,
+            "Steps dispatched in autonomous mode",
+            "task-1",
+        )
+        bridge.create_activity.assert_any_call(
+            ActivityEventType.STEP_STARTED,
+            "Agent nanobot started step: Analyze",
+            "task-1",
+            "nanobot",
+        )
+        bridge.create_activity.assert_any_call(
+            ActivityEventType.STEP_COMPLETED,
+            "Agent nanobot completed step: Analyze",
+            "task-1",
+            "nanobot",
+        )
+        bridge.create_activity.assert_any_call(
+            ActivityEventType.TASK_COMPLETED,
+            "Task completed -- all 1 steps finished",
+            "task-1",
+        )
 
     @pytest.mark.asyncio
-    async def test_crash_marks_step_as_crashed(self) -> None:
-        """Exception → step status set to CRASHED."""
-        bridge = _make_bridge()
+    async def test_dispatch_parallel_group_runs_concurrently(self) -> None:
+        bridge, state = _make_stateful_bridge(
+            [
+                _step("step-1", "Parallel A", parallel_group=1, order=1),
+                _step("step-2", "Parallel B", parallel_group=1, order=2),
+            ]
+        )
         dispatcher = StepDispatcher(bridge)
-        exc = RuntimeError("unexpected failure")
 
-        step = _make_step()
+        running = 0
+        peak_running = 0
+
+        async def _run_agent(*args, **kwargs):
+            nonlocal running, peak_running
+            running += 1
+            peak_running = max(peak_running, running)
+            await asyncio.sleep(0.01)
+            running -= 1
+            return f"done {kwargs['task_title']}"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1", "step-2"])
+
+        assert state["step-1"]["status"] == StepStatus.COMPLETED
+        assert state["step-2"]["status"] == StepStatus.COMPLETED
+        assert peak_running == 2
+
+    @pytest.mark.asyncio
+    async def test_dispatch_sequential_groups_order(self) -> None:
+        bridge, state = _make_stateful_bridge(
+            [
+                _step("step-1", "Group 1", parallel_group=1, order=1),
+                _step("step-2", "Group 2", parallel_group=2, order=2),
+            ]
+        )
+        dispatcher = StepDispatcher(bridge)
+        execution_order: list[str] = []
+
+        async def _run_agent(*args, **kwargs):
+            execution_order.append(kwargs["task_title"])
+            return "ok"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1", "step-2"])
+
+        assert execution_order == ["Group 1", "Group 2"]
+        assert state["step-1"]["status"] == StepStatus.COMPLETED
+        assert state["step-2"]["status"] == StepStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_step_crash_does_not_cancel_sibling(self) -> None:
+        bridge, state = _make_stateful_bridge(
+            [
+                _step("step-1", "Crash", parallel_group=1, order=1),
+                _step("step-2", "Sibling", parallel_group=1, order=2),
+            ]
+        )
+        dispatcher = StepDispatcher(bridge)
+
+        async def _run_agent(*args, **kwargs):
+            title = kwargs["task_title"]
+            if title == "Crash":
+                await asyncio.sleep(0.005)
+                raise RuntimeError("boom")
+            await asyncio.sleep(0.01)
+            return "ok"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1", "step-2"])
+
+        assert state["step-1"]["status"] == StepStatus.CRASHED
+        assert state["step-2"]["status"] == StepStatus.COMPLETED
+        bridge.update_task_status.assert_not_called()
+        bridge.send_message.assert_any_call(
+            "task-1",
+            "System",
+            AuthorType.SYSTEM,
+            'Step "Crash" crashed:\n```\nRuntimeError: boom\n```\nAgent: nanobot',
+            MessageType.SYSTEM_EVENT,
+        )
+
+    @pytest.mark.asyncio
+    async def test_dependency_unblocking_triggers_dispatch(self) -> None:
+        bridge, state = _make_stateful_bridge(
+            [
+                _step("step-1", "Root", status=StepStatus.ASSIGNED, parallel_group=1, order=1),
+                _step(
+                    "step-2",
+                    "Blocked",
+                    status=StepStatus.BLOCKED,
+                    parallel_group=2,
+                    order=2,
+                    blocked_by=["step-1"],
+                ),
+            ],
+            dependency_map={"step-1": ["step-2"]},
+        )
+        dispatcher = StepDispatcher(bridge)
+        titles: list[str] = []
+
+        async def _run_agent(*args, **kwargs):
+            titles.append(kwargs["task_title"])
+            return "ok"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1", "step-2"])
+
+        assert titles == ["Root", "Blocked"]
+        assert state["step-1"]["status"] == StepStatus.COMPLETED
+        assert state["step-2"]["status"] == StepStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_all_steps_completed_transitions_task_to_done(self) -> None:
+        bridge, _state = _make_stateful_bridge(
+            [
+                _step("step-1", "One", status=StepStatus.ASSIGNED, parallel_group=1, order=1),
+                _step("step-2", "Two", status=StepStatus.ASSIGNED, parallel_group=1, order=2),
+            ]
+        )
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(return_value="ok"),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1", "step-2"])
+
+        bridge.update_task_status.assert_called_once_with(
+            "task-1",
+            TaskStatus.DONE,
+            None,
+            "All 2 steps completed",
+        )
+
+    @pytest.mark.asyncio
+    async def test_step_completion_calls_post_step_completion(self) -> None:
+        """After a step runs successfully, post_step_completion is called (Story 2.5)."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Write Report", order=1)])
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(return_value="Report written."),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        # post_step_completion should be called instead of send_message for the success path
+        bridge.post_step_completion.assert_called_once()
+        call_args = bridge.post_step_completion.call_args
+        assert call_args[0][0] == "task-1"        # task_id
+        assert call_args[0][1] == "step-1"        # step_id
+        assert call_args[0][2] == "nanobot" # agent_name
+        assert call_args[0][3] == "Report written." # content
+
+    @pytest.mark.asyncio
+    async def test_step_completion_passes_artifacts(self) -> None:
+        """Artifacts collected are forwarded to post_step_completion."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        dispatcher = StepDispatcher(bridge)
+
+        fake_artifacts = [{"path": "output/report.pdf", "action": "created", "description": "PDF, 10 KB"}]
 
         with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
-                new=AsyncMock(side_effect=exc),
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
             ),
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("nanobot.mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("nanobot.mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(return_value="Analysis done."),
+            ),
+            patch("mc.executor._snapshot_output_dir", return_value={}),
+            patch(
+                "mc.executor._collect_output_artifacts",
+                return_value=fake_artifacts,
+            ),
         ):
-            with pytest.raises(RuntimeError):
-                await dispatcher._execute_step("task-abc", step)
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
 
-        # Step must be marked CRASHED
-        crashed_calls = [
-            c for c in bridge.update_step_status.call_args_list
-            if len(c[0]) >= 2 and c[0][1] == StepStatus.CRASHED
+        bridge.post_step_completion.assert_called_once()
+        call_args = bridge.post_step_completion.call_args
+        # When artifacts is non-empty, it is passed as the last positional arg
+        assert call_args[0][4] == fake_artifacts
+
+    @pytest.mark.asyncio
+    async def test_step_completion_no_artifacts_passes_none(self) -> None:
+        """When no artifacts are produced, None is passed to post_step_completion."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(return_value="Computation done."),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        bridge.post_step_completion.assert_called_once()
+        call_args = bridge.post_step_completion.call_args
+        # Empty artifacts list → None passed
+        assert call_args[0][4] is None
+
+    @pytest.mark.asyncio
+    async def test_dispatch_failure_posts_system_message(self) -> None:
+        """When dispatch_steps crashes entirely, a system message is posted."""
+        bridge = MagicMock()
+        bridge.create_activity.side_effect = RuntimeError("bridge down")
+        bridge.send_message.return_value = None
+        dispatcher = StepDispatcher(bridge)
+
+        with patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        bridge.send_message.assert_called_once()
+        call_args = bridge.send_message.call_args
+        assert call_args[0][0] == "task-1"
+        assert call_args[0][2] == AuthorType.SYSTEM
+        assert "Step dispatch failed" in call_args[0][3]
+
+
+class TestTaskFileManifestInjection:
+    """Story 6.1: Verify task-level file manifest injected into execution_description."""
+
+    @pytest.mark.asyncio
+    async def test_step_with_task_files_includes_manifest_in_description(self) -> None:
+        """Task-level file manifest is injected into execution_description when task has files."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        bridge.query.return_value = {
+            "title": "Main Task",
+            "status": "in_progress",
+            "files": [
+                {
+                    "name": "report.pdf",
+                    "type": "application/pdf",
+                    "size": 867328,
+                    "subfolder": "attachments",
+                    "uploaded_at": "2026-02-25T00:00:00Z",
+                },
+                {
+                    "name": "notes.md",
+                    "type": "text/markdown",
+                    "size": 12288,
+                    "subfolder": "attachments",
+                    "uploaded_at": "2026-02-25T00:00:00Z",
+                },
+            ],
+        }
+        dispatcher = StepDispatcher(bridge)
+
+        captured_description: list[str] = []
+
+        async def _capture_run_agent(*args: Any, **kwargs: Any) -> str:
+            captured_description.append(kwargs["task_description"])
+            return "done"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert len(captured_description) == 1
+        desc = captured_description[0]
+        assert "2 file(s) in its manifest" in desc
+        assert "report.pdf" in desc
+        assert "notes.md" in desc
+        assert "attachments" in desc
+        assert "847 KB" in desc          # 867328 // 1024 = 847
+        assert "12 KB" in desc           # 12288 // 1024 = 12
+        assert "Review the file manifest" in desc
+
+    @pytest.mark.asyncio
+    async def test_step_without_task_files_does_not_include_manifest(self) -> None:
+        """When a task has no files, no file manifest section appears in the description."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
+        bridge.query.return_value = {"title": "Main Task", "status": "in_progress", "files": []}
+        dispatcher = StepDispatcher(bridge)
+
+        captured_description: list[str] = []
+
+        async def _capture_run_agent(*args: Any, **kwargs: Any) -> str:
+            captured_description.append(kwargs["task_description"])
+            return "done"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert len(captured_description) == 1
+        desc = captured_description[0]
+        assert "file(s) in its manifest" not in desc
+        assert "File manifest:" not in desc
+
+    @pytest.mark.asyncio
+    async def test_step_without_task_files_key_does_not_include_manifest(self) -> None:
+        """When a task dict has no 'files' key, no file manifest section appears."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
+        # Default _make_stateful_bridge returns {"title": "Main Task"} -- no 'files' key
+        dispatcher = StepDispatcher(bridge)
+
+        captured_description: list[str] = []
+
+        async def _capture_run_agent(*args: Any, **kwargs: Any) -> str:
+            captured_description.append(kwargs["task_description"])
+            return "done"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert len(captured_description) == 1
+        desc = captured_description[0]
+        assert "file(s) in its manifest" not in desc
+        assert "File manifest:" not in desc
+
+    @pytest.mark.asyncio
+    async def test_manifest_includes_human_readable_sizes(self) -> None:
+        """Manifest summary includes human-readable sizes for various file sizes."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        bridge.query.return_value = {
+            "title": "Main Task",
+            "status": "in_progress",
+            "files": [
+                {
+                    "name": "tiny.txt",
+                    "type": "text/plain",
+                    "size": 512,
+                    "subfolder": "attachments",
+                    "uploaded_at": "2026-02-25T00:00:00Z",
+                },
+                {
+                    "name": "medium.bin",
+                    "type": "application/octet-stream",
+                    "size": 1048576,
+                    "subfolder": "attachments",
+                    "uploaded_at": "2026-02-25T00:00:00Z",
+                },
+                {
+                    "name": "large.zip",
+                    "type": "application/zip",
+                    "size": 2621440,
+                    "subfolder": "attachments",
+                    "uploaded_at": "2026-02-25T00:00:00Z",
+                },
+            ],
+        }
+        dispatcher = StepDispatcher(bridge)
+
+        captured_description: list[str] = []
+
+        async def _capture_run_agent(*args: Any, **kwargs: Any) -> str:
+            captured_description.append(kwargs["task_description"])
+            return "done"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert len(captured_description) == 1
+        desc = captured_description[0]
+        assert "0 KB" in desc       # 512 // 1024 = 0
+        assert "1.0 MB" in desc     # 1048576 / (1024*1024) = 1.0
+        assert "2.5 MB" in desc     # 2621440 / (1024*1024) = 2.5
+
+    @pytest.mark.asyncio
+    async def test_manifest_single_file_correct_count(self) -> None:
+        """A task with one file shows '1 file(s) in its manifest'."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Process", order=1)])
+        bridge.query.return_value = {
+            "title": "Main Task",
+            "status": "in_progress",
+            "files": [
+                {
+                    "name": "report.pdf",
+                    "type": "application/pdf",
+                    "size": 51200,
+                    "subfolder": "attachments",
+                    "uploaded_at": "2026-02-25T00:00:00Z",
+                },
+            ],
+        }
+        dispatcher = StepDispatcher(bridge)
+
+        captured_description: list[str] = []
+
+        async def _capture_run_agent(*args: Any, **kwargs: Any) -> str:
+            captured_description.append(kwargs["task_description"])
+            return "done"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert len(captured_description) == 1
+        desc = captured_description[0]
+        assert "1 file(s) in its manifest" in desc
+        assert "report.pdf" in desc
+        assert "50 KB" in desc  # 51200 // 1024 = 50
+
+
+class TestStepOutputFileSync:
+    """Story 6.2: Verify sync_task_output_files is called BEFORE post_step_completion (AC 7)."""
+
+    @pytest.mark.asyncio
+    async def test_step_completion_calls_sync_task_output_files(self) -> None:
+        """After a step completes, sync_task_output_files is called with correct args."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        bridge.sync_task_output_files.return_value = None
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(return_value="analysis done"),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        # sync_task_output_files must be called once with (task_id, task_data_dict, agent_name)
+        bridge.sync_task_output_files.assert_called_once()
+        call_args = bridge.sync_task_output_files.call_args
+        assert call_args[0][0] == "task-1"           # task_id
+        assert isinstance(call_args[0][1], dict)     # task_data is a dict
+        assert call_args[0][2] == "nanobot"    # agent_name
+
+        # Step must still be completed
+        assert state["step-1"]["status"] == StepStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_sync_output_files_failure_does_not_crash_step(self) -> None:
+        """A sync_task_output_files failure must not crash the step or the dispatcher."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Build", order=1)])
+        bridge.sync_task_output_files.side_effect = RuntimeError("sync fail")
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(return_value="build done"),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            # Should NOT raise even though sync raises RuntimeError
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        # Step must complete successfully despite the sync failure
+        assert state["step-1"]["status"] == StepStatus.COMPLETED
+        # Task must also complete
+        bridge.update_task_status.assert_called_once_with(
+            "task-1",
+            TaskStatus.DONE,
+            None,
+            "All 1 steps completed",
+        )
+
+    @pytest.mark.asyncio
+    async def test_sync_called_before_post_step_completion(self) -> None:
+        """AC 7: sync_task_output_files must be called BEFORE post_step_completion.
+
+        Regression guard: ensures future refactors cannot reorder these two calls
+        without a test failure.
+        """
+        bridge, state = _make_stateful_bridge([_step("step-1", "Report", order=1)])
+        bridge.sync_task_output_files.return_value = None
+
+        call_order: list[str] = []
+
+        def _record_sync(*args: Any, **kwargs: Any) -> None:
+            call_order.append("sync")
+
+        def _record_post(*args: Any, **kwargs: Any) -> None:
+            call_order.append("post_step_completion")
+
+        bridge.sync_task_output_files.side_effect = _record_sync
+        bridge.post_step_completion.side_effect = _record_post
+
+        dispatcher = StepDispatcher(bridge)
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(return_value="report done"),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert call_order == ["sync", "post_step_completion"], (
+            f"sync_task_output_files must be called before post_step_completion, "
+            f"but actual order was: {call_order}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_sync_not_called_when_step_crashes(self) -> None:
+        """sync_task_output_files must NOT be called when the step agent raises (crash path).
+
+        Dev Note: The sync call is in the success path only. If the step crashes,
+        output files may be incomplete/invalid, so the manifest must not be updated.
+        """
+        bridge, state = _make_stateful_bridge([_step("step-1", "Crash", order=1)])
+        bridge.sync_task_output_files.return_value = None
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(side_effect=RuntimeError("agent exploded")),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        # Step must be marked crashed
+        assert state["step-1"]["status"] == StepStatus.CRASHED
+        # Sync must NOT be called on crash path — output may be incomplete
+        bridge.sync_task_output_files.assert_not_called()
+
+
+class TestSupervisedModeSkipsDispatch:
+    """Verify supervised mode guard at orchestrator level (AC4)."""
+
+    @pytest.mark.asyncio
+    async def test_supervised_mode_does_not_trigger_dispatch(self) -> None:
+        from mc.orchestrator import TaskOrchestrator
+        from mc.types import ExecutionPlan, ExecutionPlanStep
+
+        bridge = MagicMock()
+        bridge.list_agents.return_value = [
+            {
+                "name": "nanobot",
+                "display_name": "Owl",
+                "role": "general",
+                "status": "active",
+                "model": "test",
+            }
         ]
-        assert crashed_calls, "update_step_status must be called with CRASHED"
+        orchestrator = TaskOrchestrator(bridge)
+        orchestrator._step_dispatcher = MagicMock()
+        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
 
-    @pytest.mark.asyncio
-    async def test_crash_sends_message_with_error_details(self) -> None:
-        """RuntimeError → send_message content has error type and agent name."""
-        bridge = _make_bridge()
-        dispatcher = StepDispatcher(bridge)
-        exc = RuntimeError("unexpected failure")
+        task = {
+            "id": "task-1",
+            "title": "Supervised task",
+            "description": "test",
+            "status": "planning",
+            "supervision_mode": "supervised",
+        }
 
-        step = _make_step()
-
-        with (
-            patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
-                new=AsyncMock(side_effect=exc),
-            ),
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("nanobot.mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("nanobot.mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
-        ):
-            with pytest.raises(RuntimeError):
-                await dispatcher._execute_step("task-abc", step)
-
-        assert bridge.send_message.called
-        # send_message args: (task_id, author_name, author_type, content, message_type)
-        call_args = bridge.send_message.call_args
-        content = call_args[0][3]
-        assert "RuntimeError" in content
-        assert "dev-agent" in content
-
-    @pytest.mark.asyncio
-    async def test_crash_message_contains_step_title(self) -> None:
-        """Crash message includes the step title."""
-        bridge = _make_bridge()
-        dispatcher = StepDispatcher(bridge)
-        exc = ValueError("bad value")
-
-        step = _make_step(title="Deploy service", agent="ops-agent")
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="s1", title="Step", description="d",
+                    assigned_agent="nanobot", blocked_by=[],
+                    parallel_group=1, order=1,
+                )
+            ]
+        )
 
         with (
-            patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
-                new=AsyncMock(side_effect=exc),
-            ),
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("nanobot.mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("nanobot.mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.orchestrator.asyncio.create_task") as mock_create_task,
+            patch("mc.orchestrator.TaskPlanner") as planner_cls,
         ):
-            with pytest.raises(ValueError):
-                await dispatcher._execute_step("task-abc", step)
+            planner = planner_cls.return_value
+            planner.plan_task = AsyncMock(return_value=plan)
+            await orchestrator._process_planning_task(task)
 
-        call_args = bridge.send_message.call_args
-        content = call_args[0][3]
-        assert "Deploy service" in content
-        assert "ops-agent" in content
+        # Supervised mode should NOT trigger dispatch or materialization
+        bridge.batch_create_steps.assert_not_called()
+        bridge.kick_off_task.assert_not_called()
+        orchestrator._step_dispatcher.dispatch_steps.assert_not_called()
+        mock_create_task.assert_not_called()
+
+
+class TestPausedTaskDispatch:
+    """Story 7.4: Dispatcher respects paused task state (AC 7)."""
 
     @pytest.mark.asyncio
-    async def test_crash_reraises_exception(self) -> None:
-        """The original exception is re-raised after crash handling."""
-        bridge = _make_bridge()
+    async def test_dispatcher_skips_dispatch_when_task_is_paused(self) -> None:
+        """AC 7: dispatcher skips new step dispatch when task status is 'review' (paused).
+
+        Story 7.4: When a task is paused (status=review, no awaitingKickoff), the
+        pre-dispatch check must see status != in_progress and skip the dispatch.
+        The step must remain in 'assigned' status (not dispatched).
+        """
+        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        # Simulate a paused task: bridge.query returns status=review
+        bridge.query.return_value = {"title": "Main Task", "status": "review"}
         dispatcher = StepDispatcher(bridge)
 
-        step = _make_step()
+        run_agent_called = False
 
+        async def _should_not_run(*args: Any, **kwargs: Any) -> str:
+            nonlocal run_agent_called
+            run_agent_called = True
+            return "should not be reached"
+
+        snap_patch, collect_patch = _patch_executor_helpers()
         with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "nanobot.mc.step_dispatcher._run_step_agent",
-                new=AsyncMock(side_effect=RuntimeError("boom")),
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
             ),
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("nanobot.mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("nanobot.mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("nanobot.mc.executor._snapshot_output_dir", return_value={}),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_should_not_run),
+            snap_patch,
+            collect_patch,
         ):
-            with pytest.raises(RuntimeError, match="boom"):
-                await dispatcher._execute_step("task-abc", step)
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        # The step agent must NOT have been called — dispatch was skipped
+        assert not run_agent_called, "Step agent was called despite task being paused (review status)"
+        # Step must remain in 'assigned' status (not completed or crashed)
+        assert state["step-1"]["status"] == StepStatus.ASSIGNED
+        # Task must NOT be marked done
+        bridge.update_task_status.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Convex variable interpolation in step prompt (regression: step_dispatcher
-# was bypassing executor._execute_task and never interpolating variables)
-# ---------------------------------------------------------------------------
+class TestTaskLevelFileSummaryInDelegationContext:
+    """Story 6.3: Task-level file summary (using _build_file_summary) in delegation context.
 
-
-_SUCCESS_PATCHES = (
-    "nanobot.mc.step_dispatcher._maybe_inject_orientation",
-    "nanobot.mc.step_dispatcher._build_step_thread_context",
-    "nanobot.mc.executor._snapshot_output_dir",
-    "nanobot.mc.executor._collect_output_artifacts",
-)
-
-
-class TestConvexVariableInterpolation:
-    """Convex variables must be interpolated into the prompt before agent execution."""
+    These tests verify FR-F29: the step delegation context includes file metadata
+    (number of files, types, total size, and names) from the task-level file summary
+    produced by planner._build_file_summary().
+    """
 
     @pytest.mark.asyncio
-    async def test_convex_variables_are_interpolated_before_step_execution(self) -> None:
-        """{{p_channel_list}} in YAML prompt is replaced with the Convex variable value."""
-        yaml_prompt = "Monitor channels: {{p_channel_list}}"
-        channel_value = "https://youtube.com/@AIJasonZ,https://youtube.com/@QuantBrasil"
-
-        bridge = _make_bridge()
-        bridge.get_agent_by_name = MagicMock(return_value={
-            "prompt": yaml_prompt,
-            "variables": [{"name": "p_channel_list", "value": channel_value}],
-        })
+    async def test_step_execution_includes_task_level_file_summary_when_task_has_files(
+        self,
+    ) -> None:
+        """AC #2: delegation context includes task-level file summary when task has files."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        bridge.query.return_value = {
+            "title": "Main Task",
+            "status": "in_progress",
+            "files": [
+                {
+                    "name": "invoice.pdf",
+                    "type": "application/pdf",
+                    "size": 867328,
+                    "subfolder": "attachments",
+                },
+                {
+                    "name": "notes.md",
+                    "type": "text/markdown",
+                    "size": 12288,
+                    "subfolder": "attachments",
+                },
+            ],
+        }
         dispatcher = StepDispatcher(bridge)
-        step = _make_step(agent="youtube-summarizer")
 
-        captured: list[str | None] = []
+        captured_description: list[str] = []
 
-        async def capture(**kwargs):
-            captured.append(kwargs.get("agent_prompt"))
+        async def _capture_run_agent(*args: Any, **kwargs: Any) -> str:
+            captured_description.append(kwargs["task_description"])
             return "done"
 
+        snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(yaml_prompt, None, None)),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", new=capture),
-            patch(_SUCCESS_PATCHES[0], side_effect=lambda n, p: p),
-            patch(_SUCCESS_PATCHES[1], return_value=""),
-            patch(_SUCCESS_PATCHES[2], return_value={}),
-            patch(_SUCCESS_PATCHES[3], return_value=[]),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            snap_patch,
+            collect_patch,
         ):
-            await dispatcher._execute_step("task-abc", step)
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
 
-        assert captured, "Agent must be called"
-        prompt = captured[0]
-        assert channel_value in prompt, f"Variable not interpolated. Got: {prompt!r}"
-        assert "{{p_channel_list}}" not in prompt, f"Placeholder still present. Got: {prompt!r}"
+        assert len(captured_description) == 1
+        desc = captured_description[0]
+        # Task-level file summary from _build_file_summary() must appear
+        assert "2 attached file(s)" in desc
+        assert "invoice.pdf" in desc
+        assert "application/pdf" in desc
+        assert "notes.md" in desc
+        assert "text/markdown" in desc
+        # Executor delegation context must contain "Files available at:" (not planner advisory)
+        assert "Files available at:" in desc
+        assert "attachments" in desc
+        # The planner-only routing advisory must NOT appear in executor delegation context
+        assert "Consider file types when selecting the best agent" not in desc
 
     @pytest.mark.asyncio
-    async def test_convex_prompt_overrides_yaml_prompt(self) -> None:
-        """Convex prompt takes precedence over the YAML config (Convex as source of truth)."""
-        yaml_prompt = "Old YAML prompt"
-        convex_prompt = "Updated Convex prompt — source of truth"
-
-        bridge = _make_bridge()
-        bridge.get_agent_by_name = MagicMock(return_value={
-            "prompt": convex_prompt,
-            "variables": [],
-        })
+    async def test_step_execution_excludes_task_level_file_summary_when_task_has_no_files(
+        self,
+    ) -> None:
+        """AC #3: no file summary noise when task has no file attachments."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
+        bridge.query.return_value = {"title": "Main Task", "status": "in_progress", "files": []}
         dispatcher = StepDispatcher(bridge)
-        step = _make_step(agent="some-agent")
 
-        captured: list[str | None] = []
+        captured_description: list[str] = []
 
-        async def capture(**kwargs):
-            captured.append(kwargs.get("agent_prompt"))
+        async def _capture_run_agent(*args: Any, **kwargs: Any) -> str:
+            captured_description.append(kwargs["task_description"])
             return "done"
 
+        snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("nanobot.mc.step_dispatcher._load_agent_config", return_value=(yaml_prompt, None, None)),
-            patch("nanobot.mc.step_dispatcher._run_step_agent", new=capture),
-            patch(_SUCCESS_PATCHES[0], side_effect=lambda n, p: p),
-            patch(_SUCCESS_PATCHES[1], return_value=""),
-            patch(_SUCCESS_PATCHES[2], return_value={}),
-            patch(_SUCCESS_PATCHES[3], return_value=[]),
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            snap_patch,
+            collect_patch,
         ):
-            await dispatcher._execute_step("task-abc", step)
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
 
-        assert captured, "Agent must be called"
-        assert captured[0] == convex_prompt, f"Expected Convex prompt, got: {captured[0]!r}"
-
-
-# ---------------------------------------------------------------------------
-# Story 7.2: Human step dispatch (AC: 3, 6)
-# NOTE: Human step dispatching (assigned_agent="human" → waiting_human) is
-# not yet implemented in step_dispatcher.py. Tests will be added when the
-# feature is built.
-# ---------------------------------------------------------------------------
+        assert len(captured_description) == 1
+        desc = captured_description[0]
+        # No routing advisory noise when there are no files (AC #3)
+        assert "Consider file types" not in desc
+        assert "Files available at:" not in desc

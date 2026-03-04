@@ -41,7 +41,7 @@ def _make_cron_job(
 
 async def _run_gateway_and_capture(captured: dict) -> None:
     """Run run_gateway() with all dependencies mocked, capture the on_job callback."""
-    from nanobot.mc.gateway import run_gateway
+    from mc.gateway import run_gateway
 
     # Build mock cron service that captures the on_job callback assignment
     mock_cron = MagicMock()
@@ -99,14 +99,14 @@ async def _run_gateway_and_capture(captured: dict) -> None:
 
     stop_task = asyncio.create_task(trigger_stop())
 
-    with patch("nanobot.mc.gateway.TaskOrchestrator", return_value=mock_orch_instance), \
-         patch("nanobot.mc.gateway.TimeoutChecker", return_value=mock_tc_instance), \
-         patch("nanobot.mc.executor.TaskExecutor", mock_exec_cls), \
-         patch("nanobot.mc.chat_handler.ChatHandler", return_value=mock_chat_instance), \
+    with patch("mc.gateway.TaskOrchestrator", return_value=mock_orch_instance), \
+         patch("mc.gateway.TimeoutChecker", return_value=mock_tc_instance), \
+         patch("mc.executor.TaskExecutor", mock_exec_cls), \
+         patch("mc.chat_handler.ChatHandler", return_value=mock_chat_instance), \
          patch("nanobot.config.loader.load_config"), \
-         patch("nanobot.mc.mention_watcher.MentionWatcher", return_value=mock_mention_instance), \
+         patch("mc.mention_watcher.MentionWatcher", return_value=mock_mention_instance), \
          patch("nanobot.cron.service.CronService", mock_cron_cls), \
-         patch("nanobot.mc.gateway._run_plan_negotiation_manager", new=AsyncMock()):
+         patch("mc.gateway._run_plan_negotiation_manager", new=AsyncMock()):
         try:
             await run_gateway(mock_bridge)
         except SystemExit:
@@ -418,7 +418,7 @@ class TestProcessDirectReturnsContentWhenMessageToolUsed:
             if msg_tool := loop.tools.get("message"):
                 if isinstance(msg_tool, MessageTool):
                     await msg_tool.execute("Hello from MC agent")
-            return "Hello from MC agent", []
+            return "Hello from MC agent", [], []
 
         loop._run_agent_loop = _fake_agent_loop
 

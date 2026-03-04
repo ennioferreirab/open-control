@@ -9,7 +9,7 @@ export const list = query({
   },
 });
 
-export const upsertByName = internalMutation({
+export const upsertByName = mutation({
   args: {
     name: v.string(),
     displayName: v.string(),
