@@ -509,6 +509,107 @@ class TestLLMFailureFallback:
         assert plan.steps[0].assigned_agent == "nanobot"
 
 
+class TestPlannerDiagnosticLogging:
+    """Verify planner logs diagnostic details on failure."""
+
+    @pytest.mark.asyncio
+    async def test_timeout_logs_specific_message(self):
+        """Timeout should log a distinct warning with timeout duration."""
+        from mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(side_effect=asyncio.TimeoutError())
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")), \
+             patch("mc.planner.logger") as mock_logger:
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        # Should log timeout specifically
+        timeout_calls = [
+            c for c in mock_logger.warning.call_args_list
+            if "timed out" in str(c)
+        ]
+        assert len(timeout_calls) >= 1
+
+    @pytest.mark.asyncio
+    async def test_general_error_logs_with_traceback(self):
+        """General errors should log with exc_info=True."""
+        from mc.planner import TaskPlanner
+
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(side_effect=RuntimeError("API exploded"))
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")), \
+             patch("mc.planner.logger") as mock_logger:
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        # Should log with exc_info=True
+        error_calls = [
+            c for c in mock_logger.warning.call_args_list
+            if "LLM planning failed" in str(c)
+        ]
+        assert len(error_calls) >= 1
+        # Verify exc_info=True was passed
+        assert error_calls[0].kwargs.get("exc_info") is True
+
+
+class TestPlannerModelParameter:
+    """Verify planner passes model to create_provider."""
+
+    @pytest.mark.asyncio
+    async def test_model_param_passed_to_provider(self):
+        """When model is specified, it should be passed to create_provider."""
+        from mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "anthropic/claude-sonnet-4-6")) as mock_create:
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+                model="anthropic/claude-sonnet-4-6",
+            )
+
+        mock_create.assert_called_once_with(model="anthropic/claude-sonnet-4-6")
+
+    @pytest.mark.asyncio
+    async def test_no_model_param_passes_none(self):
+        """When no model specified, create_provider gets model=None."""
+        from mc.planner import TaskPlanner
+
+        plan_json = _single_step_plan_json()
+        mock_provider = MagicMock()
+        mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
+
+        planner = TaskPlanner()
+
+        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")) as mock_create:
+            await planner.plan_task(
+                title="Test task",
+                description=None,
+                agents=SAMPLE_AGENTS,
+            )
+
+        mock_create.assert_called_once_with(model=None)
+
+
 class TestMalformedJSONFallback:
     """Test malformed JSON fallback — invalid LLM output triggers heuristic (Task 4.7 / AC #10)."""
 
@@ -741,14 +842,21 @@ class TestEnrichedPlannerFeatures:
         assert "**code-agent**" in roster
         assert "Skills: python, javascript" in roster
 
-    def test_system_prompt_has_decomposition_principles(self):
+    def test_system_prompt_has_decomposition_guidance(self):
         """SYSTEM_PROMPT must contain key conceptual sections."""
         from mc.planner import SYSTEM_PROMPT
 
-        assert "Decomposition Principles" in SYSTEM_PROMPT
+        assert "Decomposition" in SYSTEM_PROMPT
         assert "Anti-Patterns" in SYSTEM_PROMPT
         assert "Examples" in SYSTEM_PROMPT
         assert "Tool Awareness" in SYSTEM_PROMPT
+
+    def test_system_prompt_encourages_multi_step_for_complex_tasks(self):
+        """SYSTEM_PROMPT should NOT say 'most tasks need 1 step'."""
+        from mc.planner import SYSTEM_PROMPT
+
+        assert "most tasks need exactly 1 step" not in SYSTEM_PROMPT
+        assert "most tasks need only 1 step" not in SYSTEM_PROMPT
 
     def test_system_prompt_has_few_shot_examples(self):
         """SYSTEM_PROMPT must include at least three numbered examples."""
@@ -757,6 +865,14 @@ class TestEnrichedPlannerFeatures:
         assert "Example 1" in SYSTEM_PROMPT
         assert "Example 2" in SYSTEM_PROMPT
         assert "Example 3" in SYSTEM_PROMPT
+
+    def test_user_prompt_template_does_not_bias_single_step(self):
+        """USER_PROMPT_TEMPLATE should not bias toward single-step plans."""
+        from mc.planner import USER_PROMPT_TEMPLATE
+
+        lower = USER_PROMPT_TEMPLATE.lower()
+        assert "most tasks need only 1 step" not in lower
+        assert "most tasks need exactly 1 step" not in lower
 
 
 # ---------------------------------------------------------------------------
