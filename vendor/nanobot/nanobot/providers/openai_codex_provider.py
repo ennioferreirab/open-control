@@ -15,12 +15,16 @@ from nanobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 DEFAULT_CODEX_URL = "https://chatgpt.com/backend-api/codex/responses"
 DEFAULT_ORIGINATOR = "nanobot"
+CODEX_MODELS: list[str] = [
+    "openai-codex/gpt-5.3-codex",
+    "openai-codex/gpt-5.2",
+]
 
 
 class OpenAICodexProvider(LLMProvider):
     """Use Codex OAuth to call the Responses API."""
 
-    def __init__(self, default_model: str = "openai-codex/gpt-5.1-codex"):
+    def __init__(self, default_model: str = "openai-codex/gpt-5.3-codex"):
         super().__init__(api_key=None, api_base=None)
         self.default_model = default_model
 
@@ -31,6 +35,7 @@ class OpenAICodexProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        reasoning_effort: str | None = None,
         reasoning_level: str | None = None,
     ) -> LLMResponse:
         model = model or self.default_model
@@ -51,6 +56,11 @@ class OpenAICodexProvider(LLMProvider):
             "tool_choice": "auto",
             "parallel_tool_calls": True,
         }
+
+        effective_reasoning = reasoning_level or reasoning_effort
+        if effective_reasoning:
+            effort = "high" if effective_reasoning == "max" else effective_reasoning
+            body["reasoning"] = {"effort": effort}
 
         if tools:
             body["tools"] = _convert_tools(tools)
@@ -78,6 +88,9 @@ class OpenAICodexProvider(LLMProvider):
 
     def get_default_model(self) -> str:
         return self.default_model
+
+    def list_models(self) -> list[str]:
+        return list(CODEX_MODELS)
 
 
 def _strip_model_prefix(model: str) -> str:
