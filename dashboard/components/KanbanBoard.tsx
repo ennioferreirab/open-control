@@ -251,7 +251,7 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
   const stepsByTaskId = new Map<Id<"tasks">, Doc<"steps">[]>();
   for (const step of boardSteps) {
     const taskStatus = taskStatusMap.get(step.taskId);
-    if (taskStatus === "done") {
+    if (taskStatus === "done" || taskStatus === "review") {
       continue;
     }
     const mappedColumn = stepStatusToColumnStatus(step.status, taskStatus);
@@ -264,7 +264,12 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
   }
 
   const tasksWithRenderableSteps = new Set(stepsByTaskId.keys());
-  const regularTasks = tasks.filter((task) => !tasksWithRenderableSteps.has(task._id));
+  // Tasks in "review" always render as regular cards in the Review column
+  // (not as step groups in In Progress), even if they have running steps
+  // — e.g. when ask_user pauses execution for user input.
+  const regularTasks = tasks.filter(
+    (task) => !tasksWithRenderableSteps.has(task._id) || task.status === "review"
+  );
 
   const tasksByStatus = COLUMNS.map((col) => {
     const columnTasks = regularTasks

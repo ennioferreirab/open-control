@@ -69,16 +69,22 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
   // Don't render for manual tasks
   if (task.isManual) return null;
 
-  // Plan-chat mode: task is in_progress, or review+awaitingKickoff.
-  // In this mode the user can chat with the Lead Agent to modify the plan.
+  // Plan-chat mode: only review+awaitingKickoff (pre-kickoff plan negotiation).
+  // In this mode the user chats with the Lead Agent to modify the plan.
   // We use postUserPlanMessage (no status transition, no plan clear).
   const taskAny = task as any;
   const isPlanChatMode =
+    task.status === "review" && taskAny.awaitingKickoff === true;
+
+  // In-progress OR review-without-awaitingKickoff: task is executing or waiting
+  // for a user reply to an ask_user call. Messages go to the executing agent.
+  // We use postPlanMessage to avoid disrupting status; UI shows plain "Reply".
+  const isInProgress =
     task.status === "in_progress" ||
-    (task.status === "review" && taskAny.awaitingKickoff === true);
+    (task.status === "review" && taskAny.awaitingKickoff !== true);
 
   const isBlocked = BLOCKED_STATUSES.includes(task.status);
-  const canSend = content.trim().length > 0 && !isSubmitting && (inputMode === "comment" || isPlanChatMode || !!selectedAgent);
+  const canSend = content.trim().length > 0 && !isSubmitting && (inputMode === "comment" || isPlanChatMode || isInProgress || !!selectedAgent);
 
   const filteredAgents = useSelectableAgents(board?.enabledAgents);
 
@@ -162,15 +168,17 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
       }
     }
 
-    if (inputMode !== "comment" && !isPlanChatMode && !agentForSubmit) return;
+    if (inputMode !== "comment" && !isPlanChatMode && !isInProgress && !agentForSubmit) return;
     setIsSubmitting(true);
     setError("");
     try {
       if (inputMode === "comment") {
         // Comment mode: post inert comment, no status/agent change
         await postComment({ taskId: task._id, content: trimmed });
-      } else if (isPlanChatMode) {
-        // Plan-chat: just post the message, Lead Agent subscription handles it
+      } else if (isPlanChatMode || isInProgress) {
+        // Plan-chat (review+awaitingKickoff) or in-progress reply:
+        // post without disrupting task status. For in_progress, the watcher
+        // delivers the reply to the waiting ask_user Future.
         await postPlanMessage({ taskId: task._id, content: trimmed });
       } else {
         await sendMessage({
@@ -351,8 +359,8 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         <p className="text-xs text-red-500">{error}</p>
       )}
       <div className="flex items-center gap-2">
-        {modePill("Message Agent")}
-        {inputMode === "agent" && (
+        {modePill(isInProgress ? "Reply" : "Message Agent")}
+        {inputMode === "agent" && !isInProgress && (
           <Select value={selectedAgent} onValueChange={setSelectedAgent}>
             <SelectTrigger className="w-[180px] h-7 text-xs">
               <SelectValue placeholder="Select agent" />
@@ -370,7 +378,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
       <div className="flex gap-2 relative">
         <Textarea
           ref={textareaRef}
-          placeholder={inputMode === "comment" ? "Add a comment..." : "Send a message to the agent..."}
+          placeholder={inputMode === "comment" ? "Add a comment..." : isInProgress ? "Reply to the thread..." : "Send a message to the agent..."}
           value={content}
           onChange={inputMode === "comment" ? (e) => setContent(e.target.value) : handleTextChange}
           onKeyDown={handleKeyDown}
@@ -391,7 +399,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         >
           <SendHorizontal className="h-4 w-4" />
         </Button>
-        {inputMode === "agent" && mentionQuery !== null && !isPlanChatMode && filteredAgents && (
+        {inputMode === "agent" && mentionQuery !== null && !isPlanChatMode && !isInProgress && filteredAgents && (
           <AgentMentionAutocomplete
             agents={filteredAgents.map((a) => ({
               name: a.name,
