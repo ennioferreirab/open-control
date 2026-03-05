@@ -20,6 +20,12 @@ _REASONING_BUDGET_TOKENS: dict[str, int] = {
     "medium": 8000,
     "max": 16000,
 }
+_REASONING_EFFORT_MAP: dict[str, str] = {
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "max": "max",
+}
 
 
 class AnthropicOAuthProvider(LLMProvider):
@@ -71,10 +77,26 @@ class AnthropicOAuthProvider(LLMProvider):
             body["tool_choice"] = {"type": "auto"}
 
         if reasoning_level:
-            budget = _REASONING_BUDGET_TOKENS.get(reasoning_level)
-            if budget:
-                body["thinking"] = {"type": "enabled", "budget_tokens": budget}
-                body["temperature"] = 1.0  # Anthropic requires temp=1.0 with thinking
+            if _is_adaptive_model(model):
+                effort = _map_effort(reasoning_level, model)
+                body["output_config"] = {"effort": effort}
+                body["thinking"] = {"type": "adaptive"}
+                logger.debug(
+                    "reasoning -> effort={} (adaptive) [model={}]",
+                    effort,
+                    model,
+                )
+            else:
+                budget_level = _map_budget_level(reasoning_level)
+                budget = _REASONING_BUDGET_TOKENS.get(budget_level)
+                if budget:
+                    body["thinking"] = {"type": "enabled", "budget_tokens": budget}
+                    body["temperature"] = 1.0  # Anthropic requires temp=1.0 with thinking
+                    logger.debug(
+                        "reasoning -> budget_tokens={} [model={}]",
+                        budget,
+                        model,
+                    )
 
         try:
             content, tool_calls, finish_reason, usage, reasoning_content = await _request_anthropic(
@@ -126,6 +148,29 @@ def _strip_prefix(model: str) -> str:
         if model.startswith(prefix):
             return model.split("/", 1)[1]
     return model
+
+
+def _is_adaptive_model(model: str) -> bool:
+    model = _strip_prefix(model).lower()
+    return "4-6" in model
+
+
+def _map_budget_level(level: str) -> str:
+    # Older Claude models use low/medium/max budgets.
+    normalized = level.lower()
+    if normalized == "high":
+        return "max"
+    if normalized in _REASONING_BUDGET_TOKENS:
+        return normalized
+    return "medium"
+
+
+def _map_effort(level: str, model: str) -> str:
+    effort = _REASONING_EFFORT_MAP.get(level.lower(), "medium")
+    model_lower = _strip_prefix(model).lower()
+    if effort == "max" and "opus-4-6" not in model_lower:
+        return "high"
+    return effort
 
 
 def _convert_messages(

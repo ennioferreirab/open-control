@@ -8,6 +8,7 @@ from typing import Any
 import json_repair
 import litellm
 from litellm import acompletion
+from loguru import logger
 
 from nanobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from nanobot.providers.registry import find_by_model, find_gateway
@@ -22,6 +23,42 @@ _REASONING_BUDGET_TOKENS: dict[str, int] = {
     "medium": 8000,
     "max": 16000,
 }
+_REASONING_EFFORT_MAP: dict[str, str] = {
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "max": "max",
+}
+
+
+def _strip_anthropic_prefix(model: str) -> str:
+    model = model.strip()
+    for prefix in ("anthropic/", "anthropic-oauth/", "anthropic_oauth/"):
+        if model.startswith(prefix):
+            return model.split("/", 1)[1]
+    return model
+
+
+def _is_adaptive_model(model: str) -> bool:
+    return "4-6" in _strip_anthropic_prefix(model).lower()
+
+
+def _map_budget_level(level: str) -> str:
+    # Older Claude models use low/medium/max budgets.
+    normalized = level.lower()
+    if normalized == "high":
+        return "max"
+    if normalized in _REASONING_BUDGET_TOKENS:
+        return normalized
+    return "medium"
+
+
+def _map_effort(level: str, model: str) -> str:
+    effort = _REASONING_EFFORT_MAP.get(level.lower(), "medium")
+    if effort == "max" and "opus-4-6" not in _strip_anthropic_prefix(model).lower():
+        return "high"
+    return effort
+
 
 def _short_tool_id() -> str:
     """Generate a 9-char alphanumeric ID compatible with all providers (incl. Mistral)."""
@@ -248,10 +285,26 @@ class LiteLLMProvider(LLMProvider):
         if effective_level:
             model_lower = original_model.lower()
             if "anthropic" in model_lower or "claude" in model_lower:
-                budget = _REASONING_BUDGET_TOKENS.get(effective_level)
-                if budget:
-                    kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
-                    kwargs["temperature"] = 1.0  # Anthropic requires temp=1.0 with thinking
+                if _is_adaptive_model(original_model):
+                    effort = _map_effort(effective_level, original_model)
+                    # LiteLLM maps reasoning_effort → output_config={"effort": ...} internally
+                    kwargs["reasoning_effort"] = effort
+                    logger.debug(
+                        "reasoning -> effort={} (adaptive) [model={}]",
+                        effort,
+                        _strip_anthropic_prefix(original_model),
+                    )
+                else:
+                    budget_level = _map_budget_level(effective_level)
+                    budget = _REASONING_BUDGET_TOKENS.get(budget_level)
+                    if budget:
+                        kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
+                        kwargs["temperature"] = 1.0  # Anthropic requires temp=1.0 with thinking
+                        logger.debug(
+                            "reasoning -> budget_tokens={} [model={}]",
+                            budget,
+                            _strip_anthropic_prefix(original_model),
+                        )
             elif any(p in model_lower for p in ("openai", "gpt", "o1", "o3", "o4")):
                 effort_map = {"low": "low", "medium": "medium", "max": "high", "high": "high"}
                 effort = effort_map.get(effective_level)

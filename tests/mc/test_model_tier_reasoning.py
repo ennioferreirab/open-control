@@ -311,8 +311,10 @@ class TestLiteLLMProviderReasoningInjection:
             )
 
         _, kwargs = mock_ac.call_args
-        assert kwargs.get("thinking") == {"type": "enabled", "budget_tokens": 1024}
-        assert kwargs.get("temperature") == 1.0
+        # claude-sonnet-4-6 → adaptive: LiteLLM reasoning_effort kwarg (maps to output_config.effort)
+        assert kwargs.get("reasoning_effort") == "low"
+        assert "output_config" not in kwargs
+        assert kwargs.get("temperature") != 1.0  # NOT forced in adaptive mode
 
     @pytest.mark.asyncio
     async def test_anthropic_model_medium_reasoning_injects_thinking(self) -> None:
@@ -334,7 +336,9 @@ class TestLiteLLMProviderReasoningInjection:
             )
 
         _, kwargs = mock_ac.call_args
-        assert kwargs.get("thinking") == {"type": "enabled", "budget_tokens": 8000}
+        # claude-sonnet-4-6 → adaptive: LiteLLM reasoning_effort kwarg (maps to output_config.effort)
+        assert kwargs.get("reasoning_effort") == "medium"
+        assert "output_config" not in kwargs
 
     @pytest.mark.asyncio
     async def test_anthropic_model_none_reasoning_omits_thinking(self) -> None:

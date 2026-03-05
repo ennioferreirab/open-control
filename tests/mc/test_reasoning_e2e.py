@@ -126,31 +126,40 @@ class TestSettingsToReasoningLevel:
 # ===========================================================================
 
 class TestReasoningLevelToApiKwargs:
-    """The resolved reasoning level reaches acompletion with the correct params."""
+    """The resolved reasoning level reaches acompletion with the correct params.
+
+    SONNET = claude-sonnet-4-6-20250514 → adaptive model path:
+      reasoning_effort kwarg (LiteLLM maps it to output_config.effort internally)
+      No forced temp=1.0, no budget_tokens.
+    """
 
     @pytest.mark.asyncio
-    async def test_low_sends_budget_1024(self) -> None:
+    async def test_low_sends_effort_low_adaptive(self) -> None:
         kwargs = await _call_provider("low")
-        assert kwargs.get("thinking") == {"type": "enabled", "budget_tokens": 1024}
-        assert kwargs.get("temperature") == 1.0
+        assert kwargs.get("reasoning_effort") == "low"
+        assert "output_config" not in kwargs
+        assert "thinking" not in kwargs
+        assert kwargs.get("temperature") != 1.0  # NOT forced to 1.0 in adaptive mode
 
     @pytest.mark.asyncio
-    async def test_medium_sends_budget_8000(self) -> None:
+    async def test_medium_sends_effort_medium_adaptive(self) -> None:
         kwargs = await _call_provider("medium")
-        assert kwargs.get("thinking") == {"type": "enabled", "budget_tokens": 8000}
-        assert kwargs.get("temperature") == 1.0
+        assert kwargs.get("reasoning_effort") == "medium"
+        assert "output_config" not in kwargs
 
     @pytest.mark.asyncio
-    async def test_max_sends_budget_16000(self) -> None:
+    async def test_max_sends_effort_high_adaptive_on_sonnet(self) -> None:
+        # "max" is clamped to "high" on Sonnet 4.6 (only Opus 4.6 supports "max")
         kwargs = await _call_provider("max")
-        assert kwargs.get("thinking") == {"type": "enabled", "budget_tokens": 16000}
-        assert kwargs.get("temperature") == 1.0
+        assert kwargs.get("reasoning_effort") == "high"
+        assert "output_config" not in kwargs
 
     @pytest.mark.asyncio
     async def test_none_sends_no_thinking(self) -> None:
         kwargs = await _call_provider(None)
         assert "thinking" not in kwargs
         assert "reasoning_effort" not in kwargs
+        assert "output_config" not in kwargs
 
 
 # ===========================================================================
@@ -165,7 +174,7 @@ class TestFullChainSettingsToApiCall:
     """
 
     @pytest.mark.asyncio
-    async def test_settings_low_produces_thinking_1024_in_api_call(self) -> None:
+    async def test_settings_low_produces_effort_low_in_api_call(self) -> None:
         # Arrange: settings say standard-medium → reasoning "low"
         bridge = _make_bridge({"standard-medium": "low"})
         resolver = TierResolver(bridge)
@@ -179,13 +188,14 @@ class TestFullChainSettingsToApiCall:
         # Act: call provider with resolved values
         kwargs = await _call_provider(reasoning_level)
 
-        # Assert: acompletion received thinking params for "low"
-        assert kwargs.get("thinking") == {"type": "enabled", "budget_tokens": 1024}, (
-            f"Expected thinking budget_tokens=1024 for 'low' reasoning; got {kwargs}"
+        # Assert: LiteLLM receives reasoning_effort kwarg (mapped to output_config.effort internally)
+        assert kwargs.get("reasoning_effort") == "low", (
+            f"Expected reasoning_effort=low for 'low' reasoning; got {kwargs}"
         )
+        assert "output_config" not in kwargs
 
     @pytest.mark.asyncio
-    async def test_settings_medium_produces_thinking_8000_in_api_call(self) -> None:
+    async def test_settings_medium_produces_effort_medium_in_api_call(self) -> None:
         bridge = _make_bridge({"standard-medium": "medium"})
         resolver = TierResolver(bridge)
 
@@ -193,7 +203,8 @@ class TestFullChainSettingsToApiCall:
         assert reasoning_level == "medium"
 
         kwargs = await _call_provider(reasoning_level)
-        assert kwargs.get("thinking") == {"type": "enabled", "budget_tokens": 8000}
+        assert kwargs.get("reasoning_effort") == "medium"
+        assert "output_config" not in kwargs
 
     @pytest.mark.asyncio
     async def test_settings_off_produces_no_thinking_in_api_call(self) -> None:
@@ -210,19 +221,23 @@ class TestFullChainSettingsToApiCall:
 
     @pytest.mark.asyncio
     async def test_changing_setting_changes_api_params(self) -> None:
-        """The main regression guard: changing settings changes API call params."""
-        # Round 1: reasoning = "low" → budget_tokens = 1024
+        """The main regression guard: changing settings changes API call params.
+
+        SONNET (4.6 model) uses reasoning_effort kwarg (LiteLLM maps to output_config.effort).
+        'max' is clamped to 'high' on Sonnet 4.6.
+        """
+        # Round 1: reasoning = "low" → reasoning_effort = "low"
         bridge = _make_bridge({"standard-medium": "low"})
         resolver = TierResolver(bridge)
 
         level_1 = resolver.resolve_reasoning_level("tier:standard-medium")
         kwargs_1 = await _call_provider(level_1)
 
-        assert kwargs_1.get("thinking") == {"type": "enabled", "budget_tokens": 1024}, (
-            f"Round 1 (low): expected budget=1024, got {kwargs_1}"
+        assert kwargs_1.get("reasoning_effort") == "low", (
+            f"Round 1 (low): expected reasoning_effort=low, got {kwargs_1}"
         )
 
-        # Round 2: user changes setting to "max" → budget_tokens = 16000
+        # Round 2: user changes setting to "max" → reasoning_effort = "high" (clamped on Sonnet 4.6)
         bridge.query.side_effect = lambda key, args: (
             json.dumps(_DEFAULT_TIERS) if args.get("key") == "model_tiers"
             else json.dumps({"standard-medium": "max"})
@@ -233,8 +248,8 @@ class TestFullChainSettingsToApiCall:
         assert level_2 == "max"
         kwargs_2 = await _call_provider(level_2)
 
-        assert kwargs_2.get("thinking") == {"type": "enabled", "budget_tokens": 16000}, (
-            f"Round 2 (max): expected budget=16000, got {kwargs_2}"
+        assert kwargs_2.get("reasoning_effort") == "high", (
+            f"Round 2 (max→high on Sonnet): expected reasoning_effort=high, got {kwargs_2}"
         )
 
         # Round 3: user turns reasoning off
@@ -250,4 +265,7 @@ class TestFullChainSettingsToApiCall:
 
         assert "thinking" not in kwargs_3, (
             f"Round 3 (off): thinking should be absent, got {kwargs_3}"
+        )
+        assert "output_config" not in kwargs_3, (
+            f"Round 3 (off): output_config should be absent, got {kwargs_3}"
         )
