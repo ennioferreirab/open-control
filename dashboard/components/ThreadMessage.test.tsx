@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { ThreadMessage } from "./ThreadMessage";
 
 afterEach(() => {
@@ -83,6 +83,25 @@ describe("ThreadMessage — user_message", () => {
     const { container } = render(<ThreadMessage message={message as never} />);
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.className).toContain("bg-blue-50");
+  });
+
+  it("opens artifact callback when generated file is clicked", () => {
+    const onArtifactClick = vi.fn();
+    const message = makeMessage({
+      type: "step_completion",
+      artifacts: [{ path: "/output/result.md", action: "created" as const }],
+    });
+
+    render(
+      <ThreadMessage
+        message={message as never}
+        onArtifactClick={onArtifactClick}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "/output/result.md" }));
+
+    expect(onArtifactClick).toHaveBeenCalledWith("/output/result.md");
   });
 });
 

@@ -10,6 +10,7 @@ import { STRUCTURED_MESSAGE_TYPE } from "@/lib/constants";
 interface ThreadMessageProps {
   message: Doc<"messages">;
   steps?: Doc<"steps">[];
+  onArtifactClick?: (artifactPath: string) => void;
 }
 
 function getInitials(name: string): string {
@@ -63,7 +64,11 @@ function getMessageStyles(message: Doc<"messages">): MessageStyles {
   return getLegacyMessageStyles(message.messageType, message.authorType);
 }
 
-export function ThreadMessage({ message, steps }: ThreadMessageProps) {
+export function ThreadMessage({
+  message,
+  steps,
+  onArtifactClick,
+}: ThreadMessageProps) {
   const styles = getMessageStyles(message);
   // Lead Agent messages have authorType "system" but should render as Markdown
   // (not plain italic text). Exclude lead_agent_plan and lead_agent_chat from
@@ -91,7 +96,7 @@ export function ThreadMessage({ message, steps }: ThreadMessageProps) {
           {getInitials(message.authorName)}
         </AvatarFallback>
       </Avatar>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 overflow-hidden">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium text-foreground flex items-center gap-1">
             {isComment && <MessageCircle className="h-3 w-3 text-slate-500 shrink-0" />}
@@ -126,7 +131,7 @@ export function ThreadMessage({ message, steps }: ThreadMessageProps) {
           )}
           {isSystem || message.authorType === "user" ? (
             <p
-              className={`text-sm text-muted-foreground ${isSystem || isSystemError ? "italic" : ""}`}
+              className={`text-sm text-muted-foreground break-words ${isSystem || isSystemError ? "italic" : ""}`}
             >
               {message.content}
             </p>
@@ -140,7 +145,14 @@ export function ThreadMessage({ message, steps }: ThreadMessageProps) {
 
         {/* Render artifacts if present */}
         {message.artifacts && message.artifacts.length > 0 && (
-          <ArtifactRenderer artifacts={message.artifacts} />
+          <ArtifactRenderer
+            artifacts={message.artifacts}
+            onArtifactClick={
+              onArtifactClick
+                ? (artifact) => onArtifactClick(artifact.path)
+                : undefined
+            }
+          />
         )}
       </div>
     </div>

@@ -332,6 +332,36 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     }
   };
 
+  const handleOpenArtifact = useCallback((artifactPath: string) => {
+    if (!task || !isTaskLoaded) return;
+
+    const normalizedPath = artifactPath.startsWith("/") ? artifactPath : `/${artifactPath}`;
+    const matchedFile = (task.files ?? []).find(
+      (file) => `/${file.subfolder}/${file.name}` === normalizedPath
+    );
+
+    if (matchedFile) {
+      setViewerFile(matchedFile);
+      return;
+    }
+
+    const segments = normalizedPath.split("/").filter(Boolean);
+    if (segments.length < 2) return;
+
+    const [subfolder, ...nameParts] = segments;
+    if (subfolder !== "output" && subfolder !== "attachments") return;
+
+    const name = nameParts.join("/");
+    if (!name) return;
+
+    setViewerFile({
+      name,
+      subfolder,
+      size: 0,
+      type: "",
+    });
+  }, [isTaskLoaded, task]);
+
   return (
     <Sheet open={!!taskId} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-[90vw] sm:w-[50vw] sm:max-w-none flex flex-col p-0">
@@ -609,6 +639,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                           <ThreadMessage
                             message={msg}
                             steps={liveSteps ?? undefined}
+                            onArtifactClick={handleOpenArtifact}
                           />
                         </motion.div>
                       ))}

@@ -21,6 +21,7 @@ export interface Artifact {
 
 interface ArtifactRendererProps {
   artifacts: Artifact[];
+  onArtifactClick?: (artifact: Artifact) => void;
 }
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
@@ -50,27 +51,47 @@ function ActionBadge({ action }: { action: ArtifactAction }) {
   );
 }
 
-function ArtifactItem({ artifact }: { artifact: Artifact }) {
+function ArtifactItem({
+  artifact,
+  onArtifactClick,
+}: {
+  artifact: Artifact;
+  onArtifactClick?: (artifact: Artifact) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const hasDiff = artifact.action === ARTIFACT_ACTION.MODIFIED && !!artifact.diff;
+  const isClickable = typeof onArtifactClick === "function";
 
   return (
-    <div className="rounded border border-border bg-muted/30 px-2.5 py-2 text-xs">
+    <div className="w-full min-w-0 max-w-full overflow-hidden rounded border border-border bg-muted/30 px-2.5 py-2 text-xs">
       {/* File row: icon + path + badge */}
-      <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex w-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden">
         <ArtifactFileIcon path={artifact.path} />
-        <span
-          className="font-mono text-xs text-blue-500 cursor-pointer hover:underline truncate flex-1 min-w-0"
-          title={artifact.path}
-        >
-          {artifact.path}
-        </span>
-        <ActionBadge action={artifact.action} />
+        {isClickable ? (
+          <button
+            type="button"
+            className="flex-1 min-w-0 truncate text-left font-mono text-xs text-blue-500 hover:underline"
+            title={artifact.path}
+            onClick={() => onArtifactClick(artifact)}
+          >
+            {artifact.path}
+          </button>
+        ) : (
+          <span
+            className="flex-1 min-w-0 truncate font-mono text-xs text-blue-500"
+            title={artifact.path}
+          >
+            {artifact.path}
+          </span>
+        )}
+        <div className="shrink-0">
+          <ActionBadge action={artifact.action} />
+        </div>
       </div>
 
       {/* Description for created files */}
       {artifact.description && (
-        <p className="mt-1 text-xs text-muted-foreground pl-5">
+        <p className="mt-1 break-words pl-5 text-xs text-muted-foreground">
           {artifact.description}
         </p>
       )}
@@ -111,15 +132,22 @@ function ArtifactItem({ artifact }: { artifact: Artifact }) {
   );
 }
 
-export function ArtifactRenderer({ artifacts }: ArtifactRendererProps) {
+export function ArtifactRenderer({
+  artifacts,
+  onArtifactClick,
+}: ArtifactRendererProps) {
   if (!artifacts || artifacts.length === 0) {
     return null;
   }
 
   return (
-    <div className="mt-2 flex flex-col gap-1.5">
+    <div className="mt-2 flex w-full min-w-0 max-w-full flex-col gap-1.5">
       {artifacts.map((artifact, idx) => (
-        <ArtifactItem key={`${artifact.path}-${idx}`} artifact={artifact} />
+        <ArtifactItem
+          key={`${artifact.path}-${idx}`}
+          artifact={artifact}
+          onArtifactClick={onArtifactClick}
+        />
       ))}
     </div>
   );
