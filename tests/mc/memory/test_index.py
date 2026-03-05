@@ -72,6 +72,21 @@ def test_search_fts_fallback(tmp_path):
     assert any("python" in result.content.lower() for result in results)
 
 
+def test_search_with_url_characters_does_not_raise(tmp_path):
+    (tmp_path / "MEMORY.md").write_text(
+        "YouTube summaries for Kelvin Cleto channel and recent videos.",
+        encoding="utf-8",
+    )
+    idx = MemoryIndex(tmp_path)
+
+    idx.sync()
+    results = idx.search(
+        "Transcreva e resuma os videos do canal https://www.youtube.com/@eusoukelvincleto"
+    )
+
+    assert isinstance(results, list)
+
+
 def test_temporal_decay_penalizes_old(tmp_path):
     idx = MemoryIndex(tmp_path)
     now = time.time()
