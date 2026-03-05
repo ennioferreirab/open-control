@@ -16,12 +16,13 @@ from mc.planner import TaskPlanner
 from mc.provider_factory import create_provider
 from mc.step_dispatcher import StepDispatcher
 from mc.types import (
-    AgentData,
-    ActivityEventType,
-    AuthorType,
-    ExecutionPlan,
     LEAD_AGENT_NAME,
     LOW_AGENT_NAME,
+    NANOBOT_AGENT_NAME,
+    ActivityEventType,
+    AgentData,
+    AuthorType,
+    ExecutionPlan,
     MessageType,
     TaskStatus,
     TrustLevel,
@@ -316,7 +317,7 @@ class TaskOrchestrator:
         await asyncio.to_thread(
             self._bridge.create_activity,
             ActivityEventType.TASK_ASSIGNED,
-            f"Task assigned to Lead Agent",
+            "Task assigned to Lead Agent",
             task_id,
             self._lead_agent_name,
         )
@@ -331,15 +332,19 @@ class TaskOrchestrator:
         try:
             # Resolve a fast model for planning (Sonnet-tier, not Opus).
             planning_model = None
+            planning_reasoning_level = None
             try:
                 from mc.tier_resolver import TierResolver
                 tier_resolver = TierResolver(self._bridge)
                 planning_model = tier_resolver.resolve_model("tier:standard-medium")
+                planning_reasoning_level = tier_resolver.resolve_reasoning_level(
+                    "tier:standard-medium"
+                )
             except (ValueError, Exception) as exc:
                 logger.debug("[orchestrator] Could not resolve planning tier: %s", exc)
 
             # Use LLM-based planner (falls back to heuristic on failure).
-            planner = TaskPlanner()
+            planner = TaskPlanner(self._bridge)
             plan = await planner.plan_task(
                 title,
                 description,
@@ -347,6 +352,7 @@ class TaskOrchestrator:
                 explicit_agent=assigned_agent,
                 files=task_data.get("files") or [],
                 model=planning_model,
+                reasoning_level=planning_reasoning_level,
             )
 
             # Prevent circular delegation: if a step would route back to the
