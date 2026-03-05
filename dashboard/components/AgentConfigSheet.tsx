@@ -171,7 +171,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
   const computedModel = useMemo(() => {
     switch (modelMode) {
       case "tier":
-        return tierLevel ? `tier:${reasoningLevel ? "reasoning" : "standard"}-${tierLevel}` : "";
+        return tierLevel ? `tier:standard-${tierLevel}` : "";
       case "cc":
         return customModel ? `cc/${customModel}` : "";
       case "custom":
@@ -191,7 +191,8 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
       const parsed = parseModelValue(agent.model || "");
       setModelMode(parsed.modelMode);
       setTierLevel(parsed.tierLevel);
-      setReasoningLevel((agent as any).reasoningLevel || (parsed.hadReasoning ? "low" : ""));
+      // Reasoning only applies to custom mode; tier uses global settings
+      setReasoningLevel(parsed.modelMode === "custom" ? ((agent as any).reasoningLevel || "") : "");
       setCustomModel(parsed.customModel);
       const ccOpts = agent.claudeCodeOpts;
       setCcPermissionMode(ccOpts?.permissionMode ?? "bypassPermissions");
@@ -564,6 +565,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                         // Must be a tier level value (low/medium/high)
                         setModelMode("tier");
                         setTierLevel(value);
+                        setReasoningLevel("");
                         setCustomModel("");
                       }
                     }}
@@ -589,7 +591,7 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                     </SelectContent>
                   </Select>
 
-                  {(modelMode === "tier" || modelMode === "custom") && (
+                  {modelMode === "custom" && (
                     <div className="space-y-1">
                       <label className="text-sm font-medium">Reasoning</label>
                       <Select
@@ -643,8 +645,8 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
                     </Badge>
                   )}
                   {modelMode === "tier" && tierLevel && (() => {
-                    const fullTier = `${reasoningLevel ? "reasoning" : "standard"}-${tierLevel}`;
-                    const tierLabel = `${tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1)}${reasoningLevel ? ` (Reasoning: ${reasoningLevel})` : ""}`;
+                    const fullTier = `standard-${tierLevel}`;
+                    const tierLabel = tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1);
                     const resolvedModel = modelTiers[fullTier];
                     const isConfigured = resolvedModel != null && resolvedModel !== "";
                     return isConfigured ? (
