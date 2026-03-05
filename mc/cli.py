@@ -700,6 +700,10 @@ def _get_status_color(status: str) -> str:
         "done": "green",
         "retrying": "yellow",
         "crashed": "red",
+        "planning": "cyan",
+        "ready": "blue",
+        "failed": "red",
+        "deleted": "dim",
     }.get(status, "white")
 
 
@@ -753,6 +757,9 @@ def tasks_create(
     """Create a new task."""
     if title is None:
         title = typer.prompt("Task title")
+    if not title or not title.strip():
+        console.print("[red]Task title cannot be empty[/red]")
+        raise typer.Exit(1)
 
     bridge = _get_bridge()
     try:
@@ -774,15 +781,21 @@ def tasks_create(
             args["assigned_agent"] = agent
         if source:
             args["source_agent"] = source
-        result = bridge.mutation("tasks:create", args)
+        try:
+            result = bridge.mutation("tasks:create", args)
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
         task_id = result if isinstance(result, str) else (result or {}).get("id", "")
         console.print(f"[green]Task created:[/green] {title}")
         if task_id:
             console.print(f"  ID: {task_id}")
-        console.print(f"  Status: inbox")
-        console.print(
-            f"  Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )
+        if manual:
+            console.print("  Type: manual (human task)")
+        if trust_level:
+            console.print(f"  Trust: {trust_level}")
+        if agent:
+            console.print(f"  Agent: {agent}")
     finally:
         bridge.close()
 
@@ -1018,7 +1031,7 @@ def tasks_deny(
         args: dict = {"task_id": task_id, "feedback": feedback, "user_name": user}
         try:
             bridge.mutation("tasks:deny", args)
-            console.print(f"[green]Task denied:[/green] {task_id}")
+            console.print(f"[yellow]Task denied:[/yellow] {task_id}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
