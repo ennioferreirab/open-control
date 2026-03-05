@@ -114,6 +114,7 @@ async def _run_step_agent(
     task_id: str,
     cron_service: Any | None = None,
     bridge: Any | None = None,
+    ask_user_registry: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
     from mc.executor import _run_agent_on_task, _background_tasks
@@ -131,6 +132,7 @@ async def _run_step_agent(
         task_id=task_id,
         cron_service=cron_service,
         bridge=bridge,
+        ask_user_registry=ask_user_registry,
     )
 
     # Fire-and-forget memory consolidation after step completion.
@@ -581,9 +583,13 @@ class StepDispatcher:
                     logger.error("[dispatcher] %s", error_msg)
                     raise
 
+                from mc.ask_user_handler import AskUserHandler
+
+                ask_handler = AskUserHandler()
                 ipc_server = MCSocketServer(self._bridge, None)
+                ipc_server.set_ask_user_handler(ask_handler)
                 if self._ask_user_registry is not None:
-                    self._ask_user_registry.register(task_id, ipc_server)
+                    self._ask_user_registry.register(task_id, ask_handler)
                 try:
                     await ipc_server.start(ws_ctx.socket_path)
                 except Exception as exc:
@@ -676,6 +682,7 @@ class StepDispatcher:
                 task_id=task_id,
                 cron_service=self._cron_service,
                 bridge=self._bridge,
+                ask_user_registry=self._ask_user_registry,
             )
 
             # Collect artifacts and post structured completion message (Story 2.5).

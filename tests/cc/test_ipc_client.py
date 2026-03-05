@@ -226,19 +226,15 @@ class TestMCSocketServerHandlers:
         finally:
             await srv.stop()
 
-    async def test_ask_user_timeout_fallback(self):
-        """ask_user times out and returns the fallback string."""
+    async def test_ask_user_no_handler_returns_error(self):
+        """ask_user without a handler returns an error message."""
         sock = _short_sock()
 
         mock_bridge = MagicMock()
         mock_bridge.send_message = MagicMock(return_value=None)
 
         srv = MCSocketServer(mock_bridge, None)
-        # Shrink the timeout to near-zero for the test
-        import claude_code.ipc_server as ipc_srv_mod
-        original_timeout = ipc_srv_mod.ASK_USER_TIMEOUT
-        ipc_srv_mod.ASK_USER_TIMEOUT = 0.05
-
+        # No handler set — should return error
         await srv.start(sock)
         client = MCSocketClient(sock)
 
@@ -251,19 +247,23 @@ class TestMCSocketServerHandlers:
                     "task_id": "task-abc",
                 },
             )
-            assert result.get("answer") == ipc_srv_mod.ASK_USER_TIMEOUT_REPLY
+            assert result.get("answer") == "No ask_user handler configured."
         finally:
-            ipc_srv_mod.ASK_USER_TIMEOUT = original_timeout
             await srv.stop()
 
     async def test_deliver_user_reply_resolves_future(self):
-        """deliver_user_reply resolves the pending ask_user future."""
+        """AskUserHandler.deliver_user_reply resolves the pending ask_user future."""
         sock = _short_sock()
 
         mock_bridge = MagicMock()
         mock_bridge.send_message = MagicMock(return_value=None)
+        mock_bridge.update_task_status = MagicMock(return_value=None)
 
+        from mc.ask_user_handler import AskUserHandler
+
+        handler = AskUserHandler()
         srv = MCSocketServer(mock_bridge, None)
+        srv.set_ask_user_handler(handler)
         await srv.start(sock)
         client = MCSocketClient(sock)
 
@@ -281,8 +281,8 @@ class TestMCSocketServerHandlers:
         # Let the server start waiting
         await asyncio.sleep(0.1)
 
-        # Deliver the reply
-        srv.deliver_user_reply("task-xyz", "Yes, ready!")
+        # Deliver the reply via handler
+        handler.deliver_user_reply("task-xyz", "Yes, ready!")
 
         result = await asyncio.wait_for(ask_task, timeout=5)
         assert result.get("answer") == "Yes, ready!"

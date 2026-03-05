@@ -167,6 +167,7 @@ async def _run_agent_on_task(
     cron_service: Any | None = None,
     task_id: str | None = None,
     bridge: "ConvexBridge | None" = None,
+    ask_user_registry: Any | None = None,
 ) -> tuple[str, str, "AgentLoop"]:
     """Run the nanobot agent loop on a task and return the result.
 
@@ -274,13 +275,38 @@ async def _run_agent_on_task(
                 bridge=bridge,
             )
 
-    result = await loop.process_direct(
-        content=message,
-        session_key=session_key,
-        channel="mc",
-        chat_id=agent_name,
-        task_id=task_id,
-    )
+    # Set MC context on ask_user tool for interactive user questions
+    _ask_user_cleanup: tuple[Any | None, str | None] | None = None
+    if ask_user_tool := loop.tools.get("ask_user"):
+        from nanobot.agent.tools.ask_user import AskUserTool
+        if isinstance(ask_user_tool, AskUserTool):
+            from mc.ask_user_handler import AskUserHandler
+
+            handler = AskUserHandler()
+            if ask_user_registry and task_id:
+                ask_user_registry.register(task_id, handler)
+            ask_user_tool.set_context(
+                agent_name=agent_name,
+                task_id=task_id,
+                bridge=bridge,
+                handler=handler,
+            )
+            _ask_user_cleanup = (ask_user_registry, task_id)
+
+    try:
+        result = await loop.process_direct(
+            content=message,
+            session_key=session_key,
+            channel="mc",
+            chat_id=agent_name,
+            task_id=task_id,
+        )
+    finally:
+        if _ask_user_cleanup is not None:
+            reg, tid = _ask_user_cleanup
+            if reg and tid:
+                reg.unregister(tid)
+
     return result, session_key, loop
 
 
@@ -1140,6 +1166,7 @@ class TaskExecutor:
                 cron_service=self._cron_service,
                 task_id=task_id,
                 bridge=self._bridge,
+                ask_user_registry=self._ask_user_registry,
             )
 
             # Collect file artifacts produced during agent execution.
@@ -1501,9 +1528,13 @@ class TaskExecutor:
 
         # 2. Start IPC server (MCSocketServer.start() already removes stale socket)
         # bus=None: MCP bridge tools use IPC, not the in-process MessageBus
+        from mc.ask_user_handler import AskUserHandler
+
+        ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
+        ipc_server.set_ask_user_handler(ask_handler)
         if self._ask_user_registry is not None:
-            self._ask_user_registry.register(task_id, ipc_server)
+            self._ask_user_registry.register(task_id, ask_handler)
         try:
             await ipc_server.start(ws_ctx.socket_path)
         except Exception as exc:
@@ -1814,9 +1845,13 @@ class TaskExecutor:
             logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
             return None
 
+        from mc.ask_user_handler import AskUserHandler
+
+        ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
+        ipc_server.set_ask_user_handler(ask_handler)
         if self._ask_user_registry is not None:
-            self._ask_user_registry.register(task_id, ipc_server)
+            self._ask_user_registry.register(task_id, ask_handler)
         try:
             await ipc_server.start(ws_ctx.socket_path)
         except Exception as exc:

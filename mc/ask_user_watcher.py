@@ -1,7 +1,7 @@
 """AskUserReplyWatcher — polls task threads for user replies to pending ask_user calls.
 
 Runs as an asyncio loop in the gateway. Checks tasks with active ask_user calls
-(via AskUserRegistry) and delivers user replies to the waiting MCSocketServer.
+(via AskUserRegistry) and delivers user replies to the waiting AskUserHandler.
 """
 
 from __future__ import annotations
@@ -101,6 +101,6 @@ class AskUserReplyWatcher:
                     )
                     break
 
-        stale_ids = set(self._seen_messages) - set(self._registry._servers)
+        stale_ids = set(self._seen_messages) - set(self._registry._handlers)
         for tid in stale_ids:
             del self._seen_messages[tid]

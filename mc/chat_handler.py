@@ -182,9 +182,13 @@ class ChatHandler:
                 except Exception as exc:
                     raise RuntimeError(f"CC workspace preparation failed: {exc}")
 
+                from mc.ask_user_handler import AskUserHandler
+
+                ask_handler = AskUserHandler()
                 ipc_server = MCSocketServer(self._bridge, None)
+                ipc_server.set_ask_user_handler(ask_handler)
                 if self._ask_user_registry is not None:
-                    self._ask_user_registry.register(task_id, ipc_server)
+                    self._ask_user_registry.register(task_id, ask_handler)
                 try:
                     await ipc_server.start(ws_ctx.socket_path)
                 except Exception as exc:
