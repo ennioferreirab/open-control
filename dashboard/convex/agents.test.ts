@@ -104,4 +104,46 @@ describe("agents.upsertByName", () => {
     const agentPatch = patches[0]?.patch;
     expect(agentPatch?.variables).toBeUndefined();
   });
+
+  it("preserves existing Convex skills when agent already exists", async () => {
+    const handler = getHandler();
+    const { ctx, patches } = makeCtx({
+      _id: "agent-doc-id",
+      name: "youtube-summarizer",
+      prompt: "some prompt",
+      skills: ["youtube-watcher", "cron"],
+    });
+
+    await handler(ctx, {
+      name: "youtube-summarizer",
+      displayName: "YouTube Summarizer",
+      role: "Summarizer",
+      prompt: "YAML prompt",
+      skills: ["legacy-yaml-skill"],
+    });
+
+    const agentPatch = patches[0]?.patch;
+    expect(agentPatch?.skills).toBeUndefined();
+  });
+
+  it("bootstraps skills from YAML when existing agent has none yet", async () => {
+    const handler = getHandler();
+    const { ctx, patches } = makeCtx({
+      _id: "agent-doc-id",
+      name: "youtube-summarizer",
+      prompt: "some prompt",
+      skills: [],
+    });
+
+    await handler(ctx, {
+      name: "youtube-summarizer",
+      displayName: "YouTube Summarizer",
+      role: "Summarizer",
+      prompt: "YAML prompt",
+      skills: ["youtube-watcher", "cron"],
+    });
+
+    const agentPatch = patches[0]?.patch;
+    expect(agentPatch?.skills).toEqual(["youtube-watcher", "cron"]);
+  });
 });

@@ -55,7 +55,7 @@ export async function PUT(
   if (updates.prompt !== undefined) merged.prompt = updates.prompt;
   if (updates.model !== undefined) merged.model = updates.model || undefined;
   if (updates.display_name !== undefined) merged.display_name = updates.display_name;
-  if (updates.skills !== undefined) merged.skills = updates.skills?.length ? updates.skills : undefined;
+  if (updates.skills !== undefined) merged.skills = updates.skills;
   if (updates.soul !== undefined) merged.soul = updates.soul || undefined;
   if (updates.claude_code !== undefined) {
     if (updates.claude_code === null) {
