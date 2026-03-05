@@ -206,8 +206,9 @@ class TestOpenAICodexProviderListModels:
         provider = OpenAICodexProvider()
         result = provider.list_models()
         assert result == CODEX_MODELS
+        assert 'openai-codex/gpt-5.4' in result
         assert 'openai-codex/gpt-5.3-codex' in result
-        assert 'openai-codex/gpt-5.2' in result
+        assert 'openai-codex/gpt-5.2' not in result
         assert 'openai-codex/gpt-5.1-codex' not in result
 
 
