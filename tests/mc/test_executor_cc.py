@@ -884,3 +884,94 @@ class TestLoadAgentData:
             result = executor._load_agent_data("bad-agent")
 
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Board-scoped workspace resolution in _execute_cc_task (H1 / L2 coverage)
+# ---------------------------------------------------------------------------
+
+
+class TestCCBoardScopedWorkspace:
+    """Board resolution in _execute_cc_task: happy path and failure fallback.
+
+    These tests follow the same minimal patch pattern as TestExecuteCCTaskHappyPath:
+    stub out CCWorkspaceManager, MCSocketServer, and ClaudeCodeProvider, then
+    configure bridge.get_board_by_id to control the board lookup outcome.
+    """
+
+    def _make_cc_mocks(self):
+        """Return (ws_mock, ipc_mock, provider_mock) with prepare/execute stubs."""
+        ws_mock = MagicMock()
+        ws_mock.prepare.return_value = _ws_ctx()
+
+        ipc_mock = AsyncMock()
+
+        provider_mock = MagicMock()
+        provider_mock.execute_task = AsyncMock(return_value=_cc_result())
+
+        return ws_mock, ipc_mock, provider_mock
+
+    @pytest.mark.asyncio
+    async def test_board_found_passes_board_name_to_workspace(self):
+        """When board_id resolves to a board, board_name is forwarded to CCWorkspaceManager."""
+        bridge = _make_bridge()
+        bridge.get_board_by_id = MagicMock(return_value={"name": "my-board"})
+        bridge.get_agent_by_name = MagicMock(return_value=None)
+        bridge.query = MagicMock(return_value=None)
+
+        executor = _make_executor(bridge)
+        agent_data = _cc_agent()
+        ws_mock, ipc_mock, provider_mock = self._make_cc_mocks()
+
+        with (
+            patch(_PATCH_WS_MGR, return_value=ws_mock),
+            patch(_PATCH_IPC_SRV, return_value=ipc_mock),
+            patch(_PATCH_PROVIDER, return_value=provider_mock),
+            patch("mc.board_utils.get_agent_memory_mode", return_value="clean"),
+        ):
+            await executor._execute_cc_task(
+                task_id="task-99",
+                title="Board task",
+                description=None,
+                agent_name="my-cc-agent",
+                agent_data=agent_data,
+                task_data={"board_id": "board-abc"},
+                needs_enrichment=False,
+            )
+
+        ws_mock.prepare.assert_called_once()
+        call_kwargs = ws_mock.prepare.call_args.kwargs
+        assert call_kwargs.get("board_name") == "my-board"
+        assert call_kwargs.get("memory_mode") == "clean"
+
+    @pytest.mark.asyncio
+    async def test_board_lookup_failure_falls_back_to_global_workspace(self):
+        """When get_board_by_id raises, _execute_cc_task uses global workspace (board_name=None)."""
+        bridge = _make_bridge()
+        bridge.get_board_by_id = MagicMock(side_effect=RuntimeError("Convex unavailable"))
+        bridge.get_agent_by_name = MagicMock(return_value=None)
+        bridge.query = MagicMock(return_value=None)
+
+        executor = _make_executor(bridge)
+        agent_data = _cc_agent()
+        ws_mock, ipc_mock, provider_mock = self._make_cc_mocks()
+
+        with (
+            patch(_PATCH_WS_MGR, return_value=ws_mock),
+            patch(_PATCH_IPC_SRV, return_value=ipc_mock),
+            patch(_PATCH_PROVIDER, return_value=provider_mock),
+        ):
+            await executor._execute_cc_task(
+                task_id="task-100",
+                title="Fallback task",
+                description=None,
+                agent_name="my-cc-agent",
+                agent_data=agent_data,
+                task_data={"board_id": "board-xyz"},
+                needs_enrichment=False,
+            )
+
+        # board_name must be None — global workspace fallback
+        ws_mock.prepare.assert_called_once()
+        call_kwargs = ws_mock.prepare.call_args.kwargs
+        assert call_kwargs.get("board_name") is None

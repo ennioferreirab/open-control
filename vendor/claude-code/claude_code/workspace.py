@@ -93,6 +93,8 @@ class CCWorkspaceManager:
         task_id: str,
         orientation: str | None = None,
         task_prompt: str | None = None,
+        board_name: str | None = None,
+        memory_mode: str = "clean",
     ) -> WorkspaceContext:
         """Set up the workspace directory for an agent and return its context.
 
@@ -105,6 +107,9 @@ class CCWorkspaceManager:
             task_id: The Convex task _id being executed.
             orientation: Optional global orientation text to inject into CLAUDE.md.
             task_prompt: Optional task description for relevant history search.
+            board_name: Optional board name for board-scoped workspace root.
+            memory_mode: Agent memory mode for board workspace ("clean" or
+                "with_history").
 
         Returns:
             WorkspaceContext with all resolved paths.
@@ -117,10 +122,19 @@ class CCWorkspaceManager:
         if not agent_name or "/" in agent_name or agent_name.startswith("."):
             raise ValueError(f"Invalid agent name: {agent_name!r}")
 
-        workspace = self._root / "agents" / agent_name
-        workspace.mkdir(parents=True, exist_ok=True)
-        (workspace / "memory").mkdir(exist_ok=True)
-        (workspace / "sessions").mkdir(exist_ok=True)
+        if board_name:
+            from mc.board_utils import resolve_board_workspace
+
+            workspace = resolve_board_workspace(board_name, agent_name, mode=memory_mode)
+            # resolve_board_workspace already creates memory/ and sessions/.
+            # Keep these calls for idempotent safety.
+            (workspace / "memory").mkdir(parents=True, exist_ok=True)
+            (workspace / "sessions").mkdir(exist_ok=True)
+        else:
+            workspace = self._root / "agents" / agent_name
+            workspace.mkdir(parents=True, exist_ok=True)
+            (workspace / "memory").mkdir(exist_ok=True)
+            (workspace / "sessions").mkdir(exist_ok=True)
 
         # Skills must be mapped BEFORE generating CLAUDE.md so the skills
         # summary in _generate_claude_md() can reference the mapped symlinks.

@@ -1513,7 +1513,33 @@ class TaskExecutor:
                 agent_name,
             )
 
-        # 0d. Snapshot output dir for artifact detection
+        # 0d. Resolve board-scoped workspace for CC (mirrors nanobot board resolution)
+        _cc_board_name: str | None = None
+        _cc_memory_mode: str = "clean"
+        _board_id = (task_data or {}).get("board_id")
+        if _board_id:
+            try:
+                _board = await asyncio.to_thread(
+                    self._bridge.get_board_by_id, _board_id
+                )
+                if _board:
+                    _cc_board_name = _board.get("name")
+                    if _cc_board_name:
+                        from mc.board_utils import get_agent_memory_mode
+
+                        _cc_memory_mode = get_agent_memory_mode(_board, agent_name)
+                        logger.info(
+                            "[executor] CC: board-scoped workspace for agent '%s' on board '%s' (mode=%s)",
+                            agent_name, _cc_board_name, _cc_memory_mode,
+                        )
+            except Exception:
+                logger.warning(
+                    "[executor] CC: failed to resolve board workspace for task '%s', using global workspace",
+                    title,
+                    exc_info=True,
+                )
+
+        # 0e. Snapshot output dir for artifact detection
         pre_snapshot = await asyncio.to_thread(_snapshot_output_dir, task_id)
 
         # 1. Prepare workspace
@@ -1521,8 +1547,15 @@ class TaskExecutor:
             ws_mgr = CCWorkspaceManager()
             from mc.orientation import load_orientation
             orientation = load_orientation(agent_name)
-            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id, orientation=orientation,
-                                    task_prompt=title)
+            ws_ctx = ws_mgr.prepare(
+                agent_name,
+                agent_data,
+                task_id,
+                orientation=orientation,
+                task_prompt=title,
+                board_name=_cc_board_name,
+                memory_mode=_cc_memory_mode,
+            )
         except Exception as exc:
             await self._crash_task(task_id, title, f"Workspace preparation failed: {exc}", agent_name)
             return
@@ -1629,6 +1662,37 @@ class TaskExecutor:
                     await self._on_task_completed(task_id, result.output or "")
                 except Exception:
                     logger.exception("[executor] on_task_completed failed for CC task '%s'", title)
+
+        # Fire-and-forget post-CC memory consolidation (best-effort, non-blocking).
+        # Mirrors nanobot's end_task_session() — runs for both success and error tasks.
+        _cc_task_status = "error" if result.is_error else "completed"
+        _cc_ws_cwd = ws_ctx.cwd  # capture before ws_ctx goes out of scope
+
+        async def _post_cc_consolidate():
+            try:
+                from claude_code.memory_consolidator import CCMemoryConsolidator
+                from mc.types import is_tier_reference
+                from mc.tier_resolver import TierResolver
+                _model = "tier:standard-low"
+                if is_tier_reference(_model):
+                    _model = TierResolver(self._bridge).resolve_model(_model) or _model
+                consolidator = CCMemoryConsolidator(_cc_ws_cwd)
+                await consolidator.consolidate(
+                    task_title=title,
+                    task_output=result.output or "",
+                    task_status=_cc_task_status,
+                    task_id=task_id,
+                    model=_model,
+                )
+                logger.info("[executor] CC memory consolidation done for '%s'", title)
+            except Exception:
+                logger.warning(
+                    "[executor] CC memory consolidation failed for '%s'", title, exc_info=True
+                )
+
+        _t = asyncio.create_task(_post_cc_consolidate())
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
 
     async def _post_cc_activity(
         self,
@@ -1836,13 +1900,47 @@ class TaskExecutor:
                 agent_name, task_id,
             )
 
+        # Resolve board-scoped workspace for thread reply (same logic as _execute_cc_task).
+        # Best-effort: falls back to global workspace on any bridge failure.
+        _tr_board_name: str | None = None
+        _tr_memory_mode: str = "clean"
+        try:
+            _tr_task_data = await asyncio.to_thread(
+                self._bridge.query, "tasks:getById", {"task_id": task_id}
+            )
+            _tr_board_id = (_tr_task_data or {}).get("board_id")
+            if _tr_board_id:
+                _tr_board = await asyncio.to_thread(
+                    self._bridge.get_board_by_id, _tr_board_id
+                )
+                if _tr_board:
+                    _tr_board_name = _tr_board.get("name")
+                    if _tr_board_name:
+                        from mc.board_utils import get_agent_memory_mode
+                        _tr_memory_mode = get_agent_memory_mode(_tr_board, agent_name)
+                        logger.info(
+                            "[executor] CC thread reply: board-scoped workspace for agent '%s' on board '%s' (mode=%s)",
+                            agent_name, _tr_board_name, _tr_memory_mode,
+                        )
+        except Exception:
+            logger.warning(
+                "[executor] CC thread reply: failed to resolve board workspace for task '%s', using global workspace",
+                task_id,
+                exc_info=True,
+            )
+
         # Prepare workspace and IPC server
         try:
             ws_mgr = CCWorkspaceManager()
             from mc.orientation import load_orientation
             orientation = load_orientation(agent_name)
-            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id, orientation=orientation,
-                                    task_prompt=user_message)
+            ws_ctx = ws_mgr.prepare(
+                agent_name, agent_data, task_id,
+                orientation=orientation,
+                task_prompt=user_message,
+                board_name=_tr_board_name,
+                memory_mode=_tr_memory_mode,
+            )
         except Exception as exc:
             logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
             return None

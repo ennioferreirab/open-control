@@ -503,3 +503,75 @@ class TestSkillAvailabilityCheck:
             "missing-binary-skill" in msg and "unavailable" in msg
             for msg in warning_messages
         ), f"Expected WARNING containing 'missing-binary-skill' and 'unavailable', got: {warning_messages}"
+
+
+class TestBoardScopedWorkspace:
+    """Tests for board-scoped workspace isolation."""
+
+    def test_board_scoped_workspace_uses_board_path(self, tmp_path: Path) -> None:
+        """When board_name is provided, workspace root is under boards/{board}/agents/{agent}/."""
+        from unittest.mock import patch
+
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        board_workspace = tmp_path / "boards" / "myboard" / "agents" / "test-agent"
+        board_workspace.mkdir(parents=True, exist_ok=True)
+        (board_workspace / "memory").mkdir()
+        (board_workspace / "sessions").mkdir()
+
+        # Patch at the source module (mc.board_utils) rather than claude_code.workspace,
+        # because workspace.py uses a deferred `from mc.board_utils import …` inside
+        # prepare(), so Python re-resolves the name from mc.board_utils on every call.
+        # If workspace.py ever hoists the import to module level, the target must change
+        # to "claude_code.workspace.resolve_board_workspace".
+        with patch("mc.board_utils.resolve_board_workspace", return_value=board_workspace) as mock_resolve:
+            ctx = manager.prepare("test-agent", agent, "task123", board_name="myboard", memory_mode="clean")
+
+        mock_resolve.assert_called_once_with("myboard", "test-agent", mode="clean")
+        assert ctx.cwd == board_workspace
+
+    def test_no_board_uses_global_path(self, tmp_path: Path) -> None:
+        """Without board_name, workspace stays at agents/{agent}/."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        ctx = manager.prepare("test-agent", agent, "task123")
+        assert ctx.cwd == tmp_path / "agents" / "test-agent"
+
+    def test_with_history_mode_passed_to_board_utils(self, tmp_path: Path) -> None:
+        """memory_mode='with_history' is forwarded to resolve_board_workspace."""
+        from unittest.mock import patch
+
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        board_workspace = tmp_path / "boards" / "projboard" / "agents" / "test-agent"
+        board_workspace.mkdir(parents=True, exist_ok=True)
+        (board_workspace / "memory").mkdir()
+        (board_workspace / "sessions").mkdir()
+
+        # See patch-target note in test_board_scoped_workspace_uses_board_path.
+        with patch("mc.board_utils.resolve_board_workspace", return_value=board_workspace) as mock_resolve:
+            manager.prepare("test-agent", agent, "task123", board_name="projboard", memory_mode="with_history")
+
+        mock_resolve.assert_called_once_with("projboard", "test-agent", mode="with_history")
+
+    def test_board_workspace_generates_claude_md(self, tmp_path: Path) -> None:
+        """Board-scoped workspace still generates CLAUDE.md correctly."""
+        from unittest.mock import patch
+
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent(prompt="Board agent prompt.")
+
+        board_workspace = tmp_path / "boards" / "b1" / "agents" / "test-agent"
+        board_workspace.mkdir(parents=True, exist_ok=True)
+        (board_workspace / "memory").mkdir()
+        (board_workspace / "sessions").mkdir()
+
+        # See patch-target note in test_board_scoped_workspace_uses_board_path.
+        with patch("mc.board_utils.resolve_board_workspace", return_value=board_workspace):
+            ctx = manager.prepare("test-agent", agent, "task999", board_name="b1")
+
+        claude_md = board_workspace / "CLAUDE.md"
+        assert claude_md.exists()
+        assert "Board agent prompt." in claude_md.read_text()

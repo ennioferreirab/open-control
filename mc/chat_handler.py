@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 2
 
+# Strong references to fire-and-forget consolidation tasks (prevents GC before completion).
+_chat_background_tasks: set[asyncio.Task[None]] = set()
+
 
 class ChatHandler:
     """Polls for pending chat messages and dispatches them to agents."""
@@ -210,6 +213,11 @@ class ChatHandler:
                 except Exception:
                     logger.debug("[chat] No stored CC session for %s chat", agent_name)
 
+                # Sentinel captures execute_task() result for consolidation in finally.
+                # Assigned before the is_error raise so both success and error paths see it.
+                _cc_result_obj = None
+                _cc_ws_cwd_chat = ws_ctx.cwd
+
                 try:
                     from nanobot.config.loader import load_config
                     _cfg = load_config()
@@ -234,6 +242,10 @@ class ChatHandler:
                         session_id=session_id,
                     )
 
+                    # Capture before the is_error raise so the finally can consolidate
+                    # both successful and error CC chat results (mirrors executor behaviour).
+                    _cc_result_obj = result_obj
+
                     if result_obj.is_error:
                         raise RuntimeError(f"Claude Code error: {result_obj.output[:1000]}")
 
@@ -253,6 +265,40 @@ class ChatHandler:
                     if self._ask_user_registry is not None:
                         self._ask_user_registry.unregister(task_id)
                     await ipc_server.stop()
+
+                    # Fire-and-forget memory consolidation for CC chat (both success and error).
+                    # Runs here (finally) so error results are also consolidated.
+                    # _cc_result_obj is None only if execute_task() itself threw, in which case
+                    # there is nothing useful to consolidate.
+                    if _cc_result_obj is not None:
+                        _cc_task_status_chat = "error" if _cc_result_obj.is_error else "completed"
+                        _cc_task_output_chat = _cc_result_obj.output or ""
+
+                        async def _post_chat_consolidate():
+                            try:
+                                from claude_code.memory_consolidator import CCMemoryConsolidator
+                                from mc.types import is_tier_reference
+                                from mc.tier_resolver import TierResolver
+                                _model = "tier:standard-low"
+                                if is_tier_reference(_model):
+                                    _model = TierResolver(self._bridge).resolve_model(_model) or _model
+                                consolidator = CCMemoryConsolidator(_cc_ws_cwd_chat)
+                                await consolidator.consolidate(
+                                    task_title=f"chat with @{agent_name}",
+                                    task_output=_cc_task_output_chat,
+                                    task_status=_cc_task_status_chat,
+                                    task_id=task_id,
+                                    model=_model,
+                                )
+                                logger.info("[chat] CC memory consolidation done for @%s", agent_name)
+                            except Exception:
+                                logger.warning(
+                                    "[chat] CC memory consolidation failed for @%s", agent_name, exc_info=True
+                                )
+
+                        _ct = asyncio.create_task(_post_chat_consolidate())
+                        _chat_background_tasks.add(_ct)
+                        _ct.add_done_callback(_chat_background_tasks.discard)
 
                 # Send response and mark done
                 await asyncio.to_thread(
