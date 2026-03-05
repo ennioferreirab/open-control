@@ -101,6 +101,10 @@ export function SettingsPanel() {
   const allSettings = useQuery(api.settings.list);
   const setSetting = useMutation(api.settings.set);
   const [savedFields, setSavedFields] = useState<Record<string, boolean>>({});
+  const DEFAULT_EMBEDDING_MODEL = "openrouter/openai/text-embedding-3-small";
+  const [embeddingInputValue, setEmbeddingInputValue] = useState(
+    DEFAULT_EMBEDDING_MODEL,
+  );
 
   const settingsMap: Record<string, string> = {};
   allSettings?.forEach((s) => {
@@ -108,6 +112,8 @@ export function SettingsPanel() {
   });
 
   const getValue = (key: string) => settingsMap[key] ?? DEFAULTS[key];
+  const embeddingModelValue = getValue("memory_embedding_model") ?? "";
+  const embeddingEnabled = embeddingModelValue.trim().length > 0;
 
   const handleSave = useCallback(
     async (key: string, value: string) => {
@@ -119,6 +125,12 @@ export function SettingsPanel() {
     },
     [setSetting],
   );
+
+  useEffect(() => {
+    if (embeddingModelValue.trim().length > 0) {
+      setEmbeddingInputValue(embeddingModelValue);
+    }
+  }, [embeddingModelValue]);
 
   return (
     <div className="space-y-6 p-6 pb-12 overflow-y-auto max-h-full">
@@ -223,6 +235,67 @@ export function SettingsPanel() {
       <Separator />
 
       <ModelTierSettings />
+
+      <Separator />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <label className="text-sm font-medium">Vector Memory Search</label>
+          </div>
+          <div className="flex items-center gap-2">
+            {savedFields["memory_embedding_model"] && (
+              <Check className="h-4 w-4 text-green-500 transition-opacity" />
+            )}
+            <Switch
+              checked={embeddingEnabled}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  const model =
+                    embeddingInputValue.trim() || DEFAULT_EMBEDDING_MODEL;
+                  setEmbeddingInputValue(model);
+                  handleSave("memory_embedding_model", model);
+                } else {
+                  handleSave("memory_embedding_model", "");
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground font-medium">
+            Embedding Model
+          </label>
+          <Input
+            value={embeddingInputValue}
+            disabled={!embeddingEnabled}
+            placeholder={DEFAULT_EMBEDDING_MODEL}
+            onChange={(e) => setEmbeddingInputValue(e.target.value)}
+            onBlur={() => {
+              if (embeddingEnabled) {
+                const val = embeddingInputValue.trim() || DEFAULT_EMBEDDING_MODEL;
+                setEmbeddingInputValue(val);
+                handleSave("memory_embedding_model", val);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && embeddingEnabled) {
+                const val = embeddingInputValue.trim() || DEFAULT_EMBEDDING_MODEL;
+                setEmbeddingInputValue(val);
+                handleSave("memory_embedding_model", val);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            className={!embeddingEnabled ? "opacity-50 cursor-not-allowed" : ""}
+          />
+          <p className="text-xs text-muted-foreground">
+            {embeddingEnabled
+              ? "Memory search uses FTS + vector embeddings. Falls back to FTS-only if the model is unavailable."
+              : "Enable to use FTS + vector search. FTS-only when disabled."}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
