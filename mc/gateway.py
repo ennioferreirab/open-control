@@ -547,6 +547,20 @@ def _sync_model_tiers(bridge: ConvexBridge) -> None:
             logger.info("[gateway] Model tiers up to date — no migration needed")
 
 
+def _sync_embedding_model(bridge) -> None:
+    try:
+        model = bridge.query("settings:get", {"key": "memory_embedding_model"})
+    except Exception:
+        logger.warning("[gateway] Failed to read memory_embedding_model setting")
+        return
+    if model:
+        os.environ["NANOBOT_MEMORY_EMBEDDING_MODEL"] = model
+        logger.info("[gateway] Memory embedding model set: %s", model)
+    else:
+        os.environ.pop("NANOBOT_MEMORY_EMBEDDING_MODEL", None)
+        logger.info("[gateway] Memory embedding model cleared (FTS-only)")
+
+
 def sync_agent_registry(
     bridge: ConvexBridge,
     agents_dir: Path,
@@ -1425,6 +1439,10 @@ async def main() -> None:
             logger.info("[gateway] Model tiers synced")
         except Exception:
             logger.exception("[gateway] Model tiers sync failed")
+        try:
+            _sync_embedding_model(bridge)
+        except Exception:
+            logger.exception("[gateway] Embedding model sync failed")
 
         # Ensure default board exists (AC2)
         try:
