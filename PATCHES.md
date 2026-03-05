@@ -6,7 +6,7 @@ Use this as a guide when running `git subtree pull` to resolve merge conflicts.
 Upstream remote: `https://github.com/HKUDS/nanobot.git` (branch: `main`)
 Baseline commit: `a3b13a5` (subtree import)
 
-**Stats**: 6 new files + 22 modified files = 28 total patched files.
+**Stats**: 7 new files + 23 modified files = 30 total patched files.
 
 ---
 
@@ -21,6 +21,7 @@ These files do not exist in upstream and will never conflict on `subtree pull`:
 | `channels/mission_control.py` | `MissionControlChannel`: bridges outbound messages to Convex task threads; registered via `ChannelManager.register_channel()` |
 | `providers/anthropic_oauth.py` | Full Anthropic OAuth PKCE flow; stores tokens in `~/.nanobot/anthropic_oauth.json` |
 | `providers/anthropic_oauth_provider.py` | `AnthropicOAuthProvider`: direct httpx+SSE provider (bypasses LiteLLM) for OAuth-authenticated Claude access |
+| `agent/tools/search_memory.py` | `SearchMemoryTool`: hybrid BM25+vector search over agent memory (MEMORY.md + HISTORY.md); delegates to `HybridMemoryStore.search()` |
 | `skills/create-agent/SKILL.md` | Guided 5-step wizard skill for creating nanobot agent configs |
 
 ---
@@ -33,17 +34,18 @@ These files do not exist in upstream and will never conflict on `subtree pull`:
 - **`memory_workspace`**: separate path for memory/session storage (falls back to `workspace`); propagated to `ContextBuilder`, `SessionManager`
 - **`_consolidation_locks`**: changed from `weakref.WeakValueDictionary` to plain `dict`; new helpers `_get_consolidation_lock()` / `_prune_consolidation_lock()`
 - **New instance vars**: `_current_task_id`, `_last_turn_content`
-- **`_register_default_tools`**: registers `McDelegateTool` and `AskAgentTool` (with try/except for MC context)
+- **`_register_default_tools`**: registers `McDelegateTool`, `AskAgentTool`, and `SearchMemoryTool` (all with try/except for MC context)
 - **`_set_tool_context()`**: type-checked dispatch; `CronTool.set_context()` receives `task_id` and `agent_name`
 - **`_run_agent_loop`**: passes `reasoning_level` to `provider.chat()`
-- **`_consolidate_memory()`**: passes `max_tokens` and `mc_system_prompt` to `MemoryStore.consolidate()`
+- **`_consolidate_memory()`**: uses `self.context.memory` (HybridMemoryStore if available) instead of creating new `MemoryStore`; passes `max_tokens` and `mc_system_prompt` to `consolidate()`
 - **`process_direct()`**: new `task_id` param; sets `_current_task_id`; falls back to `_last_turn_content` when `MessageTool` suppresses return
 - **New method `end_task_session()`**: consolidates + clears a session at end of an MC task
 - **`_process_message` / `_handle_message`**: passes `skill_names=self.allowed_skills` to `context.build_messages()`
 
 ### `agent/context.py`
 
-- **`ContextBuilder.__init__`**: new `global_skills_dir` param, passed to `SkillsLoader`
+- **`ContextBuilder.__init__`**: new `global_skills_dir` param, passed to `SkillsLoader`; try-imports `HybridMemoryStore` from `mc.memory.store` (falls back to `MemoryStore` if unavailable)
+- **`_get_identity()`**: added guideline: "Use search_memory tool to recall past decisions and events from history."
 - **`build_skills_summary()` call**: passes `allowed_names=skill_names`
 
 ### `agent/memory.py`
@@ -122,6 +124,12 @@ These files do not exist in upstream and will never conflict on `subtree pull`:
 
 - Added `AnthropicOAuthProvider` import and export
 
+### `providers/anthropic_oauth_provider.py`
+
+- **Reasoning API migration for Claude 4.6**: detects `4-6` models after stripping OAuth prefix and switches reasoning to `output_config={"effort": ...}` + `thinking={"type": "adaptive"}`; keeps legacy `thinking.budget_tokens` + `temperature=1.0` for older models
+- **Effort clamping**: maps `max` to `high` for all non-Opus-4.6 models to avoid Anthropic API validation errors
+- **Debug observability**: logs effective reasoning params (`effort` adaptive vs `budget_tokens`) before each API call
+
 ### `providers/base.py`
 
 - **`LLMProvider.chat()`**: added `reasoning_level: str | None = None` param (alongside existing `reasoning_effort`)
@@ -135,6 +143,7 @@ These files do not exist in upstream and will never conflict on `subtree pull`:
 
 - **`_REASONING_BUDGET_TOKENS`** dict constant added (`low/medium/max` → token budgets)
 - **`chat()`**: added `reasoning_level` param with model-aware injection (Anthropic → `thinking` dict + `temperature=1.0`; OpenAI → `reasoning_effort` string)
+- **Reasoning API migration for Claude 4.6**: detects `4-6` models (after stripping Anthropic prefixes) and passes `reasoning_effort=<effort>` (LiteLLM native kwarg, auto-mapped to `output_config.effort`) instead of deprecated `thinking.budget_tokens`; clamps `max` effort to `high` for non-Opus-4.6; logs effective reasoning params at DEBUG level before `acompletion()`
 - **`list_models()`**: queries `/v1/models` endpoint if api_key/api_base available
 
 ### `providers/openai_codex_provider.py`

@@ -163,6 +163,13 @@ class AgentLoop:
         except Exception:
             pass  # MC context not available — tool not registered
 
+        # Register search_memory tool if HybridMemoryStore is available
+        try:
+            from nanobot.agent.tools.search_memory import SearchMemoryTool
+            self.tools.register(SearchMemoryTool(memory_store=self.context.memory))
+        except Exception:
+            pass  # search_memory not available
+
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
         if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
@@ -408,7 +415,7 @@ class AgentLoop:
                                   content=final_content or "Background task completed.")
 
         preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-        logger.info("Processing message from {}:{}: {}", msg.channel, msg.sender_id, preview)
+        logger.info("Processing message from {}:{}: {} (model={})", msg.channel, msg.sender_id, preview, self.model)
 
         key = session_key or msg.session_key
         session = self.sessions.get_or_create(key)
@@ -549,8 +556,13 @@ class AgentLoop:
         session.updated_at = datetime.now()
 
     async def _consolidate_memory(self, session, archive_all: bool = False) -> bool:
-        """Delegate to MemoryStore.consolidate(). Returns True on success."""
-        return await MemoryStore(self.memory_workspace).consolidate(
+        """Delegate to MemoryStore.consolidate(). Returns True on success.
+
+        Uses the context's memory store (HybridMemoryStore if available) so that
+        consolidation writes trigger index sync automatically.
+        """
+        memory_store = self.context.memory
+        return await memory_store.consolidate(
             session, self.provider, self.model,
             archive_all=archive_all, memory_window=self.memory_window,
             max_tokens=self.memory_consolidation_max_tokens,

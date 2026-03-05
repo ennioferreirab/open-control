@@ -20,7 +20,11 @@ class ContextBuilder:
 
     def __init__(self, workspace: Path, global_skills_dir: Path | None = None):
         self.workspace = workspace
-        self.memory = MemoryStore(workspace)
+        try:
+            from mc.memory.store import HybridMemoryStore
+            self.memory = HybridMemoryStore(workspace)
+        except ImportError:
+            self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace, global_skills_dir=global_skills_dir)
 
     def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
@@ -77,6 +81,7 @@ Your workspace is at: {workspace_path}
 - After writing or editing a file, re-read it if accuracy matters.
 - If a tool call fails, analyze the error before retrying with a different approach.
 - Ask for clarification when the request is ambiguous.
+- Use search_memory tool to recall past decisions and events from history.
 
 Reply directly with text for conversations. Only use the 'message' tool to send to a specific chat channel."""
 
