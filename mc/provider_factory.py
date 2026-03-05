@@ -13,36 +13,55 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _get_codex_token():
+    """Try to get the Codex OAuth token. Raises if not authenticated."""
+    from oauth_cli_kit import get_token
+    return get_token()
+
+
+def _merge_codex_models(models: list[str]) -> list[str]:
+    """Append Codex models if the user is authenticated, without duplicates."""
+    try:
+        _get_codex_token()
+    except Exception:
+        return models
+    from nanobot.providers.openai_codex_provider import CODEX_MODELS
+    existing = set(models)
+    return models + [m for m in CODEX_MODELS if m not in existing]
+
+
 def list_available_models() -> list[str]:
     """Return model identifiers available from the configured provider.
 
     Priority:
-      1. agents.models in config — explicit user-defined list (takes precedence).
-      2. Provider API query — e.g. GET /v1/models for OpenRouter, Anthropic, etc.
-      3. Fallback — just the default model if everything else fails.
-
-    Story 11.1 — AC #4.
+      1. agents.models in config — explicit user-defined list (base).
+      2. Authenticated OAuth providers — Codex models merged in if token exists.
+      3. Provider API query — e.g. GET /v1/models for OpenRouter, Anthropic, etc.
+      4. Fallback — just the default model if everything else fails.
     """
     from nanobot.config.loader import load_config
 
     config = load_config()
     default_model = config.agents.defaults.model
 
-    # 1. Explicit user-defined list (e.g. for OAuth providers that don't expose /v1/models)
+    # 1. Explicit user-defined list as base
     if config.agents.models:
-        return list(config.agents.models)
+        models: list[str] = list(config.agents.models)
+        # 2. Merge Codex models if authenticated
+        return _merge_codex_models(models)
 
     # 2. Query the active provider's models endpoint
     try:
         provider, _ = create_provider(model=None)
-        models = provider.list_models()
-        if models:
-            return models
+        models_from_api = provider.list_models()
+        if models_from_api:
+            return _merge_codex_models(models_from_api)
     except Exception as e:
-        logger.warning("list_available_models: provider query failed: %s", e)
+        logger.warning('list_available_models: provider query failed: %s', e)
 
-    # 3. Fallback
-    return [default_model] if default_model else []
+    # 4. Fallback
+    base = [default_model] if default_model else []
+    return _merge_codex_models(base)
 
 
 class ProviderError(Exception):
