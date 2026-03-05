@@ -1,23 +1,32 @@
-"""Tests for AskUserRegistry — global registry of active MCSocketServer instances."""
+"""Tests for AskUserRegistry — global registry of active AskUserHandler instances."""
 
 import asyncio
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
+from mc.ask_user_handler import AskUserHandler
 from mc.ask_user_registry import AskUserRegistry
+
+
+def _handler_with_pending(task_id: str) -> AskUserHandler:
+    """Create an AskUserHandler with a fake pending ask for the given task_id."""
+    handler = AskUserHandler()
+    handler._pending_ask["req-123"] = MagicMock()  # fake future
+    handler._task_to_request[task_id] = "req-123"
+    return handler
 
 
 class TestAskUserRegistry:
     def test_register_and_lookup(self):
         registry = AskUserRegistry()
-        mock_server = MagicMock()
-        registry.register("task-abc", mock_server)
-        assert registry.get("task-abc") is mock_server
+        handler = AskUserHandler()
+        registry.register("task-abc", handler)
+        assert registry.get("task-abc") is handler
 
     def test_unregister(self):
         registry = AskUserRegistry()
-        mock_server = MagicMock()
-        registry.register("task-abc", mock_server)
+        handler = AskUserHandler()
+        registry.register("task-abc", handler)
         registry.unregister("task-abc")
         assert registry.get("task-abc") is None
 
@@ -31,18 +40,14 @@ class TestAskUserRegistry:
 
     def test_has_pending_ask(self):
         registry = AskUserRegistry()
-        mock_server = MagicMock()
-        mock_server._task_to_request = {"task-abc": "req-123"}
-        mock_server._pending_ask = {"req-123": MagicMock()}
-        registry.register("task-abc", mock_server)
+        handler = _handler_with_pending("task-abc")
+        registry.register("task-abc", handler)
         assert registry.has_pending_ask("task-abc") is True
 
     def test_has_pending_ask_no_pending(self):
         registry = AskUserRegistry()
-        mock_server = MagicMock()
-        mock_server._task_to_request = {}
-        mock_server._pending_ask = {}
-        registry.register("task-abc", mock_server)
+        handler = AskUserHandler()  # no pending asks
+        registry.register("task-abc", handler)
         assert registry.has_pending_ask("task-abc") is False
 
     def test_has_pending_ask_unregistered(self):
@@ -51,27 +56,29 @@ class TestAskUserRegistry:
 
     def test_active_task_ids(self):
         registry = AskUserRegistry()
-        server_a = MagicMock()
-        server_a._task_to_request = {"task-a": "req-1"}
-        server_a._pending_ask = {"req-1": MagicMock()}
-        server_b = MagicMock()
-        server_b._task_to_request = {}
-        server_b._pending_ask = {}
-        registry.register("task-a", server_a)
-        registry.register("task-b", server_b)
+        handler_a = _handler_with_pending("task-a")
+        handler_b = AskUserHandler()  # no pending asks
+        registry.register("task-a", handler_a)
+        registry.register("task-b", handler_b)
         assert registry.active_task_ids() == {"task-a"}
 
     def test_deliver_reply(self):
         registry = AskUserRegistry()
-        mock_server = MagicMock()
-        mock_server._task_to_request = {"task-abc": "req-123"}
-        mock_server._pending_ask = {"req-123": MagicMock()}
-        registry.register("task-abc", mock_server)
-        result = registry.deliver_reply("task-abc", "Yes!")
-        mock_server.deliver_user_reply.assert_called_once_with("task-abc", "Yes!")
-        assert result is True
+        loop = asyncio.new_event_loop()
+        try:
+            handler = AskUserHandler()
+            future = loop.create_future()
+            handler._pending_ask["req-123"] = future
+            handler._task_to_request["task-abc"] = "req-123"
+            registry.register("task-abc", handler)
+            result = registry.deliver_reply("task-abc", "Yes!")
+            assert result is True
+            assert future.done()
+            assert future.result() == "Yes!"
+        finally:
+            loop.close()
 
-    def test_deliver_reply_no_server(self):
+    def test_deliver_reply_no_handler(self):
         registry = AskUserRegistry()
         result = registry.deliver_reply("nonexistent", "answer")
         assert result is False

@@ -19,13 +19,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from mc.ask_user_handler import AskUserHandler
     from mc.bridge import ConvexBridge
     from nanobot.bus.queue import MessageBus
 
 logger = logging.getLogger(__name__)
 
-ASK_USER_TIMEOUT = 300  # seconds
-ASK_USER_TIMEOUT_REPLY = "User did not respond within 5 minutes. Proceed with your best judgment."
+# No timeout for ask_user — wait indefinitely for user reply.
 
 # Maximum ask_agent recursion depth (AC6)
 ASK_AGENT_MAX_DEPTH = 2
@@ -42,10 +42,7 @@ class MCSocketServer:
         self._handlers: dict[str, Callable[..., Any]] = {}
         self._server: asyncio.AbstractServer | None = None
         self._socket_path: str | None = None
-        # Pending ask_user futures: unique_request_id -> asyncio.Future (L1 fix)
-        self._pending_ask: dict[str, asyncio.Future[str]] = {}
-        # Map task_id -> request_id for deliver_user_reply lookups
-        self._task_to_request: dict[str, str] = {}
+        self._ask_user_handler: AskUserHandler | None = None
 
         # Register default handlers
         self.register("ask_user", self._handle_ask_user)
@@ -60,6 +57,10 @@ class MCSocketServer:
     def register(self, method: str, handler: Callable[..., Any]) -> None:
         """Register a handler for a given IPC method name."""
         self._handlers[method] = handler
+
+    def set_ask_user_handler(self, handler: "AskUserHandler") -> None:
+        """Set the ask_user handler used by the ask_user IPC method."""
+        self._ask_user_handler = handler
 
     # ── Server lifecycle ──────────────────────────────────────────────
 
@@ -144,53 +145,16 @@ class MCSocketServer:
         """Post a question to the task thread and wait for user reply."""
         if not self._bridge or not task_id:
             return {"answer": "No MC connection or task context available."}
-
-        # Format question for the thread
-        content_parts = [f"**{agent_name} is asking:**\n\n{question}"]
-        if options:
-            opts_str = "\n".join(f"  {i + 1}. {o}" for i, o in enumerate(options))
-            content_parts.append(f"\nOptions:\n{opts_str}")
-        content = "\n".join(content_parts)
-
-        try:
-            await asyncio.to_thread(
-                self._bridge.send_message,
-                task_id,
-                agent_name,
-                "agent",
-                content,
-                # M1: use "work" for agent-originated questions (not "user_message")
-                "work",
-            )
-        except Exception as exc:
-            logger.warning("ask_user: failed to post question to thread: %s", exc)
-
-        # L1: Use a unique request ID instead of task_id to avoid concurrent clobber
-        request_id = str(uuid.uuid4())
-        future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
-        self._pending_ask[request_id] = future
-        self._task_to_request[task_id] = request_id
-
-        try:
-            answer = await asyncio.wait_for(future, timeout=ASK_USER_TIMEOUT)
-        except asyncio.TimeoutError:
-            answer = ASK_USER_TIMEOUT_REPLY
-        finally:
-            self._pending_ask.pop(request_id, None)
-            self._task_to_request.pop(task_id, None)
-
+        if not self._ask_user_handler:
+            return {"answer": "No ask_user handler configured."}
+        answer = await self._ask_user_handler.ask(
+            question=question,
+            options=options,
+            agent_name=agent_name,
+            task_id=task_id,
+            bridge=self._bridge,
+        )
         return {"answer": answer}
-
-    def deliver_user_reply(self, task_id: str, answer: str) -> None:
-        """Called by MC when the user sends a reply to a pending ask_user.
-
-        Resolves the waiting future so the IPC handler can return the answer.
-        """
-        request_id = self._task_to_request.get(task_id)
-        if request_id:
-            future = self._pending_ask.get(request_id)
-            if future and not future.done():
-                future.set_result(answer)
 
     async def _handle_send_message(
         self,
