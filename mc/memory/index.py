@@ -323,8 +323,12 @@ class MemoryIndex:
         if not query.strip() or top_k <= 0:
             return []
 
+        normalized_query = self._normalize_fts_query(query)
+        if not normalized_query:
+            return []
+
         limit = max(top_k * 5, top_k)
-        bm25_results = self._bm25(query, limit=limit)
+        bm25_results = self._bm25(normalized_query, limit=limit)
 
         vec_results: list[SearchResult] = []
         if self._vec_available and not self._provider_is_null:
@@ -342,6 +346,24 @@ class MemoryIndex:
         decayed = self._temporal_decay(merged, decay_lambda)
         reranked = self._mmr_rerank(decayed, top_k=top_k, diversity=mmr_diversity)
         return reranked[:top_k]
+
+    @staticmethod
+    def _normalize_fts_query(query: str) -> str:
+        """Normalize free-form text into a safe SQLite FTS query.
+
+        Raw task prompts can include URLs and punctuation that break FTS5 MATCH
+        parsing. We reduce them to alphanumeric tokens and join with spaces.
+        """
+        tokens = re.findall(r"\w+", query.lower())
+        # De-duplicate while preserving order and drop trivial 1-char tokens.
+        seen: set[str] = set()
+        filtered: list[str] = []
+        for token in tokens:
+            if len(token) <= 1 or token in seen:
+                continue
+            seen.add(token)
+            filtered.append(token)
+        return " ".join(filtered)
 
     def _bm25(self, query: str, limit: int) -> list[SearchResult]:
         rows = self._conn.execute(
