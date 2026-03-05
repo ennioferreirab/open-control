@@ -9,7 +9,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mc.orchestrator import TaskOrchestrator, generate_title_via_low_agent
-from mc.types import ActivityEventType, AuthorType, ExecutionPlan, ExecutionPlanStep, MessageType, TaskStatus
+from mc.types import (
+    ActivityEventType,
+    AuthorType,
+    ExecutionPlan,
+    ExecutionPlanStep,
+    MessageType,
+    TaskStatus,
+)
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -269,6 +276,57 @@ class TestProcessPlanningTask:
         call_kwargs = planner.plan_task.call_args[1]
         assert "files" in call_kwargs
         assert call_kwargs["files"] == files
+
+    @pytest.mark.asyncio
+    async def test_process_planning_task_passes_reasoning_level_to_planner(self) -> None:
+        """Planner should receive the resolved reasoning level for the planning tier."""
+        bridge = _make_bridge()
+        bridge.list_agents.return_value = [
+            {
+                "name": "nanobot",
+                "display_name": "Owl",
+                "role": "Generalist",
+                "skills": ["general"],
+                "enabled": True,
+            }
+        ]
+        orchestrator = TaskOrchestrator(bridge)
+        orchestrator._step_dispatcher = MagicMock()
+        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
+
+        task = _make_task(task_id="task-reasoning", title="Reasoning")
+
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Analyze request",
+                    description="Analyze scope and constraints",
+                    assigned_agent="nanobot",
+                    blocked_by=[],
+                    parallel_group=1,
+                    order=1,
+                )
+            ]
+        )
+
+        def _capture_create_task(coro):
+            coro.close()
+            return MagicMock()
+
+        with (
+            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
+            patch("mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.tier_resolver.TierResolver.resolve_model", return_value="cc/claude-sonnet-4-6"),
+            patch("mc.tier_resolver.TierResolver.resolve_reasoning_level", return_value="low"),
+        ):
+            planner = planner_cls.return_value
+            planner.plan_task = AsyncMock(return_value=plan)
+            await orchestrator._process_planning_task(task)
+
+        call_kwargs = planner.plan_task.call_args[1]
+        assert call_kwargs["reasoning_level"] == "low"
 
 
 class TestHandleReviewTransitionPausedTask:

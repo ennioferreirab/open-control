@@ -629,7 +629,7 @@ class TaskExecutor:
             )
             agents = []
 
-        planner = TaskPlanner()
+        planner = TaskPlanner(self._bridge)
         plan = await planner.plan_task(
             title=title,
             description=description,
@@ -965,7 +965,7 @@ class TaskExecutor:
         # Load agent prompt, model, and skills from YAML config
         agent_prompt, agent_model, agent_skills = self._load_agent_config(agent_name)
         logger.info(
-            "[executor] YAML config for '%s': prompt_len=%d, model=%s, skills=%s",
+            "[executor] Local YAML config for '%s': prompt_len=%d, model=%s, skills=%s",
             agent_name,
             len(agent_prompt) if agent_prompt else 0,
             agent_model,

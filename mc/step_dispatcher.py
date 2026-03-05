@@ -352,7 +352,7 @@ class StepDispatcher:
         try:
             agent_prompt, agent_model, agent_skills = _load_agent_config(agent_name)
             logger.info(
-                "[dispatcher] YAML config for '%s': prompt_len=%d, model=%s, skills=%s",
+                "[dispatcher] Local YAML config for '%s': prompt_len=%d, model=%s, skills=%s",
                 agent_name,
                 len(agent_prompt) if agent_prompt else 0,
                 agent_model,
