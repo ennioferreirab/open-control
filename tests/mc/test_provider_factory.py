@@ -199,20 +199,21 @@ class TestProviderErrorAttributes:
         err = ProviderError("Generic error")
         assert err.action == ""
 
+
 class TestOpenAICodexProviderListModels:
     def test_list_models_returns_codex_models(self):
         from nanobot.providers.openai_codex_provider import OpenAICodexProvider, CODEX_MODELS
         provider = OpenAICodexProvider()
-        assert provider.list_models() == CODEX_MODELS
-        assert 'openai-codex/gpt-5.3-codex' in CODEX_MODELS
-        assert 'openai-codex/gpt-5.2' in CODEX_MODELS
-        assert 'openai-codex/gpt-5.1-codex' not in CODEX_MODELS
+        result = provider.list_models()
+        assert result == CODEX_MODELS
+        assert 'openai-codex/gpt-5.3-codex' in result
+        assert 'openai-codex/gpt-5.2' in result
+        assert 'openai-codex/gpt-5.1-codex' not in result
 
 
 class TestOpenAICodexProviderReasoning:
     @pytest.mark.asyncio
     async def test_reasoning_level_added_to_body(self):
-        from unittest.mock import patch, MagicMock
         from nanobot.providers.openai_codex_provider import OpenAICodexProvider
         provider = OpenAICodexProvider()
         captured_body = {}
@@ -222,13 +223,13 @@ class TestOpenAICodexProviderReasoning:
         mock_token = MagicMock()
         mock_token.account_id = 'acc123'
         mock_token.access = 'tok123'
-        with patch('nanobot.providers.openai_codex_provider.get_codex_token', return_value=mock_token),              patch('nanobot.providers.openai_codex_provider._request_codex', side_effect=fake_request_codex):
+        with patch('nanobot.providers.openai_codex_provider.get_codex_token', return_value=mock_token), \
+             patch('nanobot.providers.openai_codex_provider._request_codex', side_effect=fake_request_codex):
             await provider.chat(messages=[{'role': 'user', 'content': 'hi'}], reasoning_level='medium')
         assert captured_body.get('reasoning') == {'effort': 'medium'}
 
     @pytest.mark.asyncio
     async def test_reasoning_max_maps_to_high(self):
-        from unittest.mock import patch, MagicMock
         from nanobot.providers.openai_codex_provider import OpenAICodexProvider
         provider = OpenAICodexProvider()
         captured_body = {}
@@ -238,13 +239,13 @@ class TestOpenAICodexProviderReasoning:
         mock_token = MagicMock()
         mock_token.account_id = 'acc'
         mock_token.access = 'tok'
-        with patch('nanobot.providers.openai_codex_provider.get_codex_token', return_value=mock_token),              patch('nanobot.providers.openai_codex_provider._request_codex', side_effect=fake_request_codex):
+        with patch('nanobot.providers.openai_codex_provider.get_codex_token', return_value=mock_token), \
+             patch('nanobot.providers.openai_codex_provider._request_codex', side_effect=fake_request_codex):
             await provider.chat(messages=[{'role': 'user', 'content': 'hi'}], reasoning_level='max')
         assert captured_body.get('reasoning') == {'effort': 'high'}
 
     @pytest.mark.asyncio
     async def test_no_reasoning_when_not_set(self):
-        from unittest.mock import patch, MagicMock
         from nanobot.providers.openai_codex_provider import OpenAICodexProvider
         provider = OpenAICodexProvider()
         captured_body = {}
@@ -254,6 +255,7 @@ class TestOpenAICodexProviderReasoning:
         mock_token = MagicMock()
         mock_token.account_id = 'acc'
         mock_token.access = 'tok'
-        with patch('nanobot.providers.openai_codex_provider.get_codex_token', return_value=mock_token),              patch('nanobot.providers.openai_codex_provider._request_codex', side_effect=fake_request_codex):
+        with patch('nanobot.providers.openai_codex_provider.get_codex_token', return_value=mock_token), \
+             patch('nanobot.providers.openai_codex_provider._request_codex', side_effect=fake_request_codex):
             await provider.chat(messages=[{'role': 'user', 'content': 'hi'}])
         assert 'reasoning' not in captured_body
