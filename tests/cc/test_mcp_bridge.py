@@ -341,8 +341,8 @@ class TestReportProgressTool:
 # ---------------------------------------------------------------------------
 
 class TestListTools:
-    async def test_list_tools_returns_all_six(self):
-        """list_tools returns all 6 expected tools."""
+    async def test_list_tools_returns_all_seven(self):
+        """list_tools returns all 7 expected tools."""
         import claude_code.mcp_bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
@@ -355,6 +355,7 @@ class TestListTools:
             "ask_agent",
             "report_progress",
             "cron",
+            "search_memory",
         }
 
     async def test_tools_have_required_fields(self):
