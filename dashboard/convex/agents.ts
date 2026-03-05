@@ -41,14 +41,12 @@ export const upsertByName = mutation({
         console.warn(`[agents:upsertByName] Skipped upsert for deleted agent '${args.name}' — YAML should be cleaned up by sync.`);
         return;
       }
-      // Convex is source of truth for prompt and variables — never overwrite
-      // them from YAML sync. Only displayName, role, skills, model are
-      // updated from the agent registry on startup.
+      // Convex is source of truth for prompt, variables, and skills edited in
+      // the dashboard. Startup YAML sync should only refresh identity/model.
       const patch: Record<string, unknown> = {
         displayName: args.displayName,
         role: args.role,
         soul: args.soul,
-        skills: args.skills,
         model: args.model,
         lastActiveAt: timestamp,
         // Preserve existing enabled value on update (don't reset on re-sync)
@@ -56,6 +54,11 @@ export const upsertByName = mutation({
       // Set prompt only if agent has none yet (first-time bootstrap)
       if (!existing.prompt && args.prompt) {
         patch.prompt = args.prompt;
+      }
+      // Bootstrap skills from YAML only when the existing document has no
+      // skills yet. After that, dashboard edits remain authoritative.
+      if ((!Array.isArray(existing.skills) || existing.skills.length === 0) && args.skills.length > 0) {
+        patch.skills = args.skills;
       }
       if (args.isSystem !== undefined) {
         patch.isSystem = args.isSystem;
