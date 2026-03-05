@@ -185,6 +185,29 @@ async def list_tools() -> list[Tool]:
                 "required": ["action"],
             },
         ),
+        Tool(
+            name="search_memory",
+            description=(
+                "Search agent memory and history for relevant past events, decisions, "
+                "and facts. Uses hybrid BM25 keyword + optional vector search."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query — keywords or natural language question.",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of results to return (default: 5).",
+                        "minimum": 1,
+                        "maximum": 50,
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
     ]
 
 
@@ -317,6 +340,29 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if "error" in result:
             return [TextContent(type="text", text=f"Error: {result['error']}")]
         return [TextContent(type="text", text=result.get("result", "Done"))]
+
+    elif name == "search_memory":
+        query = arguments.get("query", "")
+        top_k = arguments.get("top_k", 5)
+        try:
+            from pathlib import Path
+            from mc.memory.index import MemoryIndex
+            agent_name = _get_agent_name()
+            workspace = Path.home() / ".nanobot" / "agents" / agent_name
+            memory_dir = workspace / "memory"
+            if not memory_dir.exists():
+                return [TextContent(type="text", text="No memory directory found.")]
+            index = MemoryIndex(memory_dir)
+            index.sync()
+            results = index.search(query, top_k=top_k)
+            if not results:
+                return [TextContent(type="text", text="No matching memories found.")]
+            formatted = "\n".join(f"- {r.content.strip()}" for r in results)
+            return [TextContent(type="text", text=formatted)]
+        except ImportError:
+            return [TextContent(type="text", text="Memory search not available (mc.memory not installed).")]
+        except Exception as e:
+            return [TextContent(type="text", text=f"Memory search error: {e}")]
 
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]

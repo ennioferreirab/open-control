@@ -41,6 +41,7 @@ Use these tools via the `mcp__nanobot__` prefix:
 - **mcp__nanobot__ask_agent** — Ask a specific agent a question and get a reply.
 - **mcp__nanobot__report_progress** — Report task progress back to Mission Control.
 - **mcp__nanobot__cron** — Schedule reminders and recurring tasks (add/list/remove).
+- **mcp__nanobot__search_memory** — Search agent memory and history for relevant past events and decisions.
 
 ### CRITICAL: User Interaction Rules
 
@@ -91,6 +92,7 @@ class CCWorkspaceManager:
         agent_config: AgentData,
         task_id: str,
         orientation: str | None = None,
+        task_prompt: str | None = None,
     ) -> WorkspaceContext:
         """Set up the workspace directory for an agent and return its context.
 
@@ -102,6 +104,7 @@ class CCWorkspaceManager:
             agent_config: Agent configuration data including prompt, soul, and skills.
             task_id: The Convex task _id being executed.
             orientation: Optional global orientation text to inject into CLAUDE.md.
+            task_prompt: Optional task description for relevant history search.
 
         Returns:
             WorkspaceContext with all resolved paths.
@@ -122,7 +125,8 @@ class CCWorkspaceManager:
         # Skills must be mapped BEFORE generating CLAUDE.md so the skills
         # summary in _generate_claude_md() can reference the mapped symlinks.
         self._map_skills(workspace, agent_config.skills)
-        self._generate_claude_md(workspace, agent_config, orientation=orientation)
+        self._generate_claude_md(workspace, agent_config, orientation=orientation,
+                                 task_prompt=task_prompt)
 
         # H3: Validate socket path length (macOS limit ~104 chars)
         # Include first 8 chars of task_id to prevent socket clobber when the
@@ -146,7 +150,8 @@ class CCWorkspaceManager:
     # ------------------------------------------------------------------
 
     def _generate_claude_md(
-        self, workspace: Path, config: AgentData, orientation: str | None = None
+        self, workspace: Path, config: AgentData, orientation: str | None = None,
+        task_prompt: str | None = None,
     ) -> None:
         """Write CLAUDE.md with agent identity, context, and MCP tools guide.
 
@@ -197,6 +202,12 @@ class CCWorkspaceManager:
         memory = self._load_memory(workspace)
         if memory:
             parts.append(f"## Memory\n\n{memory}")
+
+        # 6.5. Relevant history (hybrid search)
+        if task_prompt:
+            relevant = self._search_relevant_history(workspace, task_prompt)
+            if relevant:
+                parts.append(f"## Relevant History\n\n{relevant}")
 
         # 7. Project conventions
         parts.append(_DEFAULT_CONVENTIONS)
@@ -277,6 +288,32 @@ class CCWorkspaceManager:
             return None
         content = memory_file.read_text(encoding="utf-8").strip()
         return content if content else None
+
+    def _search_relevant_history(self, workspace: Path, query: str) -> str | None:
+        """Search agent memory for history relevant to the task prompt.
+
+        Uses MemoryIndex for hybrid BM25+vector search if available.
+
+        Args:
+            workspace: The agent-specific workspace directory.
+            query: Task description to search for.
+
+        Returns:
+            Formatted relevant history or None if unavailable/empty.
+        """
+        try:
+            from mc.memory.index import MemoryIndex
+            index = MemoryIndex(workspace / "memory")
+            index.sync()
+            results = index.search(query, top_k=5)
+            if not results:
+                return None
+            return "\n".join(f"- {r.content.strip()}" for r in results)
+        except ImportError:
+            return None
+        except Exception:
+            logger.warning("Failed to search relevant history for workspace %s", workspace)
+            return None
 
     def _build_always_skills_content(self, workspace: Path) -> str:
         """Load always-on skills content for injection into CLAUDE.md."""

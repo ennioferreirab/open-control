@@ -577,7 +577,8 @@ class StepDispatcher:
                     ws_mgr = CCWorkspaceManager()
                     from mc.orientation import load_orientation
                     orientation = load_orientation(agent_name)
-                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation)
+                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation,
+                                            task_prompt=step_title)
                 except Exception as exc:
                     error_msg = f"CC workspace preparation failed for step '{step_title}': {exc}"
                     logger.error("[dispatcher] %s", error_msg)

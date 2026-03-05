@@ -1521,7 +1521,8 @@ class TaskExecutor:
             ws_mgr = CCWorkspaceManager()
             from mc.orientation import load_orientation
             orientation = load_orientation(agent_name)
-            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id, orientation=orientation)
+            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id, orientation=orientation,
+                                    task_prompt=title)
         except Exception as exc:
             await self._crash_task(task_id, title, f"Workspace preparation failed: {exc}", agent_name)
             return
@@ -1840,7 +1841,8 @@ class TaskExecutor:
             ws_mgr = CCWorkspaceManager()
             from mc.orientation import load_orientation
             orientation = load_orientation(agent_name)
-            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id, orientation=orientation)
+            ws_ctx = ws_mgr.prepare(agent_name, agent_data, task_id, orientation=orientation,
+                                    task_prompt=user_message)
         except Exception as exc:
             logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
             return None

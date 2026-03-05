@@ -178,7 +178,8 @@ class ChatHandler:
                     ws_mgr = CCWorkspaceManager()
                     from mc.orientation import load_orientation
                     orientation = load_orientation(agent_name)
-                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation)
+                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation,
+                                            task_prompt=content)
                 except Exception as exc:
                     raise RuntimeError(f"CC workspace preparation failed: {exc}")
 
