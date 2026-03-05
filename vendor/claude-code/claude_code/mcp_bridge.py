@@ -34,6 +34,20 @@ def _get_task_id() -> str | None:
     return os.environ.get("TASK_ID") or None
 
 
+def _get_board_name() -> str | None:
+    return os.environ.get("BOARD_NAME") or None
+
+
+def _resolve_memory_workspace():
+    """Resolve the memory workspace path for search_memory, board-aware."""
+    from pathlib import Path
+    agent_name = _get_agent_name()
+    board_name = _get_board_name()
+    if board_name:
+        return Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
+    return Path.home() / ".nanobot" / "agents" / agent_name
+
+
 # Module-level aliases kept for backward compatibility with tests that patch them.
 # These are still read lazily via the functions above in production use.
 MC_SOCKET_PATH: str = os.environ.get("MC_SOCKET_PATH", "/tmp/mc-agent.sock")
@@ -345,20 +359,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         query = arguments.get("query", "")
         top_k = arguments.get("top_k", 5)
         try:
-            from pathlib import Path
-            from mc.memory.index import MemoryIndex
-            agent_name = _get_agent_name()
-            workspace = Path.home() / ".nanobot" / "agents" / agent_name
+            from mc.memory.store import HybridMemoryStore
+            workspace = _resolve_memory_workspace()
             memory_dir = workspace / "memory"
             if not memory_dir.exists():
                 return [TextContent(type="text", text="No memory directory found.")]
-            index = MemoryIndex(memory_dir)
-            index.sync()
-            results = index.search(query, top_k=top_k)
+            store = HybridMemoryStore(workspace)
+            results = store.search(query, top_k=top_k)
             if not results:
                 return [TextContent(type="text", text="No matching memories found.")]
-            formatted = "\n".join(f"- {r.content.strip()}" for r in results)
-            return [TextContent(type="text", text=formatted)]
+            return [TextContent(type="text", text=results)]
         except ImportError:
             return [TextContent(type="text", text="Memory search not available (mc.memory not installed).")]
         except Exception as e:

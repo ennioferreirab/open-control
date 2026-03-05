@@ -150,7 +150,8 @@ class CCWorkspaceManager:
             raise ValueError(
                 f"Socket path too long ({len(socket_path)} chars, max {_MAX_SOCKET_PATH_LEN}): {socket_path}"
             )
-        self._generate_mcp_json(workspace, agent_name, task_id, socket_path)
+        self._generate_mcp_json(workspace, agent_name, task_id, socket_path,
+                                board_name=board_name)
 
         return WorkspaceContext(
             cwd=workspace,
@@ -289,14 +290,23 @@ class CCWorkspaceManager:
         return "\n\n".join(parts) if parts else ""
 
     def _load_memory(self, workspace: Path) -> str | None:
-        """Read {workspace}/memory/MEMORY.md and return its content.
+        """Load memory context (long-term + recent history) via HybridMemoryStore.
+
+        Falls back to raw MEMORY.md if mc.memory is unavailable.
 
         Args:
             workspace: The agent-specific workspace directory.
 
         Returns:
-            Memory content string or None if empty/missing.
+            Memory context string or None if empty/missing.
         """
+        try:
+            from mc.memory.store import HybridMemoryStore
+            store = HybridMemoryStore(workspace)
+            ctx = store.get_memory_context()
+            return ctx if ctx else None
+        except ImportError:
+            pass
         memory_file = workspace / "memory" / "MEMORY.md"
         if not memory_file.exists():
             return None
@@ -479,18 +489,23 @@ class CCWorkspaceManager:
         agent_name: str,
         task_id: str,
         socket_path: str,
+        *,
+        board_name: str | None = None,
     ) -> None:
         """Write .mcp.json that configures the nanobot MCP server subprocess."""
+        env: dict[str, str] = {
+            "MC_SOCKET_PATH": socket_path,
+            "AGENT_NAME": agent_name,
+            "TASK_ID": task_id,
+        }
+        if board_name:
+            env["BOARD_NAME"] = board_name
         config: dict = {
             "mcpServers": {
                 "nanobot": {
                     "command": "uv",
                     "args": ["run", "python", "-m", "claude_code.mcp_bridge"],
-                    "env": {
-                        "MC_SOCKET_PATH": socket_path,
-                        "AGENT_NAME": agent_name,
-                        "TASK_ID": task_id,
-                    },
+                    "env": env,
                 }
             }
         }

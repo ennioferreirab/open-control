@@ -560,6 +560,21 @@ def _sync_embedding_model(bridge) -> None:
         os.environ.pop("NANOBOT_MEMORY_EMBEDDING_MODEL", None)
         logger.info("[gateway] Memory embedding model cleared (FTS-only)")
 
+    # Persist to memory_settings.json so standalone nanobot (Telegram) can read it
+    try:
+        import json
+        settings_path = Path.home() / ".nanobot" / "memory_settings.json"
+        existing: dict = {}
+        if settings_path.exists():
+            existing = json.loads(settings_path.read_text(encoding="utf-8"))
+        existing["embedding_model"] = model or ""
+        settings_path.write_text(
+            json.dumps(existing, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        logger.debug("[gateway] Failed to persist embedding model to memory_settings.json")
+
 
 def sync_agent_registry(
     bridge: ConvexBridge,
@@ -643,6 +658,47 @@ def sync_agent_registry(
         logger.exception("Failed to deactivate removed agents")
 
     return valid_agents, errors
+
+
+def _distribute_builtin_skills(
+    workspace_skills_dir: Path, *source_dirs: Path
+) -> None:
+    """Copy builtin skill directories to the workspace if not already present.
+
+    For each *source_dir*, iterates its subdirectories looking for those that
+    contain a ``SKILL.md`` file. If the corresponding directory does not yet
+    exist under *workspace_skills_dir*, it is copied via ``shutil.copytree()``.
+
+    Existing workspace skills are **never** overwritten so that user
+    customizations are preserved.
+    """
+    workspace_skills_dir.mkdir(parents=True, exist_ok=True)
+
+    for source_dir in source_dirs:
+        if not source_dir.is_dir():
+            logger.debug(
+                "Skipping missing builtin skills source: %s", source_dir
+            )
+            continue
+
+        for entry in sorted(source_dir.iterdir()):
+            if not entry.is_dir():
+                continue
+            if not (entry / "SKILL.md").exists():
+                continue
+
+            target = workspace_skills_dir / entry.name
+            if target.exists():
+                logger.debug(
+                    "Skill '%s' already exists in workspace, skipping",
+                    entry.name,
+                )
+                continue
+
+            shutil.copytree(entry, target)
+            logger.info(
+                "Distributed builtin skill '%s' to workspace", entry.name
+            )
 
 
 def sync_skills(
@@ -1425,6 +1481,16 @@ async def main() -> None:
                 logger.info("[gateway] Nanobot default model synced from Convex")
         except Exception:
             logger.exception("[gateway] Nanobot model sync failed")
+
+        # Distribute builtin skills to workspace before sync (Story SK.1)
+        try:
+            from nanobot.config.loader import load_config as _lc
+            from mc.skills import MC_SKILLS_DIR
+            _ws = _lc().workspace_path
+            _builtin_dir = Path(__file__).parent.parent / "vendor" / "nanobot" / "nanobot" / "skills"
+            _distribute_builtin_skills(_ws / "skills", _builtin_dir, MC_SKILLS_DIR)
+        except Exception:
+            logger.exception("[gateway] Builtin skill distribution failed")
 
         # Sync skills alongside agents (Story 8.2)
         try:

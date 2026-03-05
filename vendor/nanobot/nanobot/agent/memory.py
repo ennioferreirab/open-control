@@ -63,6 +63,11 @@ class MemoryStore:
             self.memory_file.write_text(content, encoding="utf-8")
 
     def append_history(self, entry: str) -> None:
+        import re
+        from datetime import datetime as _dt
+        # Ensure every entry starts with a date prefix for reliable filtering
+        if not re.match(r"^\[\d{4}-\d{2}-\d{2}", entry):
+            entry = f"[{_dt.now().strftime('%Y-%m-%d %H:%M')}] {entry}"
         with self._lock:
             with open(self.history_file, "a", encoding="utf-8") as f:
                 f.write(entry.rstrip() + "\n\n")

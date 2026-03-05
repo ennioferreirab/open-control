@@ -457,3 +457,71 @@ class TestCronTool:
         names = {t.name for t in tools}
 
         assert "cron" in names
+
+
+# ---------------------------------------------------------------------------
+# Test search_memory board-scoped workspace
+# ---------------------------------------------------------------------------
+
+class TestSearchMemoryBoardScope:
+    async def test_search_memory_uses_board_workspace_when_set(self, tmp_path):
+        """search_memory resolves board-scoped workspace when BOARD_NAME is set."""
+        import claude_code.mcp_bridge as bridge_mod
+        from mc.memory.store import HybridMemoryStore
+
+        board_ws = tmp_path / "board-agent"
+        store = HybridMemoryStore(board_ws)
+        store.write_long_term("Board-specific fact about deployment")
+
+        with patch.object(bridge_mod, "_resolve_memory_workspace", return_value=board_ws):
+            result = await bridge_mod.call_tool(
+                "search_memory", {"query": "deployment"}
+            )
+
+        assert len(result) == 1
+        assert "deployment" in result[0].text
+
+    async def test_search_memory_uses_global_workspace_without_board(self, tmp_path):
+        """search_memory falls back to global agent workspace when no BOARD_NAME."""
+        import claude_code.mcp_bridge as bridge_mod
+        from mc.memory.store import HybridMemoryStore
+
+        global_ws = tmp_path / "global-agent"
+        store = HybridMemoryStore(global_ws)
+        store.write_long_term("Global fact about infrastructure")
+
+        with patch.object(bridge_mod, "_resolve_memory_workspace", return_value=global_ws):
+            result = await bridge_mod.call_tool(
+                "search_memory", {"query": "infrastructure"}
+            )
+
+        assert len(result) == 1
+        assert "infrastructure" in result[0].text
+
+    def test_resolve_memory_workspace_with_board(self):
+        """_resolve_memory_workspace constructs board-scoped path when BOARD_NAME set."""
+        import claude_code.mcp_bridge as bridge_mod
+        from pathlib import Path
+
+        with (
+            patch.object(bridge_mod, "_get_agent_name", return_value="owl"),
+            patch.object(bridge_mod, "_get_board_name", return_value="default"),
+        ):
+            ws = bridge_mod._resolve_memory_workspace()
+
+        expected = Path.home() / ".nanobot" / "boards" / "default" / "agents" / "owl"
+        assert ws == expected
+
+    def test_resolve_memory_workspace_without_board(self):
+        """_resolve_memory_workspace constructs global path when no BOARD_NAME."""
+        import claude_code.mcp_bridge as bridge_mod
+        from pathlib import Path
+
+        with (
+            patch.object(bridge_mod, "_get_agent_name", return_value="owl"),
+            patch.object(bridge_mod, "_get_board_name", return_value=None),
+        ):
+            ws = bridge_mod._resolve_memory_workspace()
+
+        expected = Path.home() / ".nanobot" / "agents" / "owl"
+        assert ws == expected
