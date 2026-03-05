@@ -16,8 +16,8 @@ Before coding, ensure you have an implementation-ready story artifact.
 > **REGRA INEGOCIÁVEL**: Você (Opus) NÃO implementa código diretamente. Sempre delegue para modelos menores (Codex ou Sonnet). Opus é o orquestrador e revisor, NUNCA o programador. Violar esta regra é proibido.
 
 **ANTES de spawnar qualquer dev agent, PERGUNTE ao usuário** qual modo de execução usar:
-1. **Codex**: execute via `codex exec "<prompt>"` (external Codex CLI)
-2. **Sonnet**: use the most recent Claude Sonnet model as the dev agent (cost-efficient, fast)
+1. **Codex** (`gpt-5.3-codex`): execute via `codex exec -c model="gpt-5.3-codex" "<prompt>"` (external Codex CLI)
+2. **Sonnet** (`claude-sonnet-4-6`): use the most recent Claude Sonnet model as the dev agent (cost-efficient, fast)
 
 **NÃO prossiga sem a resposta do usuário.** Esta pergunta é obrigatória.
 
@@ -30,7 +30,7 @@ Use the **Task tool** to spawn dev agents in **isolated git worktrees** (`isolat
 
 **CRITICAL**: Always set the `model` parameter on the Task tool:
 - If user chose **Sonnet**: `model: "sonnet"`
-- If user chose **Codex**: use `Bash` tool with `codex exec "<prompt>"`
+- If user chose **Codex**: use `Bash` tool with `codex exec -c model="gpt-5.3-codex" "<prompt>"`
 - **NEVER** use `model: "opus"` or omit the model (which defaults to Opus) for dev agents
 
 **For multiple independent stories**: spawn agents in parallel (one per story) using `run_in_background: true`. Each agent works in its own worktree to avoid conflicts.
