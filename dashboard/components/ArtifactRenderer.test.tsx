@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { ArtifactRenderer, type Artifact } from "./ArtifactRenderer";
 
@@ -176,5 +176,23 @@ describe("ArtifactRenderer", () => {
     const pathEl = screen.getByText("/src/component.tsx");
     expect(pathEl.className).toContain("font-mono");
     expect(pathEl.className).toContain("text-blue-500");
+  });
+
+  it("calls onArtifactClick when the artifact path is clicked", () => {
+    const onArtifactClick = vi.fn();
+    const artifacts: Artifact[] = [
+      { path: "/output/report.md", action: "created" },
+    ];
+
+    render(
+      <ArtifactRenderer
+        artifacts={artifacts}
+        onArtifactClick={onArtifactClick}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "/output/report.md" }));
+
+    expect(onArtifactClick).toHaveBeenCalledWith(artifacts[0]);
   });
 });
