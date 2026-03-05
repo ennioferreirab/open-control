@@ -156,6 +156,13 @@ class AgentLoop:
         except Exception:
             pass  # MC context not available — tool not registered
 
+        # Register ask_user tool for interactive user questions
+        try:
+            from nanobot.agent.tools.ask_user import AskUserTool
+            self.tools.register(AskUserTool())
+        except Exception:
+            pass  # MC context not available — tool not registered
+
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
         if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
