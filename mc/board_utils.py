@@ -78,13 +78,16 @@ def _setup_with_history(memory_dir: Path, agent_name: str, board_name: str) -> N
     global_memory_dir = Path.home() / ".nanobot" / "agents" / agent_name / "memory"
     global_memory_dir.mkdir(parents=True, exist_ok=True)
 
-    for fname in ("MEMORY.md", "HISTORY.md"):
+    for fname in ("MEMORY.md", "HISTORY.md", "memory-index.sqlite"):
         global_file = global_memory_dir / fname
         board_file = memory_dir / fname
 
-        # Ensure global file exists
+        # Ensure global file exists (only for .md files — SQLite is created on demand)
         if not global_file.exists():
-            global_file.write_text("", encoding="utf-8")
+            if fname.endswith(".md"):
+                global_file.write_text("", encoding="utf-8")
+            else:
+                continue  # Skip SQLite symlink if source doesn't exist yet
 
         # Replace regular file or stale symlink with correct symlink
         if board_file.is_symlink():

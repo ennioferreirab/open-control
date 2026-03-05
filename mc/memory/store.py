@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import re
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from mc.memory.index import MemoryIndex
@@ -12,13 +15,82 @@ from nanobot.agent.memory import MemoryStore
 
 logger = logging.getLogger(__name__)
 
+# Defaults — overridable via memory_settings.json
+_DEFAULT_HISTORY_CONTEXT_DAYS = 5
+_DEFAULT_MEMORY_CONTEXT_MAX_CHARS = 40_000
+
 
 class HybridMemoryStore(MemoryStore):
     def __init__(self, workspace: Path, embedding_model: str | None = None):
         super().__init__(workspace)
-        model = embedding_model or os.environ.get("NANOBOT_MEMORY_EMBEDDING_MODEL")
+        settings = self._read_settings()
+        model = embedding_model or os.environ.get("NANOBOT_MEMORY_EMBEDDING_MODEL") or settings.get("embedding_model") or None
+        self._history_context_days: int = settings.get("history_context_days", _DEFAULT_HISTORY_CONTEXT_DAYS)
+        self._memory_context_max_chars: int = settings.get("memory_context_max_chars", _DEFAULT_MEMORY_CONTEXT_MAX_CHARS)
         self._index = MemoryIndex(self.memory_dir, model)
         self._consolidation_in_progress = False
+
+    @staticmethod
+    def _read_settings() -> dict:
+        """Read memory settings from ~/.nanobot/memory_settings.json."""
+        try:
+            settings_path = Path.home() / ".nanobot" / "memory_settings.json"
+            if not settings_path.exists():
+                return {}
+            return json.loads(settings_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+    def get_memory_context(self) -> str:
+        """Build memory context: long-term memory + recent history entries."""
+        parts: list[str] = []
+
+        long_term = self.read_long_term().strip()
+        if long_term:
+            parts.append(f"## Long-term Memory\n{long_term}")
+
+        recent = self._read_recent_history(self._history_context_days)
+        if recent:
+            parts.append(f"## Recent History (last {self._history_context_days} days)\n{recent}")
+
+        combined = "\n\n".join(parts)
+        if len(combined) > self._memory_context_max_chars:
+            combined = combined[: self._memory_context_max_chars] + "\n...(truncated)"
+        return combined
+
+    def _read_recent_history(self, days: int) -> str:
+        """Return HISTORY.md entries from the last N days."""
+        if days <= 0:
+            return ""
+        with self._lock:
+            if not self.history_file.exists():
+                return ""
+            text = self.history_file.read_text(encoding="utf-8")
+        if not text.strip():
+            return ""
+
+        cutoff = datetime.now() - timedelta(days=days)
+        date_re = re.compile(r"^\[(\d{4}-\d{2}-\d{2})")
+        kept: list[str] = []
+        for entry in text.split("\n\n"):
+            entry = entry.strip()
+            if not entry:
+                continue
+            m = date_re.match(entry)
+            if not m:
+                continue  # skip undated entries (legacy; new writes always have dates)
+            try:
+                entry_date = datetime.strptime(m.group(1), "%Y-%m-%d")
+                # Handle date ranges like [2026-02-26 to 2026-03-04]
+                range_match = re.search(r"to\s+(\d{4}-\d{2}-\d{2})", entry[:60])
+                if range_match:
+                    end_date = datetime.strptime(range_match.group(1), "%Y-%m-%d")
+                    entry_date = max(entry_date, end_date)
+                if entry_date >= cutoff:
+                    kept.append(entry)
+            except ValueError:
+                continue
+        return "\n\n".join(kept)
 
     def write_long_term(self, content: str) -> None:
         super().write_long_term(content)
