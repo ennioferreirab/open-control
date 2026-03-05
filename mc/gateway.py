@@ -737,6 +737,36 @@ def sync_nanobot_default_model(bridge: "ConvexBridge") -> bool:
         )
         return False
 
+    # Resolve tier references (e.g. "tier:standard-low" → "anthropic/claude-haiku-4-5")
+    if convex_model.startswith("tier:"):
+        from mc.tier_resolver import TierResolver
+
+        try:
+            resolver = TierResolver(bridge)
+            resolved = resolver.resolve_model(convex_model)
+            if not resolved:
+                logger.warning(
+                    "[gateway] Skipping %s model sync: tier '%s' resolved to None",
+                    NANOBOT_AGENT_NAME,
+                    convex_model,
+                )
+                return False
+            logger.info(
+                "[gateway] Resolved %s model tier: %s -> %s",
+                NANOBOT_AGENT_NAME,
+                convex_model,
+                resolved,
+            )
+            convex_model = resolved
+        except Exception:
+            logger.warning(
+                "[gateway] Skipping %s model sync: failed to resolve tier '%s'",
+                NANOBOT_AGENT_NAME,
+                convex_model,
+                exc_info=True,
+            )
+            return False
+
     from nanobot.config.loader import get_config_path
 
     config_path = get_config_path()

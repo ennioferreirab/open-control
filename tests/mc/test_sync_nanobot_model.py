@@ -98,6 +98,63 @@ def test_skips_when_agent_model_empty_or_none(tmp_path, monkeypatch):
     assert sync_nanobot_default_model(bridge) is False
 
 
+def test_resolves_tier_reference_before_writing(tmp_path, monkeypatch):
+    from mc.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
+
+    config_path = tmp_path / ".nanobot" / "config.json"
+    _write_config(config_path, model="anthropic/old-model")
+    monkeypatch.setattr(
+        "nanobot.config.loader.get_config_path",
+        lambda: config_path,
+    )
+
+    bridge = MagicMock()
+    bridge.get_agent_by_name.return_value = {
+        "name": NANOBOT_AGENT_NAME,
+        "model": "tier:standard-low",
+    }
+    # TierResolver queries model_tiers setting via bridge.query
+    bridge.query.return_value = json.dumps({
+        "standard-low": "anthropic/claude-haiku-4-5",
+        "standard-medium": "anthropic/claude-sonnet-4-6",
+        "standard-high": "anthropic/claude-opus-4-6",
+    })
+
+    updated = sync_nanobot_default_model(bridge)
+
+    assert updated is True
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    # Must write the resolved model, NOT the tier reference
+    assert data["agents"]["defaults"]["model"] == "anthropic/claude-haiku-4-5"
+    assert "tier:" not in data["agents"]["defaults"]["model"]
+
+
+def test_skips_when_tier_resolution_fails(tmp_path, monkeypatch):
+    from mc.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
+
+    config_path = tmp_path / ".nanobot" / "config.json"
+    _write_config(config_path, model="anthropic/old-model")
+    monkeypatch.setattr(
+        "nanobot.config.loader.get_config_path",
+        lambda: config_path,
+    )
+
+    bridge = MagicMock()
+    bridge.get_agent_by_name.return_value = {
+        "name": NANOBOT_AGENT_NAME,
+        "model": "tier:nonexistent-tier",
+    }
+    # Return empty tiers so resolution fails
+    bridge.query.return_value = json.dumps({})
+
+    updated = sync_nanobot_default_model(bridge)
+
+    assert updated is False
+    # config.json must NOT be modified
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    assert data["agents"]["defaults"]["model"] == "anthropic/old-model"
+
+
 def test_skips_when_config_missing(tmp_path, monkeypatch):
     from mc.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
 
