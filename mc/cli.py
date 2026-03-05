@@ -687,6 +687,10 @@ def _get_bridge():
         raise typer.Exit(1)
 
     admin_key = os.environ.get("CONVEX_ADMIN_KEY")
+    if not admin_key:
+        from mc.gateway import _resolve_admin_key
+
+        admin_key = _resolve_admin_key()
     return ConvexBridge(convex_url, admin_key)
 
 
