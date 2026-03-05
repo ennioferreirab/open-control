@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import math
 import re
 import sqlite3
@@ -27,7 +28,8 @@ class MemoryIndex:
 
         from mc.memory.providers import get_provider
 
-        self._provider: typing.Any = get_provider(embedding_model)
+        model = embedding_model or os.environ.get("NANOBOT_MEMORY_EMBEDDING_MODEL")
+        self._provider: typing.Any = get_provider(model)
         self._provider_is_null = self._provider.__class__.__name__ == "NullProvider"
 
         self.memory_dir.mkdir(parents=True, exist_ok=True)

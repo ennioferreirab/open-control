@@ -117,3 +117,12 @@ def test_rebuild_clears_and_reindexes(tmp_path):
     results = idx.search("comet")
     assert results
     assert any("comet" in result.content.lower() for result in results)
+
+
+def test_index_reads_embedding_model_from_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("NANOBOT_MEMORY_EMBEDDING_MODEL", "some-model")
+    from mc.memory.index import MemoryIndex
+
+    idx = MemoryIndex(tmp_path)
+    assert idx._provider.__class__.__name__ == "LiteLLMProvider"
+    assert idx._provider.model == "some-model"
