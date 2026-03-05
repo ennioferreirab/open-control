@@ -121,9 +121,8 @@ class EmailChannel(BaseChannel):
         is_reply = to_addr in self._last_subject_by_chat
         force_send = bool((msg.metadata or {}).get("force_send"))
 
-        # autoReplyEnabled only controls automatic replies, not proactive sends
-        if is_reply and not self.config.auto_reply_enabled and not force_send:
-            logger.info("Skip automatic email reply to {}: auto_reply_enabled is false", to_addr)
+        if not self.config.auto_reply_enabled and not force_send:
+            logger.info("Skip email send to {}: auto_reply_enabled is false", to_addr)
             return
 
         base_subject = self._last_subject_by_chat.get(to_addr, "nanobot reply")
