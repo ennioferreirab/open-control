@@ -10,6 +10,8 @@ import asyncio
 import json
 from typing import Any
 
+_IPC_STREAM_LIMIT = 1024 * 1024
+
 
 class MCSocketClient:
     """Async client for communicating with the MC IPC server over a Unix socket."""
@@ -32,7 +34,10 @@ class MCSocketClient:
             asyncio.TimeoutError: If no response arrives within 300 seconds.
         """
         try:
-            reader, writer = await asyncio.open_unix_connection(self._path)
+            reader, writer = await asyncio.open_unix_connection(
+                self._path,
+                limit=_IPC_STREAM_LIMIT,
+            )
         except (FileNotFoundError, ConnectionRefusedError) as exc:
             raise ConnectionError(
                 f"Cannot connect to MC IPC socket at {self._path}: {exc}"

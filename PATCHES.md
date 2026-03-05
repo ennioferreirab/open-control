@@ -193,6 +193,13 @@ Files most likely to conflict on upstream sync (sorted by patch size):
 
 ### Modified Files
 
+#### `claude_code/types.py`
+- **`CCTaskResult`**: added `error_type: str = ""` and `error_message: str = ""` fields
+
+#### `claude_code/provider.py`
+- **`_handle_message()`**: captures `stream_event` API errors (invalid model, rate limit, auth, overloaded); extracts error details from `result.error` dict when `is_error=True`
+- **`_build_command()`**: warns on unrecognized model names (does not block)
+
 #### `claude_code/workspace.py`
 
 - **`CCWorkspaceManager.prepare()`**: new `board_name: str | None = None` and `memory_mode: str = "clean"` params; when `board_name` is provided, workspace root is set via `mc.board_utils.resolve_board_workspace()` instead of the global `~/.nanobot/agents/{agent}/` path.

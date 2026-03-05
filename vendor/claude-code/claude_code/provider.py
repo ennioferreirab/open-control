@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_STREAM_READER_LIMIT = 1024 * 1024
+
 
 class ClaudeCodeProvider:
     """Executes prompts via the Claude Code CLI in headless mode.
@@ -77,6 +79,7 @@ class ClaudeCodeProvider:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(workspace_ctx.cwd),
+            limit=_STREAM_READER_LIMIT,
         )
 
         result = CCTaskResult(
@@ -135,6 +138,15 @@ class ClaudeCodeProvider:
         if model and model.startswith("cc/"):
             model = model[3:]
         if model:
+            from claude_code.types import CC_AVAILABLE_MODELS
+            known_bare = {m.removeprefix("cc/") for m in CC_AVAILABLE_MODELS}
+            if model not in known_bare:
+                logger.warning(
+                    "ClaudeCodeProvider: model '%s' not in known models %s — "
+                    "proceeding anyway (may fail if model does not exist)",
+                    model,
+                    sorted(known_bare),
+                )
             cmd.extend(["--model", model])
 
         # Budget and turns: per-agent opts > global defaults
@@ -214,6 +226,15 @@ class ClaudeCodeProvider:
             # cost_usd alias, then the nested cost object, then fall back to 0.
             result.output = msg.get("result", "")
             result.is_error = bool(msg.get("is_error", False))
+            if result.is_error:
+                err = msg.get("error")
+                if isinstance(err, dict):
+                    result.error_type = result.error_type or err.get("type", "")
+                    result.error_message = result.error_message or err.get("message", "")
+                    if not result.output:
+                        result.output = f"{result.error_type}: {result.error_message}"
+                elif not result.output:
+                    result.output = "Unknown error (no details in result message)"
             cost = (
                 msg.get("total_cost_usd")
                 or msg.get("cost_usd")
@@ -241,6 +262,21 @@ class ClaudeCodeProvider:
                             on_stream({"type": "tool_use", "name": block.get("name", "")})
                 elif isinstance(content, str) and content:
                     on_stream({"type": "text", "text": content})
+
+        elif msg_type == "stream_event":
+            event = msg.get("event") or {}
+            if event.get("type") == "error":
+                err = event.get("error") or {}
+                result.is_error = True
+                result.error_type = err.get("type", "api_error")
+                result.error_message = err.get("message", "Unknown stream error")
+                if not result.output:
+                    result.output = f"{result.error_type}: {result.error_message}"
+                logger.warning(
+                    "ClaudeCodeProvider: stream error (task): %s — %s",
+                    result.error_type,
+                    result.error_message,
+                )
 
     async def _kill_process(self, proc: asyncio.subprocess.Process) -> None:
         """Gracefully terminate the subprocess, falling back to SIGKILL."""

@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_IPC_STREAM_LIMIT = 1024 * 1024
+
 # No timeout for ask_user — wait indefinitely for user reply.
 
 # Maximum ask_agent recursion depth (AC6)
@@ -74,7 +76,7 @@ class MCSocketServer:
 
         self._socket_path = socket_path
         self._server = await asyncio.start_unix_server(
-            self._handle_connection, path=socket_path
+            self._handle_connection, path=socket_path, limit=_IPC_STREAM_LIMIT
         )
         # M2: Restrict socket to owner-only access so other local users cannot
         # connect and invoke MC operations.

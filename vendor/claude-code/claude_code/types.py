@@ -53,3 +53,5 @@ class CCTaskResult:
     cost_usd: float   # total cost from result message
     usage: dict       # {input_tokens, output_tokens, ...}
     is_error: bool    # True if result.is_error or non-zero exit
+    error_type: str = ""       # e.g. "invalid_request_error", "overloaded_error"
+    error_message: str = ""    # detailed error message from API

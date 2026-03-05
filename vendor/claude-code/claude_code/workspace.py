@@ -444,7 +444,7 @@ class CCWorkspaceManager:
 
             target = self._find_skill(workspace, skill_name)
             if target is None:
-                logger.warning("Skill '%s' not found in any search location — skipping", skill_name)
+                logger.debug("Skill '%s' not found in any search location — skipping", skill_name)
                 continue
 
             if _loader and not _loader.is_skill_available(skill_name):

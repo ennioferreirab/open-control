@@ -244,6 +244,28 @@ class TestBuildCommand:
         model_idx = cmd.index("--model")
         assert cmd[model_idx + 1] == "claude-sonnet-4-6"
 
+    def test_unknown_model_warns(self, tmp_path, caplog):
+        """Unknown model emits a warning but command is still built."""
+        provider = ClaudeCodeProvider()
+        agent = _make_agent(model="claude-opus-6")
+        ctx = _make_workspace(tmp_path)
+        with caplog.at_level(logging.WARNING, logger="claude_code.provider"):
+            cmd = provider._build_command("x", agent, ctx, None)
+        idx = cmd.index("--model")
+        assert cmd[idx + 1] == "claude-opus-6"
+        assert "claude-opus-6" in caplog.text
+        assert "not in known models" in caplog.text
+
+    def test_known_model_no_warning(self, tmp_path, caplog):
+        """Known model does not emit a warning."""
+        provider = ClaudeCodeProvider()
+        agent = _make_agent(model="claude-sonnet-4-6")
+        ctx = _make_workspace(tmp_path)
+        with caplog.at_level(logging.WARNING, logger="claude_code.provider"):
+            cmd = provider._build_command("x", agent, ctx, None)
+        assert "--model" in cmd
+        assert "not in known models" not in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # _parse_stream
@@ -458,6 +480,82 @@ class TestHandleMessage:
         assert result.output == ""
         assert result.is_error is False
 
+    def test_stream_event_error_sets_is_error(self):
+        """stream_event with error type captures error details."""
+        provider = ClaudeCodeProvider()
+        result = CCTaskResult(output="", session_id="", cost_usd=0.0, usage={}, is_error=False)
+        msg = {
+            "type": "stream_event",
+            "event": {
+                "type": "error",
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": "Model does not exist",
+                },
+            },
+        }
+        provider._handle_message(msg, result, None)
+        assert result.is_error is True
+        assert result.error_type == "invalid_request_error"
+        assert result.error_message == "Model does not exist"
+        assert result.output  # non-empty
+
+    def test_stream_event_non_error_ignored(self):
+        """stream_event with non-error type does not modify result."""
+        provider = ClaudeCodeProvider()
+        result = CCTaskResult(output="", session_id="", cost_usd=0.0, usage={}, is_error=False)
+        msg = {
+            "type": "stream_event",
+            "event": {"type": "content_block_start"},
+        }
+        provider._handle_message(msg, result, None)
+        assert result.is_error is False
+        assert result.output == ""
+
+    def test_result_error_with_error_dict(self):
+        """result with is_error=True and error dict synthesizes output."""
+        provider = ClaudeCodeProvider()
+        result = CCTaskResult(output="", session_id="", cost_usd=0.0, usage={}, is_error=False)
+        msg = {
+            "type": "result",
+            "result": "",
+            "is_error": True,
+            "error": {"type": "auth_error", "message": "Invalid API key"},
+        }
+        provider._handle_message(msg, result, None)
+        assert result.is_error is True
+        assert result.error_type == "auth_error"
+        assert result.error_message == "Invalid API key"
+        assert result.output  # synthesized from error dict
+
+    def test_result_error_preserves_existing_output(self):
+        """result with is_error=True keeps result text but still captures error details."""
+        provider = ClaudeCodeProvider()
+        result = CCTaskResult(output="", session_id="", cost_usd=0.0, usage={}, is_error=False)
+        msg = {
+            "type": "result",
+            "result": "Some output",
+            "is_error": True,
+            "error": {"type": "x", "message": "y"},
+        }
+        provider._handle_message(msg, result, None)
+        assert result.output == "Some output"
+        assert result.error_type == "x"
+        assert result.error_message == "y"
+
+    def test_result_error_no_details_fallback(self):
+        """result with is_error=True but no error key uses fallback output."""
+        provider = ClaudeCodeProvider()
+        result = CCTaskResult(output="", session_id="", cost_usd=0.0, usage={}, is_error=False)
+        msg = {
+            "type": "result",
+            "result": "",
+            "is_error": True,
+        }
+        provider._handle_message(msg, result, None)
+        assert result.is_error is True
+        assert result.output == "Unknown error (no details in result message)"
+
 
 # ---------------------------------------------------------------------------
 # execute_task integration
@@ -645,3 +743,72 @@ class TestExecuteTask:
                     await task
 
                 mock_kill.assert_called_once_with(proc)
+
+    @pytest.mark.asyncio
+    async def test_stream_error_then_result_error(self, tmp_path):
+        """Stream error followed by result error preserves stream error details."""
+        lines = [
+            json.dumps({
+                "type": "stream_event",
+                "event": {
+                    "type": "error",
+                    "error": {
+                        "type": "invalid_request_error",
+                        "message": "Model does not exist",
+                    },
+                },
+            }),
+            json.dumps({
+                "type": "result",
+                "result": "",
+                "is_error": True,
+                "error": {"type": "invalid_request_error", "message": "Model does not exist"},
+            }),
+        ]
+        proc = self._make_mock_proc(lines, returncode=1)
+
+        provider = ClaudeCodeProvider()
+        agent = _make_agent()
+        ctx = _make_workspace(tmp_path)
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await provider.execute_task("x", agent, "task-err", ctx)
+
+        assert result.is_error is True
+        assert result.error_type == "invalid_request_error"
+        assert result.error_message == "Model does not exist"
+        assert result.output  # non-empty
+
+    @pytest.mark.asyncio
+    async def test_stream_error_without_result_message(self, tmp_path):
+        """Stream error with no result message preserves error info."""
+        lines = [
+            json.dumps({
+                "type": "stream_event",
+                "event": {
+                    "type": "error",
+                    "error": {
+                        "type": "overloaded_error",
+                        "message": "Server is overloaded",
+                    },
+                },
+            }),
+        ]
+
+        async def _read_stderr():
+            return b"Process exited unexpectedly"
+
+        proc = self._make_mock_proc(lines, returncode=1)
+        proc.stderr.read = _read_stderr
+
+        provider = ClaudeCodeProvider()
+        agent = _make_agent()
+        ctx = _make_workspace(tmp_path)
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await provider.execute_task("x", agent, "task-no-result", ctx)
+
+        assert result.is_error is True
+        assert result.error_type == "overloaded_error"
+        assert result.error_message == "Server is overloaded"
+        assert "overloaded_error" in result.output
