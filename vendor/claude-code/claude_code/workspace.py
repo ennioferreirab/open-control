@@ -35,12 +35,25 @@ _MCP_TOOLS_GUIDE = """\
 
 Use these tools via the `mcp__nanobot__` prefix:
 
-- **mcp__nanobot__ask_user** — Ask the human user a question and wait for a reply.
+- **mcp__nanobot__ask_user** — Ask the human user a question and wait for their reply.
 - **mcp__nanobot__send_message** — Send a message to another agent or to the task thread.
 - **mcp__nanobot__delegate_task** — Delegate a subtask to a specialist agent.
 - **mcp__nanobot__ask_agent** — Ask a specific agent a question and get a reply.
 - **mcp__nanobot__report_progress** — Report task progress back to Mission Control.
 - **mcp__nanobot__cron** — Schedule reminders and recurring tasks (add/list/remove).
+
+### CRITICAL: User Interaction Rules
+
+**NEVER** guess, assume, or fabricate user input. If a task requires information from the user:
+
+1. Call `mcp__nanobot__ask_user` with your question.
+2. The call BLOCKS until the user replies — wait for it.
+3. Only then proceed to the next question or action.
+
+Examples of when you MUST use `mcp__nanobot__ask_user`:
+- Running a questionnaire or wizard (ask each question one at a time, wait for reply)
+- Confirming a destructive action before executing it
+- Gathering required parameters that were not provided in the task
 
 > **IMPORTANT**: `AskUserQuestion` does NOT work. You MUST use `mcp__nanobot__ask_user` instead.
 """
