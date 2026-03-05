@@ -392,6 +392,16 @@ class StepDispatcher:
                             "[dispatcher] Final prompt for '%s' (len=%d, first 200 chars): %s",
                             agent_name, len(agent_prompt), repr(agent_prompt[:200]),
                         )
+
+                    # Sync skills from Convex (same pattern as prompt)
+                    convex_skills = convex_agent.get("skills")
+                    if convex_skills is not None:
+                        if convex_skills != agent_skills:
+                            logger.info(
+                                "[dispatcher] Skills synced from Convex for '%s': %s -> %s",
+                                agent_name, agent_skills, convex_skills,
+                            )
+                        agent_skills = convex_skills
             except Exception:
                 logger.warning(
                     "[dispatcher] Could not fetch Convex agent data for '%s', using YAML",
@@ -555,6 +565,15 @@ class StepDispatcher:
                     if convex_agent_raw:
                         agent_data_for_cc.display_name = convex_agent_raw.get("display_name", agent_name)
                         agent_data_for_cc.role = convex_agent_raw.get("role", "agent")
+                        # Sync skills from Convex (same pattern as prompt/model)
+                        convex_skills = convex_agent_raw.get("skills")
+                        if convex_skills is not None:
+                            if convex_skills != agent_data_for_cc.skills:
+                                logger.info(
+                                    "[dispatcher] CC skills synced from Convex for '%s': %s -> %s",
+                                    agent_name, agent_data_for_cc.skills, convex_skills,
+                                )
+                            agent_data_for_cc.skills = convex_skills
                         cc_opts_raw = convex_agent_raw.get("claude_code_opts")
                         if cc_opts_raw and isinstance(cc_opts_raw, dict):
                             from mc.types import ClaudeCodeOpts

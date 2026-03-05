@@ -1028,6 +1028,16 @@ class TaskExecutor:
                         "[executor] Final prompt for '%s' (len=%d, first 200 chars): %s",
                         agent_name, len(agent_prompt), repr(agent_prompt[:200]),
                     )
+
+                # Sync skills from Convex (same pattern as prompt/model)
+                convex_skills = convex_agent.get("skills")
+                if convex_skills is not None:
+                    if convex_skills != agent_skills:
+                        logger.info(
+                            "[executor] Skills synced from Convex for '%s': %s -> %s",
+                            agent_name, agent_skills, convex_skills,
+                        )
+                    agent_skills = convex_skills
         except Exception:
             logger.warning(
                 "[executor] Could not fetch Convex agent data for '%s', using YAML", agent_name, exc_info=True
@@ -1478,6 +1488,10 @@ class TaskExecutor:
                     if agent_data.prompt:
                         agent_data.prompt = agent_data.prompt.replace(
                             "{{" + var["name"] + "}}", var["value"])
+                # Sync skills from Convex
+                convex_skills = convex_agent.get("skills")
+                if convex_skills is not None:
+                    agent_data.skills = convex_skills
         except Exception:
             logger.warning("[executor] CC: Convex agent sync failed for '%s'", agent_name)
 
