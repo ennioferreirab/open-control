@@ -1,10 +1,21 @@
-"""Tests for ExecutionRequest data model."""
+"""Tests for ExecutionRequest, ExecutionResult, and supporting types."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from mc.application.execution.request import EntityType, ExecutionRequest
+from mc.application.execution.request import (
+    EntityType,
+    ErrorCategory,
+    ExecutionRequest,
+    ExecutionResult,
+    RunnerType,
+)
+
+
+# ---------------------------------------------------------------------------
+# Story 16.1 — EntityType
+# ---------------------------------------------------------------------------
 
 
 class TestEntityType:
@@ -15,6 +26,35 @@ class TestEntityType:
 
     def test_step_constant(self) -> None:
         assert EntityType.STEP == "step"
+
+
+# ---------------------------------------------------------------------------
+# Story 16.2 — RunnerType and ErrorCategory
+# ---------------------------------------------------------------------------
+
+
+class TestRunnerType:
+    def test_nanobot_value(self) -> None:
+        assert RunnerType.NANOBOT.value == "nanobot"
+
+    def test_claude_code_value(self) -> None:
+        assert RunnerType.CLAUDE_CODE.value == "claude-code"
+
+    def test_human_value(self) -> None:
+        assert RunnerType.HUMAN.value == "human"
+
+
+class TestErrorCategory:
+    def test_all_categories(self) -> None:
+        assert ErrorCategory.TIER.value == "tier"
+        assert ErrorCategory.PROVIDER.value == "provider"
+        assert ErrorCategory.RUNNER.value == "runner"
+        assert ErrorCategory.WORKFLOW.value == "workflow"
+
+
+# ---------------------------------------------------------------------------
+# Story 16.1 — ExecutionRequest defaults and fields
+# ---------------------------------------------------------------------------
 
 
 class TestExecutionRequestDefaults:
@@ -43,6 +83,10 @@ class TestExecutionRequestDefaults:
         assert req.trust_level == "autonomous"
         assert req.is_cc is False
         assert req.task_data == {}
+        # 16.2 defaults
+        assert req.runner_type == RunnerType.NANOBOT
+        assert req.step_id is None
+        assert req.session_key is None
 
     def test_minimal_step_request(self) -> None:
         req = ExecutionRequest(
@@ -98,6 +142,8 @@ class TestExecutionRequestPopulated:
             tag_attributes="urgent: priority=high",
             trust_level="human_approved",
             task_data={"id": "task_abc", "title": "Test Task"},
+            runner_type=RunnerType.CLAUDE_CODE,
+            session_key="mc:task:test-agent:task_abc",
         )
         assert req.title == "Test Task"
         assert req.agent_name == "test-agent"
@@ -108,6 +154,8 @@ class TestExecutionRequestPopulated:
         assert req.thread_context.startswith("[Thread History]")
         assert req.tags == ["urgent"]
         assert req.trust_level == "human_approved"
+        assert req.runner_type == RunnerType.CLAUDE_CODE
+        assert req.session_key == "mc:task:test-agent:task_abc"
 
     def test_step_request_with_predecessors(self) -> None:
         req = ExecutionRequest(
@@ -119,11 +167,13 @@ class TestExecutionRequestPopulated:
             predecessor_step_ids=["step_0"],
             predecessor_context="[Predecessor Context]\nstep_0 completed",
             blocked_by=["step_0"],
+            step_id="step_1",
         )
         assert req.step_title == "Implement feature"
         assert req.predecessor_step_ids == ["step_0"]
         assert req.blocked_by == ["step_0"]
         assert "Predecessor" in req.predecessor_context
+        assert req.step_id == "step_1"
 
     def test_cc_request(self) -> None:
         req = ExecutionRequest(
@@ -136,6 +186,15 @@ class TestExecutionRequestPopulated:
         assert req.is_cc is True
         assert req.model == "claude-sonnet-4-20250514"
 
+    def test_human_runner_type(self) -> None:
+        req = ExecutionRequest(
+            entity_type=EntityType.TASK,
+            entity_id="task_human",
+            task_id="task_human",
+            runner_type=RunnerType.HUMAN,
+        )
+        assert req.runner_type == RunnerType.HUMAN
+
 
 class TestExecutionRequestSafeTaskId:
     """Tests for safe_task_id property."""
@@ -146,7 +205,6 @@ class TestExecutionRequestSafeTaskId:
             entity_id="task_abc",
             task_id="task_abc",
         )
-        # task_safe_id should work on any string
         safe_id = req.safe_task_id
         assert isinstance(safe_id, str)
         assert len(safe_id) > 0
@@ -193,3 +251,51 @@ class TestExecutionRequestMutability:
         )
         req1.files.append({"name": "a.txt"})
         assert len(req2.files) == 0
+
+
+# ---------------------------------------------------------------------------
+# Story 16.2 — ExecutionResult
+# ---------------------------------------------------------------------------
+
+
+class TestExecutionResult:
+    def test_success_result(self) -> None:
+        result = ExecutionResult(success=True, output="Done!")
+        assert result.success is True
+        assert result.output == "Done!"
+        assert result.error_category is None
+        assert result.error_message is None
+        assert result.cost_usd == 0.0
+        assert result.session_id is None
+        assert result.artifacts == []
+        assert result.transition_status is None
+
+    def test_error_result(self) -> None:
+        result = ExecutionResult(
+            success=False,
+            error_category=ErrorCategory.PROVIDER,
+            error_message="OAuth expired",
+        )
+        assert result.success is False
+        assert result.error_category == ErrorCategory.PROVIDER
+        assert result.error_message == "OAuth expired"
+
+    def test_result_with_metadata(self) -> None:
+        result = ExecutionResult(
+            success=True,
+            output="All done",
+            cost_usd=0.0534,
+            session_id="sess_abc123",
+            artifacts=[{"path": "output/report.pdf", "action": "created"}],
+        )
+        assert result.cost_usd == 0.0534
+        assert result.session_id == "sess_abc123"
+        assert len(result.artifacts) == 1
+
+    def test_transition_status(self) -> None:
+        result = ExecutionResult(
+            success=True,
+            output="Waiting for human.",
+            transition_status="waiting_human",
+        )
+        assert result.transition_status == "waiting_human"

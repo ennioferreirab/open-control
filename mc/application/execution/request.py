@@ -3,16 +3,24 @@
 Normalizes all execution context into a single dataclass used by tasks,
 steps, and CC execution paths. This replaces the ad-hoc dict/string
 context building scattered across executor.py and step_dispatcher.py.
+
+Also contains ExecutionResult and supporting enums (RunnerType,
+ErrorCategory) introduced by Story 16.2 for the ExecutionEngine.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from mc.types import AgentData
 
+
+# ---------------------------------------------------------------------------
+# Story 16.1 — Entity type constants
+# ---------------------------------------------------------------------------
 
 class EntityType:
     """Entity type constants for execution requests."""
@@ -21,6 +29,31 @@ class EntityType:
     STEP = "step"
 
 
+# ---------------------------------------------------------------------------
+# Story 16.2 — Runner type and error category enums
+# ---------------------------------------------------------------------------
+
+class RunnerType(str, Enum):
+    """Which backend runs the agent work."""
+
+    NANOBOT = "nanobot"
+    CLAUDE_CODE = "claude-code"
+    HUMAN = "human"
+
+
+class ErrorCategory(str, Enum):
+    """Normalized error categories for centralized handling."""
+
+    TIER = "tier"
+    PROVIDER = "provider"
+    RUNNER = "runner"
+    WORKFLOW = "workflow"
+
+
+# ---------------------------------------------------------------------------
+# Unified ExecutionRequest (16.1 fields + 16.2 additions)
+# ---------------------------------------------------------------------------
+
 @dataclass
 class ExecutionRequest:
     """Normalized execution context for task or step execution.
@@ -28,6 +61,8 @@ class ExecutionRequest:
     Fields mirror the context that executor.py and step_dispatcher.py
     assemble independently. The unified context pipeline populates this
     dataclass so that all execution paths share the same preparation.
+
+    The engine inspects ``runner_type`` to select the correct strategy.
     """
 
     # Identity
@@ -93,6 +128,11 @@ class ExecutionRequest:
     # Raw task data (for post-execution hooks)
     task_data: dict[str, Any] = field(default_factory=dict)
 
+    # --- Story 16.2 additions ---
+    runner_type: RunnerType = RunnerType.NANOBOT
+    step_id: str | None = None
+    session_key: str | None = None
+
     @property
     def is_task(self) -> bool:
         """Return True if this is a task execution request."""
@@ -108,3 +148,32 @@ class ExecutionRequest:
         """Return filesystem-safe task ID."""
         from mc.types import task_safe_id
         return task_safe_id(self.task_id)
+
+
+# ---------------------------------------------------------------------------
+# Story 16.2 — ExecutionResult
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ExecutionResult:
+    """Outcome of an execution run.
+
+    Carries enough data for post-execution steps (memory consolidation,
+    artifact sync, session finalization) without needing the caller to
+    know which runner was used.
+    """
+
+    success: bool
+    output: str = ""
+
+    # Error details (populated on failure)
+    error_category: ErrorCategory | None = None
+    error_message: str | None = None
+
+    # Runner-specific metadata
+    cost_usd: float = 0.0
+    session_id: str | None = None
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
+
+    # For human strategy: the target status transition
+    transition_status: str | None = None
