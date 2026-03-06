@@ -462,10 +462,50 @@ export function ExecutionPlanTab({
   }
 
   if (!executionPlan || !executionPlan.steps || executionPlan.steps.length === 0) {
+    if (!canAddOrEdit) {
+      return (
+        <p className="text-sm text-muted-foreground text-center py-8">
+          Direct execution &mdash; no multi-step plan
+        </p>
+      );
+    }
+    // canAddOrEdit: show empty state with Add Step button
     return (
-      <p className="text-sm text-muted-foreground text-center py-8">
-        Direct execution &mdash; no multi-step plan
-      </p>
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <span className="text-xs text-muted-foreground">No steps yet</span>
+          {taskId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => { setAddStepError(null); setShowAddForm((prev) => !prev); }}
+              data-testid="add-step-button"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add Step
+            </Button>
+          )}
+        </div>
+        {showAddForm && taskId && (
+          <div className="mb-2 px-1">
+            <AddStepForm
+              existingSteps={[]}
+              boardId={boardId}
+              onAdd={handleAddStep}
+              onCancel={() => setShowAddForm(false)}
+            />
+            {addStepError && (
+              <p className="text-xs text-destructive mt-1" data-testid="add-step-error">
+                {addStepError}
+              </p>
+            )}
+          </div>
+        )}
+        <p className="text-sm text-muted-foreground text-center py-8">
+          No steps yet &mdash; use &ldquo;Add Step&rdquo; to build a plan
+        </p>
+      </div>
     );
   }
 
