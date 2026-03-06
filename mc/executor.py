@@ -924,217 +924,45 @@ class TaskExecutor:
                 "this dispatch."
             )
 
-        # Route to Claude Code backend if agent is configured with backend: claude-code
-        agent_data = self._load_agent_data(agent_name)
-        if agent_data and agent_data.backend == "claude-code":
-            await self._execute_cc_task(
-                task_id,
-                title,
-                description,
-                agent_name,
-                agent_data,
+        # ── Unified context pipeline (Story 16.1) ─────────────────────────
+        # Delegate all context building to the shared ContextBuilder.
+        from mc.application.execution.context_builder import ContextBuilder
+
+        try:
+            ctx_builder = ContextBuilder(self._bridge)
+            ctx_builder._tier_resolver = self._tier_resolver  # share resolver
+            req = await ctx_builder.build_task_context(
+                task_id=task_id,
+                title=title,
+                description=description,
+                agent_name=agent_name,
                 trust_level=trust_level,
                 task_data=task_data,
-                needs_enrichment=True,
             )
+        except ValueError as exc:
+            # Tier resolution error
+            await self._handle_tier_error(task_id, title, agent_name, exc)
             return
 
-        # Fetch fresh task data for up-to-date file manifest (NFR8)
-        safe_id = task_safe_id(task_id)
-        files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
-        try:
-            fresh_task = await asyncio.to_thread(
-                self._bridge.query, "tasks:getById", {"task_id": task_id}
-            )
-            raw_files = (fresh_task or {}).get("files") or []
-        except Exception:
-            logger.warning(
-                "[executor] Failed to fetch fresh task data for '%s', using subscription snapshot",
-                title,
-            )
-            raw_files = (task_data or {}).get("files") or []
-        file_manifest = [
-            {
-                "name": f.get("name", "unknown"),
-                "type": f.get("type", "application/octet-stream"),
-                "size": f.get("size", 0),
-                "subfolder": f.get("subfolder", "attachments"),
-            }
-            for f in raw_files
-        ]
+        # Unpack unified request into local variables
+        description = req.description
+        agent_prompt = req.agent_prompt
+        agent_model = req.agent_model
+        agent_skills = req.agent_skills
+        reasoning_level = req.reasoning_level
+        board_name = req.board_name
+        memory_workspace = req.memory_workspace
 
-        output_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id / "output")
-        task_instruction = (
-            f"Task workspace: {files_dir}\n"
-            f"Save ALL output files (reports, summaries, generated content) to: {output_dir}\n"
-            f"Do NOT save output files outside this directory."
-        )
-        if file_manifest:
-            manifest_summary = ", ".join(
-                f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
-                for f in file_manifest
-            )
-            task_instruction += (
-                f"\nTask has {len(file_manifest)} attached file(s) at {files_dir}/attachments. "
-                f"File manifest: {manifest_summary}"
-            )
-        description = (description or "") + f"\n\n{task_instruction}"
+        # Route to Claude Code backend:
+        # - If agent is configured with backend: claude-code (YAML config)
+        # - Or if unified pipeline detected a cc/ model prefix
+        agent_data = self._load_agent_data(agent_name)
+        is_cc_backend = agent_data and agent_data.backend == "claude-code"
 
-        # Inject thread context for multi-turn agent interaction
-        try:
-            thread_messages = await asyncio.to_thread(
-                self._bridge.get_task_messages, task_id
-            )
-            thread_context = _build_thread_context(thread_messages)
-            if thread_context:
-                description = (description or "") + f"\n{thread_context}"
-                injected_count = min(len(thread_messages), 20)
-                logger.info(
-                    "[executor] Injected thread context (%d of %d messages) for task '%s'",
-                    injected_count, len(thread_messages), title,
-                )
-        except Exception:
-            logger.warning(
-                "[executor] Failed to fetch thread messages for '%s', continuing without thread context",
-                title,
-                exc_info=True,
-            )
-
-        # Inject tag attribute values context (Story 12.2)
-        try:
-            task_tags = (task_data or {}).get("tags") or []
-            if task_tags:
-                tag_attr_values = await asyncio.to_thread(
-                    self._bridge.query,
-                    "tagAttributeValues:getByTask",
-                    {"task_id": task_id},
-                )
-                tag_attr_catalog = await asyncio.to_thread(
-                    self._bridge.query,
-                    "tagAttributes:list",
-                    {},
-                )
-                tag_attrs_context = _build_tag_attributes_context(
-                    task_tags,
-                    tag_attr_values if isinstance(tag_attr_values, list) else [],
-                    tag_attr_catalog if isinstance(tag_attr_catalog, list) else [],
-                )
-                if tag_attrs_context:
-                    description = (description or "") + f"\n\n{tag_attrs_context}"
-                    logger.info(
-                        "[executor] Injected tag attributes context for task '%s'",
-                        title,
-                    )
-        except Exception:
-            logger.warning(
-                "[executor] Failed to fetch tag attributes for '%s', continuing without tag attributes context",
-                title,
-                exc_info=True,
-            )
-
-        # Load agent prompt, model, and skills from YAML config
-        agent_prompt, agent_model, agent_skills = self._load_agent_config(agent_name)
-        logger.info(
-            "[executor] Local YAML config for '%s': prompt_len=%d, model=%s, skills=%s",
-            agent_name,
-            len(agent_prompt) if agent_prompt else 0,
-            agent_model,
-            agent_skills,
-        )
-
-        # Convex is the source of truth for model, prompt, and variables — override YAML
-        try:
-            from mc.gateway import AGENTS_DIR
-            convex_agent = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
-            if convex_agent:
-                # Sync model
-                if convex_agent.get("model"):
-                    convex_model = convex_agent["model"]
-                    if convex_model != agent_model:
-                        logger.info(
-                            "[executor] Model synced from Convex for '%s': %s → %s",
-                            agent_name, agent_model, convex_model,
-                        )
-                        agent_model = convex_model
-                        # Write back to YAML so local host stays in sync
-                        try:
-                            await asyncio.to_thread(
-                                self._bridge.write_agent_config, convex_agent, AGENTS_DIR
-                            )
-                        except Exception:
-                            logger.warning(
-                                "[executor] YAML write-back failed for '%s'", agent_name, exc_info=True
-                            )
-
-                # Sync prompt (Convex is source of truth for dashboard edits)
-                convex_prompt = convex_agent.get("prompt")
-                logger.info(
-                    "[executor] Convex prompt for '%s': len=%d, first 300 chars: %s",
-                    agent_name,
-                    len(convex_prompt) if convex_prompt else 0,
-                    repr(convex_prompt[:300]) if convex_prompt else "(none)",
-                )
-                if convex_prompt:
-                    agent_prompt = convex_prompt
-
-                # Interpolate variables into prompt ({{var_name}} → value)
-                variables = convex_agent.get("variables") or []
-                if variables and agent_prompt:
-                    for var in variables:
-                        placeholder = "{{" + var["name"] + "}}"
-                        before_count = agent_prompt.count(placeholder)
-                        agent_prompt = agent_prompt.replace(placeholder, var["value"])
-                        logger.info(
-                            "[executor] Variable '%s' interpolated %d time(s) for '%s': value=%r",
-                            var["name"], before_count, agent_name, var["value"][:100],
-                        )
-                    logger.info(
-                        "[executor] Interpolated %d variable(s) into prompt for '%s'",
-                        len(variables), agent_name,
-                    )
-                # Log the final prompt for debugging sync issues
-                if agent_prompt:
-                    logger.info(
-                        "[executor] Final prompt for '%s' (len=%d, first 200 chars): %s",
-                        agent_name, len(agent_prompt), repr(agent_prompt[:200]),
-                    )
-
-                # Sync skills from Convex (same pattern as prompt/model)
-                convex_skills = convex_agent.get("skills")
-                if convex_skills is not None:
-                    if convex_skills != agent_skills:
-                        logger.info(
-                            "[executor] Skills synced from Convex for '%s': %s -> %s",
-                            agent_name, agent_skills, convex_skills,
-                        )
-                    agent_skills = convex_skills
-        except Exception:
-            logger.warning(
-                "[executor] Could not fetch Convex agent data for '%s', using YAML", agent_name, exc_info=True
-            )
-
-        # Resolve tier references (Story 11.1, AC5)
-        reasoning_level: str | None = None
-        if agent_model and is_tier_reference(agent_model):
-            tier_ref = agent_model  # save before overwriting
-            try:
-                agent_model = self._get_tier_resolver().resolve_model(agent_model)
-                logger.info("[executor] Resolved tier for agent '%s': %s", agent_name, agent_model)
-            except ValueError as exc:
-                await self._handle_tier_error(task_id, title, agent_name, exc)
-                return
-            # Resolve reasoning level — never raises, missing config = off
-            reasoning_level = self._get_tier_resolver().resolve_reasoning_level(tier_ref)
-            if reasoning_level:
-                logger.info(
-                    "[executor] Reasoning level for agent '%s': %s", agent_name, reasoning_level
-                )
-
-        # Route to Claude Code backend when model starts with cc/ (e.g. set via tier dropdown)
-        if agent_model and is_cc_model(agent_model):
-            cc_model_name = extract_cc_model_name(agent_model)
-            if agent_data is None:
-                agent_data = self._load_agent_data(agent_name)
+        if req.is_cc or is_cc_backend:
+            cc_model_name = req.model if req.is_cc else agent_model
+            if not is_cc_backend:
+                agent_data = req.agent
             if agent_data is None:
                 agent_data = AgentData(
                     name=agent_name,
@@ -1143,7 +971,7 @@ class TaskExecutor:
                     model=cc_model_name,
                     backend="claude-code",
                 )
-            else:
+            elif req.is_cc:
                 agent_data.model = cc_model_name
                 agent_data.backend = "claude-code"
             await self._execute_cc_task(
@@ -1155,32 +983,9 @@ class TaskExecutor:
                 trust_level=trust_level,
                 task_data=task_data,
                 reasoning_level=reasoning_level,
-                needs_enrichment=False,
+                needs_enrichment=False,  # unified pipeline already enriched
             )
             return
-
-        # Inject global orientation for non-lead agents
-        agent_prompt = self._maybe_inject_orientation(agent_name, agent_prompt)
-        if agent_prompt:
-            logger.info(
-                "[executor] Post-orientation prompt for '%s' (len=%d, first 200 chars): %s",
-                agent_name, len(agent_prompt), repr(agent_prompt[:200]),
-            )
-
-        # System agents (nanobot) use identity from SOUL.md + ContextBuilder —
-        # skip prompt/orientation injection so MC uses the exact same prompt as Telegram.
-        if agent_name == NANOBOT_AGENT_NAME:
-            agent_prompt = None
-            logger.info("[executor] Cleared prompt for nanobot (uses SOUL.md + ContextBuilder)")
-
-        # Inject agent roster into lead-agent context so it can discover all
-        # available agents without relying on list_dir (which only shows agents
-        # that have already run and have a board-scoped workspace).
-        if is_lead_agent(agent_name):
-            roster = self._build_agent_roster()
-            if roster:
-                description = (description or "") + f"\n\n{roster}"
-                logger.info("[executor] Injected agent roster into lead-agent context")
 
         if agent_skills is not None:
             logger.info(
@@ -1192,34 +997,6 @@ class TaskExecutor:
                 "[executor] Agent '%s' has no skills filter (all skills visible)",
                 agent_name,
             )
-
-        # Resolve board-scoped workspace (AC6, AC7)
-        board_name: str | None = None
-        memory_workspace: Path | None = None
-        board_id = (task_data or {}).get("board_id")
-        if board_id:
-            try:
-                board = await asyncio.to_thread(
-                    self._bridge.get_board_by_id, board_id
-                )
-                if board:
-                    board_name = board.get("name")
-                    if board_name:
-                        from mc.board_utils import resolve_board_workspace, get_agent_memory_mode
-                        mode = get_agent_memory_mode(board, agent_name)
-                        memory_workspace = resolve_board_workspace(
-                            board_name, agent_name, mode=mode
-                        )
-                        logger.info(
-                            "[executor] Using board-scoped workspace for agent '%s' on board '%s' (mode=%s)",
-                            agent_name, board_name, mode,
-                        )
-            except Exception:
-                logger.warning(
-                    "[executor] Failed to resolve board workspace for task '%s', using global workspace",
-                    title,
-                    exc_info=True,
-                )
 
         # Snapshot the output directory before agent execution so we can detect
         # created/modified files afterwards (Story 2.5).

@@ -14,18 +14,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.types import (
+    NANOBOT_AGENT_NAME,
     ActivityEventType,
     AgentData,
     AuthorType,
-    NANOBOT_AGENT_NAME,
     MessageType,
     StepStatus,
     TaskStatus,
     is_lead_agent,
-    is_tier_reference,
-    is_cc_model,
-    extract_cc_model_name,
-    task_safe_id,
 )
 
 if TYPE_CHECKING:
@@ -117,7 +113,7 @@ async def _run_step_agent(
     ask_user_registry: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
-    from mc.executor import _run_agent_on_task, _background_tasks, _relocate_invalid_memory_files
+    from mc.executor import _background_tasks, _relocate_invalid_memory_files, _run_agent_on_task
 
     result, session_key, loop = await _run_agent_on_task(
         agent_name=agent_name,
@@ -317,12 +313,10 @@ class StepDispatcher:
         # Deferred imports to break circular dependency:
         # step_dispatcher -> executor -> gateway -> orchestrator -> step_dispatcher
         from mc.executor import (
-            _human_size,
-            _snapshot_output_dir,
             _collect_output_artifacts,
             _relocate_invalid_memory_files,
+            _snapshot_output_dir,
         )
-        from mc.planner import _build_file_summary
 
         step_id = step.get("id")
         if not step_id:
@@ -330,7 +324,6 @@ class StepDispatcher:
             return []
 
         step_title = (step.get("title") or "Untitled Step").strip()
-        step_description = step.get("description") or ""
         agent_name = (step.get("assigned_agent") or NANOBOT_AGENT_NAME).strip()
         if is_lead_agent(agent_name):
             logger.warning(
@@ -361,202 +354,51 @@ class StepDispatcher:
         )
 
         try:
-            agent_prompt, agent_model, agent_skills = _load_agent_config(agent_name)
-            logger.info(
-                "[dispatcher] Local YAML config for '%s': prompt_len=%d, model=%s, skills=%s",
-                agent_name,
-                len(agent_prompt) if agent_prompt else 0,
-                agent_model,
-                agent_skills,
-            )
+            # ── Unified context pipeline (Story 16.1) ─────────────────────
+            # Delegate all context building to the shared ContextBuilder.
+            from mc.application.execution.context_builder import ContextBuilder
 
-            # Convex is source of truth for prompt and variables — override YAML.
-            # This mirrors the logic in executor._execute_task().
             try:
-                convex_agent = await asyncio.to_thread(
-                    self._bridge.get_agent_by_name, agent_name
+                ctx_builder = ContextBuilder(self._bridge)
+                ctx_builder._tier_resolver = self._tier_resolver  # share resolver
+                req = await ctx_builder.build_step_context(task_id, step)
+            except ValueError as exc:
+                error_msg = (
+                    f"Model tier resolution failed for agent "
+                    f"'{agent_name}': {exc}"
                 )
-                if convex_agent:
-                    convex_prompt = convex_agent.get("prompt")
-                    logger.info(
-                        "[dispatcher] Convex prompt for '%s': len=%d, first 200 chars: %s",
-                        agent_name,
-                        len(convex_prompt) if convex_prompt else 0,
-                        repr(convex_prompt[:200]) if convex_prompt else "(none)",
-                    )
-                    if convex_prompt:
-                        agent_prompt = convex_prompt
-
-                    # Interpolate {{var_name}} placeholders from Convex variables
-                    variables = convex_agent.get("variables") or []
-                    if variables and agent_prompt:
-                        for var in variables:
-                            placeholder = "{{" + var["name"] + "}}"
-                            before_count = agent_prompt.count(placeholder)
-                            agent_prompt = agent_prompt.replace(placeholder, var["value"])
-                            logger.info(
-                                "[dispatcher] Variable '%s' interpolated %d time(s) for '%s': value=%r",
-                                var["name"], before_count, agent_name, var["value"][:100],
-                            )
-                    if agent_prompt:
-                        logger.info(
-                            "[dispatcher] Final prompt for '%s' (len=%d, first 200 chars): %s",
-                            agent_name, len(agent_prompt), repr(agent_prompt[:200]),
-                        )
-
-                    # Sync skills from Convex (same pattern as prompt)
-                    convex_skills = convex_agent.get("skills")
-                    if convex_skills is not None:
-                        if convex_skills != agent_skills:
-                            logger.info(
-                                "[dispatcher] Skills synced from Convex for '%s': %s -> %s",
-                                agent_name, agent_skills, convex_skills,
-                            )
-                        agent_skills = convex_skills
-            except Exception:
-                logger.warning(
-                    "[dispatcher] Could not fetch Convex agent data for '%s', using YAML",
-                    agent_name,
-                    exc_info=True,
+                logger.error("[dispatcher] %s", error_msg)
+                await asyncio.to_thread(
+                    self._bridge.send_message,
+                    task_id,
+                    "System",
+                    AuthorType.SYSTEM,
+                    f'Step "{step_title}" failed: {error_msg}',
+                    MessageType.SYSTEM_EVENT,
                 )
+                raise
 
-            # Resolve tier references (Story 11.1, AC5)
-            reasoning_level: str | None = None
-            if agent_model and is_tier_reference(agent_model):
-                try:
-                    tier_ref = agent_model
-                    agent_model = self._get_tier_resolver().resolve_model(agent_model)
-                    logger.info("[dispatcher] Resolved tier for agent '%s': %s", agent_name, agent_model)
-                    reasoning_level = self._get_tier_resolver().resolve_reasoning_level(tier_ref)
-                    if reasoning_level:
-                        logger.info("[dispatcher] Reasoning level for agent '%s': %s", agent_name, reasoning_level)
-                except ValueError as exc:
-                    error_msg = f"Model tier resolution failed for agent '{agent_name}': {exc}"
-                    logger.error("[dispatcher] %s", error_msg)
-                    await asyncio.to_thread(
-                        self._bridge.send_message,
-                        task_id,
-                        "System",
-                        AuthorType.SYSTEM,
-                        f'Step "{step_title}" failed: {error_msg}',
-                        MessageType.SYSTEM_EVENT,
-                    )
-                    raise
+            # Unpack unified request into local variables
+            agent_prompt = req.agent_prompt
+            agent_model = req.agent_model
+            agent_skills = req.agent_skills
+            reasoning_level = req.reasoning_level
+            execution_description = req.description
+            task_data = req.task_data
+            board_name = req.board_name
+            memory_workspace = req.memory_workspace
 
-            agent_prompt = _maybe_inject_orientation(agent_name, agent_prompt)
-
-            # System agents (nanobot) use identity from SOUL.md + ContextBuilder —
-            # skip prompt/orientation injection so MC uses the exact same prompt as Telegram.
-            if agent_name == NANOBOT_AGENT_NAME:
-                agent_prompt = None
-
-            thread_messages = await asyncio.to_thread(
-                self._bridge.get_task_messages, task_id
-            )
-            # Resolve predecessor step IDs from the step's blockedBy list (AC #3, AC #6).
-            predecessor_step_ids: list[str] = [
-                str(pid) for pid in (step.get("blocked_by") or []) if pid
-            ]
-            thread_context = _build_step_thread_context(
-                thread_messages, predecessor_step_ids=predecessor_step_ids
-            )
-
-            task_data = await asyncio.to_thread(
-                self._bridge.query,
-                "tasks:getById",
-                {"task_id": task_id},
-            )
-            task_data = task_data if isinstance(task_data, dict) else {}
-            task_title = task_data.get("title", "Untitled Task")
-
-            # Build task-level file manifest from fresh task data (AC: 1, 4; NFR-F8).
-            raw_files = task_data.get("files") or []
-            file_manifest = [
-                {
-                    "name": f.get("name", "unknown"),
-                    "type": f.get("type", "application/octet-stream"),
-                    "size": f.get("size", 0),
-                    "subfolder": f.get("subfolder", "attachments"),
-                }
-                for f in raw_files
-            ]
-
-            safe_task_id = task_safe_id(task_id)
-            files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_task_id)
-            output_dir = str(Path.home() / ".nanobot" / "tasks" / safe_task_id / "output")
-
-            board_name: str | None = None
-            memory_workspace: Path | None = None
-            board_id = task_data.get("board_id")
-            if board_id:
-                board = await asyncio.to_thread(self._bridge.get_board_by_id, board_id)
-                if isinstance(board, dict):
-                    board_name = board.get("name")
-                    if board_name:
-                        from mc.board_utils import resolve_board_workspace, get_agent_memory_mode
-                        mode = get_agent_memory_mode(board, agent_name) if isinstance(board, dict) else "clean"
-                        memory_workspace = resolve_board_workspace(board_name, agent_name, mode=mode)
-
-            execution_description = (
-                f'You are executing step: "{step_title}"\n'
-                f"Step description: {step_description}\n\n"
-                f'This step is part of task: "{task_title}"\n'
-                f"Task workspace: {files_dir}\n"
-                f"Save ALL output files to: {output_dir}\n"
-                "Do NOT save output files outside this directory."
-            )
-
-            # Inject task-level file manifest (AC: 1, 5, 6, 7; Story 6.1).
-            # Must come BEFORE any step-level file sections so agent sees broad context first.
-            if file_manifest:
-                manifest_summary = ", ".join(
-                    f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
-                    for f in file_manifest
-                )
-                execution_description += (
-                    f"\n\nTask has {len(file_manifest)} file(s) in its manifest. "
-                    f"File manifest: {manifest_summary}\n"
-                    f"Review the file manifest before starting work."
-                )
-
-            # Inject task-level file routing context (FR-F29; Story 6.3).
-            # Builds a delegation-aware summary from raw_files using _build_file_summary()
-            # (which includes MIME types and total size), then replaces the planning-only
-            # "Consider file types" advisory with the executor-appropriate "Available at" path.
-            # Guarded by `if raw_files` to ensure no empty file context noise (AC #3).
-            if raw_files:
-                file_routing_summary = _build_file_summary(raw_files)
-                if file_routing_summary:
-                    # Strip the planner-targeted advisory; replace with executor-targeted path.
-                    delegation_summary = file_routing_summary.replace(
-                        "Consider file types when selecting the best agent.",
-                        f"Files available at: {files_dir}/attachments",
-                    )
-                    execution_description += f"\n\n{delegation_summary}"
-
-            if thread_context:
-                execution_description += f"\n{thread_context}"
-
-            # Snapshot output dir before agent execution for artifact detection (Story 2.5).
+            # Snapshot output dir before agent execution for artifact detection
+            # (Story 2.5).
             pre_snapshot = await asyncio.to_thread(_snapshot_output_dir, task_id)
 
-            # Route to Claude Code backend when model starts with cc/ (e.g. set via tier dropdown)
-            if agent_model and is_cc_model(agent_model):
-                cc_model_name = extract_cc_model_name(agent_model)
+            # Route to Claude Code backend when model starts with cc/
+            if req.is_cc:
+                cc_model_name = req.model
 
-                # Load full AgentData from config.yaml for CC context enrichment (CC-9)
-                from mc.gateway import AGENTS_DIR
-                from mc.yaml_validator import validate_agent_file
-
-                config_path = AGENTS_DIR / agent_name / "config.yaml"
-                full_agent_data = None
-                if config_path.exists():
-                    result = validate_agent_file(config_path)
-                    if isinstance(result, AgentData):
-                        full_agent_data = result
-
-                if full_agent_data:
-                    agent_data_for_cc = full_agent_data
+                # Use AgentData from unified pipeline, or build a fallback
+                if req.agent:
+                    agent_data_for_cc = req.agent
                     agent_data_for_cc.model = cc_model_name
                     agent_data_for_cc.backend = "claude-code"
                 else:
@@ -568,22 +410,21 @@ class StepDispatcher:
                         backend="claude-code",
                     )
 
-                # Try to enrich from Convex agent data (for claude_code_opts not in config.yaml)
+                # Try to enrich from Convex agent data
+                # (for claude_code_opts not in config.yaml)
                 try:
                     convex_agent_raw = await asyncio.to_thread(
                         self._bridge.get_agent_by_name, agent_name
                     )
                     if convex_agent_raw:
-                        agent_data_for_cc.display_name = convex_agent_raw.get("display_name", agent_name)
-                        agent_data_for_cc.role = convex_agent_raw.get("role", "agent")
-                        # Sync skills from Convex (same pattern as prompt/model)
+                        agent_data_for_cc.display_name = convex_agent_raw.get(
+                            "display_name", agent_name
+                        )
+                        agent_data_for_cc.role = convex_agent_raw.get(
+                            "role", "agent"
+                        )
                         convex_skills = convex_agent_raw.get("skills")
                         if convex_skills is not None:
-                            if convex_skills != agent_data_for_cc.skills:
-                                logger.info(
-                                    "[dispatcher] CC skills synced from Convex for '%s': %s -> %s",
-                                    agent_name, agent_data_for_cc.skills, convex_skills,
-                                )
                             agent_data_for_cc.skills = convex_skills
                         cc_opts_raw = convex_agent_raw.get("claude_code_opts")
                         if cc_opts_raw and isinstance(cc_opts_raw, dict):
@@ -591,17 +432,23 @@ class StepDispatcher:
                             agent_data_for_cc.claude_code_opts = ClaudeCodeOpts(
                                 max_budget_usd=cc_opts_raw.get("max_budget_usd"),
                                 max_turns=cc_opts_raw.get("max_turns"),
-                                permission_mode=cc_opts_raw.get("permission_mode", "acceptEdits"),
+                                permission_mode=cc_opts_raw.get(
+                                    "permission_mode", "acceptEdits"
+                                ),
                                 allowed_tools=cc_opts_raw.get("allowed_tools"),
-                                disallowed_tools=cc_opts_raw.get("disallowed_tools"),
+                                disallowed_tools=cc_opts_raw.get(
+                                    "disallowed_tools"
+                                ),
                             )
                 except Exception:
-                    logger.warning("[dispatcher] Could not enrich agent data for CC routing")
+                    logger.warning(
+                        "[dispatcher] Could not enrich agent data for CC"
+                    )
 
                 # Execute step via CC backend
-                from claude_code.workspace import CCWorkspaceManager
-                from claude_code.provider import ClaudeCodeProvider
                 from claude_code.ipc_server import MCSocketServer
+                from claude_code.provider import ClaudeCodeProvider
+                from claude_code.workspace import CCWorkspaceManager
 
                 try:
                     ws_mgr = CCWorkspaceManager()

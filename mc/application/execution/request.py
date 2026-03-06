@@ -1,0 +1,110 @@
+"""Unified execution request data model.
+
+Normalizes all execution context into a single dataclass used by tasks,
+steps, and CC execution paths. This replaces the ad-hoc dict/string
+context building scattered across executor.py and step_dispatcher.py.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from mc.types import AgentData
+
+
+class EntityType:
+    """Entity type constants for execution requests."""
+
+    TASK = "task"
+    STEP = "step"
+
+
+@dataclass
+class ExecutionRequest:
+    """Normalized execution context for task or step execution.
+
+    Fields mirror the context that executor.py and step_dispatcher.py
+    assemble independently. The unified context pipeline populates this
+    dataclass so that all execution paths share the same preparation.
+    """
+
+    # Identity
+    entity_type: str  # EntityType.TASK or EntityType.STEP
+    entity_id: str  # task_id or step_id
+    task_id: str  # always the parent task_id
+
+    # Task metadata
+    title: str = ""
+    description: str | None = None
+
+    # Agent configuration (resolved from YAML + Convex)
+    agent: AgentData | None = None
+    agent_name: str = ""
+    agent_prompt: str | None = None
+    agent_model: str | None = None
+    agent_skills: list[str] | None = None
+    reasoning_level: str | None = None
+
+    # Board context
+    board: dict[str, Any] | None = None
+    board_name: str | None = None
+    memory_workspace: Path | None = None
+
+    # Files
+    files: list[dict[str, Any]] = field(default_factory=list)
+    file_manifest: list[dict[str, Any]] = field(default_factory=list)
+    files_dir: str = ""
+    output_dir: str = ""
+
+    # Thread context
+    thread_context: str = ""
+    thread_messages: list[dict[str, Any]] = field(default_factory=list)
+
+    # Predecessor context (steps only)
+    predecessor_context: str = ""
+    predecessor_step_ids: list[str] = field(default_factory=list)
+
+    # Skills
+    skills: list[str] = field(default_factory=list)
+
+    # Prompt (assembled final prompt)
+    prompt: str = ""
+
+    # Model (resolved model identifier, after tier resolution)
+    model: str | None = None
+
+    # Tags / tag attributes
+    tags: list[str] = field(default_factory=list)
+    tag_attributes: str = ""
+
+    # Trust level
+    trust_level: str = "autonomous"
+
+    # Step-specific fields
+    step_title: str = ""
+    step_description: str = ""
+    blocked_by: list[str] = field(default_factory=list)
+
+    # CC-specific
+    is_cc: bool = False
+
+    # Raw task data (for post-execution hooks)
+    task_data: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def is_task(self) -> bool:
+        """Return True if this is a task execution request."""
+        return self.entity_type == EntityType.TASK
+
+    @property
+    def is_step(self) -> bool:
+        """Return True if this is a step execution request."""
+        return self.entity_type == EntityType.STEP
+
+    @property
+    def safe_task_id(self) -> str:
+        """Return filesystem-safe task ID."""
+        from mc.types import task_safe_id
+        return task_safe_id(self.task_id)

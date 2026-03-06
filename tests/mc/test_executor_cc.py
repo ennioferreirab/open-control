@@ -16,23 +16,21 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch, call
-
-import mc.executor as _executor_module
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import mc.executor as _executor_module
 from mc.executor import TaskExecutor
 from mc.types import (
+    ActivityEventType,
     AgentData,
+    AuthorType,
     CCTaskResult,
     ClaudeCodeOpts,
-    WorkspaceContext,
-    TaskStatus,
-    ActivityEventType,
-    AuthorType,
     MessageType,
+    TaskStatus,
+    WorkspaceContext,
 )
 
 # Patch targets for lazy-imported CC modules (imported inside _execute_cc_task).
@@ -112,14 +110,40 @@ async def _drain_background_tasks() -> None:
 
 
 class TestBackendRouting:
-    """_execute_task routes to _execute_cc_task when backend == 'claude-code'."""
+    """_execute_task routes to _execute_cc_task when backend == 'claude-code'.
+
+    Updated for Story 16.1: ContextBuilder is mocked at the pipeline level,
+    then _load_agent_data detects backend: claude-code for routing.
+    """
 
     @pytest.mark.asyncio
     async def test_claude_code_backend_routes_to_execute_cc_task(self):
         executor = _make_executor()
         agent_data = _cc_agent(backend="claude-code")
 
+        # Build a non-CC ExecutionRequest (ContextBuilder doesn't detect CC
+        # from backend field -- that's done post-pipeline by _load_agent_data)
+        from mc.application.execution.request import EntityType, ExecutionRequest
+
+        req = ExecutionRequest(
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Test task",
+            description="desc",
+            agent_name="my-cc-agent",
+            is_cc=False,
+            files_dir="/tmp/test-files",
+            output_dir="/tmp/test-output",
+        )
+
         with (
+            patch(
+                "mc.application.execution.context_builder.ContextBuilder"
+                ".build_task_context",
+                new_callable=AsyncMock,
+                return_value=req,
+            ),
             patch.object(executor, "_load_agent_data", return_value=agent_data),
             patch.object(executor, "_execute_cc_task", new_callable=AsyncMock) as mock_cc,
         ):
@@ -131,28 +155,45 @@ class TestBackendRouting:
                 trust_level="autonomous",
             )
 
-        mock_cc.assert_awaited_once_with(
-            "t1", "Test task", "desc", "my-cc-agent", agent_data,
-            trust_level="autonomous", task_data=None, needs_enrichment=True,
-        )
+        mock_cc.assert_awaited_once()
+        call_kwargs = mock_cc.call_args
+        assert call_kwargs[0][0] == "t1"  # task_id
+        assert call_kwargs[0][3] == "my-cc-agent"  # agent_name
+        assert call_kwargs[0][4] == agent_data  # agent_data
+        # Unified pipeline already enriched, so needs_enrichment=False
+        assert call_kwargs[1]["needs_enrichment"] is False
 
     @pytest.mark.asyncio
     async def test_nanobot_backend_skips_cc_task(self):
         executor = _make_executor()
         agent_data = _cc_agent(backend="nanobot")
 
+        from mc.application.execution.request import EntityType, ExecutionRequest
+
+        req = ExecutionRequest(
+            entity_type=EntityType.TASK,
+            entity_id="t2",
+            task_id="t2",
+            title="Nanobot task",
+            agent_name="my-cc-agent",
+            is_cc=False,
+            files_dir="/tmp/test-files",
+            output_dir="/tmp/test-output",
+        )
+
         with (
+            patch(
+                "mc.application.execution.context_builder.ContextBuilder"
+                ".build_task_context",
+                new_callable=AsyncMock,
+                return_value=req,
+            ),
             patch.object(executor, "_load_agent_data", return_value=agent_data),
             patch.object(executor, "_execute_cc_task", new_callable=AsyncMock) as mock_cc,
             # Patch the nanobot path so it doesn't actually run
             patch("mc.executor._run_agent_on_task", new_callable=AsyncMock) as mock_run,
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
-            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
-            patch.object(executor._bridge, "query", return_value={}),
-            patch.object(executor._bridge, "update_task_status", return_value=None),
-            patch.object(executor._bridge, "send_message", return_value=None),
-            patch.object(executor._bridge, "get_agent_by_name", return_value=None),
         ):
             mock_run.return_value = ("result", "key", MagicMock())
             await executor._execute_task(
@@ -169,17 +210,31 @@ class TestBackendRouting:
     async def test_no_agent_data_skips_cc_task(self):
         executor = _make_executor()
 
+        from mc.application.execution.request import EntityType, ExecutionRequest
+
+        req = ExecutionRequest(
+            entity_type=EntityType.TASK,
+            entity_id="t3",
+            task_id="t3",
+            title="Unregistered agent",
+            agent_name="unknown-agent",
+            is_cc=False,
+            files_dir="/tmp/test-files",
+            output_dir="/tmp/test-output",
+        )
+
         with (
+            patch(
+                "mc.application.execution.context_builder.ContextBuilder"
+                ".build_task_context",
+                new_callable=AsyncMock,
+                return_value=req,
+            ),
             patch.object(executor, "_load_agent_data", return_value=None),
             patch.object(executor, "_execute_cc_task", new_callable=AsyncMock) as mock_cc,
             patch("mc.executor._run_agent_on_task", new_callable=AsyncMock) as mock_run,
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
-            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
-            patch.object(executor._bridge, "query", return_value={}),
-            patch.object(executor._bridge, "update_task_status", return_value=None),
-            patch.object(executor._bridge, "send_message", return_value=None),
-            patch.object(executor._bridge, "get_agent_by_name", return_value=None),
         ):
             mock_run.return_value = ("result", "key", MagicMock())
             await executor._execute_task(
@@ -764,7 +819,11 @@ class TestOnTaskCompletedCallback:
 
 
 class TestCCModelRouting:
-    """Tests for cc/ model routing in _execute_task."""
+    """Tests for cc/ model routing in _execute_task.
+
+    Updated for Story 16.1: ContextBuilder detects cc/ model prefix and sets
+    is_cc=True + model (without prefix) on the ExecutionRequest.
+    """
 
     @pytest.mark.asyncio
     async def test_cc_model_routes_to_cc_task(self):
@@ -786,12 +845,33 @@ class TestCCModelRouting:
         async def capture_cc_task(task_id, title, description, agent_name, agent_data, **kwargs):
             captured_agent_data.append(agent_data)
 
+        # ContextBuilder detects cc/ prefix and sets is_cc=True
+        from mc.application.execution.request import EntityType, ExecutionRequest
+
+        req = ExecutionRequest(
+            entity_type=EntityType.TASK,
+            entity_id="task-123",
+            task_id="task-123",
+            title="Test Task",
+            description="Test description",
+            agent_name="test-agent",
+            agent_model="cc/claude-sonnet-4-6",
+            is_cc=True,
+            model="claude-sonnet-4-6",
+            agent=nanobot_agent,
+            files_dir="/tmp/test-files",
+            output_dir="/tmp/test-output",
+        )
+
         with (
+            patch(
+                "mc.application.execution.context_builder.ContextBuilder"
+                ".build_task_context",
+                new_callable=AsyncMock,
+                return_value=req,
+            ),
             patch.object(executor, "_load_agent_data", return_value=nanobot_agent),
             patch.object(executor, "_execute_cc_task", side_effect=capture_cc_task),
-            patch.object(executor, "_load_agent_config", return_value=(None, "cc/claude-sonnet-4-6", None)),
-            patch.object(executor._bridge, "query", return_value={}),
-            patch.object(executor._bridge, "get_agent_by_name", return_value=None),
         ):
             await executor._execute_task(
                 task_id="task-123",
@@ -816,12 +896,31 @@ class TestCCModelRouting:
         async def capture_cc_task(task_id, title, description, agent_name, agent_data, **kwargs):
             captured_agent_data.append(agent_data)
 
+        # ContextBuilder detects cc/ prefix, but agent is None
+        from mc.application.execution.request import EntityType, ExecutionRequest
+
+        req = ExecutionRequest(
+            entity_type=EntityType.TASK,
+            entity_id="task-456",
+            task_id="task-456",
+            title="Opus Task",
+            agent_name="unknown-agent",
+            is_cc=True,
+            model="claude-opus-4-6",
+            agent=None,
+            files_dir="/tmp/test-files",
+            output_dir="/tmp/test-output",
+        )
+
         with (
+            patch(
+                "mc.application.execution.context_builder.ContextBuilder"
+                ".build_task_context",
+                new_callable=AsyncMock,
+                return_value=req,
+            ),
             patch.object(executor, "_load_agent_data", return_value=None),
             patch.object(executor, "_execute_cc_task", side_effect=capture_cc_task),
-            patch.object(executor, "_load_agent_config", return_value=(None, "cc/claude-opus-4-6", None)),
-            patch.object(executor._bridge, "query", return_value={}),
-            patch.object(executor._bridge, "get_agent_by_name", return_value=None),
         ):
             await executor._execute_task(
                 task_id="task-456",
