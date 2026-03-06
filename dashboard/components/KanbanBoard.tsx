@@ -1,334 +1,51 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, useMutation, useConvex } from "convex/react";
-import { api } from "../convex/_generated/api";
-import { Doc, Id } from "../convex/_generated/dataModel";
+import { useState } from "react";
 import { LayoutGroup } from "motion/react";
+import { Id } from "../convex/_generated/dataModel";
 import { KanbanColumn } from "./KanbanColumn";
 import { TrashBinSheet } from "./TrashBinSheet";
 import { DoneTasksSheet } from "./DoneTasksSheet";
 import { CompactFavoriteCard } from "./CompactFavoriteCard";
 import { Star, Trash2 } from "lucide-react";
-import { useBoard } from "@/components/BoardContext";
 import { ParsedSearch } from "@/lib/searchParser";
-
-const COLUMNS = [
-  { title: "Inbox", status: "inbox", accentColor: "bg-violet-500" },
-  { title: "Assigned", status: "assigned", accentColor: "bg-cyan-500" },
-  { title: "In Progress", status: "in_progress", accentColor: "bg-blue-500" },
-  { title: "Review", status: "review", accentColor: "bg-amber-500" },
-  { title: "Done", status: "done", accentColor: "bg-green-500" },
-] as const;
+import { useBoardFilters } from "@/hooks/useBoardFilters";
+import { useBoardView } from "@/hooks/useBoardView";
+import { useBoardColumns } from "@/hooks/useBoardColumns";
 
 interface KanbanBoardProps {
   onTaskClick?: (taskId: Id<"tasks">) => void;
   search?: ParsedSearch;
 }
 
-type ColumnStatus = (typeof COLUMNS)[number]["status"];
-const EMPTY_SEARCH: ParsedSearch = {
-  freeText: "",
-  tagFilters: [],
-  attributeFilters: [],
-};
+export function KanbanBoard({ onTaskClick, search }: KanbanBoardProps) {
+  const filters = useBoardFilters(search);
+  const boardView = useBoardView(filters);
+  const columns = useBoardColumns(boardView.tasks, boardView.allSteps);
 
-function stepStatusToColumnStatus(
-  stepStatus: Doc<"steps">["status"],
-  taskStatus?: Doc<"tasks">["status"]
-): ColumnStatus | null {
-  switch (stepStatus) {
-    case "waiting_human":
-      return "review";
-    case "assigned":
-    case "blocked":
-      // When the parent task is already in_progress, waiting steps belong in
-      // the "In Progress" column — not "Assigned" (which is for tasks not yet started).
-      return taskStatus === "in_progress" ? "in_progress" : "assigned";
-    case "running":
-    case "crashed":
-      return "in_progress";
-    case "completed":
-      // Done tasks already skip all steps (line 248-252), so this only
-      // affects non-done tasks. Old completed steps from previous runs
-      // must not pull an active task into the "Done" column.
-      return null;
-    default:
-      return null;
-  }
-}
-
-export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardProps) {
-  const { activeBoardId, isDefaultBoard } = useBoard();
-  const convex = useConvex();
-  const hasFreeText = search.freeText.trim().length > 0;
-  const hasTagFilters = search.tagFilters.length > 0;
-  const hasAttributeFilters = search.attributeFilters.length > 0;
-  const isSearchActive = hasFreeText || hasTagFilters || hasAttributeFilters;
-
-  const searchedTasksResult = useQuery(
-    api.tasks.search,
-    hasFreeText
-      ? activeBoardId
-        ? { query: search.freeText, boardId: activeBoardId }
-        : { query: search.freeText }
-      : "skip"
-  );
-  const allTasksResult = useQuery(api.tasks.list, !hasFreeText && !activeBoardId ? {} : "skip");
-  const boardTasksResult = useQuery(
-    api.tasks.listByBoard,
-    !hasFreeText && activeBoardId
-      ? { boardId: activeBoardId, includeNoBoardId: isDefaultBoard }
-      : "skip",
-  );
-  const baseTasks = hasFreeText
-    ? searchedTasksResult
-    : activeBoardId
-      ? boardTasksResult
-      : allTasksResult;
-  const tagAttributes = useQuery(
-    api.tagAttributes.list,
-    hasAttributeFilters ? {} : "skip"
-  );
-  const [attributeMatchedTaskIds, setAttributeMatchedTaskIds] = useState<Set<Id<"tasks">> | null>(null);
-  const [isAttributeFiltering, setIsAttributeFiltering] = useState(false);
-  const boardStepsResult = useQuery(
-    api.steps.listByBoard,
-    activeBoardId
-      ? { boardId: activeBoardId, includeNoBoardId: isDefaultBoard }
-      : "skip"
-  );
-  const globalStepsResult = useQuery(
-    api.steps.listAll,
-    activeBoardId ? "skip" : {}
-  );
-  const allStepsResult = activeBoardId ? boardStepsResult : globalStepsResult;
-
-  const tagFilteredTasks = useMemo(() => {
-    if (!baseTasks) return undefined;
-    if (!hasTagFilters) return baseTasks;
-    return baseTasks.filter((task) => {
-      const taskTags = (task.tags ?? []).map((tag) => tag.toLowerCase());
-      return search.tagFilters.every((tagFilter) => taskTags.includes(tagFilter));
-    });
-  }, [baseTasks, hasTagFilters, search.tagFilters]);
-
-  // Stable key for attribute filters so the effect only re-runs when
-  // the actual filter values change, not on every task-list update.
-  const attrFilterKey = useMemo(
-    () => JSON.stringify(search.attributeFilters),
-    [search.attributeFilters]
-  );
-  const tagFilteredTaskIds = useMemo(
-    () => tagFilteredTasks?.map((t) => t._id),
-    [tagFilteredTasks]
-  );
-  const tagFilteredTaskIdsKey = useMemo(
-    () => JSON.stringify(tagFilteredTaskIds),
-    [tagFilteredTaskIds]
-  );
-
-  useEffect(() => {
-    if (!hasAttributeFilters) {
-      setAttributeMatchedTaskIds(null);
-      setIsAttributeFiltering(false);
-      return;
-    }
-    if (!tagFilteredTasks || tagAttributes === undefined) {
-      setIsAttributeFiltering(true);
-      return;
-    }
-
-    let cancelled = false;
-    setIsAttributeFiltering(true);
-
-    const run = async () => {
-      const attrNameById = new Map(
-        tagAttributes.map((attr) => [attr._id, attr.name.toLowerCase()] as const)
-      );
-      const preFilterMatches = await Promise.all(
-        search.attributeFilters.map((filter) =>
-          convex.query(api.tagAttributeValues.searchByValue, {
-            value: filter.value,
-            tagName: filter.tagName,
-          })
-        )
-      );
-      const preFilteredTaskIdSets = preFilterMatches.map(
-        (ids) => new Set(ids as Id<"tasks">[])
-      );
-      const preFilteredTasks = tagFilteredTasks.filter((task) =>
-        preFilteredTaskIdSets.every((taskIds) => taskIds.has(task._id))
-      );
-      const valuesByTask = await Promise.all(
-        preFilteredTasks.map((task) =>
-          convex.query(api.tagAttributeValues.getByTask, { taskId: task._id })
-        )
-      );
-      if (cancelled) return;
-
-      const matchedTaskIds = new Set<Id<"tasks">>();
-      for (const [index, task] of preFilteredTasks.entries()) {
-        const values = valuesByTask[index] ?? [];
-        const matchesAllFilters = search.attributeFilters.every((filter) =>
-          values.some((entry) => {
-            const attrName = attrNameById.get(entry.attributeId)?.toLowerCase();
-            return (
-              entry.tagName.toLowerCase() === filter.tagName &&
-              attrName === filter.attrName &&
-              entry.value.toLowerCase().includes(filter.value)
-            );
-          })
-        );
-        if (matchesAllFilters) {
-          matchedTaskIds.add(task._id);
-        }
-      }
-
-      setAttributeMatchedTaskIds(matchedTaskIds);
-      setIsAttributeFiltering(false);
-    };
-
-    run().catch(() => {
-      if (!cancelled) {
-        setAttributeMatchedTaskIds(new Set());
-        setIsAttributeFiltering(false);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convex, hasAttributeFilters, attrFilterKey, tagAttributes, tagFilteredTaskIdsKey]);
-
-  const tasks = useMemo(() => {
-    if (!tagFilteredTasks) return undefined;
-    if (!hasAttributeFilters) return tagFilteredTasks;
-    if (isAttributeFiltering || !attributeMatchedTaskIds) return undefined;
-    return tagFilteredTasks.filter((task) => attributeMatchedTaskIds.has(task._id));
-  }, [
-    attributeMatchedTaskIds,
-    hasAttributeFilters,
-    isAttributeFiltering,
-    tagFilteredTasks,
-  ]);
-
-  // Derive favorites from the currently displayed task set.
-  const boardFavorites = (tasks ?? []).filter((t) => t.isFavorite === true);
-  const hitlCount = useQuery(api.tasks.countHitlPending) ?? 0;
-  const deletedTasks = useQuery(api.tasks.listDeleted);
-  const deletedCount = deletedTasks?.length ?? 0;
-  const clearAllDone = useMutation(api.tasks.clearAllDone);
-  const tagsList = useQuery(api.taskTags.list);
-  const tagColorMap: Record<string, string> = Object.fromEntries(
-    tagsList?.map((t) => [t.name, t.color]) ?? []
-  );
   const [trashOpen, setTrashOpen] = useState(false);
   const [doneSheetOpen, setDoneSheetOpen] = useState(false);
 
-  if (tasks === undefined || allStepsResult === undefined) {
+  if (boardView.isLoading || columns === undefined) {
     return null;
   }
-  const allSteps = allStepsResult;
 
-  if (!isSearchActive && tasks.length === 0 && deletedCount === 0) {
+  if (
+    !filters.isSearchActive &&
+    (boardView.tasks?.length ?? 0) === 0 &&
+    boardView.deletedCount === 0
+  ) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
         No tasks yet. Type above to create your first task.
       </div>
     );
   }
-  const showNoSearchResults = isSearchActive && tasks.length === 0;
 
-  const visibleTaskIds = new Set(tasks.map((task) => task._id));
-  const boardSteps = allSteps.filter((step) => visibleTaskIds.has(step.taskId));
-  const taskTitleMap = new Map(tasks.map((task) => [task._id, task.title] as const));
-  const taskCreationTimeMap = new Map(
-    tasks.map((task) => [task._id, task._creationTime] as const)
-  );
-
-  const taskStatusMap = new Map(tasks.map((task) => [task._id, task.status] as const));
-
-  const stepsByTaskId = new Map<Id<"tasks">, Doc<"steps">[]>();
-  for (const step of boardSteps) {
-    const taskStatus = taskStatusMap.get(step.taskId);
-    if (taskStatus === "done" || taskStatus === "review") {
-      continue;
-    }
-    const mappedColumn = stepStatusToColumnStatus(step.status, taskStatus);
-    if (!mappedColumn) {
-      continue;
-    }
-    const current = stepsByTaskId.get(step.taskId) ?? [];
-    current.push(step);
-    stepsByTaskId.set(step.taskId, current);
-  }
-
-  const tasksWithRenderableSteps = new Set(stepsByTaskId.keys());
-  // Tasks in "review" always render as regular cards in the Review column
-  // (not as step groups in In Progress), even if they have running steps
-  // — e.g. when ask_user pauses execution for user input.
-  const regularTasks = tasks.filter(
-    (task) => !tasksWithRenderableSteps.has(task._id) || task.status === "review"
-  );
-
-  const tasksByStatus = COLUMNS.map((col) => {
-    const columnTasks = regularTasks
-      .filter((t) => {
-        if (col.status === "in_progress") {
-          return (
-            t.status === "in_progress" ||
-            t.status === "retrying" ||
-            t.status === "crashed" ||
-            t.status === "failed"
-          );
-        }
-        if (col.status === "assigned") {
-          return (
-            t.status === "assigned" ||
-            t.status === "planning" ||
-            t.status === "ready"
-          );
-        }
-        if (col.status === "inbox") {
-          return t.status === "inbox";
-        }
-        return t.status === col.status;
-      })
-      .sort((a, b) => b._creationTime - a._creationTime);
-
-    const stepGroups = Array.from(stepsByTaskId.entries())
-      .map(([taskId, taskSteps]) => {
-        const taskStatus = taskStatusMap.get(taskId);
-        const steps = taskSteps
-          .filter((step) => stepStatusToColumnStatus(step.status, taskStatus) === col.status)
-          .sort((a, b) => a.order - b.order);
-        return {
-          taskId,
-          taskTitle: taskTitleMap.get(taskId) ?? "Unknown Task",
-          steps,
-        };
-      })
-      .filter((group) => group.steps.length > 0)
-      .sort(
-        (a, b) =>
-          (taskCreationTimeMap.get(b.taskId) ?? 0) -
-          (taskCreationTimeMap.get(a.taskId) ?? 0)
-      );
-
-    return {
-      ...col,
-      tasks: columnTasks,
-      stepGroups,
-      totalCount:
-        columnTasks.length +
-        stepGroups.reduce((count, group) => count + group.steps.length, 0),
-    };
-  });
-
+  const showNoSearchResults =
+    filters.isSearchActive && (boardView.tasks?.length ?? 0) === 0;
   const doneTaskCount =
-    tasksByStatus.find((c) => c.status === "done")?.tasks.length ?? 0;
+    columns.find((c) => c.status === "done")?.tasks.length ?? 0;
 
   return (
     <LayoutGroup>
@@ -338,7 +55,7 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
             No tasks match your search
           </div>
         )}
-        {boardFavorites.length > 0 && (
+        {boardView.favorites.length > 0 && (
           <div className="px-1 pb-2">
             <div className="flex items-center gap-1.5 mb-1.5">
               <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
@@ -347,7 +64,7 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
               </span>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {boardFavorites.map((task) => (
+              {boardView.favorites.map((task) => (
                 <CompactFavoriteCard
                   key={task._id}
                   task={task}
@@ -359,7 +76,7 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
         )}
         <div className="flex-1 flex gap-4 overflow-hidden">
           <div className="flex min-w-0 gap-4 overflow-x-auto snap-x snap-mandatory pb-1 md:flex-1 md:grid md:grid-cols-5 md:overflow-hidden md:snap-none md:pb-0">
-            {tasksByStatus.map((col) => (
+            {columns.map((col) => (
               <KanbanColumn
                 key={col.status}
                 title={col.title}
@@ -369,11 +86,13 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
                 totalCount={col.totalCount}
                 accentColor={col.accentColor}
                 onTaskClick={onTaskClick}
-                hitlCount={col.status === "review" ? hitlCount : undefined}
-                tagColorMap={tagColorMap}
+                hitlCount={
+                  col.status === "review" ? boardView.hitlCount : undefined
+                }
+                tagColorMap={boardView.tagColorMap}
                 {...(col.status === "done"
                   ? {
-                      onClear: () => clearAllDone(),
+                      onClear: () => boardView.clearAllDone(),
                       clearDisabled: doneTaskCount === 0,
                       onViewAll: () => setDoneSheetOpen(true),
                     }
@@ -391,7 +110,10 @@ export function KanbanBoard({ onTaskClick, search = EMPTY_SEARCH }: KanbanBoardP
         </div>
       </div>
       <TrashBinSheet open={trashOpen} onClose={() => setTrashOpen(false)} />
-      <DoneTasksSheet open={doneSheetOpen} onClose={() => setDoneSheetOpen(false)} />
+      <DoneTasksSheet
+        open={doneSheetOpen}
+        onClose={() => setDoneSheetOpen(false)}
+      />
     </LayoutGroup>
   );
 }
