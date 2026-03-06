@@ -131,7 +131,6 @@ export const create = mutation({
       ? "autonomous"
       : ((args.trustLevel ?? "autonomous") as
           | "autonomous"
-          | "agent_reviewed"
           | "human_approved");
     const supervisionMode = isManual
       ? "autonomous"
@@ -177,8 +176,7 @@ export const create = mutation({
         : `Task created: "${args.title}"`;
 
     if (!isManual && trustLevel !== "autonomous") {
-      const levelLabel = trustLevel === "agent_reviewed" ? "agent reviewed" : "human approved";
-      description += ` (trust: ${levelLabel})`;
+      description += ` (trust: human approved)`;
     }
     if (!isManual && supervisionMode === "supervised") {
       description += " (supervised)";

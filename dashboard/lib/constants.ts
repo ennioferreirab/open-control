@@ -26,7 +26,6 @@ export const STEP_STATUS = {
 // Trust level values
 export const TRUST_LEVEL = {
   AUTONOMOUS: "autonomous",
-  AGENT_REVIEWED: "agent_reviewed",
   HUMAN_APPROVED: "human_approved",
 } as const;
 

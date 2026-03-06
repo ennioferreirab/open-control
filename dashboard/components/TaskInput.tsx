@@ -14,8 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Bot, Paperclip, User, X, Eye, Zap, ShieldCheck } from "lucide-react";
-// ShieldCheck used in taskMode=auto_review button
+import { Bot, Paperclip, User, X, Eye, Zap } from "lucide-react";
 import { TAG_COLORS } from "@/lib/constants";
 import { useBoard } from "@/components/BoardContext";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
@@ -30,7 +29,7 @@ export function TaskInput() {
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("");
-  const [taskMode, setTaskMode] = useState<"autonomous" | "supervised" | "auto_review">("autonomous");
+  const [taskMode, setTaskMode] = useState<"autonomous" | "supervised">("autonomous");
   const [isManual, setIsManual] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -99,7 +98,6 @@ export function TaskInput() {
         args.supervisionMode = "autonomous";
       } else {
         args.supervisionMode = taskMode === "supervised" ? "supervised" : "autonomous";
-        if (taskMode === "auto_review") args.trustLevel = "agent_reviewed";
         if (selectedAgent && selectedAgent !== "auto") {
           args.assignedAgent = selectedAgent;
         }
@@ -183,7 +181,6 @@ export function TaskInput() {
         args.supervisionMode = "autonomous";
       } else {
         args.supervisionMode = taskMode === "supervised" ? "supervised" : "autonomous";
-        if (taskMode === "auto_review") args.trustLevel = "agent_reviewed";
         if (selectedAgent && selectedAgent !== "auto") {
           args.assignedAgent = selectedAgent;
         }
@@ -401,22 +398,20 @@ export function TaskInput() {
               <div className="flex gap-1 items-center">
                 <button
                   type="button"
-                  title={taskMode === "autonomous" ? "Autonomous" : taskMode === "supervised" ? "Supervised" : "Auto Review"}
+                  title={taskMode === "autonomous" ? "Autonomous" : "Supervised"}
                   onClick={() =>
                     setTaskMode((prev) =>
-                      prev === "autonomous" ? "supervised" : prev === "supervised" ? "auto_review" : "autonomous"
+                      prev === "autonomous" ? "supervised" : "autonomous"
                     )
                   }
                   className={`inline-flex items-center gap-1.5 rounded-md text-sm font-medium h-9 px-4 transition-all duration-200 ${
                     taskMode === "supervised"
                       ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-300 dark:border-amber-700"
-                      : taskMode === "auto_review"
-                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border border-blue-300 dark:border-blue-700"
                       : "border border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                   }`}
                 >
-                  {taskMode === "supervised" ? <Eye className="h-5 w-5" /> : taskMode === "auto_review" ? <ShieldCheck className="h-5 w-5" /> : <Zap className="h-5 w-5" />}
-                  <span>{taskMode === "supervised" ? "Supervised" : taskMode === "auto_review" ? "Auto Review" : "Autonomous"}</span>
+                  {taskMode === "supervised" ? <Eye className="h-5 w-5" /> : <Zap className="h-5 w-5" />}
+                  <span>{taskMode === "supervised" ? "Supervised" : "Autonomous"}</span>
                 </button>
 
                 <Select value={selectedAgent || "auto"} onValueChange={(v) => setSelectedAgent(v === "auto" ? "" : v)}>

@@ -240,14 +240,7 @@ class ReviewHandler:
             reviewer_name,
         )
 
-        if trust_level == TrustLevel.AGENT_REVIEWED:
-            await asyncio.to_thread(
-                self._bridge.update_task_status,
-                task_id,
-                TaskStatus.DONE,
-                reviewer_name,
-            )
-        elif trust_level == TrustLevel.HUMAN_APPROVED:
+        if trust_level == TrustLevel.HUMAN_APPROVED:
             await asyncio.to_thread(
                 self._bridge.send_message,
                 task_id,

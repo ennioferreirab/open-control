@@ -74,7 +74,6 @@ Any state → retrying, crashed, deleted (universal)
 | Level | Meaning | Use when |
 |-------|---------|----------|
 | `autonomous` | No review needed (default) | Routine tasks, low risk |
-| `agent_reviewed` | Peer agent reviews after completion | Medium complexity |
 | `human_approved` | Human must approve/deny in review | Critical tasks, deployments |
 
 ## Supervision Modes

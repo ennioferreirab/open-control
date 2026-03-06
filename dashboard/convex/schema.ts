@@ -38,7 +38,6 @@ export default defineSchema({
     assignedAgent: v.optional(v.string()),
     trustLevel: v.union(
       v.literal("autonomous"),
-      v.literal("agent_reviewed"),
       v.literal("human_approved"),
     ),
     reviewers: v.optional(v.array(v.string())),

@@ -105,7 +105,6 @@ class StepStatus(StrEnum):
 class TrustLevel(StrEnum):
     """Trust levels for task oversight. Matches Convex tasks.trustLevel union type."""
     AUTONOMOUS = "autonomous"
-    AGENT_REVIEWED = "agent_reviewed"
     HUMAN_APPROVED = "human_approved"
 
 

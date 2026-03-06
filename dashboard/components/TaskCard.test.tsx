@@ -116,16 +116,6 @@ describe("TaskCard", () => {
     expect(screen.queryByText("HITL")).not.toBeInTheDocument();
   });
 
-  it("shows review indicator for agent_reviewed tasks", () => {
-    render(
-      <TaskCard task={{ ...baseTask, trustLevel: "agent_reviewed" }} />
-    );
-    // The RefreshCw icon should be rendered (we can check for the SVG element)
-    const card = screen.getByRole("article");
-    const svg = card.querySelector("svg");
-    expect(svg).toBeTruthy();
-  });
-
   it("shows HITL badge for human_approved tasks", () => {
     render(
       <TaskCard task={{ ...baseTask, trustLevel: "human_approved" }} />

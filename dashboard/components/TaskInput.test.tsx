@@ -266,36 +266,6 @@ describe("TaskInput", () => {
     expect(screen.queryByText("Reviewers")).not.toBeInTheDocument();
   });
 
-  it("shows reviewer checkboxes when trust level is agent_reviewed", () => {
-    render(<TaskInput />);
-    fireEvent.click(screen.getByLabelText("Toggle options"));
-
-    // Change trust level to agent_reviewed
-    const trustTrigger = screen.getAllByRole("combobox")[1];
-    fireEvent.click(trustTrigger);
-    fireEvent.click(screen.getByRole("option", { name: "Agent Reviewed" }));
-
-    // Reviewer section should now be visible
-    expect(screen.getByText("Reviewers")).toBeInTheDocument();
-    expect(screen.getByText("Coder Agent")).toBeInTheDocument();
-    expect(screen.getByText("Reviewer Agent")).toBeInTheDocument();
-  });
-
-  it("hides reviewer section when trust level is changed back to autonomous", () => {
-    render(<TaskInput />);
-    fireEvent.click(screen.getByLabelText("Toggle options"));
-
-    // Change to agent_reviewed
-    fireEvent.click(screen.getAllByRole("combobox")[1]);
-    fireEvent.click(screen.getByRole("option", { name: "Agent Reviewed" }));
-    expect(screen.getByText("Reviewers")).toBeInTheDocument();
-
-    // Change back to autonomous
-    fireEvent.click(screen.getAllByRole("combobox")[1]);
-    fireEvent.click(screen.getByRole("option", { name: "Autonomous" }));
-    expect(screen.queryByText("Reviewers")).not.toBeInTheDocument();
-  });
-
   it("shows human approval checkbox when trust level is human_approved", () => {
     render(<TaskInput />);
     fireEvent.click(screen.getByLabelText("Toggle options"));
@@ -304,34 +274,6 @@ describe("TaskInput", () => {
     fireEvent.click(screen.getByRole("option", { name: "Human Approved" }));
 
     expect(screen.getByText("Require human approval")).toBeInTheDocument();
-  });
-
-  it("submits with trustLevel and reviewers when configured", () => {
-    mockMutate.mockResolvedValue("taskId123");
-    render(<TaskInput />);
-
-    // Type task title
-    const input = screen.getByPlaceholderText("Create a new task...");
-    fireEvent.change(input, { target: { value: "Review this" } });
-
-    // Expand options and set trust level
-    fireEvent.click(screen.getByLabelText("Toggle options"));
-    fireEvent.click(screen.getAllByRole("combobox")[1]);
-    fireEvent.click(screen.getByRole("option", { name: "Agent Reviewed" }));
-
-    // Select a reviewer
-    fireEvent.click(screen.getByLabelText("Coder Agent"));
-
-    // Submit
-    fireEvent.click(screen.getByText("Create"));
-
-    expect(mockMutate).toHaveBeenCalledWith({
-      title: "Review this",
-      tags: undefined,
-      supervisionMode: "autonomous",
-      trustLevel: "agent_reviewed",
-      reviewers: ["coder"],
-    });
   });
 
   // --- Story 8.4: Disabled agents in selector ---

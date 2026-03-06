@@ -193,7 +193,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
             {task.trustLevel !== "autonomous" && (
               <span className="inline-flex items-center gap-1">
                 <RefreshCw className="h-3 w-3 text-amber-500" />
-                {task.trustLevel === "agent_reviewed" ? "Reviewed" : "Human review"}
+                Human review
               </span>
             )}
             {task.files && task.files.length > 0 && (

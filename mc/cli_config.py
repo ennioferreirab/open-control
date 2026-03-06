@@ -112,7 +112,7 @@ def tasks_create(
     trust_level: str = typer.Option(
         None,
         "--trust-level",
-        help="Trust level: autonomous|agent_reviewed|human_approved",
+        help="Trust level: autonomous|human_approved",
     ),
     supervision_mode: str = typer.Option(
         None,

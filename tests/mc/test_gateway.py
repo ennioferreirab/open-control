@@ -585,8 +585,8 @@ class TestTrustLevelStatus:
     """Test trust level determines done vs review."""
 
     @pytest.mark.asyncio
-    async def test_agent_reviewed_transitions_to_review(self):
-        """agent_reviewed trust level should transition to 'review'."""
+    async def test_human_approved_transitions_to_review(self):
+        """human_approved trust level should transition to 'review'."""
         from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
@@ -601,7 +601,7 @@ class TestTrustLevelStatus:
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
-                "task_006", "Reviewed task", "For review", "review-agent", "agent_reviewed"
+                "task_006", "Reviewed task", "For review", "review-agent", "human_approved"
             )
 
         mock_bridge.update_task_status.assert_any_call(
@@ -846,7 +846,7 @@ class TestOrchestratorNoDuplicateActivity:
         task_data = {
             "title": "Review me",
             "reviewers": ["reviewer-agent"],
-            "trust_level": "agent_reviewed",
+            "trust_level": "human_approved",
         }
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
