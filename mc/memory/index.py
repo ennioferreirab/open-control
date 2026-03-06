@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
-import os
 import math
+import os
 import re
 import sqlite3
 import time
 import typing
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from mc.memory.policy import is_memory_markdown_file, iter_memory_markdown_files
+
+_DEFAULT_CHUNK_SIZE = 500
+_DEFAULT_CHUNK_OVERLAP = 50
 
 
 @dataclass
@@ -241,7 +244,7 @@ class MemoryIndex:
                 return archive_chunks
         return [
             (content, start, end, created_at_default)
-            for content, start, end in self._chunk_text(text, max_chars=500, overlap=50)
+            for content, start, end in self._chunk_text(text, max_chars=_DEFAULT_CHUNK_SIZE, overlap=_DEFAULT_CHUNK_OVERLAP)
         ]
 
     @staticmethod
@@ -261,7 +264,7 @@ class MemoryIndex:
                 continue
             created_at = MemoryIndex._parse_archive_timestamp(match.group("timestamp"))
             body_start = match.start("body")
-            for content, start, end in MemoryIndex._chunk_text(body, max_chars=500, overlap=50):
+            for content, start, end in MemoryIndex._chunk_text(body, max_chars=_DEFAULT_CHUNK_SIZE, overlap=_DEFAULT_CHUNK_OVERLAP):
                 archive_chunks.append((content, body_start + start, body_start + end, created_at))
         return archive_chunks
 
@@ -314,7 +317,7 @@ class MemoryIndex:
 
     @staticmethod
     def _chunk_text(
-        text: str, max_chars: int = 500, overlap: int = 50
+        text: str, max_chars: int = _DEFAULT_CHUNK_SIZE, overlap: int = _DEFAULT_CHUNK_OVERLAP
     ) -> list[tuple[str, int, int]]:
         if not text.strip():
             return []

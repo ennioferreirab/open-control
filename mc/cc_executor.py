@@ -19,8 +19,8 @@ from mc.types import (
     MessageType,
     TaskStatus,
     TrustLevel,
-    is_cc_model,
     extract_cc_model_name,
+    is_cc_model,
     task_safe_id,
 )
 
@@ -123,9 +123,10 @@ class CCExecutorMixin:
         reasoning_level: str | None = None, needs_enrichment: bool = True,
     ) -> None:
         """Execute a task using the Claude Code CLI backend."""
-        from claude_code.workspace import CCWorkspaceManager
-        from claude_code.provider import ClaudeCodeProvider
         from claude_code.ipc_server import MCSocketServer
+        from claude_code.provider import ClaudeCodeProvider
+        from claude_code.workspace import CCWorkspaceManager
+
         # Import from mc.executor (which re-exports from output_enricher) so that
         # test patches on "mc.executor._snapshot_output_dir" etc. take effect.
         import mc.executor as _exe
@@ -174,7 +175,7 @@ class CCExecutorMixin:
         # 1. Prepare workspace
         try:
             ws_mgr = CCWorkspaceManager()
-            from mc.orientation import load_orientation
+            from mc.agent_orientation import load_orientation
             ws_ctx = ws_mgr.prepare(
                 agent_name, agent_data, task_id,
                 orientation=load_orientation(agent_name),
@@ -330,8 +331,9 @@ class CCExecutorMixin:
         async def _post_cc_consolidate():
             try:
                 from claude_code.memory_consolidator import CCMemoryConsolidator
-                from mc.types import is_tier_reference
+
                 from mc.tier_resolver import TierResolver
+                from mc.types import is_tier_reference
                 _model = "tier:standard-low"
                 if is_tier_reference(_model):
                     _model = TierResolver(self._bridge).resolve_model(_model) or _model
@@ -420,9 +422,9 @@ class CCExecutorMixin:
         self, task_id: str, agent_name: str, user_message: str, agent_data: "AgentData",
     ) -> str | None:
         """Handle a user follow-up message in a CC agent's task thread (CC-6 AC3)."""
-        from claude_code.workspace import CCWorkspaceManager
-        from claude_code.provider import ClaudeCodeProvider
         from claude_code.ipc_server import MCSocketServer
+        from claude_code.provider import ClaudeCodeProvider
+        from claude_code.workspace import CCWorkspaceManager
 
         session_id = await self._lookup_cc_session(agent_name, task_id)
 
@@ -446,7 +448,7 @@ class CCExecutorMixin:
         # Prepare workspace and IPC server
         try:
             ws_mgr = CCWorkspaceManager()
-            from mc.orientation import load_orientation
+            from mc.agent_orientation import load_orientation
             ws_ctx = ws_mgr.prepare(
                 agent_name, agent_data, task_id,
                 orientation=load_orientation(agent_name), task_prompt=user_message,

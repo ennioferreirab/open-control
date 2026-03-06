@@ -297,7 +297,7 @@ class TestExecuteCCTaskHappyPath:
             patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
         ):

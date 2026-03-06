@@ -70,7 +70,7 @@ class TestTrustLevel:
             patch(_PATCH_WS_MGR) as MockWS,
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
         ):
@@ -102,7 +102,7 @@ class TestTrustLevel:
             patch(_PATCH_WS_MGR) as MockWS,
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
         ):
@@ -136,7 +136,7 @@ class TestArtifacts:
             patch(_PATCH_WS_MGR) as MockWS,
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}) as mock_snap,
             patch(
                 "mc.executor._collect_output_artifacts",
@@ -170,7 +170,7 @@ class TestHeartbeat:
             patch(_PATCH_WS_MGR) as MockWS,
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
             patch("pathlib.Path.home", return_value=tmp_path),
@@ -202,7 +202,7 @@ class TestProviderError:
             patch(_PATCH_WS_MGR) as MockWS,
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch.object(executor, "_handle_provider_error", new_callable=AsyncMock) as mock_handle,
         ):
@@ -228,7 +228,7 @@ class TestEffortLevel:
             patch(_PATCH_WS_MGR) as MockWS,
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
         ):
@@ -260,7 +260,7 @@ class TestEffortLevel:
             patch(_PATCH_WS_MGR) as MockWS,
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
         ):
@@ -314,7 +314,7 @@ class TestClearRetryCount:
             patch(_PATCH_WS_MGR) as MockWS,
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
         ):

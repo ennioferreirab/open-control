@@ -16,8 +16,6 @@ import time
 import uuid
 
 from mc.plan_parser import (
-    INLINE_PLANNING_SKILLS,
-    STANDARD_TOOLS,
     _build_agent_roster,
     _build_file_summary,
     _build_task_shape_hints,
@@ -310,8 +308,8 @@ class TaskPlanner:
         from claude_code.workspace import CCWorkspaceManager
         from nanobot.config.loader import load_config
 
+        from mc.agent_orientation import load_orientation
         from mc.ask_user.handler import AskUserHandler
-        from mc.orientation import load_orientation
 
         cc_opts = ClaudeCodeOpts()
         cc_opts.max_turns = CC_PLANNING_MAX_TURNS

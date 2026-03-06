@@ -7,11 +7,10 @@ String values MUST match exactly — any mismatch will cause runtime errors.
 
 from __future__ import annotations
 
-import sys
 import re
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 if sys.version_info >= (3, 11):
@@ -65,15 +64,16 @@ def extract_tier_name(model: str) -> str | None:
     return name if name in VALID_TIER_NAMES else None
 
 
+# CC = Claude Code
 # CC-specific types — re-exported from vendor package for backwards compatibility
-from claude_code.types import (
-    CC_MODEL_PREFIX,
+from claude_code.types import (  # noqa: F401, E402 — intentional re-exports
     CC_AVAILABLE_MODELS,
-    is_cc_model,
-    extract_cc_model_name,
+    CC_MODEL_PREFIX,
+    CCTaskResult,
     ClaudeCodeOpts,
     WorkspaceContext,
-    CCTaskResult,
+    extract_cc_model_name,
+    is_cc_model,
 )
 
 

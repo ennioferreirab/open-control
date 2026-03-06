@@ -42,7 +42,7 @@ async def test_thread_reply_passes_orientation_to_prepare():
     with patch("claude_code.workspace.CCWorkspaceManager") as MockWS, \
          patch("claude_code.ipc_server.MCSocketServer") as MockIPC, \
          patch("claude_code.provider.ClaudeCodeProvider") as MockProv, \
-         patch("mc.orientation.load_orientation", return_value="Global orientation text"):
+         patch("mc.agent_orientation.load_orientation", return_value="Global orientation text"):
 
         MockWS.return_value.prepare.return_value = mock_ws_ctx
         MockIPC.return_value.start = AsyncMock()

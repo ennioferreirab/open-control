@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -105,8 +104,8 @@ class ChatHandler:
             bus_spec.loader.exec_module(bus_mod)  # type: ignore[union-attr]
             MessageBus = bus_mod.MessageBus
 
-            from mc.provider_factory import create_provider
             from mc.gateway import AGENTS_DIR
+            from mc.provider_factory import create_provider
             from mc.yaml_validator import validate_agent_file
 
             # Load agent config
@@ -126,7 +125,7 @@ class ChatHandler:
                     agent_display_name = result.display_name or agent_name
 
             # Resolve tier references
-            from mc.types import is_tier_reference, is_cc_model, extract_cc_model_name
+            from mc.types import extract_cc_model_name, is_cc_model, is_tier_reference
 
             if agent_model and is_tier_reference(agent_model):
                 from mc.tier_resolver import TierResolver
@@ -173,13 +172,13 @@ class ChatHandler:
 
                 task_id = f"chat-{agent_name}"
 
-                from claude_code.workspace import CCWorkspaceManager
-                from claude_code.provider import ClaudeCodeProvider
                 from claude_code.ipc_server import MCSocketServer
+                from claude_code.provider import ClaudeCodeProvider
+                from claude_code.workspace import CCWorkspaceManager
 
                 try:
                     ws_mgr = CCWorkspaceManager()
-                    from mc.orientation import load_orientation
+                    from mc.agent_orientation import load_orientation
                     orientation = load_orientation(agent_name)
                     ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation,
                                             task_prompt=content)
@@ -292,8 +291,9 @@ class ChatHandler:
                         async def _post_chat_consolidate():
                             try:
                                 from claude_code.memory_consolidator import CCMemoryConsolidator
-                                from mc.types import is_tier_reference
+
                                 from mc.tier_resolver import TierResolver
+                                from mc.types import is_tier_reference
                                 _model = "tier:standard-low"
                                 if is_tier_reference(_model):
                                     _model = TierResolver(self._bridge).resolve_model(_model) or _model

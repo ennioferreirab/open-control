@@ -6,25 +6,17 @@ import logging
 from typing import TYPE_CHECKING
 
 from mc.types import (
+    NANOBOT_AGENT_NAME,
     ActivityEventType,
     ExecutionPlan,
-    NANOBOT_AGENT_NAME,
     TaskStatus,
 )
+from mc.utils import as_positive_int
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
-
-
-def _as_positive_int(value: object, default: int) -> int:
-    """Coerce arbitrary values to a positive integer with fallback."""
-    try:
-        parsed = int(value)
-        return parsed if parsed > 0 else default
-    except (TypeError, ValueError):
-        return default
 
 
 class PlanMaterializer:
@@ -107,8 +99,8 @@ class PlanMaterializer:
                     "description": description,
                     "assigned_agent": assigned_agent,
                     "blocked_by_temp_ids": [dep for dep in step.blocked_by if dep],
-                    "parallel_group": _as_positive_int(step.parallel_group, 1),
-                    "order": _as_positive_int(step.order, index),
+                    "parallel_group": as_positive_int(step.parallel_group, default=1),
+                    "order": as_positive_int(step.order, default=index),
                 }
             )
 

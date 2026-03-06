@@ -14,34 +14,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.types import (
+    NANOBOT_AGENT_NAME,
     ActivityEventType,
     AgentData,
     AuthorType,
-    NANOBOT_AGENT_NAME,
     MessageType,
     StepStatus,
     TaskStatus,
+    extract_cc_model_name,
+    is_cc_model,
     is_lead_agent,
     is_tier_reference,
-    is_cc_model,
-    extract_cc_model_name,
     task_safe_id,
 )
+from mc.utils import as_positive_int
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
-
-
-def _as_positive_int(value: Any, default: int) -> int:
-    """Convert a value to a positive int, with fallback."""
-    try:
-        parsed = int(value)
-        return parsed if parsed > 0 else default
-    except (TypeError, ValueError):
-        return default
-
 
 
 def _load_agent_config(
@@ -69,7 +60,7 @@ def _maybe_inject_orientation(
     agent_name: str, agent_prompt: str | None
 ) -> str | None:
     """Prepend global orientation for non-lead agents."""
-    from mc.orientation import load_orientation
+    from mc.agent_orientation import load_orientation
 
     orientation = load_orientation(agent_name)
     if not orientation:
@@ -117,7 +108,7 @@ async def _run_step_agent(
     ask_user_registry: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
-    from mc.executor import _run_agent_on_task, _background_tasks, _relocate_invalid_memory_files
+    from mc.executor import _background_tasks, _relocate_invalid_memory_files, _run_agent_on_task
 
     result, session_key, loop = await _run_agent_on_task(
         agent_name=agent_name,
@@ -286,12 +277,12 @@ class StepDispatcher:
         """Group steps by parallel_group and sort each group by order."""
         groups: dict[int, list[dict[str, Any]]] = {}
         for step in steps:
-            parallel_group = _as_positive_int(step.get("parallel_group"), 1)
+            parallel_group = as_positive_int(step.get("parallel_group"), default=1)
             groups.setdefault(parallel_group, []).append(step)
 
         for grouped_steps in groups.values():
             grouped_steps.sort(
-                key=lambda step: _as_positive_int(step.get("order"), 1)
+                key=lambda step: as_positive_int(step.get("order"), default=1)
             )
         return groups
 
@@ -317,10 +308,10 @@ class StepDispatcher:
         # Deferred imports to break circular dependency:
         # step_dispatcher -> executor -> gateway -> orchestrator -> step_dispatcher
         from mc.executor import (
-            _human_size,
-            _snapshot_output_dir,
             _collect_output_artifacts,
+            _human_size,
             _relocate_invalid_memory_files,
+            _snapshot_output_dir,
         )
         from mc.planner import _build_file_summary
 
@@ -493,7 +484,7 @@ class StepDispatcher:
                 if isinstance(board, dict):
                     board_name = board.get("name")
                     if board_name:
-                        from mc.board_utils import resolve_board_workspace, get_agent_memory_mode
+                        from mc.board_utils import get_agent_memory_mode, resolve_board_workspace
                         mode = get_agent_memory_mode(board, agent_name) if isinstance(board, dict) else "clean"
                         memory_workspace = resolve_board_workspace(board_name, agent_name, mode=mode)
 
@@ -599,13 +590,13 @@ class StepDispatcher:
                     logger.warning("[dispatcher] Could not enrich agent data for CC routing")
 
                 # Execute step via CC backend
-                from claude_code.workspace import CCWorkspaceManager
-                from claude_code.provider import ClaudeCodeProvider
                 from claude_code.ipc_server import MCSocketServer
+                from claude_code.provider import ClaudeCodeProvider
+                from claude_code.workspace import CCWorkspaceManager
 
                 try:
                     ws_mgr = CCWorkspaceManager()
-                    from mc.orientation import load_orientation
+                    from mc.agent_orientation import load_orientation
                     orientation = load_orientation(agent_name)
                     ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation,
                                             task_prompt=step_title)

@@ -16,39 +16,30 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.gateway import AgentGateway
+from mc.output_enricher import (
+    _PROVIDER_ERRORS,
+    _collect_output_artifacts,
+    _enrich_nanobot_description,
+    _provider_error_action,
+    _relocate_invalid_memory_files,
+    _run_agent_on_task,
+    _snapshot_output_dir,
+)
 from mc.planner import TaskPlanner
 from mc.types import (
-    ActivityEventType,
-    AuthorType,
-    AgentData,
-    NANOBOT_AGENT_NAME,
     LEAD_AGENT_NAME,
+    NANOBOT_AGENT_NAME,
+    ActivityEventType,
+    AgentData,
+    AuthorType,
     LeadAgentExecutionError,
     MessageType,
     TaskStatus,
     TrustLevel,
+    extract_cc_model_name,
+    is_cc_model,
     is_lead_agent,
     is_tier_reference,
-    is_cc_model,
-    extract_cc_model_name,
-    task_safe_id,
-)
-from mc.output_enricher import (
-    _human_size,
-    _snapshot_output_dir,
-    _collect_output_artifacts,
-    _relocate_invalid_memory_files,
-    _build_thread_context,
-    _build_tag_attributes_context,
-    _collect_provider_error_types,
-    _PROVIDER_ERRORS,
-    _provider_error_action,
-    _make_provider,
-    build_task_message,
-    _get_iana_timezone,
-    build_executor_agent_roster,
-    _run_agent_on_task,
-    _enrich_nanobot_description,
 )
 
 if TYPE_CHECKING:
@@ -289,7 +280,7 @@ class TaskExecutor:
 
     def _maybe_inject_orientation(self, agent_name: str, agent_prompt: str | None) -> str | None:
         """Prepend global orientation for non-lead-agent MC agents."""
-        from mc.orientation import load_orientation
+        from mc.agent_orientation import load_orientation
         orientation = load_orientation(agent_name)
         if not orientation:
             return agent_prompt
@@ -552,7 +543,7 @@ class TaskExecutor:
                 if board:
                     board_name = board.get("name")
                     if board_name:
-                        from mc.board_utils import resolve_board_workspace, get_agent_memory_mode
+                        from mc.board_utils import get_agent_memory_mode, resolve_board_workspace
                         mode = get_agent_memory_mode(board, agent_name)
                         memory_workspace = resolve_board_workspace(board_name, agent_name, mode=mode)
                         logger.info("[executor] Board-scoped workspace for '%s' on '%s' (mode=%s)", agent_name, board_name, mode)

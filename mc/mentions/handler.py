@@ -19,11 +19,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.types import (
+    NANOBOT_AGENT_NAME,
     ActivityEventType,
     AuthorType,
     MessageType,
-    LEAD_AGENT_NAME,
-    NANOBOT_AGENT_NAME,
     is_lead_agent,
 )
 
@@ -201,7 +200,7 @@ async def handle_mention(
             agent_model = None
 
     # Inject global orientation for non-lead agents
-    from mc.orientation import load_orientation
+    from mc.agent_orientation import load_orientation
     orientation = load_orientation(agent_name)
     if orientation:
         agent_prompt = f"{orientation}\n\n---\n\n{agent_prompt}" if agent_prompt else orientation
@@ -258,9 +257,10 @@ async def handle_mention(
 
     # Create provider and run agent
     try:
-        from mc.provider_factory import create_provider
         from nanobot.agent.loop import AgentLoop
         from nanobot.bus.queue import MessageBus
+
+        from mc.provider_factory import create_provider
 
         provider, resolved_model = create_provider(agent_model)
 

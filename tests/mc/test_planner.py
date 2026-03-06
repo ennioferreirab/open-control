@@ -802,7 +802,7 @@ class TestPlannerModelParameter:
             patch("claude_code.workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
             patch("claude_code.ipc_server.MCSocketServer", return_value=mock_ipc),
             patch("claude_code.provider.ClaudeCodeProvider", return_value=mock_cc_provider),
-            patch("mc.orientation.load_orientation", return_value=None),
+            patch("mc.agent_orientation.load_orientation", return_value=None),
         ):
             plan = await planner.plan_task(
                 title="Test task",
@@ -1208,7 +1208,7 @@ class TestOrientationRosterInterpolation:
         # Mock load_orientation to return interpolated text (roster interpolation
         # is tested in tests/mc/test_orientation.py; here we test delegation).
         with patch(
-            "mc.orientation.load_orientation",
+            "mc.agent_orientation.load_orientation",
             return_value="# Orientation\n\n- **test-agent** — tester (skills: testing)\n\nEnd.",
         ):
             result = _maybe_inject_orientation("test-agent", None)
@@ -1223,7 +1223,7 @@ class TestOrientationRosterInterpolation:
         from unittest.mock import patch
 
         with patch(
-            "mc.orientation.load_orientation",
+            "mc.agent_orientation.load_orientation",
             return_value="# Orientation\n\nNo placeholder here.\n\nEnd.",
         ):
             result = _maybe_inject_orientation("test-agent", None)

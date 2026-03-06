@@ -24,6 +24,7 @@ from mc.types import (
     ExecutionPlanStep,
     is_lead_agent,
 )
+from mc.utils import as_positive_int
 
 logger = logging.getLogger(__name__)
 
@@ -191,15 +192,6 @@ def _build_agent_roster(agents: list[AgentData]) -> str:
     return "\n".join(lines)
 
 
-def _as_positive_int(value: object, default: int) -> int:
-    """Return a positive integer from a loose input value."""
-    try:
-        parsed = int(value)
-        return parsed if parsed > 0 else default
-    except (TypeError, ValueError):
-        return default
-
-
 def _as_string_list(value: object) -> list[str]:
     """Normalize scalar/list input into a list of non-empty strings."""
     if isinstance(value, str):
@@ -241,7 +233,7 @@ def _normalize_plan_dependencies_and_groups(steps: list[ExecutionPlanStep]) -> N
     independent_group = 1
     if independent_steps:
         independent_group = min(
-            _as_positive_int(step.parallel_group, 1) for step in independent_steps
+            as_positive_int(step.parallel_group, default=1) for step in independent_steps
         )
 
     for step in independent_steps:
@@ -251,7 +243,7 @@ def _normalize_plan_dependencies_and_groups(steps: list[ExecutionPlanStep]) -> N
     for _ in range(len(steps)):
         changed = False
         for step in steps:
-            current = _as_positive_int(step.parallel_group, independent_group)
+            current = as_positive_int(step.parallel_group, default=independent_group)
             if not step.blocked_by:
                 if current != independent_group:
                     step.parallel_group = independent_group
@@ -259,7 +251,7 @@ def _normalize_plan_dependencies_and_groups(steps: list[ExecutionPlanStep]) -> N
                 continue
 
             dep_groups = [
-                _as_positive_int(step_by_id[dep].parallel_group, independent_group)
+                as_positive_int(step_by_id[dep].parallel_group, default=independent_group)
                 for dep in step.blocked_by
                 if dep in step_by_id
             ]
@@ -327,11 +319,11 @@ def _parse_plan_response(raw: str) -> ExecutionPlan:
             description=str(description),
             assigned_agent=str(assigned_agent),
             blocked_by=blocked_by,
-            parallel_group=_as_positive_int(
+            parallel_group=as_positive_int(
                 s.get("parallel_group", s.get("parallelGroup")),
-                1,
+                default=1,
             ),
-            order=_as_positive_int(s.get("order"), index),
+            order=as_positive_int(s.get("order"), default=index),
         ))
 
     _normalize_plan_dependencies_and_groups(steps)

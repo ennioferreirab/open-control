@@ -24,7 +24,6 @@ from typing import TYPE_CHECKING, Any
 
 from mc.types import (
     ExecutionPlan,
-    LEAD_AGENT_NAME,
     ThreadMessageType,
 )
 
@@ -526,7 +525,7 @@ async def start_plan_negotiation_loop(
             # messages).
             # A message with both @mentions and plan-change text is handled by
             # the mention_handler only — the @mention takes priority.
-            from mc.mentions.handler import is_mention_message, handle_all_mentions
+            from mc.mentions.handler import handle_all_mentions, is_mention_message
 
             if is_mention_message(content):
                 task_title = task.get("title", "")
