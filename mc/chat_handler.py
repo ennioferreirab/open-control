@@ -186,7 +186,7 @@ class ChatHandler:
                 except Exception as exc:
                     raise RuntimeError(f"CC workspace preparation failed: {exc}")
 
-                from mc.ask_user_handler import AskUserHandler
+                from mc.ask_user.handler import AskUserHandler
 
                 ask_handler = AskUserHandler()
                 ipc_server = MCSocketServer(self._bridge, None)

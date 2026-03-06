@@ -1351,8 +1351,8 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         logger.info("[gateway] Cron service started with %d job(s)", cron_status["jobs"])
 
     # Ask-user reply routing — registry + watcher (CC agents only)
-    from mc.ask_user_registry import AskUserRegistry
-    from mc.ask_user_watcher import AskUserReplyWatcher
+    from mc.ask_user.registry import AskUserRegistry
+    from mc.ask_user.watcher import AskUserReplyWatcher
 
     ask_user_registry = AskUserRegistry()
 

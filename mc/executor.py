@@ -281,7 +281,7 @@ async def _run_agent_on_task(
     if ask_user_tool := loop.tools.get("ask_user"):
         from nanobot.agent.tools.ask_user import AskUserTool
         if isinstance(ask_user_tool, AskUserTool):
-            from mc.ask_user_handler import AskUserHandler
+            from mc.ask_user.handler import AskUserHandler
 
             handler = AskUserHandler()
             if ask_user_registry and task_id:
@@ -1652,7 +1652,7 @@ class TaskExecutor:
 
         # 2. Start IPC server (MCSocketServer.start() already removes stale socket)
         # bus=None: MCP bridge tools use IPC, not the in-process MessageBus
-        from mc.ask_user_handler import AskUserHandler
+        from mc.ask_user.handler import AskUserHandler
 
         ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
@@ -2047,7 +2047,7 @@ class TaskExecutor:
             logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
             return None
 
-        from mc.ask_user_handler import AskUserHandler
+        from mc.ask_user.handler import AskUserHandler
 
         ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)

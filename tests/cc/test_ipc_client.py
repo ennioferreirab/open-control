@@ -259,7 +259,7 @@ class TestMCSocketServerHandlers:
         mock_bridge.send_message = MagicMock(return_value=None)
         mock_bridge.update_task_status = MagicMock(return_value=None)
 
-        from mc.ask_user_handler import AskUserHandler
+        from mc.ask_user.handler import AskUserHandler
 
         handler = AskUserHandler()
         srv = MCSocketServer(mock_bridge, None)

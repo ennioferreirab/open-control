@@ -11,7 +11,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.ask_user_handler import AskUserHandler
+    from mc.ask_user.handler import AskUserHandler
 
 logger = logging.getLogger(__name__)
 

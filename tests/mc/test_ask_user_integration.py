@@ -4,7 +4,7 @@ import asyncio
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
-from mc.ask_user_registry import AskUserRegistry
+from mc.ask_user.registry import AskUserRegistry
 
 
 class TestRegistryWiring:
