@@ -47,7 +47,7 @@ async def execute_step_via_cc(
         _collect_output_artifacts,
         _relocate_invalid_memory_files,
     )
-    from mc.gateway import AGENTS_DIR
+    from mc.infrastructure.config import AGENTS_DIR
     from mc.yaml_validator import validate_agent_file
 
     cc_model_name = extract_cc_model_name(agent_model)

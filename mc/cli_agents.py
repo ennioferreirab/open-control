@@ -85,7 +85,7 @@ def register_sessions_command(mc_app: typer.Typer) -> None:
 def sync_agents():
     """Sync local agent YAML files and skills to Convex."""
     import mc.cli as _cli
-    from mc.gateway import sync_agent_registry, sync_skills
+    from mc.infrastructure.agent_bootstrap import sync_agent_registry, sync_skills
 
     if not _cli.AGENTS_DIR.is_dir():
         console.print("No agents directory found. Nothing to sync.")

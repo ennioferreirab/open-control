@@ -324,7 +324,7 @@ def build_executor_agent_roster() -> str:
     Reads ~/.nanobot/agents/*/config.yaml, excludes system agents and lead-agent.
     Returns formatted list for agent orientation interpolation.
     """
-    from mc.gateway import AGENTS_DIR
+    from mc.infrastructure.config import AGENTS_DIR
     from mc.yaml_validator import validate_agent_file
 
     lines: list[str] = []
