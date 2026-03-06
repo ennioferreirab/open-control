@@ -420,7 +420,7 @@ class TestCCModelRouting:
                 "mc.yaml_validator.validate_agent_file",
                 return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
             ),
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch("claude_code.workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
             patch("claude_code.ipc_server.MCSocketServer", return_value=mock_ipc_server),
             patch("claude_code.provider.ClaudeCodeProvider", return_value=mock_provider),
@@ -496,7 +496,7 @@ class TestCCModelRouting:
                 "mc.yaml_validator.validate_agent_file",
                 return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
             ),
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch("claude_code.workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
             patch("claude_code.ipc_server.MCSocketServer", return_value=mock_ipc_server),
             patch("claude_code.provider.ClaudeCodeProvider", return_value=mock_provider),
@@ -542,7 +542,7 @@ class TestCCModelRouting:
                 "mc.yaml_validator.validate_agent_file",
                 return_value=self._make_validate_result("gpt-4"),
             ),
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch("claude_code.provider.ClaudeCodeProvider") as mock_cc_provider_cls,
         ):
             mock_spec = MagicMock()

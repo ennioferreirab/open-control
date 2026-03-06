@@ -175,7 +175,7 @@ def start(
     # before mc.gateway has finished syncing the model from Convex.
     try:
         bridge = _get_bridge()
-        from mc.gateway import sync_nanobot_default_model
+        from mc.infrastructure.agent_bootstrap import sync_nanobot_default_model
 
         if sync_nanobot_default_model(bridge):
             console.print("[green]✓[/green] Synced nanobot default model from dashboard")
@@ -700,7 +700,7 @@ def _get_bridge():
 
     admin_key = os.environ.get("CONVEX_ADMIN_KEY")
     if not admin_key:
-        from mc.gateway import _resolve_admin_key
+        from mc.infrastructure.config import _resolve_admin_key
 
         admin_key = _resolve_admin_key()
     return ConvexBridge(convex_url, admin_key)
@@ -729,7 +729,7 @@ def _get_agent_status_color(status: str) -> str:
 
 
 # Agents directory
-AGENTS_DIR = Path.home() / ".nanobot" / "agents"
+from mc.infrastructure.config import AGENTS_DIR  # noqa: E402
 
 _AGENT_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
@@ -1242,7 +1242,7 @@ mc_app.add_typer(agents_app, name="agents")
 
 def _sync_to_convex() -> None:
     """Try to sync local agents and skills to Convex. Silently skip if Convex is unavailable."""
-    from mc.gateway import sync_agent_registry, sync_skills
+    from mc.infrastructure.agent_bootstrap import sync_agent_registry, sync_skills
 
     try:
         bridge = _get_bridge()
@@ -1278,7 +1278,7 @@ def _sync_to_convex() -> None:
 @agents_app.command("sync")
 def sync_agents():
     """Sync local agent YAML files and skills to Convex."""
-    from mc.gateway import sync_agent_registry, sync_skills
+    from mc.infrastructure.agent_bootstrap import sync_agent_registry, sync_skills
 
     if not AGENTS_DIR.is_dir():
         console.print("No agents directory found. Nothing to sync.")

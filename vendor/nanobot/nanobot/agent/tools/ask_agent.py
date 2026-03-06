@@ -90,7 +90,7 @@ class AskAgentTool(Tool):
             )
 
         # Load target agent config
-        from mc.gateway import AGENTS_DIR
+        from mc.infrastructure.config import AGENTS_DIR
         from mc.yaml_validator import validate_agent_file
 
         config_file = AGENTS_DIR / target_agent / "config.yaml"

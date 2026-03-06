@@ -160,7 +160,7 @@ class TestDistributeBuiltinSkills:
         """Each distributed skill is logged with its name."""
         from mc.gateway import _distribute_builtin_skills
 
-        with caplog.at_level(logging.INFO, logger="mc.gateway"):
+        with caplog.at_level(logging.INFO, logger="mc.infrastructure.agent_bootstrap"):
             _distribute_builtin_skills(workspace_dir, source_dir_with_skills)
 
         log_text = caplog.text
@@ -173,7 +173,7 @@ class TestDistributeBuiltinSkills:
         """Non-skill directories are not logged as distributed."""
         from mc.gateway import _distribute_builtin_skills
 
-        with caplog.at_level(logging.DEBUG, logger="mc.gateway"):
+        with caplog.at_level(logging.DEBUG, logger="mc.infrastructure.agent_bootstrap"):
             _distribute_builtin_skills(workspace_dir, source_dir_with_skills)
 
         # "not-a-skill" should not appear in logs as distributed
