@@ -1418,7 +1418,7 @@ class TestWriteBackRestoresArchive:
         agent_dir.mkdir()
         (agent_dir / "memory").mkdir()
 
-        with patch("mc.gateway._restore_archived_files") as mock_restore:
+        with patch("mc.agent_sync._restore_archived_files") as mock_restore:
             _write_back_convex_agents(mock_bridge, tmp_path)
 
         mock_restore.assert_called_once()
@@ -1463,9 +1463,9 @@ class TestSyncAgentRegistryCallsCleanup:
         mock_bridge = MagicMock()
         call_order = []
 
-        with patch("mc.gateway._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
-             patch("mc.gateway._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
-             patch("mc.gateway._config_default_model", return_value="anthropic/claude-haiku-4-5"):
+        with patch("mc.agent_sync._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
+             patch("mc.agent_sync._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
+             patch("mc.agent_sync._config_default_model", return_value="anthropic/claude-haiku-4-5"):
             sync_agent_registry(mock_bridge, tmp_path)
 
         assert call_order[0] == "cleanup", "cleanup must run before write_back"
