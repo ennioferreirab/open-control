@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Doc } from "../convex/_generated/dataModel";
@@ -49,6 +49,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
   const sendMessage = useMutation(api.messages.sendThreadMessage);
   const postPlanMessage = useMutation(api.messages.postUserPlanMessage);
   const postComment = useMutation(api.messages.postComment);
+  const postMentionMessage = useMutation(api.messages.postMentionMessage);
   const restoreTask = useMutation(api.tasks.restore);
   const board = useQuery(
     api.boards.getById,
@@ -97,9 +98,23 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     (task.status === "review" && taskAny.awaitingKickoff !== true);
 
   const isBlocked = BLOCKED_STATUSES.includes(task.status);
-  const canSend = (content.trim().length > 0 || pendingFiles.length > 0) && !isSubmitting && !isUploading && (inputMode === "comment" || isPlanChatMode || isInProgress || !!selectedAgent);
 
   const filteredAgents = useSelectableAgents(board?.enabledAgents);
+
+  // Detect @mentions in current content (shared between canSend and handleSend)
+  const { hasMention, firstMentionedAgentName } = useMemo(() => {
+    const matches = content.match(/@(\w[\w-]*)/g);
+    if (!matches || !filteredAgents) return { hasMention: false, firstMentionedAgentName: undefined as string | undefined };
+    for (const m of matches) {
+      const name = m.slice(1);
+      if (filteredAgents.some((a) => a.name === name)) {
+        return { hasMention: true, firstMentionedAgentName: name };
+      }
+    }
+    return { hasMention: false, firstMentionedAgentName: undefined as string | undefined };
+  }, [content, filteredAgents]);
+
+  const canSend = (content.trim().length > 0 || pendingFiles.length > 0) && !isSubmitting && !isUploading && (inputMode === "comment" || isPlanChatMode || isInProgress || !!selectedAgent || hasMention);
 
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -170,18 +185,13 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     const trimmed = content.trim();
     if (!trimmed && pendingFiles.length === 0) return;
 
-    // Parse @mentions
-    let agentForSubmit = selectedAgent;
-    const mentionMatches = trimmed.match(/@(\w[\w-]*)/g);
-    if (mentionMatches && filteredAgents) {
-      const lastMention = mentionMatches[mentionMatches.length - 1].slice(1);
-      if (filteredAgents.some((a) => a.name === lastMention)) {
-        agentForSubmit = lastMention;
-        setSelectedAgent(lastMention);
-      }
+    // Use the first mentioned agent for both routing and selectedAgent update
+    const agentForSubmit = firstMentionedAgentName ?? selectedAgent;
+    if (firstMentionedAgentName) {
+      setSelectedAgent(firstMentionedAgentName);
     }
 
-    if (inputMode !== "comment" && !isPlanChatMode && !isInProgress && !agentForSubmit) return;
+    if (inputMode !== "comment" && !isPlanChatMode && !isInProgress && !hasMention && !agentForSubmit) return;
     setIsSubmitting(true);
     setError("");
     try {
@@ -202,6 +212,14 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         await postComment({ taskId: task._id, content: messageContent, fileAttachments });
       } else if (isPlanChatMode || isInProgress) {
         await postPlanMessage({ taskId: task._id, content: messageContent, fileAttachments });
+      } else if (hasMention && firstMentionedAgentName) {
+        // @mention detected: post without status transition (Story 13.1)
+        await postMentionMessage({
+          taskId: task._id,
+          content: messageContent,
+          mentionedAgent: firstMentionedAgentName,
+          fileAttachments,
+        });
       } else {
         await sendMessage({
           taskId: task._id,

@@ -296,6 +296,64 @@ export const postComment = mutation({
 });
 
 /**
+ * Post a user @mention message to a task thread WITHOUT changing task status.
+ *
+ * Unlike sendThreadMessage this mutation does NOT transition the task status,
+ * clear the executionPlan, or modify the assignedAgent. It simply inserts the
+ * user message so the MentionWatcher can detect and handle the @mention.
+ *
+ * Allowed on all task statuses except "deleted". (Story 13.1, AC 1-2)
+ */
+export const postMentionMessage = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    content: v.string(),
+    mentionedAgent: v.optional(v.string()),
+    fileAttachments: v.optional(v.array(v.object({
+      name: v.string(),
+      type: v.string(),
+      size: v.number(),
+    }))),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    if (task.status === "deleted") {
+      throw new ConvexError("Cannot send messages on deleted tasks");
+    }
+
+    const timestamp = new Date().toISOString();
+
+    const messageId = await ctx.db.insert("messages", {
+      taskId: args.taskId,
+      authorName: "User",
+      authorType: "user",
+      content: args.content,
+      messageType: "user_message",
+      type: "user_message",
+      timestamp,
+      ...(args.fileAttachments && { fileAttachments: args.fileAttachments }),
+    });
+
+    // Observability event
+    const description = args.mentionedAgent
+      ? `User mentioned @${args.mentionedAgent}`
+      : "User sent mention message";
+
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      eventType: "thread_message_sent",
+      description,
+      timestamp,
+    });
+
+    return messageId;
+  },
+});
+
+/**
  * Send a thread message from the user to an agent on a task.
  * Atomically: creates user message, transitions task to "assigned",
  * clears executionPlan, and creates activity event.
