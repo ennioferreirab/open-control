@@ -1,0 +1,185 @@
+/**
+ * Pure helper functions for task and board read-model queries.
+ * Extracted for testability — no Convex runtime dependencies.
+ */
+
+// --- Types ---
+
+/** Minimal task shape used by read-model computations. */
+export type TaskForFlags = {
+  status: string;
+  awaitingKickoff?: boolean;
+  isManual?: boolean;
+  executionPlan?: unknown;
+};
+
+/** Minimal step shape used by read-model computations. */
+export type StepForFlags = {
+  status: string;
+};
+
+/** UI flags computed from task + steps state. */
+export type UiFlags = {
+  isAwaitingKickoff: boolean;
+  isPaused: boolean;
+  isManual: boolean;
+  isPlanEditable: boolean;
+};
+
+/** Allowed actions computed from task state. */
+export type AllowedActions = {
+  approve: boolean;
+  kickoff: boolean;
+  pause: boolean;
+  resume: boolean;
+  retry: boolean;
+  savePlan: boolean;
+  startInbox: boolean;
+  sendMessage: boolean;
+};
+
+/** Task status type matching the schema union. */
+export type TaskStatus =
+  | "planning"
+  | "ready"
+  | "failed"
+  | "inbox"
+  | "assigned"
+  | "in_progress"
+  | "review"
+  | "done"
+  | "retrying"
+  | "crashed"
+  | "deleted";
+
+/** Board view column definition. */
+export type BoardColumn = {
+  status: TaskStatus;
+  label: string;
+};
+
+// --- Constants ---
+
+const PLAN_EDITABLE_STATUSES: ReadonlySet<string> = new Set([
+  "planning",
+  "ready",
+  "review",
+]);
+
+const BOARD_COLUMNS: readonly BoardColumn[] = [
+  { status: "inbox", label: "Inbox" },
+  { status: "planning", label: "Planning" },
+  { status: "ready", label: "Ready" },
+  { status: "assigned", label: "Assigned" },
+  { status: "in_progress", label: "In Progress" },
+  { status: "review", label: "Review" },
+  { status: "done", label: "Done" },
+  { status: "crashed", label: "Crashed" },
+  { status: "failed", label: "Failed" },
+  { status: "retrying", label: "Retrying" },
+] as const;
+
+// --- Pure computation functions ---
+
+/**
+ * Compute UI flags from a task and its steps.
+ */
+export function computeUiFlags(
+  task: TaskForFlags,
+  steps: StepForFlags[]
+): UiFlags {
+  const hasNonCompletedSteps = steps.some((s) => s.status !== "completed");
+
+  return {
+    isAwaitingKickoff: task.awaitingKickoff === true,
+    isPaused: task.status === "review" && hasNonCompletedSteps,
+    isManual: task.isManual === true,
+    isPlanEditable: PLAN_EDITABLE_STATUSES.has(task.status),
+  };
+}
+
+/**
+ * Compute allowed actions from a task and its UI flags.
+ */
+export function computeAllowedActions(
+  task: TaskForFlags,
+  uiFlags: UiFlags
+): AllowedActions {
+  const status = task.status;
+  const hasExecutionPlan = task.executionPlan != null;
+
+  return {
+    approve: status === "review",
+    kickoff:
+      status === "ready" || (status === "review" && hasExecutionPlan),
+    pause: status === "in_progress",
+    resume: status === "review" && uiFlags.isPaused,
+    retry: status === "crashed" || status === "failed",
+    savePlan: uiFlags.isPlanEditable,
+    startInbox: status === "inbox",
+    sendMessage: status !== "deleted" && status !== "retrying",
+  };
+}
+
+/**
+ * Group tasks by status into board columns.
+ * Returns a record mapping status to array of tasks.
+ */
+export function groupTasksByStatus<T extends { status: string }>(
+  tasks: T[]
+): Record<string, T[]> {
+  const grouped: Record<string, T[]> = {};
+  for (const col of BOARD_COLUMNS) {
+    grouped[col.status] = [];
+  }
+  for (const task of tasks) {
+    if (task.status === "deleted") continue;
+    const bucket = grouped[task.status];
+    if (bucket) {
+      bucket.push(task);
+    }
+  }
+  return grouped;
+}
+
+/**
+ * Return the board column definitions.
+ */
+export function getBoardColumns(): readonly BoardColumn[] {
+  return BOARD_COLUMNS;
+}
+
+/**
+ * Apply free-text and tag filters to a list of tasks.
+ */
+export function filterTasks<
+  T extends {
+    title: string;
+    description?: string | null;
+    tags?: string[] | null;
+  },
+>(
+  tasks: T[],
+  freeText?: string,
+  tagFilters?: string[]
+): T[] {
+  let result = tasks;
+
+  if (freeText) {
+    const lower = freeText.toLowerCase();
+    result = result.filter(
+      (t) =>
+        t.title.toLowerCase().includes(lower) ||
+        (t.description && t.description.toLowerCase().includes(lower))
+    );
+  }
+
+  if (tagFilters && tagFilters.length > 0) {
+    const filterSet = new Set(tagFilters);
+    result = result.filter(
+      (t) => t.tags && t.tags.some((tag) => filterSet.has(tag))
+    );
+  }
+
+  return result;
+}

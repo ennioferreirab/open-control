@@ -9,6 +9,7 @@ import {
   getRestoreTarget,
 } from "./lib/taskLifecycle";
 import { logActivity } from "./lib/workflowHelpers";
+import { computeUiFlags, computeAllowedActions } from "./lib/readModels";
 
 // ---------------------------------------------------------------------------
 // Re-export for backward compatibility (messages.ts imports isValidTransition)
@@ -1255,5 +1256,49 @@ export const updateDescription = mutation({
       description: args.description,
       updatedAt: new Date().toISOString(),
     });
+  },
+});
+
+/**
+ * Aggregated read-model query for the task detail view.
+ * Returns task data + board + messages + steps + computed uiFlags + allowedActions
+ * in a single reactive query, avoiding client-side assembly.
+ */
+export const getDetailView = query({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) return null;
+
+    // Batch-load related data in parallel
+    const [board, messages, steps] = await Promise.all([
+      task.boardId ? ctx.db.get(task.boardId) : Promise.resolve(null),
+      ctx.db
+        .query("messages")
+        .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+        .collect(),
+      ctx.db
+        .query("steps")
+        .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+        .collect(),
+    ]);
+
+    // Sort steps by order for display
+    const sortedSteps = steps.sort((a, b) => a.order - b.order);
+
+    // Compute UI flags and allowed actions
+    const uiFlags = computeUiFlags(task, steps);
+    const allowedActions = computeAllowedActions(task, uiFlags);
+
+    return {
+      task,
+      board,
+      messages,
+      steps: sortedSteps,
+      files: task.files ?? [],
+      tags: task.tags ?? [],
+      uiFlags,
+      allowedActions,
+    };
   },
 });

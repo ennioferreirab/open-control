@@ -1,5 +1,13 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import {
+  computeUiFlags,
+  computeAllowedActions,
+  groupTasksByStatus,
+  getBoardColumns,
+  filterTasks,
+} from "./lib/readModels";
 
 const KEBAB_CASE_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -202,5 +210,100 @@ export const ensureDefaultBoard = internalMutation({
     });
 
     return boardId;
+  },
+});
+
+/**
+ * Aggregated read-model query for the board view.
+ * Returns board + tasks grouped by status + step summaries + counters,
+ * with optional server-side text/tag filtering.
+ */
+export const getBoardView = query({
+  args: {
+    boardId: v.id("boards"),
+    freeText: v.optional(v.string()),
+    tagFilters: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const board = await ctx.db.get(args.boardId);
+    if (!board || board.deletedAt) return null;
+
+    // Load all tasks for this board using the index
+    const boardTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_boardId", (q) => q.eq("boardId", args.boardId))
+      .collect();
+
+    // Exclude deleted tasks for the main view
+    const activeTasks = boardTasks.filter((t) => t.status !== "deleted");
+
+    // Apply server-side filters
+    const filteredTasks = filterTasks(
+      activeTasks,
+      args.freeText,
+      args.tagFilters
+    );
+
+    // Batch-load steps for all tasks at once (avoid N+1)
+    const taskIds = new Set(filteredTasks.map((t) => t._id));
+    const stepBatches = await Promise.all(
+      Array.from(taskIds).map((taskId) =>
+        ctx.db
+          .query("steps")
+          .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+          .collect()
+      )
+    );
+
+    // Build step lookup: taskId -> steps[]
+    const stepsByTaskId = new Map<Id<"tasks">, typeof stepBatches[number]>();
+    for (const batch of stepBatches) {
+      if (batch.length > 0) {
+        stepsByTaskId.set(batch[0].taskId, batch);
+      }
+    }
+
+    // Compute per-task summaries (uiFlags + allowedActions + step counts)
+    const taskSummaries = filteredTasks.map((task) => {
+      const steps = stepsByTaskId.get(task._id) ?? [];
+      const uiFlags = computeUiFlags(task, steps);
+      const allowedActions = computeAllowedActions(task, uiFlags);
+      const completedSteps = steps.filter(
+        (s) => s.status === "completed"
+      ).length;
+
+      return {
+        task,
+        uiFlags,
+        allowedActions,
+        stepCount: steps.length,
+        completedStepCount: completedSteps,
+      };
+    });
+
+    // Group into columns
+    const groupedItems = groupTasksByStatus(filteredTasks);
+
+    // Aggregate counters from ALL active tasks (not filtered)
+    const favorites = activeTasks.filter(
+      (t) => t.isFavorite === true
+    ).length;
+    const deletedCount = boardTasks.filter(
+      (t) => t.status === "deleted"
+    ).length;
+    const hitlCount = activeTasks.filter(
+      (t) =>
+        t.status === "review" && t.trustLevel === "human_approved"
+    ).length;
+
+    return {
+      board,
+      columns: getBoardColumns(),
+      groupedItems,
+      taskSummaries,
+      favorites,
+      deletedCount,
+      hitlCount,
+    };
   },
 });
