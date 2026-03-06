@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -58,6 +59,26 @@ logger = logging.getLogger(__name__)
 # Strong references to fire-and-forget background tasks to prevent GC cancellation.
 # See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
 _background_tasks: set[asyncio.Task[None]] = set()
+
+
+@dataclass(slots=True)
+class AgentRunResult:
+    content: str
+    is_error: bool = False
+    error_message: str | None = None
+
+
+def _coerce_agent_run_result(value: Any) -> AgentRunResult:
+    """Normalize legacy string results and structured loop results."""
+    if isinstance(value, AgentRunResult):
+        return value
+    if isinstance(value, str):
+        return AgentRunResult(content=value)
+    return AgentRunResult(
+        content=getattr(value, "content", "") or "",
+        is_error=bool(getattr(value, "is_error", False)),
+        error_message=getattr(value, "error_message", None),
+    )
 
 
 class TaskExecutor:
@@ -415,15 +436,33 @@ class TaskExecutor:
                 ask_user_registry=self._ask_user_registry,
             )
             await asyncio.to_thread(_relocate_invalid_memory_files, task_id, loop.memory_workspace)
+            result = _coerce_agent_run_result(result)
+            if result.is_error:
+                raise RuntimeError(
+                    result.error_message
+                    or result.content
+                    or "Agent returned an execution error"
+                )
+            result_content = result.content
             artifacts = await asyncio.to_thread(_collect_output_artifacts, task_id, pre_snapshot)
 
             if step_id:
                 await asyncio.to_thread(
-                    self._bridge.post_step_completion, task_id, step_id, agent_name, result, artifacts or None,
+                    self._bridge.post_step_completion,
+                    task_id,
+                    step_id,
+                    agent_name,
+                    result_content,
+                    artifacts or None,
                 )
             else:
                 await asyncio.to_thread(
-                    self._bridge.send_message, task_id, agent_name, AuthorType.AGENT, result, MessageType.WORK,
+                    self._bridge.send_message,
+                    task_id,
+                    agent_name,
+                    AuthorType.AGENT,
+                    result_content,
+                    MessageType.WORK,
                 )
 
             try:

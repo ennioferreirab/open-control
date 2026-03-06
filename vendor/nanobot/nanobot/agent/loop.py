@@ -7,6 +7,7 @@ import json
 import re
 import weakref
 from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
@@ -31,6 +32,13 @@ from nanobot.session.manager import Session, SessionManager
 if TYPE_CHECKING:
     from nanobot.config.schema import ChannelsConfig, ExecToolConfig
     from nanobot.cron.service import CronService
+
+
+@dataclass(slots=True)
+class DirectProcessResult:
+    content: str
+    is_error: bool = False
+    error_message: str | None = None
 
 
 class AgentLoop:
@@ -128,6 +136,7 @@ class AgentLoop:
         self._processing_lock = asyncio.Lock()
         self._current_task_id: str | None = None
         self._last_turn_content: str | None = None
+        self._last_turn_error_message: str | None = None
         self._register_default_tools()
 
     def _register_default_tools(self) -> None:
@@ -226,11 +235,12 @@ class AgentLoop:
         self,
         initial_messages: list[dict],
         on_progress: Callable[..., Awaitable[None]] | None = None,
-    ) -> tuple[str | None, list[str], list[dict]]:
-        """Run the agent iteration loop. Returns (final_content, tools_used, messages)."""
+    ) -> tuple[str | None, list[str], list[dict], str | None]:
+        """Run the agent iteration loop and surface structured model errors."""
         messages = initial_messages
         iteration = 0
         final_content = None
+        error_message: str | None = None
         tools_used: list[str] = []
 
         while iteration < self.max_iterations:
@@ -285,7 +295,10 @@ class AgentLoop:
                 # poison the context and cause permanent 400 loops (#1303).
                 if response.finish_reason == "error":
                     logger.error("LLM returned error: {}", (clean or "")[:200])
-                    final_content = clean or "Sorry, I encountered an error calling the AI model."
+                    error_message = (
+                        clean or "Sorry, I encountered an error calling the AI model."
+                    )
+                    final_content = error_message
                     break
                 messages = self.context.add_assistant_message(
                     messages, clean, reasoning_content=response.reasoning_content,
@@ -301,7 +314,7 @@ class AgentLoop:
                 "without completing the task. You can try breaking the task into smaller steps."
             )
 
-        return final_content, tools_used, messages
+        return final_content, tools_used, messages, error_message
 
     async def run(self) -> None:
         """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
@@ -394,6 +407,7 @@ class AgentLoop:
         on_progress: Callable[[str], Awaitable[None]] | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
+        self._last_turn_error_message = None
         # System messages: parse origin from chat_id ("channel:chat_id")
         if msg.channel == "system":
             channel, chat_id = (msg.chat_id.split(":", 1) if ":" in msg.chat_id
@@ -408,9 +422,10 @@ class AgentLoop:
                 current_message=msg.content, channel=channel, chat_id=chat_id,
                 skill_names=self.allowed_skills,
             )
-            final_content, _, all_msgs = await self._run_agent_loop(messages)
+            final_content, _, all_msgs, error_message = await self._run_agent_loop(messages)
             self._save_turn(session, all_msgs, 1 + len(history))
             self.sessions.save(session)
+            self._last_turn_error_message = error_message
             return OutboundMessage(channel=channel, chat_id=chat_id,
                                   content=final_content or "Background task completed.")
 
@@ -500,7 +515,7 @@ class AgentLoop:
                 channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=meta,
             ))
 
-        final_content, _, all_msgs = await self._run_agent_loop(
+        final_content, _, all_msgs, error_message = await self._run_agent_loop(
             initial_messages, on_progress=on_progress or _bus_progress,
         )
 
@@ -513,6 +528,7 @@ class AgentLoop:
         # Always store final_content so process_direct can retrieve it even
         # when we return None below (prevents empty result in MC executor).
         self._last_turn_content = final_content
+        self._last_turn_error_message = error_message
 
         if (mt := self.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn:
             return None
@@ -617,6 +633,34 @@ class AgentLoop:
         self.sessions.invalidate(session.key)
         logger.info("end_task_session: session cleared for {}", session_key)
 
+    async def process_direct_result(
+        self,
+        content: str,
+        session_key: str = "cli:direct",
+        channel: str = "cli",
+        chat_id: str = "direct",
+        on_progress: Callable[[str], Awaitable[None]] | None = None,
+        task_id: str | None = None,
+    ) -> DirectProcessResult:
+        """Process a message directly and preserve structured error state."""
+        self._current_task_id = task_id
+        await self._connect_mcp()
+        msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
+        response = await self._process_message(msg, session_key=session_key, on_progress=on_progress)
+        if response:
+            result_content = response.content
+        else:
+            # _process_message returns None when MessageTool was used in turn (to
+            # prevent double-sending through the channel bus). In direct mode (MC
+            # executor / CLI), no bus consumer exists, so we return the agent's
+            # actual final text so the caller can use it (e.g. cron delivery).
+            result_content = self._last_turn_content or ""
+        return DirectProcessResult(
+            content=result_content,
+            is_error=self._last_turn_error_message is not None,
+            error_message=self._last_turn_error_message,
+        )
+
     async def process_direct(
         self,
         content: str,
@@ -627,14 +671,12 @@ class AgentLoop:
         task_id: str | None = None,
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
-        self._current_task_id = task_id
-        await self._connect_mcp()
-        msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
-        response = await self._process_message(msg, session_key=session_key, on_progress=on_progress)
-        if response:
-            return response.content
-        # _process_message returns None when MessageTool was used in turn (to
-        # prevent double-sending through the channel bus). In direct mode (MC
-        # executor / CLI), no bus consumer exists, so we return the agent's
-        # actual final text so the caller can use it (e.g. cron delivery).
-        return self._last_turn_content or ""
+        result = await self.process_direct_result(
+            content=content,
+            session_key=session_key,
+            channel=channel,
+            chat_id=chat_id,
+            on_progress=on_progress,
+            task_id=task_id,
+        )
+        return result.content

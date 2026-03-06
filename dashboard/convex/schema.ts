@@ -227,6 +227,7 @@ export default defineSchema({
       v.literal("step_created"),
       v.literal("step_status_changed"),
       v.literal("step_unblocked"),
+      v.literal("step_retrying"),
     ),
     description: v.string(),
     timestamp: v.string(),

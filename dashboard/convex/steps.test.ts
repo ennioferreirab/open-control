@@ -6,6 +6,7 @@ import {
   findBlockedStepsReadyToUnblock,
   isValidStepTransition,
   isValidStepStatus,
+  retryStep,
   resolveBlockedByIds,
   resolveInitialStepStatus,
 } from "./steps";
@@ -385,5 +386,93 @@ describe("batchCreate", () => {
         ],
       })
     ).rejects.toThrow(/unknown dependency/i);
+  });
+});
+
+describe("retryStep", () => {
+  function getHandler() {
+    return (retryStep as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    })._handler;
+  }
+
+  it("retries a crashed step and moves parent task to retrying", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+    const inserted: Array<{ table: string; value: Record<string, unknown> }> = [];
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Retry me",
+      status: "crashed",
+      assignedAgent: "nanobot",
+      startedAt: "2026-03-05T10:00:00Z",
+      completedAt: "2026-03-05T10:10:00Z",
+      errorMessage: "Error calling Codex:",
+    };
+    const task = {
+      _id: "task-1",
+      status: "crashed",
+      stalledAt: "2026-03-05T10:11:00Z",
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async (table: string, value: Record<string, unknown>) => {
+          inserted.push({ table, value });
+          return `${table}-1`;
+        },
+      },
+    };
+
+    const taskId = await handler(ctx, { stepId: "step-1" });
+
+    expect(taskId).toBe("task-1");
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "assigned",
+      errorMessage: undefined,
+      startedAt: undefined,
+      completedAt: undefined,
+    });
+    expect(patchedById["task-1"]).toMatchObject({
+      status: "retrying",
+      stalledAt: undefined,
+    });
+    expect(
+      inserted.some(
+        ({ table, value }) =>
+          table === "activities" && value.eventType === "step_retrying"
+      )
+    ).toBe(true);
+  });
+
+  it("rejects retry for non-crashed steps", async () => {
+    const handler = getHandler();
+    const ctx = {
+      db: {
+        get: async () => ({
+          _id: "step-1",
+          taskId: "task-1",
+          title: "Already done",
+          status: "completed",
+          assignedAgent: "nanobot",
+        }),
+        patch: async () => undefined,
+        insert: async () => "ignored",
+      },
+    };
+
+    await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(
+      /not in crashed status/
+    );
   });
 });

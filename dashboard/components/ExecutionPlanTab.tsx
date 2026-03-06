@@ -196,12 +196,15 @@ export function ExecutionPlanTab({
   onLocalPlanChange,
 }: ExecutionPlanTabProps) {
   const acceptHumanStepMutation = useMutation(api.steps.acceptHumanStep);
+  const retryStepMutation = useMutation(api.steps.retryStep);
   const manualMoveStepMutation = useMutation(api.steps.manualMoveStep);
   const addStepMutation = useMutation(api.steps.addStep);
   const updateStepMutation = useMutation(api.steps.updateStep);
   const deleteStepMutation = useMutation(api.steps.deleteStep);
   const [acceptingStepId, setAcceptingStepId] = useState<string | null>(null);
   const [acceptErrors, setAcceptErrors] = useState<Record<string, string>>({});
+  const [retryingStepId, setRetryingStepId] = useState<string | null>(null);
+  const [retryErrors, setRetryErrors] = useState<Record<string, string>>({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addStepError, setAddStepError] = useState<string | null>(null);
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
@@ -212,6 +215,24 @@ export function ExecutionPlanTab({
     const normalizedPlan = normalizePlanSteps(executionPlan.steps);
     return mergeStepsWithLiveData(normalizedPlan, liveSteps);
   }, [executionPlan, liveSteps]);
+
+  const handleRetry = useCallback(
+    async (stepId: string) => {
+      const foundStep = steps.find((step) => step.stepId === stepId);
+      const realStepId = foundStep?.liveId ?? stepId;
+      setRetryingStepId(stepId);
+      setRetryErrors((prev) => ({ ...prev, [stepId]: "" }));
+      try {
+        await retryStepMutation({ stepId: realStepId as Id<"steps"> });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to retry step";
+        setRetryErrors((prev) => ({ ...prev, [stepId]: message }));
+      } finally {
+        setRetryingStepId(null);
+      }
+    },
+    [retryStepMutation, steps]
+  );
 
   const handleAccept = useCallback(
     async (stepId: string) => {
@@ -284,16 +305,29 @@ export function ExecutionPlanTab({
           status: statusMap.get(n.id) ?? "planned",
           isEditMode: false as const,
           onAccept: handleAccept,
+          onRetry: handleRetry,
           isAccepting: acceptingStepId === n.id,
           acceptError: acceptErrors[n.id],
           onStepClick: canAddOrEdit ? handleStepClick : undefined,
+          isRetrying: retryingStepId === n.id,
+          retryError: retryErrors[n.id],
         },
       };
     });
 
     const positioned = layoutWithDagre(nodesWithStatus, rawEdges);
     return { flowNodes: positioned, flowEdges: rawEdges };
-  }, [steps, handleAccept, acceptingStepId, acceptErrors, canAddOrEdit, handleStepClick]);
+  }, [
+    steps,
+    handleAccept,
+    handleRetry,
+    acceptingStepId,
+    acceptErrors,
+    retryingStepId,
+    retryErrors,
+    canAddOrEdit,
+    handleStepClick,
+  ]);
 
   // Build existingSteps for the blocked-by selector
   const existingStepsForForm: ExistingStep[] = useMemo(() => {

@@ -150,6 +150,18 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     () => taskStatus === "review" && !taskAwaitingKickoff,
     [taskStatus, taskAwaitingKickoff]
   );
+  const liveStepsList = Array.isArray(liveSteps) ? liveSteps : [];
+  const hasCrashedLiveStep = useMemo(
+    () => liveStepsList.some((step) => step.status === "crashed"),
+    [liveStepsList]
+  );
+  const canRetryTask = useMemo(
+    () =>
+      taskStatus === "crashed" ||
+      taskStatus === "failed" ||
+      hasCrashedLiveStep,
+    [taskStatus, hasCrashedLiveStep]
+  );
   const [activeTab, setActiveTab] = useState<string>(() =>
     isAwaitingKickoff ? "plan" : "thread"
   );
@@ -498,7 +510,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                         </Button>
                       </>
                     )}
-                  {task.status === "crashed" && (
+                  {canRetryTask && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -511,40 +523,38 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       Retry from Beginning
                     </Button>
                   )}
-                  {task.status === "in_progress" && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-orange-400 text-orange-700 hover:bg-orange-50 text-xs h-7 px-2"
-                        onClick={handlePause}
-                        disabled={isPausing}
-                        data-testid="pause-button"
-                      >
-                        {isPausing ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                            Pausing...
-                          </>
-                        ) : (
-                          <>
-                            <Pause className="h-3.5 w-3.5 mr-1" />
-                            Pause
-                          </>
-                        )}
-                      </Button>
-                      {task.isManual && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                          onClick={handleManualDone}
-                          data-testid="manual-done-button"
-                        >
-                          Done
-                        </Button>
+                  {task.status === "in_progress" && !canRetryTask && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-orange-400 text-orange-700 hover:bg-orange-50 text-xs h-7 px-2"
+                      onClick={handlePause}
+                      disabled={isPausing}
+                      data-testid="pause-button"
+                    >
+                      {isPausing ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                          Pausing...
+                        </>
+                      ) : (
+                        <>
+                          <Pause className="h-3.5 w-3.5 mr-1" />
+                          Pause
+                        </>
                       )}
-                    </>
+                    </Button>
+                  )}
+                  {task.status === "in_progress" && task.isManual && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
+                      onClick={handleManualDone}
+                      data-testid="manual-done-button"
+                    >
+                      Done
+                    </Button>
                   )}
                   {isPaused && (
                     <>

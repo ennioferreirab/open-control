@@ -25,13 +25,33 @@ vi.mock("./AddStepForm", () => ({
 
 // Mock React Flow for read-only view
 vi.mock("@xyflow/react", () => ({
-  ReactFlow: ({ nodes }: { nodes: { id: string; data: { step?: { title: string }; status?: string } }[]; [key: string]: unknown }) => (
+  ReactFlow: ({ nodes }: { nodes: { id: string; data: { step?: { title: string }; status?: string; onAccept?: (id: string) => void; onRetry?: (id: string) => void } }[]; [key: string]: unknown }) => (
     <div data-testid="react-flow-readonly">
       {nodes
         .filter((n) => n.id !== "__start__" && n.id !== "__end__")
         .map((n) => (
-          <div key={n.id} data-testid={`flow-node-${n.id}`} data-status={n.data.status ?? "planned"}>
-            {n.data.step?.title || n.data.step?.title === "" ? n.data.step.title : "Untitled"}
+          <div key={n.id}>
+            <div data-testid={`flow-node-${n.id}`} data-status={n.data.status ?? "planned"}>
+              {n.data.step?.title || n.data.step?.title === "" ? n.data.step.title : "Untitled"}
+            </div>
+            {n.data.onAccept && (
+              <button
+                type="button"
+                data-testid={`flow-node-accept-${n.id}`}
+                onClick={() => n.data.onAccept?.(n.id)}
+              >
+                Accept
+              </button>
+            )}
+            {n.data.onRetry && (
+              <button
+                type="button"
+                data-testid={`flow-node-retry-${n.id}`}
+                onClick={() => n.data.onRetry?.(n.id)}
+              >
+                Retry
+              </button>
+            )}
           </div>
         ))}
     </div>
@@ -62,6 +82,7 @@ vi.mock("convex/react", () => ({
 
 afterEach(() => {
   cleanup();
+  mockMutationFn.mockClear();
 });
 
 const makeStep = (overrides: Record<string, unknown> = {}) => ({
@@ -258,6 +279,42 @@ describe("ExecutionPlanTab", () => {
     );
     const node = screen.getByTestId("flow-node-s1");
     expect(node.getAttribute("data-status")).toBe("running");
+  });
+
+  it("retries a crashed step from the read-only flow", async () => {
+    const plan = {
+      steps: [
+        makeStep({
+          stepId: "step-1",
+          title: "Recover",
+          description: "Retry failed work",
+          status: "planned",
+          order: 1,
+        }),
+      ],
+      createdAt: "2026-01-01",
+    };
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        liveSteps={[
+          {
+            _id: "step-1",
+            title: "Recover",
+            description: "Retry failed work",
+            assignedAgent: "agent-alpha",
+            status: "crashed",
+            parallelGroup: 0,
+            order: 1,
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId("flow-node-retry-step-1"));
+
+    expect(mockMutationFn).toHaveBeenCalledWith({ stepId: "step-1" });
   });
 
   it("shows Add Step button when taskId is provided and status is in_progress", () => {

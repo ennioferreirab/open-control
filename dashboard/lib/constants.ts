@@ -68,6 +68,7 @@ export const ACTIVITY_EVENT_TYPE = {
   BOARD_CREATED: "board_created",
   BOARD_UPDATED: "board_updated",
   BOARD_DELETED: "board_deleted",
+  STEP_RETRYING: "step_retrying",
 } as const;
 
 // Message type values

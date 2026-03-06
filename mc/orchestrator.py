@@ -25,6 +25,7 @@ from mc.types import (
     AuthorType,
     ExecutionPlan,
     MessageType,
+    StepStatus,
     TaskStatus,
 )
 
@@ -125,6 +126,7 @@ class TaskOrchestrator:
         self._known_inbox_ids: set[str] = set()
         self._known_planning_ids: set[str] = set()
         self._known_kickoff_ids: set[str] = set()
+        self._known_retry_ids: set[str] = set()
 
     async def start_inbox_routing_loop(self) -> None:
         """Subscribe to inbox tasks, generate auto-title, then transition to planning/assigned."""
@@ -655,6 +657,71 @@ class TaskOrchestrator:
                             task_id,
                             exc_info=True,
                         )
+
+    async def start_retry_watch_loop(self) -> None:
+        """Watch retrying tasks and re-enter them into the execution pipeline."""
+        logger.info("[orchestrator] Starting retry watch loop")
+
+        queue = self._bridge.async_subscribe(
+            "tasks:listByStatus", {"status": "retrying"}
+        )
+
+        while True:
+            tasks = await queue.get()
+            if tasks is None:
+                continue
+
+            current_ids = {t.get("id") for t in tasks if t.get("id")}
+            self._known_retry_ids &= current_ids
+
+            for task_data in tasks:
+                task_id = task_data.get("id")
+                if not task_id or task_id in self._known_retry_ids:
+                    continue
+                self._known_retry_ids.add(task_id)
+
+                steps = await asyncio.to_thread(
+                    self._bridge.get_steps_by_task, task_id
+                )
+                execution_plan = task_data.get("execution_plan") or task_data.get("executionPlan")
+
+                if steps:
+                    assigned_step_ids = [
+                        str(step.get("id"))
+                        for step in steps
+                        if step.get("status") == StepStatus.ASSIGNED and step.get("id")
+                    ]
+                    await asyncio.to_thread(
+                        self._bridge.update_task_status,
+                        task_id,
+                        TaskStatus.IN_PROGRESS,
+                    )
+                    if assigned_step_ids:
+                        asyncio.create_task(
+                            self._step_dispatcher.dispatch_steps(
+                                task_id, assigned_step_ids
+                            )
+                        )
+                    continue
+
+                if execution_plan:
+                    await asyncio.to_thread(
+                        self._bridge.update_task_status,
+                        task_id,
+                        TaskStatus.IN_PROGRESS,
+                    )
+                    plan = ExecutionPlan.from_dict(execution_plan)
+                    created_step_ids = await asyncio.to_thread(
+                        self._plan_materializer.materialize,
+                        task_id,
+                        plan,
+                        skip_kickoff=True,
+                    )
+                    asyncio.create_task(
+                        self._step_dispatcher.dispatch_steps(
+                            task_id, created_step_ids
+                        )
+                    )
 
     # -- Review delegation wrappers (implementation in ReviewHandler) ----------
 

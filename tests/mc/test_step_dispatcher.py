@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -274,7 +275,12 @@ class TestStepDispatcher:
 
         assert state["step-1"]["status"] == StepStatus.CRASHED
         assert state["step-2"]["status"] == StepStatus.COMPLETED
-        bridge.update_task_status.assert_not_called()
+        bridge.update_task_status.assert_any_call(
+            "task-1",
+            TaskStatus.CRASHED,
+            "nanobot",
+            'Step "Crash" crashed',
+        )
         bridge.send_message.assert_any_call(
             "task-1",
             "System",
@@ -885,6 +891,85 @@ class TestStepOutputFileSync:
         assert state["step-1"]["status"] == StepStatus.CRASHED
         # Sync must NOT be called on crash path — output may be incomplete
         bridge.sync_task_output_files.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_model_error_result_marks_step_and_task_crashed(self) -> None:
+        """Structured model errors must not escape as completed step output."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Crash", order=1)])
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(
+                    return_value=SimpleNamespace(
+                        content="Error calling Codex:",
+                        is_error=True,
+                        error_message="Error calling Codex:",
+                    )
+                ),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert state["step-1"]["status"] == StepStatus.CRASHED
+        bridge.post_step_completion.assert_not_called()
+        bridge.update_task_status.assert_any_call(
+            "task-1",
+            TaskStatus.CRASHED,
+            "nanobot",
+            'Step "Crash" crashed',
+        )
+        assert not any(
+            call_args[0][0] == ActivityEventType.STEP_COMPLETED
+            for call_args in bridge.create_activity.call_args_list
+        )
+
+    @pytest.mark.asyncio
+    async def test_runtime_step_crash_marks_parent_task_crashed(self) -> None:
+        """A crashed step should push the parent task into crashed state."""
+        bridge, state = _make_stateful_bridge([_step("step-1", "Crash", order=1)])
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.step_dispatcher._load_agent_config",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "mc.step_dispatcher._maybe_inject_orientation",
+                side_effect=lambda agent_name, prompt: prompt,
+            ),
+            patch(
+                "mc.step_dispatcher._run_step_agent",
+                new=AsyncMock(side_effect=RuntimeError("agent exploded")),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
+
+        assert state["step-1"]["status"] == StepStatus.CRASHED
+        bridge.update_task_status.assert_any_call(
+            "task-1",
+            TaskStatus.CRASHED,
+            "nanobot",
+            'Step "Crash" crashed',
+        )
 
 
 class TestSupervisedModeSkipsDispatch:

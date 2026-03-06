@@ -11,6 +11,7 @@ import {
   GitMerge,
   Loader2,
   Lock,
+  RefreshCw,
   Trash2,
   User,
   XCircle,
@@ -86,9 +87,12 @@ export type FlowStepNodeData = {
   onMergePaths?: (tempId: string) => void;
   onDeleteStep?: (tempId: string) => void;
   onAccept?: (stepId: string) => void;
+  onRetry?: (stepId: string) => void;
   isAccepting?: boolean;
   acceptError?: string;
   onStepClick?: (stepId: string) => void;
+  isRetrying?: boolean;
+  retryError?: string;
 };
 
 export type FlowStepNodeType = Node<FlowStepNodeData, "flowStep">;
@@ -99,12 +103,29 @@ const addBtnClass =
   "flex items-center justify-center w-5 h-5 rounded-full bg-muted hover:bg-primary hover:text-primary-foreground text-muted-foreground transition-colors shadow-sm border border-border cursor-pointer";
 
 function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) {
-  const { step, status, isEditMode, hasParallelSiblings, onAddSequential, onAddParallel, onMergePaths, onDeleteStep, onAccept, isAccepting, acceptError, onStepClick } = data;
+  const {
+    step,
+    status,
+    isEditMode,
+    hasParallelSiblings,
+    onAddSequential,
+    onAddParallel,
+    onMergePaths,
+    onDeleteStep,
+    onAccept,
+    onRetry,
+    isAccepting,
+    acceptError,
+    onStepClick,
+    isRetrying,
+    retryError,
+  } = data;
   const resolvedStatus = status ?? "planned";
   const meta = getStatusMeta(resolvedStatus);
   const normalizedStatus = normalizeStatus(resolvedStatus);
   const isWaitingHuman = normalizedStatus === "waiting_human";
   const isRunningHuman = normalizedStatus === "running" && step.assignedAgent === "human";
+  const isCrashed = normalizedStatus === "crashed";
   const agentDisplay = step.assignedAgent === "human" ? null : step.assignedAgent;
 
   return (
@@ -236,6 +257,35 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
           </button>
           {acceptError && (
             <p className="mt-0.5 text-[10px] text-red-600">{acceptError}</p>
+          )}
+        </div>
+      )}
+
+      {isCrashed && !isEditMode && onRetry && (
+        <div className="mt-1.5">
+          <button
+            type="button"
+            data-testid={`retry-step-${step.tempId}`}
+            disabled={isRetrying}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetry(step.tempId);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-medium",
+              "bg-amber-600 text-white hover:bg-amber-700 transition-colors",
+              "disabled:opacity-60 disabled:cursor-not-allowed"
+            )}
+          >
+            {isRetrying ? (
+              <RefreshCw className="h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3" />
+            )}
+            Retry step
+          </button>
+          {retryError && (
+            <p className="mt-0.5 text-[10px] text-red-600">{retryError}</p>
           )}
         </div>
       )}

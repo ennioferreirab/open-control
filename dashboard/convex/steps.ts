@@ -576,6 +576,72 @@ export const manualMoveStep = mutation({
   },
 });
 
+export const retryStep = mutation({
+  args: {
+    stepId: v.id("steps"),
+  },
+  handler: async (ctx, args) => {
+    const step = await ctx.db.get(args.stepId);
+    if (!step) {
+      throw new ConvexError("Step not found");
+    }
+    if (step.status !== "crashed") {
+      throw new ConvexError(
+        `Step is not in crashed status (current: ${step.status})`
+      );
+    }
+
+    const task = await ctx.db.get(step.taskId);
+    if (!task) {
+      throw new ConvexError("Parent task not found");
+    }
+
+    const timestamp = new Date().toISOString();
+
+    await ctx.db.patch(args.stepId, {
+      status: "assigned",
+      errorMessage: undefined,
+      startedAt: undefined,
+      completedAt: undefined,
+    });
+
+    await logStepStatusChange(ctx, {
+      taskId: step.taskId,
+      stepTitle: step.title,
+      previousStatus: step.status,
+      nextStatus: "assigned",
+      assignedAgent: step.assignedAgent,
+      timestamp,
+    });
+
+    await ctx.db.patch(step.taskId, {
+      status: "retrying",
+      stalledAt: undefined,
+      updatedAt: timestamp,
+    });
+
+    await ctx.db.insert("activities", {
+      taskId: step.taskId,
+      agentName: step.assignedAgent,
+      eventType: "step_retrying",
+      description: `Manual retry initiated for step: "${step.title}"`,
+      timestamp,
+    });
+
+    await ctx.db.insert("messages", {
+      taskId: step.taskId,
+      stepId: args.stepId,
+      authorName: "System",
+      authorType: "system",
+      content: `Manual retry initiated for step "${step.title}".`,
+      messageType: "system_event",
+      timestamp,
+    });
+
+    return step.taskId;
+  },
+});
+
 export const addStep = mutation({
   args: {
     taskId: v.id("tasks"),
