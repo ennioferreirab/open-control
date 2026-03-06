@@ -93,7 +93,8 @@ class TestInvalidTransitions:
         assert is_valid_transition(TaskStatus.IN_PROGRESS, TaskStatus.INBOX) is False
 
     def test_in_progress_to_assigned(self) -> None:
-        assert is_valid_transition(TaskStatus.IN_PROGRESS, TaskStatus.ASSIGNED) is False
+        # in_progress -> assigned is valid (Convex authoritative, Story 15.1 reconciliation)
+        assert is_valid_transition(TaskStatus.IN_PROGRESS, TaskStatus.ASSIGNED) is True
 
     def test_review_to_in_progress(self) -> None:
         assert is_valid_transition(TaskStatus.REVIEW, TaskStatus.IN_PROGRESS) is True
@@ -102,7 +103,8 @@ class TestInvalidTransitions:
         assert is_valid_transition(TaskStatus.DONE, TaskStatus.INBOX) is False
 
     def test_done_to_assigned(self) -> None:
-        assert is_valid_transition(TaskStatus.DONE, TaskStatus.ASSIGNED) is False
+        # done -> assigned is valid (Convex authoritative, Story 15.1 reconciliation)
+        assert is_valid_transition(TaskStatus.DONE, TaskStatus.ASSIGNED) is True
 
     def test_done_to_in_progress(self) -> None:
         assert is_valid_transition(TaskStatus.DONE, TaskStatus.IN_PROGRESS) is False

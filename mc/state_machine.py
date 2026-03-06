@@ -1,51 +1,69 @@
 """
 Task and step state machines — validates transitions and maps to activity event types.
 
-This mirrors the Convex-side validation in dashboard/convex/tasks.ts and steps.ts.
-The Convex side is authoritative; this module is for bridge-side pre-validation.
+This module is a thin backward-compatible wrapper around the canonical workflow
+contract defined in ``shared/workflow/workflow_spec.json`` and loaded by
+``mc.domain.workflow_contract``.
+
+All hardcoded transition maps have been replaced by delegations to the contract.
+Existing callers that import ``VALID_TRANSITIONS``, ``UNIVERSAL_TARGETS``, etc.
+continue to work unchanged.
+
+Story 15.1 — Shared Workflow Contract.
 """
 
 from __future__ import annotations
 
-from mc.types import TaskStatus, StepStatus, ActivityEventType
+from mc.domain.workflow_contract import (
+    SPEC as _SPEC,
+)
+from mc.domain.workflow_contract import (
+    get_step_transition_event as _get_step_transition_event,
+)
+from mc.domain.workflow_contract import (
+    get_task_transition_event as _get_task_transition_event,
+)
+from mc.domain.workflow_contract import (
+    is_valid_step_transition as _is_valid_step_transition,
+)
+from mc.domain.workflow_contract import (
+    is_valid_task_transition as _is_valid_task_transition,
+)
 
-# Valid transitions: current_status -> [allowed_next_statuses]
-VALID_TRANSITIONS: dict[str, list[str]] = {
-    TaskStatus.PLANNING: [TaskStatus.FAILED, TaskStatus.REVIEW],
-    TaskStatus.INBOX: [TaskStatus.ASSIGNED],
-    TaskStatus.ASSIGNED: [TaskStatus.IN_PROGRESS],
-    TaskStatus.IN_PROGRESS: [TaskStatus.REVIEW, TaskStatus.DONE],
-    TaskStatus.REVIEW: [TaskStatus.IN_PROGRESS, TaskStatus.DONE, TaskStatus.INBOX],
-    TaskStatus.RETRYING: [TaskStatus.IN_PROGRESS, TaskStatus.CRASHED],
-    TaskStatus.CRASHED: [TaskStatus.INBOX],
-}
+# ---------------------------------------------------------------------------
+# Backward-compatible module-level constants — derived from the contract spec
+# ---------------------------------------------------------------------------
 
-# These target statuses are allowed from ANY source state
-UNIVERSAL_TARGETS: set[str] = {TaskStatus.RETRYING, TaskStatus.CRASHED}
+# Task transitions: current_status -> [allowed_next_statuses]
+VALID_TRANSITIONS: dict[str, list[str]] = dict(_SPEC["taskTransitions"])
+
+# Universal targets: allowed from ANY source state
+UNIVERSAL_TARGETS: set[str] = set(_SPEC["taskUniversalTargets"])
 
 # Map (from, to) -> activity event type
 TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
-    (TaskStatus.PLANNING, TaskStatus.REVIEW): ActivityEventType.TASK_PLANNING,
-    (TaskStatus.PLANNING, TaskStatus.FAILED): ActivityEventType.TASK_FAILED,
-    (TaskStatus.INBOX, TaskStatus.ASSIGNED): ActivityEventType.TASK_ASSIGNED,
-    (TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_STARTED,
-    (TaskStatus.IN_PROGRESS, TaskStatus.REVIEW): ActivityEventType.REVIEW_REQUESTED,
-    (TaskStatus.IN_PROGRESS, TaskStatus.DONE): ActivityEventType.TASK_COMPLETED,
-    (TaskStatus.REVIEW, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_STARTED,
-    (TaskStatus.REVIEW, TaskStatus.DONE): ActivityEventType.TASK_COMPLETED,
-    (TaskStatus.REVIEW, TaskStatus.INBOX): ActivityEventType.TASK_RETRYING,
-    (TaskStatus.RETRYING, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_RETRYING,
-    (TaskStatus.RETRYING, TaskStatus.CRASHED): ActivityEventType.TASK_CRASHED,
-    (TaskStatus.CRASHED, TaskStatus.INBOX): ActivityEventType.TASK_RETRYING,
+    tuple(k.split("->")): v  # type: ignore[misc]
+    for k, v in _SPEC["taskTransitionEvents"].items()
 }
+
+# Step transitions: current_status -> [allowed_next_statuses]
+STEP_VALID_TRANSITIONS: dict[str, list[str]] = dict(_SPEC["stepTransitions"])
+
+# Map (from, to) -> activity event type for step transitions
+STEP_TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
+    tuple(k.split("->")): v  # type: ignore[misc]
+    for k, v in _SPEC["stepTransitionEvents"].items()
+}
+
+
+# ---------------------------------------------------------------------------
+# Task-level functions — delegate to contract
+# ---------------------------------------------------------------------------
 
 
 def is_valid_transition(current_status: str, new_status: str) -> bool:
     """Check if a state transition is valid."""
-    if new_status in UNIVERSAL_TARGETS:
-        return True
-    allowed = VALID_TRANSITIONS.get(current_status, [])
-    return new_status in allowed
+    return _is_valid_task_transition(current_status, new_status)
 
 
 def validate_transition(current_status: str, new_status: str) -> None:
@@ -58,61 +76,22 @@ def validate_transition(current_status: str, new_status: str) -> None:
 
 def get_event_type(current_status: str, new_status: str) -> str:
     """Get the activity event type for a transition."""
-    if new_status == TaskStatus.RETRYING:
-        return ActivityEventType.TASK_RETRYING
-    if new_status == TaskStatus.CRASHED:
-        return ActivityEventType.TASK_CRASHED
-    event_type = TRANSITION_EVENT_MAP.get((current_status, new_status))
-    if event_type is None:
+    event = _get_task_transition_event(current_status, new_status)
+    if event is None:
         raise ValueError(
             f"No event type mapping for transition '{current_status}' -> '{new_status}'"
         )
-    return event_type
+    return event
 
 
 # ---------------------------------------------------------------------------
-# Step-level state machine (Story 3.1, updated Story 7.2)
-#
-# Mirrors Convex STEP_TRANSITIONS in dashboard/convex/steps.ts.
-# The Convex side is authoritative; this is for bridge-side pre-validation.
+# Step-level functions — delegate to contract
 # ---------------------------------------------------------------------------
-
-# Valid step transitions: current_status -> [allowed_next_statuses]
-STEP_VALID_TRANSITIONS: dict[str, list[str]] = {
-    StepStatus.PLANNED: [StepStatus.ASSIGNED, StepStatus.BLOCKED],
-    StepStatus.ASSIGNED: [
-        StepStatus.RUNNING,
-        StepStatus.COMPLETED,
-        StepStatus.CRASHED,
-        StepStatus.BLOCKED,
-        StepStatus.WAITING_HUMAN,
-    ],
-    StepStatus.RUNNING: [StepStatus.COMPLETED, StepStatus.CRASHED],
-    StepStatus.COMPLETED: [],
-    StepStatus.CRASHED: [StepStatus.ASSIGNED],
-    StepStatus.BLOCKED: [StepStatus.ASSIGNED, StepStatus.CRASHED],
-    StepStatus.WAITING_HUMAN: [StepStatus.COMPLETED, StepStatus.CRASHED],
-}
-
-# Map (from, to) -> activity event type for step transitions
-STEP_TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
-    (StepStatus.PLANNED, StepStatus.ASSIGNED): ActivityEventType.STEP_DISPATCHED,
-    (StepStatus.BLOCKED, StepStatus.ASSIGNED): ActivityEventType.STEP_DISPATCHED,
-    (StepStatus.CRASHED, StepStatus.ASSIGNED): ActivityEventType.STEP_DISPATCHED,
-    (StepStatus.ASSIGNED, StepStatus.RUNNING): ActivityEventType.STEP_STARTED,
-    (StepStatus.RUNNING, StepStatus.COMPLETED): ActivityEventType.STEP_COMPLETED,
-    (StepStatus.RUNNING, StepStatus.CRASHED): ActivityEventType.SYSTEM_ERROR,
-    (StepStatus.ASSIGNED, StepStatus.CRASHED): ActivityEventType.SYSTEM_ERROR,
-    (StepStatus.ASSIGNED, StepStatus.WAITING_HUMAN): ActivityEventType.STEP_DISPATCHED,
-    (StepStatus.WAITING_HUMAN, StepStatus.COMPLETED): ActivityEventType.STEP_COMPLETED,
-    (StepStatus.WAITING_HUMAN, StepStatus.CRASHED): ActivityEventType.SYSTEM_ERROR,
-}
 
 
 def is_valid_step_transition(current_status: str, new_status: str) -> bool:
     """Check if a step state transition is valid."""
-    allowed = STEP_VALID_TRANSITIONS.get(current_status, [])
-    return new_status in allowed
+    return _is_valid_step_transition(current_status, new_status)
 
 
 def validate_step_transition(current_status: str, new_status: str) -> None:
@@ -125,9 +104,9 @@ def validate_step_transition(current_status: str, new_status: str) -> None:
 
 def get_step_event_type(current_status: str, new_status: str) -> str:
     """Get the activity event type for a step transition."""
-    event_type = STEP_TRANSITION_EVENT_MAP.get((current_status, new_status))
-    if event_type is None:
+    event = _get_step_transition_event(current_status, new_status)
+    if event is None:
         raise ValueError(
             f"No event type mapping for step transition '{current_status}' -> '{new_status}'"
         )
-    return event_type
+    return event
