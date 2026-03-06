@@ -976,8 +976,8 @@ class TestOrchestratorPlannerIntegration:
             "description": "Write some Python",
         }
 
-        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with patch("mc.workers.planning.TaskPlanner") as MockPlanner, \
+             patch("mc.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1010,8 +1010,8 @@ class TestOrchestratorPlannerIntegration:
             "assigned_agent": "code-agent",
         }
 
-        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with patch("mc.workers.planning.TaskPlanner") as MockPlanner, \
+             patch("mc.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1045,8 +1045,8 @@ class TestOrchestratorPlannerIntegration:
             "description": None,
         }
 
-        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with patch("mc.workers.planning.TaskPlanner") as MockPlanner, \
+             patch("mc.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1073,8 +1073,8 @@ class TestOrchestratorPlannerIntegration:
             "is_manual": True,
         }
 
-        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with patch("mc.workers.planning.TaskPlanner") as MockPlanner, \
+             patch("mc.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
             await orch._process_planning_task(task_data)
 
             MockPlanner.assert_not_called()

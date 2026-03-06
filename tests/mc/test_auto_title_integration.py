@@ -1,6 +1,5 @@
 """Integration tests for auto-title wiring inside _process_inbox_task."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -47,25 +46,25 @@ async def test_auto_title_updates_title_and_continues():
 
     with (
         patch(
-            "mc.orchestrator.generate_title_via_low_agent",
-            new=AsyncMock(return_value="A Força dos Poemas Curtos"),
+            "mc.workers.inbox.generate_title_via_low_agent",
+            new=AsyncMock(return_value="A Forca dos Poemas Curtos"),
         ),
         patch("asyncio.to_thread", side_effect=passthrough),
     ):
         orchestrator = TaskOrchestrator(bridge)
-        task = _make_task(auto_title=True, description="Poemas curtos revelam a força...")
+        task = _make_task(auto_title=True, description="Poemas curtos revelam a forca...")
         await orchestrator._process_inbox_task(task)
 
     # updateTitle mutation must have been called with the generated title
     bridge.mutation.assert_called_once_with(
         "tasks:updateTitle",
-        {"task_id": "task123", "title": "A Força dos Poemas Curtos"},
+        {"task_id": "task123", "title": "A Forca dos Poemas Curtos"},
     )
 
 
 @pytest.mark.asyncio
 async def test_auto_title_skipped_when_llm_returns_none():
-    """When generate_title_via_low_agent returns None, updateTitle is NOT called and planning uses original title."""
+    """When generate_title_via_low_agent returns None, updateTitle is NOT called."""
     bridge = _make_bridge()
 
     async def passthrough(fn, *args, **kwargs):
@@ -73,13 +72,13 @@ async def test_auto_title_skipped_when_llm_returns_none():
 
     with (
         patch(
-            "mc.orchestrator.generate_title_via_low_agent",
+            "mc.workers.inbox.generate_title_via_low_agent",
             new=AsyncMock(return_value=None),
         ),
         patch("asyncio.to_thread", side_effect=passthrough),
     ):
         orchestrator = TaskOrchestrator(bridge)
-        task = _make_task(auto_title=True, description="Poemas curtos revelam a força...")
+        task = _make_task(auto_title=True, description="Poemas curtos revelam a forca...")
         await orchestrator._process_inbox_task(task)
 
     # updateTitle must NOT have been called
@@ -96,13 +95,13 @@ async def test_auto_title_not_called_when_flag_false():
 
     with (
         patch(
-            "mc.orchestrator.generate_title_via_low_agent",
+            "mc.workers.inbox.generate_title_via_low_agent",
             new=AsyncMock(return_value="Should Not Be Called"),
         ) as mock_gen,
         patch("asyncio.to_thread", side_effect=passthrough),
     ):
         orchestrator = TaskOrchestrator(bridge)
-        task = _make_task(auto_title=False, description="Poemas curtos revelam a força...")
+        task = _make_task(auto_title=False, description="Poemas curtos revelam a forca...")
         await orchestrator._process_inbox_task(task)
 
     mock_gen.assert_not_called()
@@ -111,7 +110,7 @@ async def test_auto_title_not_called_when_flag_false():
 
 @pytest.mark.asyncio
 async def test_auto_title_not_called_when_no_description():
-    """When auto_title=True but description is empty/None, generate_title_via_low_agent is skipped."""
+    """When auto_title=True but description is None, generate_title_via_low_agent is skipped."""
     bridge = _make_bridge()
 
     async def passthrough(fn, *args, **kwargs):
@@ -119,7 +118,7 @@ async def test_auto_title_not_called_when_no_description():
 
     with (
         patch(
-            "mc.orchestrator.generate_title_via_low_agent",
+            "mc.workers.inbox.generate_title_via_low_agent",
             new=AsyncMock(return_value="Should Not Be Called"),
         ) as mock_gen,
         patch("asyncio.to_thread", side_effect=passthrough),

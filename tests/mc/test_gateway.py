@@ -717,14 +717,12 @@ class TestOrchestratorNoDuplicateActivity:
 
     @pytest.mark.asyncio
     async def test_explicit_assignment_no_duplicate_status_activity(self):
-        """Explicit assignment uses planner; update_task_status called once (Convex handles event).
+        """Explicit assignment routes to 'assigned'; no duplicate status activity events.
 
-        Updated in Story 4.5: explicit assignments now go through the planner
-        (AC #8). create_activity is called for step dispatch (TASK_STARTED),
-        which is expected — only duplicate STATUS TRANSITION events are avoided.
+        Updated in Story 17.1: inbox processing only does auto-title + routing.
+        Planning is handled by PlanningWorker in a separate subscription.
         """
         from mc.orchestrator import TaskOrchestrator
-        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -734,10 +732,6 @@ class TestOrchestratorNoDuplicateActivity:
             {"name": "agent-a", "display_name": "Agent A", "role": "dev", "skills": ["coding"]},
         ])
 
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="agent-a"),
-        ])
-
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
             "id": "task_dedup_1",
@@ -745,25 +739,23 @@ class TestOrchestratorNoDuplicateActivity:
             "assigned_agent": "agent-a",
         }
 
-        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            MockPlanner.return_value.plan_task = AsyncMock(return_value=plan)
+        with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await orch._process_inbox_task(task_data)
 
-        # update_task_status called once for assignment (Convex handles the activity)
+        # update_task_status called once for routing (Convex handles the activity)
         mock_bridge.update_task_status.assert_called_once()
-        # create_activity is only for step dispatch (TASK_STARTED), not status transitions
+        # create_activity must NOT contain task_assigned (no duplicate status events)
         for call_args in mock_bridge.create_activity.call_args_list:
             assert call_args[0][0] != "task_assigned"
 
     @pytest.mark.asyncio
     async def test_best_match_routing_no_duplicate_status_activity(self):
-        """Best-match routing uses planner; only step dispatch activity events created.
+        """Inbox routing transitions to planning; no duplicate status activity events.
 
-        Updated in Story 4.5: all tasks go through the LLM planner now.
+        Updated in Story 17.1: inbox processing only does auto-title + routing.
+        Planning is handled by PlanningWorker in a separate subscription.
         """
         from mc.orchestrator import TaskOrchestrator
-        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -773,10 +765,6 @@ class TestOrchestratorNoDuplicateActivity:
             {"name": "test-agent", "display_name": "Test", "role": "dev", "skills": ["testing"]},
         ])
 
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Run tests", description="Run tests", assigned_agent="test-agent"),
-        ])
-
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
             "id": "task_dedup_2",
@@ -784,34 +772,28 @@ class TestOrchestratorNoDuplicateActivity:
             "description": None,
         }
 
-        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            MockPlanner.return_value.plan_task = AsyncMock(return_value=plan)
+        with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await orch._process_inbox_task(task_data)
 
         mock_bridge.update_task_status.assert_called_once()
-        # create_activity is only for step dispatch, not status transitions
+        # create_activity must NOT contain task_assigned (no duplicate status events)
         for call_args in mock_bridge.create_activity.call_args_list:
             assert call_args[0][0] != "task_assigned"
 
     @pytest.mark.asyncio
     async def test_fallback_routing_no_duplicate_status_activity(self):
-        """Fallback (no agent match) uses planner; only step dispatch events created.
+        """Inbox routing transitions to planning; no duplicate status events.
 
-        Updated in Story 4.5: all tasks go through the LLM planner now.
+        Updated in Story 17.1: inbox processing only does auto-title + routing.
+        Planning is handled by PlanningWorker in a separate subscription.
         """
         from mc.orchestrator import TaskOrchestrator
-        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
         mock_bridge.list_agents = MagicMock(return_value=[])
-
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Do task", description="Do task", assigned_agent="lead-agent"),
-        ])
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -820,13 +802,11 @@ class TestOrchestratorNoDuplicateActivity:
             "description": None,
         }
 
-        with patch("mc.orchestrator.TaskPlanner") as MockPlanner, \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            MockPlanner.return_value.plan_task = AsyncMock(return_value=plan)
+        with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await orch._process_inbox_task(task_data)
 
         mock_bridge.update_task_status.assert_called_once()
-        # create_activity is only for step dispatch, not status transitions
+        # create_activity must NOT contain task_assigned (no duplicate status events)
         for call_args in mock_bridge.create_activity.call_args_list:
             assert call_args[0][0] != "task_assigned"
 

@@ -1,4 +1,9 @@
-"""Unit tests for planning-oriented TaskOrchestrator behavior."""
+"""Unit tests for planning-oriented TaskOrchestrator behavior.
+
+After Story 17.1, the orchestrator delegates to workers. These tests verify
+the delegation wiring and the original behavior through the orchestrator's
+public API. Patches target the worker modules where the logic now lives.
+"""
 
 from __future__ import annotations
 
@@ -91,8 +96,8 @@ class TestProcessPlanningTask:
             }
         ]
         orchestrator = TaskOrchestrator(bridge)
-        orchestrator._step_dispatcher = MagicMock()
-        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
+        orchestrator._planning_worker._step_dispatcher = MagicMock()
+        orchestrator._planning_worker._step_dispatcher.dispatch_steps = AsyncMock()
         task = _make_task()
         scheduled_coroutines: list[object] = []
 
@@ -116,20 +121,27 @@ class TestProcessPlanningTask:
             return MagicMock()
 
         with (
-            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
-            patch("mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.workers.planning.asyncio.create_task",
+                side_effect=_capture_create_task,
+            ),
+            patch("mc.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
             await orchestrator._process_planning_task(task)
 
         bridge.create_task_directory.assert_called_once_with("task-1")
-        bridge.update_execution_plan.assert_called_once_with("task-1", plan.to_dict())
+        bridge.update_execution_plan.assert_called_once_with(
+            "task-1", plan.to_dict()
+        )
         bridge.update_task_status.assert_not_called()
         bridge.batch_create_steps.assert_called_once()
         bridge.kick_off_task.assert_called_once_with("task-1", 1)
-        orchestrator._step_dispatcher.dispatch_steps.assert_called_once_with("task-1", ["step-1"])
+        orchestrator._planning_worker._step_dispatcher.dispatch_steps.assert_called_once_with(
+            "task-1", ["step-1"]
+        )
         assert len(scheduled_coroutines) == 1
 
         assert bridge.create_activity.call_count == 3
@@ -145,8 +157,8 @@ class TestProcessPlanningTask:
         bridge = _make_bridge()
         bridge.list_agents.return_value = []
         orchestrator = TaskOrchestrator(bridge)
-        orchestrator._step_dispatcher = MagicMock()
-        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
+        orchestrator._planning_worker._step_dispatcher = MagicMock()
+        orchestrator._planning_worker._step_dispatcher.dispatch_steps = AsyncMock()
         task = _make_task(task_id="task-supervised", title="Supervised")
         task["supervision_mode"] = "supervised"
 
@@ -165,19 +177,21 @@ class TestProcessPlanningTask:
         )
 
         with (
-            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.orchestrator.asyncio.create_task") as create_task_mock,
-            patch("mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.workers.planning.asyncio.create_task") as create_task_mock,
+            patch("mc.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
             await orchestrator._process_planning_task(task)
 
-        bridge.update_execution_plan.assert_called_once_with("task-supervised", plan.to_dict())
+        bridge.update_execution_plan.assert_called_once_with(
+            "task-supervised", plan.to_dict()
+        )
         bridge.batch_create_steps.assert_not_called()
         bridge.kick_off_task.assert_not_called()
         create_task_mock.assert_not_called()
-        orchestrator._step_dispatcher.dispatch_steps.assert_not_called()
+        orchestrator._planning_worker._step_dispatcher.dispatch_steps.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_failure_marks_task_failed_and_reports_error(self) -> None:
@@ -187,11 +201,13 @@ class TestProcessPlanningTask:
         task = _make_task(task_id="task-fail", title="Failing plan")
 
         with (
-            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
-            planner.plan_task = AsyncMock(side_effect=RuntimeError("planner exploded"))
+            planner.plan_task = AsyncMock(
+                side_effect=RuntimeError("planner exploded")
+            )
             await orchestrator._process_planning_task(task)
 
         bridge.update_execution_plan.assert_not_called()
@@ -201,7 +217,8 @@ class TestProcessPlanningTask:
         assert status_args[1] == TaskStatus.FAILED
 
         failed_events = [
-            c for c in bridge.create_activity.call_args_list
+            c
+            for c in bridge.create_activity.call_args_list
             if c[0][0] == ActivityEventType.TASK_FAILED
         ]
         assert len(failed_events) == 1
@@ -228,8 +245,8 @@ class TestProcessPlanningTask:
             }
         ]
         orchestrator = TaskOrchestrator(bridge)
-        orchestrator._step_dispatcher = MagicMock()
-        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
+        orchestrator._planning_worker._step_dispatcher = MagicMock()
+        orchestrator._planning_worker._step_dispatcher.dispatch_steps = AsyncMock()
 
         files = [
             {"name": "invoice.pdf", "type": "application/pdf", "size": 867328},
@@ -263,9 +280,12 @@ class TestProcessPlanningTask:
             return MagicMock()
 
         with (
-            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
-            patch("mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.workers.planning.asyncio.create_task",
+                side_effect=_capture_create_task,
+            ),
+            patch("mc.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(side_effect=_capture_plan_task)
@@ -278,7 +298,9 @@ class TestProcessPlanningTask:
         assert call_kwargs["files"] == files
 
     @pytest.mark.asyncio
-    async def test_process_planning_task_passes_reasoning_level_to_planner(self) -> None:
+    async def test_process_planning_task_passes_reasoning_level_to_planner(
+        self,
+    ) -> None:
         """Planner should receive the resolved reasoning level for the planning tier."""
         bridge = _make_bridge()
         bridge.list_agents.return_value = [
@@ -291,8 +313,8 @@ class TestProcessPlanningTask:
             }
         ]
         orchestrator = TaskOrchestrator(bridge)
-        orchestrator._step_dispatcher = MagicMock()
-        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
+        orchestrator._planning_worker._step_dispatcher = MagicMock()
+        orchestrator._planning_worker._step_dispatcher.dispatch_steps = AsyncMock()
 
         task = _make_task(task_id="task-reasoning", title="Reasoning")
 
@@ -315,11 +337,20 @@ class TestProcessPlanningTask:
             return MagicMock()
 
         with (
-            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
-            patch("mc.orchestrator.TaskPlanner") as planner_cls,
-            patch("mc.tier_resolver.TierResolver.resolve_model", return_value="cc/claude-sonnet-4-6"),
-            patch("mc.tier_resolver.TierResolver.resolve_reasoning_level", return_value="low"),
+            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.workers.planning.asyncio.create_task",
+                side_effect=_capture_create_task,
+            ),
+            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch(
+                "mc.tier_resolver.TierResolver.resolve_model",
+                return_value="cc/claude-sonnet-4-6",
+            ),
+            patch(
+                "mc.tier_resolver.TierResolver.resolve_reasoning_level",
+                return_value="low",
+            ),
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -338,7 +369,7 @@ class TestHandleReviewTransitionPausedTask:
         must NOT be auto-completed to done.
 
         Without the fix, _handle_review_transition would see:
-            trust_level=autonomous, no reviewers → auto-complete to done.
+            trust_level=autonomous, no reviewers -> auto-complete to done.
         With the fix, it detects existing steps and skips processing.
         """
         bridge = _make_bridge()
@@ -358,7 +389,7 @@ class TestHandleReviewTransitionPausedTask:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await orchestrator._handle_review_transition("task-1", paused_task)
 
         # Task must NOT be auto-completed to done
@@ -368,7 +399,7 @@ class TestHandleReviewTransitionPausedTask:
     async def test_review_task_without_steps_is_auto_completed(self) -> None:
         """Regression: autonomous tasks without steps (normal review completion) still auto-complete."""
         bridge = _make_bridge()
-        # No materialized steps — this is a normal review completion
+        # No materialized steps -- this is a normal review completion
         bridge.get_steps_by_task.return_value = []
         orchestrator = TaskOrchestrator(bridge)
 
@@ -381,11 +412,13 @@ class TestHandleReviewTransitionPausedTask:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await orchestrator._handle_review_transition("task-1", review_task)
 
         # Task SHOULD be auto-completed (no steps = normal autonomous review)
-        bridge.update_task_status.assert_called_once_with("task-1", TaskStatus.DONE)
+        bridge.update_task_status.assert_called_once_with(
+            "task-1", TaskStatus.DONE
+        )
 
 
 class TestGenerateTitleViaLowAgent:
@@ -409,7 +442,9 @@ class TestGenerateTitleViaLowAgent:
                 "mc.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
-                result = await generate_title_via_low_agent(bridge, "Do something useful")
+                result = await generate_title_via_low_agent(
+                    bridge, "Do something useful"
+                )
 
         assert result == "My Generated Title"
 
@@ -433,7 +468,9 @@ class TestGenerateTitleViaLowAgent:
                 "mc.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
-                result = await generate_title_via_low_agent(bridge, "Do something useful")
+                result = await generate_title_via_low_agent(
+                    bridge, "Do something useful"
+                )
 
         assert result is None
 
@@ -446,7 +483,9 @@ class TestGenerateTitleViaLowAgent:
             "mc.orchestrator.asyncio.to_thread",
             side_effect=_sync_to_thread,
         ):
-            result = await generate_title_via_low_agent(bridge, "Do something useful")
+            result = await generate_title_via_low_agent(
+                bridge, "Do something useful"
+            )
 
         assert result is None
 
@@ -476,5 +515,7 @@ class TestGenerateTitleViaLowAgent:
 
         # Verify the prompt was truncated
         call_messages = mock_provider.chat.call_args[1]["messages"]
-        assert len(call_messages[0]["content"]) <= 5100  # prompt header + 5000 char description
+        assert (
+            len(call_messages[0]["content"]) <= 5100
+        )  # prompt header + 5000 char description
         assert result == "Short Title"
