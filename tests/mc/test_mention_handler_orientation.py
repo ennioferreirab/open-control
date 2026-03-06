@@ -14,10 +14,10 @@ async def test_mention_handler_no_import_error():
     # After the fix, it uses mc.orientation.load_orientation instead.
 
     # Simply importing the module should not error
-    import mc.mention_handler
+    import mc.mentions.handler
 
     # The module should use load_orientation, not _maybe_inject_orientation
-    source = inspect.getsource(mc.mention_handler)
+    source = inspect.getsource(mc.mentions.handler)
     assert "_maybe_inject_orientation" not in source, \
         "mention_handler should not reference _maybe_inject_orientation"
     assert "load_orientation" in source, \

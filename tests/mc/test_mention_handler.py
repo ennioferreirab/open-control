@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mc.mention_handler import (
+from mc.mentions.handler import (
     extract_mentions,
     is_mention_message,
     _build_mention_context,
@@ -28,7 +28,7 @@ _ALL_TEST_AGENTS = {
 def _mock_known_agent_names():
     """Patch _known_agent_names so tests do not depend on ~/.nanobot/agents/."""
     with patch(
-        "mc.mention_handler._known_agent_names",
+        "mc.mentions.handler._known_agent_names",
         return_value=_ALL_TEST_AGENTS,
     ):
         yield
