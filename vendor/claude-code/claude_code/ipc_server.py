@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.ask_user_handler import AskUserHandler
+    from mc.ask_user.handler import AskUserHandler
     from mc.bridge import ConvexBridge
     from nanobot.bus.queue import MessageBus
 

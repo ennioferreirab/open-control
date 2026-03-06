@@ -310,7 +310,7 @@ class TaskPlanner:
         from claude_code.workspace import CCWorkspaceManager
         from nanobot.config.loader import load_config
 
-        from mc.ask_user_handler import AskUserHandler
+        from mc.ask_user.handler import AskUserHandler
         from mc.orientation import load_orientation
 
         cc_opts = ClaudeCodeOpts()
