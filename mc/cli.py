@@ -8,11 +8,9 @@ import re
 import signal
 import subprocess
 import time
-from datetime import datetime
 from pathlib import Path
 
 import typer
-import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -25,6 +23,11 @@ console = Console()
 
 # PID file location
 PID_FILE = Path.home() / ".nanobot" / "mc.pid"
+
+# Agents directory (also used by cli_agents via mc.cli.AGENTS_DIR)
+AGENTS_DIR = Path.home() / ".nanobot" / "agents"
+
+_AGENT_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 def _find_dashboard_dir() -> Path:
@@ -107,6 +110,109 @@ def _kill_stale_processes() -> None:
                 pass  # Process already exited
 
 
+# ============================================================================
+# Bridge Helper
+# ============================================================================
+
+
+def _get_bridge():
+    """Create a ConvexBridge from environment variables."""
+    from mc.bridge import ConvexBridge
+
+    convex_url = os.environ.get("CONVEX_URL")
+    if not convex_url:
+        env_file = _find_dashboard_dir() / ".env.local"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                if line.startswith("NEXT_PUBLIC_CONVEX_URL="):
+                    convex_url = line.split("=", 1)[1].strip().strip('"')
+                    break
+
+    if not convex_url:
+        console.print("[red]CONVEX_URL not set.[/red]")
+        console.print(
+            "Set CONVEX_URL environment variable or ensure dashboard/.env.local exists."
+        )
+        raise typer.Exit(1)
+
+    admin_key = os.environ.get("CONVEX_ADMIN_KEY")
+    if not admin_key:
+        from mc.gateway import _resolve_admin_key
+
+        admin_key = _resolve_admin_key()
+    return ConvexBridge(convex_url, admin_key)
+
+
+# ============================================================================
+# Status color helpers (used by status command and by cli_config/cli_agents)
+# ============================================================================
+
+
+def _get_status_color(status: str) -> str:
+    """Map task status to Rich color name."""
+    return {
+        "inbox": "magenta",
+        "assigned": "blue",
+        "in_progress": "cyan",
+        "review": "yellow",
+        "done": "green",
+        "retrying": "yellow",
+        "crashed": "red",
+        "planning": "cyan",
+        "ready": "blue",
+        "failed": "red",
+        "deleted": "dim",
+    }.get(status, "white")
+
+
+def _get_agent_status_color(status: str) -> str:
+    """Map agent status to Rich color name."""
+    return {"active": "blue", "idle": "dim", "crashed": "red"}.get(status, "white")
+
+
+# ============================================================================
+# Sync helper (used by cli_agents)
+# ============================================================================
+
+
+def _sync_to_convex() -> None:
+    """Try to sync local agents and skills to Convex. Silently skip if Convex is unavailable."""
+    from mc.gateway import sync_agent_registry, sync_skills
+
+    try:
+        bridge = _get_bridge()
+    except (SystemExit, Exception):
+        # Convex not configured -- skip sync silently
+        return
+
+    try:
+        synced, errors = sync_agent_registry(bridge, AGENTS_DIR)
+        if synced:
+            console.print(
+                f"[dim]Synced {len(synced)} agent(s) to Convex.[/dim]"
+            )
+        for filename, errs in errors.items():
+            for e in errs:
+                console.print(f"[yellow]Sync warning ({filename}): {e}[/yellow]")
+        try:
+            skill_names = sync_skills(bridge)
+            if skill_names:
+                console.print(
+                    f"[dim]Synced {len(skill_names)} skill(s) to Convex.[/dim]"
+                )
+        except Exception as exc:
+            console.print(f"[yellow]Skills sync skipped: {exc}[/yellow]")
+    except Exception as exc:
+        console.print(f"[yellow]Sync skipped: {exc}[/yellow]")
+    finally:
+        bridge.close()
+
+
+# ============================================================================
+# Lifecycle Commands
+# ============================================================================
+
+
 @mc_app.command()
 def start(
     dashboard_dir: str = typer.Option(
@@ -164,21 +270,19 @@ def start(
         if config.channels.email.enabled:
             enabled.append("email")
         if enabled:
-            console.print(f"[green]✓[/green] Nanobot channels: {', '.join(enabled)}")
+            console.print(f"[green]\u2713[/green] Nanobot channels: {', '.join(enabled)}")
         else:
-            console.print("[yellow]⚠[/yellow] No nanobot channels enabled")
+            console.print("[yellow]\u26a0[/yellow] No nanobot channels enabled")
     except Exception:
         pass
 
     # Pre-sync: update config.json from Convex BEFORE nanobot gateway starts.
-    # This avoids a race condition where the nanobot process reads config.json
-    # before mc.gateway has finished syncing the model from Convex.
     try:
         bridge = _get_bridge()
         from mc.gateway import sync_nanobot_default_model
 
         if sync_nanobot_default_model(bridge):
-            console.print("[green]✓[/green] Synced nanobot default model from dashboard")
+            console.print("[green]\u2713[/green] Synced nanobot default model from dashboard")
     except Exception:
         pass  # Non-critical; mc.gateway will retry during its own startup
 
@@ -269,7 +373,7 @@ def status():
         _cleanup_pid_file()
         raise typer.Exit(0)
 
-    # MC is running — query Convex
+    # MC is running -- query Convex
     console.print("[bold green]Mission Control is running[/bold green]\n")
 
     try:
@@ -345,1203 +449,24 @@ def status():
         bridge.close()
 
 
-@mc_app.command()
-def docs():
-    """Show auto-generated API documentation from Convex schema."""
-    from rich.markdown import Markdown
-
-    dashboard_dir = _find_dashboard_dir()
-    convex_dir = dashboard_dir / "convex"
-
-    if not convex_dir.is_dir():
-        console.print("[red]Convex directory not found.[/red]")
-        raise typer.Exit(1)
-
-    doc_lines = ["# Mission Control API Reference\n"]
-
-    # Parse schema
-    schema_file = convex_dir / "schema.ts"
-    if schema_file.exists():
-        doc_lines.append("## Tables\n")
-        doc_lines.append(_parse_schema_tables(schema_file.read_text()))
-
-    # Parse function files
-    for ts_file in sorted(convex_dir.glob("*.ts")):
-        if ts_file.name.startswith("_") or ts_file.name == "schema.ts":
-            continue
-        doc_lines.append(f"\n## {ts_file.stem}\n")
-        doc_lines.append(
-            _parse_convex_functions(ts_file.read_text(), ts_file.stem)
-        )
-
-    md_text = "\n".join(doc_lines)
-    console.print(Markdown(md_text))
-
-
-def _parse_schema_tables(schema_text: str) -> str:
-    """Extract table definitions from a Convex schema.ts file."""
-    lines = []
-    # Match table names: defineTable pattern
-    table_matches = re.findall(
-        r"(\w+):\s*defineTable\(\{(.*?)\}\)", schema_text, re.DOTALL
-    )
-    for table_name, body in table_matches:
-        lines.append(f"### {table_name}\n")
-        # Extract field definitions: fieldName: v.type(...)
-        fields = re.findall(r"(\w+):\s*v\.(\w+)\(([^)]*)\)", body)
-        if fields:
-            lines.append("| Field | Type | Detail |")
-            lines.append("|-------|------|--------|")
-            for field_name, vtype, detail in fields:
-                detail_clean = detail.strip().strip('"').strip("'")
-                lines.append(f"| {field_name} | {vtype} | {detail_clean} |")
-        lines.append("")
-
-    # Extract indexes
-    index_matches = re.findall(
-        r'\.index\("(\w+)",\s*\[([^\]]+)\]\)', schema_text
-    )
-    if index_matches:
-        lines.append("### Indexes\n")
-        for idx_name, idx_fields in index_matches:
-            fields_clean = idx_fields.replace('"', "").strip()
-            lines.append(f"- **{idx_name}**: [{fields_clean}]")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-def _parse_convex_functions(file_text: str, module_name: str) -> str:
-    """Extract exported query/mutation names from a Convex function file."""
-    lines = []
-    # Match exported queries and mutations
-    exports = re.findall(
-        r"export\s+const\s+(\w+)\s*=\s*(query|mutation|internalQuery|internalMutation)",
-        file_text,
-    )
-    if exports:
-        for func_name, func_type in exports:
-            lines.append(f"- `{module_name}:{func_name}` ({func_type})")
-    else:
-        lines.append("_No exported functions found._")
-    return "\n".join(lines)
-
-
-@mc_app.command()
-def init(
-    skip_presets: bool = typer.Option(
-        False, "--skip-presets", help="Skip preset agent selection"
-    ),
-    skip_custom: bool = typer.Option(
-        False, "--skip-custom", help="Skip custom agent creation"
-    ),
-    yes: bool = typer.Option(
-        False, "--yes", "-y", help="Auto-confirm (non-interactive)"
-    ),
-):
-    """Guided setup wizard — create a full agent team in one go."""
-    from rich.rule import Rule
-
-    from mc.init_wizard import (
-        PRESETS,
-        AgentPlan,
-        agent_exists,
-        build_lead_agent_yaml,
-        build_preset_yaml,
-        create_agents,
-        lead_agent_exists,
-    )
-
-    plans: list[AgentPlan] = []
-
-    console.print()
-    console.print(Rule("[bold]Mission Control Setup Wizard[/bold]"))
-    console.print()
-
-    # ------------------------------------------------------------------
-    # Step 1 — Lead Agent
-    # ------------------------------------------------------------------
-    console.print("[bold]Step 1:[/bold] Lead Agent\n")
-
-    if lead_agent_exists():
-        console.print("  lead-agent already exists — [dim]skipping[/dim]")
-        plans.append(AgentPlan(
-            name="lead-agent",
-            role="Lead Agent — Orchestrator",
-            yaml_text="",
-            source="lead",
-            skip=True,
-            skip_reason="already exists",
-        ))
-    else:
-        console.print("  Will create [bold]lead-agent[/bold] (orchestrator)")
-        plans.append(AgentPlan(
-            name="lead-agent",
-            role="Lead Agent — Orchestrator",
-            yaml_text=build_lead_agent_yaml(),
-            source="lead",
-        ))
-    console.print()
-
-    # ------------------------------------------------------------------
-    # Step 2 — Preset Agents
-    # ------------------------------------------------------------------
-    if not skip_presets:
-        console.print("[bold]Step 2:[/bold] Preset Agents\n")
-        console.print("  Available presets:")
-        for i, p in enumerate(PRESETS, 1):
-            exists_tag = " [dim](exists)[/dim]" if agent_exists(p.name) else ""
-            console.print(f"    {i}. {p.name} — {p.role}{exists_tag}")
-        console.print()
-
-        if yes:
-            # Non-interactive: add all presets that don't exist
-            for p in PRESETS:
-                if agent_exists(p.name):
-                    plans.append(AgentPlan(
-                        name=p.name, role=p.role, yaml_text="",
-                        source="preset", skip=True,
-                        skip_reason="already exists",
-                    ))
-                else:
-                    plans.append(AgentPlan(
-                        name=p.name, role=p.role,
-                        yaml_text=build_preset_yaml(p), source="preset",
-                    ))
-        else:
-            raw = typer.prompt(
-                "  Select presets (comma-separated numbers, 'all', or 'none')",
-                default="all",
-            )
-            raw = raw.strip().lower()
-
-            if raw == "none":
-                selected_presets = []
-            elif raw == "all":
-                selected_presets = list(PRESETS)
-            else:
-                indices = []
-                for part in raw.split(","):
-                    part = part.strip()
-                    if part.isdigit():
-                        idx = int(part) - 1
-                        if 0 <= idx < len(PRESETS):
-                            indices.append(idx)
-                selected_presets = [PRESETS[i] for i in sorted(set(indices))]
-
-            for p in selected_presets:
-                if agent_exists(p.name):
-                    if typer.confirm(
-                        f"  Agent '{p.name}' already exists. Overwrite?",
-                        default=False,
-                    ):
-                        plans.append(AgentPlan(
-                            name=p.name, role=p.role,
-                            yaml_text=build_preset_yaml(p), source="preset",
-                        ))
-                    else:
-                        plans.append(AgentPlan(
-                            name=p.name, role=p.role, yaml_text="",
-                            source="preset", skip=True,
-                            skip_reason="user declined overwrite",
-                        ))
-                else:
-                    plans.append(AgentPlan(
-                        name=p.name, role=p.role,
-                        yaml_text=build_preset_yaml(p), source="preset",
-                    ))
-        console.print()
-    else:
-        console.print("[bold]Step 2:[/bold] Preset Agents — [dim]skipped[/dim]\n")
-
-    # ------------------------------------------------------------------
-    # Step 3 — Custom Agents
-    # ------------------------------------------------------------------
-    if not skip_custom:
-        console.print("[bold]Step 3:[/bold] Custom Agents\n")
-
-        if yes:
-            console.print("  --yes flag set — [dim]skipping custom agents[/dim]")
-        else:
-            console.print(
-                "  Describe agents in plain English. "
-                "Leave blank when done."
-            )
-            while True:
-                description = typer.prompt(
-                    "\n  Agent description (blank to finish)",
-                    default="",
-                    show_default=False,
-                )
-                if not description.strip():
-                    break
-
-                console.print("  Generating agent configuration...")
-                yaml_text, errors = asyncio.run(
-                    _generate_custom_agent_safe(description)
-                )
-                if errors:
-                    console.print(f"  [red]Error:[/red] {'; '.join(errors)}")
-                    continue
-
-                # Extract name from generated YAML
-                parsed = yaml.safe_load(yaml_text)
-                agent_name = parsed.get("name", "custom-agent")
-                agent_role = parsed.get("role", "Custom Agent")
-
-                console.print(f"  Generated: [bold]{agent_name}[/bold] — {agent_role}")
-
-                if agent_exists(agent_name):
-                    if not typer.confirm(
-                        f"  Agent '{agent_name}' already exists. Overwrite?",
-                        default=False,
-                    ):
-                        console.print("  Skipped.")
-                        continue
-
-                plans.append(AgentPlan(
-                    name=agent_name,
-                    role=agent_role,
-                    yaml_text=yaml_text,
-                    source="custom",
-                ))
-        console.print()
-    else:
-        console.print("[bold]Step 3:[/bold] Custom Agents — [dim]skipped[/dim]\n")
-
-    # ------------------------------------------------------------------
-    # Step 4 — Review & Confirm
-    # ------------------------------------------------------------------
-    console.print("[bold]Step 4:[/bold] Review & Confirm\n")
-
-    to_create = [p for p in plans if not p.skip]
-    to_skip = [p for p in plans if p.skip]
-
-    if not to_create:
-        console.print("  Nothing to create — all agents already exist or were skipped.")
-        raise typer.Exit(0)
-
-    table = Table(title="Agents to Create")
-    table.add_column("Name", style="bold")
-    table.add_column("Role")
-    table.add_column("Source")
-    for p in to_create:
-        table.add_row(p.name, p.role, p.source)
-    console.print(table)
-
-    if to_skip:
-        console.print(f"\n  [dim]Skipping {len(to_skip)} agent(s): "
-                       f"{', '.join(p.name for p in to_skip)}[/dim]")
-
-    console.print()
-
-    if not yes:
-        if not typer.confirm("  Proceed?", default=True):
-            console.print("  Cancelled.")
-            raise typer.Exit(0)
-
-    # Create
-    results = create_agents(to_create)
-
-    console.print()
-    created = sum(1 for r in results if r.success and not r.error.startswith("skipped"))
-    failed = sum(1 for r in results if not r.success)
-
-    for r in results:
-        if r.success and r.path:
-            console.print(f"  [green]✓[/green] {r.name} → {r.path}")
-        elif not r.success:
-            console.print(f"  [red]✗[/red] {r.name} — {r.error}")
-
-    console.print(f"\n  [green]{created} agent(s) created.[/green]", end="")
-    if failed:
-        console.print(f"  [red]{failed} failed.[/red]", end="")
-    console.print()
-
-    if created > 0:
-        _sync_to_convex()
-
-
-async def _generate_custom_agent_safe(description: str) -> tuple[str | None, list[str]]:
-    """Wrapper around generate_custom_agent that catches provider errors."""
-    try:
-        from mc.init_wizard import generate_custom_agent
-        return await generate_custom_agent(description)
-    except SystemExit as exc:
-        return None, [str(exc)]
-    except Exception as exc:
-        return None, [f"Generation failed: {exc}"]
-
-
 # ============================================================================
-# Bridge Helper
+# Register sub-apps from cli_agents and cli_config
 # ============================================================================
 
-
-def _get_bridge():
-    """Create a ConvexBridge from environment variables."""
-    from mc.bridge import ConvexBridge
-
-    convex_url = os.environ.get("CONVEX_URL")
-    if not convex_url:
-        env_file = _find_dashboard_dir() / ".env.local"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("NEXT_PUBLIC_CONVEX_URL="):
-                    convex_url = line.split("=", 1)[1].strip().strip('"')
-                    break
-
-    if not convex_url:
-        console.print("[red]CONVEX_URL not set.[/red]")
-        console.print(
-            "Set CONVEX_URL environment variable or ensure dashboard/.env.local exists."
-        )
-        raise typer.Exit(1)
-
-    admin_key = os.environ.get("CONVEX_ADMIN_KEY")
-    if not admin_key:
-        from mc.gateway import _resolve_admin_key
-
-        admin_key = _resolve_admin_key()
-    return ConvexBridge(convex_url, admin_key)
-
-
-def _get_status_color(status: str) -> str:
-    """Map task status to Rich color name."""
-    return {
-        "inbox": "magenta",
-        "assigned": "blue",
-        "in_progress": "cyan",
-        "review": "yellow",
-        "done": "green",
-        "retrying": "yellow",
-        "crashed": "red",
-        "planning": "cyan",
-        "ready": "blue",
-        "failed": "red",
-        "deleted": "dim",
-    }.get(status, "white")
-
-
-def _get_agent_status_color(status: str) -> str:
-    """Map agent status to Rich color name."""
-    return {"active": "blue", "idle": "dim", "crashed": "red"}.get(status, "white")
-
-
-# Agents directory
-AGENTS_DIR = Path.home() / ".nanobot" / "agents"
-
-_AGENT_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-
-
-# ============================================================================
-# Task Commands
-# ============================================================================
-
-tasks_app = typer.Typer(
-    help="Manage Mission Control tasks",
-    no_args_is_help=True,
+from mc.cli_agents import (  # noqa: E402
+    agents_app,
+    register_init_command,
+    register_sessions_command,
 )
+from mc.cli_config import (  # noqa: E402
+    register_docs_command,
+    tasks_app,
+)
+
+mc_app.add_typer(agents_app, name="agents")
 mc_app.add_typer(tasks_app, name="tasks")
 
-
-@tasks_app.command("create")
-def tasks_create(
-    title: str = typer.Argument(None, help="Task title"),
-    description: str = typer.Option(
-        None, "--description", "-d", help="Task description"
-    ),
-    tags: str = typer.Option(None, "--tags", "-t", help="Comma-separated tags"),
-    trust_level: str = typer.Option(
-        None,
-        "--trust-level",
-        help="Trust level: autonomous|agent_reviewed|human_approved",
-    ),
-    supervision_mode: str = typer.Option(
-        None,
-        "--supervision-mode",
-        help="Supervision mode: autonomous|supervised",
-    ),
-    manual: bool = typer.Option(
-        False,
-        "--manual",
-        help="Mark task as manually managed",
-    ),
-    agent: str = typer.Option(None, "--agent", help="Agent name to assign"),
-    source: str = typer.Option(None, "--source", help="Source agent name"),
-):
-    """Create a new task."""
-    if title is None:
-        title = typer.prompt("Task title")
-    if not title or not title.strip():
-        console.print("[red]Task title cannot be empty[/red]")
-        raise typer.Exit(1)
-
-    bridge = _get_bridge()
-    try:
-        tag_list = (
-            [t.strip() for t in tags.split(",") if t.strip()] if tags else None
-        )
-        args: dict = {"title": title}
-        if description:
-            args["description"] = description
-        if tag_list:
-            args["tags"] = tag_list
-        if trust_level:
-            args["trust_level"] = trust_level
-        if supervision_mode:
-            args["supervision_mode"] = supervision_mode
-        if manual:
-            args["is_manual"] = True
-        if agent:
-            args["assigned_agent"] = agent
-        if source:
-            args["source_agent"] = source
-        try:
-            result = bridge.mutation("tasks:create", args)
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-        task_id = result if isinstance(result, str) else (result or {}).get("id", "")
-        console.print(f"[green]Task created:[/green] {title}")
-        if task_id:
-            console.print(f"  ID: {task_id}")
-        if manual:
-            console.print("  Type: manual (human task)")
-        if trust_level:
-            console.print(f"  Trust: {trust_level}")
-        if agent:
-            console.print(f"  Agent: {agent}")
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("list")
-def tasks_list(
-    status: str = typer.Option(None, "--status", "-s", help="Filter by status"),
-    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
-):
-    """List all tasks."""
-    import json as _json
-
-    bridge = _get_bridge()
-    try:
-        if status:
-            tasks = bridge.query("tasks:listByStatus", {"status": status})
-        else:
-            tasks = bridge.query("tasks:list")
-        if not tasks:
-            console.print("No tasks found.")
-            return
-
-        if output_json:
-            console.print(_json.dumps(tasks, indent=2, default=str))
-            return
-
-        status_order = [
-            "inbox",
-            "assigned",
-            "in_progress",
-            "review",
-            "done",
-            "retrying",
-            "crashed",
-        ]
-        tasks.sort(
-            key=lambda t: (
-                status_order.index(t.get("status", "inbox"))
-                if t.get("status", "inbox") in status_order
-                else len(status_order)
-            )
-        )
-
-        table = Table(title="Tasks")
-        table.add_column("ID", style="dim")
-        table.add_column("Status", style="bold")
-        table.add_column("Title", max_width=50)
-        table.add_column("Agent")
-        table.add_column("Created")
-
-        for task in tasks:
-            task_id = task.get("id", "")
-            status_val = task.get("status", "unknown")
-            color = _get_status_color(status_val)
-            title_text = task.get("title", "Untitled")
-            if len(title_text) > 50:
-                title_text = title_text[:47] + "..."
-            agent = task.get("assigned_agent") or "-"
-            created = (task.get("created_at") or "")[:10]
-
-            table.add_row(
-                task_id,
-                f"[{color}]{status_val}[/{color}]",
-                title_text,
-                agent,
-                created,
-            )
-
-        console.print(table)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("get")
-def tasks_get(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
-):
-    """Show details of a task plus last 10 thread messages."""
-    import json as _json
-
-    bridge = _get_bridge()
-    try:
-        task = bridge.query("tasks:getById", {"task_id": task_id})
-        if not task:
-            console.print(f"[red]Task not found:[/red] {task_id}")
-            raise typer.Exit(1)
-
-        messages = bridge.query("messages:listByTask", {"task_id": task_id}) or []
-        messages = messages[-10:]
-
-        if output_json:
-            console.print(_json.dumps({"task": task, "messages": messages}, indent=2, default=str))
-            return
-
-        console.print(f"\n[bold]Task:[/bold] {task.get('title', 'Untitled')}")
-        console.print(f"  [dim]ID:[/dim]           {task_id}")
-        console.print(f"  [dim]Status:[/dim]        {task.get('status', '-')}")
-        console.print(f"  [dim]Agent:[/dim]         {task.get('assigned_agent') or '-'}")
-        console.print(f"  [dim]Trust Level:[/dim]   {task.get('trust_level') or '-'}")
-        console.print(f"  [dim]Supervision:[/dim]   {task.get('supervision_mode') or '-'}")
-        console.print(f"  [dim]Manual:[/dim]        {task.get('is_manual', False)}")
-        console.print(f"  [dim]Created:[/dim]       {(task.get('created_at') or '')[:19]}")
-        console.print(f"  [dim]Updated:[/dim]       {(task.get('updated_at') or '')[:19]}")
-        tags = task.get("tags") or []
-        console.print(f"  [dim]Tags:[/dim]          {', '.join(tags) if tags else '-'}")
-        description = task.get("description") or ""
-        if description:
-            console.print(f"\n[bold]Description:[/bold]")
-            console.print(f"  {description}")
-
-        if messages:
-            console.print(f"\n[bold]Last {len(messages)} messages:[/bold]")
-            for msg in messages:
-                author = msg.get("author_name") or msg.get("author_type") or "?"
-                content = msg.get("content") or ""
-                ts = (msg.get("timestamp") or msg.get("created_at") or "")[:19]
-                console.print(f"  [{ts}] [cyan]{author}[/cyan]: {content[:120]}")
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("update-status")
-def tasks_update_status(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    status: str = typer.Argument(..., help="New status"),
-    agent: str = typer.Option(None, "--agent", help="Agent name"),
-):
-    """Update the status of a task."""
-    bridge = _get_bridge()
-    try:
-        args: dict = {"task_id": task_id, "status": status}
-        if agent:
-            args["agent_name"] = agent
-        try:
-            bridge.mutation("tasks:updateStatus", args)
-            console.print(f"[green]Status updated:[/green] {task_id} → {status}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("send-message")
-def tasks_send_message(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    content: str = typer.Argument(..., help="Message content"),
-    author: str = typer.Option("User", "--author", help="Author name"),
-):
-    """Post a comment message to a task thread."""
-    bridge = _get_bridge()
-    try:
-        args: dict = {
-            "task_id": task_id,
-            "content": content,
-            "author_name": author,
-        }
-        try:
-            bridge.mutation("messages:postComment", args)
-            console.print(f"[green]Message sent to task:[/green] {task_id}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("delete")
-def tasks_delete(
-    task_id: str = typer.Argument(..., help="Task ID"),
-):
-    """Soft-delete a task."""
-    bridge = _get_bridge()
-    try:
-        try:
-            bridge.mutation("tasks:softDelete", {"task_id": task_id})
-            console.print(f"[green]Task deleted:[/green] {task_id}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("restore")
-def tasks_restore(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    mode: str = typer.Option("previous", "--mode", help="Restore mode: previous|beginning"),
-):
-    """Restore a soft-deleted task."""
-    bridge = _get_bridge()
-    try:
-        args: dict = {"task_id": task_id, "mode": mode}
-        try:
-            bridge.mutation("tasks:restore", args)
-            console.print(f"[green]Task restored:[/green] {task_id} (mode: {mode})")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("approve")
-def tasks_approve(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    user: str = typer.Option("User", "--user", help="Approving user name"),
-):
-    """Approve a task that is awaiting human approval."""
-    bridge = _get_bridge()
-    try:
-        args: dict = {"task_id": task_id, "user_name": user}
-        try:
-            bridge.mutation("tasks:approve", args)
-            console.print(f"[green]Task approved:[/green] {task_id}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("deny")
-def tasks_deny(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    feedback: str = typer.Argument(..., help="Denial feedback"),
-    user: str = typer.Option("User", "--user", help="Denying user name"),
-):
-    """Deny a task that is awaiting human approval."""
-    bridge = _get_bridge()
-    try:
-        args: dict = {"task_id": task_id, "feedback": feedback, "user_name": user}
-        try:
-            bridge.mutation("tasks:deny", args)
-            console.print(f"[yellow]Task denied:[/yellow] {task_id}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("pause")
-def tasks_pause(
-    task_id: str = typer.Argument(..., help="Task ID"),
-):
-    """Pause a running task."""
-    bridge = _get_bridge()
-    try:
-        try:
-            bridge.mutation("tasks:pauseTask", {"task_id": task_id})
-            console.print(f"[green]Task paused:[/green] {task_id}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("resume")
-def tasks_resume(
-    task_id: str = typer.Argument(..., help="Task ID"),
-):
-    """Resume a paused task."""
-    bridge = _get_bridge()
-    try:
-        try:
-            bridge.mutation("tasks:resumeTask", {"task_id": task_id})
-            console.print(f"[green]Task resumed:[/green] {task_id}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("update-title")
-def tasks_update_title(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    title: str = typer.Argument(..., help="New title"),
-):
-    """Update the title of a task."""
-    bridge = _get_bridge()
-    try:
-        args: dict = {"task_id": task_id, "title": title}
-        try:
-            bridge.mutation("tasks:updateTitle", args)
-            console.print(f"[green]Title updated:[/green] {task_id} → {title}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("update-description")
-def tasks_update_description(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    description: str = typer.Argument(..., help="New description"),
-):
-    """Update the description of a task."""
-    bridge = _get_bridge()
-    try:
-        args: dict = {"task_id": task_id, "description": description}
-        try:
-            bridge.mutation("tasks:updateDescription", args)
-            console.print(f"[green]Description updated:[/green] {task_id}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("update-tags")
-def tasks_update_tags(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    tags: str = typer.Argument(..., help="Comma-separated tags"),
-):
-    """Update the tags of a task (comma-separated)."""
-    bridge = _get_bridge()
-    try:
-        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-        args: dict = {"task_id": task_id, "tags": tag_list}
-        try:
-            bridge.mutation("tasks:updateTags", args)
-            console.print(f"[green]Tags updated:[/green] {task_id} → {tag_list}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-@tasks_app.command("manual-move")
-def tasks_manual_move(
-    task_id: str = typer.Argument(..., help="Task ID"),
-    status: str = typer.Argument(..., help="Target status"),
-):
-    """Manually move a task to a specific status."""
-    bridge = _get_bridge()
-    try:
-        args: dict = {"task_id": task_id, "new_status": status}
-        try:
-            bridge.mutation("tasks:manualMove", args)
-            console.print(f"[green]Task moved:[/green] {task_id} → {status}")
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
-    finally:
-        bridge.close()
-
-
-# ============================================================================
-# Sessions Command (CC-6 AC5)
-# ============================================================================
-
-
-@mc_app.command()
-def sessions():
-    """List active Claude Code agent sessions."""
-    bridge = _get_bridge()
-    try:
-        all_settings = bridge.query("settings:list") or []
-        cc_sessions = [
-            s for s in all_settings
-            if isinstance(s.get("key"), str)
-            and s["key"].startswith("cc_session:")
-            and s.get("value")
-        ]
-
-        if not cc_sessions:
-            console.print("No active CC sessions found.")
-            return
-
-        table = Table(title="Claude Code Sessions")
-        table.add_column("Agent", style="bold")
-        table.add_column("Task ID")
-        table.add_column("Session ID")
-
-        # Key format: cc_session:{agent_name}:{task_id}  (or :latest)
-        regular_sessions = []
-        latest_sessions = []
-        for entry in cc_sessions:
-            key = entry.get("key", "")
-            parts = key.split(":", 2)  # ["cc_session", agent_name, task_id_or_latest]
-            if len(parts) == 3:
-                _, agent_name_part, task_id_part = parts
-                if task_id_part == "latest":
-                    latest_sessions.append(entry)
-                else:
-                    regular_sessions.append(entry)
-
-        for entry in sorted(regular_sessions, key=lambda x: x.get("key", "")):
-            key = entry.get("key", "")
-            value = entry.get("value", "")
-            parts = key.split(":", 2)
-            agent_col = parts[1] if len(parts) > 1 else key
-            task_col = parts[2] if len(parts) > 2 else ""
-            session_col = value[:40] + "..." if len(value) > 40 else value
-            table.add_row(agent_col, task_col, session_col)
-
-        for entry in sorted(latest_sessions, key=lambda x: x.get("key", "")):
-            key = entry.get("key", "")
-            value = entry.get("value", "")
-            parts = key.split(":", 2)
-            agent_col = parts[1] if len(parts) > 1 else key
-            session_col = value[:40] + "..." if len(value) > 40 else value
-            table.add_row(agent_col, "[dim]:latest[/dim]", session_col)
-
-        console.print(table)
-        console.print(f"\n  Total: {len(regular_sessions)} task session(s), {len(latest_sessions)} latest pointer(s)")
-    finally:
-        bridge.close()
-
-
-# ============================================================================
-# Agent Commands
-# ============================================================================
-
-agents_app = typer.Typer(
-    help="Manage Mission Control agents",
-    no_args_is_help=True,
-)
-mc_app.add_typer(agents_app, name="agents")
-
-
-def _sync_to_convex() -> None:
-    """Try to sync local agents and skills to Convex. Silently skip if Convex is unavailable."""
-    from mc.gateway import sync_agent_registry, sync_skills
-
-    try:
-        bridge = _get_bridge()
-    except (SystemExit, Exception):
-        # Convex not configured — skip sync silently
-        return
-
-    try:
-        synced, errors = sync_agent_registry(bridge, AGENTS_DIR)
-        if synced:
-            console.print(
-                f"[dim]Synced {len(synced)} agent(s) to Convex.[/dim]"
-            )
-        for filename, errs in errors.items():
-            for e in errs:
-                console.print(f"[yellow]Sync warning ({filename}): {e}[/yellow]")
-
-        # Sync skills alongside agents (Story 8.2)
-        try:
-            skill_names = sync_skills(bridge)
-            if skill_names:
-                console.print(
-                    f"[dim]Synced {len(skill_names)} skill(s) to Convex.[/dim]"
-                )
-        except Exception as exc:
-            console.print(f"[yellow]Skills sync skipped: {exc}[/yellow]")
-    except Exception as exc:
-        console.print(f"[yellow]Sync skipped: {exc}[/yellow]")
-    finally:
-        bridge.close()
-
-
-@agents_app.command("sync")
-def sync_agents():
-    """Sync local agent YAML files and skills to Convex."""
-    from mc.gateway import sync_agent_registry, sync_skills
-
-    if not AGENTS_DIR.is_dir():
-        console.print("No agents directory found. Nothing to sync.")
-        raise typer.Exit(0)
-
-    bridge = _get_bridge()
-    try:
-        synced, errors = sync_agent_registry(bridge, AGENTS_DIR)
-
-        if synced:
-            table = Table(title="Synced Agents")
-            table.add_column("Name", style="bold")
-            table.add_column("Role")
-            table.add_column("Model")
-            for agent in synced:
-                table.add_row(agent.name, agent.role, agent.model or "-")
-            console.print(table)
-        else:
-            console.print("No valid agents found to sync.")
-
-        for filename, errs in errors.items():
-            console.print(f"[red]Invalid: {filename}[/red]")
-            for e in errs:
-                console.print(f"  - {e}")
-
-        console.print(
-            f"\n[green]{len(synced)} synced[/green]"
-            + (f", [red]{len(errors)} failed[/red]" if errors else "")
-        )
-
-        # Sync skills (Story 8.2)
-        try:
-            skill_names = sync_skills(bridge)
-            console.print(f"[green]{len(skill_names)} skill(s) synced[/green]")
-        except Exception as exc:
-            console.print(f"[yellow]Skills sync failed: {exc}[/yellow]")
-    finally:
-        bridge.close()
-
-
-@agents_app.command("list")
-def list_agents():
-    """List all registered agents."""
-    from mc.yaml_validator import validate_agent_file
-
-    # Scan agent directories for config.yaml files
-    agents_dir = AGENTS_DIR
-    valid_agents = []
-
-    if agents_dir.is_dir():
-        for child in sorted(agents_dir.iterdir()):
-            config_file = child / "config.yaml"
-            if child.is_dir() and config_file.is_file():
-                result = validate_agent_file(config_file)
-                if not isinstance(result, list):
-                    valid_agents.append(result)
-
-    if not valid_agents:
-        console.print(
-            "No agents found. Create one with `nanobot mc agents create`"
-        )
-        return
-
-    table = Table(title="Registered Agents")
-    table.add_column("Name", style="bold")
-    table.add_column("Role")
-    table.add_column("Status")
-    table.add_column("Model")
-    table.add_column("Skills")
-
-    for agent in valid_agents:
-        status_color = _get_agent_status_color(agent.status)
-        table.add_row(
-            agent.name,
-            agent.role,
-            f"[{status_color}]{agent.status}[/{status_color}]",
-            agent.model or "-",
-            ", ".join(agent.skills) if agent.skills else "-",
-        )
-
-    console.print(table)
-
-
-@agents_app.command("create")
-def create_agent():
-    """Create a new agent via interactive prompts."""
-    from mc.yaml_validator import validate_agent_file
-
-    console.print("[bold]Create a new agent[/bold]\n")
-
-    # Agent name
-    while True:
-        name = typer.prompt("Agent name (lowercase alphanumeric + hyphens)")
-        name = name.strip().lower()
-        if _AGENT_NAME_PATTERN.match(name):
-            break
-        console.print(
-            "[red]Invalid name.[/red] Use lowercase letters, numbers, and hyphens "
-            "(e.g., 'my-agent')."
-        )
-
-    # Role
-    role = typer.prompt("Role (e.g., 'Senior Developer')")
-
-    # Skills
-    skills_input = typer.prompt(
-        "Skills (comma-separated, or leave empty)", default="", show_default=False
-    )
-    skills = [s.strip() for s in skills_input.split(",") if s.strip()]
-
-    # System prompt
-    console.print("System prompt (enter your prompt, finish with an empty line):")
-    prompt_lines = []
-    while True:
-        line = typer.prompt("", default="", show_default=False)
-        if not line:
-            break
-        prompt_lines.append(line)
-    prompt = "\n".join(prompt_lines)
-    if not prompt.strip():
-        prompt = typer.prompt("System prompt cannot be empty. Enter a prompt")
-
-    # Model (optional)
-    model_input = typer.prompt(
-        "LLM model (optional, press Enter to skip)", default="", show_default=False
-    )
-    model = model_input.strip() or None
-
-    # Build YAML content
-    config_data = {
-        "name": name,
-        "role": role,
-        "prompt": prompt,
-        "skills": skills,
-    }
-    if model:
-        config_data["model"] = model
-
-    # Create agent workspace
-    agent_dir = AGENTS_DIR / name
-    agent_dir.mkdir(parents=True, exist_ok=True)
-    (agent_dir / "memory").mkdir(exist_ok=True)
-    (agent_dir / "skills").mkdir(exist_ok=True)
-
-    # Write MEMORY.md
-    memory_file = agent_dir / "memory" / "MEMORY.md"
-    if not memory_file.exists():
-        memory_file.write_text("")
-
-    # Write SOUL.md
-    from mc.agent_assist import ensure_soul_md
-    ensure_soul_md(agent_dir, name, role)
-
-    # Write config.yaml
-    config_path = agent_dir / "config.yaml"
-    config_path.write_text(
-        yaml.dump(config_data, default_flow_style=False, sort_keys=False),
-        encoding="utf-8",
-    )
-
-    # Validate the generated file
-    result = validate_agent_file(config_path)
-    if isinstance(result, list):
-        console.print(f"[red]Validation failed:[/red]")
-        for err in result:
-            console.print(f"  - {err}")
-        # Clean up on failure
-        import shutil
-
-        shutil.rmtree(agent_dir)
-        raise typer.Exit(1)
-
-    console.print(f"\n[green]Agent '{name}' created at {agent_dir}[/green]")
-    _sync_to_convex()
-
-
-@agents_app.command("assist")
-def assist_agent():
-    """Create an agent from a natural language description (LLM-assisted)."""
-    from rich.syntax import Syntax
-    from mc.agent_assist import (
-        build_llm_provider, create_agent_workspace,
-        extract_yaml_from_response, generate_agent_yaml, validate_yaml_content,
-    )
-
-    console.print("[bold]Agent-Assisted Creation[/bold]\n")
-    description = typer.prompt("Describe the agent you want to create")
-    if not description.strip():
-        console.print("[red]Description cannot be empty.[/red]")
-        raise typer.Exit(1)
-
-    provider = build_llm_provider()
-    max_iterations = 3
-    feedback: str | None = None
-
-    for iteration in range(max_iterations):
-        console.print("\nGenerating agent configuration...")
-        raw = asyncio.run(generate_agent_yaml(provider, description, feedback=feedback))
-        if not raw.strip():
-            console.print("[red]LLM returned an empty response. Try again.[/red]")
-            raise typer.Exit(1)
-
-        yaml_text = extract_yaml_from_response(raw)
-        parsed, errors = validate_yaml_content(yaml_text)
-
-        if errors:
-            console.print("\n[red]Validation errors:[/red]")
-            for e in errors:
-                console.print(f"  - {e}")
-            if iteration < max_iterations - 1:
-                console.print("\nRetrying with validation feedback...")
-                feedback = "; ".join(errors)
-                continue
-            console.print("\n[red]Maximum retries reached.[/red]")
-            raise typer.Exit(1)
-
-        console.print()
-        console.print(Syntax(yaml_text, "yaml", theme="monokai", line_numbers=False))
-        console.print()
-
-        choice = typer.prompt(
-            "Save this configuration? [Y/n/edit]", default="Y", show_default=False
-        ).strip().lower()
-
-        if choice in ("y", ""):
-            _save_assisted_agent(parsed["name"], yaml_text, create_agent_workspace)
-            return
-        elif choice == "n":
-            console.print("Cancelled. No files were created.")
-            raise typer.Exit(0)
-        elif choice == "edit":
-            if iteration >= max_iterations - 1:
-                console.print("[yellow]Maximum feedback iterations reached.[/yellow]")
-                if typer.prompt("Save current config? [Y/n]", default="Y").strip().lower() in ("y", ""):
-                    _save_assisted_agent(parsed["name"], yaml_text, create_agent_workspace)
-                else:
-                    console.print("Cancelled.")
-                return
-            feedback = typer.prompt("What would you like to change?")
-            if not feedback.strip():
-                console.print("No feedback provided. Cancelled.")
-                raise typer.Exit(0)
-        else:
-            console.print(f"[yellow]Unknown choice '{choice}'. Cancelled.[/yellow]")
-            raise typer.Exit(0)
-
-
-def _save_assisted_agent(agent_name, yaml_text, create_fn):
-    """Save an assisted-generated agent, checking for overwrites."""
-    from mc.yaml_validator import validate_agent_file
-
-    agent_dir = Path.home() / ".nanobot" / "agents" / agent_name
-    if agent_dir.exists():
-        if not typer.confirm(f"Agent '{agent_name}' already exists. Overwrite?", default=False):
-            console.print("Cancelled.")
-            raise typer.Exit(0)
-
-    config_path = create_fn(agent_name, yaml_text)
-    result = validate_agent_file(config_path)
-    if isinstance(result, list):
-        console.print("[red]Saved file failed validation:[/red]")
-        for err in result:
-            console.print(f"  - {err}")
-        raise typer.Exit(1)
-    console.print(f"\n[green]Agent '{agent_name}' created at {config_path}[/green]")
-    _sync_to_convex()
+# Register top-level commands from sub-modules
+register_sessions_command(mc_app)
+register_init_command(mc_app)
+register_docs_command(mc_app)
