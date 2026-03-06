@@ -15,7 +15,8 @@ import logging
 import time
 import uuid
 
-from mc.plan_parser import (
+from mc.plan_parser import (  # noqa: F401
+    STANDARD_TOOLS,
     _build_agent_roster,
     _build_file_summary,
     _build_task_shape_hints,

@@ -16,14 +16,22 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.gateway import AgentGateway
-from mc.output_enricher import (
+from mc.output_enricher import (  # noqa: F401
     _PROVIDER_ERRORS,
+    _build_tag_attributes_context,
+    _build_thread_context,
     _collect_output_artifacts,
+    _collect_provider_error_types,
     _enrich_nanobot_description,
+    _get_iana_timezone,
+    _human_size,
+    _make_provider,
     _provider_error_action,
     _relocate_invalid_memory_files,
     _run_agent_on_task,
     _snapshot_output_dir,
+    build_executor_agent_roster,
+    build_task_message,
 )
 from mc.planner import TaskPlanner
 from mc.types import (
