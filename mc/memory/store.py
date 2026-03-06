@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Defaults — overridable via memory_settings.json
 _DEFAULT_HISTORY_CONTEXT_DAYS = 5
 _DEFAULT_MEMORY_CONTEXT_MAX_CHARS = 40_000
+_CONSOLIDATION_FAILURE_COOLDOWN_SECONDS = 300
 
 
 class HybridMemoryStore(MemoryStore):
@@ -29,6 +31,7 @@ class HybridMemoryStore(MemoryStore):
         self._memory_context_max_chars: int = settings.get("memory_context_max_chars", _DEFAULT_MEMORY_CONTEXT_MAX_CHARS)
         self._index = MemoryIndex(self.memory_dir, model)
         self._consolidation_in_progress = False
+        self._consolidation_retry_after = 0.0
 
     @staticmethod
     def _read_settings() -> dict:
@@ -106,6 +109,14 @@ class HybridMemoryStore(MemoryStore):
         if self._consolidation_in_progress:
             return
 
+        now = time.monotonic()
+        if now < self._consolidation_retry_after:
+            logger.info(
+                "Skipping file-based memory consolidation during cooldown (%.0fs remaining)",
+                self._consolidation_retry_after - now,
+            )
+            return
+
         from mc.memory.consolidation import is_history_above_threshold
         if not is_history_above_threshold(self.memory_dir):
             return
@@ -125,13 +136,20 @@ class HybridMemoryStore(MemoryStore):
                 while is_history_above_threshold(self.memory_dir):
                     ok = await consolidate_history_and_memory(self.memory_dir, model)
                     if not ok:
+                        self._consolidation_retry_after = (
+                            time.monotonic() + _CONSOLIDATION_FAILURE_COOLDOWN_SECONDS
+                        )
                         logger.warning("File-based memory consolidation returned False")
                         break
                     ran = True
+                    self._consolidation_retry_after = 0.0
                 if ran:
                     self._index.sync()
                     logger.info("File-based memory consolidation completed")
             except Exception:
+                self._consolidation_retry_after = (
+                    time.monotonic() + _CONSOLIDATION_FAILURE_COOLDOWN_SECONDS
+                )
                 logger.exception("File-based memory consolidation failed")
             finally:
                 self._consolidation_in_progress = False

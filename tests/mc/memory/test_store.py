@@ -218,3 +218,28 @@ async def test_consolidation_worker_loops_until_history_below_threshold(
 
     assert store._consolidation_in_progress is False
     assert consolidate_mock.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_consolidation_failure_enters_cooldown_and_skips_immediate_retry(
+    tmp_path,
+):
+    with patch.object(HybridMemoryStore, "_resolve_consolidation_model", return_value="test-model"), \
+         patch("mc.memory.consolidation.is_history_above_threshold", return_value=True), \
+         patch("mc.memory.consolidation.consolidate_history_and_memory", new_callable=AsyncMock) as consolidate_mock:
+        store = HybridMemoryStore(tmp_path)
+        consolidate_mock.return_value = False
+
+        store._maybe_trigger_consolidation()
+
+        for _ in range(100):
+            if not store._consolidation_in_progress:
+                break
+            await asyncio.sleep(0)
+
+        assert consolidate_mock.await_count == 1
+
+        store._maybe_trigger_consolidation()
+        await asyncio.sleep(0)
+
+        assert consolidate_mock.await_count == 1

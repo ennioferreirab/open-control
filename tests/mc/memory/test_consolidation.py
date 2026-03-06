@@ -40,13 +40,9 @@ def test_is_history_above_threshold_custom(tmp_path):
 
 def _make_llm_response(memory_content: str) -> MagicMock:
     tool_call = MagicMock()
-    tool_call.function.arguments = json.dumps({"memory": memory_content})
-    msg = MagicMock()
-    msg.tool_calls = [tool_call]
-    choice = MagicMock()
-    choice.message = msg
+    tool_call.arguments = json.dumps({"memory": memory_content})
     response = MagicMock()
-    response.choices = [choice]
+    response.tool_calls = [tool_call]
     return response
 
 
@@ -71,12 +67,14 @@ async def test_consolidate_archives_and_clears(tmp_path):
 
     response = _make_llm_response("# Consolidated Memory\n\nBuilt memory system. Old facts preserved.")
     temp_paths: list[Path] = []
+    provider = MagicMock()
+    provider.chat = AsyncMock(return_value=response)
 
     with _force_small_threshold(), \
-         patch("litellm.acompletion", new=AsyncMock(return_value=response)), \
+         patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")), \
          patch("mc.memory.index.MemoryIndex"), \
          patch("tempfile.NamedTemporaryFile", side_effect=_capture_named_tempfile_factory(temp_paths)):
-        ok = await consolidate_history_and_memory(tmp_path, "test-model")
+        ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is True
 
@@ -104,7 +102,7 @@ async def test_consolidate_archives_and_clears(tmp_path):
 @pytest.mark.asyncio
 async def test_consolidate_no_history(tmp_path):
     """No-op when HISTORY.md is empty or missing."""
-    ok = await consolidate_history_and_memory(tmp_path, "test-model")
+    ok = await consolidate_history_and_memory(tmp_path)
     assert ok is True
 
 
@@ -113,8 +111,8 @@ async def test_consolidate_below_threshold_is_noop(tmp_path):
     history_file = tmp_path / "HISTORY.md"
     history_file.write_text("small history", encoding="utf-8")
 
-    with patch("litellm.acompletion", new=AsyncMock(side_effect=AssertionError("should not call llm"))):
-        ok = await consolidate_history_and_memory(tmp_path, "test-model")
+    with patch("mc.memory.consolidation.create_provider", side_effect=AssertionError("should not call provider")):
+        ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is True
     assert history_file.read_text(encoding="utf-8") == "small history"
@@ -125,8 +123,11 @@ async def test_consolidate_below_threshold_is_noop(tmp_path):
 async def test_consolidate_llm_failure(tmp_path):
     (tmp_path / "HISTORY.md").write_text("some content", encoding="utf-8")
 
-    with _force_small_threshold(), patch("litellm.acompletion", new=AsyncMock(side_effect=RuntimeError("boom"))):
-        ok = await consolidate_history_and_memory(tmp_path, "test-model")
+    provider = MagicMock()
+    provider.chat = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with _force_small_threshold(), patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")):
+        ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is False
     # Original files untouched
@@ -137,10 +138,12 @@ async def test_consolidate_llm_failure(tmp_path):
 async def test_consolidate_no_tool_call(tmp_path):
     (tmp_path / "HISTORY.md").write_text("some content", encoding="utf-8")
     response = MagicMock()
-    response.choices = [MagicMock(message=MagicMock(tool_calls=[]))]
+    response.tool_calls = []
+    provider = MagicMock()
+    provider.chat = AsyncMock(return_value=response)
 
-    with _force_small_threshold(), patch("litellm.acompletion", new=AsyncMock(return_value=response)):
-        ok = await consolidate_history_and_memory(tmp_path, "test-model")
+    with _force_small_threshold(), patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")):
+        ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is False
 
@@ -149,9 +152,11 @@ async def test_consolidate_no_tool_call(tmp_path):
 async def test_consolidate_empty_memory_returned(tmp_path):
     (tmp_path / "HISTORY.md").write_text("some content", encoding="utf-8")
     response = _make_llm_response("")
+    provider = MagicMock()
+    provider.chat = AsyncMock(return_value=response)
 
-    with _force_small_threshold(), patch("litellm.acompletion", new=AsyncMock(return_value=response)):
-        ok = await consolidate_history_and_memory(tmp_path, "test-model")
+    with _force_small_threshold(), patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")):
+        ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is False
 
@@ -162,14 +167,17 @@ async def test_consolidate_preserves_tail_arriving_during_llm(tmp_path):
     history_file.write_text("[2026-03-05] Initial event.\n\n", encoding="utf-8")
     (tmp_path / "MEMORY.md").write_text("Old facts.", encoding="utf-8")
     response = _make_llm_response("# Consolidated Memory\n\nInitial event preserved.")
+    provider = MagicMock()
 
-    async def _acompletion(**kwargs):
+    async def _chat(**kwargs):
         with open(history_file, "a", encoding="utf-8") as handle:
             handle.write("[2026-03-05 12:01] Tail event.\n\n")
         return response
 
-    with _force_small_threshold(), patch("litellm.acompletion", new=AsyncMock(side_effect=_acompletion)):
-        ok = await consolidate_history_and_memory(tmp_path, "test-model")
+    provider.chat = AsyncMock(side_effect=_chat)
+
+    with _force_small_threshold(), patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")):
+        ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is True
     assert history_file.read_text(encoding="utf-8") == "[2026-03-05 12:01] Tail event.\n\n"
@@ -186,15 +194,18 @@ async def test_consolidate_aborts_on_non_append_conflict(tmp_path):
     (tmp_path / "MEMORY.md").write_text("Old facts.", encoding="utf-8")
     response = _make_llm_response("# Consolidated Memory\n\nShould not commit.")
     temp_paths: list[Path] = []
+    provider = MagicMock()
 
-    async def _acompletion(**kwargs):
+    async def _chat(**kwargs):
         history_file.write_text("[2026-03-05 12:01] Rewritten history.\n\n", encoding="utf-8")
         return response
 
+    provider.chat = AsyncMock(side_effect=_chat)
+
     with _force_small_threshold(), \
-         patch("litellm.acompletion", new=AsyncMock(side_effect=_acompletion)), \
+         patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")), \
          patch("tempfile.NamedTemporaryFile", side_effect=_capture_named_tempfile_factory(temp_paths)):
-        ok = await consolidate_history_and_memory(tmp_path, "test-model")
+        ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is False
     assert history_file.read_text(encoding="utf-8") == "[2026-03-05 12:01] Rewritten history.\n\n"

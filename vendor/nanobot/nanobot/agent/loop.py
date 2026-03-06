@@ -455,24 +455,28 @@ class AgentLoop:
             return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id,
                                   content="🐈 nanobot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands")
 
-        unconsolidated = len(session.messages) - session.last_consolidated
-        if (unconsolidated >= self.memory_window and session.key not in self._consolidating):
-            self._consolidating.add(session.key)
-            lock = self._get_consolidation_lock(session.key)
-
-            async def _consolidate_and_unlock():
-                try:
-                    async with lock:
-                        await self._consolidate_memory(session)
-                finally:
-                    self._consolidating.discard(session.key)
-                    self._prune_consolidation_lock(session.key, lock)
-                    _task = asyncio.current_task()
-                    if _task is not None:
-                        self._consolidation_tasks.discard(_task)
-
-            _task = asyncio.create_task(_consolidate_and_unlock())
-            self._consolidation_tasks.add(_task)
+        # Legacy AgentLoop background consolidation disabled.
+        # Memory compaction should flow through mc/memory instead of the old
+        # session-snapshot consolidation path here.
+        #
+        # unconsolidated = len(session.messages) - session.last_consolidated
+        # if (unconsolidated >= self.memory_window and session.key not in self._consolidating):
+        #     self._consolidating.add(session.key)
+        #     lock = self._get_consolidation_lock(session.key)
+        #
+        #     async def _consolidate_and_unlock():
+        #         try:
+        #             async with lock:
+        #                 await self._consolidate_memory(session)
+        #         finally:
+        #             self._consolidating.discard(session.key)
+        #             self._prune_consolidation_lock(session.key, lock)
+        #             _task = asyncio.current_task()
+        #             if _task is not None:
+        #                 self._consolidation_tasks.discard(_task)
+        #
+        #     _task = asyncio.create_task(_consolidate_and_unlock())
+        #     self._consolidation_tasks.add(_task)
 
         self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
         if message_tool := self.tools.get("message"):
@@ -559,7 +563,8 @@ class AgentLoop:
         """Delegate to MemoryStore.consolidate(). Returns True on success.
 
         Uses the context's memory store (HybridMemoryStore if available) so that
-        consolidation writes trigger index sync automatically.
+        consolidation writes trigger index sync automatically. In MC setups this
+        enters the `mc/memory` path rather than the old AgentLoop background flow.
         """
         memory_store = self.context.memory
         return await memory_store.consolidate(

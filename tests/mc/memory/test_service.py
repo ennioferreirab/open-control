@@ -155,29 +155,21 @@ class TestQuarantineInvalidMemoryFiles:
 
 
 def _make_llm_response(history_entry: str, memory_update: str):
-    """Build a mock litellm response with a save_memory tool call."""
+    """Build a mock provider response with a save_memory tool call."""
     tool_call = MagicMock()
-    tool_call.function.arguments = json.dumps({
+    tool_call.arguments = json.dumps({
         "history_entry": history_entry,
         "memory_update": memory_update,
     })
-    message = MagicMock()
-    message.tool_calls = [tool_call]
-    choice = MagicMock()
-    choice.message = message
     response = MagicMock()
-    response.choices = [choice]
+    response.tool_calls = [tool_call]
     return response
 
 
 def _make_llm_response_no_tool_calls():
-    """Build a mock litellm response with no tool calls."""
-    message = MagicMock()
-    message.tool_calls = None
-    choice = MagicMock()
-    choice.message = message
+    """Build a mock provider response with no tool calls."""
     response = MagicMock()
-    response.choices = [choice]
+    response.tool_calls = None
     return response
 
 
@@ -197,17 +189,16 @@ class TestConsolidateTaskOutput:
             "[2026-03-05 10:00] Task completed successfully",
             "# Updated Memory\nFact 1\nFact 2",
         )
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
                 task_output="Task did things",
                 task_status="completed",
                 task_id="task-123",
-                model="test-model",
             )
 
         assert result is True
@@ -219,33 +210,32 @@ class TestConsolidateTaskOutput:
         assert "Fact 2" in memory
 
     async def test_llm_call_failure_returns_false(self, workspace):
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(side_effect=Exception("API error"))
+        provider = MagicMock()
+        provider.chat = AsyncMock(side_effect=Exception("API error"))
 
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
                 task_output="output",
                 task_status="completed",
                 task_id="task-456",
-                model="test-model",
             )
 
         assert result is False
 
     async def test_no_tool_calls_returns_false(self, workspace):
         mock_response = _make_llm_response_no_tool_calls()
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
                 task_output="output",
                 task_status="completed",
                 task_id="task-789",
-                model="test-model",
             )
 
         assert result is False
@@ -257,22 +247,20 @@ class TestConsolidateTaskOutput:
             "[2026-03-05 10:00] Done",
             "# Memory",
         )
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
                 task_output=long_output,
                 task_status="completed",
                 task_id="task-trunc",
-                model="test-model",
                 max_output_chars=3000,
             )
 
-            # Check the user message sent to LLM contains truncation notice
-            call_args = mock_litellm.acompletion.call_args
+            call_args = provider.chat.call_args
             messages = call_args.kwargs["messages"]
             user_msg = messages[1]["content"]
             assert "truncated" in user_msg
@@ -280,40 +268,38 @@ class TestConsolidateTaskOutput:
 
     async def test_custom_system_prompt(self, workspace):
         mock_response = _make_llm_response("[2026-03-05] Done", "# Memory")
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
                 task_output="output",
                 task_status="completed",
                 task_id="task-prompt",
-                model="test-model",
                 system_prompt="Custom prompt",
             )
 
-            call_args = mock_litellm.acompletion.call_args
+            call_args = provider.chat.call_args
             messages = call_args.kwargs["messages"]
             assert messages[0]["content"] == "Custom prompt"
 
     async def test_default_system_prompt_used(self, workspace):
         mock_response = _make_llm_response("[2026-03-05] Done", "# Memory")
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
                 task_output="output",
                 task_status="completed",
                 task_id="task-default",
-                model="test-model",
             )
 
-            call_args = mock_litellm.acompletion.call_args
+            call_args = provider.chat.call_args
             messages = call_args.kwargs["messages"]
             assert messages[0]["content"] == DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT
 
@@ -323,17 +309,16 @@ class TestConsolidateTaskOutput:
             "[2026-03-05 10:00] Nothing new",
             existing_memory,  # Same as current
         )
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
                 task_output="output",
                 task_status="completed",
                 task_id="task-noop",
-                model="test-model",
             )
 
         assert result is True
@@ -347,27 +332,23 @@ class TestConsolidateTaskOutput:
     async def test_string_args_from_llm(self, workspace):
         """When the LLM returns arguments as a JSON string (not pre-parsed dict)."""
         tool_call = MagicMock()
-        tool_call.function.arguments = json.dumps({
+        tool_call.arguments = json.dumps({
             "history_entry": "[2026-03-05] String args",
             "memory_update": "# New memory",
         })
-        message = MagicMock()
-        message.tool_calls = [tool_call]
-        choice = MagicMock()
-        choice.message = message
         response = MagicMock()
-        response.choices = [choice]
+        response.tool_calls = [tool_call]
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=response)
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=response)
 
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test",
                 task_output="out",
                 task_status="done",
                 task_id="task-str",
-                model="test-model",
             )
 
         assert result is True
@@ -375,24 +356,20 @@ class TestConsolidateTaskOutput:
     async def test_non_dict_args_returns_false(self, workspace):
         """When parsed arguments are not a dict, return False."""
         tool_call = MagicMock()
-        tool_call.function.arguments = '"just a string"'
-        message = MagicMock()
-        message.tool_calls = [tool_call]
-        choice = MagicMock()
-        choice.message = message
+        tool_call.arguments = '"just a string"'
         response = MagicMock()
-        response.choices = [choice]
+        response.tool_calls = [tool_call]
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=response)
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=response)
 
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test",
                 task_output="out",
                 task_status="done",
                 task_id="task-bad-args",
-                model="test-model",
             )
 
         assert result is False
@@ -400,24 +377,20 @@ class TestConsolidateTaskOutput:
     async def test_malformed_tool_call_returns_false(self, workspace):
         """When tool call arguments can't be parsed, return False."""
         tool_call = MagicMock()
-        tool_call.function.arguments = "not valid json {{{"
-        message = MagicMock()
-        message.tool_calls = [tool_call]
-        choice = MagicMock()
-        choice.message = message
+        tool_call.arguments = "not valid json {{{"
         response = MagicMock()
-        response.choices = [choice]
+        response.tool_calls = [tool_call]
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=response)
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=response)
 
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test",
                 task_output="out",
                 task_status="done",
                 task_id="task-malformed",
-                model="test-model",
             )
 
         assert result is False
@@ -425,27 +398,23 @@ class TestConsolidateTaskOutput:
     async def test_non_string_entry_converted_to_json(self, workspace):
         """When history_entry is not a string (e.g. dict), it gets JSON-encoded."""
         tool_call = MagicMock()
-        tool_call.function.arguments = {
+        tool_call.arguments = {
             "history_entry": {"key": "value"},
             "memory_update": "# Memory",
         }
-        message = MagicMock()
-        message.tool_calls = [tool_call]
-        choice = MagicMock()
-        choice.message = message
         response = MagicMock()
-        response.choices = [choice]
+        response.tool_calls = [tool_call]
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=response)
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=response)
 
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test",
                 task_output="out",
                 task_status="done",
                 task_id="task-nonstr",
-                model="test-model",
             )
 
         assert result is True
@@ -458,17 +427,16 @@ class TestConsolidateTaskOutput:
             "[2026-03-05 10:00] First entry",
             "# First memory",
         )
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.litellm") as mock_litellm:
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-
+        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
             result = await consolidate_task_output(
                 tmp_path,
                 task_title="First Task",
                 task_output="output",
                 task_status="completed",
                 task_id="task-new",
-                model="test-model",
             )
 
         assert result is True

@@ -8,14 +8,16 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-import litellm
 from filelock import FileLock
+
+from mc.provider_factory import create_provider
 
 logger = logging.getLogger(__name__)
 
 # --- Configurable constants ---
 HISTORY_CONSOLIDATION_THRESHOLD_CHARS = 160_000  # ~40K tokens
 MEMORY_TARGET_MAX_CHARS = 12_000  # ~3K tokens — target size for consolidated MEMORY.md
+MEMORY_CONSOLIDATION_MODEL = "tier:standard-medium"
 
 _CONSOLIDATION_TOOL = [
     {
@@ -64,7 +66,7 @@ def is_history_above_threshold(
 
 async def consolidate_history_and_memory(
     memory_dir: Path,
-    model: str,
+    model: str | None = None,
     *,
     memory_target_max_chars: int = MEMORY_TARGET_MAX_CHARS,
 ) -> bool:
@@ -123,14 +125,14 @@ async def consolidate_history_and_memory(
         )
 
         try:
-            response = await litellm.acompletion(
-                model=model,
+            provider, resolved_model = create_provider(model or MEMORY_CONSOLIDATION_MODEL)
+            response = await provider.chat(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
                 tools=_CONSOLIDATION_TOOL,
-                tool_choice={"type": "function", "function": {"name": "save_consolidated_memory"}},
+                model=resolved_model,
             )
         except Exception:
             logger.exception("consolidate_history_and_memory: LLM call failed")
@@ -138,11 +140,10 @@ async def consolidate_history_and_memory(
 
         # Parse tool call
         try:
-            tool_calls = response.choices[0].message.tool_calls
-            if not tool_calls:
+            if not response.tool_calls:
                 logger.warning("consolidate_history_and_memory: no tool call returned")
                 return False
-            args = tool_calls[0].function.arguments
+            args = response.tool_calls[0].arguments
             if isinstance(args, str):
                 args = json.loads(args)
         except Exception:

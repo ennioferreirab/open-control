@@ -38,6 +38,7 @@ These files do not exist in upstream and will never conflict on `subtree pull`:
 - **`_set_tool_context()`**: type-checked dispatch; `CronTool.set_context()` receives `task_id` and `agent_name`
 - **`_run_agent_loop`**: passes `reasoning_level` to `provider.chat()`
 - **`_consolidate_memory()`**: uses `self.context.memory` (HybridMemoryStore if available) instead of creating new `MemoryStore`; passes `max_tokens` and `mc_system_prompt` to `consolidate()`
+- **Legacy `_process_message()` auto-consolidation path commented out**: normal chat turns no longer trigger the old AgentLoop background consolidation task; explicit flows like `/new` still call `_consolidate_memory()`, which now documents that MC setups enter the `mc/memory` backend path
 - **`process_direct()`**: new `task_id` param; sets `_current_task_id`; falls back to `_last_turn_content` when `MessageTool` suppresses return
 - **New method `end_task_session()`**: consolidates + clears a session at end of an MC task
 - **`_process_message` / `_handle_message`**: passes `skill_names=self.allowed_skills` to `context.build_messages()`

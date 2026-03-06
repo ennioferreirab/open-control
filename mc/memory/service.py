@@ -7,12 +7,12 @@ import logging
 import shutil
 from pathlib import Path
 
-import litellm
-
 from mc.memory.policy import find_invalid_memory_files
 from mc.memory.store import HybridMemoryStore
+from mc.provider_factory import create_provider
 
 logger = logging.getLogger(__name__)
+MEMORY_CONSOLIDATION_MODEL = "tier:standard-medium"
 
 _SAVE_MEMORY_TOOL = [
     {
@@ -112,7 +112,7 @@ async def consolidate_task_output(
     task_output: str,
     task_status: str,
     task_id: str,
-    model: str,
+    model: str | None = None,
     system_prompt: str | None = None,
     max_output_chars: int = 3000,
 ) -> bool:
@@ -134,25 +134,24 @@ async def consolidate_task_output(
     )
 
     try:
-        response = await litellm.acompletion(
-            model=model,
+        provider, resolved_model = create_provider(model or MEMORY_CONSOLIDATION_MODEL)
+        response = await provider.chat(
             messages=[
                 {"role": "system", "content": system_prompt or DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             tools=_SAVE_MEMORY_TOOL,
-            tool_choice={"type": "function", "function": {"name": "save_memory"}},
+            model=resolved_model,
         )
     except Exception:
         logger.exception("Task memory consolidation LLM call failed for task %s", task_id)
         return False
 
     try:
-        tool_calls = response.choices[0].message.tool_calls
-        if not tool_calls:
+        if not response.tool_calls:
             logger.warning("Task memory consolidation returned no tool call for task %s", task_id)
             return False
-        args = tool_calls[0].function.arguments
+        args = response.tool_calls[0].arguments
         if isinstance(args, str):
             args = json.loads(args)
     except Exception:
