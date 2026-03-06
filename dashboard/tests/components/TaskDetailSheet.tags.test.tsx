@@ -20,6 +20,8 @@ vi.mock("../../convex/_generated/api", () => ({
       resumeTask: "tasks:resumeTask",
       retry: "tasks:retry",
       updateTags: "tasks:updateTags",
+      updateTitle: "tasks:updateTitle",
+      updateDescription: "tasks:updateDescription",
       addTaskFiles: "tasks:addTaskFiles",
       removeTaskFile: "tasks:removeTaskFile",
     },
@@ -27,6 +29,11 @@ vi.mock("../../convex/_generated/api", () => ({
     steps: { getByTask: "steps:getByTask" },
     activities: { create: "activities:create" },
     taskTags: { list: "taskTags:list" },
+    tagAttributes: { list: "tagAttributes:list" },
+    tagAttributeValues: {
+      getByTask: "tagAttributeValues:getByTask",
+      removeByTaskAndTag: "tagAttributeValues:removeByTaskAndTag",
+    },
   },
 }));
 

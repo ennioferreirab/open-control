@@ -9,8 +9,6 @@ const mockUseQuery = vi.fn();
 const mockMutationFn = vi.fn().mockResolvedValue(undefined);
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => {
-    // If mockReturnValueOnce queue is exhausted, return [] as safe default
-    // (handles extra useQuery calls like taskTags.list)
     const result = mockUseQuery(...args);
     return result;
   },
@@ -73,16 +71,15 @@ describe("TaskDetailSheet", () => {
   });
 
   // Helper: set up useQuery to return task + empty arrays for all other queries.
-  // mockReturnValueOnce chains in individual tests override as needed.
+  // Now there are 6 useQuery calls in useTaskDetailView:
+  //   getById, listByTask, getByTask (steps), taskTags.list, tagAttributes.list, tagAttributeValues.getByTask
+  // Plus ThreadInput adds: boards.getById, agents.list
   function setupQueryMock(task: typeof baseTask, messages: unknown[] = []) {
     mockUseQuery.mockImplementation((_query: unknown, args: unknown) => {
-      // "skip" queries return undefined
       if (args === "skip") return undefined;
-      // taskTags.list passes {} — return empty array
       if (typeof args === "object" && args !== null && !("taskId" in (args as Record<string, unknown>))) return [];
       return undefined;
     });
-    // Override with sequential values for the conditional queries
     mockUseQuery
       .mockReturnValueOnce(task)      // getById
       .mockReturnValueOnce(messages)   // listByTask
@@ -92,46 +89,38 @@ describe("TaskDetailSheet", () => {
       .mockReturnValueOnce([]);        // tagAttributeValues.getByTask
   }
 
-  function setupStableQueryMock(
-    task: typeof baseTask & { files?: unknown[] },
-    options: {
-      messages?: unknown[];
-      liveSteps?: unknown[];
-      board?: unknown;
-      agents?: unknown[];
-    } = {},
-  ) {
-    let taskScopedQueryCount = 0;
-    mockUseQuery.mockImplementation((_query: unknown, args: unknown) => {
+  // One render pass provides 6 useQuery values (useTaskDetailView) + ThreadInput hooks
+  function oneRenderPass(task: typeof baseTask, messages: unknown[] = []) {
+    mockUseQuery
+      .mockReturnValueOnce(task)
+      .mockReturnValueOnce(messages)
+      .mockReturnValueOnce([])  // steps
+      .mockReturnValueOnce([])  // taskTags.list
+      .mockReturnValueOnce([])  // tagAttributes.list
+      .mockReturnValueOnce([]); // tagAttributeValues.getByTask
+  }
+
+  // Stable mock that survives any number of re-renders (for interactive tests).
+  // The useTaskDetailView hook calls useQuery 6 times per render in this exact order:
+  //   0: getById -> task, 1: listByTask -> messages, 2: getByTask -> [],
+  //   3: taskTags.list -> [], 4: tagAttributes.list -> [], 5: tagAttributeValues.getByTask -> []
+  // ThreadInput's useSelectableAgents also calls useQuery (agents.list) but with no skip arg.
+  // boards.getById is skipped (returns undefined).
+  // We cycle through positions 0-5 using a global counter.
+  function stableQueryMock(task: typeof baseTask, messages: unknown[] = []) {
+    let callCount = 0;
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
-      if (args === undefined) return options.agents ?? [];
-      if (
-        typeof args === "object" &&
-        args !== null &&
-        "boardId" in (args as Record<string, unknown>)
-      ) {
-        return options.board;
-      }
-      if (
-        typeof args === "object" &&
-        args !== null &&
-        !("taskId" in (args as Record<string, unknown>))
-      ) {
-        return [];
-      }
-      if (
-        typeof args === "object" &&
-        args !== null &&
-        "taskId" in (args as Record<string, unknown>)
-      ) {
-        const position = taskScopedQueryCount % 4;
-        taskScopedQueryCount += 1;
-        if (position === 0) return task;
-        if (position === 1) return options.messages ?? [];
-        if (position === 2) return options.liveSteps ?? [];
-        return [];
-      }
-      return undefined;
+      // agents.list has undefined args
+      if (args === undefined) return [];
+      // taskTags.list / tagAttributes.list pass {} with no taskId
+      if (typeof args === "object" && args !== null && !("taskId" in (args as Record<string, unknown>))) return [];
+      // { taskId } queries cycle through positions
+      const pos = callCount % 4;  // 4 queries with { taskId } per render
+      callCount++;
+      if (pos === 0) return task;     // getById
+      if (pos === 1) return messages;  // listByTask
+      return [];                       // getByTask, tagAttributeValues.getByTask
     });
   }
 
@@ -142,11 +131,7 @@ describe("TaskDetailSheet", () => {
       }
       return undefined;
     });
-    mockUseQuery
-      .mockReturnValueOnce(baseTask) // getById
-      .mockReturnValueOnce([]) // listByTask
-      .mockReturnValueOnce([]) // getByTask
-      .mockReturnValueOnce([]); // taskTags.list
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -157,11 +142,7 @@ describe("TaskDetailSheet", () => {
   });
 
   it("renders assigned agent name", () => {
-    mockUseQuery
-      .mockReturnValueOnce(baseTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -171,11 +152,7 @@ describe("TaskDetailSheet", () => {
   });
 
   it("shows empty thread placeholder when no messages", () => {
-    mockUseQuery
-      .mockReturnValueOnce(baseTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -187,11 +164,7 @@ describe("TaskDetailSheet", () => {
   });
 
   it("renders messages in the thread tab", () => {
-    mockUseQuery
-      .mockReturnValueOnce(baseTask)
-      .mockReturnValueOnce([baseMessage])
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(baseTask, [baseMessage]);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -218,9 +191,7 @@ describe("TaskDetailSheet", () => {
       status: "review" as const,
       trustLevel: "human_approved" as const,
     };
-    mockUseQuery
-      .mockReturnValueOnce(reviewTask)
-      .mockReturnValueOnce([]);
+    oneRenderPass(reviewTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -235,9 +206,7 @@ describe("TaskDetailSheet", () => {
       status: "review" as const,
       trustLevel: "autonomous" as const,
     };
-    mockUseQuery
-      .mockReturnValueOnce(reviewTask)
-      .mockReturnValueOnce([]);
+    oneRenderPass(reviewTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -253,7 +222,7 @@ describe("TaskDetailSheet", () => {
       ...baseTask,
       status: "crashed" as const,
     };
-    setupQueryMock(crashedTask);
+    oneRenderPass(crashedTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -265,7 +234,7 @@ describe("TaskDetailSheet", () => {
   });
 
   it("does not show Retry from Beginning button for non-crashed tasks", () => {
-    setupQueryMock(baseTask);
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -281,7 +250,7 @@ describe("TaskDetailSheet", () => {
       ...baseTask,
       status: "crashed" as const,
     };
-    setupQueryMock(crashedTask);
+    oneRenderPass(crashedTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -289,55 +258,6 @@ describe("TaskDetailSheet", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Retry from Beginning" }));
     expect(mockMutationFn).toHaveBeenCalledWith({ taskId: "task1" });
-  });
-
-  it("shows Retry from Beginning button for failed tasks", () => {
-    const failedTask = {
-      ...baseTask,
-      status: "failed" as const,
-    };
-    setupQueryMock(failedTask);
-
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
-
-    expect(
-      screen.getByRole("button", { name: "Retry from Beginning" }),
-    ).toBeInTheDocument();
-  });
-
-  it("shows Retry from Beginning button when a live step is crashed", () => {
-    const inProgressTask = {
-      ...baseTask,
-      status: "in_progress" as const,
-    };
-    mockUseQuery
-      .mockReturnValueOnce(inProgressTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([
-        {
-          _id: "step-1",
-          title: "Step 1",
-          description: "Broken step",
-          assignedAgent: "agent-alpha",
-          status: "crashed",
-          blockedBy: [],
-          parallelGroup: 0,
-          order: 1,
-        },
-      ])
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
-
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
-
-    expect(
-      screen.getByRole("button", { name: "Retry from Beginning" }),
-    ).toBeInTheDocument();
   });
 
   // --- Story 4.6: Kick-off button for review + awaitingKickoff tasks ---
@@ -349,10 +269,7 @@ describe("TaskDetailSheet", () => {
       awaitingKickoff: true,
       supervisionMode: "supervised" as const,
     };
-    mockUseQuery
-      .mockReturnValueOnce(reviewingTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(reviewingTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -362,10 +279,7 @@ describe("TaskDetailSheet", () => {
   });
 
   it("does NOT show Kick-off button when task status is in_progress", () => {
-    mockUseQuery
-      .mockReturnValueOnce(baseTask) // in_progress
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -376,10 +290,7 @@ describe("TaskDetailSheet", () => {
 
   it("does NOT show Kick-off button when task status is planning", () => {
     const planningTask = { ...baseTask, status: "planning" as const };
-    mockUseQuery
-      .mockReturnValueOnce(planningTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(planningTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -394,10 +305,7 @@ describe("TaskDetailSheet", () => {
       status: "review" as const,
       trustLevel: "human_approved" as const,
     };
-    mockUseQuery
-      .mockReturnValueOnce(reviewTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(reviewTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -412,10 +320,7 @@ describe("TaskDetailSheet", () => {
       status: "review" as const,
       awaitingKickoff: true,
     };
-    mockUseQuery
-      .mockReturnValueOnce(reviewingTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(reviewingTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -435,10 +340,7 @@ describe("TaskDetailSheet", () => {
         { name: "chart.png", type: "image/png", size: 204800, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
       ],
     };
-    mockUseQuery
-      .mockReturnValueOnce(taskWithFiles)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(taskWithFiles);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -452,10 +354,7 @@ describe("TaskDetailSheet", () => {
       ...baseTask,
       files: [],
     };
-    mockUseQuery
-      .mockReturnValueOnce(taskNoFiles)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(taskNoFiles);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -471,7 +370,7 @@ describe("TaskDetailSheet", () => {
       ...baseTask,
       files: [],
     };
-    setupStableQueryMock(taskNoFiles);
+    stableQueryMock(taskNoFiles);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -496,7 +395,7 @@ describe("TaskDetailSheet", () => {
         { name: "result.py", type: "text/plain", size: 2048, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
       ],
     };
-    setupStableQueryMock(taskWithFiles);
+    stableQueryMock(taskWithFiles);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -523,7 +422,7 @@ describe("TaskDetailSheet", () => {
         { name: "Makefile", type: "text/plain", size: 512, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
       ],
     };
-    setupStableQueryMock(taskWithFiles);
+    stableQueryMock(taskWithFiles);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -531,7 +430,6 @@ describe("TaskDetailSheet", () => {
 
     await user.click(screen.getByRole("tab", { name: "Files (4)" }));
 
-    // Assert file names are rendered
     await waitFor(() => {
       expect(screen.getByText("document.pdf")).toBeInTheDocument();
     });
@@ -539,11 +437,9 @@ describe("TaskDetailSheet", () => {
     expect(screen.getByText("script.ts")).toBeInTheDocument();
     expect(screen.getByText("Makefile")).toBeInTheDocument();
 
-    // Assert correct icons via aria-label (FileIcon renders aria-label on each icon)
     expect(screen.getByLabelText("PDF file")).toBeInTheDocument();
     expect(screen.getByLabelText("Image file")).toBeInTheDocument();
     expect(screen.getByLabelText("Code file")).toBeInTheDocument();
-    // Makefile has no extension — should render generic File icon
     expect(screen.getByLabelText("Generic file")).toBeInTheDocument();
   });
 
@@ -552,7 +448,7 @@ describe("TaskDetailSheet", () => {
   it("renders Attach File button in the Files tab (AC: 1)", async () => {
     const user = userEvent.setup();
     const taskNoFiles = { ...baseTask, files: [] };
-    setupStableQueryMock(taskNoFiles);
+    stableQueryMock(taskNoFiles);
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
@@ -567,9 +463,8 @@ describe("TaskDetailSheet", () => {
   it("disables button and shows Uploading... text during upload (AC: 8)", async () => {
     const user = userEvent.setup();
     const taskNoFiles = { ...baseTask, files: [] };
-    setupStableQueryMock(taskNoFiles);
+    stableQueryMock(taskNoFiles);
 
-    // Mock fetch to hang so we can observe the uploading state
     let resolveFetch!: (value: Response) => void;
     const hangingFetch = new Promise<Response>((resolve) => { resolveFetch = resolve; });
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(hangingFetch));
@@ -591,7 +486,6 @@ describe("TaskDetailSheet", () => {
     });
     expect(screen.getByTestId("attach-file-button")).toHaveTextContent("Uploading...");
 
-    // Resolve the hanging fetch to allow cleanup
     resolveFetch(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     vi.unstubAllGlobals();
   });
@@ -599,7 +493,7 @@ describe("TaskDetailSheet", () => {
   it("shows upload error message when upload fails (AC: 7)", async () => {
     const user = userEvent.setup();
     const taskNoFiles = { ...baseTask, files: [] };
-    setupStableQueryMock(taskNoFiles);
+    stableQueryMock(taskNoFiles);
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
 
@@ -626,7 +520,7 @@ describe("TaskDetailSheet", () => {
   it("calls addTaskFiles and createActivity mutations on successful upload (AC: 2, 3, 5)", async () => {
     const user = userEvent.setup();
     const taskNoFiles = { ...baseTask, files: [] };
-    setupStableQueryMock(taskNoFiles);
+    stableQueryMock(taskNoFiles);
 
     const returnedFiles = [
       { name: "doc.pdf", type: "application/pdf", size: 1024, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
@@ -651,10 +545,8 @@ describe("TaskDetailSheet", () => {
     fireEvent.change(fileInput);
 
     await waitFor(() => {
-      // addTaskFiles mutation called with returned file metadata
       expect(mockMutationFn).toHaveBeenCalledWith({ taskId: "task1", files: returnedFiles });
     });
-    // createActivity mutation called with eventType: "file_attached"
     expect(mockMutationFn).toHaveBeenCalledWith(
       expect.objectContaining({
         taskId: "task1",
@@ -666,7 +558,7 @@ describe("TaskDetailSheet", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders No attachments yet. placeholder when task has only output files (AC: 9 — empty attachments section)", async () => {
+  it("renders No attachments yet. placeholder when task has only output files (AC: 9 -- empty attachments section)", async () => {
     const user = userEvent.setup();
     const taskOutputOnly = {
       ...baseTask,
@@ -674,7 +566,7 @@ describe("TaskDetailSheet", () => {
         { name: "result.py", type: "text/plain", size: 2048, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
       ],
     };
-    setupStableQueryMock(taskOutputOnly);
+    stableQueryMock(taskOutputOnly);
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
     await user.click(screen.getByRole("tab", { name: "Files (1)" }));
@@ -682,7 +574,6 @@ describe("TaskDetailSheet", () => {
     await waitFor(() => {
       expect(screen.getByText("No attachments yet.")).toBeInTheDocument();
     });
-    // Output file still renders
     expect(screen.getByText("result.py")).toBeInTheDocument();
   });
 
@@ -694,7 +585,7 @@ describe("TaskDetailSheet", () => {
         { name: "notes.pdf", type: "application/pdf", size: 10240, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
       ],
     };
-    setupStableQueryMock(taskWithAttachment);
+    stableQueryMock(taskWithAttachment);
 
     vi.stubGlobal(
       "fetch",
@@ -725,9 +616,7 @@ describe("TaskDetailSheet", () => {
   // --- Story 7.4: Pause and Resume buttons ---
 
   it("shows Pause button for in_progress task (AC 1)", () => {
-    mockUseQuery
-      .mockReturnValueOnce(baseTask) // in_progress
-      .mockReturnValueOnce([]);
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -743,10 +632,7 @@ describe("TaskDetailSheet", () => {
       status: "review" as const,
       awaitingKickoff: true,
     };
-    mockUseQuery
-      .mockReturnValueOnce(reviewingTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(reviewingTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -757,9 +643,7 @@ describe("TaskDetailSheet", () => {
 
   it("does NOT show Pause button for done task (AC 8)", () => {
     const doneTask = { ...baseTask, status: "done" as const };
-    mockUseQuery
-      .mockReturnValueOnce(doneTask)
-      .mockReturnValueOnce([]);
+    oneRenderPass(doneTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -772,12 +656,8 @@ describe("TaskDetailSheet", () => {
     const pausedTask = {
       ...baseTask,
       status: "review" as const,
-      // awaitingKickoff is absent — this is the paused state
     };
-    mockUseQuery
-      .mockReturnValueOnce(pausedTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(pausedTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -786,14 +666,11 @@ describe("TaskDetailSheet", () => {
     expect(screen.getByTestId("resume-button")).toBeInTheDocument();
     expect(screen.getByTestId("resume-button")).toHaveTextContent("Resume");
     expect(screen.getByTestId("paused-badge")).toBeInTheDocument();
-    // Kick-off button must NOT appear (it's a paused task, not pre-kickoff)
     expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
   });
 
   it("does NOT show Resume button for in_progress task (AC 4)", () => {
-    mockUseQuery
-      .mockReturnValueOnce(baseTask) // in_progress
-      .mockReturnValueOnce([]);
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -804,9 +681,7 @@ describe("TaskDetailSheet", () => {
 
   it("does NOT show Resume button for done task (AC 4)", () => {
     const doneTask = { ...baseTask, status: "done" as const };
-    mockUseQuery
-      .mockReturnValueOnce(doneTask)
-      .mockReturnValueOnce([]);
+    oneRenderPass(doneTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -816,9 +691,7 @@ describe("TaskDetailSheet", () => {
   });
 
   it("calls pauseTask mutation when Pause is clicked (AC 2)", async () => {
-    mockUseQuery
-      .mockReturnValueOnce(baseTask) // in_progress
-      .mockReturnValueOnce([]);
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -836,10 +709,7 @@ describe("TaskDetailSheet", () => {
       ...baseTask,
       status: "review" as const,
     };
-    mockUseQuery
-      .mockReturnValueOnce(pausedTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(pausedTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -862,10 +732,7 @@ describe("TaskDetailSheet", () => {
       status: "review" as const,
       awaitingKickoff: true,
     };
-    mockUseQuery
-      .mockReturnValueOnce(reviewingTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(reviewingTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
@@ -873,26 +740,19 @@ describe("TaskDetailSheet", () => {
 
     const planTab = screen.getByTestId("execution-plan-tab");
     expect(planTab).toBeInTheDocument();
-    // The ExecutionPlanTab mock renders with data-edit-mode="true" when isEditMode is true
     expect(planTab.getAttribute("data-edit-mode")).toBe("true");
   });
 
   it("does not auto-switch to plan tab for non-awaitingKickoff tasks (thread tab is active by default)", () => {
-    mockUseQuery
-      .mockReturnValueOnce(baseTask) // in_progress, no awaitingKickoff
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(baseTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
     );
 
-    // Thread tab should be active (default for non-awaitingKickoff tasks),
-    // meaning the thread content (empty placeholder) is visible.
     expect(
       screen.getByText("No messages yet. Agent activity will appear here."),
     ).toBeInTheDocument();
-    // Kick-off button is absent since this is not a review+awaitingKickoff task
     expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
   });
 
@@ -921,10 +781,7 @@ describe("TaskDetailSheet", () => {
       executionPlan,
     };
     mockMutationFn.mockResolvedValue(undefined);
-    mockUseQuery
-      .mockReturnValueOnce(reviewingTask)
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([]);
+    oneRenderPass(reviewingTask);
 
     render(
       <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,

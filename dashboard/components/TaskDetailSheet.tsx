@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import * as motion from "motion/react-client";
 import { useReducedMotion } from "motion/react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import {
   Sheet,
@@ -21,15 +19,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { File, FileCode, FileText, Image, Loader2, Paperclip, Pause, Pencil, Play, Plus, Trash2, X } from "lucide-react";
-import type { ExecutionPlan } from "@/lib/types";
 import { ThreadMessage } from "./ThreadMessage";
 import { ExecutionPlanTab } from "./ExecutionPlanTab";
-import { STATUS_COLORS, TAG_COLORS, type TaskStatus } from "@/lib/constants";
+import { TAG_COLORS } from "@/lib/constants";
 import { InlineRejection } from "./InlineRejection";
 import { DocumentViewerModal } from "./DocumentViewerModal";
 import { ThreadInput } from "./ThreadInput";
 import { TagAttributeEditor } from "./TagAttributeEditor";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { useTaskDetailView } from "@/hooks/useTaskDetailView";
+import { useTaskDetailActions } from "@/hooks/useTaskDetailActions";
+import { usePlanEditorState } from "@/hooks/usePlanEditorState";
 
 const formatSize = (bytes: number) =>
   bytes < 1024 * 1024
@@ -54,52 +54,37 @@ interface TaskDetailSheetProps {
 }
 
 export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
-  const task = useQuery(
-    api.tasks.getById,
-    taskId ? { taskId } : "skip",
+  // --- Feature hooks ---
+  const view = useTaskDetailView(taskId);
+  const actions = useTaskDetailActions();
+  const planState = usePlanEditorState(
+    view.taskExecutionPlan,
+    view.isAwaitingKickoff,
   );
-  const messages = useQuery(
-    api.messages.listByTask,
-    taskId ? { taskId } : "skip",
-  );
-  const liveSteps = useQuery(
-    api.steps.getByTask,
-    taskId ? { taskId } : "skip",
-  );
-  const tagsList = useQuery(api.taskTags.list, taskId ? {} : "skip");
-  const tagAttributesList = useQuery(api.tagAttributes.list, taskId ? {} : "skip");
-  const tagAttrValues = useQuery(
-    api.tagAttributeValues.getByTask,
-    taskId ? { taskId } : "skip",
-  );
-  const approveMutation = useMutation(api.tasks.approve);
-  const kickOffMutation = useMutation(api.tasks.approveAndKickOff);
-  const pauseTaskMutation = useMutation(api.tasks.pauseTask);
-  const resumeTaskMutation = useMutation(api.tasks.resumeTask);
-  const saveExecutionPlanMutation = useMutation(api.tasks.saveExecutionPlan);
-  const startInboxTaskMutation = useMutation(api.tasks.startInboxTask);
-  const manualMoveMutation = useMutation(api.tasks.manualMove);
-  const retryMutation = useMutation(api.tasks.retry);
-  const updateTagsMutation = useMutation(api.tasks.updateTags);
-  const updateTitleMutation = useMutation(api.tasks.updateTitle);
-  const updateDescriptionMutation = useMutation(api.tasks.updateDescription);
-  const addTaskFiles = useMutation(api.tasks.addTaskFiles);
-  const removeTaskFile = useMutation(api.tasks.removeTaskFile);
-  const createActivity = useMutation(api.activities.create);
+
+  const {
+    task, messages, liveSteps, tagsList, tagAttributesList, tagAttrValues,
+    isTaskLoaded, colors, tagColorMap, taskExecutionPlan,
+    isAwaitingKickoff, isPaused,
+  } = view;
+
+  const {
+    approve, kickOff, isKickingOff, kickOffError,
+    pause, isPausing, pauseError,
+    resume, isResuming, resumeError,
+    retry, updateTags, removeTagAttrValues,
+    updateTitle, updateDescription,
+    addTaskFiles, removeTaskFile, createActivity,
+  } = actions;
+
+  const {
+    activePlan, localPlan, setLocalPlan,
+    activeTab, setActiveTab,
+  } = planState;
+
   const shouldReduceMotion = useReducedMotion();
   const [viewerFile, setViewerFile] = useState<{ name: string; type: string; size: number; subfolder: string } | null>(null);
   const [showRejection, setShowRejection] = useState(false);
-  const [isKickingOff, setIsKickingOff] = useState(false);
-  const [kickOffError, setKickOffError] = useState("");
-  const [isPausing, setIsPausing] = useState(false);
-  const [pauseError, setPauseError] = useState("");
-  const [isResuming, setIsResuming] = useState(false);
-  const [resumeError, setResumeError] = useState("");
-  const [isSavingPlan, setIsSavingPlan] = useState(false);
-  const [savePlanError, setSavePlanError] = useState("");
-  const [isStartingInbox, setIsStartingInbox] = useState(false);
-  const [startInboxError, setStartInboxError] = useState("");
-  const [manualDoneError, setManualDoneError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
@@ -113,65 +98,6 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const threadEndRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const messageCount = messages?.length ?? 0;
-
-  // localPlan: holds user edits to the execution plan in the canvas
-  const [localPlan, setLocalPlan] = useState<ExecutionPlan | undefined>(undefined);
-
-  // Extract typed values once to avoid repeated (task as any) casts throughout the component
-  const taskAny = task as any;
-  const taskExecutionPlan: ExecutionPlan | undefined = taskAny?.executionPlan;
-  const taskGeneratedAt: string | undefined = taskExecutionPlan?.generatedAt;
-  const taskAwaitingKickoff: boolean = taskAny?.awaitingKickoff === true;
-  const taskStatus: string | undefined = taskAny?.status;
-
-  // Reset local plan when switching tasks or when server plan changes
-  const prevTaskId = useRef<string | undefined>(undefined);
-  const prevPlanGeneratedAt = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if ((taskId ?? undefined) !== prevTaskId.current) {
-      prevTaskId.current = taskId ?? undefined;
-      prevPlanGeneratedAt.current = taskGeneratedAt;
-      setLocalPlan(undefined);
-      return;
-    }
-    if (taskGeneratedAt !== prevPlanGeneratedAt.current) {
-      prevPlanGeneratedAt.current = taskGeneratedAt;
-      setLocalPlan(undefined);
-    }
-  }, [taskId, taskGeneratedAt]);
-
-  // activeTab: controlled tab state for auto-switching to Execution Plan when awaitingKickoff
-  const isAwaitingKickoff = useMemo(
-    () => taskStatus === "review" && taskAwaitingKickoff,
-    [taskStatus, taskAwaitingKickoff]
-  );
-  // isPaused: task is in review but NOT awaiting kickoff — this is the paused state (AC 4)
-  const isPaused = useMemo(
-    () => taskStatus === "review" && !taskAwaitingKickoff,
-    [taskStatus, taskAwaitingKickoff]
-  );
-  const liveStepsList = Array.isArray(liveSteps) ? liveSteps : [];
-  const hasCrashedLiveStep = useMemo(
-    () => liveStepsList.some((step) => step.status === "crashed"),
-    [liveStepsList]
-  );
-  const canRetryTask = useMemo(
-    () =>
-      taskStatus === "crashed" ||
-      taskStatus === "failed" ||
-      hasCrashedLiveStep,
-    [taskStatus, hasCrashedLiveStep]
-  );
-  const [activeTab, setActiveTab] = useState<string>(() =>
-    isAwaitingKickoff ? "plan" : "thread"
-  );
-
-  // When task opens or awaitingKickoff changes, auto-switch to plan tab
-  useEffect(() => {
-    if (isAwaitingKickoff) {
-      setActiveTab("plan");
-    }
-  }, [isAwaitingKickoff, taskId]);
 
   // Track if user is at bottom via IntersectionObserver
   useEffect(() => {
@@ -196,19 +122,6 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     }
   }, [messageCount, isAtBottom]);
 
-  // Guard: task must be a valid document (not undefined, null, or a non-object from test mocks)
-  const isTaskLoaded = task != null && typeof task === "object" && "status" in task;
-
-  const colors = isTaskLoaded
-    ? STATUS_COLORS[task.status as TaskStatus] ?? STATUS_COLORS.inbox
-    : null;
-
-  const tagColorMap: Record<string, string> = Object.fromEntries(
-    tagsList?.map((t) => [t.name, t.color]) ?? []
-  );
-
-  const removeTagAttrValues = useMutation(api.tagAttributeValues.removeByTaskAndTag);
-
   // Reset inline-edit state whenever a different task opens
   useEffect(() => {
     setIsEditingTitle(false);
@@ -223,7 +136,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
       return;
     }
     try {
-      await updateTitleMutation({ taskId: task._id, title: trimmed });
+      await updateTitle(task._id, trimmed);
     } finally {
       setIsEditingTitle(false);
     }
@@ -233,7 +146,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     if (!task || !isTaskLoaded) return;
     const trimmed = editDescriptionValue.trim() || undefined;
     try {
-      await updateDescriptionMutation({ taskId: task._id, description: trimmed });
+      await updateDescription(task._id, trimmed);
     } finally {
       setIsEditingDescription(false);
     }
@@ -243,112 +156,38 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     if (!task || !isTaskLoaded) return;
     const currentTags = task.tags ?? [];
     const newTags = currentTags.filter((t) => t !== tagToRemove);
-    updateTagsMutation({ taskId: task._id, tags: newTags });
+    updateTags(task._id, newTags);
     // Cascade-delete attribute values for the removed tag
-    removeTagAttrValues({ taskId: task._id, tagName: tagToRemove });
+    removeTagAttrValues(task._id, tagToRemove);
   };
 
   const handleAddTag = (tagToAdd: string) => {
     if (!task || !isTaskLoaded) return;
     const currentTags = task.tags ?? [];
     if (currentTags.includes(tagToAdd)) return;
-    updateTagsMutation({ taskId: task._id, tags: [...currentTags, tagToAdd] });
+    updateTags(task._id, [...currentTags, tagToAdd]);
   };
 
   const handleKickOff = async () => {
     if (!task || !isTaskLoaded) return;
-    setIsKickingOff(true);
-    setKickOffError("");
     try {
       const planToSave = localPlan ?? taskExecutionPlan;
-      await kickOffMutation({ taskId: task._id, executionPlan: planToSave });
+      await kickOff(task._id, planToSave);
       onClose();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setKickOffError(`Kick-off failed: ${message}`);
-    } finally {
-      setIsKickingOff(false);
+    } catch {
+      // error is set in the hook
     }
   };
 
   const handlePause = async () => {
     if (!task || !isTaskLoaded) return;
-    setIsPausing(true);
-    setPauseError("");
-    try {
-      await pauseTaskMutation({ taskId: task._id });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setPauseError(`Pause failed: ${message}`);
-    } finally {
-      setIsPausing(false);
-    }
+    await pause(task._id);
   };
 
   const handleResume = async () => {
     if (!task || !isTaskLoaded) return;
-    setIsResuming(true);
-    setResumeError("");
-    try {
-      const planToSave = localPlan ?? taskExecutionPlan;
-      await resumeTaskMutation({ taskId: task._id, executionPlan: planToSave });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setResumeError(`Resume failed: ${message}`);
-    } finally {
-      setIsResuming(false);
-    }
-  };
-
-  const handleSavePlan = async () => {
-    if (!task || !isTaskLoaded || !localPlan) return;
-    setIsSavingPlan(true);
-    setSavePlanError("");
-    setStartInboxError("");
-    try {
-      await saveExecutionPlanMutation({ taskId: task._id, executionPlan: localPlan });
-      setLocalPlan(undefined); // Reset — Convex is now source of truth
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setSavePlanError(`Save failed: ${message}`);
-    } finally {
-      setIsSavingPlan(false);
-    }
-  };
-
-  const handleStartInbox = async () => {
-    if (!task || !isTaskLoaded) return;
-    setIsStartingInbox(true);
-    setStartInboxError("");
-    setSavePlanError("");
-    let success = false;
-    try {
-      // Only send plan if there are unsaved local changes; otherwise the mutation
-      // falls back to the plan already stored on the task (Fix #12: avoid redundant payload)
-      const planToSend = localPlan ?? undefined;
-      await startInboxTaskMutation({ taskId: task._id, executionPlan: planToSend });
-      setLocalPlan(undefined);
-      success = true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setStartInboxError(`Start failed: ${message}`);
-    } finally {
-      setIsStartingInbox(false);
-    }
-    // Close after finally so setIsStartingInbox runs before unmount
-    if (success) onClose();
-  };
-
-  const handleManualDone = async () => {
-    if (!task || !isTaskLoaded) return;
-    setManualDoneError("");
-    try {
-      await manualMoveMutation({ taskId: task._id, newStatus: "done" });
-      onClose();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setManualDoneError(`Move failed: ${message}`);
-    }
+    const planToSave = localPlan ?? taskExecutionPlan;
+    await resume(task._id, planToSave);
   };
 
   const handleAttachFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -371,13 +210,13 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
       });
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       const { files: uploadedFiles } = await res.json();
-      await addTaskFiles({ taskId: task._id, files: uploadedFiles });
-      await createActivity({
-        taskId: task._id,
-        eventType: "file_attached",
-        description: `User attached ${files.length} file${files.length > 1 ? "s" : ""} to task`,
-        timestamp: new Date().toISOString(),
-      });
+      await addTaskFiles(task._id, uploadedFiles);
+      await createActivity(
+        task._id,
+        "file_attached",
+        `User attached ${files.length} file${files.length > 1 ? "s" : ""} to task`,
+        new Date().toISOString(),
+      );
     } catch {
       setUploadError("Upload failed. Please try again.");
     } finally {
@@ -397,7 +236,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
         body: JSON.stringify({ subfolder: file.subfolder, filename: file.name }),
       });
       if (!res.ok) throw new Error("Delete failed");
-      await removeTaskFile({ taskId: task._id, subfolder: file.subfolder, filename: file.name });
+      await removeTaskFile(task._id, file.subfolder, file.name);
     } catch {
       // Re-clicking is idempotent: ENOENT is treated as success, so retry will self-heal
       setDeleteError("Delete failed. Please try again.");
@@ -461,10 +300,10 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                   />
                 ) : (
                   <div className="flex items-start gap-1.5 group/title">
-                    <span className="flex-1">{task.title}</span>
+                    <span className="flex-1">{task!.title}</span>
                     <button
                       type="button"
-                      onClick={() => { setEditTitleValue(task.title); setIsEditingTitle(true); }}
+                      onClick={() => { setEditTitleValue(task!.title); setIsEditingTitle(true); }}
                       className="opacity-0 group-hover/title:opacity-100 transition-opacity mt-0.5 flex-shrink-0 p-0.5 rounded hover:bg-accent"
                       aria-label="Edit title"
                     >
@@ -479,22 +318,22 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                     variant="outline"
                     className={`text-xs ${colors?.bg} ${colors?.text} border-0`}
                   >
-                    {task.status.replaceAll("_", " ")}
+                    {task!.status.replaceAll("_", " ")}
                   </Badge>
-                  {task.assignedAgent && (
+                  {task!.assignedAgent && (
                     <span className="text-xs text-muted-foreground">
-                      {task.assignedAgent}
+                      {task!.assignedAgent}
                     </span>
                   )}
-                  {task.status === "review" &&
-                    task.trustLevel === "human_approved" && (
+                  {task!.status === "review" &&
+                    task!.trustLevel === "human_approved" && (
                       <>
                         <Button
                           variant="default"
                           size="sm"
                           className="bg-green-500 hover:bg-green-600 text-white text-xs h-7 px-2"
                           onClick={() => {
-                            approveMutation({ taskId: task._id });
+                            approve(task!._id);
                             onClose();
                           }}
                         >
@@ -510,20 +349,20 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                         </Button>
                       </>
                     )}
-                  {canRetryTask && (
+                  {task!.status === "crashed" && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="border-amber-500 text-amber-700 hover:bg-amber-50 text-xs"
                       onClick={async () => {
-                        await retryMutation({ taskId: task._id });
+                        await retry(task!._id);
                         onClose();
                       }}
                     >
                       Retry from Beginning
                     </Button>
                   )}
-                  {task.status === "in_progress" && !canRetryTask && (
+                  {task!.status === "in_progress" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -543,17 +382,6 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                           Pause
                         </>
                       )}
-                    </Button>
-                  )}
-                  {task.status === "in_progress" && task.isManual && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                      onClick={handleManualDone}
-                      data-testid="manual-done-button"
-                    >
-                      Done
                     </Button>
                   )}
                   {isPaused && (
@@ -617,51 +445,6 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       </Button>
                     </>
                   )}
-                  {taskStatus === "inbox" && (
-                    <>
-                      {localPlan && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7 px-2"
-                          onClick={handleSavePlan}
-                          disabled={isSavingPlan}
-                          data-testid="save-plan-button"
-                        >
-                          {isSavingPlan ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            "Save Plan"
-                          )}
-                        </Button>
-                      )}
-                      {(localPlan || taskExecutionPlan) && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                          onClick={handleStartInbox}
-                          disabled={isStartingInbox}
-                          data-testid="start-inbox-button"
-                        >
-                          {isStartingInbox ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                              Starting...
-                            </>
-                          ) : (
-                            <>
-                              <Play className="h-3.5 w-3.5 mr-1" />
-                              Start
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </>
-                  )}
                 </div>
               </SheetDescription>
               {showRejection && taskId && (
@@ -692,21 +475,6 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                   {resumeError}
                 </div>
               )}
-              {savePlanError && (
-                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-                  {savePlanError}
-                </div>
-              )}
-              {startInboxError && (
-                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-                  {startInboxError}
-                </div>
-              )}
-              {manualDoneError && (
-                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-                  {manualDoneError}
-                </div>
-              )}
 
               {/* Description — always visible in header, editable with pencil icon */}
               <div className="mt-3 group/desc">
@@ -725,8 +493,8 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                   />
                 ) : (
                   <div className="flex items-start gap-1.5">
-                    {task.description ? (
-                      <p className="text-sm text-muted-foreground flex-1 whitespace-pre-wrap">{task.description}</p>
+                    {task!.description ? (
+                      <p className="text-sm text-muted-foreground flex-1 whitespace-pre-wrap">{task!.description}</p>
                     ) : (
                       <p
                         className="text-sm text-muted-foreground/50 italic flex-1 cursor-text"
@@ -737,7 +505,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                     )}
                     <button
                       type="button"
-                      onClick={() => { setEditDescriptionValue(task.description ?? ""); setIsEditingDescription(true); }}
+                      onClick={() => { setEditDescriptionValue(task!.description ?? ""); setIsEditingDescription(true); }}
                       className="opacity-0 group-hover/desc:opacity-100 transition-opacity mt-0.5 flex-shrink-0 p-0.5 rounded hover:bg-accent"
                       aria-label="Edit description"
                     >
@@ -756,8 +524,8 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                 <TabsTrigger value="plan">Execution Plan</TabsTrigger>
                 <TabsTrigger value="config">Config</TabsTrigger>
                 <TabsTrigger value="files">
-                  {task.files && task.files.length > 0
-                    ? `Files (${task.files.length})`
+                  {task!.files && task!.files.length > 0
+                    ? `Files (${task!.files.length})`
                     : "Files"}
                 </TabsTrigger>
               </TabsList>
@@ -802,13 +570,11 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
               <TabsContent value="plan" className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col">
                 <div className="flex-1 min-h-0 px-6 py-4">
                   <ExecutionPlanTab
-                    executionPlan={(localPlan ?? taskExecutionPlan) ?? null}
+                    executionPlan={activePlan ?? null}
                     liveSteps={liveSteps ?? undefined}
-                    isPlanning={task.status === "planning"}
-                    isEditMode={task.status === "review"}
-                    taskId={task._id}
-                    taskStatus={task.status}
-                    boardId={task.boardId}
+                    isPlanning={task!.status === "planning"}
+                    isEditMode={task!.status === "review"}
+                    taskId={task!._id}
                     onLocalPlanChange={setLocalPlan}
                   />
                 </div>
@@ -822,16 +588,16 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       Trust Level
                     </h4>
                     <p className="text-sm text-foreground mt-1">
-                      {task.trustLevel.replaceAll("_", " ")}
+                      {task!.trustLevel.replaceAll("_", " ")}
                     </p>
                   </div>
-                  {task.reviewers && task.reviewers.length > 0 && (
+                  {task!.reviewers && task!.reviewers.length > 0 && (
                     <div>
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         Reviewers
                       </h4>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {task.reviewers.map((reviewer) => (
+                        {task!.reviewers.map((reviewer) => (
                           <Badge key={reviewer} variant="secondary" className="text-xs">
                             {reviewer}
                           </Badge>
@@ -839,23 +605,23 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       </div>
                     </div>
                   )}
-                  {task.taskTimeout != null && (
+                  {task!.taskTimeout != null && (
                     <div>
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         Task Timeout
                       </h4>
                       <p className="text-sm text-foreground mt-1">
-                        {task.taskTimeout}s
+                        {task!.taskTimeout}s
                       </p>
                     </div>
                   )}
-                  {task.interAgentTimeout != null && (
+                  {task!.interAgentTimeout != null && (
                     <div>
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         Inter-Agent Timeout
                       </h4>
                       <p className="text-sm text-foreground mt-1">
-                        {task.interAgentTimeout}s
+                        {task!.interAgentTimeout}s
                       </p>
                     </div>
                   )}
@@ -864,7 +630,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       Tags
                     </h4>
                     <div className="flex flex-wrap items-center gap-1 mt-1">
-                      {(task.tags ?? []).map((tag) => {
+                      {(task!.tags ?? []).map((tag) => {
                         const colorKey = tagColorMap[tag];
                         const color = colorKey ? TAG_COLORS[colorKey] : null;
                         return (
@@ -909,7 +675,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                           ) : (
                             <div className="flex flex-col gap-0.5">
                               {tagsList.map((catalogTag) => {
-                                const isAssigned = (task.tags ?? []).includes(catalogTag.name);
+                                const isAssigned = (task!.tags ?? []).includes(catalogTag.name);
                                 const color = TAG_COLORS[catalogTag.color];
                                 return (
                                   <button
@@ -939,9 +705,9 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                     </div>
 
                     {/* Tag Attributes (expandable per tag) */}
-                    {tagAttributesList && tagAttributesList.length > 0 && (task.tags ?? []).length > 0 && (
+                    {tagAttributesList && tagAttributesList.length > 0 && (task!.tags ?? []).length > 0 && (
                       <div className="mt-3 space-y-1">
-                        {(task.tags ?? []).map((tag) => {
+                        {(task!.tags ?? []).map((tag) => {
                           const isExpanded = expandedTags.has(tag);
                           const toggleExpand = () => {
                             setExpandedTags((prev) => {
@@ -979,7 +745,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                                     return (
                                       <TagAttributeEditor
                                         key={`${tag}-${attr._id}`}
-                                        taskId={task._id}
+                                        taskId={task!._id}
                                         tagName={tag}
                                         attribute={attr}
                                         currentValue={val?.value ?? ""}
@@ -1026,7 +792,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                   )}
 
                   {(() => {
-                    const allFiles = task.files ?? [];
+                    const allFiles = task!.files ?? [];
                     const attachments = allFiles.filter((f) => f.subfolder === "attachments");
                     const outputs = allFiles.filter((f) => f.subfolder === "output");
 
@@ -1126,7 +892,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
       </SheetContent>
       {isTaskLoaded && (
         <DocumentViewerModal
-          taskId={task._id}
+          taskId={task!._id}
           file={viewerFile}
           onClose={() => setViewerFile(null)}
         />

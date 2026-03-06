@@ -1,0 +1,161 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook } from "@testing-library/react";
+import { useTaskDetailView } from "./useTaskDetailView";
+
+// Mock convex/react
+const mockUseQuery = vi.fn();
+vi.mock("convex/react", () => ({
+  useQuery: (...args: unknown[]) => mockUseQuery(...args),
+  useMutation: () => vi.fn(),
+}));
+
+vi.mock("../convex/_generated/api", () => ({
+  api: {
+    tasks: { getById: "tasks:getById" },
+    messages: { listByTask: "messages:listByTask" },
+    steps: { getByTask: "steps:getByTask" },
+    taskTags: { list: "taskTags:list" },
+    tagAttributes: { list: "tagAttributes:list" },
+    tagAttributeValues: { getByTask: "tagAttributeValues:getByTask" },
+  },
+}));
+
+const baseTask = {
+  _id: "task1" as never,
+  _creationTime: 1000,
+  title: "Test Task",
+  description: "A test task",
+  status: "in_progress" as const,
+  assignedAgent: "agent-alpha",
+  trustLevel: "autonomous" as const,
+  tags: ["frontend"],
+  createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
+};
+
+describe("useTaskDetailView", () => {
+  beforeEach(() => {
+    mockUseQuery.mockReset();
+  });
+
+  it("returns null task and isTaskLoaded=false when taskId is null", () => {
+    mockUseQuery.mockReturnValue(undefined);
+    const { result } = renderHook(() => useTaskDetailView(null));
+    expect(result.current.task).toBeNull();
+    expect(result.current.isTaskLoaded).toBe(false);
+    expect(result.current.colors).toBeNull();
+  });
+
+  it("returns isTaskLoaded=true when task is loaded", () => {
+    mockUseQuery.mockImplementation((_query: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (typeof args === "object" && args !== null && "taskId" in (args as any)) {
+        // Return task for getById, empty arrays for listByTask/getByTask/getByTask
+        return undefined;
+      }
+      return [];
+    });
+    mockUseQuery
+      .mockReturnValueOnce(baseTask)     // getById
+      .mockReturnValueOnce([])           // listByTask
+      .mockReturnValueOnce([])           // getByTask (steps)
+      .mockReturnValueOnce([])           // taskTags.list
+      .mockReturnValueOnce([])           // tagAttributes.list
+      .mockReturnValueOnce([]);          // tagAttributeValues.getByTask
+
+    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    expect(result.current.isTaskLoaded).toBe(true);
+    expect(result.current.task).toEqual(baseTask);
+    expect(result.current.colors).not.toBeNull();
+  });
+
+  it("computes isAwaitingKickoff correctly", () => {
+    const awaitingTask = {
+      ...baseTask,
+      status: "review",
+      awaitingKickoff: true,
+    };
+    mockUseQuery
+      .mockReturnValueOnce(awaitingTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    expect(result.current.isAwaitingKickoff).toBe(true);
+    expect(result.current.isPaused).toBe(false);
+  });
+
+  it("computes isPaused correctly for review without awaitingKickoff", () => {
+    const pausedTask = { ...baseTask, status: "review" };
+    mockUseQuery
+      .mockReturnValueOnce(pausedTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    expect(result.current.isPaused).toBe(true);
+    expect(result.current.isAwaitingKickoff).toBe(false);
+  });
+
+  it("builds tagColorMap from tagsList", () => {
+    const tags = [
+      { _id: "t1", name: "frontend", color: "blue" },
+      { _id: "t2", name: "backend", color: "green" },
+    ];
+    mockUseQuery
+      .mockReturnValueOnce(baseTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce(tags)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    expect(result.current.tagColorMap).toEqual({
+      frontend: "blue",
+      backend: "green",
+    });
+  });
+
+  it("returns correct status colors for in_progress", () => {
+    mockUseQuery
+      .mockReturnValueOnce(baseTask) // status: in_progress
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    expect(result.current.colors).toBeDefined();
+    expect(result.current.colors!.bg).toContain("blue");
+  });
+
+  it("extracts taskExecutionPlan from task", () => {
+    const planTask = {
+      ...baseTask,
+      executionPlan: {
+        steps: [{ tempId: "s1", title: "Step 1", description: "Do it", assignedAgent: "a", blockedBy: [], parallelGroup: 0, order: 1 }],
+        generatedAt: "2026-01-01T00:00:00Z",
+        generatedBy: "lead-agent",
+      },
+    };
+    mockUseQuery
+      .mockReturnValueOnce(planTask)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    expect(result.current.taskExecutionPlan).toBeDefined();
+    expect(result.current.taskExecutionPlan!.steps).toHaveLength(1);
+  });
+});
