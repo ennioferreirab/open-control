@@ -643,3 +643,28 @@ class TestExecutorShim:
         # Verify artifact content is still present
         assert "report.pdf" in ctx
         assert "PDF, 245 KB" in ctx
+
+
+# ── File attachments ──────────────────────────────────────────────────────────
+
+
+def test_file_attachments_in_user_message():
+    """File attachments are rendered as (attached: ...) suffix."""
+    builder = ThreadContextBuilder()
+    messages = [
+        {
+            "author_name": "User",
+            "author_type": "user",
+            "message_type": "user_message",
+            "type": "user_message",
+            "content": "Analyze this report",
+            "timestamp": "2026-03-05T10:00:00Z",
+            "file_attachments": [
+                {"name": "report.pdf", "type": "application/pdf", "size": 1024},
+                {"name": "data.csv", "type": "text/csv", "size": 512},
+            ],
+        },
+    ]
+    result = builder.build(messages)
+    assert "(attached: report.pdf, data.csv)" in result
+    assert "Analyze this report" in result
