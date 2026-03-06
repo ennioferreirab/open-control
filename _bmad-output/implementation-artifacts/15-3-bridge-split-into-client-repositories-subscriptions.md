@@ -1,6 +1,6 @@
 # Story 15.3: Bridge Split into Client, Repositories and Subscriptions
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -65,39 +65,39 @@ so that data access stops being a god module.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Audit bridge.py and plan split** (AC: #1)
-  - [ ] 1.1 Read `mc/bridge.py` completely and categorize every method: client infra vs retry vs key conversion vs task repo vs step repo vs message repo vs agent repo vs board repo vs settings repo vs subscription
-  - [ ] 1.2 Read `mc/bridge_subscriptions.py` to understand subscription/polling patterns
-  - [ ] 1.3 Grep for all `from mc.bridge import` and `from mc import bridge` to map all consumers
-  - [ ] 1.4 Document the split plan: which methods go where
+- [x] **Task 1: Audit bridge.py and plan split** (AC: #1)
+  - [x] 1.1 Read `mc/bridge.py` completely and categorize every method: client infra vs retry vs key conversion vs task repo vs step repo vs message repo vs agent repo vs board repo vs settings repo vs subscription
+  - [x] 1.2 Read `mc/bridge_subscriptions.py` to understand subscription/polling patterns
+  - [x] 1.3 Grep for all `from mc.bridge import` and `from mc import bridge` to map all consumers
+  - [x] 1.4 Document the split plan: which methods go where
 
-- [ ] **Task 2: Create bridge package structure** (AC: #2)
-  - [ ] 2.1 Convert `mc/bridge.py` to `mc/bridge/__init__.py` (the facade)
-  - [ ] 2.2 Create `mc/bridge/client.py` -- extract raw Convex client (connection, auth, raw query/mutation calls)
-  - [ ] 2.3 Create `mc/bridge/retry.py` -- extract retry/backoff logic
-  - [ ] 2.4 Create `mc/bridge/key_conversion.py` -- extract camelCase/snake_case conversion utilities
-  - [ ] 2.5 Write tests for client, retry, and key_conversion modules
+- [x] **Task 2: Create bridge package structure** (AC: #2)
+  - [x] 2.1 Convert `mc/bridge.py` to `mc/bridge/__init__.py` (the facade)
+  - [x] 2.2 Create `mc/bridge/client.py` -- extract raw Convex client (connection, auth, raw query/mutation calls)
+  - [x] 2.3 Create `mc/bridge/retry.py` -- extract retry/backoff logic
+  - [x] 2.4 Create `mc/bridge/key_conversion.py` -- extract camelCase/snake_case conversion utilities
+  - [x] 2.5 Write tests for client, retry, and key_conversion modules
 
-- [ ] **Task 3: Extract repositories** (AC: #3)
-  - [ ] 3.1 Create `mc/bridge/repositories/__init__.py`
-  - [ ] 3.2 Create `mc/bridge/repositories/tasks.py` -- extract task-related methods
-  - [ ] 3.3 Create `mc/bridge/repositories/steps.py` -- extract step-related methods
-  - [ ] 3.4 Create `mc/bridge/repositories/messages.py` -- extract message-related methods
-  - [ ] 3.5 Create `mc/bridge/repositories/agents.py` -- extract agent sync/query methods
-  - [ ] 3.6 Create `mc/bridge/repositories/boards.py` -- extract board-related methods
-  - [ ] 3.7 Create `mc/bridge/repositories/settings.py` -- extract settings methods
-  - [ ] 3.8 Write tests for each repository
+- [x] **Task 3: Extract repositories** (AC: #3)
+  - [x] 3.1 Create `mc/bridge/repositories/__init__.py`
+  - [x] 3.2 Create `mc/bridge/repositories/tasks.py` -- extract task-related methods
+  - [x] 3.3 Create `mc/bridge/repositories/steps.py` -- extract step-related methods
+  - [x] 3.4 Create `mc/bridge/repositories/messages.py` -- extract message-related methods
+  - [x] 3.5 Create `mc/bridge/repositories/agents.py` -- extract agent sync/query methods
+  - [x] 3.6 Create `mc/bridge/repositories/boards.py` -- extract board-related methods
+  - [x] 3.7 Create `mc/bridge/repositories/settings.py` -- extract settings methods
+  - [x] 3.8 Write tests for each repository
 
-- [ ] **Task 4: Extract subscriptions** (AC: #4)
-  - [ ] 4.1 Create `mc/bridge/subscriptions.py` -- move polling/subscription logic from bridge_subscriptions.py and bridge.py
-  - [ ] 4.2 Update the facade to delegate to subscriptions module
-  - [ ] 4.3 Write tests for subscription logic
+- [x] **Task 4: Extract subscriptions** (AC: #4)
+  - [x] 4.1 Create `mc/bridge/subscriptions.py` -- move polling/subscription logic from bridge.py
+  - [x] 4.2 Update the facade to delegate to subscriptions module
+  - [x] 4.3 Write tests for subscription logic
 
-- [ ] **Task 5: Wire facade and verify compatibility** (AC: #5, #6)
-  - [ ] 5.1 Update `mc/bridge/__init__.py` to import and re-export all public API from sub-modules
-  - [ ] 5.2 Verify all existing call sites work without changes (grep and test)
-  - [ ] 5.3 Run full test suite to verify no regressions
-  - [ ] 5.4 Verify `mc/bridge_subscriptions.py` is either removed or reduced to a thin import shim
+- [x] **Task 5: Wire facade and verify compatibility** (AC: #5, #6)
+  - [x] 5.1 Update `mc/bridge/__init__.py` to import and re-export all public API from sub-modules
+  - [x] 5.2 Verify all existing call sites work without changes (grep and test)
+  - [x] 5.3 Run full test suite to verify no regressions
+  - [x] 5.4 Verify `mc/bridge_subscriptions.py` is either removed or reduced to a thin import shim
 
 ## Dev Notes
 
@@ -154,11 +154,50 @@ The `mc/bridge/__init__.py` facade instantiates all repositories and delegates. 
 ## Dev Agent Record
 
 ### Agent Model Used
+claude-opus-4-6
 
 ### Debug Log References
+- No `mc/bridge_subscriptions.py` exists -- all subscription logic was in `mc/bridge.py`
+- Tests using `object.__new__(ConvexBridge)` and `MagicMock(spec=ConvexBridge)` patterns required lazy repo initialization via `_ensure_repos()`
+- `_BridgeClientAdapter` handles both normal and test-mock scenarios
 
 ### Completion Notes List
+- Bridge split into 12 new files across client, retry, key_conversion, subscriptions, and 7 repository modules
+- Added ChatRepository (not in original plan) since bridge had chat methods
+- Facade uses `_ensure_repos()` lazy init pattern to handle `object.__new__()` test patterns
+- 5 bridge-specific test methods in test_chat_handler.py updated (allowed by AC5)
+- All 97 original bridge tests pass unchanged
+- 94 new tests added for sub-modules
+- 3 pre-existing failures unrelated to this story
 
 ### File List
+**Created:**
+- `mc/bridge/__init__.py` -- facade (replaces mc/bridge.py)
+- `mc/bridge/client.py` -- standalone BridgeClient wrapper
+- `mc/bridge/retry.py` -- retry/backoff logic with constants
+- `mc/bridge/key_conversion.py` -- camelCase/snake_case utilities
+- `mc/bridge/subscriptions.py` -- SubscriptionManager (sync + async polling)
+- `mc/bridge/repositories/__init__.py` -- re-exports all repositories
+- `mc/bridge/repositories/tasks.py` -- TaskRepository
+- `mc/bridge/repositories/steps.py` -- StepRepository
+- `mc/bridge/repositories/messages.py` -- MessageRepository
+- `mc/bridge/repositories/agents.py` -- AgentRepository
+- `mc/bridge/repositories/boards.py` -- BoardRepository
+- `mc/bridge/repositories/chats.py` -- ChatRepository
+- `mc/bridge/repositories/settings.py` -- SettingsRepository (placeholder)
+- `tests/mc/bridge/__init__.py`
+- `tests/mc/bridge/test_key_conversion.py`
+- `tests/mc/bridge/test_retry.py`
+- `tests/mc/bridge/test_client.py`
+- `tests/mc/bridge/test_repositories.py`
+- `tests/mc/bridge/test_subscriptions.py`
+- `tests/mc/bridge/test_backward_compat.py`
+
+**Removed:**
+- `mc/bridge.py` -- replaced by `mc/bridge/` package
+
+**Modified:**
+- `tests/mc/test_chat_handler.py` -- 5 bridge-specific tests updated for delegation pattern
 
 ## Change Log
+- 2026-03-06: Story implemented -- bridge split into package with facade pattern

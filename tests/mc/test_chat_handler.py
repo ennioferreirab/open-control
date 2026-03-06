@@ -277,77 +277,92 @@ class TestChatHandlerPollingLoop:
 
 
 class TestBridgeChatHelpers:
-    """Test that the bridge chat methods call the right Convex functions."""
+    """Test that the bridge chat methods call the right Convex functions.
 
-    def test_get_pending_chat_messages_calls_query(self):
+    After the bridge split (Story 15.3), methods delegate to ChatRepository
+    via the adapter, which calls bridge.mutation() (not _mutation_with_retry).
+    """
+
+    @patch("mc.bridge.ConvexClient")
+    def test_get_pending_chat_messages_calls_query(self, MockClient):
         """get_pending_chat_messages calls chats:listPending query."""
         from mc.bridge import ConvexBridge
 
-        bridge = MagicMock(spec=ConvexBridge)
-        bridge.query = MagicMock(return_value=[])
+        mock_client = MockClient.return_value
+        mock_client.query.return_value = []
 
-        # Call the actual method on the class, passing bridge as self
-        result = ConvexBridge.get_pending_chat_messages(bridge)
+        bridge = ConvexBridge("https://test.convex.cloud")
+        result = bridge.get_pending_chat_messages()
 
-        bridge.query.assert_called_once_with("chats:listPending")
+        mock_client.query.assert_called_with("chats:listPending", {})
         assert result == []
 
-    def test_get_pending_returns_list_or_empty(self):
+    @patch("mc.bridge.ConvexClient")
+    def test_get_pending_returns_list_or_empty(self, MockClient):
         """get_pending_chat_messages returns empty list for None."""
         from mc.bridge import ConvexBridge
 
-        bridge = MagicMock(spec=ConvexBridge)
-        bridge.query = MagicMock(return_value=None)
+        mock_client = MockClient.return_value
+        mock_client.query.return_value = None
 
-        result = ConvexBridge.get_pending_chat_messages(bridge)
+        bridge = ConvexBridge("https://test.convex.cloud")
+        result = bridge.get_pending_chat_messages()
         assert result == []
 
-    def test_send_chat_response_calls_mutation(self):
+    @patch("mc.bridge.ConvexClient")
+    def test_send_chat_response_calls_mutation(self, MockClient):
         """send_chat_response calls chats:send mutation."""
         from mc.bridge import ConvexBridge
 
-        bridge = MagicMock(spec=ConvexBridge)
-        bridge._mutation_with_retry = MagicMock()
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
 
-        ConvexBridge.send_chat_response(bridge, "my-agent", "Hello back!")
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.send_chat_response("my-agent", "Hello back!")
 
-        bridge._mutation_with_retry.assert_called_once()
-        call_args = bridge._mutation_with_retry.call_args
-        assert call_args[0][0] == "chats:send"
-        payload = call_args[0][1]
-        assert payload["agent_name"] == "my-agent"
-        assert payload["author_name"] == "my-agent"
-        assert payload["author_type"] == "agent"
+        mock_client.mutation.assert_called_once()
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "chats:send"
+        payload = call_args[1]
+        assert payload["agentName"] == "my-agent"
+        assert payload["authorName"] == "my-agent"
+        assert payload["authorType"] == "agent"
         assert payload["content"] == "Hello back!"
         assert payload["status"] == "done"
 
-    def test_mark_chat_processing_calls_mutation(self):
+    @patch("mc.bridge.ConvexClient")
+    def test_mark_chat_processing_calls_mutation(self, MockClient):
         """mark_chat_processing calls chats:updateStatus with processing."""
         from mc.bridge import ConvexBridge
 
-        bridge = MagicMock(spec=ConvexBridge)
-        bridge._mutation_with_retry = MagicMock()
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
 
-        ConvexBridge.mark_chat_processing(bridge, "chat456")
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.mark_chat_processing("chat456")
 
-        bridge._mutation_with_retry.assert_called_once_with(
-            "chats:updateStatus",
-            {"chat_id": "chat456", "status": "processing"},
-        )
+        mock_client.mutation.assert_called_once()
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "chats:updateStatus"
+        assert call_args[1]["chatId"] == "chat456"
+        assert call_args[1]["status"] == "processing"
 
-    def test_mark_chat_done_calls_mutation(self):
+    @patch("mc.bridge.ConvexClient")
+    def test_mark_chat_done_calls_mutation(self, MockClient):
         """mark_chat_done calls chats:updateStatus with done."""
         from mc.bridge import ConvexBridge
 
-        bridge = MagicMock(spec=ConvexBridge)
-        bridge._mutation_with_retry = MagicMock()
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
 
-        ConvexBridge.mark_chat_done(bridge, "chat789")
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.mark_chat_done("chat789")
 
-        bridge._mutation_with_retry.assert_called_once_with(
-            "chats:updateStatus",
-            {"chat_id": "chat789", "status": "done"},
-        )
+        mock_client.mutation.assert_called_once()
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[0] == "chats:updateStatus"
+        assert call_args[1]["chatId"] == "chat789"
+        assert call_args[1]["status"] == "done"
 
 
 # ---------------------------------------------------------------------------
