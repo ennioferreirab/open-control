@@ -87,7 +87,7 @@ class TestProcessChatMessage:
                 ),
             ),
             patch(
-                "mc.gateway.AGENTS_DIR",
+                "mc.infrastructure.config.AGENTS_DIR",
                 agents_dir,
             ),
         ):

@@ -16,8 +16,8 @@ These files do not exist in upstream and will never conflict on `subtree pull`:
 
 | File | Description |
 |------|-------------|
-| `agent/tools/ask_agent.py` | `AskAgentTool`: synchronous agent-to-agent conversation tool; requires `mc.bridge.ConvexBridge` context, silently skipped if MC unavailable |
-| `agent/tools/mc_delegate.py` | `McDelegateTool` (`delegate_task`): delegates tasks to the Mission Control Convex board; always registered in AgentLoop |
+| `agent/tools/ask_agent.py` | `AskAgentTool`: synchronous agent-to-agent conversation tool; requires `mc.bridge.ConvexBridge` context, silently skipped if MC unavailable. Imports `AGENTS_DIR` from `mc.infrastructure.config` (migrated from `mc.gateway` in Story 15.2). |
+| `agent/tools/mc_delegate.py` | `McDelegateTool` (`delegate_task`): delegates tasks to the Mission Control Convex board; always registered in AgentLoop. Imports `_resolve_convex_url` from `mc.infrastructure.config` (migrated from `mc.gateway` in Story 15.2). |
 | `channels/mission_control.py` | `MissionControlChannel`: bridges outbound messages to Convex task threads; registered via `ChannelManager.register_channel()` |
 | `providers/anthropic_oauth.py` | Full Anthropic OAuth PKCE flow; stores tokens in `~/.nanobot/anthropic_oauth.json` |
 | `providers/anthropic_oauth_provider.py` | `AnthropicOAuthProvider`: direct httpx+SSE provider (bypasses LiteLLM) for OAuth-authenticated Claude access |
@@ -199,6 +199,9 @@ Files most likely to conflict on upstream sync (sorted by patch size):
 #### `claude_code/provider.py`
 - **`_handle_message()`**: captures `stream_event` API errors (invalid model, rate limit, auth, overloaded); extracts error details from `result.error` dict when `is_error=True`
 - **`_build_command()`**: warns on unrecognized model names (does not block)
+
+#### `claude_code/ipc_server.py`
+- **Import migration (Story 15.2)**: `AGENTS_DIR` now imported from `mc.infrastructure.config` instead of `mc.gateway`
 
 #### `claude_code/workspace.py`
 
