@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { ExecutionPlanTab } from "./ExecutionPlanTab";
 
 // Mock PlanEditor so we can test without React Flow and Convex dependencies
@@ -9,6 +9,18 @@ vi.mock("./PlanEditor", () => ({
       PlanEditor: {plan ? "plan loaded" : "no plan"}
     </div>
   ),
+}));
+
+// Mock AddStepForm
+vi.mock("./AddStepForm", () => ({
+  AddStepForm: ({ onAdd, onCancel }: { existingSteps: unknown[]; boardId?: string; onAdd: (data: { title: string; description: string; assignedAgent: string; blockedByIds: string[] }) => void; onCancel: () => void }) => {
+    return (
+      <div data-testid="add-step-form">
+        <button data-testid="mock-add-btn" onClick={() => onAdd({ title: "New Step", description: "Desc", assignedAgent: "agent-a", blockedByIds: [] })}>Add</button>
+        <button data-testid="mock-cancel-btn" onClick={onCancel}>Cancel</button>
+      </div>
+    );
+  },
 }));
 
 // Mock React Flow for read-only view
@@ -246,5 +258,190 @@ describe("ExecutionPlanTab", () => {
     );
     const node = screen.getByTestId("flow-node-s1");
     expect(node.getAttribute("data-status")).toBe("running");
+  });
+
+  it("shows Add Step button when taskId is provided and status is in_progress", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", description: "Step one" })],
+      createdAt: "2026-01-01",
+    };
+    render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />);
+    expect(screen.getByTestId("add-step-button")).toBeInTheDocument();
+  });
+
+  it("does NOT show Add Step button when taskStatus is planning", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", description: "Step one" })],
+      createdAt: "2026-01-01",
+    };
+    render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="planning" />);
+    expect(screen.queryByTestId("add-step-button")).not.toBeInTheDocument();
+  });
+
+  it("does NOT show Add Step button when taskId is missing", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", description: "Step one" })],
+      createdAt: "2026-01-01",
+    };
+    render(<ExecutionPlanTab executionPlan={plan} />);
+    expect(screen.queryByTestId("add-step-button")).not.toBeInTheDocument();
+  });
+
+  it("shows AddStepForm when Add Step button is clicked", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", description: "Step one" })],
+      createdAt: "2026-01-01",
+    };
+    render(
+      <ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />
+    );
+
+    // Initially form is hidden
+    expect(screen.queryByTestId("add-step-form")).not.toBeInTheDocument();
+
+    // Click the add step button
+    fireEvent.click(screen.getByTestId("add-step-button"));
+
+    // Form should appear
+    expect(screen.getByTestId("add-step-form")).toBeInTheDocument();
+  });
+
+  it("hides AddStepForm when Cancel is clicked", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", description: "Step one" })],
+      createdAt: "2026-01-01",
+    };
+    render(
+      <ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />
+    );
+
+    fireEvent.click(screen.getByTestId("add-step-button"));
+    expect(screen.getByTestId("add-step-form")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("mock-cancel-btn"));
+    expect(screen.queryByTestId("add-step-form")).not.toBeInTheDocument();
+  });
+
+  it("in review mode, onAdd appends to local plan via onLocalPlanChange", () => {
+    const onLocalPlanChange = vi.fn();
+    const plan = {
+      steps: [
+        {
+          tempId: "step_1",
+          stepId: "step_1",
+          title: "Existing",
+          description: "Existing step",
+          assignedAgent: "agent-a",
+          blockedBy: [] as string[],
+          parallelGroup: 1,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-01-01T00:00:00Z",
+      generatedBy: "lead-agent" as const,
+      createdAt: "2026-01-01",
+    };
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        taskId="task-abc"
+        taskStatus="review"
+        isEditMode={false}
+        onLocalPlanChange={onLocalPlanChange}
+      />
+    );
+
+    // Show the form
+    fireEvent.click(screen.getByTestId("add-step-button"));
+
+    // Click the mock add button (triggers onAdd)
+    fireEvent.click(screen.getByTestId("mock-add-btn"));
+
+    // onLocalPlanChange should be called with updated plan
+    expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
+    const updatedPlan = onLocalPlanChange.mock.calls[0][0];
+    expect(updatedPlan.steps).toHaveLength(2);
+
+    const newStep = updatedPlan.steps[1];
+    expect(newStep.title).toBe("New Step");
+    expect(newStep.description).toBe("Desc");
+    expect(newStep.assignedAgent).toBe("agent-a");
+    expect(newStep.tempId).toBe("step_2");
+    expect(newStep.order).toBe(2);
+    expect(newStep.blockedBy).toEqual([]);
+  });
+
+  it("in in_progress mode, onAdd calls addStep mutation", async () => {
+    const plan = {
+      steps: [
+        makeStep({ stepId: "s1", description: "Step one", order: 1 }),
+      ],
+      createdAt: "2026-01-01",
+    };
+
+    mockMutationFn.mockClear();
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        taskId="task-abc"
+        taskStatus="in_progress"
+      />
+    );
+
+    // Show the form
+    fireEvent.click(screen.getByTestId("add-step-button"));
+
+    // Click the mock add button
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-add-btn"));
+    });
+
+    // The addStep mutation should be called
+    expect(mockMutationFn).toHaveBeenCalledTimes(1);
+    expect(mockMutationFn).toHaveBeenCalledWith({
+      taskId: "task-abc",
+      title: "New Step",
+      description: "Desc",
+      assignedAgent: "agent-a",
+      blockedByStepIds: undefined,
+    });
+  });
+
+  it("in done mode, onAdd calls addStep mutation", async () => {
+    const plan = {
+      steps: [
+        makeStep({ stepId: "s1", description: "Step one", order: 1 }),
+      ],
+      createdAt: "2026-01-01",
+    };
+
+    mockMutationFn.mockClear();
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        taskId="task-abc"
+        taskStatus="done"
+      />
+    );
+
+    // Show the form
+    fireEvent.click(screen.getByTestId("add-step-button"));
+
+    // Click the mock add button
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-add-btn"));
+    });
+
+    // The addStep mutation should be called
+    expect(mockMutationFn).toHaveBeenCalledTimes(1);
+    expect(mockMutationFn).toHaveBeenCalledWith({
+      taskId: "task-abc",
+      title: "New Step",
+      description: "Desc",
+      assignedAgent: "agent-a",
+      blockedByStepIds: undefined,
+    });
   });
 });

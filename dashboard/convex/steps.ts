@@ -513,6 +513,182 @@ export const acceptHumanStep = mutation({
   },
 });
 
+export const addStep = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    title: v.string(),
+    description: v.string(),
+    assignedAgent: v.string(),
+    blockedByStepIds: v.optional(v.array(v.id("steps"))),
+  },
+  handler: async (ctx, args) => {
+    // Validate required fields are not empty strings
+    if (!args.title.trim()) throw new ConvexError("Step title is required");
+    if (!args.description.trim()) throw new ConvexError("Step description is required");
+    if (!args.assignedAgent.trim()) throw new ConvexError("Assigned agent is required");
+
+    // Validate lead-agent is never assignable
+    if (args.assignedAgent === "lead-agent") {
+      throw new ConvexError("lead-agent cannot be assigned to steps");
+    }
+
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+
+    // This mutation is only for in_progress or done tasks
+    // (review uses local plan state, not this mutation)
+    if (task.status !== "in_progress" && task.status !== "done") {
+      throw new ConvexError(
+        `addStep is only allowed for tasks in 'in_progress' or 'done' status (current: ${task.status})`
+      );
+    }
+
+    const blockedByIds = args.blockedByStepIds ?? [];
+
+    // Validate blockedBy references
+    for (const depId of blockedByIds) {
+      const depStep = await ctx.db.get(depId);
+      if (!depStep) {
+        throw new ConvexError(`Dependency step not found: ${depId}`);
+      }
+      if (depStep.taskId !== args.taskId) {
+        throw new ConvexError(
+          "All blockedBy dependency steps must belong to the same task"
+        );
+      }
+    }
+
+    // Query existing steps for this task
+    const existingSteps = await ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+      .collect();
+
+    // Compute order: max(existing orders) + 1
+    const maxOrder = existingSteps.reduce(
+      (max, s) => Math.max(max, s.order),
+      0
+    );
+    const order = maxOrder + 1;
+
+    // Compute parallelGroup based on blockers
+    let parallelGroup: number;
+    if (blockedByIds.length > 0) {
+      const blockerSteps = existingSteps.filter((s) =>
+        blockedByIds.includes(s._id)
+      );
+      const maxBlockerGroup = blockerSteps.reduce(
+        (max, s) => Math.max(max, s.parallelGroup),
+        0
+      );
+      parallelGroup = maxBlockerGroup + 1;
+    } else {
+      const maxGroup = existingSteps.reduce(
+        (max, s) => Math.max(max, s.parallelGroup),
+        0
+      );
+      parallelGroup = maxGroup + 1;
+    }
+
+    // Determine initial status
+    let status: StepStatus;
+    if (blockedByIds.length === 0) {
+      status = "planned";
+    } else {
+      // Check if all blockers are completed
+      const blockerSteps = existingSteps.filter((s) =>
+        blockedByIds.includes(s._id)
+      );
+      const allBlockersCompleted = blockerSteps.every(
+        (s) => s.status === "completed"
+      );
+      status = allBlockersCompleted ? "planned" : "blocked";
+    }
+
+    const now = new Date().toISOString();
+
+    // Create the step record
+    const stepId = await ctx.db.insert("steps", {
+      taskId: args.taskId,
+      title: args.title,
+      description: args.description,
+      assignedAgent: args.assignedAgent,
+      status,
+      blockedBy: blockedByIds.length > 0 ? blockedByIds : undefined,
+      parallelGroup,
+      order,
+      createdAt: now,
+    });
+
+    // Append to tasks.executionPlan.steps (keep plan JSON in sync)
+    const plan = (task.executionPlan as {
+      steps?: Array<Record<string, unknown>>;
+    }) ?? {};
+    const planSteps = Array.isArray(plan.steps) ? [...plan.steps] : [];
+
+    // Generate tempId following step_N pattern
+    const existingTempIds = planSteps
+      .map((s) => String(s.tempId ?? ""))
+      .filter((id) => /^step_\d+$/.test(id))
+      .map((id) => parseInt(id.replace("step_", ""), 10));
+    const maxTempIdNum = existingTempIds.length > 0
+      ? Math.max(...existingTempIds)
+      : existingSteps.length;
+    const tempId = `step_${maxTempIdNum + 1}`;
+
+    // Build blockedBy tempId references for the plan JSON
+    const stepIdToTempId = new Map<string, string>();
+    for (const ps of planSteps) {
+      if (ps.tempId && ps.stepId) {
+        stepIdToTempId.set(String(ps.stepId), String(ps.tempId));
+      }
+    }
+    // Also try matching existing steps by their _id to find tempIds
+    for (const es of existingSteps) {
+      const planEntry = planSteps.find(
+        (ps) =>
+          String(ps.stepId) === String(es._id) ||
+          ps.title === es.title
+      );
+      if (planEntry?.tempId) {
+        stepIdToTempId.set(String(es._id), String(planEntry.tempId));
+      }
+    }
+
+    const blockedByTempIds = blockedByIds
+      .map((id) => stepIdToTempId.get(String(id)) ?? String(id))
+      .filter(Boolean);
+
+    planSteps.push({
+      tempId,
+      stepId: String(stepId),
+      title: args.title,
+      description: args.description,
+      assignedAgent: args.assignedAgent,
+      blockedBy: blockedByTempIds,
+      parallelGroup,
+      order,
+    });
+
+    await ctx.db.patch(args.taskId, {
+      executionPlan: { ...plan, steps: planSteps },
+    });
+
+    // Insert activity record
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      agentName: args.assignedAgent,
+      eventType: "step_created",
+      description: `Step added manually: ${args.title}`,
+      timestamp: now,
+    });
+
+    return stepId;
+  },
+});
+
 export const deleteStep = mutation({
   args: {
     stepId: v.id("steps"),

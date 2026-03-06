@@ -658,6 +658,8 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                     isPlanning={task.status === "planning"}
                     isEditMode={task.status === "review"}
                     taskId={task._id}
+                    taskStatus={task.status}
+                    boardId={task.boardId}
                     onLocalPlanChange={setLocalPlan}
                   />
                 </div>
