@@ -60,6 +60,7 @@ from mc.timeout_checker import TimeoutChecker
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
+    from mc.services.plan_negotiation import PlanNegotiationSupervisor
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +69,9 @@ logger = logging.getLogger(__name__)
 # Plan negotiation manager
 # ---------------------------------------------------------------------------
 
-# Task IDs requeued by cron — plan negotiation manager skips these.
-# Must be module-level so _process_batch (nested in _run_plan_negotiation_manager)
-# and run_gateway() can both access it without a NameError.
-_cron_requeued_ids: set[str] = set()
+# Plan negotiation supervisor instance — created at gateway level for cron integration.
+# The _cron_requeued_ids set is now managed by PlanNegotiationSupervisor.
+_plan_negotiation_supervisor: "PlanNegotiationSupervisor | None" = None
 
 
 async def _run_plan_negotiation_manager(
@@ -79,111 +79,15 @@ async def _run_plan_negotiation_manager(
 ) -> None:
     """Manage per-task plan negotiation loops.
 
-    Subscribes to tasks in both "review" (awaitingKickoff) and "in_progress"
-    statuses. For each task that enters a negotiable state, spawns a
-    start_plan_negotiation_loop coroutine. Prevents duplicate loops for the
-    same task_id.
-
-    The per-task loops are self-terminating — they exit when the task leaves
-    a negotiable status. This manager only needs to spawn new ones.
-
-    Story 7.3 — Task 4.3 / 4.4.
+    Thin wrapper that delegates to PlanNegotiationSupervisor (Story 17.2).
     """
-    from mc.plan_negotiator import start_plan_negotiation_loop
+    from mc.services.plan_negotiation import PlanNegotiationSupervisor
 
-    logger.info("[gateway] Plan negotiation manager started")
-
-    # Track active negotiation loops to prevent duplicates
-    active_negotiation_ids: set[str] = set()
-
-    async def _spawn_loop_if_needed(task_id: str) -> None:
-        """Spawn a plan negotiation loop for task_id if not already active."""
-        if task_id in active_negotiation_ids:
-            return
-        active_negotiation_ids.add(task_id)
-        logger.info("[gateway] Spawning plan negotiation loop for task %s", task_id)
-
-        async def _run_and_cleanup() -> None:
-            try:
-                await start_plan_negotiation_loop(
-                    bridge, task_id, ask_user_registry=ask_user_registry
-                )
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception(
-                    "[gateway] Plan negotiation loop for task %s crashed", task_id
-                )
-            finally:
-                active_negotiation_ids.discard(task_id)
-                logger.info(
-                    "[gateway] Plan negotiation loop for task %s ended", task_id
-                )
-
-        asyncio.create_task(_run_and_cleanup())
-
-    # Subscribe to both review and in_progress task lists
-    review_queue = bridge.async_subscribe(
-        "tasks:listByStatus", {"status": "review"}
+    global _plan_negotiation_supervisor
+    _plan_negotiation_supervisor = PlanNegotiationSupervisor(
+        bridge=bridge, ask_user_registry=ask_user_registry
     )
-    in_progress_queue = bridge.async_subscribe(
-        "tasks:listByStatus", {"status": "in_progress"}
-    )
-
-    async def _process_batch(tasks_batch: object) -> None:
-        """Process a batch of tasks from either subscription queue."""
-        if not tasks_batch or isinstance(tasks_batch, dict):
-            return
-        for task_data in tasks_batch:  # type: ignore[union-attr]
-            task_id = task_data.get("id")
-            if not task_id:
-                continue
-
-            task_status = task_data.get("status", "")
-            awaiting_kickoff = task_data.get("awaiting_kickoff", False)
-
-            # Only spawn for supervised tasks in review (awaitingKickoff) or in_progress
-            if task_status == "in_progress" or (
-                task_status == "review" and awaiting_kickoff
-            ):
-                # Skip plan negotiation for cron-requeued tasks (they
-                # re-enter in_progress but don't need lead-agent interaction).
-                # Manual reassignments are NOT in this set and proceed normally.
-                if task_id in _cron_requeued_ids:
-                    _cron_requeued_ids.discard(task_id)
-                    logger.info(
-                        "[gateway] Skipping plan negotiation for task %s "
-                        "(cron requeue)",
-                        task_id,
-                    )
-                    continue
-                await _spawn_loop_if_needed(task_id)
-
-    # Drain both queues by creating persistent reader tasks so no queue.get()
-    # coroutine is ever abandoned (avoids leaked asyncio tasks from asyncio.wait).
-    async def _drain_queue(queue: asyncio.Queue) -> None:  # type: ignore[type-arg]
-        while True:
-            try:
-                batch = await queue.get()
-                await _process_batch(batch)
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                logger.warning(
-                    "[gateway] Plan negotiation manager: error reading queue: %s",
-                    exc,
-                )
-
-    reader_tasks = [
-        asyncio.create_task(_drain_queue(review_queue)),
-        asyncio.create_task(_drain_queue(in_progress_queue)),
-    ]
-    try:
-        # Wait until cancelled (gateway shutdown)
-        await asyncio.gather(*reader_tasks)
-    finally:
-        for t in reader_tasks:
-            t.cancel()
+    await _plan_negotiation_supervisor.run()
 
 
 # ---------------------------------------------------------------------------
@@ -348,10 +252,9 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
             agent_name,
             f"Cron re-queued task to {agent_name}",
         )
-        _cron_requeued_ids.add(task_id)
-        logger.info(
-            "[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name
-        )
+        if _plan_negotiation_supervisor is not None:
+            _plan_negotiation_supervisor.mark_cron_requeued(task_id)
+        logger.info("[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name)
         return True
 
     async def on_cron_job(job: CronJob) -> str | None:
@@ -501,8 +404,12 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
 
 
 async def main() -> None:
-    """Gateway entry point — resolves Convex URL, creates bridge, syncs agents, runs gateway."""
+    """Gateway entry point — resolves Convex URL, creates bridge, syncs agents, runs gateway.
+
+    Uses AgentSyncService (Story 17.2) for all sync operations.
+    """
     from mc.bridge import ConvexBridge
+    from mc.services.agent_sync import AgentSyncService
 
     convex_url = _resolve_convex_url()
     if not convex_url:
@@ -526,8 +433,10 @@ async def main() -> None:
 
     try:
         agents_dir = AGENTS_DIR
+        sync_service = AgentSyncService(bridge=bridge, agents_dir=agents_dir)
+
         if agents_dir.is_dir():
-            synced, errors = sync_agent_registry(bridge, agents_dir)
+            synced, errors = sync_service.sync_agent_registry()
             logger.info("[gateway] Synced %d agent(s)", len(synced))
             for filename, errs in errors.items():
                 for err in errs:
@@ -560,19 +469,19 @@ async def main() -> None:
 
         # Sync skills alongside agents (Story 8.2)
         try:
-            skill_names = sync_skills(bridge)
+            skill_names = sync_service.sync_skills()
             logger.info("[gateway] Synced %d skill(s)", len(skill_names))
         except Exception:
             logger.exception("[gateway] Skills sync failed")
 
         # Sync connected models and seed default tiers (Story 11.1, AC4)
         try:
-            _sync_model_tiers(bridge)
+            sync_service.sync_model_tiers()
             logger.info("[gateway] Model tiers synced")
         except Exception:
             logger.exception("[gateway] Model tiers sync failed")
         try:
-            _sync_embedding_model(bridge)
+            sync_service.sync_embedding_model()
         except Exception:
             logger.exception("[gateway] Embedding model sync failed")
 

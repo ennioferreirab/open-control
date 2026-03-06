@@ -140,7 +140,7 @@ class TestRunGateway:
              patch("nanobot.bus.queue.MessageBus"), \
              patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel), \
              patch("mc.gateway._run_plan_negotiation_manager", new=AsyncMock()), \
-             patch("mc.mention_watcher.MentionWatcher") as MockMW:
+             patch("mc.mentions.watcher.MentionWatcher") as MockMW:
             mock_orch_instance = MockOrch.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
