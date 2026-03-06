@@ -1,13 +1,13 @@
 """
 Mention Watcher — global @mention detection loop for all task threads.
 
-Polls for new user messages across all tasks and dispatches @mention handling
-when a message contains @agent-name patterns. Works independently of the
-plan_negotiation_loop so mentions work in tasks of any status (done, crashed,
-in_progress, review, etc.).
+Polls for new user messages across ALL tasks regardless of status and dispatches
+@mention handling when a message contains @agent-name patterns. This is the
+single, authoritative handler for @mentions across all task statuses (inbox,
+assigned, in_progress, review, done, crashed, retrying, etc.).
 
-The plan_negotiator already handles @mentions for tasks in review/in_progress
-(to avoid double-processing). This watcher covers all other task statuses.
+The PlanNegotiator skips @mention messages (leaving them for this watcher),
+so there is no double-processing.
 
 Story: "Mencionar agentes via @arroba em qualquer task"
 """
@@ -25,9 +25,6 @@ logger = logging.getLogger(__name__)
 
 # How often to poll for new messages (seconds)
 POLL_INTERVAL_SECONDS = 3
-
-# Statuses handled by plan_negotiator (mentions already covered there)
-_NEGOTIATION_STATUSES = frozenset({"review", "in_progress"})
 
 # Max seen message IDs to keep in memory before pruning
 _SEEN_IDS_MAX = 5000
@@ -56,9 +53,9 @@ class MentionWatcher:
       or a similar query) to avoid per-task subscriptions.
     - Falls back to polling tasks:listByStatus for all active tasks if no
       global messages query is available.
-    - Deduplicates via seen_message_ids to avoid double-processing.
-    - Skips tasks in review/in_progress because the plan_negotiator already
-      handles @mentions for those.
+    - Deduplicates via _per_task_seen to avoid double-processing.
+    - Handles ALL task statuses — the PlanNegotiator skips @mention messages
+      so there is no double-processing.
     """
 
     def __init__(self, bridge: "ConvexBridge") -> None:
@@ -110,20 +107,6 @@ class MentionWatcher:
             if not task_id:
                 continue
 
-            # Skip tasks in statuses already handled by plan_negotiator
-            # (review with awaitingKickoff and in_progress)
-            # We still process review tasks WITHOUT awaitingKickoff and
-            # in_progress tasks to catch @mentions the plan_negotiator
-            # might skip (non-negotiable messages).
-            # Actually, plan_negotiator handles ALL user messages for
-            # in_progress and review(awaitingKickoff) — including @mentions.
-            # So we skip those to avoid double-processing.
-            awaiting_kickoff = task_data.get("awaiting_kickoff", False)
-            if task_status == "in_progress":
-                continue  # plan_negotiator handles this
-            if task_status == "review" and awaiting_kickoff:
-                continue  # plan_negotiator handles this
-
             # Fetch messages for this task
             try:
                 messages = await asyncio.to_thread(
@@ -168,7 +151,7 @@ class MentionWatcher:
                     continue
 
                 # Check for @mentions
-                from mc.mention_handler import is_mention_message, handle_all_mentions
+                from mc.mention_handler import handle_all_mentions, is_mention_message
 
                 if not is_mention_message(content):
                     continue
