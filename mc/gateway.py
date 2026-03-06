@@ -271,7 +271,7 @@ def _cleanup_deleted_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
         except OSError:
             logger.exception("Failed to remove local folder for agent '%s' — will retry on next sync", name)
 
-        # TODO (CC-6 H1): Clean up cc_session:{name}:* keys from Convex settings
+        # TODO: Clean up cc_session:{name}:* keys from Convex settings
         # when an agent is deleted. The bridge does not currently expose a
         # settings:listByPrefix query, so we cannot enumerate and delete all
         # session keys for this agent. This is a known gap — when

@@ -334,8 +334,8 @@ class TestBridgeInit:
     @patch("mc.bridge.ConvexClient")
     def test_init_with_admin_key(self, MockClient):
         mock_client = MockClient.return_value
-        bridge = ConvexBridge("https://test.convex.cloud", admin_key="secret123")
-        mock_client.set_admin_auth.assert_called_once_with("secret123")
+        bridge = ConvexBridge("https://test.convex.cloud", admin_key="test-admin-key")
+        mock_client.set_admin_auth.assert_called_once_with("test-admin-key")
 
     @patch("mc.bridge.ConvexClient")
     def test_init_without_admin_key(self, MockClient):

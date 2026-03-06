@@ -1529,7 +1529,7 @@ class TaskExecutor:
 
         Orchestrates workspace preparation, IPC server startup, CC provider
         execution, and result posting.  Any phase failure crashes the task.
-        Session resume (CC-6 AC2): looks up a stored session_id before executing.
+        Session resume: looks up a stored session_id before executing.
         """
         from claude_code.workspace import CCWorkspaceManager
         from claude_code.provider import ClaudeCodeProvider
@@ -1665,7 +1665,7 @@ class TaskExecutor:
             await self._crash_task(task_id, title, f"MCP IPC server failed: {exc}", agent_name)
             return
 
-        # 3. Look up existing session for resume (CC-6 AC2)
+        # 3. Look up existing session for resume
         session_id: str | None = None
         try:
             stored = await asyncio.to_thread(
@@ -1847,7 +1847,7 @@ class TaskExecutor:
             agent_name,
         )
 
-        # Store session_id for future resume (CC-6 AC1)
+        # Store session_id for future resume
         if result.session_id:
             try:
                 await asyncio.to_thread(
@@ -1888,7 +1888,7 @@ class TaskExecutor:
             f"Agent {agent_name} completed task '{title}'",
         )
 
-        # NOTE: Session is intentionally NOT deleted here (CC-6 AC1).
+        # NOTE: Session is intentionally NOT deleted here.
         # The session_id must persist after task completion so that follow-up
         # messages can resume the CC session. Cleanup happens only when the
         # agent is deleted (see _cleanup_deleted_agents in gateway.py).
@@ -1968,7 +1968,7 @@ class TaskExecutor:
         user_message: str,
         agent_data: "AgentData",
     ) -> str | None:
-        """Handle a user follow-up message in a CC agent's task thread (CC-6 AC3).
+        """Handle a user follow-up message in a CC agent's task thread.
 
         Resumes the latest CC session for this agent+task with the user's
         message as a new prompt.  Returns the CC response text, or None on
@@ -2082,7 +2082,7 @@ class TaskExecutor:
                 self._ask_user_registry.unregister(task_id)
             await ipc_server.stop()
 
-        # Update stored session with the new session_id from this turn (CC-6 AC3)
+        # Update stored session with the new session_id from this turn
         if result.session_id:
             try:
                 await asyncio.to_thread(

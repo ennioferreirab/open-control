@@ -1598,7 +1598,7 @@ requires-dist = [
 provides-extras = ["matrix", "dev"]
 
 [[package]]
-name = "nanobot-ennio"
+name = "nanobot-mcontrol"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

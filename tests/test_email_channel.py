@@ -16,11 +16,11 @@ def _make_config() -> EmailConfig:
         imap_host="imap.example.com",
         imap_port=993,
         imap_username="bot@example.com",
-        imap_password="secret",
+        imap_password="test-password",
         smtp_host="smtp.example.com",
         smtp_port=587,
         smtp_username="bot@example.com",
-        smtp_password="secret",
+        smtp_password="test-password",
         mark_seen=True,
     )
 

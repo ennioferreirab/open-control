@@ -1,4 +1,4 @@
-"""Tests for CC-6: Session Management for Claude Code agents.
+"""Tests for Session Management for Claude Code agents.
 
 Covers:
 - AC1: session_id stored on task completion (both task-scoped and latest keys)
