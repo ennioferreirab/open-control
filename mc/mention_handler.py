@@ -210,13 +210,13 @@ async def handle_mention(
     if agent_name == NANOBOT_AGENT_NAME:
         agent_prompt = None
 
-    # Fetch recent thread context for the agent
+    # Fetch recent thread context for the agent (shared pipeline -- AC2 of 16.1)
     try:
         thread_messages = await asyncio.to_thread(
             bridge.get_task_messages, task_id
         )
-        # Build a minimal thread context (last 10 messages)
-        thread_context = _build_mention_context(thread_messages, max_messages=10)
+        from mc.application.execution.thread_context_builder import build_thread_context
+        thread_context = build_thread_context(thread_messages, max_messages=10)
     except Exception:
         logger.warning(
             "[mention_handler] Failed to fetch thread context for task %s",
@@ -395,42 +395,6 @@ async def handle_all_mentions(
             )
 
     return True
-
-
-def _build_mention_context(
-    messages: list[dict[str, Any]],
-    max_messages: int = 10,
-) -> str:
-    """Build a brief thread context for mention responses.
-
-    Returns a compact summary of recent thread messages so the mentioned
-    agent has context about what's been discussed.
-    """
-    if not messages:
-        return ""
-
-    # Take the last N messages, excluding system events
-    visible = [
-        m for m in messages
-        if m.get("author_type") != "system"
-        and m.get("message_type") != "system_event"
-    ]
-    window = visible[-max_messages:] if len(visible) > max_messages else visible
-
-    if not window:
-        return ""
-
-    lines: list[str] = ["[Recent Thread Context]"]
-    for m in window:
-        author = m.get("author_name", "Unknown")
-        content = m.get("content", "")
-        if content:
-            # Truncate long messages
-            if len(content) > 300:
-                content = content[:300] + "..."
-            lines.append(f"{author}: {content}")
-
-    return "\n".join(lines)
 
 
 def _list_available_agents(agents_dir: Path) -> str:
