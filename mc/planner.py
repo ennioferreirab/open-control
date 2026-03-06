@@ -27,6 +27,7 @@ from mc.plan_parser import (  # noqa: F401
     score_agent,
 )
 from mc.types import (
+    HUMAN_AGENT_NAME,
     LEAD_AGENT_NAME,
     NANOBOT_AGENT_NAME,
     AgentData,
@@ -135,6 +136,7 @@ step_6 aggregates the five per-video outputs into a combined cross-video summary
 - assignedAgent must be one of the agent names listed in the user message
 - If no specialist agent matches, assign "nanobot" as fallback
 - NEVER assign "lead-agent" to any step — lead-agent only plans, it never executes
+- You may assign "human" to steps requiring manual review, approval, or human action. Human steps pause execution until a person accepts them.
 - blockedBy is a list of tempIds that must complete before this step can start
 - Steps with no blockers that can run simultaneously share the same parallelGroup number
 - Steps that depend on others get a higher parallelGroup number
@@ -375,7 +377,7 @@ class TaskPlanner:
     ) -> None:
         """Replace invalid/disallowed agent names with nanobot."""
         fallback_agent = self._fallback_agent_name(agents)
-        delegatable_names = {a.name for a in agents if _is_delegatable(a)} | {NANOBOT_AGENT_NAME}
+        delegatable_names = {a.name for a in agents if _is_delegatable(a)} | {NANOBOT_AGENT_NAME, HUMAN_AGENT_NAME}
         for step in plan.steps:
             if (
                 not step.assigned_agent

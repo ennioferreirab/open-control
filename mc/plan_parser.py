@@ -17,6 +17,7 @@ from pathlib import Path
 import json_repair
 
 from mc.types import (
+    HUMAN_AGENT_NAME,
     LEAD_AGENT_NAME,
     NANOBOT_AGENT_NAME,
     AgentData,
@@ -189,6 +190,12 @@ def _build_agent_roster(agents: list[AgentData]) -> str:
             f"  Skills: general\n"
             f"  Tools: {tools_str}"
         )
+    # Virtual agent for human-in-the-loop steps (always available)
+    lines.append(
+        f"- **{HUMAN_AGENT_NAME}** -- human operator\n"
+        f"  Assign to steps that require manual review, approval, or human action.\n"
+        f"  Human steps pause execution until a person accepts them."
+    )
     return "\n".join(lines)
 
 

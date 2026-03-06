@@ -8,7 +8,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   planning: ["failed", "review", "ready", "in_progress"],
   ready: ["in_progress", "planning", "failed"],
   failed: ["planning"],
-  inbox: ["assigned", "planning"],
+  inbox: ["assigned", "planning", "in_progress"],
   assigned: ["in_progress", "assigned"],
   in_progress: ["review", "done", "assigned"],
   review: ["done", "inbox", "assigned", "in_progress", "planning"],
@@ -32,6 +32,7 @@ const TRANSITION_EVENT_MAP: Record<string, string> = {
   "failed->planning": "task_planning",
   "inbox->assigned": "task_assigned",
   "inbox->planning": "task_planning",
+  "inbox->in_progress": "task_started",
   "assigned->assigned": "task_reassigned",
   "assigned->in_progress": "task_started",
   "in_progress->review": "review_requested",
@@ -426,6 +427,121 @@ export const updateExecutionPlan = internalMutation({
       executionPlan: args.executionPlan,
       updatedAt: new Date().toISOString(),
     });
+  },
+});
+
+// Reusable schema for execution plan validation
+const executionPlanSchema = v.object({
+  steps: v.array(v.object({
+    tempId: v.string(),
+    title: v.string(),
+    description: v.string(),
+    assignedAgent: v.string(),
+    blockedBy: v.array(v.string()),
+    parallelGroup: v.number(),
+    order: v.number(),
+    attachedFiles: v.optional(v.array(v.string())),
+  })),
+  generatedAt: v.string(),
+  generatedBy: v.literal("lead-agent"),
+});
+
+/**
+ * Save an execution plan on a task (public mutation).
+ * Allowed from inbox or review status.
+ */
+export const saveExecutionPlan = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    executionPlan: executionPlanSchema,
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    const allowed = ["inbox", "review"];
+    if (!allowed.includes(task.status)) {
+      throw new ConvexError(
+        `Cannot save execution plan on task in status '${task.status}'. Allowed: ${allowed.join(", ")}`
+      );
+    }
+    if (args.executionPlan.steps.length === 0) {
+      throw new ConvexError("Execution plan must have at least one step");
+    }
+    await ctx.db.patch(args.taskId, {
+      executionPlan: args.executionPlan,
+      updatedAt: new Date().toISOString(),
+    });
+    return args.taskId;
+  },
+});
+
+/**
+ * Start an inbox task that has a manually-built execution plan.
+ * Saves the plan, transitions inbox → in_progress, so the orchestrator
+ * materializes steps and dispatches them.
+ */
+export const startInboxTask = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    executionPlan: v.optional(executionPlanSchema),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    if (task.status !== "inbox") {
+      throw new ConvexError(
+        `Cannot start task in status '${task.status}'. Expected: inbox`
+      );
+    }
+    if (task.isManual !== true) {
+      throw new ConvexError(
+        "Only manual inbox tasks can be started with a plan. Non-manual tasks are routed automatically."
+      );
+    }
+
+    // Use provided plan, or fall back to plan already saved on the task
+    const planToSave = args.executionPlan ?? (task.executionPlan as typeof args.executionPlan | undefined);
+    if (
+      !planToSave ||
+      !Array.isArray(planToSave.steps) ||
+      planToSave.steps.length === 0
+    ) {
+      throw new ConvexError(
+        "Cannot start task without an execution plan. Add at least one step first."
+      );
+    }
+    // Validate that the fallback plan has the required fields
+    for (const step of planToSave.steps) {
+      if (!step.tempId || !step.title || !step.assignedAgent) {
+        throw new ConvexError(
+          "Existing execution plan has invalid steps. Please rebuild the plan."
+        );
+      }
+    }
+
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      status: "in_progress",
+      updatedAt: now,
+    };
+    // Only overwrite executionPlan if a new one was provided
+    if (args.executionPlan) {
+      patch.executionPlan = args.executionPlan;
+    }
+    await ctx.db.patch(args.taskId, patch);
+
+    await ctx.db.insert("activities", {
+      taskId: args.taskId,
+      eventType: "task_started",
+      description: "User started inbox task with manual execution plan",
+      timestamp: now,
+    });
+
+    return args.taskId;
   },
 });
 

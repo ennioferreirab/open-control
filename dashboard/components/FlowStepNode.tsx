@@ -102,7 +102,9 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
   const { step, status, isEditMode, hasParallelSiblings, onAddSequential, onAddParallel, onMergePaths, onDeleteStep, onAccept, isAccepting, acceptError, onStepClick } = data;
   const resolvedStatus = status ?? "planned";
   const meta = getStatusMeta(resolvedStatus);
-  const isWaitingHuman = normalizeStatus(resolvedStatus) === "waiting_human";
+  const normalizedStatus = normalizeStatus(resolvedStatus);
+  const isWaitingHuman = normalizedStatus === "waiting_human";
+  const isRunningHuman = normalizedStatus === "running" && step.assignedAgent === "human";
   const agentDisplay = step.assignedAgent === "human" ? null : step.assignedAgent;
 
   return (
@@ -114,7 +116,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
         meta.runningPulse && "motion-safe:animate-pulse",
         onStepClick && "cursor-pointer hover:border-primary/50 transition-colors"
       )}
-      onClick={() => onStepClick?.(step.tempId)}
+      /* Click handled by ReactFlow onNodeClick — onStepClick only controls cursor */
     >
       {/* Handles — always present for edge rendering, hidden in edit mode */}
       <Handle
@@ -208,8 +210,8 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
         <p className="text-[10px] text-muted-foreground mt-1 truncate">{agentDisplay}</p>
       )}
 
-      {/* Accept button for waiting_human in read-only mode */}
-      {isWaitingHuman && !isEditMode && onAccept && (
+      {/* Accept button for waiting_human / Mark Done for running human steps */}
+      {(isWaitingHuman || isRunningHuman) && !isEditMode && onAccept && (
         <div className="mt-1.5">
           <button
             type="button"
@@ -230,7 +232,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
             ) : (
               <CheckCircle className="h-3 w-3" />
             )}
-            Accept
+            {isRunningHuman ? "Mark Done" : "Accept"}
           </button>
           {acceptError && (
             <p className="mt-0.5 text-[10px] text-red-600">{acceptError}</p>

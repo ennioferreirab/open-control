@@ -32,7 +32,7 @@ const STEP_TRANSITIONS: Record<StepStatus, StepStatus[]> = {
   completed: [],
   crashed: ["assigned"],
   blocked: ["assigned", "crashed"],
-  waiting_human: ["completed", "crashed"],
+  waiting_human: ["running", "completed", "crashed"],
 };
 
 type ActivityLoggerCtx = {
@@ -445,68 +445,131 @@ export const acceptHumanStep = mutation({
 
     const timestamp = new Date().toISOString();
 
+    // Transition to "running" — the human has accepted and is working on it.
+    // Dependents remain blocked until the step is manually completed.
     await ctx.db.patch(args.stepId, {
-      status: "completed",
-      completedAt: timestamp,
+      status: "running",
+      startedAt: step.startedAt ?? timestamp,
     });
 
     await logStepStatusChange(ctx, {
       taskId: step.taskId,
       stepTitle: step.title,
       previousStatus: step.status,
-      nextStatus: "completed",
+      nextStatus: "running",
       assignedAgent: step.assignedAgent,
       timestamp,
     });
 
     await ctx.db.insert("activities", {
       taskId: step.taskId,
-      eventType: "step_completed",
-      description: `Human completed step: "${step.title}"`,
+      eventType: "step_status_changed",
+      description: `Human accepted step: "${step.title}"`,
       timestamp,
     });
 
-    // Unblock dependent steps that were waiting on this human step.
-    // The Python dispatch loop has already exited (no assigned steps remained
-    // while this step was in waiting_human). We must unblock here so that
-    // dependent steps become assigned and are picked up by the orchestrator.
-    const allTaskSteps = await ctx.db
-      .query("steps")
-      .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
-      .collect();
+    return step.taskId;
+  },
+});
 
-    const unblockedIds = findBlockedStepsReadyToUnblock(allTaskSteps);
-    const stepsById = new Map(
-      allTaskSteps.map((s) => [s._id, s] as const)
-    );
+/**
+ * Manually move a human-assigned step between states.
+ * Used for kanban drag-drop and "Mark Done" actions on human steps.
+ * When completing a step, unblocks any dependents.
+ */
+export const manualMoveStep = mutation({
+  args: {
+    stepId: v.id("steps"),
+    newStatus: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const step = await ctx.db.get(args.stepId);
+    if (!step) {
+      throw new ConvexError("Step not found");
+    }
+    if (step.assignedAgent !== "human") {
+      throw new ConvexError("Only human-assigned steps can be manually moved");
+    }
+    // Restrict to transitions that make sense for human-driven steps
+    const allowedHumanTransitions: Record<string, string[]> = {
+      assigned: ["running", "waiting_human"],
+      waiting_human: ["running", "completed", "crashed"],
+      running: ["completed", "crashed"],
+    };
+    const allowed = allowedHumanTransitions[step.status];
+    if (!allowed) {
+      throw new ConvexError(
+        `Human step in '${step.status}' status cannot be manually moved`
+      );
+    }
+    if (step.status === args.newStatus) {
+      return step.taskId;
+    }
+    if (!allowed.includes(args.newStatus)) {
+      throw new ConvexError(
+        `Invalid human step transition: ${step.status} -> ${args.newStatus}`
+      );
+    }
 
-    for (const unblockedStepId of unblockedIds) {
-      const blockedStep = stepsById.get(unblockedStepId);
-      if (!blockedStep) {
-        continue;
+    const timestamp = new Date().toISOString();
+    const patch: Record<string, unknown> = { status: args.newStatus };
+
+    if (args.newStatus === "running" && !step.startedAt) {
+      patch.startedAt = timestamp;
+    }
+    if (args.newStatus === "completed") {
+      patch.completedAt = timestamp;
+    }
+
+    await ctx.db.patch(args.stepId, patch);
+
+    await logStepStatusChange(ctx, {
+      taskId: step.taskId,
+      stepTitle: step.title,
+      previousStatus: step.status,
+      nextStatus: args.newStatus,
+      assignedAgent: step.assignedAgent,
+      timestamp,
+    });
+
+    // When completing, unblock dependent steps so the orchestrator picks them up.
+    if (args.newStatus === "completed") {
+      const allTaskSteps = await ctx.db
+        .query("steps")
+        .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
+        .collect();
+
+      const unblockedIds = findBlockedStepsReadyToUnblock(allTaskSteps);
+      const stepsById = new Map(
+        allTaskSteps.map((s) => [s._id, s] as const)
+      );
+
+      for (const unblockedStepId of unblockedIds) {
+        const blockedStep = stepsById.get(unblockedStepId);
+        if (!blockedStep) continue;
+
+        await ctx.db.patch(unblockedStepId, {
+          status: "assigned",
+          errorMessage: undefined,
+        });
+
+        await logStepStatusChange(ctx, {
+          taskId: blockedStep.taskId,
+          stepTitle: blockedStep.title,
+          previousStatus: blockedStep.status,
+          nextStatus: "assigned",
+          assignedAgent: blockedStep.assignedAgent,
+          timestamp,
+        });
+
+        await ctx.db.insert("activities", {
+          taskId: blockedStep.taskId,
+          agentName: blockedStep.assignedAgent,
+          eventType: "step_unblocked",
+          description: `Step unblocked and assigned: "${blockedStep.title}"`,
+          timestamp,
+        });
       }
-
-      await ctx.db.patch(unblockedStepId, {
-        status: "assigned",
-        errorMessage: undefined,
-      });
-
-      await logStepStatusChange(ctx, {
-        taskId: blockedStep.taskId,
-        stepTitle: blockedStep.title,
-        previousStatus: blockedStep.status,
-        nextStatus: "assigned",
-        assignedAgent: blockedStep.assignedAgent,
-        timestamp,
-      });
-
-      await ctx.db.insert("activities", {
-        taskId: blockedStep.taskId,
-        agentName: blockedStep.assignedAgent,
-        eventType: "step_unblocked",
-        description: `Step unblocked and assigned: "${blockedStep.title}"`,
-        timestamp,
-      });
     }
 
     return step.taskId;
@@ -802,6 +865,15 @@ export const deleteStep = mutation({
     const step = await ctx.db.get(args.stepId);
     if (!step) {
       throw new ConvexError("Step not found");
+    }
+
+    // Only planned, blocked, or assigned human steps can be deleted
+    const deletableStatuses = ["planned", "blocked"];
+    const isAssignedHuman = step.status === "assigned" && step.assignedAgent === "human";
+    if (!deletableStatuses.includes(step.status) && !isAssignedHuman) {
+      throw new ConvexError(
+        `Cannot delete step in '${step.status}' status. Only planned, blocked, or assigned human steps can be deleted.`
+      );
     }
 
     // Clean up blockedBy references in sibling steps

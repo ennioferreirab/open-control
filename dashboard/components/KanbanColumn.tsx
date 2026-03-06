@@ -50,6 +50,7 @@ export function KanbanColumn({
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const manualMove = useMutation(api.tasks.manualMove);
+  const manualMoveStep = useMutation(api.steps.manualMoveStep);
 
   useEffect(() => {
     if (hitlCount > prevCountRef.current) {
@@ -85,6 +86,26 @@ export function KanbanColumn({
       onDrop={async (e) => {
         e.preventDefault();
         setIsDragOver(false);
+        // Check for step drops first (human step kanban drag)
+        const stepId = e.dataTransfer.getData("application/step-id");
+        if (stepId) {
+          const stepStatusMap: Record<string, string> = {
+            assigned: "assigned",
+            in_progress: "running",
+            review: "waiting_human",
+            done: "completed",
+          };
+          const targetStepStatus = stepStatusMap[status];
+          if (targetStepStatus) {
+            try {
+              await manualMoveStep({ stepId: stepId as Id<"steps">, newStatus: targetStepStatus });
+            } catch (err) {
+              console.error("[KanbanColumn] Step move failed:", err);
+            }
+          }
+          return;
+        }
+        // Task drops
         const taskId = e.dataTransfer.getData("text/plain");
         if (taskId) {
           await manualMove({ taskId: taskId as Id<"tasks">, newStatus: status as "inbox" | "assigned" | "in_progress" | "review" | "done" | "retrying" | "crashed" });

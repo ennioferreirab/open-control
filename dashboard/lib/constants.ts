@@ -21,6 +21,7 @@ export const STEP_STATUS = {
   COMPLETED: "completed",
   CRASHED: "crashed",
   BLOCKED: "blocked",
+  WAITING_HUMAN: "waiting_human",
 } as const;
 
 // Trust level values
@@ -109,6 +110,10 @@ export const SYSTEM_AGENT_NAMES = new Set(["lead-agent", "mc-agent", "nanobot", 
 // Agents hidden from user-facing selectors (dropdowns, mentions, sidebar).
 // nanobot is intentionally excluded — it can be delegated to and mentioned.
 export const HIDDEN_AGENT_NAMES = new Set(["lead-agent", "mc-agent", "low-agent"]);
+
+// Virtual agent sentinel for human-in-the-loop steps.
+// Not a DB agent — used in step assignment dropdowns and planner roster.
+export const HUMAN_AGENT_NAME = "human";
 
 // Derived TypeScript types for use in function signatures and component props
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
@@ -217,6 +222,11 @@ export const STEP_STATUS_COLORS: Record<
   blocked: {
     border: "border-l-amber-500",
     bg: "bg-amber-100 dark:bg-amber-950",
+    text: "text-amber-700 dark:text-amber-300",
+  },
+  waiting_human: {
+    border: "border-l-amber-500",
+    bg: "bg-amber-50 dark:bg-amber-950",
     text: "text-amber-700 dark:text-amber-300",
   },
 };

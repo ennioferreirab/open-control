@@ -17,6 +17,7 @@ from mc.types import (
     ActivityEventType,
     AgentData,
     AuthorType,
+    HUMAN_AGENT_NAME,
     NANOBOT_AGENT_NAME,
     MessageType,
     StepStatus,
@@ -339,6 +340,34 @@ class StepDispatcher:
                 NANOBOT_AGENT_NAME,
             )
             agent_name = NANOBOT_AGENT_NAME
+
+        if agent_name == HUMAN_AGENT_NAME:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.update_step_status, step_id, StepStatus.WAITING_HUMAN
+                )
+                await asyncio.to_thread(
+                    self._bridge.create_activity,
+                    ActivityEventType.HITL_REQUESTED,
+                    f"Step awaiting human action: {step_title}",
+                    task_id,
+                )
+            except Exception as exc:
+                logger.error(
+                    "[dispatcher] Failed to set step '%s' to waiting_human: %s",
+                    step_title, exc, exc_info=True,
+                )
+                try:
+                    await asyncio.to_thread(
+                        self._bridge.update_step_status, step_id, StepStatus.CRASHED,
+                        f"{type(exc).__name__}: {exc}",
+                    )
+                except Exception:
+                    logger.error(
+                        "[dispatcher] Failed to mark step %s as crashed", step_id,
+                        exc_info=True,
+                    )
+            return []
 
         await asyncio.to_thread(
             self._bridge.create_activity,

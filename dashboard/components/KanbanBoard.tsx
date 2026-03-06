@@ -38,6 +38,8 @@ function stepStatusToColumnStatus(
   taskStatus?: Doc<"tasks">["status"]
 ): ColumnStatus | null {
   switch (stepStatus) {
+    case "waiting_human":
+      return "review";
     case "assigned":
     case "blocked":
       // When the parent task is already in_progress, waiting steps belong in

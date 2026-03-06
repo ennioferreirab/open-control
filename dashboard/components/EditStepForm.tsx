@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Trash2, User } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -15,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
+import { HUMAN_AGENT_NAME } from "@/lib/constants";
 import type { Id } from "../convex/_generated/dataModel";
 
 export interface EditStepData {
@@ -33,10 +35,11 @@ interface EditStepFormProps {
   };
   boardId?: Id<"boards">;
   onSave: (data: EditStepData) => void;
+  onDelete?: (stepId: string) => void;
   onCancel: () => void;
 }
 
-export function EditStepForm({ step, boardId, onSave, onCancel }: EditStepFormProps) {
+export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: EditStepFormProps) {
   const [title, setTitle] = useState(step.title);
   const [description, setDescription] = useState(step.description);
   const [assignedAgent, setAssignedAgent] = useState(step.assignedAgent);
@@ -112,6 +115,12 @@ export function EditStepForm({ step, boardId, onSave, onCancel }: EditStepFormPr
             <SelectValue placeholder="Select agent" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem key={HUMAN_AGENT_NAME} value={HUMAN_AGENT_NAME}>
+              <span className="flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5" />
+                Human
+              </span>
+            </SelectItem>
             {selectableAgents.map((agent) => (
               <SelectItem key={agent.name} value={agent.name}>
                 {agent.displayName || agent.name}
@@ -140,6 +149,22 @@ export function EditStepForm({ step, boardId, onSave, onCancel }: EditStepFormPr
         >
           {isLocked ? "Close" : "Cancel"}
         </Button>
+        {!isLocked && onDelete && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => {
+              if (window.confirm(`Delete step "${step.title || "Untitled"}"?`)) {
+                onDelete(step.stepId);
+              }
+            }}
+            data-testid="edit-step-delete"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Delete
+          </Button>
+        )}
       </div>
     </div>
   );

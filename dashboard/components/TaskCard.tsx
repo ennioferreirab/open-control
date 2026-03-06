@@ -60,9 +60,18 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
     : "?";
 
   return (
+    <div
+      draggable={isManual}
+      onDragStart={isManual ? (e) => {
+        e.dataTransfer.setData("text/plain", task._id);
+        e.dataTransfer.effectAllowed = "move";
+        setIsDragging(true);
+      } : undefined}
+      onDragEnd={isManual ? () => setIsDragging(false) : undefined}
+    >
     <motion.div
       layoutId={task._id}
-      layout
+      layout={!isDragging}
       transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.3 }}
     >
       <Card
@@ -75,13 +84,6 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
         onClick={onClick}
         role="article"
         aria-label={`${task.title} - ${task.status}`}
-        draggable={isManual}
-        onDragStart={isManual ? (e) => {
-          e.dataTransfer.setData("text/plain", task._id);
-          e.dataTransfer.effectAllowed = "move";
-          setIsDragging(true);
-        } : undefined}
-        onDragEnd={isManual ? () => setIsDragging(false) : undefined}
       >
         <div className="mb-1.5 flex items-start justify-between gap-2">
           <h3 className="min-w-0 text-sm font-semibold text-foreground line-clamp-2">
@@ -302,5 +304,6 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
         )}
       </Card>
     </motion.div>
+    </div>
   );
 }

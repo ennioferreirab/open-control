@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { StepFileAttachment } from "./StepFileAttachment";
 import { getAgentInitials } from "@/lib/utils";
+import { HUMAN_AGENT_NAME } from "@/lib/constants";
 import { Trash2, X, User } from "lucide-react";
 import type { PlanStep } from "@/lib/types";
 
@@ -46,7 +47,7 @@ export function StepDetailPanel({
   onClose,
 }: StepDetailPanelProps) {
   const selectableAgents = agents.filter((a) => a.name !== "lead-agent");
-  const isHumanAssigned = step.assignedAgent === "human";
+  const isHumanAssigned = step.assignedAgent === HUMAN_AGENT_NAME;
   const assignedAgent = agents.find((a) => a.name === step.assignedAgent);
   const displayName = isHumanAssigned
     ? "Human"
@@ -123,7 +124,7 @@ export function StepDetailPanel({
             </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem key="human" value="human">
+            <SelectItem key={HUMAN_AGENT_NAME} value={HUMAN_AGENT_NAME}>
               <span className="flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5" />
                 Human

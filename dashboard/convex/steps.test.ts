@@ -124,8 +124,8 @@ describe("isValidStepTransition", () => {
     expect(isValidStepTransition("waiting_human", "crashed")).toBe(true);
   });
 
-  it("rejects waiting_human -> running (human steps do not run agents)", () => {
-    expect(isValidStepTransition("waiting_human", "running")).toBe(false);
+  it("allows waiting_human -> running (human accept)", () => {
+    expect(isValidStepTransition("waiting_human", "running")).toBe(true);
   });
 
   it("rejects waiting_human -> blocked", () => {
@@ -195,30 +195,30 @@ describe("acceptHumanStep", () => {
     return { ctx, step, patchedValues, insertedActivities };
   }
 
-  it("transitions waiting_human step to completed", async () => {
+  it("transitions waiting_human step to running", async () => {
     const handler = getHandler();
     const { ctx, patchedValues } = makeCtx();
 
     await handler(ctx, { stepId: "step-1" });
 
-    expect(patchedValues.status).toBe("completed");
-    expect(patchedValues.completedAt).toBeDefined();
+    expect(patchedValues.status).toBe("running");
+    expect(patchedValues.startedAt).toBeDefined();
   });
 
-  it("creates activity event with 'Human completed step' description", async () => {
+  it("creates activity event with 'Human accepted step' description", async () => {
     const handler = getHandler();
     const { ctx, insertedActivities } = makeCtx();
 
     await handler(ctx, { stepId: "step-1" });
 
-    // There may be multiple activities (step_status_changed + step_completed);
-    // we assert on the step_completed one specifically.
-    const completedActivity = insertedActivities.find(
-      (a) => (a as Record<string, unknown>).eventType === "step_completed"
+    const acceptedActivity = insertedActivities.find(
+      (a) => {
+        const desc = (a as Record<string, unknown>).description as string;
+        return desc.includes("Human accepted step");
+      }
     );
-    expect(completedActivity).toBeDefined();
-    expect((completedActivity as Record<string, unknown>).description).toContain("Human completed step");
-    expect((completedActivity as Record<string, unknown>).description).toContain("Review documents");
+    expect(acceptedActivity).toBeDefined();
+    expect((acceptedActivity as Record<string, unknown>).description).toContain("Review documents");
   });
 
   it("returns the taskId for the caller", async () => {
@@ -254,13 +254,11 @@ describe("acceptHumanStep", () => {
     );
   });
 
-  it("unblocks dependent steps directly in the mutation (dispatch loop has already exited)", async () => {
-    // acceptHumanStep must unblock blocked dependents itself because the
-    // Python dispatch loop exits when waiting_human steps are pending and
-    // there is no orchestrator subscription re-triggering dispatch on Accept.
+  it("does NOT unblock dependents on accept (deferred to manual completion)", async () => {
+    // acceptHumanStep transitions to running, not completed.
+    // Dependent unblocking happens in manualMoveStep when the human completes the step.
     const handler = getHandler();
     const patchedByStepId: Record<string, Record<string, unknown>> = {};
-    const insertedActivities: Record<string, unknown>[] = [];
 
     const humanStep = {
       _id: "step-1",
@@ -268,14 +266,6 @@ describe("acceptHumanStep", () => {
       title: "Review",
       status: "waiting_human",
       assignedAgent: "human",
-    };
-    const blockedDependent = {
-      _id: "step-2",
-      taskId: "task-1",
-      title: "Deploy",
-      status: "blocked",
-      assignedAgent: "nanobot",
-      blockedBy: ["step-1"],
     };
 
     const ctx = {
@@ -287,37 +277,17 @@ describe("acceptHumanStep", () => {
         patch: async (id: string, values: Record<string, unknown>) => {
           patchedByStepId[id] = { ...(patchedByStepId[id] ?? {}), ...values };
         },
-        insert: async (_table: string, value: Record<string, unknown>) => {
-          insertedActivities.push(value);
-          return "activity-id";
-        },
-        // In a real Convex transaction, the patch to step-1 (completed) is
-        // visible when the query runs later in the same mutation. Simulate this
-        // by returning the human step with the updated status.
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
-            collect: async () => [
-              { ...humanStep, status: "completed" },
-              blockedDependent,
-            ],
-          }),
-        }),
+        insert: async () => "activity-id",
       },
     };
 
     await handler(ctx, { stepId: "step-1" });
 
-    // The human step must become completed
-    expect(patchedByStepId["step-1"]?.status).toBe("completed");
+    // The human step must become running (not completed)
+    expect(patchedByStepId["step-1"]?.status).toBe("running");
 
-    // The dependent step must become assigned
-    expect(patchedByStepId["step-2"]?.status).toBe("assigned");
-
-    // An unblocked activity must have been created
-    const unblockedActivities = insertedActivities.filter(
-      (a) => (a as Record<string, unknown>).eventType === "step_unblocked"
-    );
-    expect(unblockedActivities.length).toBeGreaterThan(0);
+    // No other steps should have been patched
+    expect(Object.keys(patchedByStepId)).toEqual(["step-1"]);
   });
 });
 

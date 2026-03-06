@@ -12,7 +12,7 @@ from mc.types import TaskStatus, StepStatus, ActivityEventType
 # Valid transitions: current_status -> [allowed_next_statuses]
 VALID_TRANSITIONS: dict[str, list[str]] = {
     TaskStatus.PLANNING: [TaskStatus.FAILED, TaskStatus.REVIEW],
-    TaskStatus.INBOX: [TaskStatus.ASSIGNED],
+    TaskStatus.INBOX: [TaskStatus.ASSIGNED, TaskStatus.PLANNING, TaskStatus.IN_PROGRESS],
     TaskStatus.ASSIGNED: [TaskStatus.IN_PROGRESS],
     TaskStatus.IN_PROGRESS: [TaskStatus.REVIEW, TaskStatus.DONE],
     TaskStatus.REVIEW: [TaskStatus.IN_PROGRESS, TaskStatus.DONE, TaskStatus.INBOX],
@@ -28,6 +28,8 @@ TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
     (TaskStatus.PLANNING, TaskStatus.REVIEW): ActivityEventType.TASK_PLANNING,
     (TaskStatus.PLANNING, TaskStatus.FAILED): ActivityEventType.TASK_FAILED,
     (TaskStatus.INBOX, TaskStatus.ASSIGNED): ActivityEventType.TASK_ASSIGNED,
+    (TaskStatus.INBOX, TaskStatus.PLANNING): ActivityEventType.TASK_PLANNING,
+    (TaskStatus.INBOX, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_STARTED,
     (TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS): ActivityEventType.TASK_STARTED,
     (TaskStatus.IN_PROGRESS, TaskStatus.REVIEW): ActivityEventType.REVIEW_REQUESTED,
     (TaskStatus.IN_PROGRESS, TaskStatus.DONE): ActivityEventType.TASK_COMPLETED,
@@ -91,7 +93,7 @@ STEP_VALID_TRANSITIONS: dict[str, list[str]] = {
     StepStatus.COMPLETED: [],
     StepStatus.CRASHED: [StepStatus.ASSIGNED],
     StepStatus.BLOCKED: [StepStatus.ASSIGNED, StepStatus.CRASHED],
-    StepStatus.WAITING_HUMAN: [StepStatus.COMPLETED, StepStatus.CRASHED],
+    StepStatus.WAITING_HUMAN: [StepStatus.RUNNING, StepStatus.COMPLETED, StepStatus.CRASHED],
 }
 
 # Map (from, to) -> activity event type for step transitions
@@ -104,6 +106,7 @@ STEP_TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
     (StepStatus.RUNNING, StepStatus.CRASHED): ActivityEventType.SYSTEM_ERROR,
     (StepStatus.ASSIGNED, StepStatus.CRASHED): ActivityEventType.SYSTEM_ERROR,
     (StepStatus.ASSIGNED, StepStatus.WAITING_HUMAN): ActivityEventType.STEP_DISPATCHED,
+    (StepStatus.WAITING_HUMAN, StepStatus.RUNNING): ActivityEventType.STEP_STARTED,
     (StepStatus.WAITING_HUMAN, StepStatus.COMPLETED): ActivityEventType.STEP_COMPLETED,
     (StepStatus.WAITING_HUMAN, StepStatus.CRASHED): ActivityEventType.SYSTEM_ERROR,
 }

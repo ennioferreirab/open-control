@@ -76,6 +76,9 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const kickOffMutation = useMutation(api.tasks.approveAndKickOff);
   const pauseTaskMutation = useMutation(api.tasks.pauseTask);
   const resumeTaskMutation = useMutation(api.tasks.resumeTask);
+  const saveExecutionPlanMutation = useMutation(api.tasks.saveExecutionPlan);
+  const startInboxTaskMutation = useMutation(api.tasks.startInboxTask);
+  const manualMoveMutation = useMutation(api.tasks.manualMove);
   const retryMutation = useMutation(api.tasks.retry);
   const updateTagsMutation = useMutation(api.tasks.updateTags);
   const updateTitleMutation = useMutation(api.tasks.updateTitle);
@@ -92,6 +95,11 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const [pauseError, setPauseError] = useState("");
   const [isResuming, setIsResuming] = useState(false);
   const [resumeError, setResumeError] = useState("");
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
+  const [savePlanError, setSavePlanError] = useState("");
+  const [isStartingInbox, setIsStartingInbox] = useState(false);
+  const [startInboxError, setStartInboxError] = useState("");
+  const [manualDoneError, setManualDoneError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
@@ -116,14 +124,21 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const taskAwaitingKickoff: boolean = taskAny?.awaitingKickoff === true;
   const taskStatus: string | undefined = taskAny?.status;
 
-  // Track Lead Agent plan updates via generatedAt — reset local edits when plan changes
+  // Reset local plan when switching tasks or when server plan changes
+  const prevTaskId = useRef<string | undefined>(undefined);
   const prevPlanGeneratedAt = useRef<string | undefined>(undefined);
   useEffect(() => {
+    if ((taskId ?? undefined) !== prevTaskId.current) {
+      prevTaskId.current = taskId ?? undefined;
+      prevPlanGeneratedAt.current = taskGeneratedAt;
+      setLocalPlan(undefined);
+      return;
+    }
     if (taskGeneratedAt !== prevPlanGeneratedAt.current) {
       prevPlanGeneratedAt.current = taskGeneratedAt;
-      setLocalPlan(undefined); // Force PlanEditor to re-sync from Convex
+      setLocalPlan(undefined);
     }
-  }, [taskGeneratedAt]);
+  }, [taskId, taskGeneratedAt]);
 
   // activeTab: controlled tab state for auto-switching to Execution Plan when awaitingKickoff
   const isAwaitingKickoff = useMemo(
@@ -270,6 +285,57 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
       setResumeError(`Resume failed: ${message}`);
     } finally {
       setIsResuming(false);
+    }
+  };
+
+  const handleSavePlan = async () => {
+    if (!task || !isTaskLoaded || !localPlan) return;
+    setIsSavingPlan(true);
+    setSavePlanError("");
+    setStartInboxError("");
+    try {
+      await saveExecutionPlanMutation({ taskId: task._id, executionPlan: localPlan });
+      setLocalPlan(undefined); // Reset — Convex is now source of truth
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setSavePlanError(`Save failed: ${message}`);
+    } finally {
+      setIsSavingPlan(false);
+    }
+  };
+
+  const handleStartInbox = async () => {
+    if (!task || !isTaskLoaded) return;
+    setIsStartingInbox(true);
+    setStartInboxError("");
+    setSavePlanError("");
+    let success = false;
+    try {
+      // Only send plan if there are unsaved local changes; otherwise the mutation
+      // falls back to the plan already stored on the task (Fix #12: avoid redundant payload)
+      const planToSend = localPlan ?? undefined;
+      await startInboxTaskMutation({ taskId: task._id, executionPlan: planToSend });
+      setLocalPlan(undefined);
+      success = true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setStartInboxError(`Start failed: ${message}`);
+    } finally {
+      setIsStartingInbox(false);
+    }
+    // Close after finally so setIsStartingInbox runs before unmount
+    if (success) onClose();
+  };
+
+  const handleManualDone = async () => {
+    if (!task || !isTaskLoaded) return;
+    setManualDoneError("");
+    try {
+      await manualMoveMutation({ taskId: task._id, newStatus: "done" });
+      onClose();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setManualDoneError(`Move failed: ${message}`);
     }
   };
 
@@ -446,26 +512,39 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                     </Button>
                   )}
                   {task.status === "in_progress" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-orange-400 text-orange-700 hover:bg-orange-50 text-xs h-7 px-2"
-                      onClick={handlePause}
-                      disabled={isPausing}
-                      data-testid="pause-button"
-                    >
-                      {isPausing ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                          Pausing...
-                        </>
-                      ) : (
-                        <>
-                          <Pause className="h-3.5 w-3.5 mr-1" />
-                          Pause
-                        </>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-orange-400 text-orange-700 hover:bg-orange-50 text-xs h-7 px-2"
+                        onClick={handlePause}
+                        disabled={isPausing}
+                        data-testid="pause-button"
+                      >
+                        {isPausing ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                            Pausing...
+                          </>
+                        ) : (
+                          <>
+                            <Pause className="h-3.5 w-3.5 mr-1" />
+                            Pause
+                          </>
+                        )}
+                      </Button>
+                      {task.isManual && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
+                          onClick={handleManualDone}
+                          data-testid="manual-done-button"
+                        >
+                          Done
+                        </Button>
                       )}
-                    </Button>
+                    </>
                   )}
                   {isPaused && (
                     <>
@@ -528,6 +607,51 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       </Button>
                     </>
                   )}
+                  {taskStatus === "inbox" && (
+                    <>
+                      {localPlan && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 px-2"
+                          onClick={handleSavePlan}
+                          disabled={isSavingPlan}
+                          data-testid="save-plan-button"
+                        >
+                          {isSavingPlan ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            "Save Plan"
+                          )}
+                        </Button>
+                      )}
+                      {(localPlan || taskExecutionPlan) && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
+                          onClick={handleStartInbox}
+                          disabled={isStartingInbox}
+                          data-testid="start-inbox-button"
+                        >
+                          {isStartingInbox ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              Starting...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-3.5 w-3.5 mr-1" />
+                              Start
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </>
+                  )}
                 </div>
               </SheetDescription>
               {showRejection && taskId && (
@@ -556,6 +680,21 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
               {resumeError && (
                 <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800" data-testid="resume-error">
                   {resumeError}
+                </div>
+              )}
+              {savePlanError && (
+                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
+                  {savePlanError}
+                </div>
+              )}
+              {startInboxError && (
+                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
+                  {startInboxError}
+                </div>
+              )}
+              {manualDoneError && (
+                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
+                  {manualDoneError}
                 </div>
               )}
 

@@ -26,6 +26,7 @@ else:
 LEAD_AGENT_NAME = "lead-agent"
 NANOBOT_AGENT_NAME = "nanobot"
 LOW_AGENT_NAME = "low-agent"
+HUMAN_AGENT_NAME = "human"
 
 # Model tier system (Story 11.1)
 TIER_PREFIX = "tier:"

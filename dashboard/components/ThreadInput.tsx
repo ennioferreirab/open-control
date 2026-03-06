@@ -82,9 +82,6 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     }
   }, [task.assignedAgent, isSubmitting]);
 
-  // Don't render for manual tasks
-  if (task.isManual) return null;
-
   // Plan-chat mode: only review+awaitingKickoff (pre-kickoff plan negotiation).
   // In this mode the user chats with the Lead Agent to modify the plan.
   // We use postUserPlanMessage (no status transition, no plan clear).

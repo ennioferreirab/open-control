@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { Loader2, Plus } from "lucide-react";
-import { ReactFlow, Background, Controls } from "@xyflow/react";
+import { ReactFlow, Background, Controls, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
@@ -69,6 +69,7 @@ interface ExecutionPlanTabProps {
 
 interface NormalizedStep {
   stepId: string;
+  liveId?: string;
   title?: string;
   description: string;
   assignedAgent?: string;
@@ -151,6 +152,7 @@ function mergeStepsWithLiveData(
     if (!liveStep) return planStep;
     return {
       ...planStep,
+      liveId: liveStep._id,
       title: liveStep.title ?? planStep.title,
       description: liveStep.description || planStep.description,
       assignedAgent: liveStep.assignedAgent || planStep.assignedAgent,
@@ -194,8 +196,10 @@ export function ExecutionPlanTab({
   onLocalPlanChange,
 }: ExecutionPlanTabProps) {
   const acceptHumanStepMutation = useMutation(api.steps.acceptHumanStep);
+  const manualMoveStepMutation = useMutation(api.steps.manualMoveStep);
   const addStepMutation = useMutation(api.steps.addStep);
   const updateStepMutation = useMutation(api.steps.updateStep);
+  const deleteStepMutation = useMutation(api.steps.deleteStep);
   const [acceptingStepId, setAcceptingStepId] = useState<string | null>(null);
   const [acceptErrors, setAcceptErrors] = useState<Record<string, string>>({});
   const [showAddForm, setShowAddForm] = useState(false);
@@ -203,12 +207,28 @@ export function ExecutionPlanTab({
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editStepError, setEditStepError] = useState<string | null>(null);
 
+  const steps = useMemo(() => {
+    if (!executionPlan?.steps || executionPlan.steps.length === 0) return [];
+    const normalizedPlan = normalizePlanSteps(executionPlan.steps);
+    return mergeStepsWithLiveData(normalizedPlan, liveSteps);
+  }, [executionPlan, liveSteps]);
+
   const handleAccept = useCallback(
     async (stepId: string) => {
+      // Resolve plan tempId to real Convex step _id
+      const foundStep = steps.find((s) => s.stepId === stepId);
+      const realStepId = foundStep?.liveId ?? stepId;
+      const stepStatus = foundStep?.status;
       setAcceptingStepId(stepId);
       setAcceptErrors((prev) => ({ ...prev, [stepId]: "" }));
       try {
-        await acceptHumanStepMutation({ stepId: stepId as Id<"steps"> });
+        if (stepStatus === "running") {
+          // Human step already accepted — complete it
+          await manualMoveStepMutation({ stepId: realStepId as Id<"steps">, newStatus: "completed" });
+        } else {
+          // waiting_human → accept (transitions to running)
+          await acceptHumanStepMutation({ stepId: realStepId as Id<"steps"> });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to accept step";
         setAcceptErrors((prev) => ({ ...prev, [stepId]: message }));
@@ -216,14 +236,8 @@ export function ExecutionPlanTab({
         setAcceptingStepId(null);
       }
     },
-    [acceptHumanStepMutation]
+    [acceptHumanStepMutation, manualMoveStepMutation, steps]
   );
-
-  const steps = useMemo(() => {
-    if (!executionPlan?.steps || executionPlan.steps.length === 0) return [];
-    const normalizedPlan = normalizePlanSteps(executionPlan.steps);
-    return mergeStepsWithLiveData(normalizedPlan, liveSteps);
-  }, [executionPlan, liveSteps]);
 
   const completedCount = steps.filter(
     (step) => normalizeStatus(step.status) === "completed"
@@ -242,6 +256,15 @@ export function ExecutionPlanTab({
       setShowAddForm(false);
     },
     [canAddOrEdit]
+  );
+
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (node.id === "__start__" || node.id === "__end__") return;
+      if (!canAddOrEdit) return;
+      handleStepClick(node.id);
+    },
+    [canAddOrEdit, handleStepClick]
   );
 
   // Build flow nodes/edges for read-only view
@@ -292,10 +315,10 @@ export function ExecutionPlanTab({
 
   const handleAddStep = useCallback(
     async (data: AddStepData) => {
-      if (isReviewMode && onLocalPlanChange && executionPlan) {
+      if (isReviewMode && onLocalPlanChange) {
         // Pre-kickoff: append to local plan state
-        const currentPlan = executionPlan as ExecutionPlan;
-        const currentSteps = currentPlan.steps ?? [];
+        const currentPlan = executionPlan as ExecutionPlan | null;
+        const currentSteps = currentPlan?.steps ?? [];
 
         // Compute next tempId
         const existingNums = currentSteps
@@ -343,8 +366,9 @@ export function ExecutionPlanTab({
         };
 
         const updatedPlan: ExecutionPlan = {
-          ...currentPlan,
           steps: [...currentSteps, newStep],
+          generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
+          generatedBy: currentPlan?.generatedBy ?? "lead-agent",
         };
         onLocalPlanChange(updatedPlan);
         setAddStepError(null);
@@ -387,6 +411,7 @@ export function ExecutionPlanTab({
     if (!found) return null;
     return {
       stepId: found.stepId,
+      liveId: found.liveId,
       title: found.title ?? "",
       description: found.description,
       assignedAgent: found.assignedAgent ?? "",
@@ -396,24 +421,26 @@ export function ExecutionPlanTab({
 
   const handleEditStep = useCallback(
     async (data: EditStepData) => {
-      if (isReviewMode && onLocalPlanChange && executionPlan) {
+      if (isReviewMode && onLocalPlanChange) {
         // Pre-kickoff: update in local plan state
-        const currentPlan = executionPlan as ExecutionPlan;
-        const updatedSteps = currentPlan.steps.map((s) => {
+        const currentPlan = executionPlan as ExecutionPlan | null;
+        const currentSteps = currentPlan?.steps ?? [];
+        const updatedSteps = currentSteps.map((s) => {
           if (s.tempId !== editingStepId) return s;
           return { ...s, title: data.title, description: data.description,
             assignedAgent: data.assignedAgent };
         });
-        onLocalPlanChange({ ...currentPlan, steps: updatedSteps });
+        const updatedPlan: ExecutionPlan = {
+          steps: updatedSteps,
+          generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
+          generatedBy: currentPlan?.generatedBy ?? "lead-agent",
+        };
+        onLocalPlanChange(updatedPlan);
         setEditStepError(null);
         setEditingStepId(null);
       } else if (isLiveMode && editingStepId) {
-        // Live mode: find the real step _id from liveSteps
-        const liveStep = liveSteps?.find(
-          (ls) => ls._id === editingStepId ||
-            ls.title === editingStep?.title
-        );
-        const realStepId = liveStep?._id ?? editingStepId;
+        // Live mode: use the real Convex step _id
+        const realStepId = editingStep?.liveId ?? editingStepId;
         try {
           await updateStepMutation({
             stepId: realStepId as Id<"steps">,
@@ -430,7 +457,48 @@ export function ExecutionPlanTab({
       }
     },
     [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange,
-      editingStepId, editingStep, liveSteps, updateStepMutation]
+      editingStepId, editingStep, updateStepMutation]
+  );
+
+  const handleDeleteStep = useCallback(
+    async (stepId: string) => {
+      if (isReviewMode && onLocalPlanChange) {
+        const currentPlan = executionPlan as ExecutionPlan | null;
+        const currentSteps = currentPlan?.steps ?? [];
+        if (currentSteps.length <= 1) {
+          setEditStepError("Cannot delete the last step. A plan must have at least one step.");
+          return;
+        }
+        const updatedSteps = currentSteps
+          .filter((s) => s.tempId !== stepId)
+          .map((s) => ({
+            ...s,
+            blockedBy: s.blockedBy.filter((dep) => dep !== stepId),
+          }));
+        const updatedPlan: ExecutionPlan = {
+          steps: updatedSteps,
+          generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
+          generatedBy: currentPlan?.generatedBy ?? "lead-agent",
+        };
+        onLocalPlanChange(updatedPlan);
+        setEditingStepId(null);
+        setEditStepError(null);
+      } else if (isLiveMode && stepId) {
+        // Use the real Convex step _id if available
+        const foundStep = steps.find((s) => s.stepId === stepId);
+        const realStepId = foundStep?.liveId ?? stepId;
+        try {
+          await deleteStepMutation({ stepId: realStepId as Id<"steps"> });
+          setEditingStepId(null);
+          setEditStepError(null);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Failed to delete step";
+          setEditStepError(message);
+        }
+      }
+    },
+    [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange,
+      steps, deleteStepMutation]
   );
 
   // Edit mode: render PlanEditor
@@ -548,9 +616,11 @@ export function ExecutionPlanTab({
       {editingStep && editingStepId && (
         <div className="mb-2 px-1">
           <EditStepForm
+            key={editingStepId}
             step={editingStep}
             boardId={boardId}
             onSave={handleEditStep}
+            onDelete={handleDeleteStep}
             onCancel={() => { setEditingStepId(null); setEditStepError(null); }}
           />
           {editStepError && (
@@ -565,6 +635,7 @@ export function ExecutionPlanTab({
           edges={flowEdges}
           nodeTypes={nodeTypes}
           defaultEdgeOptions={defaultEdgeOptions}
+          onNodeClick={handleNodeClick}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}

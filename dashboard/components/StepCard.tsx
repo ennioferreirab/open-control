@@ -9,7 +9,7 @@ import { api } from "../convex/_generated/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Lock, Paperclip, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, Lock, Paperclip, Trash2, User } from "lucide-react";
 import { Doc } from "../convex/_generated/dataModel";
 import { STEP_STATUS_COLORS, type StepStatus } from "@/lib/constants";
 
@@ -22,10 +22,18 @@ interface StepCardProps {
 export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
   const shouldReduceMotion = useReducedMotion();
   const deleteStepMutation = useMutation(api.steps.deleteStep);
+  const acceptHumanStep = useMutation(api.steps.acceptHumanStep);
+  const manualMoveStep = useMutation(api.steps.manualMoveStep);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isActioning, setIsActioning] = useState(false);
+  const [actionError, setActionError] = useState("");
   const colors =
     STEP_STATUS_COLORS[step.status as StepStatus] ?? STEP_STATUS_COLORS.assigned;
   const assignedAgentName = step.assignedAgent ?? "Unassigned";
+  const isHuman = step.assignedAgent === "human";
+  const isWaitingHuman = step.status === "waiting_human";
+  const isRunningHuman = isHuman && step.status === "running";
   const assignedAgentInitials = step.assignedAgent
     ? step.assignedAgent
         .split(/[\s-_]+/)
@@ -46,9 +54,18 @@ export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
   };
 
   return (
+    <div
+      draggable={isHuman && !isWaitingHuman}
+      onDragStart={isHuman ? (e) => {
+        e.dataTransfer.setData("application/step-id", step._id);
+        e.dataTransfer.effectAllowed = "move";
+        setIsDragging(true);
+      } : undefined}
+      onDragEnd={isHuman ? () => setIsDragging(false) : undefined}
+    >
     <motion.div
       layoutId={step._id}
-      layout
+      layout={!isDragging}
       transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.3 }}
     >
       <Card
@@ -56,6 +73,8 @@ export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
           "rounded-[10px] border-l-[3px] p-3 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           colors.border,
           isInteractive ? "cursor-pointer" : "",
+          isHuman && !isWaitingHuman ? "cursor-grab" : "",
+          isDragging ? "opacity-50 shadow-lg" : "",
         ].join(" ")}
         onClick={onClick}
         onKeyDown={handleKeyDown}
@@ -128,6 +147,46 @@ export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
             }}
           />
         </div>
+        {/* Accept / Complete buttons for human steps */}
+        {isWaitingHuman && (
+          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              className="h-6 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
+              disabled={isActioning}
+              onClick={async (e) => {
+                e.stopPropagation();
+                setIsActioning(true);
+                setActionError("");
+                try { await acceptHumanStep({ stepId: step._id }); } catch (err) { setActionError(err instanceof Error ? err.message : "Failed"); } finally { setIsActioning(false); }
+              }}
+            >
+              <User className="h-3 w-3 mr-1" />
+              Accept
+            </Button>
+          </div>
+        )}
+        {isRunningHuman && (
+          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              className="h-6 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
+              disabled={isActioning}
+              onClick={async (e) => {
+                e.stopPropagation();
+                setIsActioning(true);
+                setActionError("");
+                try { await manualMoveStep({ stepId: step._id, newStatus: "completed" }); } catch (err) { setActionError(err instanceof Error ? err.message : "Failed"); } finally { setIsActioning(false); }
+              }}
+            >
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Mark Done
+            </Button>
+          </div>
+        )}
+        {actionError && (
+          <p className="mt-1 text-[10px] text-red-600 truncate">{actionError}</p>
+        )}
         {showDeleteConfirm && (
           <div onClick={(e) => e.stopPropagation()}>
             <motion.div
@@ -167,5 +226,6 @@ export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
         )}
       </Card>
     </motion.div>
+    </div>
   );
 }

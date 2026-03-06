@@ -58,6 +58,9 @@ class TestIsValidStepTransitionValid:
     def test_assigned_to_waiting_human(self) -> None:
         assert is_valid_step_transition(StepStatus.ASSIGNED, StepStatus.WAITING_HUMAN) is True
 
+    def test_waiting_human_to_running(self) -> None:
+        assert is_valid_step_transition(StepStatus.WAITING_HUMAN, StepStatus.RUNNING) is True
+
     def test_waiting_human_to_completed(self) -> None:
         assert is_valid_step_transition(StepStatus.WAITING_HUMAN, StepStatus.COMPLETED) is True
 
@@ -106,9 +109,6 @@ class TestIsValidStepTransitionInvalid:
         assert is_valid_step_transition(StepStatus.PLANNED, StepStatus.RUNNING) is False
 
     # Story 7.2: waiting_human invalid transitions
-    def test_waiting_human_to_running(self) -> None:
-        assert is_valid_step_transition(StepStatus.WAITING_HUMAN, StepStatus.RUNNING) is False
-
     def test_waiting_human_to_assigned(self) -> None:
         assert is_valid_step_transition(StepStatus.WAITING_HUMAN, StepStatus.ASSIGNED) is False
 
@@ -179,6 +179,10 @@ class TestGetStepEventType:
         result = get_step_event_type(StepStatus.ASSIGNED, StepStatus.WAITING_HUMAN)
         assert result == ActivityEventType.STEP_DISPATCHED
 
+    def test_waiting_human_to_running_returns_step_started(self) -> None:
+        result = get_step_event_type(StepStatus.WAITING_HUMAN, StepStatus.RUNNING)
+        assert result == ActivityEventType.STEP_STARTED
+
     def test_waiting_human_to_completed_returns_step_completed(self) -> None:
         result = get_step_event_type(StepStatus.WAITING_HUMAN, StepStatus.COMPLETED)
         assert result == ActivityEventType.STEP_COMPLETED
@@ -239,7 +243,7 @@ def test_step_valid_transitions_match_convex_spec() -> None:
         "completed": [],
         "crashed": ["assigned"],
         "blocked": ["assigned", "crashed"],
-        "waiting_human": ["completed", "crashed"],
+        "waiting_human": ["running", "completed", "crashed"],
     }
     # Check all expected states are present in Python dict
     assert set(STEP_VALID_TRANSITIONS.keys()) == set(expected.keys()), (

@@ -21,7 +21,9 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { User } from "lucide-react";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
+import { HUMAN_AGENT_NAME } from "@/lib/constants";
 import { getStatusMeta } from "./FlowStepNode";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -136,6 +138,12 @@ export function AddStepForm({
             <SelectValue placeholder="Select agent" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem key={HUMAN_AGENT_NAME} value={HUMAN_AGENT_NAME}>
+              <span className="flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5" />
+                Human
+              </span>
+            </SelectItem>
             {selectableAgents.map((agent) => (
               <SelectItem key={agent.name} value={agent.name}>
                 {agent.displayName || agent.name}

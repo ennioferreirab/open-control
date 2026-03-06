@@ -215,14 +215,12 @@ export const postUserPlanMessage = mutation({
     if (!task) {
       throw new ConvexError("Task not found");
     }
-    if (task.isManual) {
-      throw new ConvexError("Cannot send thread messages on manual tasks");
-    }
-
-    const allowedStatuses = ["in_progress", "review"];
+    const allowedStatuses = task.isManual
+      ? ["inbox", "in_progress", "review"]
+      : ["in_progress", "review"];
     if (!allowedStatuses.includes(task.status)) {
       throw new ConvexError(
-        `postUserPlanMessage is only allowed when task is in_progress or review (current: ${task.status})`
+        `postUserPlanMessage is only allowed when task is ${allowedStatuses.join(" or ")} (current: ${task.status})`
       );
     }
 
@@ -314,11 +312,9 @@ export const sendThreadMessage = mutation({
     if (!task) {
       throw new ConvexError("Task not found");
     }
-    if (task.isManual) {
-      throw new ConvexError("Cannot send thread messages on manual tasks");
-    }
-
-    const blockedStatuses = ["in_progress", "retrying", "deleted"];
+    const blockedStatuses = task.isManual
+      ? ["retrying", "deleted"]
+      : ["in_progress", "retrying", "deleted"];
     if (blockedStatuses.includes(task.status)) {
       throw new ConvexError(
         `Cannot send messages while task is ${task.status}`
@@ -339,28 +335,31 @@ export const sendThreadMessage = mutation({
       timestamp,
     });
 
-    // 2. Transition task to "assigned" (unless already assigned)
-    if (task.status !== "assigned") {
-      if (!isValidTransition(task.status, "assigned")) {
-        throw new ConvexError(
-          `Invalid transition: ${task.status} -> assigned`
-        );
-      }
-      await ctx.db.patch(args.taskId, {
-        status: "assigned",
-        assignedAgent: args.agentName,
-        previousStatus: task.status,
-        executionPlan: undefined,
-        stalledAt: undefined,
-        updatedAt: timestamp,
-      });
-    } else {
-      // Already assigned — only update agent if changed
-      if (task.assignedAgent !== args.agentName) {
+    // 2. For manual tasks, skip status transitions — just record the message.
+    //    For agent tasks, transition to "assigned" to trigger agent pickup.
+    if (!task.isManual) {
+      if (task.status !== "assigned") {
+        if (!isValidTransition(task.status, "assigned")) {
+          throw new ConvexError(
+            `Invalid transition: ${task.status} -> assigned`
+          );
+        }
         await ctx.db.patch(args.taskId, {
+          status: "assigned",
           assignedAgent: args.agentName,
+          previousStatus: task.status,
+          executionPlan: undefined,
+          stalledAt: undefined,
           updatedAt: timestamp,
         });
+      } else {
+        // Already assigned — only update agent if changed
+        if (task.assignedAgent !== args.agentName) {
+          await ctx.db.patch(args.taskId, {
+            assignedAgent: args.agentName,
+            updatedAt: timestamp,
+          });
+        }
       }
     }
 
