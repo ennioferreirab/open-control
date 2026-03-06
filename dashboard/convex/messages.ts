@@ -24,6 +24,13 @@ const artifactsValidator = v.optional(v.array(v.object({
   diff: v.optional(v.string()),
 })));
 
+/** Validator for file attachments on user messages. */
+const fileAttachmentsValidator = v.optional(v.array(v.object({
+  name: v.string(),
+  type: v.string(),
+  size: v.number(),
+})));
+
 export const listByTask = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
@@ -58,6 +65,7 @@ export const create = internalMutation({
     type: threadMessageTypeValidator,
     stepId: v.optional(v.id("steps")),
     artifacts: artifactsValidator,
+    fileAttachments: fileAttachmentsValidator,
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("messages", {
@@ -70,6 +78,7 @@ export const create = internalMutation({
       type: args.type,
       stepId: args.stepId,
       artifacts: args.artifacts,
+      fileAttachments: args.fileAttachments,
     });
   },
 });
