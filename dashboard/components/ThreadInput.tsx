@@ -13,8 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SendHorizontal, RotateCcw, MessageCircle } from "lucide-react";
+import { SendHorizontal, RotateCcw, MessageCircle, Paperclip, Loader2 } from "lucide-react";
 import { AgentMentionAutocomplete } from "./AgentMentionAutocomplete";
+import { FileChip } from "./FileChip";
+import { useFileUpload } from "@/hooks/useFileUpload";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 
 interface ThreadInputProps {
@@ -53,6 +55,20 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     task.boardId ? { boardId: task.boardId } : "skip"
   );
 
+  const {
+    pendingFiles,
+    isUploading,
+    uploadError: fileUploadError,
+    fileInputRef,
+    addFiles,
+    removePendingFile,
+    uploadAll,
+    openFilePicker,
+    clearPending,
+  } = useFileUpload(task._id);
+
+  const [isDragOver, setIsDragOver] = useState(false);
+
   // Keep refs in sync with state for stable closures
   useEffect(() => { contentRef.current = content; }, [content]);
   useEffect(() => { mentionStartIndexRef.current = mentionStartIndex; }, [mentionStartIndex]);
@@ -84,7 +100,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     (task.status === "review" && taskAny.awaitingKickoff !== true);
 
   const isBlocked = BLOCKED_STATUSES.includes(task.status);
-  const canSend = content.trim().length > 0 && !isSubmitting && (inputMode === "comment" || isPlanChatMode || isInProgress || !!selectedAgent);
+  const canSend = (content.trim().length > 0 || pendingFiles.length > 0) && !isSubmitting && !isUploading && (inputMode === "comment" || isPlanChatMode || isInProgress || !!selectedAgent);
 
   const filteredAgents = useSelectableAgents(board?.enabledAgents);
 
@@ -155,13 +171,13 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
 
   const handleSend = async () => {
     const trimmed = content.trim();
-    if (!trimmed) return;
+    if (!trimmed && pendingFiles.length === 0) return;
 
-    // Parse @mentions: use the last mentioned agent name if it matches a known agent
+    // Parse @mentions
     let agentForSubmit = selectedAgent;
     const mentionMatches = trimmed.match(/@(\w[\w-]*)/g);
     if (mentionMatches && filteredAgents) {
-      const lastMention = mentionMatches[mentionMatches.length - 1].slice(1); // remove @
+      const lastMention = mentionMatches[mentionMatches.length - 1].slice(1);
       if (filteredAgents.some((a) => a.name === lastMention)) {
         agentForSubmit = lastMention;
         setSelectedAgent(lastMention);
@@ -172,22 +188,33 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     setIsSubmitting(true);
     setError("");
     try {
+      // Upload pending files first
+      let fileAttachments: { name: string; type: string; size: number }[] | undefined;
+      if (pendingFiles.length > 0) {
+        const uploaded = await uploadAll();
+        fileAttachments = uploaded.map((f) => ({
+          name: f.name,
+          type: f.type,
+          size: f.size,
+        }));
+      }
+
+      const messageContent = trimmed || "(files attached)";
+
       if (inputMode === "comment") {
-        // Comment mode: post inert comment, no status/agent change
-        await postComment({ taskId: task._id, content: trimmed });
+        await postComment({ taskId: task._id, content: messageContent, fileAttachments });
       } else if (isPlanChatMode || isInProgress) {
-        // Plan-chat (review+awaitingKickoff) or in-progress reply:
-        // post without disrupting task status. For in_progress, the watcher
-        // delivers the reply to the waiting ask_user Future.
-        await postPlanMessage({ taskId: task._id, content: trimmed });
+        await postPlanMessage({ taskId: task._id, content: messageContent, fileAttachments });
       } else {
         await sendMessage({
           taskId: task._id,
-          content: trimmed,
+          content: messageContent,
           agentName: agentForSubmit,
+          fileAttachments,
         });
       }
       setContent("");
+      clearPending();
       onMessageSent?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message. Please try again.");
@@ -236,6 +263,35 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
       if (canSend) handleSend();
     }
   };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
+  }, [addFiles]);
+
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      addFiles(files);
+    }
+    e.target.value = "";
+  }, [addFiles]);
 
   const handleRestore = async () => {
     setIsRestoring(true);
@@ -330,7 +386,27 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
             Ask the Lead Agent to modify the plan...
           </p>
         )}
-        <div className="flex gap-2">
+        {fileUploadError && (
+          <p className="text-xs text-red-500">{fileUploadError}</p>
+        )}
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {pendingFiles.map((pf) => (
+              <FileChip
+                key={pf.name}
+                name={pf.name}
+                size={pf.size}
+                onRemove={() => removePendingFile(pf.name)}
+              />
+            ))}
+          </div>
+        )}
+        <div
+          className={`flex gap-2 ${isDragOver ? "ring-2 ring-primary ring-offset-1 rounded-md" : ""}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <Textarea
             placeholder={inputMode === "comment" ? "Add a comment..." : "e.g. Add a step to write tests, or remove the deployment step..."}
             value={content}
@@ -339,16 +415,40 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
             className="text-sm min-h-[80px] max-h-[160px] resize-none"
             disabled={isSubmitting}
           />
-          <Button
-            size="icon"
-            variant="default"
-            className="h-[80px] w-10 shrink-0"
-            onClick={handleSend}
-            disabled={!canSend}
-          >
-            <SendHorizontal className="h-4 w-4" />
-          </Button>
+          <div className="flex flex-col gap-1 shrink-0">
+            <Button
+              size="icon"
+              variant="default"
+              className="h-[38px] w-10"
+              onClick={handleSend}
+              disabled={!canSend}
+            >
+              <SendHorizontal className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-[38px] w-10"
+              onClick={openFilePicker}
+              disabled={isSubmitting || isUploading}
+              title="Attach files"
+            >
+              {isUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Paperclip className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileInputChange}
+          aria-label="Attach files to message"
+        />
       </div>
     );
   }
@@ -375,7 +475,27 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
           </Select>
         )}
       </div>
-      <div className="flex gap-2 relative">
+      {fileUploadError && (
+        <p className="text-xs text-red-500">{fileUploadError}</p>
+      )}
+      {pendingFiles.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {pendingFiles.map((pf) => (
+            <FileChip
+              key={pf.name}
+              name={pf.name}
+              size={pf.size}
+              onRemove={() => removePendingFile(pf.name)}
+            />
+          ))}
+        </div>
+      )}
+      <div
+        className={`flex gap-2 relative ${isDragOver ? "ring-2 ring-primary ring-offset-1 rounded-md" : ""}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <Textarea
           ref={textareaRef}
           placeholder={inputMode === "comment" ? "Add a comment..." : isInProgress ? "Reply to the thread..." : "Send a message to the agent..."}
@@ -384,21 +504,36 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
           onKeyDown={handleKeyDown}
           onFocus={() => clearTimeout(blurTimeoutRef.current)}
           onBlur={() => {
-            // Delay close to allow click on autocomplete portal
             blurTimeoutRef.current = setTimeout(() => setMentionQuery(null), 150);
           }}
           className="text-sm min-h-[80px] max-h-[160px] resize-none"
           disabled={isSubmitting}
         />
-        <Button
-          size="icon"
-          variant="default"
-          className="h-[80px] w-10 shrink-0"
-          onClick={handleSend}
-          disabled={!canSend}
-        >
-          <SendHorizontal className="h-4 w-4" />
-        </Button>
+        <div className="flex flex-col gap-1 shrink-0">
+          <Button
+            size="icon"
+            variant="default"
+            className="h-[38px] w-10"
+            onClick={handleSend}
+            disabled={!canSend}
+          >
+            <SendHorizontal className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-[38px] w-10"
+            onClick={openFilePicker}
+            disabled={isSubmitting || isUploading}
+            title="Attach files"
+          >
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Paperclip className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
         {inputMode === "agent" && mentionQuery !== null && !isPlanChatMode && !isInProgress && filteredAgents && (
           <AgentMentionAutocomplete
             agents={filteredAgents.map((a) => ({
@@ -413,6 +548,14 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
           />
         )}
       </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileInputChange}
+        aria-label="Attach files to message"
+      />
     </div>
   );
 }

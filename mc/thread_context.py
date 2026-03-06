@@ -168,17 +168,33 @@ class ThreadContextBuilder:
         if 0 <= latest_user_idx_in_window < len(window):
             latest = window[latest_user_idx_in_window]
             latest_content = latest.get("content", "")
-            result_parts.append(f"[Latest Follow-up]\nUser: {latest_content}")
+            file_attachments = latest.get("file_attachments") or []
+            attachment_suffix = ""
+            if file_attachments:
+                names = ", ".join(
+                    fa.get("name", "unknown") for fa in file_attachments
+                )
+                attachment_suffix = f" (attached: {names})"
+            result_parts.append(
+                f"[Latest Follow-up]\nUser: {latest_content}{attachment_suffix}"
+            )
 
         return "\n\n".join(result_parts)
 
     def _format_message(self, message: dict[str, Any]) -> str:
-        """Render a single message including artifacts if present."""
+        """Render a single message including artifacts and file attachments."""
         author = message.get("author_name", "Unknown")
         author_type = message.get("author_type", "system")
         ts = message.get("timestamp", "")
         content = message.get("content", "")
         msg_type = message.get("type")
+
+        # Format file attachments suffix
+        file_attachments = message.get("file_attachments") or []
+        attachment_suffix = ""
+        if file_attachments:
+            names = ", ".join(fa.get("name", "unknown") for fa in file_attachments)
+            attachment_suffix = f" (attached: {names})"
 
         if msg_type == "step_completion":
             line = f"{author} [{author_type}] ({ts}) [Step Completion]: {content}"
@@ -189,9 +205,9 @@ class ThreadContextBuilder:
                     line += "\n" + artifact_str
             return line
         elif msg_type == "comment":
-            return f"{author} [Comment]: {content}"
+            return f"{author} [Comment]: {content}{attachment_suffix}"
         else:
-            return f"{author} [{author_type}] ({ts}): {content}"
+            return f"{author} [{author_type}] ({ts}): {content}{attachment_suffix}"
 
     def _format_artifacts(self, artifacts: list[dict[str, Any]]) -> str:
         """Format artifacts for LLM context injection.

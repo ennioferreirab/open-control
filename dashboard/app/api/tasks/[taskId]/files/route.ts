@@ -3,6 +3,7 @@ import { mkdir, rename, rm, unlink, writeFile } from "fs/promises";
 import { basename, join } from "path";
 import { homedir } from "os";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const TASK_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 export async function POST(
@@ -50,6 +51,12 @@ export async function POST(
     if (!(value instanceof File)) continue;
 
     const file = value;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File "${file.name}" exceeds 10MB limit` },
+        { status: 413 },
+      );
+    }
     // Sanitize the filename to prevent path traversal attacks: strip any
     // directory components so that e.g. "../../etc/passwd" becomes "passwd".
     const safeName = basename(file.name);

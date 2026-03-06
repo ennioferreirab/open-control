@@ -5,53 +5,8 @@ import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import {
-  File,
-  FileCode,
-  FileText,
-  Image,
-  Loader2,
-  Paperclip,
-  X,
-} from "lucide-react";
-
-const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
-const CODE_EXTS = new Set([
-  ".py",
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".go",
-  ".rs",
-  ".java",
-  ".sh",
-]);
-
-function getFileIconType(name: string): "pdf" | "image" | "code" | "generic" {
-  const dotIdx = name.lastIndexOf(".");
-  if (dotIdx === -1) return "generic";
-  const ext = name.slice(dotIdx).toLowerCase();
-  if (ext === ".pdf") return "pdf";
-  if (IMAGE_EXTS.has(ext)) return "image";
-  if (CODE_EXTS.has(ext)) return "code";
-  return "generic";
-}
-
-function FileIcon({ name }: { name: string }) {
-  const iconType = getFileIconType(name);
-  const cls = "h-3 w-3 text-muted-foreground";
-  switch (iconType) {
-    case "pdf":
-      return <FileText className={cls} data-testid="icon-pdf" />;
-    case "image":
-      return <Image className={cls} data-testid="icon-image" />;
-    case "code":
-      return <FileCode className={cls} data-testid="icon-code" />;
-    default:
-      return <File className={cls} data-testid="icon-generic" />;
-  }
-}
+import { Loader2, Paperclip } from "lucide-react";
+import { FileChip } from "./FileChip";
 
 export interface StepFileAttachmentProps {
   stepTempId: string;
@@ -97,17 +52,14 @@ export function StepFileAttachment({
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       const { files: uploadedFiles } = await res.json();
 
-      // Update the task-level files manifest
       await addTaskFiles({
         taskId: taskId as Id<"tasks">,
         files: uploadedFiles,
       });
 
-      // Update the step's attachedFiles in the local plan state
       const newFileNames: string[] = uploadedFiles.map(
         (f: { name: string }) => f.name
       );
-      // Deduplicate: only add file names not already in attachedFiles
       const existingNames = new Set(attachedFiles);
       const uniqueNewNames = newFileNames.filter(
         (name) => !existingNames.has(name)
@@ -122,37 +74,20 @@ export function StepFileAttachment({
     }
   };
 
-  const handleRemoveFile = (fileName: string) => {
-    onFileRemoved(stepTempId, fileName);
-  };
-
   return (
     <div className="mt-2 space-y-1">
-      {/* File list — only shown when there are attached files */}
       {attachedFiles.length > 0 && (
         <div className="flex flex-col gap-0.5">
           {attachedFiles.map((fileName) => (
-            <div
+            <FileChip
               key={fileName}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground"
-            >
-              <FileIcon name={fileName} />
-              <span className="flex-1 min-w-0 truncate" title={fileName}>
-                {fileName}
-              </span>
-              <button
-                onClick={() => handleRemoveFile(fileName)}
-                aria-label={`Remove ${fileName}`}
-                className="flex-shrink-0 hover:text-destructive transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
+              name={fileName}
+              onRemove={() => onFileRemoved(stepTempId, fileName)}
+            />
           ))}
         </div>
       )}
 
-      {/* Attach button */}
       <div className="flex items-center gap-2">
         <input
           ref={fileInputRef}
