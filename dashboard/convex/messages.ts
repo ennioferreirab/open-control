@@ -208,6 +208,7 @@ export const postUserPlanMessage = mutation({
   args: {
     taskId: v.id("tasks"),
     content: v.string(),
+    fileAttachments: fileAttachmentsValidator,
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -234,6 +235,7 @@ export const postUserPlanMessage = mutation({
       content: args.content,
       messageType: "user_message",
       type: "user_message",
+      fileAttachments: args.fileAttachments,
       timestamp,
     });
 
@@ -258,6 +260,7 @@ export const postComment = mutation({
     taskId: v.id("tasks"),
     content: v.string(),
     authorName: v.optional(v.string()),
+    fileAttachments: fileAttachmentsValidator,
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -278,6 +281,7 @@ export const postComment = mutation({
       content: args.content,
       messageType: "comment",
       type: "comment",
+      fileAttachments: args.fileAttachments,
       timestamp,
     });
 
@@ -303,6 +307,7 @@ export const sendThreadMessage = mutation({
     taskId: v.id("tasks"),
     content: v.string(),
     agentName: v.string(),
+    fileAttachments: fileAttachmentsValidator,
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -330,6 +335,7 @@ export const sendThreadMessage = mutation({
       content: args.content,
       messageType: "user_message",
       type: "user_message",  // Unified thread type (AC: 2)
+      fileAttachments: args.fileAttachments,
       timestamp,
     });
 
