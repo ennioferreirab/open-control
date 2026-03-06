@@ -462,9 +462,9 @@ def _build_task_context(task_data: dict[str, Any] | None) -> str:
     if tags and isinstance(tags, list):
         lines.append(f"Tags: {', '.join(str(t) for t in tags)}")
 
-    board_name = task_data.get("board_name") or task_data.get("board")
-    if board_name:
-        lines.append(f"Board: {board_name}")
+    board_id = task_data.get("board_id")
+    if board_id:
+        lines.append(f"Board ID: {board_id}")
 
     # Only return section if we have at least one field beyond the header
     if len(lines) <= 1:

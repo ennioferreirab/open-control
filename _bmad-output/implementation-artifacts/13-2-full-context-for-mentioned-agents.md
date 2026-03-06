@@ -161,4 +161,4 @@ None required.
 - `_bmad-output/implementation-artifacts/13-2-full-context-for-mentioned-agents.md` — updated (completion status)
 
 ### Change Log
-- 2026-03-05: Implemented Story 13.2 — Full Context for Mentioned Agents. Replaced _build_mention_context with ThreadContextBuilder, added task metadata/execution plan/file injection, restructured prompt with ordered sections. 42 tests passing.
+- 2026-03-05: Implemented Story 13.2 — Full Context for Mentioned Agents. Replaced _build_mention_context with ThreadContextBuilder, added task metadata/execution plan/file injection, restructured prompt with ordered sections. 41 tests passing.

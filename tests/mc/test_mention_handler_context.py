@@ -10,7 +10,7 @@ Story 13.2: Full Context for Mentioned Agents.
 from __future__ import annotations
 
 import inspect
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -36,7 +36,7 @@ def mock_bridge():
         "status": "in_progress",
         "assigned_agent": "researcher",
         "tags": ["ai", "safety"],
-        "board_name": "Sprint 1",
+        "board_id": "board_sprint1",
         "execution_plan": {
             "steps": [
                 {"title": "Literature review", "status": "completed"},
@@ -100,73 +100,42 @@ def _mock_agent_env():
         yield mock_config
 
 
-def _run_with_capture(mock_bridge, mock_env, extra_patches=None):
-    """Helper to run handle_mention and capture the full_message sent to the agent.
+class _MentionResult:
+    """Container for a handle_mention invocation result."""
 
-    Returns the captured content string.
+    def __init__(self) -> None:
+        self.content: str = ""
+
+
+@pytest.fixture
+def run_mention(mock_bridge, _mock_agent_env):
+    """Fixture that runs handle_mention and captures the prompt sent to the agent.
+
+    Returns an async callable that accepts optional overrides for handle_mention
+    kwargs and returns a ``_MentionResult`` whose ``.content`` holds the captured
+    prompt string.
     """
-    import asyncio
 
-    captured_message = {}
+    async def _run(**overrides) -> _MentionResult:
+        result = _MentionResult()
 
-    async def mock_process_direct(**kwargs):
-        captured_message["content"] = kwargs.get("content", "")
-        return "Agent response"
-
-    mock_loop = MagicMock()
-    mock_loop.process_direct = mock_process_direct
-    mock_loop.tools = {}
-
-    patches = {
-        "mc.provider_factory.create_provider": MagicMock(
-            return_value=("prov", "model")
-        ),
-        "nanobot.agent.loop.AgentLoop": MagicMock(return_value=mock_loop),
-        "nanobot.bus.queue.MessageBus": MagicMock(),
-    }
-    if extra_patches:
-        patches.update(extra_patches)
-
-    async def _run():
-        with patch.dict("sys.modules", {}):
-            ctx_managers = [patch(k, v) for k, v in patches.items()]
-            # Apply all patches
-            for cm in ctx_managers:
-                cm.start()
-            try:
-                await handle_mention(
-                    bridge=mock_bridge,
-                    task_id="task123",
-                    agent_name="researcher",
-                    query="What about alignment?",
-                    caller_message_content="@researcher What about alignment?",
-                    task_title="Research AI safety",
-                )
-            finally:
-                for cm in ctx_managers:
-                    cm.stop()
-
-    asyncio.get_event_loop().run_until_complete(_run())
-    return captured_message.get("content", "")
-
-
-class TestHandleMentionTaskMetadata:
-    """AC1: Task metadata injected into prompt."""
-
-    @pytest.mark.asyncio
-    async def test_injects_task_context_section(
-        self, mock_bridge, _mock_agent_env
-    ):
-        """handle_mention includes [Task Context] with task metadata."""
-        captured_message = {}
-
-        async def mock_process_direct(**kwargs):
-            captured_message["content"] = kwargs.get("content", "")
+        async def _capture(**kwargs):
+            result.content = kwargs.get("content", "")
             return "Agent response"
 
         mock_loop = MagicMock()
-        mock_loop.process_direct = mock_process_direct
+        mock_loop.process_direct = _capture
         mock_loop.tools = {}
+
+        defaults = dict(
+            bridge=mock_bridge,
+            task_id="task123",
+            agent_name="researcher",
+            query="help",
+            caller_message_content="@researcher help",
+            task_title="Test task",
+        )
+        defaults.update(overrides)
 
         with (
             patch(
@@ -176,32 +145,40 @@ class TestHandleMentionTaskMetadata:
             patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
             patch("nanobot.bus.queue.MessageBus"),
         ):
-            await handle_mention(
-                bridge=mock_bridge,
-                task_id="task123",
-                agent_name="researcher",
-                query="What about alignment?",
-                caller_message_content="@researcher What about alignment?",
-                task_title="Research AI safety",
-            )
+            await handle_mention(**defaults)
 
-        content = captured_message["content"]
+        return result
+
+    return _run
+
+
+class TestHandleMentionTaskMetadata:
+    """AC1: Task metadata injected into prompt."""
+
+    @pytest.mark.asyncio
+    async def test_injects_task_context_section(self, run_mention):
+        """handle_mention includes [Task Context] with task metadata."""
+        result = await run_mention(
+            query="What about alignment?",
+            caller_message_content="@researcher What about alignment?",
+            task_title="Research AI safety",
+        )
+
+        content = result.content
         assert "[Task Context]" in content
         assert "Title: Research AI safety" in content
         assert "Description: Investigate alignment techniques" in content
         assert "Status: in_progress" in content
         assert "Assigned Agent: researcher" in content
         assert "Tags: ai, safety" in content
-        assert "Board: Sprint 1" in content
+        assert "Board ID: board_sprint1" in content
 
 
 class TestHandleMentionThreadContext:
     """AC2: ThreadContextBuilder used with max_messages=20."""
 
     @pytest.mark.asyncio
-    async def test_uses_thread_context_builder(
-        self, mock_bridge, _mock_agent_env
-    ):
+    async def test_uses_thread_context_builder(self, run_mention):
         """handle_mention calls ThreadContextBuilder.build with max_messages=20."""
         captured_args = {}
 
@@ -211,27 +188,8 @@ class TestHandleMentionThreadContext:
                 captured_args["max_messages"] = max_messages
                 return "[Thread History]\nUser: test message"
 
-        mock_loop = MagicMock()
-        mock_loop.process_direct = AsyncMock(return_value="Response")
-        mock_loop.tools = {}
-
-        with (
-            patch("mc.mention_handler.ThreadContextBuilder", CapturingBuilder),
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=("prov", "model"),
-            ),
-            patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
-            patch("nanobot.bus.queue.MessageBus"),
-        ):
-            await handle_mention(
-                bridge=mock_bridge,
-                task_id="task123",
-                agent_name="researcher",
-                query="help",
-                caller_message_content="@researcher help",
-                task_title="Test task",
-            )
+        with patch("mc.mention_handler.ThreadContextBuilder", CapturingBuilder):
+            await run_mention()
 
         assert captured_args["max_messages"] == 20
 
@@ -240,161 +198,50 @@ class TestHandleMentionExecutionPlan:
     """AC3: Execution plan summary included/omitted correctly."""
 
     @pytest.mark.asyncio
-    async def test_includes_execution_plan(
-        self, mock_bridge, _mock_agent_env
-    ):
+    async def test_includes_execution_plan(self, run_mention):
         """handle_mention includes [Execution Plan] when plan exists."""
-        captured_message = {}
+        result = await run_mention()
 
-        async def mock_process_direct(**kwargs):
-            captured_message["content"] = kwargs.get("content", "")
-            return "Agent response"
-
-        mock_loop = MagicMock()
-        mock_loop.process_direct = mock_process_direct
-        mock_loop.tools = {}
-
-        with (
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=("prov", "model"),
-            ),
-            patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
-            patch("nanobot.bus.queue.MessageBus"),
-        ):
-            await handle_mention(
-                bridge=mock_bridge,
-                task_id="task123",
-                agent_name="researcher",
-                query="help",
-                caller_message_content="@researcher help",
-                task_title="Test task",
-            )
-
-        content = captured_message["content"]
+        content = result.content
         assert "[Execution Plan]" in content
         assert "1. Literature review — completed" in content
         assert "2. Summarize findings — in_progress" in content
 
     @pytest.mark.asyncio
-    async def test_omits_plan_when_absent(
-        self, mock_bridge, _mock_agent_env
-    ):
+    async def test_omits_plan_when_absent(self, mock_bridge, run_mention):
         """handle_mention omits [Execution Plan] when no plan exists."""
         mock_bridge.get_task.return_value = {
             "title": "Simple task",
             "status": "in_progress",
         }
 
-        captured_message = {}
+        result = await run_mention(task_title="Simple task")
 
-        async def mock_process_direct(**kwargs):
-            captured_message["content"] = kwargs.get("content", "")
-            return "Agent response"
-
-        mock_loop = MagicMock()
-        mock_loop.process_direct = mock_process_direct
-        mock_loop.tools = {}
-
-        with (
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=("prov", "model"),
-            ),
-            patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
-            patch("nanobot.bus.queue.MessageBus"),
-        ):
-            await handle_mention(
-                bridge=mock_bridge,
-                task_id="task123",
-                agent_name="researcher",
-                query="help",
-                caller_message_content="@researcher help",
-                task_title="Simple task",
-            )
-
-        content = captured_message["content"]
-        assert "[Execution Plan]" not in content
+        assert "[Execution Plan]" not in result.content
 
 
 class TestHandleMentionTaskFiles:
     """AC4: Task file references included/omitted correctly."""
 
     @pytest.mark.asyncio
-    async def test_includes_task_files(
-        self, mock_bridge, _mock_agent_env
-    ):
+    async def test_includes_task_files(self, run_mention):
         """handle_mention includes [Task Files] when files exist."""
-        captured_message = {}
+        result = await run_mention()
 
-        async def mock_process_direct(**kwargs):
-            captured_message["content"] = kwargs.get("content", "")
-            return "Agent response"
-
-        mock_loop = MagicMock()
-        mock_loop.process_direct = mock_process_direct
-        mock_loop.tools = {}
-
-        with (
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=("prov", "model"),
-            ),
-            patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
-            patch("nanobot.bus.queue.MessageBus"),
-        ):
-            await handle_mention(
-                bridge=mock_bridge,
-                task_id="task123",
-                agent_name="researcher",
-                query="help",
-                caller_message_content="@researcher help",
-                task_title="Test task",
-            )
-
-        content = captured_message["content"]
-        assert "[Task Files]" in content
-        assert "reference.pdf" in content
+        assert "[Task Files]" in result.content
+        assert "reference.pdf" in result.content
 
     @pytest.mark.asyncio
-    async def test_omits_files_when_absent(
-        self, mock_bridge, _mock_agent_env
-    ):
+    async def test_omits_files_when_absent(self, mock_bridge, run_mention):
         """handle_mention omits [Task Files] when no files attached."""
         mock_bridge.get_task.return_value = {
             "title": "No files task",
             "status": "in_progress",
         }
 
-        captured_message = {}
+        result = await run_mention(task_title="No files task")
 
-        async def mock_process_direct(**kwargs):
-            captured_message["content"] = kwargs.get("content", "")
-            return "Agent response"
-
-        mock_loop = MagicMock()
-        mock_loop.process_direct = mock_process_direct
-        mock_loop.tools = {}
-
-        with (
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=("prov", "model"),
-            ),
-            patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
-            patch("nanobot.bus.queue.MessageBus"),
-        ):
-            await handle_mention(
-                bridge=mock_bridge,
-                task_id="task123",
-                agent_name="researcher",
-                query="help",
-                caller_message_content="@researcher help",
-                task_title="No files task",
-            )
-
-        content = captured_message["content"]
-        assert "[Task Files]" not in content
+        assert "[Task Files]" not in result.content
 
 
 class TestBuildMentionContextRemoved:
@@ -416,36 +263,11 @@ class TestHandleMentionPromptStructure:
     """AC5: Prompt structure follows the specified section order."""
 
     @pytest.mark.asyncio
-    async def test_section_order(self, mock_bridge, _mock_agent_env):
+    async def test_section_order(self, run_mention):
         """Sections appear in correct order: System > Mention > Task > Plan > Files."""
-        captured_message = {}
+        result = await run_mention()
 
-        async def mock_process_direct(**kwargs):
-            captured_message["content"] = kwargs.get("content", "")
-            return "Agent response"
-
-        mock_loop = MagicMock()
-        mock_loop.process_direct = mock_process_direct
-        mock_loop.tools = {}
-
-        with (
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=("prov", "model"),
-            ),
-            patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
-            patch("nanobot.bus.queue.MessageBus"),
-        ):
-            await handle_mention(
-                bridge=mock_bridge,
-                task_id="task123",
-                agent_name="researcher",
-                query="help",
-                caller_message_content="@researcher help",
-                task_title="Test task",
-            )
-
-        content = captured_message["content"]
+        content = result.content
 
         # Verify section order
         sys_idx = content.index("[System instructions]")
@@ -458,38 +280,12 @@ class TestHandleMentionPromptStructure:
 
     @pytest.mark.asyncio
     async def test_no_system_instructions_when_prompt_none(
-        self, mock_bridge, _mock_agent_env
+        self, _mock_agent_env, run_mention
     ):
-        """[System instructions] omitted when agent_prompt is None (nanobot agent)."""
+        """Verifies [System instructions] section is omitted when agent prompt is None."""
         _mock_agent_env.prompt = None
 
-        captured_message = {}
+        result = await run_mention()
 
-        async def mock_process_direct(**kwargs):
-            captured_message["content"] = kwargs.get("content", "")
-            return "Agent response"
-
-        mock_loop = MagicMock()
-        mock_loop.process_direct = mock_process_direct
-        mock_loop.tools = {}
-
-        with (
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=("prov", "model"),
-            ),
-            patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
-            patch("nanobot.bus.queue.MessageBus"),
-        ):
-            await handle_mention(
-                bridge=mock_bridge,
-                task_id="task123",
-                agent_name="researcher",
-                query="help",
-                caller_message_content="@researcher help",
-                task_title="Test task",
-            )
-
-        content = captured_message["content"]
-        assert "[System instructions]" not in content
-        assert "[Mention]" in content
+        assert "[System instructions]" not in result.content
+        assert "[Mention]" in result.content

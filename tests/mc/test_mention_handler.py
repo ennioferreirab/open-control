@@ -134,7 +134,7 @@ class TestBuildTaskContext:
             "status": "in_progress",
             "assigned_agent": "researcher",
             "tags": ["urgent", "backend"],
-            "board_name": "Sprint 5",
+            "board_id": "board_sprint5",
         }
         result = _build_task_context(task)
         assert "[Task Context]" in result
@@ -143,7 +143,7 @@ class TestBuildTaskContext:
         assert "Status: in_progress" in result
         assert "Assigned Agent: researcher" in result
         assert "Tags: urgent, backend" in result
-        assert "Board: Sprint 5" in result
+        assert "Board ID: board_sprint5" in result
 
     def test_omits_empty_fields(self):
         task = {"title": "Only title", "description": ""}
