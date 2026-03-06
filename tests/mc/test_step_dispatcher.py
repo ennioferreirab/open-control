@@ -954,8 +954,8 @@ class TestSupervisedModeSkipsDispatch:
             }
         ]
         orchestrator = TaskOrchestrator(bridge)
-        orchestrator._step_dispatcher = MagicMock()
-        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
+        orchestrator._planning_worker._step_dispatcher = MagicMock()
+        orchestrator._planning_worker._step_dispatcher.dispatch_steps = AsyncMock()
 
         task = {
             "id": "task-1",
@@ -976,9 +976,9 @@ class TestSupervisedModeSkipsDispatch:
         )
 
         with (
-            patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.orchestrator.asyncio.create_task") as mock_create_task,
-            patch("mc.orchestrator.TaskPlanner") as planner_cls,
+            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.workers.planning.asyncio.create_task") as mock_create_task,
+            patch("mc.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -987,7 +987,7 @@ class TestSupervisedModeSkipsDispatch:
         # Supervised mode should NOT trigger dispatch or materialization
         bridge.batch_create_steps.assert_not_called()
         bridge.kick_off_task.assert_not_called()
-        orchestrator._step_dispatcher.dispatch_steps.assert_not_called()
+        orchestrator._planning_worker._step_dispatcher.dispatch_steps.assert_not_called()
         mock_create_task.assert_not_called()
 
 
