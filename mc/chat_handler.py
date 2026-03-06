@@ -6,9 +6,9 @@ runtime. Sessions persist across messages (no end_task_session call).
 
 Story 10.2 -- Task 5.
 
-TODO: Thread replies to tasks assigned to claude-code (backend="claude-code")
+TODO (CC-6 H2): Thread replies to tasks assigned to claude-code (backend="claude-code")
 agents are currently not routed to TaskExecutor.handle_cc_thread_reply(). The
-MentionWatcher in mc/mentions/watcher.py handles @mention messages across tasks, but
+MentionWatcher in mention_watcher.py handles @mention messages across tasks, but
 plain (non-mention) user replies to a done/crashed CC task thread are not forwarded
 to the CC provider for session resumption.
 
@@ -16,13 +16,14 @@ To integrate: in MentionWatcher._poll_all_tasks() (or a new dedicated poller), d
 user messages on tasks whose assigned agent has backend="claude-code", and call
 TaskExecutor.handle_cc_thread_reply(task_id, agent_name, content, agent_data) instead
 of (or in addition to) the @mention flow. The TaskExecutor method already implements
-the full resume + session update + response posting logic.
+the full resume + session update + response posting logic (CC-6 AC3).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -104,8 +105,8 @@ class ChatHandler:
             bus_spec.loader.exec_module(bus_mod)  # type: ignore[union-attr]
             MessageBus = bus_mod.MessageBus
 
-            from mc.gateway import AGENTS_DIR
             from mc.provider_factory import create_provider
+            from mc.infrastructure.config import AGENTS_DIR
             from mc.yaml_validator import validate_agent_file
 
             # Load agent config
@@ -125,7 +126,7 @@ class ChatHandler:
                     agent_display_name = result.display_name or agent_name
 
             # Resolve tier references
-            from mc.types import extract_cc_model_name, is_cc_model, is_tier_reference
+            from mc.types import is_tier_reference, is_cc_model, extract_cc_model_name
 
             if agent_model and is_tier_reference(agent_model):
                 from mc.tier_resolver import TierResolver
@@ -172,20 +173,20 @@ class ChatHandler:
 
                 task_id = f"chat-{agent_name}"
 
-                from claude_code.ipc_server import MCSocketServer
-                from claude_code.provider import ClaudeCodeProvider
                 from claude_code.workspace import CCWorkspaceManager
+                from claude_code.provider import ClaudeCodeProvider
+                from claude_code.ipc_server import MCSocketServer
 
                 try:
                     ws_mgr = CCWorkspaceManager()
-                    from mc.agent_orientation import load_orientation
+                    from mc.orientation import load_orientation
                     orientation = load_orientation(agent_name)
                     ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation,
                                             task_prompt=content)
                 except Exception as exc:
                     raise RuntimeError(f"CC workspace preparation failed: {exc}")
 
-                from mc.ask_user.handler import AskUserHandler
+                from mc.ask_user_handler import AskUserHandler
 
                 ask_handler = AskUserHandler()
                 ipc_server = MCSocketServer(self._bridge, None)
@@ -291,9 +292,8 @@ class ChatHandler:
                         async def _post_chat_consolidate():
                             try:
                                 from claude_code.memory_consolidator import CCMemoryConsolidator
-
-                                from mc.tier_resolver import TierResolver
                                 from mc.types import is_tier_reference
+                                from mc.tier_resolver import TierResolver
                                 _model = "tier:standard-low"
                                 if is_tier_reference(_model):
                                     _model = TierResolver(self._bridge).resolve_model(_model) or _model

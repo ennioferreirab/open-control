@@ -285,7 +285,7 @@ class MCSocketServer:
                 )
             }
 
-        from mc.gateway import AGENTS_DIR
+        from mc.infrastructure.config import AGENTS_DIR
         from mc.yaml_validator import validate_agent_file
 
         config_file = AGENTS_DIR / agent_name / "config.yaml"

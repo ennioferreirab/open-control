@@ -17,7 +17,6 @@ from mc.types import (
     ActivityEventType,
     AgentData,
     AuthorType,
-    HUMAN_AGENT_NAME,
     NANOBOT_AGENT_NAME,
     MessageType,
     StepStatus,
@@ -44,21 +43,12 @@ def _as_positive_int(value: Any, default: int) -> int:
         return default
 
 
-def _coerce_step_run_result(value: Any) -> tuple[str, bool, str | None]:
-    """Normalize legacy string results and structured execution results."""
-    if isinstance(value, str):
-        return value, False, None
-    content = getattr(value, "content", "") or ""
-    is_error = bool(getattr(value, "is_error", False))
-    error_message = getattr(value, "error_message", None)
-    return content, is_error, error_message
-
 
 def _load_agent_config(
     agent_name: str,
 ) -> tuple[str | None, str | None, list[str] | None]:
     """Load prompt, model and skills from an agent config."""
-    from mc.gateway import AGENTS_DIR
+    from mc.infrastructure.config import AGENTS_DIR
     from mc.yaml_validator import validate_agent_file
 
     config_file = AGENTS_DIR / agent_name / "config.yaml"
@@ -79,7 +69,7 @@ def _maybe_inject_orientation(
     agent_name: str, agent_prompt: str | None
 ) -> str | None:
     """Prepend global orientation for non-lead agents."""
-    from mc.agent_orientation import load_orientation
+    from mc.orientation import load_orientation
 
     orientation = load_orientation(agent_name)
     if not orientation:
@@ -127,12 +117,7 @@ async def _run_step_agent(
     ask_user_registry: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
-    from mc.executor import (
-        _background_tasks,
-        _coerce_agent_run_result,
-        _run_agent_on_task,
-        _relocate_invalid_memory_files,
-    )
+    from mc.executor import _run_agent_on_task, _background_tasks, _relocate_invalid_memory_files
 
     result, session_key, loop = await _run_agent_on_task(
         agent_name=agent_name,
@@ -174,7 +159,7 @@ async def _run_step_agent(
     _task = asyncio.create_task(_post_step_consolidate())
     _background_tasks.add(_task)
     _task.add_done_callback(_background_tasks.discard)
-    return _coerce_agent_run_result(result)
+    return result
 
 
 class StepDispatcher:
@@ -252,18 +237,6 @@ class StepDispatcher:
                 )
 
             final_steps = await asyncio.to_thread(self._bridge.get_steps_by_task, task_id)
-            any_crashed = any(
-                step.get("status") == StepStatus.CRASHED for step in final_steps
-            )
-            if any_crashed:
-                await asyncio.to_thread(
-                    self._bridge.update_task_status,
-                    task_id,
-                    TaskStatus.CRASHED,
-                    NANOBOT_AGENT_NAME,
-                    "One or more steps crashed",
-                )
-                return
             all_completed = bool(final_steps) and all(
                 step.get("status") == StepStatus.COMPLETED for step in final_steps
             )
@@ -366,34 +339,6 @@ class StepDispatcher:
                 NANOBOT_AGENT_NAME,
             )
             agent_name = NANOBOT_AGENT_NAME
-
-        if agent_name == HUMAN_AGENT_NAME:
-            try:
-                await asyncio.to_thread(
-                    self._bridge.update_step_status, step_id, StepStatus.WAITING_HUMAN
-                )
-                await asyncio.to_thread(
-                    self._bridge.create_activity,
-                    ActivityEventType.HITL_REQUESTED,
-                    f"Step awaiting human action: {step_title}",
-                    task_id,
-                )
-            except Exception as exc:
-                logger.error(
-                    "[dispatcher] Failed to set step '%s' to waiting_human: %s",
-                    step_title, exc, exc_info=True,
-                )
-                try:
-                    await asyncio.to_thread(
-                        self._bridge.update_step_status, step_id, StepStatus.CRASHED,
-                        f"{type(exc).__name__}: {exc}",
-                    )
-                except Exception:
-                    logger.error(
-                        "[dispatcher] Failed to mark step %s as crashed", step_id,
-                        exc_info=True,
-                    )
-            return []
 
         await asyncio.to_thread(
             self._bridge.create_activity,
@@ -597,22 +542,168 @@ class StepDispatcher:
 
             # Route to Claude Code backend when model starts with cc/ (e.g. set via tier dropdown)
             if agent_model and is_cc_model(agent_model):
-                from mc.cc_step_runner import execute_step_via_cc
+                cc_model_name = extract_cc_model_name(agent_model)
 
-                return await execute_step_via_cc(
-                    bridge=self._bridge,
-                    step_id=step_id,
-                    task_id=task_id,
-                    agent_name=agent_name,
-                    agent_model=agent_model,
-                    agent_prompt=agent_prompt,
-                    agent_skills=agent_skills,
-                    step_title=step_title,
-                    execution_description=execution_description,
-                    task_data=task_data,
-                    pre_snapshot=pre_snapshot,
-                    ask_user_registry=self._ask_user_registry,
+                # Load full AgentData from config.yaml for CC context enrichment (CC-9)
+                from mc.infrastructure.config import AGENTS_DIR
+                from mc.yaml_validator import validate_agent_file
+
+                config_path = AGENTS_DIR / agent_name / "config.yaml"
+                full_agent_data = None
+                if config_path.exists():
+                    result = validate_agent_file(config_path)
+                    if isinstance(result, AgentData):
+                        full_agent_data = result
+
+                if full_agent_data:
+                    agent_data_for_cc = full_agent_data
+                    agent_data_for_cc.model = cc_model_name
+                    agent_data_for_cc.backend = "claude-code"
+                else:
+                    agent_data_for_cc = AgentData(
+                        name=agent_name,
+                        display_name=agent_name,
+                        role="agent",
+                        model=cc_model_name,
+                        backend="claude-code",
+                    )
+
+                # Try to enrich from Convex agent data (for claude_code_opts not in config.yaml)
+                try:
+                    convex_agent_raw = await asyncio.to_thread(
+                        self._bridge.get_agent_by_name, agent_name
+                    )
+                    if convex_agent_raw:
+                        agent_data_for_cc.display_name = convex_agent_raw.get("display_name", agent_name)
+                        agent_data_for_cc.role = convex_agent_raw.get("role", "agent")
+                        # Sync skills from Convex (same pattern as prompt/model)
+                        convex_skills = convex_agent_raw.get("skills")
+                        if convex_skills is not None:
+                            if convex_skills != agent_data_for_cc.skills:
+                                logger.info(
+                                    "[dispatcher] CC skills synced from Convex for '%s': %s -> %s",
+                                    agent_name, agent_data_for_cc.skills, convex_skills,
+                                )
+                            agent_data_for_cc.skills = convex_skills
+                        cc_opts_raw = convex_agent_raw.get("claude_code_opts")
+                        if cc_opts_raw and isinstance(cc_opts_raw, dict):
+                            from mc.types import ClaudeCodeOpts
+                            agent_data_for_cc.claude_code_opts = ClaudeCodeOpts(
+                                max_budget_usd=cc_opts_raw.get("max_budget_usd"),
+                                max_turns=cc_opts_raw.get("max_turns"),
+                                permission_mode=cc_opts_raw.get("permission_mode", "acceptEdits"),
+                                allowed_tools=cc_opts_raw.get("allowed_tools"),
+                                disallowed_tools=cc_opts_raw.get("disallowed_tools"),
+                            )
+                except Exception:
+                    logger.warning("[dispatcher] Could not enrich agent data for CC routing")
+
+                # Execute step via CC backend
+                from claude_code.workspace import CCWorkspaceManager
+                from claude_code.provider import ClaudeCodeProvider
+                from claude_code.ipc_server import MCSocketServer
+
+                try:
+                    ws_mgr = CCWorkspaceManager()
+                    from mc.orientation import load_orientation
+                    orientation = load_orientation(agent_name)
+                    ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation,
+                                            task_prompt=step_title)
+                except Exception as exc:
+                    error_msg = f"CC workspace preparation failed for step '{step_title}': {exc}"
+                    logger.error("[dispatcher] %s", error_msg)
+                    raise
+
+                from mc.ask_user_handler import AskUserHandler
+
+                ask_handler = AskUserHandler()
+                ipc_server = MCSocketServer(self._bridge, None)
+                ipc_server.set_ask_user_handler(ask_handler)
+                if self._ask_user_registry is not None:
+                    self._ask_user_registry.register(task_id, ask_handler)
+                try:
+                    await ipc_server.start(ws_ctx.socket_path)
+                except Exception as exc:
+                    error_msg = f"MCP IPC server failed for step '{step_title}': {exc}"
+                    logger.error("[dispatcher] %s", error_msg)
+                    raise
+
+                try:
+                    from nanobot.config.loader import load_config
+                    _cfg = load_config()
+                    provider = ClaudeCodeProvider(
+                        cli_path=_cfg.claude_code.cli_path,
+                        defaults=_cfg.claude_code,
+                    )
+
+                    prompt = f"{step_title}\n\n{execution_description}"
+
+                    result_obj = await provider.execute_task(
+                        prompt=prompt,
+                        agent_config=agent_data_for_cc,
+                        task_id=task_id,
+                        workspace_ctx=ws_ctx,
+                        session_id=None,
+                    )
+                    if result_obj.is_error:
+                        raise RuntimeError(
+                            f"Claude Code error: {result_obj.output[:1000]}"
+                        )
+                    result = result_obj.output
+                except Exception as exc:
+                    error_msg = f"CC execution failed for step '{step_title}': {exc}"
+                    logger.error("[dispatcher] %s", error_msg)
+                    raise
+                finally:
+                    if self._ask_user_registry is not None:
+                        self._ask_user_registry.unregister(task_id)
+                    await ipc_server.stop()
+
+                # Post completion — same as nanobot path
+                await asyncio.to_thread(
+                    _relocate_invalid_memory_files,
+                    task_id,
+                    ws_ctx.cwd,
                 )
+                artifacts = await asyncio.to_thread(
+                    _collect_output_artifacts, task_id, pre_snapshot
+                )
+                try:
+                    await asyncio.to_thread(
+                        self._bridge.sync_task_output_files,
+                        task_id,
+                        task_data,
+                        agent_name,
+                    )
+                except Exception:
+                    logger.exception(
+                        "[dispatcher] Failed to sync output files for step %s", step_id
+                    )
+
+                await asyncio.to_thread(
+                    self._bridge.post_step_completion,
+                    task_id,
+                    step_id,
+                    agent_name,
+                    result,
+                    artifacts or None,
+                )
+                await asyncio.to_thread(
+                    self._bridge.update_step_status,
+                    step_id,
+                    StepStatus.COMPLETED,
+                )
+                await asyncio.to_thread(
+                    self._bridge.create_activity,
+                    ActivityEventType.STEP_COMPLETED,
+                    f"Agent {agent_name} completed step: {step_title}",
+                    task_id,
+                    agent_name,
+                )
+                unblocked_ids = await asyncio.to_thread(
+                    self._bridge.check_and_unblock_dependents, step_id
+                )
+                return unblocked_ids if isinstance(unblocked_ids, list) else []
 
             result = await _run_step_agent(
                 agent_name=agent_name,
@@ -629,13 +720,6 @@ class StepDispatcher:
                 bridge=self._bridge,
                 ask_user_registry=self._ask_user_registry,
             )
-            result_content, is_error_result, error_message = _coerce_step_run_result(result)
-            if is_error_result:
-                raise RuntimeError(
-                    error_message
-                    or result_content
-                    or "Agent returned an execution error"
-                )
 
             # Collect artifacts and post structured completion message (Story 2.5).
             artifacts = await asyncio.to_thread(
@@ -661,7 +745,7 @@ class StepDispatcher:
                 task_id,
                 step_id,
                 agent_name,
-                result_content,
+                result,
                 artifacts or None,
             )
             await asyncio.to_thread(
@@ -697,21 +781,6 @@ class StepDispatcher:
                 logger.error(
                     "[dispatcher] Failed to mark step %s as crashed",
                     step_id,
-                    exc_info=True,
-                )
-
-            try:
-                await asyncio.to_thread(
-                    self._bridge.update_task_status,
-                    task_id,
-                    TaskStatus.CRASHED,
-                    agent_name,
-                    f'Step "{step_title}" crashed',
-                )
-            except Exception:
-                logger.error(
-                    "[dispatcher] Failed to mark task %s as crashed after step failure",
-                    task_id,
                     exc_info=True,
                 )
 

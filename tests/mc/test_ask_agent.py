@@ -190,7 +190,7 @@ class TestAskAgentDepthLimit:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -221,7 +221,7 @@ class TestAskAgentDepthLimit:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -253,7 +253,7 @@ class TestAskAgentDepthLimit:
         child_ask_tool = AskAgentTool()
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -295,7 +295,7 @@ class TestAskAgentSuccess:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -328,7 +328,7 @@ class TestAskAgentSuccess:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -379,7 +379,7 @@ class TestAskAgentTimeout:
             return "Too late"
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -430,7 +430,7 @@ class TestAskAgentThreadLogging:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -465,7 +465,7 @@ class TestAskAgentThreadLogging:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -498,7 +498,7 @@ class TestAskAgentThreadLogging:
         long_response = "A" * 1000
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -538,7 +538,7 @@ class TestAskAgentThreadLogging:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -578,7 +578,7 @@ class TestAskAgentNotFound:
         _setup_agent_dir(agents_dir, "researcher")
         _setup_agent_dir(agents_dir, "writer")
 
-        with patch("mc.gateway.AGENTS_DIR", agents_dir):
+        with patch("mc.infrastructure.config.AGENTS_DIR", agents_dir):
             result = await tool.execute(
                 target_agent="nonexistent",
                 question="Any question?",
@@ -599,7 +599,7 @@ class TestAskAgentNotFound:
         _setup_agent_dir(agents_dir, "good-agent")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=["Missing required field: name"],
@@ -645,7 +645,7 @@ class TestAskAgentProviderError:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -670,7 +670,7 @@ class TestAskAgentProviderError:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -714,7 +714,7 @@ class TestAskAgentPromptConstruction:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -752,7 +752,7 @@ class TestAskAgentPromptConstruction:
         agent_data.prompt = None
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -786,7 +786,7 @@ class TestAskAgentPromptConstruction:
         agent_data = _make_agent_data("secretary")
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=agent_data,
@@ -845,7 +845,7 @@ class TestAskAgentTierResolution:
         agent_data.model = "tier:standard-medium"  # real tier string triggers resolution
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir_with_nanobot),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir_with_nanobot),
             patch("mc.yaml_validator.validate_agent_file", return_value=agent_data),
             patch("mc.tier_resolver.TierResolver") as MockResolver,
             patch("mc.provider_factory.create_provider", return_value=(MagicMock(), "claude-sonnet-4-6")) as mock_create,
@@ -877,7 +877,7 @@ class TestAskAgentTierResolution:
         agent_data.model = "tier:standard-medium"
 
         with (
-            patch("mc.gateway.AGENTS_DIR", agents_dir_with_nanobot),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir_with_nanobot),
             patch("mc.yaml_validator.validate_agent_file", return_value=agent_data),
         ):
             result = await tool.execute(target_agent="nanobot", question="Help?")

@@ -1,11 +1,17 @@
-"""Agent Gateway — main gateway loop and entry point.
+"""
+Agent Gateway — composition root and bootstrap/lifecycle for Mission Control.
 
-Contains run_gateway(), main(), and re-exports from agent_sync and
-process_monitor for backward compatibility.
+ARCHITECTURAL RULE: gateway can import services; services cannot import gateway.
 
-Agent sync logic lives in mc.agent_sync.
-Process monitoring, crash detection, and helper utilities live in
-mc.process_monitor.
+This module is the composition root — it wires everything together at startup
+and manages the lifecycle (start/stop) of all runtime loops.  All config
+resolution, env resolution, path utilities, agent bootstrap helpers, and sync
+logic live in ``mc.infrastructure``.
+
+Internal modules should import from ``mc.infrastructure`` (config, agent_bootstrap)
+or accept dependencies via constructor injection / function parameters.
+Only the entry point (boot.py or __main__) and integration tests should import
+from this module.
 """
 
 from __future__ import annotations
@@ -15,49 +21,41 @@ import logging
 import os
 import signal
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from mc.orchestrator import TaskOrchestrator
-
-# ---------------------------------------------------------------------------
-# Re-exports from mc.agent_sync — extracted agent registry sync functions.
-# Many call-sites and test patches still reference mc.gateway.X.
-# ---------------------------------------------------------------------------
-from mc.agent_sync import (  # noqa: F401
-    NANOBOT_AGENT_NAME,
+# Re-export AgentGateway from crash_handler for backward compatibility
+from mc.crash_handler import MAX_AUTO_RETRIES, AgentGateway  # noqa: F401
+from mc.infrastructure.agent_bootstrap import (  # noqa: F401
     _NANOBOT_AGENT_CONFIG,
+    NANOBOT_AGENT_NAME,
     _cleanup_deleted_agents,
-    _config_default_model,
+    _distribute_builtin_skills,
     _fetch_bot_identity,
-    _parse_utc_timestamp,
-    _read_file_or_none,
-    _read_session_data,
     _restore_archived_files,
+    _sync_embedding_model,
+    _sync_model_tiers,
     _write_back_convex_agents,
     ensure_low_agent,
     ensure_nanobot_agent,
     sync_agent_registry,
     sync_nanobot_default_model,
-)
-
-# ---------------------------------------------------------------------------
-# Re-exports from mc.process_monitor — extracted process monitoring and
-# helper utilities.  Keeping them here ensures that
-# ``from mc.gateway import X`` and ``patch("mc.gateway.X", ...)`` both
-# continue to work without touching existing code or tests.
-# ---------------------------------------------------------------------------
-from mc.process_monitor import (  # noqa: F401
-    MAX_AUTO_RETRIES,
-    AgentGateway,
-    _distribute_builtin_skills,
-    _resolve_admin_key,
-    _resolve_convex_url,
-    _run_plan_negotiation_manager,
-    _sync_embedding_model,
-    _sync_model_tiers,
-    filter_agent_fields,
     sync_skills,
 )
+
+# Re-export from infrastructure for backward compatibility.
+# External callers (tests, vendor code) that historically imported these
+# from mc.gateway will continue to work.
+from mc.infrastructure.config import (  # noqa: F401
+    AGENTS_DIR,
+    _config_default_model,
+    _parse_utc_timestamp,
+    _read_file_or_none,
+    _read_session_data,
+    _resolve_admin_key,
+    _resolve_convex_url,
+    filter_agent_fields,
+)
+from mc.orchestrator import TaskOrchestrator
 from mc.timeout_checker import TimeoutChecker
 
 if TYPE_CHECKING:
@@ -65,20 +63,145 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-AGENTS_DIR = Path.home() / ".nanobot" / "agents"
+
+# ---------------------------------------------------------------------------
+# Plan negotiation manager
+# ---------------------------------------------------------------------------
+
+# Task IDs requeued by cron — plan negotiation manager skips these.
+# Must be module-level so _process_batch (nested in _run_plan_negotiation_manager)
+# and run_gateway() can both access it without a NameError.
+_cron_requeued_ids: set[str] = set()
 
 
+async def _run_plan_negotiation_manager(
+    bridge: "ConvexBridge", ask_user_registry: "Any | None" = None
+) -> None:
+    """Manage per-task plan negotiation loops.
 
-async def run_gateway(bridge: ConvexBridge) -> None:
+    Subscribes to tasks in both "review" (awaitingKickoff) and "in_progress"
+    statuses. For each task that enters a negotiable state, spawns a
+    start_plan_negotiation_loop coroutine. Prevents duplicate loops for the
+    same task_id.
+
+    The per-task loops are self-terminating — they exit when the task leaves
+    a negotiable status. This manager only needs to spawn new ones.
+
+    Story 7.3 — Task 4.3 / 4.4.
+    """
+    from mc.plan_negotiator import start_plan_negotiation_loop
+
+    logger.info("[gateway] Plan negotiation manager started")
+
+    # Track active negotiation loops to prevent duplicates
+    active_negotiation_ids: set[str] = set()
+
+    async def _spawn_loop_if_needed(task_id: str) -> None:
+        """Spawn a plan negotiation loop for task_id if not already active."""
+        if task_id in active_negotiation_ids:
+            return
+        active_negotiation_ids.add(task_id)
+        logger.info("[gateway] Spawning plan negotiation loop for task %s", task_id)
+
+        async def _run_and_cleanup() -> None:
+            try:
+                await start_plan_negotiation_loop(
+                    bridge, task_id, ask_user_registry=ask_user_registry
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "[gateway] Plan negotiation loop for task %s crashed", task_id
+                )
+            finally:
+                active_negotiation_ids.discard(task_id)
+                logger.info(
+                    "[gateway] Plan negotiation loop for task %s ended", task_id
+                )
+
+        asyncio.create_task(_run_and_cleanup())
+
+    # Subscribe to both review and in_progress task lists
+    review_queue = bridge.async_subscribe(
+        "tasks:listByStatus", {"status": "review"}
+    )
+    in_progress_queue = bridge.async_subscribe(
+        "tasks:listByStatus", {"status": "in_progress"}
+    )
+
+    async def _process_batch(tasks_batch: object) -> None:
+        """Process a batch of tasks from either subscription queue."""
+        if not tasks_batch or isinstance(tasks_batch, dict):
+            return
+        for task_data in tasks_batch:  # type: ignore[union-attr]
+            task_id = task_data.get("id")
+            if not task_id:
+                continue
+
+            task_status = task_data.get("status", "")
+            awaiting_kickoff = task_data.get("awaiting_kickoff", False)
+
+            # Only spawn for supervised tasks in review (awaitingKickoff) or in_progress
+            if task_status == "in_progress" or (
+                task_status == "review" and awaiting_kickoff
+            ):
+                # Skip plan negotiation for cron-requeued tasks (they
+                # re-enter in_progress but don't need lead-agent interaction).
+                # Manual reassignments are NOT in this set and proceed normally.
+                if task_id in _cron_requeued_ids:
+                    _cron_requeued_ids.discard(task_id)
+                    logger.info(
+                        "[gateway] Skipping plan negotiation for task %s "
+                        "(cron requeue)",
+                        task_id,
+                    )
+                    continue
+                await _spawn_loop_if_needed(task_id)
+
+    # Drain both queues by creating persistent reader tasks so no queue.get()
+    # coroutine is ever abandoned (avoids leaked asyncio tasks from asyncio.wait).
+    async def _drain_queue(queue: asyncio.Queue) -> None:  # type: ignore[type-arg]
+        while True:
+            try:
+                batch = await queue.get()
+                await _process_batch(batch)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "[gateway] Plan negotiation manager: error reading queue: %s",
+                    exc,
+                )
+
+    reader_tasks = [
+        asyncio.create_task(_drain_queue(review_queue)),
+        asyncio.create_task(_drain_queue(in_progress_queue)),
+    ]
+    try:
+        # Wait until cancelled (gateway shutdown)
+        await asyncio.gather(*reader_tasks)
+    finally:
+        for t in reader_tasks:
+            t.cancel()
+
+
+# ---------------------------------------------------------------------------
+# run_gateway — main runtime loop
+# ---------------------------------------------------------------------------
+
+
+async def run_gateway(bridge: "ConvexBridge") -> None:
     """Gateway main loop — starts orchestrator, executor, timeout checker, and cron service.
 
     Args:
         bridge: ConvexBridge instance used by all components.
     """
-    from mc.executor import TaskExecutor
+    from nanobot.config.loader import load_config
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
-    from nanobot.config.loader import load_config
+
+    from mc.executor import TaskExecutor
 
     logger.info("[gateway] Agent Gateway started")
 
@@ -94,8 +217,8 @@ async def run_gateway(bridge: ConvexBridge) -> None:
 
     async def _send_telegram_direct(chat_id: str, content: str) -> None:
         """Send message to Telegram without polling — direct Bot API call."""
-        from telegram import Bot
         from nanobot.channels.telegram import _markdown_to_telegram_html, _split_message
+        from telegram import Bot
 
         if not chat_id.lstrip("-").isdigit():
             logger.error(
@@ -121,13 +244,19 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         if not delivery:
             return
         if not result.strip():
-            logger.info("[gateway] Skipping delivery for task %s — empty result (task may have failed)", task_id)
+            logger.info(
+                "[gateway] Skipping delivery for task %s — empty result (task may have failed)",
+                task_id,
+            )
             return
         channel, to = delivery
         try:
             if channel == "telegram":
                 await _send_telegram_direct(to, result)
-                logger.info("[gateway] Delivered cron result for task %s → telegram:%s", task_id, to)
+                logger.info(
+                    "[gateway] Delivered cron result for task %s → telegram:%s",
+                    task_id, to,
+                )
             else:
                 logger.warning("[gateway] Delivery to '%s' not supported", channel)
         except Exception:
@@ -137,7 +266,12 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     cron_store_path = Path.home() / ".nanobot" / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
 
-    async def _requeue_cron_task(b: "ConvexBridge", task_id: str, message: str, agent: str | None = None) -> bool:
+    async def _requeue_cron_task(
+        b: "ConvexBridge",
+        task_id: str,
+        message: str,
+        agent: str | None = None,
+    ) -> bool:
         """Re-queue an existing task for cron execution.
 
         Injects the cron trigger message into the task's thread so the agent
@@ -153,9 +287,14 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         )
 
         try:
-            task = await asyncio.to_thread(b.query, "tasks:getById", {"task_id": task_id})
+            task = await asyncio.to_thread(
+                b.query, "tasks:getById", {"task_id": task_id}
+            )
         except Exception:
-            logger.warning("[gateway] Could not fetch cron origin task %s — creating new task instead", task_id)
+            logger.warning(
+                "[gateway] Could not fetch cron origin task %s — creating new task instead",
+                task_id,
+            )
             create_args: dict = {"title": message}
             if agent:
                 create_args["assigned_agent"] = agent
@@ -163,7 +302,10 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             return False
 
         if not task:
-            logger.warning("[gateway] Cron origin task %s not found — creating new task", task_id)
+            logger.warning(
+                "[gateway] Cron origin task %s not found — creating new task",
+                task_id,
+            )
             create_args = {"title": message}
             if agent:
                 create_args["assigned_agent"] = agent
@@ -194,7 +336,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             task_id,
             "Cron",
             AuthorType.USER,
-            f"🔔 Cron triggered: {message}",
+            f"\U0001f514 Cron triggered: {message}",
             MessageType.USER_MESSAGE,
         )
 
@@ -207,7 +349,9 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             f"Cron re-queued task to {agent_name}",
         )
         _cron_requeued_ids.add(task_id)
-        logger.info("[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name)
+        logger.info(
+            "[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name
+        )
         return True
 
     async def on_cron_job(job: CronJob) -> str | None:
@@ -216,7 +360,12 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         task_id_for_delivery: str | None = None
         try:
             if job.payload.task_id:
-                requeued = await _requeue_cron_task(bridge, job.payload.task_id, job.payload.message, agent=job.payload.agent)
+                requeued = await _requeue_cron_task(
+                    bridge,
+                    job.payload.task_id,
+                    job.payload.message,
+                    agent=job.payload.agent,
+                )
                 if requeued:
                     task_id_for_delivery = job.payload.task_id
             else:
@@ -241,7 +390,10 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             and job.payload.to
             and job.payload.channel != "mc"
         ):
-            pending_deliveries[task_id_for_delivery] = (job.payload.channel, job.payload.to)
+            pending_deliveries[task_id_for_delivery] = (
+                job.payload.channel,
+                job.payload.to,
+            )
 
         return None
 
@@ -252,13 +404,14 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         logger.info("[gateway] Cron service started with %d job(s)", cron_status["jobs"])
 
     # Ask-user reply routing — registry + watcher (CC agents only)
-    from mc.ask_user.registry import AskUserRegistry
-    from mc.ask_user.watcher import AskUserReplyWatcher
+    from mc.ask_user_registry import AskUserRegistry
+    from mc.ask_user_watcher import AskUserReplyWatcher
 
     ask_user_registry = AskUserRegistry()
 
-    orchestrator = TaskOrchestrator(bridge, cron_service=cron,
-                                     ask_user_registry=ask_user_registry)
+    orchestrator = TaskOrchestrator(
+        bridge, cron_service=cron, ask_user_registry=ask_user_registry
+    )
 
     async def _inbox_loop_with_crash_log() -> None:
         try:
@@ -273,10 +426,13 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     routing_task = asyncio.create_task(orchestrator.start_routing_loop())
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
     kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
-    retry_task = asyncio.create_task(orchestrator.start_retry_watch_loop())
 
-    executor = TaskExecutor(bridge, cron_service=cron, on_task_completed=on_task_completed,
-                            ask_user_registry=ask_user_registry)
+    executor = TaskExecutor(
+        bridge,
+        cron_service=cron,
+        on_task_completed=on_task_completed,
+        ask_user_registry=ask_user_registry,
+    )
     execution_task = asyncio.create_task(executor.start_execution_loop())
 
     timeout_checker = TimeoutChecker(bridge)
@@ -293,9 +449,9 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     chat_handler = ChatHandler(bridge, ask_user_registry=ask_user_registry)
     chat_task = asyncio.create_task(chat_handler.run())
 
-    # Mention watcher — detects and handles @agent-name mentions across
-    # all task statuses (the single authoritative handler for @mentions)
-    from mc.mentions.watcher import MentionWatcher
+    # Mention watcher — detects @agent-name mentions in all task threads
+    # (covers tasks not handled by plan_negotiator: done, crashed, inbox, etc.)
+    from mc.mention_watcher import MentionWatcher
 
     mention_watcher = MentionWatcher(bridge)
     mention_task = asyncio.create_task(mention_watcher.run())
@@ -315,7 +471,6 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     routing_task.cancel()
     review_task.cancel()
     kickoff_task.cancel()
-    retry_task.cancel()
     execution_task.cancel()
     timeout_task.cancel()
     plan_negotiation_task.cancel()
@@ -327,7 +482,6 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         routing_task,
         review_task,
         kickoff_task,
-        retry_task,
         execution_task,
         timeout_task,
         plan_negotiation_task,
@@ -339,6 +493,11 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             await task
         except asyncio.CancelledError:
             pass
+
+
+# ---------------------------------------------------------------------------
+# main — entry point
+# ---------------------------------------------------------------------------
 
 
 async def main() -> None:
@@ -384,9 +543,17 @@ async def main() -> None:
         # Distribute builtin skills to workspace before sync (Story SK.1)
         try:
             from nanobot.config.loader import load_config as _lc
+
             from mc.skills import MC_SKILLS_DIR
+
             _ws = _lc().workspace_path
-            _builtin_dir = Path(__file__).parent.parent / "vendor" / "nanobot" / "nanobot" / "skills"
+            _builtin_dir = (
+                Path(__file__).parent.parent
+                / "vendor"
+                / "nanobot"
+                / "nanobot"
+                / "skills"
+            )
             _distribute_builtin_skills(_ws / "skills", _builtin_dir, MC_SKILLS_DIR)
         except Exception:
             logger.exception("[gateway] Builtin skill distribution failed")

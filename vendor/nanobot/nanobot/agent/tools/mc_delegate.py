@@ -27,7 +27,7 @@ class McDelegateTool(Tool):
 
     def _init_bridge(self) -> None:
         try:
-            from mc.gateway import _resolve_convex_url
+            from mc.infrastructure.config import _resolve_convex_url
             from mc.bridge import ConvexBridge
 
             url = _resolve_convex_url()

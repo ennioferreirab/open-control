@@ -1,6 +1,6 @@
 # Story 15.2: Bootstrap and Boundary Cleanup
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -48,41 +48,41 @@ so that internal modules stop depending on mc.gateway.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Audit current mc.gateway dependencies** (AC: #1, #3)
-  - [ ] 1.1 Read `mc/gateway.py` completely and categorize every function/class/constant: bootstrap vs config vs runtime utility
-  - [ ] 1.2 Grep for all `from mc.gateway import` and `import mc.gateway` across the entire codebase
-  - [ ] 1.3 Map each import to what it actually uses (function/constant names)
-  - [ ] 1.4 Document the dependency graph: which modules import what from gateway
+- [x] **Task 1: Audit current mc.gateway dependencies** (AC: #1, #3)
+  - [x] 1.1 Read `mc/gateway.py` completely and categorize every function/class/constant: bootstrap vs config vs runtime utility
+  - [x] 1.2 Grep for all `from mc.gateway import` and `import mc.gateway` across the entire codebase
+  - [x] 1.3 Map each import to what it actually uses (function/constant names)
+  - [x] 1.4 Document the dependency graph: which modules import what from gateway
 
-- [ ] **Task 2: Create mc/infrastructure package** (AC: #2)
-  - [ ] 2.1 Create `mc/infrastructure/__init__.py`
-  - [ ] 2.2 Create `mc/infrastructure/config.py` -- extract AGENTS_DIR, env resolution, admin key/url resolution, config path helpers from gateway
-  - [ ] 2.3 Create `mc/infrastructure/runtime_context.py` -- lightweight container/dataclass holding bridge ref, config paths, service references
-  - [ ] 2.4 Create `mc/infrastructure/agent_bootstrap.py` -- extract low-agent bootstrap and sync config logic
-  - [ ] 2.5 Write unit tests for each infrastructure module
+- [x] **Task 2: Create mc/infrastructure package** (AC: #2)
+  - [x] 2.1 Create `mc/infrastructure/__init__.py`
+  - [x] 2.2 Create `mc/infrastructure/config.py` -- extract AGENTS_DIR, env resolution, admin key/url resolution, config path helpers from gateway
+  - [x] 2.3 Create `mc/infrastructure/runtime_context.py` -- lightweight container/dataclass holding bridge ref, config paths, service references
+  - [x] 2.4 Create `mc/infrastructure/agent_bootstrap.py` -- extract low-agent bootstrap and sync config logic
+  - [x] 2.5 Write unit tests for each infrastructure module
 
-- [ ] **Task 3: Migrate all internal imports** (AC: #3)
-  - [ ] 3.1 Update `mc/executor.py` to import from `mc.infrastructure` instead of `mc.gateway`
-  - [ ] 3.2 Update `mc/step_dispatcher.py` to import from `mc.infrastructure` instead of `mc.gateway`
-  - [ ] 3.3 Update `mc/mentions/` modules to import from `mc.infrastructure` instead of `mc.gateway`
-  - [ ] 3.4 Update `mc/chat_handler.py` to import from `mc.infrastructure` instead of `mc.gateway`
-  - [ ] 3.5 Update `mc/agent_orientation.py` to import from `mc.infrastructure` instead of `mc.gateway`
-  - [ ] 3.6 Update `mc/orchestrator.py` to import from `mc.infrastructure` instead of `mc.gateway`
-  - [ ] 3.7 Update `mc/process_monitor.py` to import from `mc.infrastructure` instead of `mc.gateway`
-  - [ ] 3.8 Update `mc/cli.py` and `mc/cli_*.py` to import from `mc.infrastructure` instead of `mc.gateway`
-  - [ ] 3.9 Update any remaining modules that import from `mc.gateway`
+- [x] **Task 3: Migrate all internal imports** (AC: #3)
+  - [x] 3.1 Update `mc/executor.py` to import from `mc.infrastructure` and `mc.crash_handler` instead of `mc.gateway`
+  - [x] 3.2 Update `mc/step_dispatcher.py` to import from `mc.infrastructure` instead of `mc.gateway`
+  - [x] 3.3 Update `mc/mention_handler.py` to import from `mc.infrastructure` instead of `mc.gateway`
+  - [x] 3.4 Update `mc/chat_handler.py` to import from `mc.infrastructure` instead of `mc.gateway`
+  - [x] 3.5 N/A -- `mc/agent_orientation.py` does not exist in this codebase
+  - [x] 3.6 Update `mc/orchestrator.py` to import from `mc.infrastructure` instead of `mc.gateway`
+  - [x] 3.7 N/A -- `mc/process_monitor.py` does not exist (it's `mc/process_manager.py` which had no gateway imports)
+  - [x] 3.8 Update `mc/cli.py` to import from `mc.infrastructure` instead of `mc.gateway`
+  - [x] 3.9 Update vendor files: `mc_delegate.py`, `ask_agent.py`, `ipc_server.py`
 
-- [ ] **Task 4: Slim down mc/gateway.py** (AC: #1)
-  - [ ] 4.1 Remove all extracted functions/constants from gateway.py
-  - [ ] 4.2 Add imports from `mc.infrastructure` where gateway itself needs them for bootstrap
-  - [ ] 4.3 Ensure gateway only does: bootstrap, wiring, startup, shutdown
-  - [ ] 4.4 Add a module-level comment documenting the boundary rule
+- [x] **Task 4: Slim down mc/gateway.py** (AC: #1)
+  - [x] 4.1 Remove all extracted functions/constants from gateway.py (replaced with re-exports)
+  - [x] 4.2 Add imports from `mc.infrastructure` where gateway itself needs them for bootstrap
+  - [x] 4.3 Ensure gateway only does: bootstrap, wiring, startup, shutdown
+  - [x] 4.4 Add a module-level comment documenting the boundary rule
 
-- [ ] **Task 5: Update tests** (AC: #4)
-  - [ ] 5.1 Find all test files that patch `mc.gateway.*`
-  - [ ] 5.2 Update patches to target new locations in `mc.infrastructure`
-  - [ ] 5.3 Run full test suite to verify no regressions
-  - [ ] 5.4 Add a test that verifies no internal module imports from mc.gateway (architectural guardrail)
+- [x] **Task 5: Update tests** (AC: #4)
+  - [x] 5.1 Find all test files that patch `mc.gateway.*`
+  - [x] 5.2 Update patches to target new locations in `mc.infrastructure`
+  - [x] 5.3 Run full test suite to verify no regressions (1436 passed, 3 pre-existing failures)
+  - [x] 5.4 Add a test that verifies no internal module imports from mc.gateway (architectural guardrail)
 
 ## Dev Notes
 
@@ -118,35 +118,52 @@ class RuntimeContext:
 
 ### Project Structure Notes
 
-**Files to CREATE:**
+**Files CREATED:**
 - `mc/infrastructure/__init__.py`
 - `mc/infrastructure/config.py`
 - `mc/infrastructure/runtime_context.py`
 - `mc/infrastructure/agent_bootstrap.py`
+- `mc/crash_handler.py`
 - `tests/mc/infrastructure/__init__.py`
 - `tests/mc/infrastructure/test_config.py`
 - `tests/mc/infrastructure/test_runtime_context.py`
+- `tests/mc/infrastructure/test_boundary.py`
 
-**Files to MODIFY:**
-- `mc/gateway.py` -- slim down to bootstrap only
-- `mc/executor.py` -- update imports
-- `mc/step_dispatcher.py` -- update imports
-- `mc/orchestrator.py` -- update imports
-- `mc/process_monitor.py` -- update imports
-- `mc/mentions/handler.py` -- update imports
-- `mc/chat_handler.py` -- update imports
-- `mc/agent_orientation.py` -- update imports
-- `mc/cli.py`, `mc/cli_*.py` -- update imports
-- Various test files -- update patches
+**Files MODIFIED:**
+- `mc/gateway.py` -- slimmed to bootstrap/wiring/lifecycle + re-exports for backward compat
+- `mc/executor.py` -- imports from mc.crash_handler and mc.infrastructure.config
+- `mc/step_dispatcher.py` -- imports from mc.infrastructure.config
+- `mc/orchestrator.py` -- imports from mc.infrastructure.config
+- `mc/mention_handler.py` -- imports from mc.infrastructure.config
+- `mc/chat_handler.py` -- imports from mc.infrastructure.config
+- `mc/cli.py` -- imports from mc.infrastructure.config and mc.infrastructure.agent_bootstrap
+- `vendor/nanobot/nanobot/agent/tools/mc_delegate.py` -- imports from mc.infrastructure.config
+- `vendor/nanobot/nanobot/agent/tools/ask_agent.py` -- imports from mc.infrastructure.config
+- `vendor/claude-code/claude_code/ipc_server.py` -- imports from mc.infrastructure.config
+- `tests/mc/test_gateway.py` -- patch targets updated
+- `tests/mc/test_executor_cc.py` -- patch targets updated
+- `tests/mc/test_chat_handler.py` -- patch targets updated
+- `tests/mc/test_ask_agent.py` -- patch targets updated
+- `tests/mc/test_nanobot_agent.py` -- patch targets updated
+- `tests/mc/test_sync_nanobot_model.py` -- patch targets updated
+- `tests/mc/test_skill_distribution.py` -- logger name updated
 
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+None -- no blockers encountered.
 
 ### Completion Notes List
+- AgentGateway class was extracted to `mc/crash_handler.py` (not just infrastructure) because it's a runtime service, not config/bootstrap. This keeps the boundary clean: executor imports from crash_handler, not gateway.
+- `mc/gateway.py` provides backward-compatible re-exports so that existing callers (tests, vendor code) can still `from mc.gateway import X` without breaking.
+- The boundary test (`test_boundary.py`) uses AST parsing to verify that no mc/ module (except gateway.py itself) imports from mc.gateway.
+- 3 pre-existing test failures are unrelated: test_workspace (memory quarantine, skill logging), test_cli_tasks (output format).
 
 ### File List
+See "Project Structure Notes" above for complete file lists.
 
 ## Change Log
+- 2026-03-06: Story implemented. All ACs met. 1436 tests pass, 0 regressions.

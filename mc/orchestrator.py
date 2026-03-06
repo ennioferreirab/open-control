@@ -282,7 +282,7 @@ class TaskOrchestrator:
             return
 
         # Fetch all enabled, delegatable agents (filter extra Convex fields)
-        from mc.gateway import filter_agent_fields
+        from mc.infrastructure.config import filter_agent_fields
         from mc.planner import _is_delegatable
 
         agents_data = await asyncio.to_thread(self._bridge.list_agents)

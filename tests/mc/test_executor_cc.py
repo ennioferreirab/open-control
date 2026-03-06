@@ -847,7 +847,7 @@ class TestLoadAgentData:
     def test_returns_none_for_missing_config(self, tmp_path):
         executor = _make_executor()
         # Patch AGENTS_DIR to a temp directory where the agent dir does NOT exist
-        with patch("mc.gateway.AGENTS_DIR", tmp_path):
+        with patch("mc.infrastructure.config.AGENTS_DIR", tmp_path):
             result = executor._load_agent_data("no-such-agent")
         assert result is None
 
@@ -865,7 +865,7 @@ class TestLoadAgentData:
 
         executor = _make_executor()
         with (
-            patch("mc.gateway.AGENTS_DIR", tmp_path),
+            patch("mc.infrastructure.config.AGENTS_DIR", tmp_path),
             patch("mc.yaml_validator.validate_agent_file", return_value=expected),
         ):
             result = executor._load_agent_data("my-agent")
@@ -880,7 +880,7 @@ class TestLoadAgentData:
 
         executor = _make_executor()
         with (
-            patch("mc.gateway.AGENTS_DIR", tmp_path),
+            patch("mc.infrastructure.config.AGENTS_DIR", tmp_path),
             patch("mc.yaml_validator.validate_agent_file", return_value=["validation error"]),
         ):
             result = executor._load_agent_data("bad-agent")

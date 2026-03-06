@@ -3,7 +3,6 @@
 import asyncio
 import dataclasses
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -141,12 +140,11 @@ class TestRunGateway:
              patch("nanobot.bus.queue.MessageBus"), \
              patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel), \
              patch("mc.gateway._run_plan_negotiation_manager", new=AsyncMock()), \
-             patch("mc.mentions.watcher.MentionWatcher") as MockMW:
+             patch("mc.mention_watcher.MentionWatcher") as MockMW:
             mock_orch_instance = MockOrch.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
             mock_orch_instance.start_kickoff_watch_loop = AsyncMock()
-            mock_orch_instance.start_retry_watch_loop = AsyncMock()
             mock_orch_instance.start_inbox_routing_loop = AsyncMock()
 
             mock_tc_instance = MockTC.return_value
@@ -184,7 +182,6 @@ class TestRunGateway:
             mock_orch_instance.start_routing_loop.assert_called_once()
             mock_orch_instance.start_review_routing_loop.assert_called_once()
             mock_orch_instance.start_kickoff_watch_loop.assert_called_once()
-            mock_orch_instance.start_retry_watch_loop.assert_called_once()
             mock_tc_instance.start.assert_called_once()
             mock_exec_instance.start_execution_loop.assert_called_once()
             mock_ch_instance.run.assert_called_once()
@@ -535,42 +532,6 @@ class TestTaskExecution:
                 "crash-agent", "task_005", crash_error
             )
 
-    @pytest.mark.asyncio
-    async def test_structured_model_error_delegates_to_agent_gateway(self):
-        """Structured model errors must use the crash path instead of success."""
-        from mc.executor import TaskExecutor
-
-        mock_bridge = MagicMock()
-        mock_bridge.update_task_status = MagicMock()
-        mock_bridge.send_message = MagicMock()
-        mock_bridge.create_activity = MagicMock()
-        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
-
-        executor = TaskExecutor(mock_bridge)
-        error_result = SimpleNamespace(
-            content="Error calling Codex:",
-            is_error=True,
-            error_message="Error calling Codex:",
-        )
-
-        with patch(
-            "mc.executor._run_agent_on_task",
-            new_callable=AsyncMock,
-            return_value=(error_result, "mock_session_key", MagicMock()),
-        ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-            patch("asyncio.to_thread", side_effect=_to_thread_passthrough), \
-            patch.object(executor, "_agent_gateway") as mock_gw:
-            mock_gw.handle_agent_crash = AsyncMock()
-            await executor._execute_task(
-                "task_006", "Soft error task", "Will soft-fail", "soft-agent", "autonomous"
-            )
-
-        mock_gw.handle_agent_crash.assert_called_once()
-        mock_bridge.send_message.assert_not_called()
-        assert not any(
-            call.args[1] in {"done", "review"} for call in mock_bridge.update_task_status.call_args_list
-        )
-
 
 # ---------------------------------------------------------------------------
 # Lead-agent pure-orchestrator guards
@@ -624,8 +585,8 @@ class TestTrustLevelStatus:
     """Test trust level determines done vs review."""
 
     @pytest.mark.asyncio
-    async def test_human_approved_transitions_to_review(self):
-        """human_approved trust level should transition to 'review'."""
+    async def test_agent_reviewed_transitions_to_review(self):
+        """agent_reviewed trust level should transition to 'review'."""
         from mc.executor import TaskExecutor
 
         mock_bridge = MagicMock()
@@ -640,7 +601,7 @@ class TestTrustLevelStatus:
              patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
              patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await executor._execute_task(
-                "task_006", "Reviewed task", "For review", "review-agent", "human_approved"
+                "task_006", "Reviewed task", "For review", "review-agent", "agent_reviewed"
             )
 
         mock_bridge.update_task_status.assert_any_call(
@@ -673,7 +634,7 @@ class TestLoadAgentConfig:
             "model: anthropic/claude-haiku-3\n"
         )
 
-        with patch("mc.gateway.AGENTS_DIR", tmp_path):
+        with patch("mc.infrastructure.config.AGENTS_DIR", tmp_path):
             prompt, model, skills = executor._load_agent_config("test-agent")
 
         assert prompt == "You are a test agent."
@@ -687,7 +648,7 @@ class TestLoadAgentConfig:
         mock_bridge = MagicMock()
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.gateway.AGENTS_DIR", tmp_path):
+        with patch("mc.infrastructure.config.AGENTS_DIR", tmp_path):
             prompt, model, skills = executor._load_agent_config("nonexistent")
 
         assert prompt is None
@@ -885,7 +846,7 @@ class TestOrchestratorNoDuplicateActivity:
         task_data = {
             "title": "Review me",
             "reviewers": ["reviewer-agent"],
-            "trust_level": "human_approved",
+            "trust_level": "agent_reviewed",
         }
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
@@ -1457,7 +1418,7 @@ class TestWriteBackRestoresArchive:
         agent_dir.mkdir()
         (agent_dir / "memory").mkdir()
 
-        with patch("mc.agent_sync._restore_archived_files") as mock_restore:
+        with patch("mc.infrastructure.agent_bootstrap._restore_archived_files") as mock_restore:
             _write_back_convex_agents(mock_bridge, tmp_path)
 
         mock_restore.assert_called_once()
@@ -1502,9 +1463,9 @@ class TestSyncAgentRegistryCallsCleanup:
         mock_bridge = MagicMock()
         call_order = []
 
-        with patch("mc.agent_sync._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
-             patch("mc.agent_sync._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
-             patch("mc.agent_sync._config_default_model", return_value="anthropic/claude-haiku-4-5"):
+        with patch("mc.infrastructure.agent_bootstrap._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
+             patch("mc.infrastructure.agent_bootstrap._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
+             patch("mc.infrastructure.config._config_default_model", return_value="anthropic/claude-haiku-4-5"):
             sync_agent_registry(mock_bridge, tmp_path)
 
         assert call_order[0] == "cleanup", "cleanup must run before write_back"

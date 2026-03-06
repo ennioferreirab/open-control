@@ -1,4 +1,5 @@
-"""Task Executor — picks up assigned tasks and runs agent work.
+"""
+Task Executor — picks up assigned tasks and runs agent work.
 
 Extracted from orchestrator.py per NFR21 (500-line module limit).
 Subscribes to assigned tasks, transitions them to in_progress,
@@ -12,43 +13,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mc.gateway import AgentGateway
-from mc.output_enricher import (  # noqa: F401
-    _PROVIDER_ERRORS,
-    _build_tag_attributes_context,
-    _build_thread_context,
-    _collect_output_artifacts,
-    _collect_provider_error_types,
-    _enrich_nanobot_description,
-    _get_iana_timezone,
-    _human_size,
-    _make_provider,
-    _provider_error_action,
-    _relocate_invalid_memory_files,
-    _run_agent_on_task,
-    _snapshot_output_dir,
-    build_executor_agent_roster,
-    build_task_message,
-)
+from mc.crash_handler import AgentGateway
 from mc.planner import TaskPlanner
 from mc.types import (
-    LEAD_AGENT_NAME,
-    NANOBOT_AGENT_NAME,
     ActivityEventType,
-    AgentData,
     AuthorType,
+    AgentData,
+    NANOBOT_AGENT_NAME,
+    LEAD_AGENT_NAME,
     LeadAgentExecutionError,
     MessageType,
     TaskStatus,
     TrustLevel,
-    extract_cc_model_name,
-    is_cc_model,
     is_lead_agent,
     is_tier_reference,
+    is_cc_model,
+    extract_cc_model_name,
+    task_safe_id,
 )
 
 if TYPE_CHECKING:
@@ -61,31 +46,491 @@ logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
-@dataclass(slots=True)
-class AgentRunResult:
-    content: str
-    is_error: bool = False
-    error_message: str | None = None
+def _collect_provider_error_types() -> tuple[type[Exception], ...]:
+    """Collect provider-specific exception types for targeted catching.
+
+    Returns a tuple of exception classes that represent provider/OAuth
+    errors (as opposed to agent runtime errors). These are caught
+    separately in _execute_task so they get surfaced with actionable
+    instructions instead of being buried in generic crash handling.
+    """
+    from mc.provider_factory import ProviderError
+
+    types: list[type[Exception]] = [ProviderError]
+    try:
+        from nanobot.providers.anthropic_oauth import AnthropicOAuthExpired
+
+        types.append(AnthropicOAuthExpired)
+    except ImportError:
+        pass
+    return tuple(types)
 
 
-def _coerce_agent_run_result(value: Any) -> AgentRunResult:
-    """Normalize legacy string results and structured loop results."""
-    if isinstance(value, AgentRunResult):
-        return value
-    if isinstance(value, str):
-        return AgentRunResult(content=value)
-    return AgentRunResult(
-        content=getattr(value, "content", "") or "",
-        is_error=bool(getattr(value, "is_error", False)),
-        error_message=getattr(value, "error_message", None),
+_PROVIDER_ERRORS = _collect_provider_error_types()
+
+
+def _get_iana_timezone() -> str | None:
+    """Resolve IANA timezone name from system (e.g. 'America/Vancouver')."""
+    import os
+    try:
+        resolved = str(Path("/etc/localtime").resolve())
+        if "zoneinfo/" in resolved:
+            return resolved.split("zoneinfo/")[-1]
+    except OSError:
+        pass
+    tz_env = os.environ.get("TZ")
+    if tz_env and "/" in tz_env:
+        return tz_env.lstrip(":")
+    return None
+
+
+def build_executor_agent_roster() -> str:
+    """Build a roster of available agents for injection into executor orientation.
+
+    Reads ~/.nanobot/agents/*/config.yaml, excludes system agents and lead-agent.
+    Returns formatted list for agent orientation interpolation.
+    """
+    from mc.infrastructure.config import AGENTS_DIR
+    from mc.yaml_validator import validate_agent_file
+
+    lines: list[str] = []
+    if not AGENTS_DIR.is_dir():
+        return "(no other agents available)"
+    for agent_dir in sorted(AGENTS_DIR.iterdir()):
+        if not agent_dir.is_dir():
+            continue
+        config_path = agent_dir / "config.yaml"
+        if not config_path.exists():
+            continue
+        result = validate_agent_file(config_path)
+        if isinstance(result, list):
+            continue
+        # Skip system agents and lead-agent
+        if getattr(result, "is_system", False) or is_lead_agent(result.name):
+            continue
+        skill_str = ", ".join(result.skills) if result.skills else "general"
+        lines.append(f"- **{result.name}** — {result.role} (skills: {skill_str})")
+    if not lines:
+        return "(no other agents available)"
+    return "\n".join(lines)
+
+
+def _provider_error_action(exc: Exception) -> str:
+    """Extract a user-facing action string from a provider error.
+
+    For ProviderError the action is explicit. For AnthropicOAuthExpired
+    the message itself contains the command. Falls back to a generic hint.
+    """
+    from mc.provider_factory import ProviderError
+
+    if isinstance(exc, ProviderError) and exc.action:
+        return exc.action
+    # AnthropicOAuthExpired messages include "Run: nanobot provider login ..."
+    msg = str(exc)
+    if "Run:" in msg:
+        return msg[msg.index("Run:") :]
+    return "Check provider configuration in ~/.nanobot/config.json"
+
+
+def _make_provider(model: str | None = None):
+    """Create the LLM provider from the user's nanobot config.
+
+    Delegates to the shared provider_factory.create_provider() to avoid
+    duplication with nanobot/cli/commands.py.
+    """
+    from mc.provider_factory import create_provider
+
+    return create_provider(model)
+
+
+def build_task_message(title: str, description: str | None) -> str:
+    """Build the task message sent to the agent.
+
+    When a description exists, uses structured XML tags so the agent
+    can distinguish title from description. Otherwise, plain title
+    for backward compatibility.
+    """
+    if description and description.strip():
+        return f"<title>{title}</title>\n<description>{description}</description>"
+    return title
+
+
+async def _run_agent_on_task(
+    agent_name: str,
+    agent_prompt: str | None,
+    agent_model: str | None,
+    reasoning_level: str | None = None,
+    task_title: str = "",
+    task_description: str | None = None,
+    agent_skills: list[str] | None = None,
+    board_name: str | None = None,
+    memory_workspace: Path | None = None,
+    cron_service: Any | None = None,
+    task_id: str | None = None,
+    bridge: "ConvexBridge | None" = None,
+    ask_user_registry: Any | None = None,
+) -> tuple[str, str, "AgentLoop"]:
+    """Run the nanobot agent loop on a task and return the result.
+
+    Uses AgentLoop.process_direct() with the agent's system prompt and model.
+    The task title + description become the message input.
+    When board_name is provided, uses board-scoped session key and memory_workspace.
+    """
+    if is_lead_agent(agent_name):
+        raise LeadAgentExecutionError(
+            "INVARIANT VIOLATION: Lead Agent must never be passed to "
+            "_run_agent_on_task(). Execution structurally blocked."
+        )
+
+    from nanobot.agent.loop import AgentLoop
+    from nanobot.bus.queue import MessageBus
+
+    workspace = Path.home() / ".nanobot" / "agents" / agent_name
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    # Global workspace skills (installed via ClawHub or manually)
+    global_skills_dir = Path.home() / ".nanobot" / "workspace" / "skills"
+
+    # Build the message from task title + description (structured format)
+    message = build_task_message(task_title, task_description)
+
+    # Prefix with agent system prompt if available (ContextBuilder reads
+    # bootstrap files from workspace, but the YAML prompt isn't a bootstrap
+    # file — so we include it in the message content).
+    if agent_prompt:
+        message = f"[System instructions]\n{agent_prompt}\n\n[Task]\n{message}"
+
+    logger.info(
+        "[_run_agent_on_task] Agent '%s': workspace=%s, memory_workspace=%s",
+        agent_name, workspace, memory_workspace,
     )
+    logger.info(
+        "[_run_agent_on_task] Agent '%s': final message len=%d, first 500 chars:\n%s",
+        agent_name, len(message), repr(message[:500]),
+    )
+
+    # Board-scoped session key format (AC6); include task_id for per-task isolation
+    if board_name:
+        session_key = f"mc:board:{board_name}:task:{agent_name}:{task_id}" if task_id else f"mc:board:{board_name}:task:{agent_name}"
+    else:
+        session_key = f"mc:task:{agent_name}:{task_id}" if task_id else f"mc:task:{agent_name}"
+    logger.info(
+        "[_run_agent_on_task] Agent '%s': session_key='%s', board_name=%s",
+        agent_name, session_key, board_name,
+    )
+
+    # Create provider from user config (respects OAuth, API keys, etc.)
+    provider, resolved_model = _make_provider(agent_model)
+
+    bus = MessageBus()
+    loop = AgentLoop(
+        bus=bus,
+        provider=provider,
+        workspace=workspace,
+        model=resolved_model,
+        reasoning_level=reasoning_level,
+        allowed_skills=agent_skills,
+        global_skills_dir=global_skills_dir,
+        memory_workspace=memory_workspace,
+        cron_service=cron_service,
+        agent_name=agent_name,
+        mc_consolidation_system_prompt=(
+            "You are a memory consolidation agent processing MC task history. "
+            "User messages may contain <title>...</title> and <description>...</description> XML tags identifying the task. "
+            "Descriptions may include: file manifests (input files attached to the task), "
+            "[Task Tag Attributes] (tags and their attribute key=value pairs), "
+            "and ## Thread Context (prior human messages in the task thread). "
+            "When writing history_entry, use this format for each task: "
+            "'[YYYY-MM-DD HH:MM] Task \"<title>\": <summary>. "
+            "Tags: <tag>(<attr=val>, ...). "
+            "Files read: <paths>. Files written: <paths>.' "
+            "Omit any field that has no data. "
+            "Call the save_memory tool with your consolidation."
+        ),
+    )
+
+    # Agents running MC steps should execute tasks directly, not re-delegate.
+    # Remove delegate_task to prevent circular delegation loops.
+    loop.tools.unregister("delegate_task")
+
+    # Inject Telegram default chat_id into CronTool so agents running in MC
+    # context can schedule cron jobs that deliver to Telegram without needing
+    # to know the numeric chat_id explicitly.
+    if cron_tool := loop.tools.get("cron"):
+        from nanobot.agent.tools.cron import CronTool as _CronTool
+        if isinstance(cron_tool, _CronTool):
+            from nanobot.config.loader import load_config as _load_config
+            _cfg = _load_config()
+            _tg_ids = [x for x in _cfg.channels.telegram.allow_from if x.lstrip("-").isdigit()]
+            if _tg_ids:
+                cron_tool.set_telegram_default(_tg_ids[0])
+
+    # Set MC context on ask_agent tool for inter-agent conversations (Story 10.3)
+    if ask_tool := loop.tools.get("ask_agent"):
+        from nanobot.agent.tools.ask_agent import AskAgentTool
+        if isinstance(ask_tool, AskAgentTool):
+            ask_tool.set_context(
+                caller_agent=agent_name,
+                task_id=task_id,
+                depth=0,
+                bridge=bridge,
+            )
+
+    # Set MC context on ask_user tool for interactive user questions
+    _ask_user_cleanup: tuple[Any | None, str | None] | None = None
+    if ask_user_tool := loop.tools.get("ask_user"):
+        from nanobot.agent.tools.ask_user import AskUserTool
+        if isinstance(ask_user_tool, AskUserTool):
+            from mc.ask_user_handler import AskUserHandler
+
+            handler = AskUserHandler()
+            if ask_user_registry and task_id:
+                ask_user_registry.register(task_id, handler)
+            ask_user_tool.set_context(
+                agent_name=agent_name,
+                task_id=task_id,
+                bridge=bridge,
+                handler=handler,
+            )
+            _ask_user_cleanup = (ask_user_registry, task_id)
+
+    try:
+        result = await loop.process_direct(
+            content=message,
+            session_key=session_key,
+            channel="mc",
+            chat_id=agent_name,
+            task_id=task_id,
+        )
+    finally:
+        if _ask_user_cleanup is not None:
+            reg, tid = _ask_user_cleanup
+            if reg and tid:
+                reg.unregister(tid)
+
+    return result, session_key, loop
+
+
+def _human_size(b: int) -> str:
+    """Convert a byte count to a human-readable size string."""
+    if b < 1024 * 1024:
+        return f"{b // 1024} KB"
+    return f"{b / (1024 * 1024):.1f} MB"
+
+
+def _snapshot_output_dir(task_id: str) -> dict[str, float]:
+    """Capture {relative_path: mtime} for all files in the task's output dir.
+
+    The relative path is relative to the task base directory (two levels above
+    the file), e.g. ``"output/report.pdf"`` for a file stored in
+    ``~/.nanobot/tasks/{safe_id}/output/report.pdf``.
+    """
+    safe_id = task_safe_id(task_id)
+    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    snapshot: dict[str, float] = {}
+    if output_dir.exists():
+        for entry in output_dir.rglob("*"):
+            if entry.is_file():
+                # relative to task base dir (one level above output/)
+                rel = str(entry.relative_to(output_dir.parent))
+                snapshot[rel] = entry.stat().st_mtime
+    return snapshot
+
+
+def _collect_output_artifacts(
+    task_id: str,
+    pre_snapshot: dict[str, float] | None,
+) -> list[dict[str, Any]]:
+    """Compare post-execution output dir against pre-snapshot to detect artifacts.
+
+    Returns a list of artifact dicts (Convex-compatible) describing files
+    that were created or modified during agent execution.
+
+    Each dict has keys: ``path``, ``action``, and optionally ``description``
+    (for created files) or ``diff`` (for modified files).
+
+    The ``path`` is relative to the task base directory (e.g., ``"output/report.pdf"``).
+    """
+    safe_id = task_safe_id(task_id)
+    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    artifacts: list[dict[str, Any]] = []
+    pre = pre_snapshot or {}
+
+    if not output_dir.exists():
+        return artifacts
+
+    for entry in output_dir.rglob("*"):
+        if not entry.is_file():
+            continue
+        # relative to task base dir (parent of output/)
+        rel = str(entry.relative_to(output_dir.parent))
+        size = entry.stat().st_size
+
+        if rel not in pre:
+            # New file — created
+            ext = entry.suffix.lstrip(".").upper() or "file"
+            artifacts.append({
+                "path": rel,
+                "action": "created",
+                "description": f"{ext}, {_human_size(size)}",
+            })
+        elif entry.stat().st_mtime > pre[rel]:
+            # Existing file with newer mtime — modified
+            artifacts.append({
+                "path": rel,
+                "action": "modified",
+                "diff": f"File updated ({_human_size(size)})",
+            })
+
+    return artifacts
+
+
+def _relocate_invalid_memory_files(task_id: str, workspace: Path) -> list[Path]:
+    """Move memory contract violations into the task output directory.
+
+    Files are relocated to `output/` with a `memory-relocated-` prefix so they
+    show up in the normal artifact pipeline. Directories are archived as zip
+    files for the same reason.
+    """
+    from mc.memory import find_invalid_memory_files
+    from mc.memory.index import MemoryIndex
+
+    memory_dir = workspace / "memory"
+    invalid_paths = find_invalid_memory_files(memory_dir)
+    if not invalid_paths:
+        return []
+
+    safe_id = task_safe_id(task_id)
+    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    moved: list[Path] = []
+
+    def _unique_path(base_name: str) -> Path:
+        candidate = output_dir / base_name
+        if not candidate.exists():
+            return candidate
+        stem = candidate.stem
+        suffix = candidate.suffix
+        idx = 2
+        while True:
+            candidate = output_dir / f"{stem}-{idx}{suffix}"
+            if not candidate.exists():
+                return candidate
+            idx += 1
+
+    for path in invalid_paths:
+        if path.is_dir() and not path.is_symlink():
+            archive_base = _unique_path(f"memory-relocated-{path.name}").with_suffix("")
+            archive_file = Path(
+                shutil.make_archive(
+                    str(archive_base),
+                    "zip",
+                    root_dir=path.parent,
+                    base_dir=path.name,
+                )
+            )
+            shutil.rmtree(path)
+            moved.append(archive_file)
+            logger.warning(
+                "[executor] Archived invalid memory directory '%s' to '%s'",
+                path,
+                archive_file,
+            )
+            continue
+
+        target = _unique_path(f"memory-relocated-{path.name}")
+        shutil.move(str(path), str(target))
+        moved.append(target)
+        logger.warning(
+            "[executor] Relocated invalid memory file '%s' to '%s'",
+            path,
+            target,
+        )
+
+    if memory_dir.exists():
+        MemoryIndex(memory_dir).sync()
+
+    return moved
+
+
+def _build_thread_context(messages: list[dict[str, Any]], max_messages: int = 20) -> str:
+    """Format thread messages as conversation context for the agent.
+
+    Thin shim that delegates to ThreadContextBuilder for backward compatibility.
+    Preserves legacy behavior: returns empty string if no user messages exist.
+
+    For step-aware context with predecessor injection, use ThreadContextBuilder
+    directly with predecessor_step_ids parameter.
+    """
+    from mc.thread_context import ThreadContextBuilder
+
+    return ThreadContextBuilder().build(messages, max_messages=max_messages)
+
+
+def _build_tag_attributes_context(
+    tags: list[str],
+    attr_values: list[dict[str, Any]],
+    attr_catalog: list[dict[str, Any]],
+) -> str:
+    """Build a context section describing tag attribute values for the agent.
+
+    Args:
+        tags: List of tag name strings assigned to the task.
+        attr_values: List of tagAttributeValue records (snake_case keys from bridge).
+        attr_catalog: List of tagAttribute records (snake_case keys from bridge).
+
+    Returns:
+        A formatted string section like:
+        [Task Tag Attributes]
+        client-tag: priority=high, deadline=2026-03-01
+        ...
+        Returns empty string if no tags have non-empty attribute values.
+    """
+    if not tags or not attr_values or not attr_catalog:
+        return ""
+
+    # Build attribute id -> name lookup
+    attr_name_map: dict[str, str] = {}
+    for attr in attr_catalog:
+        attr_id = attr.get("id") or attr.get("_id") or ""
+        attr_name = attr.get("name", "")
+        if attr_id and attr_name:
+            attr_name_map[attr_id] = attr_name
+
+    # Group values by tag name
+    tag_attrs: dict[str, list[str]] = {}
+    for val in attr_values:
+        tag_name = val.get("tag_name", "")
+        value = val.get("value", "")
+        attr_id = val.get("attribute_id") or val.get("_attribute_id") or ""
+
+        # Skip empty values
+        if not tag_name or not value or tag_name not in tags:
+            continue
+
+        attr_name = attr_name_map.get(attr_id, "")
+        if not attr_name:
+            continue
+
+        if tag_name not in tag_attrs:
+            tag_attrs[tag_name] = []
+        tag_attrs[tag_name].append(f"{attr_name}={value}")
+
+    if not tag_attrs:
+        return ""
+
+    lines = ["[Task Tag Attributes]"]
+    for tag_name in tags:
+        if tag_name in tag_attrs:
+            pairs = ", ".join(tag_attrs[tag_name])
+            lines.append(f"{tag_name}: {pairs}")
+
+    return "\n".join(lines)
 
 
 class TaskExecutor:
-    """Picks up assigned tasks and runs agent execution.
-
-    Inherits CC backend methods from CCExecutorMixin (in mc.cc_executor).
-    """
+    """Picks up assigned tasks and runs agent execution."""
 
     def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None,
                  on_task_completed: Any | None = None,
@@ -106,39 +551,65 @@ class TaskExecutor:
         return self._tier_resolver
 
     async def _handle_tier_error(
-        self, task_id: str, title: str, agent_name: str, exc: Exception,
+        self,
+        task_id: str,
+        title: str,
+        agent_name: str,
+        exc: Exception,
     ) -> None:
         """Surface tier resolution errors in the task thread and crash the task."""
         error_msg = f"Model tier resolution failed: {exc}"
         logger.error("[executor] %s (task '%s', agent '%s')", error_msg, title, agent_name)
+
         try:
             await asyncio.to_thread(
-                self._bridge.send_message, task_id, "System",
-                AuthorType.SYSTEM, error_msg, MessageType.SYSTEM_EVENT,
+                self._bridge.send_message,
+                task_id,
+                "System",
+                AuthorType.SYSTEM,
+                error_msg,
+                MessageType.SYSTEM_EVENT,
             )
         except Exception:
             logger.exception("[executor] Failed to write tier error message")
+
         try:
             await asyncio.to_thread(
-                self._bridge.create_activity, ActivityEventType.SYSTEM_ERROR,
-                f"Tier resolution failed for '{title}': {exc}", task_id, agent_name,
+                self._bridge.create_activity,
+                ActivityEventType.SYSTEM_ERROR,
+                f"Tier resolution failed for '{title}': {exc}",
+                task_id,
+                agent_name,
             )
         except Exception:
             logger.exception("[executor] Failed to create tier error activity")
+
         try:
             await asyncio.to_thread(
-                self._bridge.update_task_status, task_id, TaskStatus.CRASHED,
-                agent_name, f"Tier resolution failed: {exc}",
+                self._bridge.update_task_status,
+                task_id,
+                TaskStatus.CRASHED,
+                agent_name,
+                f"Tier resolution failed: {exc}",
             )
         except Exception:
             logger.exception("[executor] Failed to crash task after tier error")
 
     async def start_execution_loop(self) -> None:
-        """Subscribe to assigned tasks and execute them as they arrive."""
+        """Subscribe to assigned tasks and execute them as they arrive.
+
+        Uses bridge.async_subscribe() which runs the blocking Convex
+        subscription in a dedicated thread and feeds updates into an
+        asyncio.Queue — no event-loop blocking.
+        Tasks are dispatched concurrently via asyncio.create_task() to
+        satisfy NFR2 (< 5s pickup latency).
+        """
         logger.info("[executor] Starting execution loop")
+
         queue = self._bridge.async_subscribe(
             "tasks:listByStatus", {"status": "assigned"}
         )
+
         while True:
             tasks = await queue.get()
             if tasks is None:
@@ -147,6 +618,7 @@ class TaskExecutor:
                 task_id = task_data.get("id")
                 if not task_id or task_id in self._known_assigned_ids:
                     continue
+                # Skip manual tasks — user-managed, no agent execution
                 if task_data.get("is_manual"):
                     logger.info(
                         "[executor] Skipping manual task '%s' (%s)",
@@ -167,85 +639,154 @@ class TaskExecutor:
             if is_lead_agent(agent_name):
                 await self._handle_lead_agent_task(task_data)
                 return
+
+            # Transition to in_progress.
+            # Activity event (task_started) is written by the Convex
+            # tasks:updateStatus mutation — no duplicate create_activity here.
             await asyncio.to_thread(
-                self._bridge.update_task_status, task_id, TaskStatus.IN_PROGRESS,
-                agent_name, f"Agent {agent_name} started work on '{title}'",
+                self._bridge.update_task_status,
+                task_id,
+                TaskStatus.IN_PROGRESS,
+                agent_name,
+                f"Agent {agent_name} started work on '{title}'",
             )
+
+            # Write system message to task thread (messages are separate from activities)
             await asyncio.to_thread(
-                self._bridge.send_message, task_id, "System", AuthorType.SYSTEM,
+                self._bridge.send_message,
+                task_id,
+                "System",
+                AuthorType.SYSTEM,
                 f"Agent {agent_name} has started work on this task.",
                 MessageType.SYSTEM_EVENT,
             )
-            logger.info("[executor] Task '%s' picked up by '%s' — now in_progress", title, agent_name)
-            await self._execute_task(task_id, title, description, agent_name, trust_level, task_data)
+
+            logger.info(
+                "[executor] Task '%s' picked up by '%s' — now in_progress",
+                title, agent_name,
+            )
+
+            await self._execute_task(
+                task_id, title, description, agent_name, trust_level, task_data
+            )
         finally:
             self._known_assigned_ids.discard(task_id)
 
     async def _handle_lead_agent_task(self, task_data: dict[str, Any]) -> None:
         """Re-route lead-agent tasks through the planner."""
-        from mc.gateway import filter_agent_fields
+        from mc.infrastructure.config import filter_agent_fields
 
         task_id = task_data["id"]
         title = task_data.get("title", "Untitled")
         description = task_data.get("description")
+
         logger.warning(
             "[executor] Lead Agent dispatch intercepted for task '%s'. "
-            "Pure orchestrator invariant enforced; rerouting via planner.", title,
+            "Pure orchestrator invariant enforced; rerouting via planner.",
+            title,
         )
+
         try:
             agents_data = await asyncio.to_thread(self._bridge.list_agents)
             agents = [AgentData(**filter_agent_fields(a)) for a in agents_data]
             agents = [a for a in agents if a.enabled is not False]
         except Exception:
             logger.warning(
-                "[executor] Failed to list agents while rerouting lead-agent task '%s'; using planner fallback",
-                title, exc_info=True,
+                "[executor] Failed to list agents while rerouting lead-agent "
+                "task '%s'; using planner fallback",
+                title,
+                exc_info=True,
             )
             agents = []
+
         planner = TaskPlanner(self._bridge)
         plan = await planner.plan_task(
-            title=title, description=description,
-            agents=agents, files=task_data.get("files") or [],
+            title=title,
+            description=description,
+            agents=agents,
+            files=task_data.get("files") or [],
         )
+
         rerouted_agent = next(
-            (step.assigned_agent for step in plan.steps
-             if step.assigned_agent and not is_lead_agent(step.assigned_agent)),
+            (
+                step.assigned_agent
+                for step in plan.steps
+                if step.assigned_agent and not is_lead_agent(step.assigned_agent)
+            ),
             None,
         )
         if not rerouted_agent:
             rerouted_agent = NANOBOT_AGENT_NAME
             logger.warning(
-                "[executor] Lead-agent reroute produced no executable assignee; using '%s' for task '%s'",
-                rerouted_agent, title,
+                "[executor] Lead-agent reroute produced no executable assignee; "
+                "using '%s' for task '%s'",
+                rerouted_agent,
+                title,
             )
-        await asyncio.to_thread(self._bridge.update_execution_plan, task_id, plan.to_dict())
+
         await asyncio.to_thread(
-            self._bridge.update_task_status, task_id, TaskStatus.ASSIGNED, rerouted_agent,
-            f"Lead Agent dispatch intercepted for '{title}'. Pure orchestrator invariant enforced; task re-routed to {rerouted_agent} via planner.",
+            self._bridge.update_execution_plan,
+            task_id,
+            plan.to_dict(),
         )
         await asyncio.to_thread(
-            self._bridge.send_message, task_id, "System", AuthorType.SYSTEM,
-            f"Lead Agent is a pure orchestrator and cannot execute tasks directly. Task re-routed to {rerouted_agent}.",
+            self._bridge.update_task_status,
+            task_id,
+            TaskStatus.ASSIGNED,
+            rerouted_agent,
+            (
+                f"Lead Agent dispatch intercepted for '{title}'. "
+                f"Pure orchestrator invariant enforced; task re-routed to "
+                f"{rerouted_agent} via planner."
+            ),
+        )
+        await asyncio.to_thread(
+            self._bridge.send_message,
+            task_id,
+            "System",
+            AuthorType.SYSTEM,
+            (
+                "Lead Agent is a pure orchestrator and cannot execute tasks "
+                f"directly. Task re-routed to {rerouted_agent}."
+            ),
             MessageType.SYSTEM_EVENT,
         )
 
-    def _load_agent_config(self, agent_name: str) -> tuple[str | None, str | None, list[str] | None]:
-        """Load prompt, model, and skills from the agent's YAML config file."""
-        from mc.gateway import AGENTS_DIR
+    def _load_agent_config(
+        self, agent_name: str
+    ) -> tuple[str | None, str | None, list[str] | None]:
+        """Load prompt, model, and skills from the agent's YAML config file.
+
+        Returns:
+            Tuple of (prompt, model, skills). prompt/model may be None if not
+            configured; skills is None when no config exists (meaning "no
+            filtering"), or the actual list from config (possibly empty,
+            meaning "only always-on skills").
+        """
+        from mc.infrastructure.config import AGENTS_DIR
         from mc.yaml_validator import validate_agent_file
 
         config_file = AGENTS_DIR / agent_name / "config.yaml"
         if not config_file.exists():
             return None, None, None
+
         result = validate_agent_file(config_file)
         if isinstance(result, list):
-            logger.warning("[executor] Agent '%s' config invalid: %s", agent_name, result)
+            # Validation errors — use defaults
+            logger.warning(
+                "[executor] Agent '%s' config invalid: %s", agent_name, result
+            )
             return None, None, None
+
         return result.prompt, result.model, result.skills
 
     def _load_agent_data(self, agent_name: str) -> "AgentData | None":
-        """Load full AgentData from an agent's YAML config file."""
-        from mc.gateway import AGENTS_DIR
+        """Load full AgentData from an agent's YAML config file.
+
+        Returns the validated AgentData (including backend field) or None when
+        the config file does not exist or fails validation.
+        """
+        from mc.infrastructure.config import AGENTS_DIR
         from mc.yaml_validator import validate_agent_file
 
         config_path = AGENTS_DIR / agent_name / "config.yaml"
@@ -255,38 +796,76 @@ class TaskExecutor:
         return result if isinstance(result, AgentData) else None
 
     async def _handle_provider_error(
-        self, task_id: str, title: str, agent_name: str, exc: Exception,
+        self,
+        task_id: str,
+        title: str,
+        agent_name: str,
+        exc: Exception,
     ) -> None:
-        """Surface provider/OAuth errors prominently."""
+        """Surface provider/OAuth errors prominently.
+
+        Instead of burying the error through generic crash handling, this
+        writes a clear system message with the actionable command the user
+        needs to run, AND creates a system_error activity event so it
+        shows up in the dashboard activity feed.
+        """
         action = _provider_error_action(exc)
         error_class = type(exc).__name__
-        user_message = f"Provider error: {error_class}: {exc}\n\nAction: {action}"
-        logger.error("[executor] Provider error on task '%s': %s. Action: %s", title, exc, action)
+        user_message = (
+            f"Provider error: {error_class}: {exc}\n\n"
+            f"Action: {action}"
+        )
+
+        logger.error(
+            "[executor] Provider error on task '%s': %s. Action: %s",
+            title, exc, action,
+        )
+
+        # Write system message to task thread with clear instructions
         try:
             await asyncio.to_thread(
-                self._bridge.send_message, task_id, "System", AuthorType.SYSTEM,
-                user_message, MessageType.SYSTEM_EVENT,
+                self._bridge.send_message,
+                task_id,
+                "System",
+                AuthorType.SYSTEM,
+                user_message,
+                MessageType.SYSTEM_EVENT,
             )
         except Exception:
             logger.exception("[executor] Failed to write provider error message")
+
+        # Create system_error activity event for the dashboard feed
         try:
             await asyncio.to_thread(
-                self._bridge.create_activity, ActivityEventType.SYSTEM_ERROR,
-                f"Provider error on '{title}': {error_class}. {action}", task_id, agent_name,
+                self._bridge.create_activity,
+                ActivityEventType.SYSTEM_ERROR,
+                f"Provider error on '{title}': {error_class}. {action}",
+                task_id,
+                agent_name,
             )
         except Exception:
             logger.exception("[executor] Failed to create provider error activity")
+
+        # Transition task to crashed (provider errors should not auto-retry)
         try:
             await asyncio.to_thread(
-                self._bridge.update_task_status, task_id, TaskStatus.CRASHED,
-                agent_name, f"Provider error: {error_class}",
+                self._bridge.update_task_status,
+                task_id,
+                TaskStatus.CRASHED,
+                agent_name,
+                f"Provider error: {error_class}",
             )
         except Exception:
             logger.exception("[executor] Failed to crash task after provider error")
 
     def _build_agent_roster(self) -> str:
-        """Build a markdown roster of all available agents from AGENTS_DIR."""
-        from mc.gateway import AGENTS_DIR
+        """Build a markdown roster of all available agents from AGENTS_DIR.
+
+        Reads ~/.nanobot/agents/ and for each agent reads config.yaml to
+        extract name, display_name, role, and skills. Returns a formatted
+        string suitable for injection into the lead-agent context.
+        """
+        from mc.infrastructure.config import AGENTS_DIR
         from mc.yaml_validator import validate_agent_file
 
         lines: list[str] = ["## Available Agents\n"]
@@ -295,11 +874,13 @@ class TaskExecutor:
         for agent_dir in sorted(AGENTS_DIR.iterdir()):
             if not agent_dir.is_dir():
                 continue
+            name = agent_dir.name
             config_path = agent_dir / "config.yaml"
             if not config_path.exists():
                 continue
             result = validate_agent_file(config_path)
             if isinstance(result, list):
+                # Invalid config — skip
                 continue
             skill_str = ", ".join(result.skills) if result.skills else "—"
             line = f"- `{result.name}` ({result.display_name}) — {result.role}"
@@ -307,86 +888,274 @@ class TaskExecutor:
             lines.append(line)
         return "\n".join(lines)
 
-    def _maybe_inject_orientation(self, agent_name: str, agent_prompt: str | None) -> str | None:
+    def _maybe_inject_orientation(
+        self, agent_name: str, agent_prompt: str | None
+    ) -> str | None:
         """Prepend global orientation for non-lead-agent MC agents."""
-        from mc.agent_orientation import load_orientation
+        from mc.orientation import load_orientation
+
         orientation = load_orientation(agent_name)
         if not orientation:
             return agent_prompt
-        logger.info("[executor] Global orientation injected for agent '%s'", agent_name)
+
+        logger.info(
+            "[executor] Global orientation injected for agent '%s'", agent_name
+        )
         if agent_prompt:
             return f"{orientation}\n\n---\n\n{agent_prompt}"
         return orientation
 
     async def _execute_task(
-        self, task_id: str, title: str, description: str | None,
-        agent_name: str, trust_level: str,
-        task_data: dict[str, Any] | None = None, step_id: str | None = None,
+        self,
+        task_id: str,
+        title: str,
+        description: str | None,
+        agent_name: str,
+        trust_level: str,
+        task_data: dict[str, Any] | None = None,
+        step_id: str | None = None,
     ) -> None:
         """Run the agent on the task and handle completion or crash."""
         if is_lead_agent(agent_name):
             raise LeadAgentExecutionError(
-                f"INVARIANT VIOLATION: Lead Agent '{LEAD_AGENT_NAME}' must never enter the execution pipeline. "
-                "This is a bug - the _pickup_task guard should have intercepted this dispatch."
+                "INVARIANT VIOLATION: Lead Agent "
+                f"'{LEAD_AGENT_NAME}' must never enter the execution pipeline. "
+                "This is a bug - the _pickup_task guard should have intercepted "
+                "this dispatch."
             )
 
         # Route to Claude Code backend if agent is configured with backend: claude-code
         agent_data = self._load_agent_data(agent_name)
         if agent_data and agent_data.backend == "claude-code":
             await self._execute_cc_task(
-                task_id, title, description, agent_name, agent_data,
-                trust_level=trust_level, task_data=task_data, needs_enrichment=True,
+                task_id,
+                title,
+                description,
+                agent_name,
+                agent_data,
+                trust_level=trust_level,
+                task_data=task_data,
+                needs_enrichment=True,
             )
             return
 
-        # Enrich description with file manifest, thread context, tag attributes
-        description = await _enrich_nanobot_description(
-            self._bridge, task_id, title, description, task_data,
+        # Fetch fresh task data for up-to-date file manifest (NFR8)
+        safe_id = task_safe_id(task_id)
+        files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
+        try:
+            fresh_task = await asyncio.to_thread(
+                self._bridge.query, "tasks:getById", {"task_id": task_id}
+            )
+            raw_files = (fresh_task or {}).get("files") or []
+        except Exception:
+            logger.warning(
+                "[executor] Failed to fetch fresh task data for '%s', using subscription snapshot",
+                title,
+            )
+            raw_files = (task_data or {}).get("files") or []
+        file_manifest = [
+            {
+                "name": f.get("name", "unknown"),
+                "type": f.get("type", "application/octet-stream"),
+                "size": f.get("size", 0),
+                "subfolder": f.get("subfolder", "attachments"),
+            }
+            for f in raw_files
+        ]
+
+        output_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id / "output")
+        task_instruction = (
+            f"Task workspace: {files_dir}\n"
+            f"Save ALL output files (reports, summaries, generated content) to: {output_dir}\n"
+            f"Do NOT save output files outside this directory."
         )
+        if file_manifest:
+            manifest_summary = ", ".join(
+                f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
+                for f in file_manifest
+            )
+            task_instruction += (
+                f"\nTask has {len(file_manifest)} attached file(s) at {files_dir}/attachments. "
+                f"File manifest: {manifest_summary}"
+            )
+        description = (description or "") + f"\n\n{task_instruction}"
+
+        # Inject thread context for multi-turn agent interaction
+        try:
+            thread_messages = await asyncio.to_thread(
+                self._bridge.get_task_messages, task_id
+            )
+            thread_context = _build_thread_context(thread_messages)
+            if thread_context:
+                description = (description or "") + f"\n{thread_context}"
+                injected_count = min(len(thread_messages), 20)
+                logger.info(
+                    "[executor] Injected thread context (%d of %d messages) for task '%s'",
+                    injected_count, len(thread_messages), title,
+                )
+        except Exception:
+            logger.warning(
+                "[executor] Failed to fetch thread messages for '%s', continuing without thread context",
+                title,
+                exc_info=True,
+            )
+
+        # Inject tag attribute values context (Story 12.2)
+        try:
+            task_tags = (task_data or {}).get("tags") or []
+            if task_tags:
+                tag_attr_values = await asyncio.to_thread(
+                    self._bridge.query,
+                    "tagAttributeValues:getByTask",
+                    {"task_id": task_id},
+                )
+                tag_attr_catalog = await asyncio.to_thread(
+                    self._bridge.query,
+                    "tagAttributes:list",
+                    {},
+                )
+                tag_attrs_context = _build_tag_attributes_context(
+                    task_tags,
+                    tag_attr_values if isinstance(tag_attr_values, list) else [],
+                    tag_attr_catalog if isinstance(tag_attr_catalog, list) else [],
+                )
+                if tag_attrs_context:
+                    description = (description or "") + f"\n\n{tag_attrs_context}"
+                    logger.info(
+                        "[executor] Injected tag attributes context for task '%s'",
+                        title,
+                    )
+        except Exception:
+            logger.warning(
+                "[executor] Failed to fetch tag attributes for '%s', continuing without tag attributes context",
+                title,
+                exc_info=True,
+            )
 
         # Load agent prompt, model, and skills from YAML config
         agent_prompt, agent_model, agent_skills = self._load_agent_config(agent_name)
         logger.info(
             "[executor] Local YAML config for '%s': prompt_len=%d, model=%s, skills=%s",
-            agent_name, len(agent_prompt) if agent_prompt else 0, agent_model, agent_skills,
+            agent_name,
+            len(agent_prompt) if agent_prompt else 0,
+            agent_model,
+            agent_skills,
         )
 
         # Convex is the source of truth for model, prompt, and variables — override YAML
-        agent_prompt, agent_model, agent_skills = await self._sync_convex_agent(
-            agent_name, agent_prompt, agent_model, agent_skills,
-        )
+        try:
+            from mc.infrastructure.config import AGENTS_DIR
+            convex_agent = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
+            if convex_agent:
+                # Sync model
+                if convex_agent.get("model"):
+                    convex_model = convex_agent["model"]
+                    if convex_model != agent_model:
+                        logger.info(
+                            "[executor] Model synced from Convex for '%s': %s → %s",
+                            agent_name, agent_model, convex_model,
+                        )
+                        agent_model = convex_model
+                        # Write back to YAML so local host stays in sync
+                        try:
+                            await asyncio.to_thread(
+                                self._bridge.write_agent_config, convex_agent, AGENTS_DIR
+                            )
+                        except Exception:
+                            logger.warning(
+                                "[executor] YAML write-back failed for '%s'", agent_name, exc_info=True
+                            )
+
+                # Sync prompt (Convex is source of truth for dashboard edits)
+                convex_prompt = convex_agent.get("prompt")
+                logger.info(
+                    "[executor] Convex prompt for '%s': len=%d, first 300 chars: %s",
+                    agent_name,
+                    len(convex_prompt) if convex_prompt else 0,
+                    repr(convex_prompt[:300]) if convex_prompt else "(none)",
+                )
+                if convex_prompt:
+                    agent_prompt = convex_prompt
+
+                # Interpolate variables into prompt ({{var_name}} → value)
+                variables = convex_agent.get("variables") or []
+                if variables and agent_prompt:
+                    for var in variables:
+                        placeholder = "{{" + var["name"] + "}}"
+                        before_count = agent_prompt.count(placeholder)
+                        agent_prompt = agent_prompt.replace(placeholder, var["value"])
+                        logger.info(
+                            "[executor] Variable '%s' interpolated %d time(s) for '%s': value=%r",
+                            var["name"], before_count, agent_name, var["value"][:100],
+                        )
+                    logger.info(
+                        "[executor] Interpolated %d variable(s) into prompt for '%s'",
+                        len(variables), agent_name,
+                    )
+                # Log the final prompt for debugging sync issues
+                if agent_prompt:
+                    logger.info(
+                        "[executor] Final prompt for '%s' (len=%d, first 200 chars): %s",
+                        agent_name, len(agent_prompt), repr(agent_prompt[:200]),
+                    )
+
+                # Sync skills from Convex (same pattern as prompt/model)
+                convex_skills = convex_agent.get("skills")
+                if convex_skills is not None:
+                    if convex_skills != agent_skills:
+                        logger.info(
+                            "[executor] Skills synced from Convex for '%s': %s -> %s",
+                            agent_name, agent_skills, convex_skills,
+                        )
+                    agent_skills = convex_skills
+        except Exception:
+            logger.warning(
+                "[executor] Could not fetch Convex agent data for '%s', using YAML", agent_name, exc_info=True
+            )
 
         # Resolve tier references (Story 11.1, AC5)
         reasoning_level: str | None = None
         if agent_model and is_tier_reference(agent_model):
-            tier_ref = agent_model
+            tier_ref = agent_model  # save before overwriting
             try:
                 agent_model = self._get_tier_resolver().resolve_model(agent_model)
                 logger.info("[executor] Resolved tier for agent '%s': %s", agent_name, agent_model)
             except ValueError as exc:
                 await self._handle_tier_error(task_id, title, agent_name, exc)
                 return
+            # Resolve reasoning level — never raises, missing config = off
             reasoning_level = self._get_tier_resolver().resolve_reasoning_level(tier_ref)
             if reasoning_level:
-                logger.info("[executor] Reasoning level for agent '%s': %s", agent_name, reasoning_level)
+                logger.info(
+                    "[executor] Reasoning level for agent '%s': %s", agent_name, reasoning_level
+                )
 
-        # Route to Claude Code backend when model starts with cc/
+        # Route to Claude Code backend when model starts with cc/ (e.g. set via tier dropdown)
         if agent_model and is_cc_model(agent_model):
             cc_model_name = extract_cc_model_name(agent_model)
             if agent_data is None:
                 agent_data = self._load_agent_data(agent_name)
             if agent_data is None:
                 agent_data = AgentData(
-                    name=agent_name, display_name=agent_name, role="agent",
-                    model=cc_model_name, backend="claude-code",
+                    name=agent_name,
+                    display_name=agent_name,
+                    role="agent",
+                    model=cc_model_name,
+                    backend="claude-code",
                 )
             else:
                 agent_data.model = cc_model_name
                 agent_data.backend = "claude-code"
             await self._execute_cc_task(
-                task_id, title, description, agent_name, agent_data,
-                trust_level=trust_level, task_data=task_data,
-                reasoning_level=reasoning_level, needs_enrichment=False,
+                task_id,
+                title,
+                description,
+                agent_name,
+                agent_data,
+                trust_level=trust_level,
+                task_data=task_data,
+                reasoning_level=reasoning_level,
+                needs_enrichment=False,
             )
             return
 
@@ -398,11 +1167,15 @@ class TaskExecutor:
                 agent_name, len(agent_prompt), repr(agent_prompt[:200]),
             )
 
-        # System agents (nanobot) use identity from SOUL.md + ContextBuilder
+        # System agents (nanobot) use identity from SOUL.md + ContextBuilder —
+        # skip prompt/orientation injection so MC uses the exact same prompt as Telegram.
         if agent_name == NANOBOT_AGENT_NAME:
             agent_prompt = None
             logger.info("[executor] Cleared prompt for nanobot (uses SOUL.md + ContextBuilder)")
 
+        # Inject agent roster into lead-agent context so it can discover all
+        # available agents without relying on list_dir (which only shows agents
+        # that have already run and have a board-scoped workspace).
         if is_lead_agent(agent_name):
             roster = self._build_agent_roster()
             if roster:
@@ -410,17 +1183,49 @@ class TaskExecutor:
                 logger.info("[executor] Injected agent roster into lead-agent context")
 
         if agent_skills is not None:
-            logger.info("[executor] Agent '%s' allowed_skills=%s (only these + always-on skills visible)", agent_name, agent_skills)
+            logger.info(
+                "[executor] Agent '%s' allowed_skills=%s (only these + always-on skills visible)",
+                agent_name, agent_skills,
+            )
         else:
-            logger.info("[executor] Agent '%s' has no skills filter (all skills visible)", agent_name)
+            logger.info(
+                "[executor] Agent '%s' has no skills filter (all skills visible)",
+                agent_name,
+            )
 
         # Resolve board-scoped workspace (AC6, AC7)
-        board_name, memory_workspace = await self._resolve_board_workspace(
-            task_data, agent_name, title,
-        )
+        board_name: str | None = None
+        memory_workspace: Path | None = None
+        board_id = (task_data or {}).get("board_id")
+        if board_id:
+            try:
+                board = await asyncio.to_thread(
+                    self._bridge.get_board_by_id, board_id
+                )
+                if board:
+                    board_name = board.get("name")
+                    if board_name:
+                        from mc.board_utils import resolve_board_workspace, get_agent_memory_mode
+                        mode = get_agent_memory_mode(board, agent_name)
+                        memory_workspace = resolve_board_workspace(
+                            board_name, agent_name, mode=mode
+                        )
+                        logger.info(
+                            "[executor] Using board-scoped workspace for agent '%s' on board '%s' (mode=%s)",
+                            agent_name, board_name, mode,
+                        )
+            except Exception:
+                logger.warning(
+                    "[executor] Failed to resolve board workspace for task '%s', using global workspace",
+                    title,
+                    exc_info=True,
+                )
 
+        # Snapshot the output directory before agent execution so we can detect
+        # created/modified files afterwards (Story 2.5).
         pre_snapshot = await asyncio.to_thread(_snapshot_output_dir, task_id)
 
+        # Log the full task description being sent to the agent for debugging
         if description:
             logger.info(
                 "[executor] Task description for '%s' (len=%d, first 300 chars): %s",
@@ -429,78 +1234,127 @@ class TaskExecutor:
 
         try:
             result, session_key, loop = await _run_agent_on_task(
-                agent_name=agent_name, agent_prompt=agent_prompt, agent_model=agent_model,
-                reasoning_level=reasoning_level, task_title=title, task_description=description,
-                agent_skills=agent_skills, board_name=board_name, memory_workspace=memory_workspace,
-                cron_service=self._cron_service, task_id=task_id, bridge=self._bridge,
+                agent_name=agent_name,
+                agent_prompt=agent_prompt,
+                agent_model=agent_model,
+                reasoning_level=reasoning_level,
+                task_title=title,
+                task_description=description,
+                agent_skills=agent_skills,
+                board_name=board_name,
+                memory_workspace=memory_workspace,
+                cron_service=self._cron_service,
+                task_id=task_id,
+                bridge=self._bridge,
                 ask_user_registry=self._ask_user_registry,
             )
-            await asyncio.to_thread(_relocate_invalid_memory_files, task_id, loop.memory_workspace)
-            result = _coerce_agent_run_result(result)
-            if result.is_error:
-                raise RuntimeError(
-                    result.error_message
-                    or result.content
-                    or "Agent returned an execution error"
-                )
-            result_content = result.content
-            artifacts = await asyncio.to_thread(_collect_output_artifacts, task_id, pre_snapshot)
+
+            await asyncio.to_thread(
+                _relocate_invalid_memory_files,
+                task_id,
+                loop.memory_workspace,
+            )
+
+            # Collect file artifacts produced during agent execution.
+            artifacts = await asyncio.to_thread(
+                _collect_output_artifacts, task_id, pre_snapshot
+            )
 
             if step_id:
+                # Post structured completion message with step context (Story 2.5).
                 await asyncio.to_thread(
                     self._bridge.post_step_completion,
                     task_id,
                     step_id,
                     agent_name,
-                    result_content,
+                    result,
                     artifacts or None,
                 )
             else:
+                # Legacy path: no step context available — post plain work message.
                 await asyncio.to_thread(
                     self._bridge.send_message,
                     task_id,
                     agent_name,
                     AuthorType.AGENT,
-                    result_content,
+                    result,
                     MessageType.WORK,
                 )
 
+            # Sync output file manifest to Convex (best-effort, non-blocking)
             try:
-                await asyncio.to_thread(self._bridge.sync_task_output_files, task_id, task_data or {}, agent_name)
+                await asyncio.to_thread(
+                    self._bridge.sync_task_output_files,
+                    task_id,
+                    task_data or {},
+                    agent_name,
+                )
             except Exception:
                 logger.exception("[executor] Failed to sync output files for task '%s'", title)
 
+            # Sync output files to cron parent task if applicable (best-effort)
             cron_parent_task_id = (task_data or {}).get("cron_parent_task_id")
             if cron_parent_task_id:
                 try:
-                    await asyncio.to_thread(self._bridge.sync_output_files_to_parent, task_id, cron_parent_task_id, agent_name)
+                    await asyncio.to_thread(
+                        self._bridge.sync_output_files_to_parent,
+                        task_id,
+                        cron_parent_task_id,
+                        agent_name,
+                    )
                 except Exception:
-                    logger.exception("[executor] Failed to sync output files to parent task '%s'", cron_parent_task_id)
+                    logger.exception(
+                        "[executor] Failed to sync output files to parent task '%s'",
+                        cron_parent_task_id,
+                    )
 
-            final_status = TaskStatus.DONE if trust_level == TrustLevel.AUTONOMOUS else TaskStatus.REVIEW
+            # Determine final status based on trust level
+            if trust_level == TrustLevel.AUTONOMOUS:
+                final_status = TaskStatus.DONE
+            else:
+                final_status = TaskStatus.REVIEW
+
+            # Activity event (task_completed) is written by the Convex
+            # tasks:updateStatus mutation — no duplicate create_activity here.
             await asyncio.to_thread(
-                self._bridge.update_task_status, task_id, final_status, agent_name,
+                self._bridge.update_task_status,
+                task_id,
+                final_status,
+                agent_name,
                 f"Agent {agent_name} completed task '{title}'",
             )
-            self._agent_gateway.clear_retry_count(task_id)
-            logger.info("[executor] Task '%s' completed by '%s' → %s", title, agent_name, final_status)
 
+            # Clear retry count on success
+            self._agent_gateway.clear_retry_count(task_id)
+
+            logger.info(
+                "[executor] Task '%s' completed by '%s' → %s",
+                title, agent_name, final_status,
+            )
+
+            # Fire-and-forget memory consolidation after task status is updated.
+            # Runs async so user sees completion immediately.
             async def _post_task_consolidate():
                 try:
                     await loop.end_task_session(session_key)
                     logger.info("[executor] Post-task memory consolidation done for '%s'", title)
                 except Exception:
-                    logger.warning("[executor] Post-task memory consolidation failed for '%s'", title, exc_info=True)
+                    logger.warning(
+                        "[executor] Post-task memory consolidation failed for '%s'",
+                        title, exc_info=True,
+                    )
 
             _task = asyncio.create_task(_post_task_consolidate())
             _background_tasks.add(_task)
             _task.add_done_callback(_background_tasks.discard)
 
+            # Write completion to global HEARTBEAT.md for the main agent (Owl) to pick up
             try:
                 from filelock import FileLock
                 result_snippet = (result or "Task completed.").strip()
                 if len(result_snippet) > 1000:
                     result_snippet = result_snippet[:1000] + "\n...(truncated)..."
+
                 heartbeat_content = (
                     f"\n## Mission Control Update\n\n"
                     f"The task **'{title}'** (ID: `{task_id}`) assigned to **{agent_name}** "
@@ -508,15 +1362,18 @@ class TaskExecutor:
                     f"### Agent's Result:\n```\n{result_snippet}\n```\n\n"
                     f"Please summarize this naturally and notify the user that the task is complete.\n"
                 )
+
                 heartbeat_file = Path.home() / ".nanobot" / "workspace" / "HEARTBEAT.md"
                 lock = FileLock(str(heartbeat_file) + ".lock", timeout=10)
                 with lock:
                     with open(heartbeat_file, "a", encoding="utf-8") as f:
                         f.write(heartbeat_content)
+
                 logger.info("[executor] Written task '%s' completion to global HEARTBEAT.md", title)
             except Exception as hb_exc:
                 logger.warning("[executor] Failed to write to HEARTBEAT.md for task '%s': %s", title, hb_exc)
 
+            # Deliver cron result to external channel if pending
             if self._on_task_completed:
                 try:
                     await self._on_task_completed(task_id, result or "")
@@ -524,7 +1381,9 @@ class TaskExecutor:
                     logger.exception("[executor] on_task_completed failed for task '%s'", title)
 
         except _PROVIDER_ERRORS as exc:
+            # Provider/OAuth errors get surfaced with clear actionable message
             await self._handle_provider_error(task_id, title, agent_name, exc)
+            # Pop pending delivery entry to prevent dict leak (empty → skips actual send)
             if self._on_task_completed:
                 try:
                     await self._on_task_completed(task_id, "")
@@ -532,83 +1391,739 @@ class TaskExecutor:
                     pass
 
         except Exception as exc:
-            logger.error("[executor] Agent '%s' crashed on task '%s': %s", agent_name, title, exc)
+            logger.error(
+                "[executor] Agent '%s' crashed on task '%s': %s",
+                agent_name, title, exc,
+            )
             await self._agent_gateway.handle_agent_crash(agent_name, task_id, exc)
+            # Pop pending delivery entry to prevent dict leak (empty → skips actual send)
             if self._on_task_completed:
                 try:
                     await self._on_task_completed(task_id, "")
                 except Exception:
                     pass
         finally:
+            # Allow re-pickup if task returns to assigned (e.g. after retry)
             self._known_assigned_ids.discard(task_id)
 
-    async def _sync_convex_agent(
-        self, agent_name: str, agent_prompt: str | None,
-        agent_model: str | None, agent_skills: list[str] | None,
-    ) -> tuple[str | None, str | None, list[str] | None]:
-        """Sync prompt, model, skills from Convex (source of truth)."""
+    # ── Claude Code backend methods ────────────────────────────────────────
+
+    async def _enrich_cc_description(
+        self, task_id: str, description: str | None, task_data: dict | None,
+    ) -> str:
+        """Enrich CC task description with file manifest, thread context, and tag attributes.
+
+        Mirrors the enrichment done for nanobot tasks (lines 840-931) but adapted
+        for the CC task path. Each enrichment is wrapped in try/except so partial
+        failures don't block execution.
+        """
+        description = description or ""
+
+        # File manifest (mirrors lines 840-879)
         try:
-            from mc.gateway import AGENTS_DIR
+            safe_id = task_safe_id(task_id)
+            files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
+            try:
+                fresh_task = await asyncio.to_thread(
+                    self._bridge.query, "tasks:getById", {"task_id": task_id}
+                )
+                raw_files = (fresh_task or {}).get("files") or []
+            except Exception:
+                logger.warning(
+                    "[executor] CC enrich: failed to fetch fresh task for '%s', using snapshot",
+                    task_id,
+                )
+                raw_files = (task_data or {}).get("files") or []
+
+            file_manifest = [
+                {
+                    "name": f.get("name", "unknown"),
+                    "type": f.get("type", "application/octet-stream"),
+                    "size": f.get("size", 0),
+                    "subfolder": f.get("subfolder", "attachments"),
+                }
+                for f in raw_files
+            ]
+
+            output_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id / "output")
+            task_instruction = (
+                f"Task workspace: {files_dir}\n"
+                f"Save ALL output files (reports, summaries, generated content) to: {output_dir}\n"
+                f"Do NOT save output files outside this directory."
+            )
+            if file_manifest:
+                manifest_summary = ", ".join(
+                    f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
+                    for f in file_manifest
+                )
+                task_instruction += (
+                    f"\nTask has {len(file_manifest)} attached file(s) at {files_dir}/attachments. "
+                    f"File manifest: {manifest_summary}"
+                )
+            description += f"\n\n{task_instruction}"
+        except Exception:
+            logger.warning("[executor] CC enrich: file manifest failed for '%s'", task_id, exc_info=True)
+
+        # Thread context (mirrors lines 882-899)
+        try:
+            thread_messages = await asyncio.to_thread(
+                self._bridge.get_task_messages, task_id
+            )
+            thread_context = _build_thread_context(thread_messages)
+            if thread_context:
+                description += f"\n{thread_context}"
+                injected_count = min(len(thread_messages), 20)
+                logger.info(
+                    "[executor] CC enrich: injected thread context (%d of %d messages) for task '%s'",
+                    injected_count, len(thread_messages), task_id,
+                )
+        except Exception:
+            logger.warning(
+                "[executor] CC enrich: thread context failed for '%s'", task_id, exc_info=True,
+            )
+
+        # Tag attributes (mirrors lines 901-931)
+        try:
+            task_tags = (task_data or {}).get("tags") or []
+            if task_tags:
+                tag_attr_values = await asyncio.to_thread(
+                    self._bridge.query,
+                    "tagAttributeValues:getByTask",
+                    {"task_id": task_id},
+                )
+                tag_attr_catalog = await asyncio.to_thread(
+                    self._bridge.query,
+                    "tagAttributes:list",
+                    {},
+                )
+                tag_attrs_context = _build_tag_attributes_context(
+                    task_tags,
+                    tag_attr_values if isinstance(tag_attr_values, list) else [],
+                    tag_attr_catalog if isinstance(tag_attr_catalog, list) else [],
+                )
+                if tag_attrs_context:
+                    description += f"\n\n{tag_attrs_context}"
+                    logger.info(
+                        "[executor] CC enrich: injected tag attributes for task '%s'", task_id,
+                    )
+        except Exception:
+            logger.warning(
+                "[executor] CC enrich: tag attributes failed for '%s'", task_id, exc_info=True,
+            )
+
+        return description
+
+    async def _execute_cc_task(
+        self,
+        task_id: str,
+        title: str,
+        description: str | None,
+        agent_name: str,
+        agent_data: "AgentData",
+        trust_level: str = "autonomous",
+        task_data: dict | None = None,
+        reasoning_level: str | None = None,
+        needs_enrichment: bool = True,
+    ) -> None:
+        """Execute a task using the Claude Code CLI backend.
+
+        Orchestrates workspace preparation, IPC server startup, CC provider
+        execution, and result posting.  Any phase failure crashes the task.
+        Session resume (CC-6 AC2): looks up a stored session_id before executing.
+        """
+        from claude_code.workspace import CCWorkspaceManager
+        from claude_code.provider import ClaudeCodeProvider
+        from claude_code.ipc_server import MCSocketServer
+
+        # 0a. Enrich description if caller hasn't already done it
+        if needs_enrichment:
+            description = await self._enrich_cc_description(task_id, description, task_data)
+
+        # 0b. Sync Convex prompt, variables, and model into agent_data
+        # Both call sites need this — agent_data.prompt is never set from Convex at either site
+        convex_agent: dict | None = None
+        try:
             convex_agent = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
             if convex_agent:
-                if convex_agent.get("model"):
-                    convex_model = convex_agent["model"]
-                    if convex_model != agent_model:
-                        logger.info("[executor] Model synced from Convex for '%s': %s -> %s", agent_name, agent_model, convex_model)
-                        agent_model = convex_model
-                        try:
-                            await asyncio.to_thread(self._bridge.write_agent_config, convex_agent, AGENTS_DIR)
-                        except Exception:
-                            logger.warning("[executor] YAML write-back failed for '%s'", agent_name, exc_info=True)
-                convex_prompt = convex_agent.get("prompt")
-                if convex_prompt:
-                    agent_prompt = convex_prompt
-                variables = convex_agent.get("variables") or []
-                if variables and agent_prompt:
-                    for var in variables:
-                        agent_prompt = agent_prompt.replace("{{" + var["name"] + "}}", var["value"])
-                    logger.info("[executor] Interpolated %d variable(s) into prompt for '%s'", len(variables), agent_name)
+                if cp := convex_agent.get("prompt"):
+                    agent_data.prompt = cp
+                if cm := convex_agent.get("model"):
+                    if is_cc_model(cm):
+                        agent_data.model = extract_cc_model_name(cm)
+                        logger.info(
+                            "[executor] CC: Convex model synced for '%s': %s → %s",
+                            agent_name, cm, agent_data.model,
+                        )
+                    else:
+                        logger.info(
+                            "[executor] CC: Convex model '%s' is not cc/ prefixed, keeping agent_data model",
+                            cm,
+                        )
+                # Interpolate variables into prompt
+                for var in (convex_agent.get("variables") or []):
+                    if agent_data.prompt:
+                        agent_data.prompt = agent_data.prompt.replace(
+                            "{{" + var["name"] + "}}", var["value"])
+                # Sync skills from Convex
                 convex_skills = convex_agent.get("skills")
                 if convex_skills is not None:
-                    if convex_skills != agent_skills:
-                        logger.info("[executor] Skills synced from Convex for '%s': %s -> %s", agent_name, agent_skills, convex_skills)
-                    agent_skills = convex_skills
+                    agent_data.skills = convex_skills
         except Exception:
-            logger.warning("[executor] Could not fetch Convex agent data for '%s', using YAML", agent_name, exc_info=True)
-        return agent_prompt, agent_model, agent_skills
+            logger.warning("[executor] CC: Convex agent sync failed for '%s'", agent_name)
 
-    async def _resolve_board_workspace(
-        self, task_data: dict[str, Any] | None, agent_name: str, title: str,
-    ) -> tuple[str | None, Path | None]:
-        """Resolve board-scoped workspace (AC6, AC7)."""
-        board_name: str | None = None
-        memory_workspace: Path | None = None
-        board_id = (task_data or {}).get("board_id")
-        if board_id:
+        # Sync claudeCodeOpts from Convex if YAML/local opts are not set.
+        if agent_data.claude_code_opts is None and convex_agent:
+            cc_raw = convex_agent.get("claude_code_opts")  # bridge converts camelCase → snake_case
+            if cc_raw and isinstance(cc_raw, dict):
+                from claude_code.types import ClaudeCodeOpts
+
+                agent_data.claude_code_opts = ClaudeCodeOpts(
+                    permission_mode=cc_raw.get("permission_mode", "acceptEdits"),
+                    max_budget_usd=cc_raw.get("max_budget_usd"),
+                    max_turns=cc_raw.get("max_turns"),
+                )
+                logger.info(
+                    "[executor] CC: claudeCodeOpts loaded from Convex for %s: permission_mode=%s",
+                    agent_name,
+                    agent_data.claude_code_opts.permission_mode,
+                )
+
+        # 0c. Map reasoning level to effort level
+        if reasoning_level:
+            effort_map = {"low": "low", "medium": "medium", "high": "high", "max": "high"}
+            effort = effort_map.get(reasoning_level, "high")
+            if agent_data.claude_code_opts is None:
+                from claude_code.types import ClaudeCodeOpts
+                agent_data.claude_code_opts = ClaudeCodeOpts()
+            agent_data.claude_code_opts.effort_level = effort
+            logger.info(
+                "[executor] CC: effort level set to '%s' (from reasoning '%s') for '%s'",
+                effort,
+                reasoning_level,
+                agent_name,
+            )
+
+        # 0d. Resolve board-scoped workspace for CC (mirrors nanobot board resolution)
+        _cc_board_name: str | None = None
+        _cc_memory_mode: str = "clean"
+        _board_id = (task_data or {}).get("board_id")
+        if _board_id:
             try:
-                board = await asyncio.to_thread(self._bridge.get_board_by_id, board_id)
-                if board:
-                    board_name = board.get("name")
-                    if board_name:
-                        from mc.board_utils import get_agent_memory_mode, resolve_board_workspace
-                        mode = get_agent_memory_mode(board, agent_name)
-                        memory_workspace = resolve_board_workspace(board_name, agent_name, mode=mode)
-                        logger.info("[executor] Board-scoped workspace for '%s' on '%s' (mode=%s)", agent_name, board_name, mode)
+                _board = await asyncio.to_thread(
+                    self._bridge.get_board_by_id, _board_id
+                )
+                if _board:
+                    _cc_board_name = _board.get("name")
+                    if _cc_board_name:
+                        from mc.board_utils import get_agent_memory_mode
+
+                        _cc_memory_mode = get_agent_memory_mode(_board, agent_name)
+                        logger.info(
+                            "[executor] CC: board-scoped workspace for agent '%s' on board '%s' (mode=%s)",
+                            agent_name, _cc_board_name, _cc_memory_mode,
+                        )
             except Exception:
-                logger.warning("[executor] Failed to resolve board workspace for '%s'", title, exc_info=True)
-        return board_name, memory_workspace
+                logger.warning(
+                    "[executor] CC: failed to resolve board workspace for task '%s', using global workspace",
+                    title,
+                    exc_info=True,
+                )
 
+        # 0e. Snapshot output dir for artifact detection
+        pre_snapshot = await asyncio.to_thread(_snapshot_output_dir, task_id)
 
-# ── Mixin injection ──────────────────────────────────────────────────────
-# Dynamically inject CCExecutorMixin methods into TaskExecutor so that all
-# CC-specific methods (defined in mc.cc_executor) are available as regular
-# methods on TaskExecutor instances.
+        # 1. Prepare workspace
+        try:
+            ws_mgr = CCWorkspaceManager()
+            from mc.orientation import load_orientation
+            orientation = load_orientation(agent_name)
+            ws_ctx = ws_mgr.prepare(
+                agent_name,
+                agent_data,
+                task_id,
+                orientation=orientation,
+                task_prompt=title,
+                board_name=_cc_board_name,
+                memory_mode=_cc_memory_mode,
+            )
+        except Exception as exc:
+            await self._crash_task(task_id, title, f"Workspace preparation failed: {exc}", agent_name)
+            return
 
-from mc.cc_executor import CCExecutorMixin as _CCMixin  # noqa: E402
+        # 2. Start IPC server (MCSocketServer.start() already removes stale socket)
+        # bus=None: MCP bridge tools use IPC, not the in-process MessageBus
+        from mc.ask_user_handler import AskUserHandler
 
-for _name in dir(_CCMixin):
-    if not _name.startswith("_CCMixin") and not _name.startswith("__"):
-        _attr = getattr(_CCMixin, _name)
-        if callable(_attr) or isinstance(_attr, (classmethod, staticmethod, property)):
-            if not hasattr(TaskExecutor, _name):
-                setattr(TaskExecutor, _name, _attr)
+        ask_handler = AskUserHandler()
+        ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
+        ipc_server.set_ask_user_handler(ask_handler)
+        if self._ask_user_registry is not None:
+            self._ask_user_registry.register(task_id, ask_handler)
+        try:
+            await ipc_server.start(ws_ctx.socket_path)
+        except Exception as exc:
+            await self._crash_task(task_id, title, f"MCP IPC server failed: {exc}", agent_name)
+            return
+
+        # 3. Look up existing session for resume (CC-6 AC2)
+        session_id: str | None = None
+        try:
+            stored = await asyncio.to_thread(
+                self._bridge.query,
+                "settings:get",
+                {"key": f"cc_session:{agent_name}:{task_id}"},
+            )
+            if stored and isinstance(stored, str):
+                session_id = stored
+                logger.info(
+                    "[executor] Resuming CC session %s for %s", session_id, agent_name
+                )
+        except Exception:
+            logger.debug(
+                "[executor] No stored CC session for %s:%s", agent_name, task_id
+            )  # No session stored — start fresh
+
+        # 4. Execute via CC provider
+        try:
+            from nanobot.config.loader import load_config
+            _cfg = load_config()
+            provider = ClaudeCodeProvider(
+                cli_path=_cfg.claude_code.cli_path,
+                defaults=_cfg.claude_code,
+            )
+            prompt = f"{title}\n\n{description}" if description else title
+
+            def on_stream(msg: dict) -> None:
+                if msg.get("type") == "text":
+                    task = asyncio.create_task(
+                        self._post_cc_activity(task_id, agent_name, msg["text"])
+                    )
+                    _background_tasks.add(task)
+                    task.add_done_callback(_background_tasks.discard)
+
+            result = await provider.execute_task(
+                prompt=prompt,
+                agent_config=agent_data,
+                task_id=task_id,
+                workspace_ctx=ws_ctx,
+                session_id=session_id,
+                on_stream=on_stream,
+            )
+        except _PROVIDER_ERRORS as exc:
+            await self._handle_provider_error(task_id, title, agent_name, exc)
+            return
+        except Exception as exc:
+            await self._crash_task(task_id, title, f"Claude Code execution failed: {exc}", agent_name)
+            return
+        finally:
+            if self._ask_user_registry is not None:
+                self._ask_user_registry.unregister(task_id)
+            await ipc_server.stop()
+
+        # 5. Process result
+        await asyncio.to_thread(
+            _relocate_invalid_memory_files,
+            task_id,
+            ws_ctx.cwd,
+        )
+
+        if result.is_error:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.sync_task_output_files, task_id, task_data or {}, agent_name
+                )
+            except Exception:
+                logger.warning("[executor] CC: output sync failed for errored task '%s'", title, exc_info=True)
+            await self._crash_task(task_id, title, f"Claude Code error: {result.output[:1000]}", agent_name)
+        else:
+            await self._complete_cc_task(
+                task_id,
+                title,
+                agent_name,
+                result,
+                trust_level=trust_level,
+            )
+            # Collect and sync output artifacts (best-effort)
+            try:
+                artifacts = await asyncio.to_thread(
+                    _collect_output_artifacts, task_id, pre_snapshot
+                )
+                if artifacts:
+                    logger.info(
+                        "[executor] CC: %d artifact(s) detected for task '%s'",
+                        len(artifacts),
+                        title,
+                    )
+                await asyncio.to_thread(
+                    self._bridge.sync_task_output_files, task_id, task_data or {}, agent_name
+                )
+            except Exception:
+                logger.warning("[executor] CC: artifact sync failed for '%s'", title, exc_info=True)
+            if self._on_task_completed:
+                try:
+                    await self._on_task_completed(task_id, result.output or "")
+                except Exception:
+                    logger.exception("[executor] on_task_completed failed for CC task '%s'", title)
+
+        # Fire-and-forget post-CC memory consolidation (best-effort, non-blocking).
+        # Mirrors nanobot's end_task_session() — runs for both success and error tasks.
+        _cc_task_status = "error" if result.is_error else "completed"
+        _cc_ws_cwd = ws_ctx.cwd  # capture before ws_ctx goes out of scope
+
+        async def _post_cc_consolidate():
+            try:
+                from claude_code.memory_consolidator import CCMemoryConsolidator
+                from mc.types import is_tier_reference
+                from mc.tier_resolver import TierResolver
+                _model = "tier:standard-low"
+                if is_tier_reference(_model):
+                    _model = TierResolver(self._bridge).resolve_model(_model) or _model
+                consolidator = CCMemoryConsolidator(_cc_ws_cwd)
+                await consolidator.consolidate(
+                    task_title=title,
+                    task_output=result.output or "",
+                    task_status=_cc_task_status,
+                    task_id=task_id,
+                    model=_model,
+                )
+                logger.info("[executor] CC memory consolidation done for '%s'", title)
+            except Exception:
+                logger.warning(
+                    "[executor] CC memory consolidation failed for '%s'", title, exc_info=True
+                )
+
+        _t = asyncio.create_task(_post_cc_consolidate())
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
+
+    async def _post_cc_activity(
+        self,
+        task_id: str,
+        agent_name: str,
+        text: str,
+    ) -> None:
+        """Post a streaming text chunk as a step_started activity (best-effort)."""
+        try:
+            await asyncio.to_thread(
+                self._bridge.create_activity,
+                ActivityEventType.STEP_STARTED,
+                text[:500],
+                task_id,
+                agent_name,
+            )
+        except Exception:
+            pass  # Non-critical — streaming activity failures must not crash the task
+
+    async def _complete_cc_task(
+        self,
+        task_id: str,
+        title: str,
+        agent_name: str,
+        result: "CCTaskResult",
+        trust_level: str = "autonomous",
+    ) -> None:
+        """Post completion message, cost activity, store session, and transition task status."""
+        from mc.types import CCTaskResult  # noqa: F401 — type annotation only
+
+        # Post agent work message to thread (M5: include truncation notice)
+        _output = result.output
+        if len(_output) > 2000:
+            _output = _output[:2000] + f"\n\n... [truncated, full output: {len(result.output)} chars]"
+        await asyncio.to_thread(
+            self._bridge.send_message,
+            task_id,
+            agent_name,
+            AuthorType.AGENT,
+            _output,
+            MessageType.WORK,
+        )
+
+        # Post cost summary as activity
+        await asyncio.to_thread(
+            self._bridge.create_activity,
+            ActivityEventType.TASK_COMPLETED,
+            f"Task completed. Cost: ${result.cost_usd:.4f}",
+            task_id,
+            agent_name,
+        )
+
+        # Store session_id for future resume (CC-6 AC1)
+        if result.session_id:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "settings:set",
+                    {
+                        "key": f"cc_session:{agent_name}:{task_id}",
+                        "value": result.session_id,
+                    },
+                )
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "settings:set",
+                    {
+                        "key": f"cc_session:{agent_name}:latest",
+                        "value": result.session_id,
+                    },
+                )
+                logger.info(
+                    "[executor] Stored CC session %s for agent %s task %s",
+                    result.session_id, agent_name, task_id,
+                )
+            except Exception:
+                logger.warning(
+                    "[executor] Failed to store CC session ID for %s",
+                    agent_name,
+                    exc_info=True,
+                )
+
+        final_status = (
+            TaskStatus.DONE if trust_level == TrustLevel.AUTONOMOUS else TaskStatus.REVIEW
+        )
+        await asyncio.to_thread(
+            self._bridge.update_task_status,
+            task_id,
+            final_status,
+            agent_name,
+            f"Agent {agent_name} completed task '{title}'",
+        )
+
+        # NOTE: Session is intentionally NOT deleted here (CC-6 AC1).
+        # The session_id must persist after task completion so that follow-up
+        # messages can resume the CC session. Cleanup happens only when the
+        # agent is deleted (see _cleanup_deleted_agents in gateway.py).
+
+        # Write completion to global HEARTBEAT.md (mirrors nanobot path)
+        try:
+            from filelock import FileLock
+            result_snippet = (result.output or "Task completed.").strip()
+            if len(result_snippet) > 1000:
+                result_snippet = result_snippet[:1000] + "\n...(truncated)..."
+
+            heartbeat_content = (
+                f"\n## Mission Control Update\n\n"
+                f"The task **'{title}'** (ID: `{task_id}`) assigned to **{agent_name}** "
+                f"has finished with status: `{final_status}`.\n\n"
+                f"### Agent's Result:\n```\n{result_snippet}\n```\n\n"
+                f"Please summarize this naturally and notify the user that the task is complete.\n"
+            )
+
+            heartbeat_file = Path.home() / ".nanobot" / "workspace" / "HEARTBEAT.md"
+
+            def _write_heartbeat() -> None:
+                lock = FileLock(str(heartbeat_file) + ".lock", timeout=10)
+                with lock:
+                    with open(heartbeat_file, "a", encoding="utf-8") as f:
+                        f.write(heartbeat_content)
+
+            await asyncio.to_thread(_write_heartbeat)
+            logger.info("[executor] CC: Written task '%s' completion to HEARTBEAT.md", title)
+        except Exception as hb_exc:
+            logger.warning("[executor] CC: Failed to write HEARTBEAT.md for task '%s': %s", title, hb_exc)
+
+        # Clear retry count on success
+        self._agent_gateway.clear_retry_count(task_id)
+
+        logger.info(
+            "[executor] CC task '%s' done (cost=$%.4f)", title, result.cost_usd
+        )
+
+    async def _crash_task(
+        self,
+        task_id: str,
+        title: str,
+        error: str,
+        agent_name: str = "System",
+    ) -> None:
+        """Post a crash message and transition the task to CRASHED."""
+        logger.error("[executor] CC task crashed: %s — %s", title, error)
+
+        try:
+            await asyncio.to_thread(
+                self._bridge.send_message,
+                task_id,
+                agent_name,
+                AuthorType.SYSTEM,
+                f"Task crashed: {error}",
+                MessageType.SYSTEM_EVENT,
+            )
+        except Exception:
+            logger.exception("[executor] Failed to post crash message for task '%s'", title)
+
+        try:
+            await asyncio.to_thread(
+                self._bridge.update_task_status,
+                task_id,
+                TaskStatus.CRASHED,
+                agent_name,
+                f"Task crashed: {error}",
+            )
+        except Exception:
+            logger.exception("[executor] Failed to crash task '%s'", title)
+
+    async def handle_cc_thread_reply(
+        self,
+        task_id: str,
+        agent_name: str,
+        user_message: str,
+        agent_data: "AgentData",
+    ) -> str | None:
+        """Handle a user follow-up message in a CC agent's task thread (CC-6 AC3).
+
+        Resumes the latest CC session for this agent+task with the user's
+        message as a new prompt.  Returns the CC response text, or None on
+        failure.
+
+        This is a helper intended to be called from the thread reply handler
+        when a user sends a message to a task assigned to a claude-code agent.
+        Integration with the message routing layer is handled separately.
+        """
+        from claude_code.workspace import CCWorkspaceManager
+        from claude_code.provider import ClaudeCodeProvider
+        from claude_code.ipc_server import MCSocketServer
+
+        # Look up stored session for resume
+        session_id: str | None = None
+        try:
+            stored = await asyncio.to_thread(
+                self._bridge.query,
+                "settings:get",
+                {"key": f"cc_session:{agent_name}:{task_id}"},
+            )
+            if stored and isinstance(stored, str):
+                session_id = stored
+                logger.info(
+                    "[executor] CC thread reply: resuming session %s for %s task %s",
+                    session_id, agent_name, task_id,
+                )
+        except Exception:
+            logger.warning(
+                "[executor] CC thread reply: could not look up session for %s task %s",
+                agent_name, task_id,
+            )
+
+        # Resolve board-scoped workspace for thread reply (same logic as _execute_cc_task).
+        # Best-effort: falls back to global workspace on any bridge failure.
+        _tr_board_name: str | None = None
+        _tr_memory_mode: str = "clean"
+        try:
+            _tr_task_data = await asyncio.to_thread(
+                self._bridge.query, "tasks:getById", {"task_id": task_id}
+            )
+            _tr_board_id = (_tr_task_data or {}).get("board_id")
+            if _tr_board_id:
+                _tr_board = await asyncio.to_thread(
+                    self._bridge.get_board_by_id, _tr_board_id
+                )
+                if _tr_board:
+                    _tr_board_name = _tr_board.get("name")
+                    if _tr_board_name:
+                        from mc.board_utils import get_agent_memory_mode
+                        _tr_memory_mode = get_agent_memory_mode(_tr_board, agent_name)
+                        logger.info(
+                            "[executor] CC thread reply: board-scoped workspace for agent '%s' on board '%s' (mode=%s)",
+                            agent_name, _tr_board_name, _tr_memory_mode,
+                        )
+        except Exception:
+            logger.warning(
+                "[executor] CC thread reply: failed to resolve board workspace for task '%s', using global workspace",
+                task_id,
+                exc_info=True,
+            )
+
+        # Prepare workspace and IPC server
+        try:
+            ws_mgr = CCWorkspaceManager()
+            from mc.orientation import load_orientation
+            orientation = load_orientation(agent_name)
+            ws_ctx = ws_mgr.prepare(
+                agent_name, agent_data, task_id,
+                orientation=orientation,
+                task_prompt=user_message,
+                board_name=_tr_board_name,
+                memory_mode=_tr_memory_mode,
+            )
+        except Exception as exc:
+            logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
+            return None
+
+        from mc.ask_user_handler import AskUserHandler
+
+        ask_handler = AskUserHandler()
+        ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
+        ipc_server.set_ask_user_handler(ask_handler)
+        if self._ask_user_registry is not None:
+            self._ask_user_registry.register(task_id, ask_handler)
+        try:
+            await ipc_server.start(ws_ctx.socket_path)
+        except Exception as exc:
+            logger.error("[executor] CC thread reply: IPC server failed: %s", exc)
+            return None
+
+        try:
+            from nanobot.config.loader import load_config
+            _cfg = load_config()
+            provider = ClaudeCodeProvider(
+                cli_path=_cfg.claude_code.cli_path,
+                defaults=_cfg.claude_code,
+            )
+            result = await provider.execute_task(
+                prompt=user_message,
+                agent_config=agent_data,
+                task_id=task_id,
+                workspace_ctx=ws_ctx,
+                session_id=session_id,
+            )
+        except Exception as exc:
+            logger.error("[executor] CC thread reply: execution failed: %s", exc)
+            return None
+        finally:
+            if self._ask_user_registry is not None:
+                self._ask_user_registry.unregister(task_id)
+            await ipc_server.stop()
+
+        # Update stored session with the new session_id from this turn (CC-6 AC3)
+        if result.session_id:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "settings:set",
+                    {
+                        "key": f"cc_session:{agent_name}:{task_id}",
+                        "value": result.session_id,
+                    },
+                )
+                # Also update the :latest key (L1 — keep latest in sync)
+                await asyncio.to_thread(
+                    self._bridge.mutation,
+                    "settings:set",
+                    {
+                        "key": f"cc_session:{agent_name}:latest",
+                        "value": result.session_id,
+                    },
+                )
+            except Exception:
+                logger.warning(
+                    "[executor] CC thread reply: failed to update session for %s", agent_name
+                )
+
+        # Post response back to the task thread (M3, M5: include truncation notice)
+        if result and not result.is_error:
+            _reply_output = result.output
+            if len(_reply_output) > 2000:
+                _reply_output = _reply_output[:2000] + f"\n\n... [truncated, full output: {len(result.output)} chars]"
+            try:
+                await asyncio.to_thread(
+                    self._bridge.send_message,
+                    task_id,
+                    agent_name,
+                    AuthorType.AGENT,
+                    _reply_output,
+                    MessageType.WORK,
+                )
+            except Exception:
+                logger.warning(
+                    "[executor] CC thread reply: failed to post response for %s", agent_name
+                )
+
+        return result.output if not result.is_error else None

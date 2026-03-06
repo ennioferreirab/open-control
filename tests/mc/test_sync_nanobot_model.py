@@ -55,7 +55,7 @@ def test_no_write_when_models_match(tmp_path, monkeypatch):
         "model": "anthropic/match-model",
     }
 
-    with patch("mc.agent_sync.os.replace") as mock_replace:
+    with patch("mc.infrastructure.agent_bootstrap.os.replace") as mock_replace:
         updated = sync_nanobot_default_model(bridge)
 
     assert updated is False
