@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Doc } from "../convex/_generated/dataModel";
@@ -85,9 +85,23 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     (task.status === "review" && taskAny.awaitingKickoff !== true);
 
   const isBlocked = BLOCKED_STATUSES.includes(task.status);
-  const canSend = content.trim().length > 0 && !isSubmitting && (inputMode === "comment" || isPlanChatMode || isInProgress || !!selectedAgent);
 
   const filteredAgents = useSelectableAgents(board?.enabledAgents);
+
+  // Detect @mentions in current content (shared between canSend and handleSend)
+  const { hasMention, firstMentionedAgentName } = useMemo(() => {
+    const matches = content.match(/@(\w[\w-]*)/g);
+    if (!matches || !filteredAgents) return { hasMention: false, firstMentionedAgentName: undefined as string | undefined };
+    for (const m of matches) {
+      const name = m.slice(1);
+      if (filteredAgents.some((a) => a.name === name)) {
+        return { hasMention: true, firstMentionedAgentName: name };
+      }
+    }
+    return { hasMention: false, firstMentionedAgentName: undefined as string | undefined };
+  }, [content, filteredAgents]);
+
+  const canSend = content.trim().length > 0 && !isSubmitting && (inputMode === "comment" || isPlanChatMode || isInProgress || !!selectedAgent || hasMention);
 
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -158,26 +172,10 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     const trimmed = content.trim();
     if (!trimmed) return;
 
-    // Parse @mentions: use the last mentioned agent name if it matches a known agent
-    let agentForSubmit = selectedAgent;
-    const mentionMatches = trimmed.match(/@(\w[\w-]*)/g);
-    let hasMention = false;
-    let firstMentionedAgent: string | undefined;
-    if (mentionMatches && filteredAgents) {
-      const lastMention = mentionMatches[mentionMatches.length - 1].slice(1); // remove @
-      if (filteredAgents.some((a) => a.name === lastMention)) {
-        agentForSubmit = lastMention;
-        setSelectedAgent(lastMention);
-      }
-      // Check if any @mention matches a known agent (for mention routing)
-      for (const m of mentionMatches) {
-        const name = m.slice(1);
-        if (filteredAgents.some((a) => a.name === name)) {
-          hasMention = true;
-          if (!firstMentionedAgent) firstMentionedAgent = name;
-          break;
-        }
-      }
+    // Use the first mentioned agent for both routing and selectedAgent update
+    const agentForSubmit = firstMentionedAgentName ?? selectedAgent;
+    if (firstMentionedAgentName) {
+      setSelectedAgent(firstMentionedAgentName);
     }
 
     if (inputMode !== "comment" && !isPlanChatMode && !isInProgress && !hasMention && !agentForSubmit) return;
@@ -192,12 +190,12 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         // post without disrupting task status. For in_progress, the watcher
         // delivers the reply to the waiting ask_user Future.
         await postPlanMessage({ taskId: task._id, content: trimmed });
-      } else if (hasMention && firstMentionedAgent) {
+      } else if (hasMention && firstMentionedAgentName) {
         // @mention detected: post without status transition (Story 13.1)
         await postMentionMessage({
           taskId: task._id,
           content: trimmed,
-          mentionedAgent: firstMentionedAgent,
+          mentionedAgent: firstMentionedAgentName,
         });
       } else {
         await sendMessage({

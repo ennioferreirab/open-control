@@ -307,6 +307,9 @@ export const postMentionMessage = mutation({
     if (task.status === "deleted") {
       throw new ConvexError("Cannot send messages on deleted tasks");
     }
+    if (task.isManual) {
+      throw new ConvexError("Cannot send thread messages on manual tasks");
+    }
 
     const timestamp = new Date().toISOString();
 

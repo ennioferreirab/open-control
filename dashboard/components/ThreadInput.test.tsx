@@ -1,24 +1,25 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { ThreadInput } from "./ThreadInput";
+import { api } from "../convex/_generated/api";
+import { getFunctionName } from "convex/server";
 
-// Track which mutation reference each useMutation call receives
-const mutationMap = new Map<string, ReturnType<typeof vi.fn>>();
+// Track mutations by the stable Convex function name (e.g. "messages:postMentionMessage").
+// Convex API references are Proxy objects that return new objects on each property
+// access, so we use getFunctionName to derive a stable string key.
+const mutationMocks = new Map<string, ReturnType<typeof vi.fn>>();
 
-function getMutationFn(key: string) {
-  if (!mutationMap.has(key)) {
-    mutationMap.set(key, vi.fn().mockResolvedValue("msg-id"));
+function getMutationMock(ref: unknown): ReturnType<typeof vi.fn> {
+  const key = getFunctionName(ref as any);
+  if (!mutationMocks.has(key)) {
+    mutationMocks.set(key, vi.fn().mockResolvedValue("msg-id"));
   }
-  return mutationMap.get(key)!;
+  return mutationMocks.get(key)!;
 }
 
 vi.mock("convex/react", () => ({
   useQuery: () => undefined, // boards.getById returns undefined (skip)
-  useMutation: (ref: { name?: string } | string) => {
-    // Convex function references are objects; extract a distinguishing key
-    const key = typeof ref === "string" ? ref : JSON.stringify(ref);
-    return getMutationFn(key);
-  },
+  useMutation: (ref: unknown) => getMutationMock(ref),
 }));
 
 // Mock useSelectableAgents to return known agents
@@ -93,7 +94,7 @@ const baseTask = {
 
 describe("ThreadInput @mention routing (Story 13.1)", () => {
   beforeEach(() => {
-    mutationMap.clear();
+    mutationMocks.clear();
   });
 
   afterEach(() => {
@@ -110,11 +111,8 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     await waitFor(() => {
-      // Find the postMentionMessage mock (it's the 4th useMutation call)
-      const calls = Array.from(mutationMap.values());
-      const calledMock = calls.find((m) => m.mock.calls.length > 0);
-      expect(calledMock).toBeDefined();
-      expect(calledMock).toHaveBeenCalledWith(
+      const mentionMock = getMutationMock(api.messages.postMentionMessage);
+      expect(mentionMock).toHaveBeenCalledWith(
         expect.objectContaining({
           taskId: "task1",
           content: "@coder please review this",
@@ -133,10 +131,8 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     await waitFor(() => {
-      const calls = Array.from(mutationMap.values());
-      const calledMock = calls.find((m) => m.mock.calls.length > 0);
-      expect(calledMock).toBeDefined();
-      expect(calledMock).toHaveBeenCalledWith(
+      const sendMock = getMutationMock(api.messages.sendThreadMessage);
+      expect(sendMock).toHaveBeenCalledWith(
         expect.objectContaining({
           taskId: "task1",
           content: "please fix the bug",
@@ -155,13 +151,14 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     await waitFor(() => {
-      const calls = Array.from(mutationMap.values());
-      const calledMock = calls.find((m) => m.mock.calls.length > 0);
-      expect(calledMock).toBeDefined();
-      // The called mock should have mentionedAgent, not agentName
-      const callArgs = calledMock!.mock.calls[0][0];
-      expect(callArgs).toHaveProperty("mentionedAgent", "reviewer");
-      expect(callArgs).not.toHaveProperty("agentName");
+      const mentionMock = getMutationMock(api.messages.postMentionMessage);
+      const sendMock = getMutationMock(api.messages.sendThreadMessage);
+      expect(mentionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mentionedAgent: "reviewer",
+        })
+      );
+      expect(sendMock).not.toHaveBeenCalled();
     });
   });
 
@@ -205,16 +202,15 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     await waitFor(() => {
-      const calls = Array.from(mutationMap.values());
-      const calledMock = calls.find((m) => m.mock.calls.length > 0);
-      expect(calledMock).toBeDefined();
-      // Plan-chat uses postUserPlanMessage: no mentionedAgent or agentName,
-      // just taskId + content
-      const callArgs = calledMock!.mock.calls[0][0];
-      expect(callArgs).toHaveProperty("taskId", "task1");
-      expect(callArgs).toHaveProperty("content", "@coder update the plan");
-      expect(callArgs).not.toHaveProperty("mentionedAgent");
-      expect(callArgs).not.toHaveProperty("agentName");
+      const planMock = getMutationMock(api.messages.postUserPlanMessage);
+      const mentionMock = getMutationMock(api.messages.postMentionMessage);
+      expect(planMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task1",
+          content: "@coder update the plan",
+        })
+      );
+      expect(mentionMock).not.toHaveBeenCalled();
     });
   });
 
@@ -228,13 +224,14 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     await waitFor(() => {
-      const calls = Array.from(mutationMap.values());
-      const calledMock = calls.find((m) => m.mock.calls.length > 0);
-      expect(calledMock).toBeDefined();
-      const callArgs = calledMock!.mock.calls[0][0];
-      // Should use sendThreadMessage (has agentName), not postMentionMessage
-      expect(callArgs).toHaveProperty("agentName");
-      expect(callArgs).not.toHaveProperty("mentionedAgent");
+      const sendMock = getMutationMock(api.messages.sendThreadMessage);
+      const mentionMock = getMutationMock(api.messages.postMentionMessage);
+      expect(sendMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentName: "coder",
+        })
+      );
+      expect(mentionMock).not.toHaveBeenCalled();
     });
   });
 });

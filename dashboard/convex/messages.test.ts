@@ -71,21 +71,14 @@ describe("messages.postMentionMessage", () => {
 
   it("uses generic description when mentionedAgent is not provided", async () => {
     const handler = getHandler();
-    const { inserts } = makeCtx(baseTask);
+    const { ctx, inserts } = makeCtx(baseTask);
 
-    await handler({ db: makeCtx(baseTask).ctx.db }, {
-      taskId: "task-1",
-      content: "Hello @someone",
-    });
-
-    // Re-create with proper tracking
-    const { ctx, inserts: ins2 } = makeCtx(baseTask);
     await handler(ctx, {
       taskId: "task-1",
       content: "Hello @someone",
     });
 
-    const actInsert = ins2.find((e) => e.table === "activities");
+    const actInsert = inserts.find((e) => e.table === "activities");
     expect(actInsert?.value.description).toBe("User sent mention message");
   });
 
@@ -99,6 +92,19 @@ describe("messages.postMentionMessage", () => {
         content: "Hey @coder",
       })
     ).rejects.toThrow(/Task not found/);
+  });
+
+  it("throws when task is manual", async () => {
+    const handler = getHandler();
+    const { ctx } = makeCtx({ ...baseTask, isManual: true });
+
+    await expect(
+      handler(ctx, {
+        taskId: "task-1",
+        content: "Hey @coder",
+        mentionedAgent: "coder",
+      })
+    ).rejects.toThrow(/Cannot send thread messages on manual tasks/);
   });
 
   it("throws when task status is deleted (AC 2)", async () => {
