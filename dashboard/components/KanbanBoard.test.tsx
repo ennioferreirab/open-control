@@ -1,46 +1,26 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, within } from "@testing-library/react";
 import { KanbanBoard } from "./KanbanBoard";
+import { Doc, Id } from "../convex/_generated/dataModel";
+import { BoardFilters } from "@/hooks/useBoardFilters";
+import { BoardViewData } from "@/hooks/useBoardView";
+import { ColumnData } from "@/hooks/useBoardColumns";
 
-let mockQueryValues: Record<string, unknown> = {};
-const mockUseQuery = vi.fn();
-const mockClearAllDone = vi.fn();
-const mockConvexQuery = vi.fn();
-const mockConvexClient = { query: mockConvexQuery };
+// --- Mock state ---
+let mockFilters: BoardFilters;
+let mockBoardView: BoardViewData;
+let mockColumns: ColumnData[] | undefined;
 
-vi.mock("../convex/_generated/api", () => ({
-  api: {
-    tasks: {
-      list: { name: "tasks.list" },
-      search: { name: "tasks.search" },
-      listByBoard: { name: "tasks.listByBoard" },
-      countHitlPending: { name: "tasks.countHitlPending" },
-      listDeleted: { name: "tasks.listDeleted" },
-      clearAllDone: { name: "tasks.clearAllDone" },
-    },
-    steps: {
-      listAll: { name: "steps.listAll" },
-    },
-    taskTags: {
-      list: { name: "taskTags.list" },
-    },
-    tagAttributes: {
-      list: { name: "tagAttributes.list" },
-    },
-    tagAttributeValues: {
-      getByTask: { name: "tagAttributeValues.getByTask" },
-      searchByValue: { name: "tagAttributeValues.searchByValue" },
-    },
-  },
+vi.mock("@/hooks/useBoardFilters", () => ({
+  useBoardFilters: () => mockFilters,
 }));
 
-vi.mock("convex/react", () => ({
-  useQuery: (
-    queryRef: { name?: string },
-    args?: unknown
-  ) => mockUseQuery(queryRef, args),
-  useMutation: () => mockClearAllDone,
-  useConvex: () => mockConvexClient,
+vi.mock("@/hooks/useBoardView", () => ({
+  useBoardView: () => mockBoardView,
+}));
+
+vi.mock("@/hooks/useBoardColumns", () => ({
+  useBoardColumns: () => mockColumns,
 }));
 
 // Mock motion/react
@@ -60,22 +40,30 @@ vi.mock("motion/react-client", () => ({
   },
 }));
 
-function setDefaultQueryValues() {
-  mockQueryValues = {
-    "tasks.list": [],
-    "tasks.search": undefined,
-    "tasks.listByBoard": undefined,
-    "tasks.countHitlPending": 0,
-    "tasks.listDeleted": [],
-    "taskTags.list": [],
-    "tagAttributes.list": [],
-    "steps.listAll": [],
-  };
-}
+// Mock convex/react for child components (KanbanColumn, TrashBinSheet, StepCard, etc.)
+vi.mock("convex/react", () => ({
+  useQuery: () => [],
+  useMutation: () => vi.fn(),
+}));
 
-function makeTask(overrides: Record<string, unknown> = {}) {
+vi.mock("../convex/_generated/api", () => ({
+  api: {
+    tasks: {
+      manualMove: { name: "tasks.manualMove" },
+      listDeleted: { name: "tasks.listDeleted" },
+      restore: { name: "tasks.restore" },
+      clearAllDone: { name: "tasks.clearAllDone" },
+      listDone: { name: "tasks.listDone" },
+    },
+    steps: {
+      deleteStep: { name: "steps.deleteStep" },
+    },
+  },
+}));
+
+function makeTask(overrides: Record<string, unknown> = {}): Doc<"tasks"> {
   return {
-    _id: `task_${Math.random().toString(36).slice(2)}`,
+    _id: `task_${Math.random().toString(36).slice(2)}` as Id<"tasks">,
     _creationTime: 1000,
     title: "Test task",
     status: "inbox",
@@ -83,14 +71,14 @@ function makeTask(overrides: Record<string, unknown> = {}) {
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
     ...overrides,
-  };
+  } as Doc<"tasks">;
 }
 
-function makeStep(overrides: Record<string, unknown> = {}) {
+function makeStep(overrides: Record<string, unknown> = {}): Doc<"steps"> {
   return {
-    _id: `step_${Math.random().toString(36).slice(2)}`,
+    _id: `step_${Math.random().toString(36).slice(2)}` as Id<"steps">,
     _creationTime: 1000,
-    taskId: "task_1",
+    taskId: "task_1" as Id<"tasks">,
     title: "Test step",
     description: "Test step description",
     assignedAgent: "nanobot",
@@ -100,30 +88,132 @@ function makeStep(overrides: Record<string, unknown> = {}) {
     order: 1,
     createdAt: "2026-01-01T00:00:00Z",
     ...overrides,
+  } as Doc<"steps">;
+}
+
+function inactiveFilters(): BoardFilters {
+  return {
+    search: { freeText: "", tagFilters: [], attributeFilters: [] },
+    isSearchActive: false,
+    hasFreeText: false,
+    hasTagFilters: false,
+    hasAttributeFilters: false,
+    setSearch: vi.fn(),
   };
+}
+
+function defaultBoardView(overrides: Partial<BoardViewData> = {}): BoardViewData {
+  return {
+    tasks: [],
+    allSteps: [],
+    favorites: [],
+    hitlCount: 0,
+    deletedTasks: [],
+    deletedCount: 0,
+    tagColorMap: {},
+    clearAllDone: vi.fn(),
+    isLoading: false,
+    ...overrides,
+  };
+}
+
+function buildColumns(
+  tasks: Doc<"tasks">[],
+  steps: Doc<"steps">[] = []
+): ColumnData[] {
+  // Simplified column builder for tests — delegates to the same logic
+  // as the real hook. For these component tests we manually build columns.
+  const COLS = [
+    { title: "Inbox", status: "inbox" as const, accentColor: "bg-violet-500" },
+    { title: "Assigned", status: "assigned" as const, accentColor: "bg-cyan-500" },
+    { title: "In Progress", status: "in_progress" as const, accentColor: "bg-blue-500" },
+    { title: "Review", status: "review" as const, accentColor: "bg-amber-500" },
+    { title: "Done", status: "done" as const, accentColor: "bg-green-500" },
+  ];
+
+  const taskStatusMap = new Map(
+    tasks.map((t) => [t._id, t.status] as const)
+  );
+  const taskTitleMap = new Map(
+    tasks.map((t) => [t._id, t.title] as const)
+  );
+
+  // Step grouping logic (matches useBoardColumns)
+  function stepStatusToCol(
+    stepStatus: string,
+    taskStatus?: string
+  ): string | null {
+    switch (stepStatus) {
+      case "assigned":
+      case "blocked":
+        return taskStatus === "in_progress" ? "in_progress" : "assigned";
+      case "running":
+      case "crashed":
+        return "in_progress";
+      default:
+        return null;
+    }
+  }
+
+  const visibleTaskIds = new Set(tasks.map((t) => t._id));
+  const boardSteps = steps.filter((s) => visibleTaskIds.has(s.taskId));
+
+  const stepsByTaskId = new Map<Id<"tasks">, Doc<"steps">[]>();
+  for (const step of boardSteps) {
+    const ts = taskStatusMap.get(step.taskId);
+    if (ts === "done" || ts === "review") continue;
+    const mapped = stepStatusToCol(step.status, ts);
+    if (!mapped) continue;
+    const cur = stepsByTaskId.get(step.taskId) ?? [];
+    cur.push(step);
+    stepsByTaskId.set(step.taskId, cur);
+  }
+
+  const hasSteps = new Set(stepsByTaskId.keys());
+  const regularTasks = tasks.filter(
+    (t) => !hasSteps.has(t._id) || t.status === "review"
+  );
+
+  return COLS.map((col) => {
+    const columnTasks = regularTasks.filter((t) => {
+      if (col.status === "in_progress")
+        return ["in_progress", "retrying", "crashed", "failed"].includes(t.status);
+      if (col.status === "assigned")
+        return ["assigned", "planning", "ready"].includes(t.status);
+      if (col.status === "inbox") return t.status === "inbox";
+      return t.status === col.status;
+    }).sort((a, b) => b._creationTime - a._creationTime);
+
+    const stepGroups = Array.from(stepsByTaskId.entries())
+      .map(([taskId, taskSteps]) => {
+        const ts = taskStatusMap.get(taskId);
+        const filtered = taskSteps
+          .filter((s) => stepStatusToCol(s.status, ts) === col.status)
+          .sort((a, b) => a.order - b.order);
+        return {
+          taskId,
+          taskTitle: taskTitleMap.get(taskId) ?? "Unknown Task",
+          steps: filtered,
+        };
+      })
+      .filter((g) => g.steps.length > 0);
+
+    return {
+      ...col,
+      tasks: columnTasks,
+      stepGroups,
+      totalCount:
+        columnTasks.length +
+        stepGroups.reduce((c, g) => c + g.steps.length, 0),
+    };
+  });
 }
 
 describe("KanbanBoard", () => {
   beforeEach(() => {
-    setDefaultQueryValues();
-    mockUseQuery.mockReset();
-    mockUseQuery.mockImplementation((queryRef: { name?: string }, args?: unknown) => {
-      if (args === "skip") {
-        return undefined;
-      }
-      return mockQueryValues[queryRef?.name ?? ""];
-    });
-    mockClearAllDone.mockReset();
-    mockConvexQuery.mockReset();
-    mockConvexQuery.mockImplementation((queryRef: { name?: string }) => {
-      if (queryRef?.name === "tagAttributeValues.searchByValue") {
-        return Promise.resolve([]);
-      }
-      if (queryRef?.name === "tagAttributeValues.getByTask") {
-        return Promise.resolve([]);
-      }
-      return Promise.resolve([]);
-    });
+    mockFilters = inactiveFilters();
+    mockBoardView = defaultBoardView();
+    mockColumns = buildColumns([]);
   });
 
   afterEach(() => {
@@ -131,7 +221,9 @@ describe("KanbanBoard", () => {
   });
 
   it("renders 5 columns with correct titles", () => {
-    mockQueryValues["tasks.list"] = [makeTask()];
+    const tasks = [makeTask()];
+    mockBoardView = defaultBoardView({ tasks });
+    mockColumns = buildColumns(tasks);
     render(<KanbanBoard />);
     expect(screen.getByText("Inbox")).toBeInTheDocument();
     expect(screen.getByText("Assigned")).toBeInTheDocument();
@@ -141,7 +233,8 @@ describe("KanbanBoard", () => {
   });
 
   it("shows empty state message when no tasks exist", () => {
-    mockQueryValues["tasks.list"] = [];
+    mockBoardView = defaultBoardView({ tasks: [], deletedCount: 0 });
+    mockColumns = buildColumns([]);
     render(<KanbanBoard />);
     expect(
       screen.getByText("No tasks yet. Type above to create your first task.")
@@ -149,26 +242,33 @@ describe("KanbanBoard", () => {
   });
 
   it("renders nothing while loading", () => {
-    mockQueryValues["tasks.list"] = undefined;
+    mockBoardView = defaultBoardView({ isLoading: true, tasks: undefined });
+    mockColumns = undefined;
     const { container } = render(<KanbanBoard />);
     expect(container.innerHTML).toBe("");
   });
 
   it("renders nothing while steps query is still loading", () => {
-    mockQueryValues["tasks.list"] = [makeTask()];
-    mockQueryValues["steps.listAll"] = undefined;
+    mockBoardView = defaultBoardView({
+      isLoading: true,
+      tasks: [makeTask()],
+      allSteps: undefined,
+    });
+    mockColumns = undefined;
     const { container } = render(<KanbanBoard />);
     expect(container.innerHTML).toBe("");
   });
 
   it("groups tasks into correct columns by status", () => {
-    mockQueryValues["tasks.list"] = [
-      makeTask({ _id: "t1", title: "Inbox task", status: "inbox" }),
-      makeTask({ _id: "t2", title: "Assigned task", status: "assigned" }),
-      makeTask({ _id: "t3", title: "Progress task", status: "in_progress" }),
-      makeTask({ _id: "t4", title: "Review task", status: "review" }),
-      makeTask({ _id: "t5", title: "Done task", status: "done" }),
+    const tasks = [
+      makeTask({ _id: "t1" as Id<"tasks">, title: "Inbox task", status: "inbox" }),
+      makeTask({ _id: "t2" as Id<"tasks">, title: "Assigned task", status: "assigned" }),
+      makeTask({ _id: "t3" as Id<"tasks">, title: "Progress task", status: "in_progress" }),
+      makeTask({ _id: "t4" as Id<"tasks">, title: "Review task", status: "review" }),
+      makeTask({ _id: "t5" as Id<"tasks">, title: "Done task", status: "done" }),
     ];
+    mockBoardView = defaultBoardView({ tasks });
+    mockColumns = buildColumns(tasks);
     render(<KanbanBoard />);
     expect(screen.getByText("Inbox task")).toBeInTheDocument();
     expect(screen.getByText("Assigned task")).toBeInTheDocument();
@@ -177,91 +277,37 @@ describe("KanbanBoard", () => {
     expect(screen.getByText("Done task")).toBeInTheDocument();
   });
 
-  it("uses tasks.search query when free text is present", () => {
-    mockQueryValues["tasks.search"] = [
-      makeTask({ _id: "s1", title: "OAuth task", status: "inbox" }),
-    ];
-    render(
-      <KanbanBoard
-        search={{ freeText: "OAuth", tagFilters: [], attributeFilters: [] }}
-      />
-    );
-    expect(screen.getByText("OAuth task")).toBeInTheDocument();
-    expect(
-      mockUseQuery.mock.calls.some(
-        ([queryRef, args]) =>
-          queryRef?.name === "tasks.search" &&
-          args &&
-          typeof args === "object" &&
-          (args as { query?: string }).query === "OAuth"
-      )
-    ).toBe(true);
-  });
-
   it("shows search empty-state message when no tasks match active search", () => {
-    mockQueryValues["tasks.search"] = [];
-    render(
-      <KanbanBoard
-        search={{ freeText: "missing", tagFilters: [], attributeFilters: [] }}
-      />
-    );
+    mockFilters = {
+      ...inactiveFilters(),
+      isSearchActive: true,
+      hasFreeText: true,
+      search: { freeText: "missing", tagFilters: [], attributeFilters: [] },
+    };
+    mockBoardView = defaultBoardView({ tasks: [] });
+    mockColumns = buildColumns([]);
+    render(<KanbanBoard />);
     expect(screen.getByText("No tasks match your search")).toBeInTheDocument();
   });
 
-  it("pre-filters attribute search candidates with searchByValue before getByTask", async () => {
-    mockQueryValues["tasks.list"] = [
-      makeTask({ _id: "t1", title: "Task One", status: "inbox", tags: ["feature"] }),
-      makeTask({ _id: "t2", title: "Task Two", status: "inbox", tags: ["feature"] }),
-    ];
-    mockQueryValues["tagAttributes.list"] = [
-      { _id: "attr1", name: "priority" },
-    ];
-    mockConvexQuery.mockImplementation((queryRef: { name?: string }, args?: any) => {
-      if (queryRef?.name === "tagAttributeValues.searchByValue") {
-        return Promise.resolve(["t2"]);
-      }
-      if (queryRef?.name === "tagAttributeValues.getByTask" && args?.taskId === "t2") {
-        return Promise.resolve([
-          { tagName: "feature", attributeId: "attr1", value: "high" },
-        ]);
-      }
-      return Promise.resolve([]);
-    });
-
-    render(
-      <KanbanBoard
-        search={{
-          freeText: "",
-          tagFilters: [],
-          attributeFilters: [{ tagName: "feature", attrName: "priority", value: "high" }],
-        }}
-      />
-    );
-
-    await vi.waitFor(() => {
-      expect(screen.getByText("Task Two")).toBeInTheDocument();
-    });
-    expect(screen.queryByText("Task One")).not.toBeInTheDocument();
-
-    const getByTaskCalls = mockConvexQuery.mock.calls.filter(
-      ([queryRef]) => queryRef?.name === "tagAttributeValues.getByTask"
-    );
-    expect(getByTaskCalls).toHaveLength(1);
-    expect(getByTaskCalls[0][1]).toEqual({ taskId: "t2" });
-  });
-
   it("places retrying and crashed tasks in the In Progress column", () => {
-    mockQueryValues["tasks.list"] = [
-      makeTask({ _id: "t1", title: "Retrying task", status: "retrying" }),
-      makeTask({ _id: "t2", title: "Crashed task", status: "crashed" }),
+    const tasks = [
+      makeTask({ _id: "t1" as Id<"tasks">, title: "Retrying task", status: "retrying" }),
+      makeTask({ _id: "t2" as Id<"tasks">, title: "Crashed task", status: "crashed" }),
     ];
+    mockBoardView = defaultBoardView({ tasks });
+    mockColumns = buildColumns(tasks);
     render(<KanbanBoard />);
     expect(screen.getByText("Retrying task")).toBeInTheDocument();
     expect(screen.getByText("Crashed task")).toBeInTheDocument();
   });
 
   it("shows 'No tasks' for empty columns when other columns have tasks", () => {
-    mockQueryValues["tasks.list"] = [makeTask({ _id: "t1", status: "inbox" })];
+    const tasks = [
+      makeTask({ _id: "t1" as Id<"tasks">, status: "inbox" }),
+    ];
+    mockBoardView = defaultBoardView({ tasks });
+    mockColumns = buildColumns(tasks);
     render(<KanbanBoard />);
     // 4 columns should show "No tasks" (all except Inbox)
     const emptyTexts = screen.getAllByText("No tasks");
@@ -269,37 +315,39 @@ describe("KanbanBoard", () => {
   });
 
   it("renders steps grouped by parent task and keeps tasks without steps as TaskCards", () => {
-    mockQueryValues["tasks.list"] = [
-      makeTask({ _id: "task_with_steps", title: "Task With Steps", status: "assigned" }),
-      makeTask({ _id: "task_without_steps", title: "Task Without Steps", status: "assigned" }),
+    const tasks = [
+      makeTask({ _id: "task_with_steps" as Id<"tasks">, title: "Task With Steps", status: "assigned" }),
+      makeTask({ _id: "task_without_steps" as Id<"tasks">, title: "Task Without Steps", status: "assigned" }),
     ];
-    mockQueryValues["steps.listAll"] = [
+    const steps = [
       makeStep({
-        _id: "step_1",
+        _id: "step_1" as Id<"steps">,
         title: "Step One",
-        taskId: "task_with_steps",
+        taskId: "task_with_steps" as Id<"tasks">,
         status: "assigned",
       }),
       makeStep({
-        _id: "step_2",
+        _id: "step_2" as Id<"steps">,
         title: "Step Two",
-        taskId: "task_with_steps",
+        taskId: "task_with_steps" as Id<"tasks">,
         status: "running",
       }),
       makeStep({
-        _id: "step_3",
+        _id: "step_3" as Id<"steps">,
         title: "Step Blocked",
-        taskId: "task_with_steps",
+        taskId: "task_with_steps" as Id<"tasks">,
         status: "blocked",
       }),
       makeStep({
-        _id: "step_4",
+        _id: "step_4" as Id<"steps">,
         title: "Step Crashed",
-        taskId: "task_with_steps",
+        taskId: "task_with_steps" as Id<"tasks">,
         status: "crashed",
       }),
     ];
 
+    mockBoardView = defaultBoardView({ tasks, allSteps: steps });
+    mockColumns = buildColumns(tasks, steps);
     render(<KanbanBoard />);
 
     expect(screen.getByText("Step One")).toBeInTheDocument();
