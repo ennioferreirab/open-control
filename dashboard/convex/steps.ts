@@ -689,6 +689,111 @@ export const addStep = mutation({
   },
 });
 
+export const updateStep = mutation({
+  args: {
+    stepId: v.id("steps"),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    assignedAgent: v.optional(v.string()),
+    blockedByStepIds: v.optional(v.array(v.id("steps"))),
+  },
+  handler: async (ctx, args) => {
+    const step = await ctx.db.get(args.stepId);
+    if (!step) {
+      throw new ConvexError("Step not found");
+    }
+
+    // Only planned/blocked steps can be edited
+    if (step.status !== "planned" && step.status !== "blocked") {
+      throw new ConvexError(
+        `Cannot edit step in '${step.status}' status. Only planned or blocked steps can be modified.`
+      );
+    }
+
+    if (args.title !== undefined && !args.title.trim()) {
+      throw new ConvexError("Step title is required");
+    }
+    if (args.description !== undefined && !args.description.trim()) {
+      throw new ConvexError("Step description is required");
+    }
+    if (args.assignedAgent !== undefined) {
+      if (!args.assignedAgent.trim()) {
+        throw new ConvexError("Assigned agent is required");
+      }
+      if (args.assignedAgent === "lead-agent") {
+        throw new ConvexError("lead-agent cannot be assigned to steps");
+      }
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (args.title !== undefined) patch.title = args.title;
+    if (args.description !== undefined) patch.description = args.description;
+    if (args.assignedAgent !== undefined) patch.assignedAgent = args.assignedAgent;
+
+    // Handle blockedBy update
+    if (args.blockedByStepIds !== undefined) {
+      for (const depId of args.blockedByStepIds) {
+        const depStep = await ctx.db.get(depId);
+        if (!depStep) {
+          throw new ConvexError(`Dependency step not found: ${depId}`);
+        }
+        if (depStep.taskId !== step.taskId) {
+          throw new ConvexError(
+            "All blockedBy dependency steps must belong to the same task"
+          );
+        }
+      }
+      patch.blockedBy =
+        args.blockedByStepIds.length > 0 ? args.blockedByStepIds : undefined;
+
+      // Re-resolve status based on new blockers
+      if (args.blockedByStepIds.length === 0) {
+        patch.status = "planned";
+      } else {
+        const existingSteps = await ctx.db
+          .query("steps")
+          .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
+          .collect();
+        const blockerSteps = existingSteps.filter((s) =>
+          args.blockedByStepIds!.includes(s._id)
+        );
+        const allDone = blockerSteps.every((s) => s.status === "completed");
+        patch.status = allDone ? "planned" : "blocked";
+      }
+    }
+
+    await ctx.db.patch(args.stepId, patch);
+
+    // Also update the executionPlan JSON on the task
+    const task = await ctx.db.get(step.taskId);
+    if (task) {
+      const plan = (task.executionPlan as {
+        steps?: Array<Record<string, unknown>>;
+      }) ?? {};
+      if (Array.isArray(plan.steps)) {
+        const updatedPlanSteps = plan.steps.map((ps) => {
+          const match =
+            String(ps.stepId) === String(args.stepId) ||
+            ps.title === step.title;
+          if (!match) return ps;
+          const updated = { ...ps };
+          if (args.title !== undefined) updated.title = args.title;
+          if (args.description !== undefined)
+            updated.description = args.description;
+          if (args.assignedAgent !== undefined)
+            updated.assignedAgent = args.assignedAgent;
+          return updated;
+        });
+        await ctx.db.patch(step.taskId, {
+          executionPlan: { ...plan, steps: updatedPlanSteps },
+        });
+      }
+    }
+
+    return args.stepId;
+  },
+});
+
 export const deleteStep = mutation({
   args: {
     stepId: v.id("steps"),

@@ -88,6 +88,7 @@ export type FlowStepNodeData = {
   onAccept?: (stepId: string) => void;
   isAccepting?: boolean;
   acceptError?: string;
+  onStepClick?: (stepId: string) => void;
 };
 
 export type FlowStepNodeType = Node<FlowStepNodeData, "flowStep">;
@@ -98,7 +99,7 @@ const addBtnClass =
   "flex items-center justify-center w-5 h-5 rounded-full bg-muted hover:bg-primary hover:text-primary-foreground text-muted-foreground transition-colors shadow-sm border border-border cursor-pointer";
 
 function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) {
-  const { step, status, isEditMode, hasParallelSiblings, onAddSequential, onAddParallel, onMergePaths, onDeleteStep, onAccept, isAccepting, acceptError } = data;
+  const { step, status, isEditMode, hasParallelSiblings, onAddSequential, onAddParallel, onMergePaths, onDeleteStep, onAccept, isAccepting, acceptError, onStepClick } = data;
   const resolvedStatus = status ?? "planned";
   const meta = getStatusMeta(resolvedStatus);
   const isWaitingHuman = normalizeStatus(resolvedStatus) === "waiting_human";
@@ -110,8 +111,10 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
       className={cn(
         "rounded-lg border bg-background px-3 py-2 shadow-sm w-[220px]",
         selected ? "border-blue-500 ring-1 ring-blue-500/30" : "border-border",
-        meta.runningPulse && "motion-safe:animate-pulse"
+        meta.runningPulse && "motion-safe:animate-pulse",
+        onStepClick && "cursor-pointer hover:border-primary/50 transition-colors"
       )}
+      onClick={() => onStepClick?.(step.tempId)}
     >
       {/* Handles — always present for edge rendering, hidden in edit mode */}
       <Handle

@@ -11,6 +11,7 @@ import { FlowStepNode, normalizeStatus, type FlowStepNodeData } from "./FlowStep
 import { StartNode, EndNode } from "./StartEndNode";
 import { PlanEditor } from "./PlanEditor";
 import { AddStepForm, type AddStepData, type ExistingStep } from "./AddStepForm";
+import { EditStepForm, type EditStepData } from "./EditStepForm";
 import { Button } from "@/components/ui/button";
 import { stepsToNodesAndEdges, layoutWithDagre } from "@/lib/flowLayout";
 import type { ExecutionPlan, PlanStep } from "@/lib/types";
@@ -194,10 +195,13 @@ export function ExecutionPlanTab({
 }: ExecutionPlanTabProps) {
   const acceptHumanStepMutation = useMutation(api.steps.acceptHumanStep);
   const addStepMutation = useMutation(api.steps.addStep);
+  const updateStepMutation = useMutation(api.steps.updateStep);
   const [acceptingStepId, setAcceptingStepId] = useState<string | null>(null);
   const [acceptErrors, setAcceptErrors] = useState<Record<string, string>>({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addStepError, setAddStepError] = useState<string | null>(null);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [editStepError, setEditStepError] = useState<string | null>(null);
 
   const handleAccept = useCallback(
     async (stepId: string) => {
@@ -225,6 +229,21 @@ export function ExecutionPlanTab({
     (step) => normalizeStatus(step.status) === "completed"
   ).length;
 
+  // Determine if this is a review (pre-kickoff) mode vs live mode
+  const isReviewMode = taskStatus === "review" || taskStatus === "inbox" || isEditMode;
+  const isLiveMode = taskStatus === "in_progress" || taskStatus === "done";
+  const canAddOrEdit = isReviewMode || isLiveMode;
+
+  const handleStepClick = useCallback(
+    (stepId: string) => {
+      if (!canAddOrEdit) return;
+      setEditingStepId(stepId);
+      setEditStepError(null);
+      setShowAddForm(false);
+    },
+    [canAddOrEdit]
+  );
+
   // Build flow nodes/edges for read-only view
   const { flowNodes, flowEdges } = useMemo(() => {
     if (steps.length === 0) return { flowNodes: [], flowEdges: [] };
@@ -244,13 +263,14 @@ export function ExecutionPlanTab({
           onAccept: handleAccept,
           isAccepting: acceptingStepId === n.id,
           acceptError: acceptErrors[n.id],
+          onStepClick: canAddOrEdit ? handleStepClick : undefined,
         },
       };
     });
 
     const positioned = layoutWithDagre(nodesWithStatus, rawEdges);
     return { flowNodes: positioned, flowEdges: rawEdges };
-  }, [steps, handleAccept, acceptingStepId, acceptErrors]);
+  }, [steps, handleAccept, acceptingStepId, acceptErrors, canAddOrEdit, handleStepClick]);
 
   // Build existingSteps for the blocked-by selector
   const existingStepsForForm: ExistingStep[] = useMemo(() => {
@@ -269,10 +289,6 @@ export function ExecutionPlanTab({
       status: s.status,
     }));
   }, [liveSteps, steps]);
-
-  // Determine if this is a review (pre-kickoff) mode vs live mode
-  const isReviewMode = taskStatus === "review" || isEditMode;
-  const isLiveMode = taskStatus === "in_progress" || taskStatus === "done";
 
   const handleAddStep = useCallback(
     async (data: AddStepData) => {
@@ -364,6 +380,59 @@ export function ExecutionPlanTab({
     ]
   );
 
+  // Find the step data for the currently editing step
+  const editingStep = useMemo(() => {
+    if (!editingStepId) return null;
+    const found = steps.find((s) => s.stepId === editingStepId);
+    if (!found) return null;
+    return {
+      stepId: found.stepId,
+      title: found.title ?? "",
+      description: found.description,
+      assignedAgent: found.assignedAgent ?? "",
+      status: found.status,
+    };
+  }, [editingStepId, steps]);
+
+  const handleEditStep = useCallback(
+    async (data: EditStepData) => {
+      if (isReviewMode && onLocalPlanChange && executionPlan) {
+        // Pre-kickoff: update in local plan state
+        const currentPlan = executionPlan as ExecutionPlan;
+        const updatedSteps = currentPlan.steps.map((s) => {
+          if (s.tempId !== editingStepId) return s;
+          return { ...s, title: data.title, description: data.description,
+            assignedAgent: data.assignedAgent };
+        });
+        onLocalPlanChange({ ...currentPlan, steps: updatedSteps });
+        setEditStepError(null);
+        setEditingStepId(null);
+      } else if (isLiveMode && editingStepId) {
+        // Live mode: find the real step _id from liveSteps
+        const liveStep = liveSteps?.find(
+          (ls) => ls._id === editingStepId ||
+            ls.title === editingStep?.title
+        );
+        const realStepId = liveStep?._id ?? editingStepId;
+        try {
+          await updateStepMutation({
+            stepId: realStepId as Id<"steps">,
+            title: data.title,
+            description: data.description,
+            assignedAgent: data.assignedAgent,
+          });
+          setEditStepError(null);
+          setEditingStepId(null);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Failed to update step";
+          setEditStepError(message);
+        }
+      }
+    },
+    [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange,
+      editingStepId, editingStep, liveSteps, updateStepMutation]
+  );
+
   // Edit mode: render PlanEditor
   const canEditPlan =
     isEditMode &&
@@ -432,6 +501,20 @@ export function ExecutionPlanTab({
             <p className="text-xs text-destructive mt-1" data-testid="add-step-error">
               {addStepError}
             </p>
+          )}
+        </div>
+      )}
+
+      {editingStep && editingStepId && (
+        <div className="mb-2 px-1">
+          <EditStepForm
+            step={editingStep}
+            boardId={boardId}
+            onSave={handleEditStep}
+            onCancel={() => { setEditingStepId(null); setEditStepError(null); }}
+          />
+          {editStepError && (
+            <p className="text-xs text-destructive mt-1">{editStepError}</p>
           )}
         </div>
       )}
