@@ -7,6 +7,25 @@ from typing import Any
 from nanobot.agent.tools.base import Tool
 
 
+def _validate_memory_write_target(file_path: Path, workspace: Path | None) -> str | None:
+    """Block ad-hoc writes inside memory/ that violate the memory contract."""
+    if workspace is None:
+        return None
+
+    try:
+        memory_dir = (workspace / "memory").resolve()
+        relative = file_path.relative_to(memory_dir)
+    except ValueError:
+        return None
+
+    if len(relative.parts) != 1 or relative.name not in {"MEMORY.md", "HISTORY.md"}:
+        return (
+            "Writes inside memory/ are restricted to memory/MEMORY.md and "
+            "memory/HISTORY.md. Save task artifacts to the task output directory instead."
+        )
+    return None
+
+
 def _resolve_path(
     path: str, workspace: Path | None = None, allowed_dir: Path | None = None
 ) -> Path:
@@ -91,6 +110,8 @@ class WriteFileTool(Tool):
     async def execute(self, path: str, content: str, **kwargs: Any) -> str:
         try:
             file_path = _resolve_path(path, self._workspace, self._allowed_dir)
+            if error := _validate_memory_write_target(file_path, self._workspace):
+                return f"Error: {error}"
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content, encoding="utf-8")
             return f"Successfully wrote {len(content)} bytes to {file_path}"
@@ -130,6 +151,8 @@ class EditFileTool(Tool):
     async def execute(self, path: str, old_text: str, new_text: str, **kwargs: Any) -> str:
         try:
             file_path = _resolve_path(path, self._workspace, self._allowed_dir)
+            if error := _validate_memory_write_target(file_path, self._workspace):
+                return f"Error: {error}"
             if not file_path.exists():
                 return f"Error: File not found: {path}"
 

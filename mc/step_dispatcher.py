@@ -117,7 +117,7 @@ async def _run_step_agent(
     ask_user_registry: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
-    from mc.executor import _run_agent_on_task, _background_tasks
+    from mc.executor import _run_agent_on_task, _background_tasks, _relocate_invalid_memory_files
 
     result, session_key, loop = await _run_agent_on_task(
         agent_name=agent_name,
@@ -133,6 +133,12 @@ async def _run_step_agent(
         cron_service=cron_service,
         bridge=bridge,
         ask_user_registry=ask_user_registry,
+    )
+
+    await asyncio.to_thread(
+        _relocate_invalid_memory_files,
+        task_id,
+        loop.memory_workspace,
     )
 
     # Fire-and-forget memory consolidation after step completion.
@@ -310,7 +316,12 @@ class StepDispatcher:
         """Execute one assigned step and return any newly unblocked step IDs."""
         # Deferred imports to break circular dependency:
         # step_dispatcher -> executor -> gateway -> orchestrator -> step_dispatcher
-        from mc.executor import _human_size, _snapshot_output_dir, _collect_output_artifacts
+        from mc.executor import (
+            _human_size,
+            _snapshot_output_dir,
+            _collect_output_artifacts,
+            _relocate_invalid_memory_files,
+        )
         from mc.planner import _build_file_summary
 
         step_id = step.get("id")
@@ -649,6 +660,11 @@ class StepDispatcher:
                     await ipc_server.stop()
 
                 # Post completion — same as nanobot path
+                await asyncio.to_thread(
+                    _relocate_invalid_memory_files,
+                    task_id,
+                    ws_ctx.cwd,
+                )
                 artifacts = await asyncio.to_thread(
                     _collect_output_artifacts, task_id, pre_snapshot
                 )

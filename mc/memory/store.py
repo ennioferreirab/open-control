@@ -121,12 +121,16 @@ class HybridMemoryStore(MemoryStore):
         async def _run():
             try:
                 from mc.memory.consolidation import consolidate_history_and_memory
-                ok = await consolidate_history_and_memory(self.memory_dir, model)
-                if ok:
+                ran = False
+                while is_history_above_threshold(self.memory_dir):
+                    ok = await consolidate_history_and_memory(self.memory_dir, model)
+                    if not ok:
+                        logger.warning("File-based memory consolidation returned False")
+                        break
+                    ran = True
+                if ran:
                     self._index.sync()
                     logger.info("File-based memory consolidation completed")
-                else:
-                    logger.warning("File-based memory consolidation returned False")
             except Exception:
                 logger.exception("File-based memory consolidation failed")
             finally:

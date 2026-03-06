@@ -21,8 +21,8 @@ class ContextBuilder:
     def __init__(self, workspace: Path, global_skills_dir: Path | None = None):
         self.workspace = workspace
         try:
-            from mc.memory.store import HybridMemoryStore
-            self.memory = HybridMemoryStore(workspace)
+            from mc.memory import create_memory_store
+            self.memory = create_memory_store(workspace)
         except ImportError:
             self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace, global_skills_dir=global_skills_dir)

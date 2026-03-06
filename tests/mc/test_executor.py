@@ -23,6 +23,7 @@ from mc.executor import (
     _snapshot_output_dir,
     _build_thread_context,
     _human_size,
+    _relocate_invalid_memory_files,
 )
 from mc.types import StepCompletionArtifact
 
@@ -251,6 +252,27 @@ class TestCollectOutputArtifacts:
         actions = {a["path"]: a["action"] for a in artifacts}
         assert actions.get("output/existing.txt") == "modified"
         assert actions.get("output/new.md") == "created"
+
+
+class TestRelocateInvalidMemoryFiles:
+    def test_moves_invalid_memory_file_to_output(self, tmp_path):
+        safe_id = "memory-relocate-task"
+        workspace = tmp_path / "agent"
+        memory_dir = workspace / "memory"
+        memory_dir.mkdir(parents=True)
+        (memory_dir / "MEMORY.md").write_text("valid", encoding="utf-8")
+        rogue = memory_dir / "rogue.md"
+        rogue.write_text("artifact", encoding="utf-8")
+
+        with _make_home_patch(tmp_path):
+            moved = _relocate_invalid_memory_files(safe_id, workspace)
+
+        assert len(moved) == 1
+        relocated = tmp_path / ".nanobot" / "tasks" / safe_id / "output" / "memory-relocated-rogue.md"
+        assert moved[0] == relocated
+        assert relocated.read_text(encoding="utf-8") == "artifact"
+        assert not rogue.exists()
+        assert (memory_dir / "MEMORY.md").exists()
 
 
 # ── _build_thread_context with step_completion ──────────────────────────

@@ -301,8 +301,8 @@ class CCWorkspaceManager:
             Memory context string or None if empty/missing.
         """
         try:
-            from mc.memory.store import HybridMemoryStore
-            store = HybridMemoryStore(workspace)
+            from mc.memory import create_memory_store
+            store = create_memory_store(workspace)
             ctx = store.get_memory_context()
             return ctx if ctx else None
         except ImportError:

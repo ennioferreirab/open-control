@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +38,19 @@ _CONSOLIDATION_TOOL = [
 ]
 
 
+def _build_archive_block(snapshot_text: str, snapshot_size: int, archived_at: datetime) -> str:
+    timestamp = archived_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+    body = snapshot_text
+    if body and not body.endswith("\n"):
+        body += "\n"
+    return (
+        f"## Archived Snapshot [{timestamp}]\n"
+        "Source: HISTORY.md\n"
+        f"Chars: {snapshot_size}\n\n"
+        f"{body}\n---\n"
+    )
+
+
 def is_history_above_threshold(
     memory_dir: Path,
     threshold_chars: int = HISTORY_CONSOLIDATION_THRESHOLD_CHARS,
@@ -54,20 +68,45 @@ async def consolidate_history_and_memory(
     *,
     memory_target_max_chars: int = MEMORY_TARGET_MAX_CHARS,
 ) -> bool:
-    """Consolidate HISTORY.md + MEMORY.md into a fresh MEMORY.md, archive old files.
+    """Consolidate HISTORY.md + MEMORY.md into a fresh MEMORY.md, archive history safely.
 
     Returns True on success, False on failure.
     """
     history_file = memory_dir / "HISTORY.md"
     memory_file = memory_dir / "MEMORY.md"
+    archive_file = memory_dir / "HISTORY_ARCHIVE.md"
 
     if not history_file.exists() or history_file.stat().st_size == 0:
         return True  # Nothing to consolidate
 
-    lock = FileLock(str(memory_dir / ".consolidation.lock"), timeout=30)
-    with lock:
-        history_text = history_file.read_text(encoding="utf-8")
-        memory_text = memory_file.read_text(encoding="utf-8") if memory_file.exists() else ""
+    consolidation_lock = FileLock(str(memory_dir / ".consolidation.lock"), timeout=30)
+    memory_lock = FileLock(str(memory_dir / ".memory.lock"), timeout=30)
+    snapshot_path: Path | None = None
+
+    with consolidation_lock:
+        with memory_lock:
+            if not history_file.exists():
+                return True
+            snapshot_history_bytes = history_file.read_bytes()
+            if not snapshot_history_bytes:
+                return True
+            if len(snapshot_history_bytes) <= HISTORY_CONSOLIDATION_THRESHOLD_CHARS:
+                return True
+            memory_text = memory_file.read_text(encoding="utf-8") if memory_file.exists() else ""
+            snapshot_handle = tempfile.NamedTemporaryFile(
+                mode="wb",
+                delete=False,
+                prefix="nanobot-history-snapshot-",
+                suffix=".md",
+            )
+            try:
+                snapshot_handle.write(snapshot_history_bytes)
+                snapshot_handle.flush()
+                snapshot_path = Path(snapshot_handle.name)
+            finally:
+                snapshot_handle.close()
+
+        history_text = snapshot_history_bytes.decode("utf-8", errors="replace")
 
         system_prompt = (
             "You are a memory consolidation agent. "
@@ -115,34 +154,49 @@ async def consolidate_history_and_memory(
             logger.warning("consolidate_history_and_memory: empty memory returned")
             return False
 
-        # Archive old files with timestamp
         now = datetime.now(timezone.utc)
-        timestamp = now.strftime("%Y-%m-%d_%H%M")
+        timestamp = now.strftime("%Y-%m-%d_%H%M%S")
 
-        if history_file.exists():
-            archive_history = memory_dir / f"HISTORY_{timestamp}.md"
-            history_file.rename(archive_history)
-
-        if memory_text.strip():
-            archive_memory = memory_dir / f"MEMORY_{timestamp}.md"
-            archive_memory.write_text(memory_text, encoding="utf-8")
-
-        # Write new MEMORY.md
-        memory_file.write_text(new_memory, encoding="utf-8")
-
-        # Clear HISTORY.md (fresh start)
-        history_file.write_text("", encoding="utf-8")
-
-        # Sync SQLite index for all .md files (including archives)
         try:
-            from mc.memory.index import MemoryIndex
-            index = MemoryIndex(memory_dir)
-            index.sync()
-        except Exception:
-            logger.debug("consolidate_history_and_memory: SQLite sync skipped")
+            with memory_lock:
+                current_history_bytes = history_file.read_bytes() if history_file.exists() else b""
+                if not current_history_bytes.startswith(snapshot_history_bytes):
+                    logger.warning(
+                        "consolidate_history_and_memory: history changed during consolidation; aborting commit"
+                    )
+                    return False
 
-        logger.info(
-            "consolidate_history_and_memory: archived to %s, new memory %d chars",
-            timestamp, len(new_memory),
-        )
-        return True
+                tail_bytes = current_history_bytes[len(snapshot_history_bytes):]
+                archive_block = _build_archive_block(history_text, len(snapshot_history_bytes), now)
+                existing_archive = archive_file.read_text(encoding="utf-8") if archive_file.exists() else ""
+                archive_prefix = "" if not existing_archive or existing_archive.endswith("\n") else "\n"
+                archive_file.write_text(existing_archive + archive_prefix + archive_block, encoding="utf-8")
+
+                if memory_text.strip():
+                    archive_memory = memory_dir / f"MEMORY_{timestamp}.md"
+                    archive_memory.write_text(memory_text, encoding="utf-8")
+
+                memory_file.write_text(new_memory, encoding="utf-8")
+                history_file.write_bytes(tail_bytes)
+
+            try:
+                from mc.memory.index import MemoryIndex
+
+                index = MemoryIndex(memory_dir)
+                index.sync()
+            except Exception:
+                logger.debug("consolidate_history_and_memory: SQLite sync skipped")
+
+            logger.info(
+                "consolidate_history_and_memory: archived snapshot to %s, new memory %d chars, tail %d bytes",
+                archive_file.name,
+                len(new_memory),
+                len(tail_bytes),
+            )
+            return True
+        finally:
+            if snapshot_path is not None:
+                try:
+                    snapshot_path.unlink(missing_ok=True)
+                except Exception:
+                    logger.debug("consolidate_history_and_memory: failed to delete snapshot %s", snapshot_path)

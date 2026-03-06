@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import hashlib
 import os
 import math
@@ -11,6 +12,8 @@ import time
 import typing
 from dataclasses import dataclass
 from pathlib import Path
+
+from mc.memory.policy import is_memory_markdown_file, iter_memory_markdown_files
 
 
 @dataclass
@@ -126,16 +129,23 @@ class MemoryIndex:
         self._vec_dim = dim
 
     def sync(self) -> None:
-        for path in sorted(self.memory_dir.glob("*.md")):
+        allowed_paths = {str(path) for path in iter_memory_markdown_files(self.memory_dir)}
+        for path in sorted(Path(p) for p in allowed_paths):
             self.sync_file(path)
+        self._prune_untracked_files(allowed_paths)
 
     def sync_file(self, path: Path) -> None:
-        if not path.exists() or path.suffix.lower() != ".md":
+        path = Path(path)
+        path_str = str(path)
+        if not path.exists():
+            self._delete_file_records(path_str)
+            return
+        if not is_memory_markdown_file(path):
+            self._delete_file_records(path_str)
             return
 
         raw = path.read_bytes()
         digest = hashlib.md5(raw).hexdigest()
-        path_str = str(path)
 
         row = self._conn.execute(
             "SELECT hash FROM files WHERE path = ?",
@@ -145,8 +155,8 @@ class MemoryIndex:
             return
 
         text = raw.decode("utf-8", errors="replace")
-        chunks = self._chunk_text(text, max_chars=500, overlap=50)
         now = time.time()
+        chunks = self._build_chunk_entries(path, text, created_at_default=now)
 
         chunk_ids: list[int] = []
         chunk_texts: list[str] = []
@@ -174,13 +184,13 @@ class MemoryIndex:
                             [(chunk_id,) for chunk_id in old_ids],
                         )
 
-            for content, start, end in chunks:
+            for content, start, end, created_at in chunks:
                 cur = self._conn.execute(
                     """
                     INSERT INTO chunks(file_path, content, offset_start, offset_end, created_at)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    (path_str, content, start, end, now),
+                    (path_str, content, start, end, created_at),
                 )
                 chunk_id = int(cur.lastrowid)
                 self._conn.execute(
@@ -217,6 +227,90 @@ class MemoryIndex:
                 """,
                 (path_str, digest, path.stat().st_mtime),
             )
+
+    def _build_chunk_entries(
+        self,
+        path: Path,
+        text: str,
+        *,
+        created_at_default: float,
+    ) -> list[tuple[str, int, int, float]]:
+        if path.name == "HISTORY_ARCHIVE.md":
+            archive_chunks = self._chunk_history_archive(text)
+            if archive_chunks:
+                return archive_chunks
+        return [
+            (content, start, end, created_at_default)
+            for content, start, end in self._chunk_text(text, max_chars=500, overlap=50)
+        ]
+
+    @staticmethod
+    def _chunk_history_archive(text: str) -> list[tuple[str, int, int, float]]:
+        block_re = re.compile(
+            r"^## Archived Snapshot \[(?P<timestamp>[^\]]+)\]\n"
+            r"Source: HISTORY\.md\n"
+            r"Chars: (?P<chars>\d+)\n\n"
+            r"(?P<body>.*?)(?:\n\n---\n(?=^## Archived Snapshot |\Z)|\n---\n(?=^## Archived Snapshot |\Z)|\Z)",
+            re.MULTILINE | re.DOTALL,
+        )
+
+        archive_chunks: list[tuple[str, int, int, float]] = []
+        for match in block_re.finditer(text):
+            body = match.group("body")
+            if not body.strip():
+                continue
+            created_at = MemoryIndex._parse_archive_timestamp(match.group("timestamp"))
+            body_start = match.start("body")
+            for content, start, end in MemoryIndex._chunk_text(body, max_chars=500, overlap=50):
+                archive_chunks.append((content, body_start + start, body_start + end, created_at))
+        return archive_chunks
+
+    @staticmethod
+    def _parse_archive_timestamp(timestamp: str) -> float:
+        normalized = timestamp.strip()
+        if normalized.endswith("Z"):
+            normalized = normalized[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(normalized)
+        except ValueError:
+            return time.time()
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+
+    def _prune_untracked_files(self, allowed_paths: set[str]) -> None:
+        tracked = [
+            str(row[0])
+            for row in self._conn.execute("SELECT path FROM files").fetchall()
+        ]
+        for path_str in tracked:
+            if path_str not in allowed_paths or not Path(path_str).exists():
+                self._delete_file_records(path_str)
+
+    def _delete_file_records(self, path_str: str) -> None:
+        old_ids = [
+            r[0]
+            for r in self._conn.execute(
+                "SELECT id FROM chunks WHERE file_path = ?", (path_str,)
+            ).fetchall()
+        ]
+        with self._conn:
+            self._conn.execute("DELETE FROM chunks WHERE file_path = ?", (path_str,))
+            if old_ids:
+                self._conn.executemany(
+                    "DELETE FROM chunks_fts WHERE rowid = ?",
+                    [(chunk_id,) for chunk_id in old_ids],
+                )
+                if self._vec_available:
+                    vec_table = self._conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_vec'"
+                    ).fetchone()
+                    if vec_table:
+                        self._conn.executemany(
+                            "DELETE FROM chunks_vec WHERE rowid = ?",
+                            [(chunk_id,) for chunk_id in old_ids],
+                        )
+            self._conn.execute("DELETE FROM files WHERE path = ?", (path_str,))
 
     @staticmethod
     def _chunk_text(

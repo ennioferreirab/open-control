@@ -266,6 +266,21 @@ class ChatHandler:
                         self._ask_user_registry.unregister(task_id)
                     await ipc_server.stop()
 
+                    try:
+                        from mc.executor import _relocate_invalid_memory_files
+
+                        await asyncio.to_thread(
+                            _relocate_invalid_memory_files,
+                            task_id,
+                            _cc_ws_cwd_chat,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[chat] Failed to relocate invalid memory files for @%s",
+                            agent_name,
+                            exc_info=True,
+                        )
+
                     # Fire-and-forget memory consolidation for CC chat (both success and error).
                     # Runs here (finally) so error results are also consolidated.
                     # _cc_result_obj is None only if execute_task() itself threw, in which case

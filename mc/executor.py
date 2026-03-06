@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -382,6 +383,75 @@ def _collect_output_artifacts(
             })
 
     return artifacts
+
+
+def _relocate_invalid_memory_files(task_id: str, workspace: Path) -> list[Path]:
+    """Move memory contract violations into the task output directory.
+
+    Files are relocated to `output/` with a `memory-relocated-` prefix so they
+    show up in the normal artifact pipeline. Directories are archived as zip
+    files for the same reason.
+    """
+    from mc.memory import find_invalid_memory_files
+    from mc.memory.index import MemoryIndex
+
+    memory_dir = workspace / "memory"
+    invalid_paths = find_invalid_memory_files(memory_dir)
+    if not invalid_paths:
+        return []
+
+    safe_id = task_safe_id(task_id)
+    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    moved: list[Path] = []
+
+    def _unique_path(base_name: str) -> Path:
+        candidate = output_dir / base_name
+        if not candidate.exists():
+            return candidate
+        stem = candidate.stem
+        suffix = candidate.suffix
+        idx = 2
+        while True:
+            candidate = output_dir / f"{stem}-{idx}{suffix}"
+            if not candidate.exists():
+                return candidate
+            idx += 1
+
+    for path in invalid_paths:
+        if path.is_dir() and not path.is_symlink():
+            archive_base = _unique_path(f"memory-relocated-{path.name}").with_suffix("")
+            archive_file = Path(
+                shutil.make_archive(
+                    str(archive_base),
+                    "zip",
+                    root_dir=path.parent,
+                    base_dir=path.name,
+                )
+            )
+            shutil.rmtree(path)
+            moved.append(archive_file)
+            logger.warning(
+                "[executor] Archived invalid memory directory '%s' to '%s'",
+                path,
+                archive_file,
+            )
+            continue
+
+        target = _unique_path(f"memory-relocated-{path.name}")
+        shutil.move(str(path), str(target))
+        moved.append(target)
+        logger.warning(
+            "[executor] Relocated invalid memory file '%s' to '%s'",
+            path,
+            target,
+        )
+
+    if memory_dir.exists():
+        MemoryIndex(memory_dir).sync()
+
+    return moved
 
 
 def _build_thread_context(messages: list[dict[str, Any]], max_messages: int = 20) -> str:
@@ -1179,6 +1249,12 @@ class TaskExecutor:
                 ask_user_registry=self._ask_user_registry,
             )
 
+            await asyncio.to_thread(
+                _relocate_invalid_memory_files,
+                task_id,
+                loop.memory_workspace,
+            )
+
             # Collect file artifacts produced during agent execution.
             artifacts = await asyncio.to_thread(
                 _collect_output_artifacts, task_id, pre_snapshot
@@ -1645,7 +1721,19 @@ class TaskExecutor:
             await ipc_server.stop()
 
         # 5. Process result
+        await asyncio.to_thread(
+            _relocate_invalid_memory_files,
+            task_id,
+            ws_ctx.cwd,
+        )
+
         if result.is_error:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.sync_task_output_files, task_id, task_data or {}, agent_name
+                )
+            except Exception:
+                logger.warning("[executor] CC: output sync failed for errored task '%s'", title, exc_info=True)
             await self._crash_task(task_id, title, f"Claude Code error: {result.output[:1000]}", agent_name)
         else:
             await self._complete_cc_task(

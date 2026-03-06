@@ -1,11 +1,45 @@
+import asyncio
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
+import pytest
+
+from mc.memory import create_memory_store
 from mc.memory.store import HybridMemoryStore
 from nanobot.agent.memory import MemoryStore
 
 
 def test_hybrid_store_is_memory_store(tmp_path):
     assert isinstance(HybridMemoryStore(tmp_path), MemoryStore)
+
+
+def test_create_memory_store_quarantines_invalid_files(tmp_path):
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    rogue = memory_dir / "rogue.md"
+    rogue.write_text("artifact", encoding="utf-8")
+
+    store = create_memory_store(tmp_path)
+
+    assert isinstance(store, HybridMemoryStore)
+    assert not rogue.exists()
+    quarantined = tmp_path / ".memory-quarantine" / "rogue.md"
+    assert quarantined.read_text(encoding="utf-8") == "artifact"
+
+
+def test_create_memory_store_keeps_archive_and_legacy_files(tmp_path):
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    archive = memory_dir / "HISTORY_ARCHIVE.md"
+    legacy = memory_dir / "HISTORY_2026-03-05_2214.md"
+    archive.write_text("archive", encoding="utf-8")
+    legacy.write_text("legacy", encoding="utf-8")
+
+    create_memory_store(tmp_path)
+
+    assert archive.exists()
+    assert legacy.exists()
+    assert not (tmp_path / ".memory-quarantine" / "HISTORY_ARCHIVE.md").exists()
 
 
 def test_write_triggers_sync(tmp_path):
@@ -162,3 +196,25 @@ def test_append_history_preserves_existing_date(tmp_path):
     content = store.history_file.read_text(encoding="utf-8")
     assert content.startswith("[2026-03-05 10:00]")
     assert content.count("[2026-03-05") == 1
+
+
+@pytest.mark.asyncio
+async def test_consolidation_worker_loops_until_history_below_threshold(
+    tmp_path,
+):
+    with patch.object(HybridMemoryStore, "_resolve_consolidation_model", return_value="test-model"), \
+         patch("mc.memory.consolidation.is_history_above_threshold") as threshold_mock, \
+         patch("mc.memory.consolidation.consolidate_history_and_memory", new_callable=AsyncMock) as consolidate_mock:
+        store = HybridMemoryStore(tmp_path)
+        threshold_mock.side_effect = [True, True, True, False]
+        consolidate_mock.return_value = True
+
+        store._maybe_trigger_consolidation()
+
+        for _ in range(100):
+            if not store._consolidation_in_progress:
+                break
+            await asyncio.sleep(0)
+
+    assert store._consolidation_in_progress is False
+    assert consolidate_mock.await_count == 2

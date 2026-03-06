@@ -219,6 +219,7 @@ class TestExecuteCCTaskHappyPath:
             patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
+            patch("mc.executor._relocate_invalid_memory_files", return_value=[] ) as mock_relocate,
         ):
             await executor._execute_cc_task(
                 "t1", "My task", "desc", "my-cc-agent", agent_data
@@ -236,6 +237,7 @@ class TestExecuteCCTaskHappyPath:
         bridge.update_task_status.assert_called_once()
         status_args = bridge.update_task_status.call_args[0]
         assert status_args[1] == TaskStatus.DONE
+        mock_relocate.assert_called_once_with("t1", ws_ctx.cwd)
 
         # IPC server should be stopped
         mock_ipc.stop.assert_awaited_once()

@@ -95,6 +95,12 @@ def create_provider(model: str | None = None) -> tuple[Any, str]:
     default_model = config.agents.defaults.model
     resolved_model = model or default_model
 
+    # cc/ prefix means "Claude Code backend model" (e.g. "cc/claude-sonnet-4-6").
+    # The cc/ prefix is only valid for the Claude Code executor; for regular LLM
+    # calls strip the prefix so the bare model name can be resolved normally.
+    if resolved_model.startswith("cc/"):
+        resolved_model = resolved_model[len("cc/"):]
+
     # If the caller supplied a bare model name (e.g. "claude-sonnet-4-6")
     # that doesn't resolve to a provider, check if the config default model
     # is the same base model with a provider prefix (e.g.

@@ -359,12 +359,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         query = arguments.get("query", "")
         top_k = arguments.get("top_k", 5)
         try:
-            from mc.memory.store import HybridMemoryStore
+            from mc.memory import create_memory_store
             workspace = _resolve_memory_workspace()
             memory_dir = workspace / "memory"
             if not memory_dir.exists():
                 return [TextContent(type="text", text="No memory directory found.")]
-            store = HybridMemoryStore(workspace)
+            store = create_memory_store(workspace)
             results = store.search(query, top_k=top_k)
             if not results:
                 return [TextContent(type="text", text="No matching memories found.")]
