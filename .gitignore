@@ -25,3 +25,7 @@ tmux_claude_control
 .claude/*
 .worktrees/
 convex-full-backup.zip
+node_modules/
+.next/
+.env.local
+CLAUDE.md.bkp
