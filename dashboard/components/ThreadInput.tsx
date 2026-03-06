@@ -47,6 +47,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
   const sendMessage = useMutation(api.messages.sendThreadMessage);
   const postPlanMessage = useMutation(api.messages.postUserPlanMessage);
   const postComment = useMutation(api.messages.postComment);
+  const postMentionMessage = useMutation(api.messages.postMentionMessage);
   const restoreTask = useMutation(api.tasks.restore);
   const board = useQuery(
     api.boards.getById,
@@ -160,15 +161,26 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     // Parse @mentions: use the last mentioned agent name if it matches a known agent
     let agentForSubmit = selectedAgent;
     const mentionMatches = trimmed.match(/@(\w[\w-]*)/g);
+    let hasMention = false;
+    let firstMentionedAgent: string | undefined;
     if (mentionMatches && filteredAgents) {
       const lastMention = mentionMatches[mentionMatches.length - 1].slice(1); // remove @
       if (filteredAgents.some((a) => a.name === lastMention)) {
         agentForSubmit = lastMention;
         setSelectedAgent(lastMention);
       }
+      // Check if any @mention matches a known agent (for mention routing)
+      for (const m of mentionMatches) {
+        const name = m.slice(1);
+        if (filteredAgents.some((a) => a.name === name)) {
+          hasMention = true;
+          if (!firstMentionedAgent) firstMentionedAgent = name;
+          break;
+        }
+      }
     }
 
-    if (inputMode !== "comment" && !isPlanChatMode && !isInProgress && !agentForSubmit) return;
+    if (inputMode !== "comment" && !isPlanChatMode && !isInProgress && !hasMention && !agentForSubmit) return;
     setIsSubmitting(true);
     setError("");
     try {
@@ -180,6 +192,13 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         // post without disrupting task status. For in_progress, the watcher
         // delivers the reply to the waiting ask_user Future.
         await postPlanMessage({ taskId: task._id, content: trimmed });
+      } else if (hasMention && firstMentionedAgent) {
+        // @mention detected: post without status transition (Story 13.1)
+        await postMentionMessage({
+          taskId: task._id,
+          content: trimmed,
+          mentionedAgent: firstMentionedAgent,
+        });
       } else {
         await sendMessage({
           taskId: task._id,
