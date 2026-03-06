@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mc.gateway import AgentGateway
+from mc.crash_handler import AgentGateway
 from mc.planner import TaskPlanner
 from mc.types import (
     ActivityEventType,
@@ -90,7 +90,7 @@ def build_executor_agent_roster() -> str:
     Reads ~/.nanobot/agents/*/config.yaml, excludes system agents and lead-agent.
     Returns formatted list for agent orientation interpolation.
     """
-    from mc.gateway import AGENTS_DIR
+    from mc.infrastructure.config import AGENTS_DIR
     from mc.yaml_validator import validate_agent_file
 
     lines: list[str] = []
@@ -674,7 +674,7 @@ class TaskExecutor:
 
     async def _handle_lead_agent_task(self, task_data: dict[str, Any]) -> None:
         """Re-route lead-agent tasks through the planner."""
-        from mc.gateway import filter_agent_fields
+        from mc.infrastructure.config import filter_agent_fields
 
         task_id = task_data["id"]
         title = task_data.get("title", "Untitled")
@@ -763,7 +763,7 @@ class TaskExecutor:
             filtering"), or the actual list from config (possibly empty,
             meaning "only always-on skills").
         """
-        from mc.gateway import AGENTS_DIR
+        from mc.infrastructure.config import AGENTS_DIR
         from mc.yaml_validator import validate_agent_file
 
         config_file = AGENTS_DIR / agent_name / "config.yaml"
@@ -786,7 +786,7 @@ class TaskExecutor:
         Returns the validated AgentData (including backend field) or None when
         the config file does not exist or fails validation.
         """
-        from mc.gateway import AGENTS_DIR
+        from mc.infrastructure.config import AGENTS_DIR
         from mc.yaml_validator import validate_agent_file
 
         config_path = AGENTS_DIR / agent_name / "config.yaml"
@@ -865,7 +865,7 @@ class TaskExecutor:
         extract name, display_name, role, and skills. Returns a formatted
         string suitable for injection into the lead-agent context.
         """
-        from mc.gateway import AGENTS_DIR
+        from mc.infrastructure.config import AGENTS_DIR
         from mc.yaml_validator import validate_agent_file
 
         lines: list[str] = ["## Available Agents\n"]
@@ -1044,7 +1044,7 @@ class TaskExecutor:
 
         # Convex is the source of truth for model, prompt, and variables — override YAML
         try:
-            from mc.gateway import AGENTS_DIR
+            from mc.infrastructure.config import AGENTS_DIR
             convex_agent = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
             if convex_agent:
                 # Sync model

@@ -21,7 +21,7 @@ def _make_agent(name: str, skills: list[str] | None = None) -> AgentData:
 
 
 class TestEnsureNanobotAgent:
-    @patch("mc.gateway._fetch_bot_identity", return_value={"name": "Owl", "role": "General-Purpose Assistant"})
+    @patch("mc.infrastructure.agent_bootstrap._fetch_bot_identity", return_value={"name": "Owl", "role": "General-Purpose Assistant"})
     def test_creates_directory_and_config_when_missing(self, mock_identity, tmp_path: Path) -> None:
         from mc.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
 
@@ -40,7 +40,7 @@ class TestEnsureNanobotAgent:
         assert config["is_system"] is True
         assert config["skills"] == []
 
-    @patch("mc.gateway._fetch_bot_identity", return_value={"name": "Owl", "role": "General-Purpose Assistant"})
+    @patch("mc.infrastructure.agent_bootstrap._fetch_bot_identity", return_value={"name": "Owl", "role": "General-Purpose Assistant"})
     def test_is_idempotent_and_preserves_existing_config(self, mock_identity, tmp_path: Path) -> None:
         from mc.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
 
@@ -67,8 +67,8 @@ class TestSyncAgentRegistryNanobotAgent:
 
         mock_bridge = MagicMock()
 
-        with patch("mc.gateway._cleanup_deleted_agents"), patch(
-            "mc.gateway._write_back_convex_agents"
+        with patch("mc.infrastructure.agent_bootstrap._cleanup_deleted_agents"), patch(
+            "mc.infrastructure.agent_bootstrap._write_back_convex_agents"
         ):
             synced, errors = sync_agent_registry(
                 mock_bridge,

@@ -106,7 +106,7 @@ class ChatHandler:
             MessageBus = bus_mod.MessageBus
 
             from mc.provider_factory import create_provider
-            from mc.gateway import AGENTS_DIR
+            from mc.infrastructure.config import AGENTS_DIR
             from mc.yaml_validator import validate_agent_file
 
             # Load agent config

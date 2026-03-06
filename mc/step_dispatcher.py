@@ -48,7 +48,7 @@ def _load_agent_config(
     agent_name: str,
 ) -> tuple[str | None, str | None, list[str] | None]:
     """Load prompt, model and skills from an agent config."""
-    from mc.gateway import AGENTS_DIR
+    from mc.infrastructure.config import AGENTS_DIR
     from mc.yaml_validator import validate_agent_file
 
     config_file = AGENTS_DIR / agent_name / "config.yaml"
@@ -545,7 +545,7 @@ class StepDispatcher:
                 cc_model_name = extract_cc_model_name(agent_model)
 
                 # Load full AgentData from config.yaml for CC context enrichment (CC-9)
-                from mc.gateway import AGENTS_DIR
+                from mc.infrastructure.config import AGENTS_DIR
                 from mc.yaml_validator import validate_agent_file
 
                 config_path = AGENTS_DIR / agent_name / "config.yaml"

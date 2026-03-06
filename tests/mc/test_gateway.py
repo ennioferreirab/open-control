@@ -634,7 +634,7 @@ class TestLoadAgentConfig:
             "model: anthropic/claude-haiku-3\n"
         )
 
-        with patch("mc.gateway.AGENTS_DIR", tmp_path):
+        with patch("mc.infrastructure.config.AGENTS_DIR", tmp_path):
             prompt, model, skills = executor._load_agent_config("test-agent")
 
         assert prompt == "You are a test agent."
@@ -648,7 +648,7 @@ class TestLoadAgentConfig:
         mock_bridge = MagicMock()
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.gateway.AGENTS_DIR", tmp_path):
+        with patch("mc.infrastructure.config.AGENTS_DIR", tmp_path):
             prompt, model, skills = executor._load_agent_config("nonexistent")
 
         assert prompt is None
@@ -1418,7 +1418,7 @@ class TestWriteBackRestoresArchive:
         agent_dir.mkdir()
         (agent_dir / "memory").mkdir()
 
-        with patch("mc.gateway._restore_archived_files") as mock_restore:
+        with patch("mc.infrastructure.agent_bootstrap._restore_archived_files") as mock_restore:
             _write_back_convex_agents(mock_bridge, tmp_path)
 
         mock_restore.assert_called_once()
@@ -1463,9 +1463,9 @@ class TestSyncAgentRegistryCallsCleanup:
         mock_bridge = MagicMock()
         call_order = []
 
-        with patch("mc.gateway._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
-             patch("mc.gateway._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
-             patch("mc.gateway._config_default_model", return_value="anthropic/claude-haiku-4-5"):
+        with patch("mc.infrastructure.agent_bootstrap._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
+             patch("mc.infrastructure.agent_bootstrap._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
+             patch("mc.infrastructure.config._config_default_model", return_value="anthropic/claude-haiku-4-5"):
             sync_agent_registry(mock_bridge, tmp_path)
 
         assert call_order[0] == "cleanup", "cleanup must run before write_back"
