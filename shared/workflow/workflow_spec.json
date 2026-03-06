@@ -1,0 +1,129 @@
+{
+  "version": "1.0.0",
+  "description": "Canonical workflow specification for task and step state machines. Single source of truth for Python and TypeScript adapters.",
+
+  "taskStatuses": [
+    "planning",
+    "ready",
+    "failed",
+    "inbox",
+    "assigned",
+    "in_progress",
+    "review",
+    "done",
+    "retrying",
+    "crashed"
+  ],
+
+  "taskTransitions": {
+    "planning": ["failed", "review", "ready", "in_progress"],
+    "ready": ["in_progress", "planning", "failed"],
+    "failed": ["planning"],
+    "inbox": ["assigned", "planning"],
+    "assigned": ["in_progress", "assigned"],
+    "in_progress": ["review", "done", "assigned"],
+    "review": ["done", "inbox", "assigned", "in_progress", "planning"],
+    "done": ["assigned"],
+    "retrying": ["in_progress", "crashed"],
+    "crashed": ["inbox", "assigned"]
+  },
+
+  "taskUniversalTargets": ["retrying", "crashed", "deleted"],
+
+  "taskTransitionEvents": {
+    "planning->failed": "task_failed",
+    "planning->review": "task_planning",
+    "planning->in_progress": "task_started",
+    "planning->ready": "task_planning",
+    "ready->in_progress": "task_started",
+    "ready->planning": "task_planning",
+    "ready->failed": "task_failed",
+    "failed->planning": "task_planning",
+    "inbox->assigned": "task_assigned",
+    "inbox->planning": "task_planning",
+    "assigned->assigned": "task_reassigned",
+    "assigned->in_progress": "task_started",
+    "in_progress->review": "review_requested",
+    "in_progress->done": "task_completed",
+    "in_progress->assigned": "task_assigned",
+    "review->done": "task_completed",
+    "review->inbox": "task_retrying",
+    "review->in_progress": "task_started",
+    "review->planning": "task_planning",
+    "review->assigned": "thread_message_sent",
+    "retrying->in_progress": "task_retrying",
+    "retrying->crashed": "task_crashed",
+    "crashed->inbox": "task_retrying",
+    "crashed->assigned": "thread_message_sent",
+    "done->assigned": "thread_message_sent"
+  },
+
+  "taskUniversalTargetEvents": {
+    "retrying": "task_retrying",
+    "crashed": "task_crashed"
+  },
+
+  "taskRestoreTargetMap": {
+    "planning": "planning",
+    "ready": "planning",
+    "failed": "planning",
+    "inbox": "inbox",
+    "assigned": "inbox",
+    "in_progress": "assigned",
+    "review": "in_progress",
+    "done": "review",
+    "crashed": "in_progress",
+    "retrying": "in_progress"
+  },
+
+  "stepStatuses": [
+    "planned",
+    "assigned",
+    "running",
+    "completed",
+    "crashed",
+    "blocked",
+    "waiting_human"
+  ],
+
+  "stepTransitions": {
+    "planned": ["assigned", "blocked"],
+    "assigned": ["running", "completed", "crashed", "blocked", "waiting_human"],
+    "running": ["completed", "crashed"],
+    "completed": [],
+    "crashed": ["assigned"],
+    "blocked": ["assigned", "crashed"],
+    "waiting_human": ["completed", "crashed"]
+  },
+
+  "stepTransitionEvents": {
+    "planned->assigned": "step_dispatched",
+    "blocked->assigned": "step_dispatched",
+    "crashed->assigned": "step_dispatched",
+    "assigned->running": "step_started",
+    "running->completed": "step_completed",
+    "running->crashed": "system_error",
+    "assigned->crashed": "system_error",
+    "assigned->waiting_human": "step_dispatched",
+    "waiting_human->completed": "step_completed",
+    "waiting_human->crashed": "system_error"
+  },
+
+  "mentionSafeTaskStatuses": [
+    "inbox",
+    "assigned",
+    "in_progress",
+    "review",
+    "done",
+    "crashed",
+    "retrying"
+  ],
+
+  "threadMessageTypes": [
+    "step_completion",
+    "user_message",
+    "system_error",
+    "lead_agent_plan",
+    "lead_agent_chat"
+  ]
+}
