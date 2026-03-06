@@ -94,7 +94,7 @@ def _mock_agent_env():
             "mc.yaml_validator.validate_agent_file",
             return_value=mock_config,
         ),
-        patch("mc.orientation.load_orientation", return_value=None),
+        patch("mc.agent_orientation.load_orientation", return_value=None),
         patch("mc.types.is_tier_reference", return_value=False),
     ):
         yield mock_config

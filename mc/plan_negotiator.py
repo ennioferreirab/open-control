@@ -12,6 +12,8 @@ negotiation during both review and in_progress phases):
 
 Also handles @mention routing: when a user message contains @agent-name, the
 mention_handler is invoked to dispatch the message to the mentioned agent directly.
+As of Story 13.3, the PlanNegotiator skips @mention messages (the MentionWatcher
+is the authoritative handler), but the old dispatch code is kept as a safety net.
 """
 
 from __future__ import annotations
@@ -518,6 +520,22 @@ async def start_plan_negotiation_loop(
                 content[:80],
             )
 
+            # Skip @mention messages — the MentionWatcher handles all
+            # @mentions across every task status, so the PlanNegotiator
+            # must not also process them (avoids double-processing).
+            from mc.mentions.handler import handle_all_mentions, is_mention_message
+
+            if is_mention_message(content):
+                logger.debug(
+                    "[plan_negotiator] Skipping @mention message "
+                    "(handled by MentionWatcher): %s",
+                    content[:80],
+                )
+                continue
+
+            # Safety net: old @mention dispatch code (kept in case the guard
+            # above has a bug — this block is unreachable when is_mention_message
+            # works correctly, but remains as defense-in-depth).
             # Check for @mentions — dispatch to mention_handler if present.
             # A message that is purely a @mention (e.g. "@researcher help me")
             # is handled by the mention_handler and NOT forwarded to the plan
@@ -525,8 +543,6 @@ async def start_plan_negotiation_loop(
             # messages).
             # A message with both @mentions and plan-change text is handled by
             # the mention_handler only — the @mention takes priority.
-            from mc.mentions.handler import handle_all_mentions, is_mention_message
-
             if is_mention_message(content):
                 task_title = task.get("title", "")
                 mention_task = asyncio.create_task(

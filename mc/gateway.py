@@ -292,8 +292,8 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     chat_handler = ChatHandler(bridge, ask_user_registry=ask_user_registry)
     chat_task = asyncio.create_task(chat_handler.run())
 
-    # Mention watcher — detects @agent-name mentions in all task threads
-    # (covers tasks not handled by plan_negotiator: done, crashed, inbox, etc.)
+    # Mention watcher — detects and handles @agent-name mentions across
+    # all task statuses (the single authoritative handler for @mentions)
     from mc.mentions.watcher import MentionWatcher
 
     mention_watcher = MentionWatcher(bridge)
