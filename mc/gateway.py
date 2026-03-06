@@ -1,56 +1,47 @@
-"""Agent Gateway — agent registry sync, main gateway loop, and entry point.
+"""
+Agent Gateway — connects nanobot agents to Convex via the bridge.
 
-Contains sync_agent_registry, run_gateway(), main(), and the functions that
-must remain here due to test-patching constraints (ensure_nanobot_agent,
-sync_nanobot_default_model, _write_back_convex_agents).
+Contains the run_gateway main loop that starts the orchestrator, executor,
+timeout checker, and cron service.
 
-Process monitoring, crash detection, restart logic, and extracted helper
-utilities live in mc.process_monitor.
+Also contains the AgentGateway class that monitors agent processes for
+crashes and implements auto-retry logic (FR37, FR38, NFR10).
+
+Agent sync logic (sync_agent_registry, sync_nanobot_default_model, etc.)
+has been extracted to mc.agent_sync.
 """
 
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import os
 import shutil
 import signal
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import yaml
-
 from mc.orchestrator import TaskOrchestrator
 from mc.timeout_checker import TimeoutChecker
-from mc.yaml_validator import validate_agent_file
 
-# ---------------------------------------------------------------------------
-# Re-exports from mc.process_monitor — these symbols were extracted but many
-# call-sites still import them from mc.gateway.  Keeping them here ensures
-# that ``from mc.gateway import X`` and ``patch("mc.gateway.X", ...)`` both
-# continue to work without touching existing code or tests.
-# ---------------------------------------------------------------------------
-from mc.process_monitor import (  # noqa: F401, E402
-    AgentGateway,
-    MAX_AUTO_RETRIES,
+# Re-exports from mc.agent_sync — these symbols were extracted but many
+# call-sites and test patches still reference mc.gateway.X
+from mc.agent_sync import (  # noqa: F401
+    NANOBOT_AGENT_NAME,
+    _NANOBOT_AGENT_CONFIG,
     _cleanup_deleted_agents,
     _config_default_model,
-    _cron_requeued_ids,
-    _distribute_builtin_skills,
     _fetch_bot_identity,
     _parse_utc_timestamp,
     _read_file_or_none,
     _read_session_data,
-    _resolve_admin_key,
-    _resolve_convex_url,
     _restore_archived_files,
-    _run_plan_negotiation_manager,
-    _sync_embedding_model,
-    _sync_model_tiers,
+    _write_back_convex_agents,
     ensure_low_agent,
-    filter_agent_fields,
-    sync_skills,
+    ensure_nanobot_agent,
+    sync_agent_registry,
+    sync_nanobot_default_model,
 )
 
 if TYPE_CHECKING:
@@ -60,389 +51,543 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 AGENTS_DIR = Path.home() / ".nanobot" / "agents"
-NANOBOT_AGENT_NAME = "nanobot"  # Re-exported for backward compat; canonical in types.py
-_NANOBOT_AGENT_CONFIG = """\
-name: nanobot
-role: "{role}"
-display_name: "{display_name}"
-is_system: true
-prompt: |
-  You are the fallback agent for Mission Control task delegation.
-  When the Lead Agent cannot find a specialist agent for a task,
-  it is routed to you.
-
-  Your identity, personality, and memory come from your SOUL.md and
-  workspace files — do NOT invent a new persona.
-
-  Focus on completing the delegated task using your tools and knowledge.
-skills: []
-"""
 
 
-def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
-    """Write-back Convex -> local for agents where Convex is newer.
+def _resolve_convex_url(dashboard_dir: Path | None = None) -> str | None:
+    """Resolve the Convex deployment URL.
 
-    Both timestamps are compared as UTC-aware datetime objects.
+    Checks CONVEX_URL env var first, then falls back to parsing
+    NEXT_PUBLIC_CONVEX_URL from dashboard/.env.local.
+
+    Args:
+        dashboard_dir: Path to the dashboard directory. Auto-detected if None.
+
+    Returns:
+        The Convex URL string, or None if not found.
     """
-    from datetime import datetime, timezone
+    url = os.environ.get("CONVEX_URL")
+    if url:
+        return url
 
-    try:
-        convex_agents = bridge.list_agents()
-    except Exception:
-        logger.exception("Failed to list agents from Convex for write-back")
-        return
+    if dashboard_dir is None:
+        candidates = [
+            Path.cwd() / "dashboard",
+            Path(__file__).resolve().parents[2] / "dashboard",
+        ]
+        for candidate in candidates:
+            if candidate.is_dir() and (candidate / ".env.local").exists():
+                dashboard_dir = candidate
+                break
 
-    for agent_data in convex_agents:
-        name = agent_data.get("name")
-        if not name:
-            continue
+    if dashboard_dir is not None:
+        env_local = dashboard_dir / ".env.local"
+        if env_local.exists():
+            for line in env_local.read_text().splitlines():
+                if line.startswith("NEXT_PUBLIC_CONVEX_URL="):
+                    return line.split("=", 1)[1].strip().strip('"')
 
-        # System agents (e.g. low-agent) are Convex-only — skip local write-back
-        if agent_data.get("is_system"):
-            continue
-
-        config_path = agents_dir / name / "config.yaml"
-        last_active = agent_data.get("last_active_at")
-        if not last_active:
-            continue
-
-        convex_ts = _parse_utc_timestamp(last_active)
-        if convex_ts is None:
-            logger.warning(
-                "Write-back: skipping agent '%s' — unparseable timestamp '%s'",
-                name, last_active,
-            )
-            continue
-
-        if config_path.is_file():
-            local_mtime = datetime.fromtimestamp(
-                config_path.stat().st_mtime, tz=timezone.utc
-            )
-            if convex_ts > local_mtime:
-                try:
-                    bridge.write_agent_config(agent_data, agents_dir)
-                    logger.info("Write-back: updated local config for agent '%s'", name)
-                except Exception:
-                    logger.exception("Write-back failed for agent '%s'", name)
-        else:
-            # Agent exists in Convex but has no local YAML — create it
-            try:
-                bridge.write_agent_config(agent_data, agents_dir)
-                logger.info("Write-back: created local config for agent '%s'", name)
-            except Exception:
-                logger.exception("Write-back failed for new agent '%s'", name)
-                continue
-
-            # Restore archived memory/history/session data if present (restore flow).
-            # Clear the archive fields from Convex after a successful restore to free
-            # storage and prevent stale data from being re-archived on a second delete.
-            try:
-                archive = bridge.get_agent_archive(name)
-                if archive:
-                    _restore_archived_files(agents_dir / name, archive)
-                    logger.info("Restored archived data for agent '%s'", name)
-                    try:
-                        bridge.clear_agent_archive(name)
-                    except Exception:
-                        logger.exception("Failed to clear archive for agent '%s' — archive data remains in Convex", name)
-            except Exception:
-                logger.exception("Failed to restore archive for agent '%s'", name)
+    return None
 
 
-def ensure_nanobot_agent(agents_dir: Path) -> None:
-    """Ensure the nanobot agent YAML definition exists on disk and links to the global workspace.
+def _resolve_admin_key(dashboard_dir: Path | None = None) -> str | None:
+    """Resolve the Convex admin key from dashboard/.env.local.
 
-    Creates the directory and config.yaml if missing. Links SOUL.md, memory, and skills
-    to the global workspace so the Mission Control agent shares the same persona and context
-    as the Telegram bot.
-
-    Raises RuntimeError if the Telegram bot identity cannot be fetched.
+    Only used as fallback when CONVEX_ADMIN_KEY env var is not set.
     """
-    agent_dir = agents_dir / NANOBOT_AGENT_NAME
-    config_path = agent_dir / "config.yaml"
+    if dashboard_dir is None:
+        candidates = [
+            Path.cwd() / "dashboard",
+            Path(__file__).resolve().parents[2] / "dashboard",
+        ]
+        for candidate in candidates:
+            if candidate.is_dir() and (candidate / ".env.local").exists():
+                dashboard_dir = candidate
+                break
 
-    workspace = Path.home() / ".nanobot" / "workspace"
+    if dashboard_dir is not None:
+        env_local = dashboard_dir / ".env.local"
+        if env_local.exists():
+            for line in env_local.read_text().splitlines():
+                if line.startswith("CONVEX_ADMIN_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"')
 
-    # Fetch identity from Telegram — raises RuntimeError on failure (no fallback)
-    identity = _fetch_bot_identity()
-    bot_name = identity["name"]
-    bot_role = identity["role"]
-
-    if not config_path.is_file():
-        agent_dir.mkdir(parents=True, exist_ok=True)
-        config_content = _NANOBOT_AGENT_CONFIG.format(
-            role=bot_role,
-            display_name=bot_name,
-        )
-        config_path.write_text(config_content, encoding="utf-8")
-        logger.info("Created nanobot agent definition at %s (Identity: %s)", config_path, bot_name)
-
-    # Always try to fix up symlinks (for upgrades/retrofits)
-    for item in ["memory", "skills", "SOUL.md"]:
-        agent_path = agent_dir / item
-        global_path = workspace / item
-
-        # Global paths MUST already exist — they are created by 'nanobot onboard'.
-        # memory/ and skills/ dirs are safe to create if missing, but SOUL.md must exist.
-        if not global_path.exists():
-            if item == "SOUL.md":
-                raise RuntimeError(
-                    f"Global workspace SOUL.md not found at {global_path}. "
-                    "Run 'nanobot onboard' first to initialize the workspace."
-                )
-            else:
-                global_path.mkdir(parents=True, exist_ok=True)
-
-        # If the local item is an empty directory (from older versions), remove it
-        if agent_path.is_dir() and not agent_path.is_symlink() and not any(agent_path.iterdir()):
-            shutil.rmtree(agent_path)
-
-        # Create symlink if missing
-        if not agent_path.exists():
-            try:
-                os.symlink(global_path, agent_path)
-                logger.info("Symlinked %s to global workspace for %s", item, bot_name)
-            except Exception as e:
-                logger.warning("Failed to symlink %s for nanobot agent: %s", item, e)
+    return None
 
 
-def sync_agent_registry(
-    bridge: "ConvexBridge",
-    agents_dir: Path,
-    default_model: str | None = None,
-) -> tuple[list["AgentData"], dict[str, list[str]]]:
-    """Sync agent YAML files to Convex agents table.
+def filter_agent_fields(data: dict[str, Any]) -> dict[str, Any]:
+    """Filter a dict to only known AgentData fields.
 
-    Write-back first (Convex -> local), then validate, resolve models,
-    upsert, and deactivate removed agents.
-
-    Returns (synced_agents, errors_by_filename).
+    Convex returns extra system fields (e.g. creation_time from _creationTime)
+    that are not part of the AgentData dataclass. This function strips them.
     """
-    resolved_default = default_model or _config_default_model()
+    from mc.types import AgentData
 
-    # Step 0: Ensure system agents exist on disk
-    ensure_nanobot_agent(agents_dir)
-
-    # Ensure low-agent system agent exists in Convex
-    try:
-        ensure_low_agent(bridge)
-    except Exception:
-        logger.warning("[gateway] Failed to ensure low-agent", exc_info=True)
-
-    # Step 0a: Cleanup — archive and remove local folders for soft-deleted agents
-    _cleanup_deleted_agents(bridge, agents_dir)
-
-    # Step 0b: Write-back — Convex -> local for dashboard-edited agents
-    _write_back_convex_agents(bridge, agents_dir)
-
-    # Step 1: Validate agent YAML in each subdirectory
-    valid_agents: list[AgentData] = []
-    errors: dict[str, list[str]] = {}
-
-    # Roles that represent non-delegatable sessions (e.g. tmux terminals)
-    _NON_AGENT_ROLES = {"remote-terminal"}
-
-    if agents_dir.is_dir():
-        for child in sorted(agents_dir.iterdir()):
-            config_file = child / "config.yaml"
-            if child.is_dir() and config_file.is_file():
-                # Quick-check: skip non-agent roles (tmux sessions, etc.)
-                try:
-                    raw = yaml.safe_load(config_file.read_text(encoding="utf-8"))
-                    if isinstance(raw, dict) and raw.get("role") in _NON_AGENT_ROLES:
-                        logger.debug(
-                            "Skipping non-agent directory %s (role=%s)",
-                            child.name, raw.get("role"),
-                        )
-                        continue
-                except Exception:
-                    pass  # Fall through to normal validation which reports errors
-
-                result = validate_agent_file(config_file)
-                if isinstance(result, list):
-                    errors[child.name] = result
-                    for msg in result:
-                        logger.error("Skipping invalid agent %s: %s", child.name, msg)
-                else:
-                    valid_agents.append(result)
-
-    # Step 2-3: Resolve model (with provider prefix) and sync each valid agent
-    for agent in valid_agents:
-        if not agent.model:
-            agent.model = resolved_default
-        elif "/" not in agent.model and resolved_default.endswith("/" + agent.model):
-            # Bare model name matches config default — use full name with prefix
-            agent.model = resolved_default
-
-        try:
-            bridge.sync_agent(agent)
-            logger.info("Synced agent '%s' (%s)", agent.name, agent.role)
-        except Exception:
-            logger.exception("Failed to sync agent '%s'", agent.name)
-
-    # Step 4: Deactivate agents whose YAML files were removed
-    active_names = [agent.name for agent in valid_agents]
-    try:
-        bridge.deactivate_agents_except(active_names)
-    except Exception:
-        logger.exception("Failed to deactivate removed agents")
-
-    return valid_agents, errors
+    valid_fields = {f.name for f in dataclasses.fields(AgentData)}
+    return {k: v for k, v in data.items() if k in valid_fields}
 
 
-def sync_nanobot_default_model(bridge: "ConvexBridge") -> bool:
-    """Sync config.json default model from the canonical Convex system agent."""
+def _sync_model_tiers(bridge: ConvexBridge) -> None:
+    """Sync connected models list and seed default tiers on startup.
+
+    - Writes available model identifiers to ``connected_models`` setting.
+    - Seeds ``model_tiers`` with defaults if the setting does not yet exist.
+    - Idempotent: existing tier mappings are never overwritten.
+
+    Story 11.1 — AC #4.
+    """
     import json
 
-    agent = bridge.get_agent_by_name(NANOBOT_AGENT_NAME)
-    if not agent:
-        logger.warning(
-            "[gateway] Skipping %s model sync: agent not found in Convex",
-            NANOBOT_AGENT_NAME,
-        )
-        return False
+    # Collect available models from provider config
+    from mc.provider_factory import list_available_models
 
-    convex_model: str | None = None
-    if isinstance(agent, dict):
-        model_val = agent.get("model")
-        if isinstance(model_val, str):
-            convex_model = model_val.strip()
+    models_list = list_available_models()
+
+    bridge.mutation(
+        "settings:set",
+        {"key": "connected_models", "value": json.dumps(models_list)},
+    )
+
+    # Derive default tier assignments from the models list.
+    # Assumes list is ordered: high-capability first, low-capability last.
+    def _pick_tier(keyword: str) -> str | None:
+        for m in models_list:
+            base = m.split("/", 1)[1] if "/" in m else m
+            if keyword in base:
+                return m
+        return models_list[0] if models_list else None
+
+    default_tiers = {
+        "standard-low": _pick_tier("haiku"),
+        "standard-medium": _pick_tier("sonnet"),
+        "standard-high": _pick_tier("opus"),
+        "reasoning-low": None,
+        "reasoning-medium": None,
+        "reasoning-high": None,
+    }
+
+    existing_raw = bridge.query("settings:get", {"key": "model_tiers"})
+    if existing_raw is None:
+        bridge.mutation(
+            "settings:set",
+            {"key": "model_tiers", "value": json.dumps(default_tiers)},
+        )
+        logger.info("[gateway] Seeded default model tiers: %s", default_tiers)
     else:
-        model_val = getattr(agent, "model", None)
-        if isinstance(model_val, str):
-            convex_model = model_val.strip()
+        # Migrate any tier values that are no longer in the connected_models list
+        # (e.g. wrong provider prefix or outdated model ID from a previous seed).
+        existing = json.loads(existing_raw)
+        models_set = set(models_list)
+        updated = dict(existing)
+        changed = False
+        for tier_key, default_val in default_tiers.items():
+            current_val = existing.get(tier_key)
+            if current_val and current_val not in models_set:
+                updated[tier_key] = default_val
+                logger.info(
+                    "[gateway] Migrated model tier %s: %s → %s",
+                    tier_key, current_val, default_val,
+                )
+                changed = True
+        if changed:
+            bridge.mutation(
+                "settings:set",
+                {"key": "model_tiers", "value": json.dumps(updated)},
+            )
+        else:
+            logger.info("[gateway] Model tiers up to date — no migration needed")
 
-    if not convex_model:
-        logger.warning(
-            "[gateway] Skipping %s model sync: missing model in Convex",
-            NANOBOT_AGENT_NAME,
+
+def _sync_embedding_model(bridge) -> None:
+    try:
+        model = bridge.query("settings:get", {"key": "memory_embedding_model"})
+    except Exception:
+        logger.warning("[gateway] Failed to read memory_embedding_model setting")
+        return
+    if model:
+        os.environ["NANOBOT_MEMORY_EMBEDDING_MODEL"] = model
+        logger.info("[gateway] Memory embedding model set: %s", model)
+    else:
+        os.environ.pop("NANOBOT_MEMORY_EMBEDDING_MODEL", None)
+        logger.info("[gateway] Memory embedding model cleared (FTS-only)")
+
+    # Persist to memory_settings.json so standalone nanobot (Telegram) can read it
+    try:
+        import json
+        settings_path = Path.home() / ".nanobot" / "memory_settings.json"
+        existing: dict = {}
+        if settings_path.exists():
+            existing = json.loads(settings_path.read_text(encoding="utf-8"))
+        existing["embedding_model"] = model or ""
+        settings_path.write_text(
+            json.dumps(existing, indent=2, ensure_ascii=False),
+            encoding="utf-8",
         )
-        return False
+    except Exception:
+        logger.debug("[gateway] Failed to persist embedding model to memory_settings.json")
 
-    # Resolve tier references (e.g. "tier:standard-low" -> "anthropic/claude-haiku-4-5")
-    if convex_model.startswith("tier:"):
-        from mc.tier_resolver import TierResolver
+
+def _distribute_builtin_skills(
+    workspace_skills_dir: Path, *source_dirs: Path
+) -> None:
+    """Copy builtin skill directories to the workspace if not already present.
+
+    For each *source_dir*, iterates its subdirectories looking for those that
+    contain a ``SKILL.md`` file. If the corresponding directory does not yet
+    exist under *workspace_skills_dir*, it is copied via ``shutil.copytree()``.
+
+    Existing workspace skills are **never** overwritten so that user
+    customizations are preserved.
+    """
+    workspace_skills_dir.mkdir(parents=True, exist_ok=True)
+
+    for source_dir in source_dirs:
+        if not source_dir.is_dir():
+            logger.debug(
+                "Skipping missing builtin skills source: %s", source_dir
+            )
+            continue
+
+        for entry in sorted(source_dir.iterdir()):
+            if not entry.is_dir():
+                continue
+            if not (entry / "SKILL.md").exists():
+                continue
+
+            target = workspace_skills_dir / entry.name
+            if target.exists():
+                logger.debug(
+                    "Skill '%s' already exists in workspace, skipping",
+                    entry.name,
+                )
+                continue
+
+            shutil.copytree(entry, target)
+            logger.info(
+                "Distributed builtin skill '%s' to workspace", entry.name
+            )
+
+
+def sync_skills(
+    bridge: ConvexBridge,
+    builtin_skills_dir: Path | None = None,
+) -> list[str]:
+    """Sync nanobot skills to Convex via SkillsLoader public API.
+
+    Returns list of synced skill names.
+    """
+    # Lazy import to avoid heavy dependency chain through nanobot.agent.__init__
+    import importlib.util
+    _skills_path = Path(__file__).parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
+    spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
+    skills_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(skills_mod)
+    SkillsLoader = skills_mod.SkillsLoader
+    default_dir = skills_mod.BUILTIN_SKILLS_DIR
+
+    resolved_dir = builtin_skills_dir or default_dir
+    # Use configured workspace path (e.g. ~/.nanobot/workspace) for skill discovery
+    from nanobot.config.loader import load_config
+    workspace = load_config().workspace_path
+    loader = SkillsLoader(workspace, builtin_skills_dir=resolved_dir)
+
+    all_skills = loader.list_skills(filter_unavailable=False)
+    synced_names: list[str] = []
+
+    for skill_info in all_skills:
+        name = skill_info["name"]
+        source = skill_info["source"]  # "builtin" or "workspace"
 
         try:
-            resolver = TierResolver(bridge)
-            resolved = resolver.resolve_model(convex_model)
-            if not resolved:
-                logger.warning(
-                    "[gateway] Skipping %s model sync: tier '%s' resolved to None",
-                    NANOBOT_AGENT_NAME,
-                    convex_model,
-                )
-                return False
-            logger.info(
-                "[gateway] Resolved %s model tier: %s -> %s",
-                NANOBOT_AGENT_NAME,
-                convex_model,
-                resolved,
-            )
-            convex_model = resolved
+            # Load body content (frontmatter stripped) via public API
+            content_body = loader.get_skill_body(name)
+            if not content_body:
+                continue
+
+            # Parse frontmatter metadata
+            meta = loader.get_skill_metadata(name) or {}
+            description = meta.get("description", name)
+            metadata_str = meta.get("metadata")  # raw JSON string
+            always = meta.get("always", "").lower() == "true" if meta.get("always") else False
+
+            # Check requirements via public API
+            available = loader.is_skill_available(name)
+            requires_str = loader.get_missing_requirements(name) if not available else None
+
+            # Upsert to Convex
+            args: dict[str, Any] = {
+                "name": name,
+                "description": description,
+                "content": content_body,
+                "source": source,
+                "available": available,
+            }
+            if metadata_str:
+                args["metadata"] = metadata_str
+            if always:
+                args["always"] = True
+            if requires_str:
+                args["requires"] = requires_str
+
+            bridge.mutation("skills:upsertByName", args)
+            synced_names.append(name)
+            logger.info("Synced skill '%s' (%s)", name, source)
+
         except Exception:
-            logger.warning(
-                "[gateway] Skipping %s model sync: failed to resolve tier '%s'",
-                NANOBOT_AGENT_NAME,
-                convex_model,
-                exc_info=True,
-            )
-            return False
+            logger.exception("Failed to sync skill '%s'", name)
 
-    from nanobot.config.loader import get_config_path
-
-    config_path = get_config_path()
-    if not config_path.exists():
-        logger.warning(
-            "[gateway] Skipping %s model sync: config not found at %s",
-            NANOBOT_AGENT_NAME,
-            config_path,
-        )
-        return False
-
+    # Deactivate skills no longer on disk
     try:
-        config = json.loads(config_path.read_text(encoding="utf-8"))
+        bridge.mutation("skills:deactivateExcept", {"active_names": synced_names})
     except Exception:
-        logger.warning(
-            "[gateway] Skipping %s model sync: could not read %s",
-            NANOBOT_AGENT_NAME,
-            config_path,
-            exc_info=True,
+        logger.exception("Failed to deactivate removed skills")
+
+    return synced_names
+
+
+# Max auto-retries per task (FR37: single retry)
+MAX_AUTO_RETRIES = 1
+
+
+class AgentGateway:
+    """Monitors agent processes and handles crash recovery with auto-retry.
+
+    Implements FR37 (auto-retry once on crash), FR38 (crashed status with error
+    log), and NFR10 (crash recovery within 30 seconds).
+    """
+
+    def __init__(self, bridge: ConvexBridge) -> None:
+        self._bridge = bridge
+        self._retry_counts: dict[str, int] = {}
+
+    async def handle_agent_crash(
+        self, agent_name: str, task_id: str, error: Exception
+    ) -> None:
+        """Handle an agent crash during task execution.
+
+        On first crash: transitions task to "retrying", logs error to thread,
+        and re-dispatches. On second crash (or if retry count already >= 1):
+        transitions to "crashed" and stops.
+
+        Args:
+            agent_name: Name of the crashed agent.
+            task_id: Convex task _id the agent was working on.
+            error: The exception that caused the crash.
+        """
+        error_msg = f"{type(error).__name__}: {error}"
+        current_retries = self._retry_counts.get(task_id, 0)
+
+        if current_retries < MAX_AUTO_RETRIES:
+            await self._retry_task(task_id, agent_name, error_msg, current_retries)
+        else:
+            await self._crash_task(task_id, agent_name, error_msg)
+
+    async def _retry_task(
+        self,
+        task_id: str,
+        agent_name: str,
+        error_msg: str,
+        current_retries: int,
+    ) -> None:
+        """Auto-retry: transition to retrying, log error, re-dispatch."""
+        self._retry_counts[task_id] = current_retries + 1
+        attempt = current_retries + 1
+
+        logger.info(
+            "[gateway] Agent '%s' crashed on task %s. "
+            "Auto-retrying (attempt %d/%d)",
+            agent_name, task_id, attempt, MAX_AUTO_RETRIES,
         )
-        return False
 
-    if not isinstance(config, dict):
-        logger.warning(
-            "[gateway] Skipping %s model sync: invalid config format",
-            NANOBOT_AGENT_NAME,
+        # Transition task to "retrying"
+        await asyncio.to_thread(
+            self._bridge.update_task_status,
+            task_id,
+            "retrying",
+            agent_name,
+            f"Agent {agent_name} crashed. Auto-retrying (attempt {attempt}/{MAX_AUTO_RETRIES})",
         )
-        return False
 
-    agents_cfg = config.setdefault("agents", {})
-    if not isinstance(agents_cfg, dict):
-        logger.warning(
-            "[gateway] Skipping %s model sync: invalid agents config",
-            NANOBOT_AGENT_NAME,
+        # Write error details to task thread
+        await asyncio.to_thread(
+            self._bridge.send_message,
+            task_id,
+            "System",
+            "system",
+            f"Agent crash detected:\n```\n{error_msg}\n```\nAuto-retrying...",
+            "system_event",
         )
-        return False
 
-    defaults_cfg = agents_cfg.setdefault("defaults", {})
-    if not isinstance(defaults_cfg, dict):
-        logger.warning(
-            "[gateway] Skipping %s model sync: invalid agents.defaults config",
-            NANOBOT_AGENT_NAME,
+        # Re-dispatch: transition retrying -> in_progress
+        await asyncio.to_thread(
+            self._bridge.update_task_status,
+            task_id,
+            "in_progress",
+            agent_name,
+            f"Re-dispatching task to {agent_name}",
         )
-        return False
 
-    old_model = defaults_cfg.get("model")
-    if old_model == convex_model:
-        logger.debug(
-            "[gateway] %s default model already in sync: %s",
-            NANOBOT_AGENT_NAME,
-            convex_model,
-        )
-        return False
+    async def _crash_task(
+        self, task_id: str, agent_name: str, error_msg: str
+    ) -> None:
+        """Retry exhausted: transition to crashed, log full error."""
+        self._retry_counts.pop(task_id, None)
 
-    defaults_cfg["model"] = convex_model
-
-    tmp_path: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=config_path.parent,
-            prefix=f"{config_path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as tmp_file:
-            tmp_path = tmp_file.name
-            json.dump(config, tmp_file, indent=2, ensure_ascii=False)
-            tmp_file.write("\n")
-        os.replace(tmp_path, config_path)
-    except Exception:
         logger.error(
-            "[gateway] Failed to sync %s default model to %s",
-            NANOBOT_AGENT_NAME,
-            config_path,
-            exc_info=True,
+            "[gateway] Agent '%s' crashed on task %s. "
+            "Retry exhausted — marking as crashed.",
+            agent_name, task_id,
         )
-        if tmp_path:
+
+        # Transition task to "crashed"
+        await asyncio.to_thread(
+            self._bridge.update_task_status,
+            task_id,
+            "crashed",
+            agent_name,
+            f"Agent {agent_name} crashed. Retry failed. Task marked as crashed.",
+        )
+
+        # Write error details to task thread
+        await asyncio.to_thread(
+            self._bridge.send_message,
+            task_id,
+            "System",
+            "system",
+            (
+                f"Retry failed. Agent crash:\n```\n{error_msg}\n```\n"
+                "Task marked as crashed. Use 'Retry from Beginning' to try again."
+            ),
+            "system_event",
+        )
+
+    def clear_retry_count(self, task_id: str) -> None:
+        """Clear the retry count for a task.
+
+        Called when a task completes successfully or is manually retried
+        (transitions to "inbox" via Story 6.4).
+        """
+        self._retry_counts.pop(task_id, None)
+
+    def get_retry_count(self, task_id: str) -> int:
+        """Return current retry count for a task."""
+        return self._retry_counts.get(task_id, 0)
+
+
+# Task IDs requeued by cron — plan negotiation manager skips these.
+# Must be module-level so _process_batch (nested in _run_plan_negotiation_manager)
+# and run_gateway() can both access it without a NameError.
+_cron_requeued_ids: set[str] = set()
+
+
+async def _run_plan_negotiation_manager(bridge: "ConvexBridge", ask_user_registry: "Any | None" = None) -> None:
+    """Manage per-task plan negotiation loops.
+
+    Subscribes to tasks in both "review" (awaitingKickoff) and "in_progress"
+    statuses. For each task that enters a negotiable state, spawns a
+    start_plan_negotiation_loop coroutine. Prevents duplicate loops for the
+    same task_id.
+
+    The per-task loops are self-terminating — they exit when the task leaves
+    a negotiable status. This manager only needs to spawn new ones.
+
+    Story 7.3 — Task 4.3 / 4.4.
+    """
+    from mc.plan_negotiator import start_plan_negotiation_loop
+
+    logger.info("[gateway] Plan negotiation manager started")
+
+    # Track active negotiation loops to prevent duplicates
+    active_negotiation_ids: set[str] = set()
+
+    async def _spawn_loop_if_needed(task_id: str) -> None:
+        """Spawn a plan negotiation loop for task_id if not already active."""
+        if task_id in active_negotiation_ids:
+            return
+        active_negotiation_ids.add(task_id)
+        logger.info("[gateway] Spawning plan negotiation loop for task %s", task_id)
+
+        async def _run_and_cleanup() -> None:
             try:
-                Path(tmp_path).unlink(missing_ok=True)
-            except OSError:
-                pass
-        return False
+                await start_plan_negotiation_loop(bridge, task_id, ask_user_registry=ask_user_registry)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "[gateway] Plan negotiation loop for task %s crashed", task_id
+                )
+            finally:
+                active_negotiation_ids.discard(task_id)
+                logger.info(
+                    "[gateway] Plan negotiation loop for task %s ended", task_id
+                )
 
-    logger.info(
-        "[gateway] Updated %s default model: %s -> %s",
-        NANOBOT_AGENT_NAME,
-        old_model,
-        convex_model,
+        asyncio.create_task(_run_and_cleanup())
+
+    # Subscribe to both review and in_progress task lists
+    review_queue = bridge.async_subscribe(
+        "tasks:listByStatus", {"status": "review"}
     )
-    return True
+    in_progress_queue = bridge.async_subscribe(
+        "tasks:listByStatus", {"status": "in_progress"}
+    )
+
+    async def _process_batch(tasks_batch: object) -> None:
+        """Process a batch of tasks from either subscription queue."""
+        if not tasks_batch or isinstance(tasks_batch, dict):
+            return
+        for task_data in tasks_batch:  # type: ignore[union-attr]
+            task_id = task_data.get("id")
+            if not task_id:
+                continue
+
+            task_status = task_data.get("status", "")
+            awaiting_kickoff = task_data.get("awaiting_kickoff", False)
+
+            # Only spawn for supervised tasks in review (awaitingKickoff) or in_progress
+            if task_status == "in_progress" or (
+                task_status == "review" and awaiting_kickoff
+            ):
+                # Skip plan negotiation for cron-requeued tasks (they
+                # re-enter in_progress but don't need lead-agent interaction).
+                # Manual reassignments are NOT in this set and proceed normally.
+                if task_id in _cron_requeued_ids:
+                    _cron_requeued_ids.discard(task_id)
+                    logger.info(
+                        "[gateway] Skipping plan negotiation for task %s "
+                        "(cron requeue)",
+                        task_id,
+                    )
+                    continue
+                await _spawn_loop_if_needed(task_id)
+
+    # Drain both queues by creating persistent reader tasks so no queue.get()
+    # coroutine is ever abandoned (avoids leaked asyncio tasks from asyncio.wait).
+    async def _drain_queue(queue: asyncio.Queue) -> None:  # type: ignore[type-arg]
+        while True:
+            try:
+                batch = await queue.get()
+                await _process_batch(batch)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "[gateway] Plan negotiation manager: error reading queue: %s",
+                    exc,
+                )
+
+    reader_tasks = [
+        asyncio.create_task(_drain_queue(review_queue)),
+        asyncio.create_task(_drain_queue(in_progress_queue)),
+    ]
+    try:
+        # Wait until cancelled (gateway shutdown)
+        await asyncio.gather(*reader_tasks)
+    finally:
+        for t in reader_tasks:
+            t.cancel()
 
 
-async def run_gateway(bridge: "ConvexBridge") -> None:
+async def run_gateway(bridge: ConvexBridge) -> None:
     """Gateway main loop — starts orchestrator, executor, timeout checker, and cron service.
 
     Args:
@@ -463,7 +608,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     config = load_config()
 
     # Lightweight delivery: dict tracks pending cron deliveries, callback sends after completion
-    pending_deliveries: dict[str, tuple[str, str]] = {}  # task_id -> (channel, to)
+    pending_deliveries: dict[str, tuple[str, str]] = {}  # task_id → (channel, to)
 
     async def _send_telegram_direct(chat_id: str, content: str) -> None:
         """Send message to Telegram without polling — direct Bot API call."""
@@ -500,7 +645,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         try:
             if channel == "telegram":
                 await _send_telegram_direct(to, result)
-                logger.info("[gateway] Delivered cron result for task %s -> telegram:%s", task_id, to)
+                logger.info("[gateway] Delivered cron result for task %s → telegram:%s", task_id, to)
             else:
                 logger.warning("[gateway] Delivery to '%s' not supported", channel)
         except Exception:
@@ -567,7 +712,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
             task_id,
             "Cron",
             AuthorType.USER,
-            f"\U0001f514 Cron triggered: {message}",
+            f"🔔 Cron triggered: {message}",
             MessageType.USER_MESSAGE,
         )
 
@@ -580,7 +725,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
             f"Cron re-queued task to {agent_name}",
         )
         _cron_requeued_ids.add(task_id)
-        logger.info("[gateway] Cron re-queued task %s -> assigned to %s", task_id, agent_name)
+        logger.info("[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name)
         return True
 
     async def on_cron_job(job: CronJob) -> str | None:
@@ -625,8 +770,8 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         logger.info("[gateway] Cron service started with %d job(s)", cron_status["jobs"])
 
     # Ask-user reply routing — registry + watcher (CC agents only)
-    from mc.ask_user.registry import AskUserRegistry
-    from mc.ask_user.watcher import AskUserReplyWatcher
+    from mc.ask_user_registry import AskUserRegistry
+    from mc.ask_user_watcher import AskUserReplyWatcher
 
     ask_user_registry = AskUserRegistry()
 
@@ -667,7 +812,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
 
     # Mention watcher — detects @agent-name mentions in all task threads
     # (covers tasks not handled by plan_negotiator: done, crashed, inbox, etc.)
-    from mc.mentions.watcher import MentionWatcher
+    from mc.mention_watcher import MentionWatcher
 
     mention_watcher = MentionWatcher(bridge)
     mention_task = asyncio.create_task(mention_watcher.run())
