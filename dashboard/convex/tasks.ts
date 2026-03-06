@@ -745,9 +745,9 @@ export const approveAndKickOff = mutation({
 });
 
 /**
- * Retry a crashed task by resetting it to inbox.
- * Clears assignedAgent so Lead Agent can re-route.
- * Preserves all existing thread messages for context.
+ * Retry a failed/crashed task.
+ * Reuses the current execution plan when steps or a plan already exist.
+ * Falls back to inbox only when the task has no plan and no materialized steps.
  */
 export const retry = mutation({
   args: {
@@ -756,20 +756,71 @@ export const retry = mutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new ConvexError("Task not found");
-    if (task.status !== "crashed") {
-      throw new ConvexError(`Task is not crashed (current: ${task.status})`);
+
+    const steps = await ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+      .collect();
+    const hasCrashedStep = steps.some((step) => step.status === "crashed");
+    const canRetryTask =
+      task.status === "crashed" ||
+      task.status === "failed" ||
+      hasCrashedStep;
+    if (!canRetryTask) {
+      throw new ConvexError(
+        `Task is not retryable (current: ${task.status})`
+      );
     }
 
     const now = new Date().toISOString();
+    const hasExecutionPlan = Boolean(task.executionPlan?.steps?.length);
+    const hasMaterializedSteps = steps.length > 0;
 
-    // Reset to inbox for re-routing
+    if (hasExecutionPlan || hasMaterializedSteps) {
+      await ctx.db.patch(args.taskId, {
+        status: "retrying",
+        stalledAt: undefined,
+        updatedAt: now,
+      });
+
+      for (const step of steps) {
+        const nextStatus = (step.blockedBy?.length ?? 0) > 0
+          ? "blocked"
+          : "assigned";
+        await ctx.db.patch(step._id, {
+          status: nextStatus,
+          errorMessage: undefined,
+          startedAt: undefined,
+          completedAt: undefined,
+        });
+      }
+
+      await ctx.db.insert("activities", {
+        taskId: args.taskId,
+        eventType: "task_retrying",
+        description: `Manual retry initiated by user for "${task.title}"`,
+        timestamp: now,
+      });
+
+      await ctx.db.insert("messages", {
+        taskId: args.taskId,
+        authorName: "System",
+        authorType: "system",
+        content: "Manual retry initiated. Reusing the current execution plan.",
+        messageType: "system_event",
+        timestamp: now,
+      });
+      return;
+    }
+
+    // Legacy fallback: re-queue through inbox/planning when no plan exists.
     await ctx.db.patch(args.taskId, {
       status: "inbox",
       assignedAgent: undefined,
+      stalledAt: undefined,
       updatedAt: now,
     });
 
-    // Activity event
     await ctx.db.insert("activities", {
       taskId: args.taskId,
       eventType: "task_retrying",
@@ -777,7 +828,6 @@ export const retry = mutation({
       timestamp: now,
     });
 
-    // System message in thread
     await ctx.db.insert("messages", {
       taskId: args.taskId,
       authorName: "System",

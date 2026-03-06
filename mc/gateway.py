@@ -273,6 +273,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     routing_task = asyncio.create_task(orchestrator.start_routing_loop())
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
     kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
+    retry_task = asyncio.create_task(orchestrator.start_retry_watch_loop())
 
     executor = TaskExecutor(bridge, cron_service=cron, on_task_completed=on_task_completed,
                             ask_user_registry=ask_user_registry)
@@ -314,6 +315,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     routing_task.cancel()
     review_task.cancel()
     kickoff_task.cancel()
+    retry_task.cancel()
     execution_task.cancel()
     timeout_task.cancel()
     plan_negotiation_task.cancel()
@@ -325,6 +327,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         routing_task,
         review_task,
         kickoff_task,
+        retry_task,
         execution_task,
         timeout_task,
         plan_negotiation_task,

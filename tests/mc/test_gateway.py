@@ -3,6 +3,7 @@
 import asyncio
 import dataclasses
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -145,6 +146,7 @@ class TestRunGateway:
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
             mock_orch_instance.start_kickoff_watch_loop = AsyncMock()
+            mock_orch_instance.start_retry_watch_loop = AsyncMock()
             mock_orch_instance.start_inbox_routing_loop = AsyncMock()
 
             mock_tc_instance = MockTC.return_value
@@ -182,6 +184,7 @@ class TestRunGateway:
             mock_orch_instance.start_routing_loop.assert_called_once()
             mock_orch_instance.start_review_routing_loop.assert_called_once()
             mock_orch_instance.start_kickoff_watch_loop.assert_called_once()
+            mock_orch_instance.start_retry_watch_loop.assert_called_once()
             mock_tc_instance.start.assert_called_once()
             mock_exec_instance.start_execution_loop.assert_called_once()
             mock_ch_instance.run.assert_called_once()
@@ -531,6 +534,42 @@ class TestTaskExecution:
             mock_gw.handle_agent_crash.assert_called_once_with(
                 "crash-agent", "task_005", crash_error
             )
+
+    @pytest.mark.asyncio
+    async def test_structured_model_error_delegates_to_agent_gateway(self):
+        """Structured model errors must use the crash path instead of success."""
+        from mc.executor import TaskExecutor
+
+        mock_bridge = MagicMock()
+        mock_bridge.update_task_status = MagicMock()
+        mock_bridge.send_message = MagicMock()
+        mock_bridge.create_activity = MagicMock()
+        mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+
+        executor = TaskExecutor(mock_bridge)
+        error_result = SimpleNamespace(
+            content="Error calling Codex:",
+            is_error=True,
+            error_message="Error calling Codex:",
+        )
+
+        with patch(
+            "mc.executor._run_agent_on_task",
+            new_callable=AsyncMock,
+            return_value=(error_result, "mock_session_key", MagicMock()),
+        ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough), \
+            patch.object(executor, "_agent_gateway") as mock_gw:
+            mock_gw.handle_agent_crash = AsyncMock()
+            await executor._execute_task(
+                "task_006", "Soft error task", "Will soft-fail", "soft-agent", "autonomous"
+            )
+
+        mock_gw.handle_agent_crash.assert_called_once()
+        mock_bridge.send_message.assert_not_called()
+        assert not any(
+            call.args[1] in {"done", "review"} for call in mock_bridge.update_task_status.call_args_list
+        )
 
 
 # ---------------------------------------------------------------------------

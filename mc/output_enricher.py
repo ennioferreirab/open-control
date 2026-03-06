@@ -363,7 +363,7 @@ async def _run_agent_on_task(
     task_id: str | None = None,
     bridge: "ConvexBridge | None" = None,
     ask_user_registry: Any | None = None,
-) -> tuple[str, str, "AgentLoop"]:
+) -> tuple[Any, str, "AgentLoop"]:
     """Run the nanobot agent loop on a task and return the result.
 
     Uses AgentLoop.process_direct() with the agent's system prompt and model.
@@ -491,13 +491,23 @@ async def _run_agent_on_task(
             _ask_user_cleanup = (ask_user_registry, task_id)
 
     try:
-        result = await loop.process_direct(
-            content=message,
-            session_key=session_key,
-            channel="mc",
-            chat_id=agent_name,
-            task_id=task_id,
-        )
+        process_direct_result = getattr(loop.__class__, "process_direct_result", None)
+        if callable(process_direct_result):
+            result = await loop.process_direct_result(
+                content=message,
+                session_key=session_key,
+                channel="mc",
+                chat_id=agent_name,
+                task_id=task_id,
+            )
+        else:
+            result = await loop.process_direct(
+                content=message,
+                session_key=session_key,
+                channel="mc",
+                chat_id=agent_name,
+                task_id=task_id,
+            )
     finally:
         if _ask_user_cleanup is not None:
             reg, tid = _ask_user_cleanup
@@ -565,4 +575,3 @@ async def _enrich_nanobot_description(
     except Exception:
         logger.warning("[executor] Failed to fetch tag attributes for '%s'", title, exc_info=True)
     return description
-

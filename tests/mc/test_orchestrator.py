@@ -75,6 +75,74 @@ class TestPlanningRoutingLoop:
         )
 
 
+class TestRetryWatchLoop:
+    @pytest.mark.asyncio
+    async def test_start_retry_watch_loop_subscribes_to_retrying_status(self) -> None:
+        bridge = _make_bridge()
+        queue: asyncio.Queue[list[dict] | None] = asyncio.Queue()
+        bridge.async_subscribe.return_value = queue
+        orchestrator = TaskOrchestrator(bridge)
+
+        loop_task = asyncio.create_task(orchestrator.start_retry_watch_loop())
+        await asyncio.sleep(0.01)
+        loop_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await loop_task
+
+        bridge.async_subscribe.assert_called_once_with(
+            "tasks:listByStatus", {"status": "retrying"}
+        )
+
+    @pytest.mark.asyncio
+    async def test_retry_watch_loop_moves_task_to_in_progress_and_dispatches_assigned_steps(self) -> None:
+        bridge = _make_bridge()
+        queue: asyncio.Queue[list[dict] | None] = asyncio.Queue()
+        bridge.async_subscribe.return_value = queue
+        bridge.get_steps_by_task.return_value = [
+            {"id": "step-1", "status": "assigned", "blocked_by": []},
+            {"id": "step-2", "status": "completed", "blocked_by": []},
+        ]
+        orchestrator = TaskOrchestrator(bridge)
+        orchestrator._step_dispatcher = MagicMock()
+        orchestrator._step_dispatcher.dispatch_steps = AsyncMock()
+
+        scheduled_coroutines: list[object] = []
+
+        def _capture_create_task(coro):
+            scheduled_coroutines.append(coro)
+            coro.close()
+            return MagicMock()
+
+        loop_task = asyncio.create_task(orchestrator.start_retry_watch_loop())
+        try:
+            with (
+                patch("mc.orchestrator.asyncio.to_thread", new=_sync_to_thread),
+                patch("mc.orchestrator.asyncio.create_task", side_effect=_capture_create_task),
+            ):
+                await queue.put([
+                    {
+                        "id": "task-1",
+                        "title": "Retry me",
+                        "status": "retrying",
+                        "execution_plan": {"steps": []},
+                    }
+                ])
+                await asyncio.sleep(0.01)
+        finally:
+            loop_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await loop_task
+
+        bridge.update_task_status.assert_called_once_with(
+            "task-1",
+            TaskStatus.IN_PROGRESS,
+        )
+        orchestrator._step_dispatcher.dispatch_steps.assert_called_once_with(
+            "task-1", ["step-1"]
+        )
+        assert len(scheduled_coroutines) == 1
+
+
 class TestProcessPlanningTask:
     @pytest.mark.asyncio
     async def test_success_stores_execution_plan_materializes_and_starts_dispatch(

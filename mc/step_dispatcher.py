@@ -44,6 +44,15 @@ def _as_positive_int(value: Any, default: int) -> int:
         return default
 
 
+def _coerce_step_run_result(value: Any) -> tuple[str, bool, str | None]:
+    """Normalize legacy string results and structured execution results."""
+    if isinstance(value, str):
+        return value, False, None
+    content = getattr(value, "content", "") or ""
+    is_error = bool(getattr(value, "is_error", False))
+    error_message = getattr(value, "error_message", None)
+    return content, is_error, error_message
+
 
 def _load_agent_config(
     agent_name: str,
@@ -118,7 +127,12 @@ async def _run_step_agent(
     ask_user_registry: Any | None = None,
 ) -> str:
     """Lazily delegate step execution to executor helper."""
-    from mc.executor import _run_agent_on_task, _background_tasks, _relocate_invalid_memory_files
+    from mc.executor import (
+        _background_tasks,
+        _coerce_agent_run_result,
+        _run_agent_on_task,
+        _relocate_invalid_memory_files,
+    )
 
     result, session_key, loop = await _run_agent_on_task(
         agent_name=agent_name,
@@ -160,7 +174,7 @@ async def _run_step_agent(
     _task = asyncio.create_task(_post_step_consolidate())
     _background_tasks.add(_task)
     _task.add_done_callback(_background_tasks.discard)
-    return result
+    return _coerce_agent_run_result(result)
 
 
 class StepDispatcher:
@@ -238,6 +252,18 @@ class StepDispatcher:
                 )
 
             final_steps = await asyncio.to_thread(self._bridge.get_steps_by_task, task_id)
+            any_crashed = any(
+                step.get("status") == StepStatus.CRASHED for step in final_steps
+            )
+            if any_crashed:
+                await asyncio.to_thread(
+                    self._bridge.update_task_status,
+                    task_id,
+                    TaskStatus.CRASHED,
+                    NANOBOT_AGENT_NAME,
+                    "One or more steps crashed",
+                )
+                return
             all_completed = bool(final_steps) and all(
                 step.get("status") == StepStatus.COMPLETED for step in final_steps
             )
@@ -603,6 +629,13 @@ class StepDispatcher:
                 bridge=self._bridge,
                 ask_user_registry=self._ask_user_registry,
             )
+            result_content, is_error_result, error_message = _coerce_step_run_result(result)
+            if is_error_result:
+                raise RuntimeError(
+                    error_message
+                    or result_content
+                    or "Agent returned an execution error"
+                )
 
             # Collect artifacts and post structured completion message (Story 2.5).
             artifacts = await asyncio.to_thread(
@@ -628,7 +661,7 @@ class StepDispatcher:
                 task_id,
                 step_id,
                 agent_name,
-                result,
+                result_content,
                 artifacts or None,
             )
             await asyncio.to_thread(
@@ -664,6 +697,21 @@ class StepDispatcher:
                 logger.error(
                     "[dispatcher] Failed to mark step %s as crashed",
                     step_id,
+                    exc_info=True,
+                )
+
+            try:
+                await asyncio.to_thread(
+                    self._bridge.update_task_status,
+                    task_id,
+                    TaskStatus.CRASHED,
+                    agent_name,
+                    f'Step "{step_title}" crashed',
+                )
+            except Exception:
+                logger.error(
+                    "[dispatcher] Failed to mark task %s as crashed after step failure",
+                    task_id,
                     exc_info=True,
                 )
 

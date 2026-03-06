@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { create, kickOff, pauseTask, resumeTask } from "./tasks";
+import { create, kickOff, pauseTask, resumeTask, retry } from "./tasks";
 
 type InsertCall = {
   table: string;
@@ -48,10 +48,16 @@ function getResumeTaskHandler() {
   })._handler;
 }
 
+function getRetryHandler() {
+  return (retry as unknown as {
+    _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
+  })._handler;
+}
+
 describe("tasks.create", () => {
-  it("defaults supervision mode to autonomous and creates unassigned non-manual tasks in planning (Story 1.5 AC 8.4)", async () => {
-    // Non-manual tasks without an assigned agent start in "planning" so the
-    // orchestrator's planning subscription picks them up for LLM plan generation.
+  it("defaults supervision mode to autonomous and creates unassigned non-manual tasks in inbox (Story 1.5 AC 8.4)", async () => {
+    // Non-manual tasks land in inbox first so the inbox routing loop can
+    // handle auto-title and the planning/assignment transition.
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
@@ -61,7 +67,7 @@ describe("tasks.create", () => {
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
     expect(taskInsert?.value.supervisionMode).toBe("autonomous");
-    expect(taskInsert?.value.status).toBe("planning");
+    expect(taskInsert?.value.status).toBe("inbox");
   });
 
   it("forces manual tasks to autonomous supervision mode", async () => {
@@ -97,7 +103,7 @@ describe("tasks.create", () => {
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert?.value.supervisionMode).toBe("supervised");
-    expect(taskInsert?.value.status).toBe("assigned");
+    expect(taskInsert?.value.status).toBe("inbox");
 
     const activityInsert = inserts.find((entry) => entry.table === "activities");
     expect(activityInsert?.value.description).toContain("(supervised)");
@@ -296,6 +302,93 @@ describe("tasks.resumeTask", () => {
       expect.objectContaining({
         status: "in_progress",
         executionPlan: updatedPlan,
+      })
+    );
+  });
+});
+
+describe("tasks.retry", () => {
+  it("retries a crashed task with materialized steps by resetting the current plan", async () => {
+    const handler = getRetryHandler();
+    const patchedTasks: Record<string, unknown>[] = [];
+    const patchedSteps: Record<string, Record<string, unknown>> = {};
+    const task = {
+      _id: "task-1",
+      status: "crashed",
+      title: "Retry with plan",
+      executionPlan: { steps: [{ tempId: "s1" }, { tempId: "s2" }] },
+      stalledAt: "2026-03-05T10:11:00Z",
+    };
+    const steps = [
+      { _id: "step-1", blockedBy: [], status: "completed" },
+      { _id: "step-2", blockedBy: ["step-1"], status: "crashed" },
+    ];
+
+    const ctx = {
+      db: {
+        get: async (id: string) => (id === "task-1" ? task : null),
+        patch: async (id: string, value: Record<string, unknown>) => {
+          if (id === "task-1") patchedTasks.push(value);
+          else patchedSteps[id] = { ...(patchedSteps[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_index: string, _fn: unknown) => ({
+            collect: async () => steps,
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { taskId: "task-1" });
+
+    expect(patchedTasks[0]).toMatchObject({
+      status: "retrying",
+      stalledAt: undefined,
+    });
+    expect(patchedSteps["step-1"]).toMatchObject({
+      status: "assigned",
+      errorMessage: undefined,
+      startedAt: undefined,
+      completedAt: undefined,
+    });
+    expect(patchedSteps["step-2"]).toMatchObject({
+      status: "blocked",
+      errorMessage: undefined,
+      startedAt: undefined,
+      completedAt: undefined,
+    });
+  });
+
+  it("keeps inbox fallback for failed tasks without plan or steps", async () => {
+    const handler = getRetryHandler();
+    const patch = vi.fn(async () => undefined);
+    const task = {
+      _id: "task-1",
+      status: "failed",
+      title: "Retry without plan",
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => (id === "task-1" ? task : null),
+        patch,
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_index: string, _fn: unknown) => ({
+            collect: async () => [],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { taskId: "task-1" });
+
+    expect(patch).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({
+        status: "inbox",
+        assignedAgent: undefined,
       })
     );
   });

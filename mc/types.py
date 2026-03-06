@@ -142,6 +142,7 @@ class ActivityEventType(StrEnum):
     STEP_DISPATCHED = "step_dispatched"
     STEP_STARTED = "step_started"
     STEP_COMPLETED = "step_completed"
+    STEP_RETRYING = "step_retrying"
     SYSTEM_ERROR = "system_error"
     TASK_DELETED = "task_deleted"
     TASK_RESTORED = "task_restored"
@@ -391,4 +392,3 @@ class ActivityData:
 def task_safe_id(task_id: str) -> str:
     """Convert a Convex task ID to a filesystem-safe string."""
     return re.sub(r"[^\w\-]", "_", task_id)
-
