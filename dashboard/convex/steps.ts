@@ -1,173 +1,27 @@
 import { ConvexError, v } from "convex/values";
 
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 
-const STEP_STATUSES = [
-  "planned",
-  "assigned",
-  "running",
-  "completed",
-  "crashed",
-  "blocked",
-  "waiting_human",
-] as const;
+import {
+  isValidStepStatus,
+  isValidStepTransition,
+  resolveInitialStepStatus,
+  findBlockedStepsReadyToUnblock,
+  resolveBlockedByIds,
+  validateBatchSteps,
+  logStepStatusChange,
+} from "./lib/stepLifecycle";
+import { logActivity } from "./lib/workflowHelpers";
 
-type StepStatus = (typeof STEP_STATUSES)[number];
-type BatchStepInput = {
-  tempId: string;
-  title: string;
-  description: string;
-  assignedAgent: string;
-  blockedByTempIds: string[];
-  parallelGroup: number;
-  order: number;
-};
-
-type StepWithDependencies = Pick<Doc<"steps">, "_id" | "status" | "blockedBy">;
-const STEP_TRANSITIONS: Record<StepStatus, StepStatus[]> = {
-  planned: ["assigned", "blocked"],
-  assigned: ["running", "completed", "crashed", "blocked", "waiting_human"],
-  running: ["completed", "crashed"],
-  completed: [],
-  crashed: ["assigned"],
-  blocked: ["assigned", "crashed"],
-  waiting_human: ["completed", "crashed"],
-};
-
-type ActivityLoggerCtx = {
-  db: {
-    insert: (
-      table: "activities",
-      value: {
-        taskId?: Id<"tasks">;
-        agentName?: string;
-        eventType: "step_status_changed";
-        description: string;
-        timestamp: string;
-      }
-    ) => Promise<unknown>;
-  };
-};
-
-export function isValidStepStatus(status: string): status is StepStatus {
-  return STEP_STATUSES.includes(status as StepStatus);
-}
-
-export function isValidStepTransition(
-  fromStatus: string,
-  toStatus: string
-): boolean {
-  if (!isValidStepStatus(fromStatus) || !isValidStepStatus(toStatus)) {
-    return false;
-  }
-  return STEP_TRANSITIONS[fromStatus].includes(toStatus);
-}
-
-export function resolveInitialStepStatus(
-  status: string | undefined,
-  blockedByCount: number
-): StepStatus {
-  const resolved = status ?? (blockedByCount > 0 ? "blocked" : "assigned");
-
-  if (!isValidStepStatus(resolved)) {
-    throw new ConvexError(`Invalid step status: ${resolved}`);
-  }
-  if (blockedByCount > 0 && resolved !== "blocked") {
-    throw new ConvexError(
-      "Steps with blockedBy dependencies must use status 'blocked'"
-    );
-  }
-  if (blockedByCount === 0 && resolved === "blocked") {
-    throw new ConvexError(
-      "Step status 'blocked' requires at least one dependency in blockedBy"
-    );
-  }
-
-  return resolved;
-}
-
-export function findBlockedStepsReadyToUnblock(
-  steps: StepWithDependencies[]
-): Id<"steps">[] {
-  const stepStatusById = new Map(
-    steps.map((step) => [step._id, step.status] as const)
-  );
-
-  return steps
-    .filter((step) => step.status === "blocked")
-    .filter((step) => (step.blockedBy ?? []).length > 0)
-    .filter((step) =>
-      (step.blockedBy ?? []).every(
-        (blockedStepId) => stepStatusById.get(blockedStepId) === "completed"
-      )
-    )
-    .map((step) => step._id);
-}
-
-function validateBatchSteps(steps: BatchStepInput[]) {
-  if (steps.length === 0) {
-    throw new ConvexError("steps:batchCreate requires at least one step");
-  }
-
-  const knownTempIds = new Set<string>();
-  for (const step of steps) {
-    if (knownTempIds.has(step.tempId)) {
-      throw new ConvexError(`Duplicate tempId in batchCreate: ${step.tempId}`);
-    }
-    knownTempIds.add(step.tempId);
-  }
-
-  for (const step of steps) {
-    for (const depTempId of step.blockedByTempIds) {
-      if (!knownTempIds.has(depTempId)) {
-        throw new ConvexError(
-          `Step '${step.tempId}' references unknown dependency '${depTempId}'`
-        );
-      }
-      if (depTempId === step.tempId) {
-        throw new ConvexError(
-          `Step '${step.tempId}' cannot depend on itself`
-        );
-      }
-    }
-  }
-}
-
-export function resolveBlockedByIds(
-  blockedByTempIds: string[],
-  tempIdToRealId: Record<string, Id<"steps">>
-): Id<"steps">[] {
-  return blockedByTempIds.map((depTempId) => {
-    const resolved = tempIdToRealId[depTempId];
-    if (!resolved) {
-      throw new ConvexError(
-        `Unknown blockedByTempId dependency: ${depTempId}`
-      );
-    }
-    return resolved;
-  });
-}
-
-async function logStepStatusChange(
-  ctx: ActivityLoggerCtx,
-  args: {
-    taskId: Id<"tasks">;
-    stepTitle: string;
-    previousStatus: string;
-    nextStatus: string;
-    assignedAgent?: string;
-    timestamp: string;
-  }
-) {
-  await ctx.db.insert("activities", {
-    taskId: args.taskId,
-    agentName: args.assignedAgent,
-    eventType: "step_status_changed",
-    description: `Step status changed from ${args.previousStatus} to ${args.nextStatus}: "${args.stepTitle}"`,
-    timestamp: args.timestamp,
-  });
-}
+// Re-export pure functions for testability and backward compatibility
+export {
+  isValidStepStatus,
+  isValidStepTransition,
+  resolveInitialStepStatus,
+  findBlockedStepsReadyToUnblock,
+  resolveBlockedByIds,
+} from "./lib/stepLifecycle";
 
 export const getByTask = query({
   args: {
@@ -204,7 +58,7 @@ export const listByBoard = query({
 
     const taskIds: Set<Id<"tasks">> = new Set(boardTasks.map((t) => t._id));
 
-    // Orphan tasks (no boardId) — needed for the default board
+    // Orphan tasks (no boardId) -- needed for the default board
     if (args.includeNoBoardId) {
       const NON_DELETED_STATUSES = [
         "planning", "ready", "failed", "inbox", "assigned",
@@ -288,7 +142,7 @@ export const create = internalMutation({
       ...(status === "completed" ? { completedAt: now } : {}),
     });
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       agentName: args.assignedAgent,
       eventType: "step_created",
@@ -346,7 +200,7 @@ export const batchCreate = internalMutation({
       tempIdToRealId[step.tempId] = stepId;
       createdStepIds.push(stepId);
 
-      await ctx.db.insert("activities", {
+      await logActivity(ctx, {
         taskId: args.taskId,
         agentName: step.assignedAgent,
         eventType: "step_created",
@@ -459,7 +313,7 @@ export const acceptHumanStep = mutation({
       timestamp,
     });
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: step.taskId,
       eventType: "step_completed",
       description: `Human completed step: "${step.title}"`,
@@ -467,9 +321,6 @@ export const acceptHumanStep = mutation({
     });
 
     // Unblock dependent steps that were waiting on this human step.
-    // The Python dispatch loop has already exited (no assigned steps remained
-    // while this step was in waiting_human). We must unblock here so that
-    // dependent steps become assigned and are picked up by the orchestrator.
     const allTaskSteps = await ctx.db
       .query("steps")
       .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
@@ -500,7 +351,7 @@ export const acceptHumanStep = mutation({
         timestamp,
       });
 
-      await ctx.db.insert("activities", {
+      await logActivity(ctx, {
         taskId: blockedStep.taskId,
         agentName: blockedStep.assignedAgent,
         eventType: "step_unblocked",
@@ -591,7 +442,7 @@ export const checkAndUnblockDependents = internalMutation({
         timestamp,
       });
 
-      await ctx.db.insert("activities", {
+      await logActivity(ctx, {
         taskId: blockedStep.taskId,
         agentName: blockedStep.assignedAgent,
         eventType: "step_unblocked",

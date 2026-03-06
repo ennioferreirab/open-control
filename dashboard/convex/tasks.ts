@@ -1,96 +1,28 @@
 import { internalMutation, mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 
-// --- State Machine Constants ---
+import {
+  isValidTaskTransition,
+  logTaskCreated,
+  logTaskStatusChange,
+  markPlanStepsCompleted,
+  getRestoreTarget,
+} from "./lib/taskLifecycle";
+import { logActivity } from "./lib/workflowHelpers";
 
-// Valid transition map: current_status -> [allowed_next_statuses]
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  planning: ["failed", "review", "ready", "in_progress"],
-  ready: ["in_progress", "planning", "failed"],
-  failed: ["planning"],
-  inbox: ["assigned", "planning"],
-  assigned: ["in_progress", "assigned"],
-  in_progress: ["review", "done", "assigned"],
-  review: ["done", "inbox", "assigned", "in_progress", "planning"],
-  done: ["assigned"],
-  retrying: ["in_progress", "crashed"],
-  crashed: ["inbox", "assigned"],
-};
-
-// Universal transitions (allowed from any state)
-const UNIVERSAL_TARGETS = ["retrying", "crashed", "deleted"];
-
-// Map transitions to activity event types
-const TRANSITION_EVENT_MAP: Record<string, string> = {
-  "planning->failed": "task_failed",
-  "planning->review": "task_planning",
-  "planning->in_progress": "task_started",
-  "planning->ready": "task_planning",
-  "ready->in_progress": "task_started",
-  "ready->planning": "task_planning",
-  "ready->failed": "task_failed",
-  "failed->planning": "task_planning",
-  "inbox->assigned": "task_assigned",
-  "inbox->planning": "task_planning",
-  "assigned->assigned": "task_reassigned",
-  "assigned->in_progress": "task_started",
-  "in_progress->review": "review_requested",
-  "in_progress->done": "task_completed",
-  "in_progress->assigned": "task_assigned",
-  "review->done": "task_completed",
-  "review->inbox": "task_retrying",
-  "review->in_progress": "task_started",
-  "review->planning": "task_planning",
-  "retrying->in_progress": "task_retrying",
-  "retrying->crashed": "task_crashed",
-  "crashed->inbox": "task_retrying",
-  "done->assigned": "thread_message_sent",
-  "review->assigned": "thread_message_sent",
-  "crashed->assigned": "thread_message_sent",
-};
-
-// Restore target map: previousStatus -> target status (n-1)
-const RESTORE_TARGET_MAP: Record<string, string> = {
-  planning: "planning",
-  ready: "planning",
-  failed: "planning",
-  inbox: "inbox",
-  assigned: "inbox",
-  in_progress: "assigned",
-  review: "in_progress",
-  done: "review",
-  crashed: "in_progress",
-  retrying: "in_progress",
-};
+// ---------------------------------------------------------------------------
+// Re-export for backward compatibility (messages.ts imports isValidTransition)
+// ---------------------------------------------------------------------------
 
 /**
  * Check if a state transition is valid.
- * Exported as a pure function for testability.
+ * Delegates to the taskLifecycle module.
  */
 export function isValidTransition(
   currentStatus: string,
   newStatus: string
 ): boolean {
-  if (UNIVERSAL_TARGETS.includes(newStatus)) {
-    return true;
-  }
-  const allowedTargets = VALID_TRANSITIONS[currentStatus] || [];
-  return allowedTargets.includes(newStatus);
-}
-
-/**
- * Get the activity event type for a given transition.
- */
-function getEventType(from: string, to: string): string {
-  if (to === "retrying") return "task_retrying";
-  if (to === "crashed") return "task_crashed";
-  const eventType = TRANSITION_EVENT_MAP[`${from}->${to}`];
-  if (!eventType) {
-    throw new Error(
-      `No event type mapping for transition '${from}' -> '${to}'`
-    );
-  }
-  return eventType;
+  return isValidTaskTransition(currentStatus, newStatus);
 }
 
 export const create = mutation({
@@ -169,26 +101,14 @@ export const create = mutation({
       updatedAt: now,
     });
 
-    // Write activity event (architectural invariant)
-    let description = isManual
-      ? `Manual task created: "${args.title}"`
-      : assignedAgent
-        ? `Task created and assigned to ${assignedAgent}: "${args.title}"`
-        : `Task created: "${args.title}"`;
-
-    if (!isManual && trustLevel !== "autonomous") {
-      const levelLabel = trustLevel === "agent_reviewed" ? "agent reviewed" : "human approved";
-      description += ` (trust: ${levelLabel})`;
-    }
-    if (!isManual && supervisionMode === "supervised") {
-      description += " (supervised)";
-    }
-
-    await ctx.db.insert("activities", {
+    // Write activity event via lifecycle helper
+    await logTaskCreated(ctx, {
       taskId,
-      agentName: assignedAgent,
-      eventType: "task_created",
-      description,
+      title: args.title,
+      isManual,
+      assignedAgent,
+      trustLevel,
+      supervisionMode,
       timestamp: now,
     });
 
@@ -389,31 +309,6 @@ export const listByStatus = query({
   },
 });
 
-/**
- * Update the executionPlan field on a task document.
- */
-/**
- * Mark all execution plan steps as completed on a task.
- * Called when a task transitions to "done" to keep the plan UI in sync.
- */
-async function markPlanStepsCompleted(
-  ctx: { db: any },
-  taskId: any,
-  task: { executionPlan?: any }
-) {
-  const plan = task.executionPlan;
-  if (!plan?.steps?.length) return;
-
-  const updatedSteps = plan.steps.map((step: any) => ({
-    ...step,
-    status: "completed",
-  }));
-
-  await ctx.db.patch(taskId, {
-    executionPlan: { ...plan, steps: updatedSteps },
-  });
-}
-
 export const updateExecutionPlan = internalMutation({
   args: {
     taskId: v.id("tasks"),
@@ -476,12 +371,11 @@ export const kickOff = internalMutation({
 
     const now = new Date().toISOString();
     await ctx.db.patch(args.taskId, {
-      // Schema currently uses in_progress as the active-running status.
       status: "in_progress",
       updatedAt: now,
     });
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "task_started",
       description: `Task kicked off with ${args.stepCount} step${args.stepCount === 1 ? "" : "s"}`,
@@ -493,7 +387,7 @@ export const kickOff = internalMutation({
 /**
  * Pause an in-progress task.
  * Transitions from in_progress to review (WITHOUT awaitingKickoff).
- * Running steps are NOT cancelled — they finish naturally.
+ * Running steps are NOT cancelled -- they finish naturally.
  * The step dispatcher checks task status before dispatching new steps,
  * so no new dispatches happen while the task is in review (paused) state.
  */
@@ -516,11 +410,10 @@ export const pauseTask = mutation({
 
     await ctx.db.patch(args.taskId, {
       status: "review",
-      // Explicitly do NOT set awaitingKickoff — paused state has no awaitingKickoff
       updatedAt: now,
     });
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "review_requested",
       description: "User paused task execution",
@@ -570,7 +463,7 @@ export const resumeTask = mutation({
     }
     await ctx.db.patch(args.taskId, patch);
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "task_started",
       description: "User resumed task execution",
@@ -619,7 +512,7 @@ export const approveAndKickOff = mutation({
     const plan = args.executionPlan ?? task.executionPlan;
     const stepCount = plan?.steps?.length ?? 0;
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "task_started",
       description: `User approved plan and kicked off task (${stepCount} step${stepCount === 1 ? "" : "s"})`,
@@ -656,7 +549,7 @@ export const retry = mutation({
     });
 
     // Activity event
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "task_retrying",
       description: `Manual retry initiated by user for "${task.title}"`,
@@ -706,7 +599,7 @@ export const approve = mutation({
     await markPlanStepsCompleted(ctx, args.taskId, task);
 
     // Activity event
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "hitl_approved",
       description: `User approved "${task.title}"`,
@@ -726,7 +619,7 @@ export const approve = mutation({
 });
 
 /**
- * Move a manual task to any status — bypasses the state machine.
+ * Move a manual task to any status -- bypasses the state machine.
  * Only allowed for tasks with isManual === true.
  */
 export const manualMove = mutation({
@@ -759,7 +652,7 @@ export const manualMove = mutation({
       updatedAt: now,
     });
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "manual_task_status_changed",
       description: `Manual task moved from ${oldStatus} to ${args.newStatus}`,
@@ -784,8 +677,8 @@ export const updateStatus = internalMutation({
     const currentStatus = task.status;
     const newStatus = args.status;
 
-    // Validate transition
-    if (!isValidTransition(currentStatus, newStatus)) {
+    // Validate transition using lifecycle module
+    if (!isValidTaskTransition(currentStatus, newStatus)) {
       throw new ConvexError(
         `Cannot transition from '${currentStatus}' to '${newStatus}'`
       );
@@ -793,7 +686,7 @@ export const updateStatus = internalMutation({
 
     const now = new Date().toISOString();
 
-    // Build patch — only update specified fields (never use replace)
+    // Build patch -- only update specified fields (never use replace)
     const patch: Record<string, unknown> = {
       status: newStatus,
       updatedAt: now,
@@ -811,43 +704,13 @@ export const updateStatus = internalMutation({
       await markPlanStepsCompleted(ctx, args.taskId, task);
     }
 
-    // Write activity event (architectural invariant: every transition gets an event)
-    const eventType = getEventType(currentStatus, newStatus);
-    let description = `Task status changed from ${currentStatus} to ${newStatus}`;
-    if (newStatus === "assigned" && args.agentName) {
-      description = `Task assigned to ${args.agentName}`;
-    } else if (newStatus === "done") {
-      description = `Task completed: "${task.title}"`;
-    }
-
-    await ctx.db.insert("activities", {
+    // Write activity event via lifecycle helper
+    await logTaskStatusChange(ctx, {
       taskId: args.taskId,
+      fromStatus: currentStatus,
+      toStatus: newStatus,
       agentName: args.agentName,
-      eventType: eventType as
-        | "task_created"
-        | "task_planning"
-        | "task_failed"
-        | "task_assigned"
-        | "task_started"
-        | "task_completed"
-        | "task_crashed"
-        | "task_retrying"
-        | "review_requested"
-        | "review_feedback"
-        | "review_approved"
-        | "hitl_requested"
-        | "hitl_approved"
-        | "hitl_denied"
-        | "agent_connected"
-        | "agent_disconnected"
-        | "agent_crashed"
-        | "system_error"
-        | "task_deleted"
-        | "task_restored"
-        | "bulk_clear_done"
-        | "manual_task_status_changed"
-        | "thread_message_sent",
-      description,
+      taskTitle: task.title,
       timestamp: now,
     });
   },
@@ -882,11 +745,11 @@ export const deny = mutation({
         ? args.feedback.slice(0, 100) + "..."
         : args.feedback;
 
-    // Task stays in "review" — only update timestamp
+    // Task stays in "review" -- only update timestamp
     await ctx.db.patch(args.taskId, { updatedAt: now });
 
     // Activity event
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "hitl_denied",
       description: `User denied "${task.title}": ${feedbackPreview}`,
@@ -958,7 +821,7 @@ export const returnToLeadAgent = mutation({
     });
 
     // Activity event
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "task_retrying",
       description: `Task returned to Lead Agent: "${task.title}"`,
@@ -1006,7 +869,7 @@ export const softDelete = mutation({
       updatedAt: now,
     });
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       agentName: task.assignedAgent,
       eventType: "task_deleted",
@@ -1049,7 +912,7 @@ export const clearAllDone = mutation({
       });
     }
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       eventType: "bulk_clear_done",
       description: `Cleared ${doneTasks.length} completed task${doneTasks.length === 1 ? "" : "s"}`,
       timestamp: now,
@@ -1156,7 +1019,7 @@ export const restore = mutation({
       targetStatus = "inbox";
       systemMessage = "Task restored to inbox for re-assignment.";
     } else {
-      targetStatus = RESTORE_TARGET_MAP[prevStatus] ?? "inbox";
+      targetStatus = getRestoreTarget(prevStatus);
       systemMessage = task.assignedAgent
         ? `Task restored. Resuming from ${targetStatus} — agent ${task.assignedAgent} will redo the ${prevStatus} step.`
         : `Task restored to ${targetStatus}.`;
@@ -1174,7 +1037,7 @@ export const restore = mutation({
     }
     await ctx.db.patch(args.taskId, patch);
 
-    await ctx.db.insert("activities", {
+    await logActivity(ctx, {
       taskId: args.taskId,
       agentName: task.assignedAgent,
       eventType: "task_restored",
