@@ -244,7 +244,7 @@ def _cleanup_deleted_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
         except OSError:
             logger.exception("Failed to remove local folder for agent '%s' — will retry on next sync", name)
 
-        # TODO (CC-6 H1): Clean up cc_session:{name}:* keys from Convex settings
+        # TODO: Clean up cc_session:{name}:* keys from Convex settings
         # when an agent is deleted. The bridge does not currently expose a
         # settings:listByPrefix query, so we cannot enumerate and delete all
         # session keys for this agent. This is a known gap — when
@@ -260,8 +260,8 @@ def _fetch_bot_identity() -> dict[str, str]:
     Raises RuntimeError if Telegram is not configured or the API call fails.
     The nanobot agent MUST mirror the Telegram bot — no silent fallback.
     """
-    from nanobot.config.loader import load_config
     import httpx
+    from nanobot.config.loader import load_config
 
     config = load_config()
     if not config.channels.telegram.enabled or not config.channels.telegram.token:

@@ -198,7 +198,7 @@ class CCExecutorMixin:
             await self._crash_task(task_id, title, f"MCP IPC server failed: {exc}", agent_name)
             return
 
-        # 3. Look up existing session for resume (CC-6 AC2)
+        # 3. Look up existing session for resume
         session_id = await self._lookup_cc_session(agent_name, task_id)
 
         # 4. Execute via CC provider
@@ -421,7 +421,7 @@ class CCExecutorMixin:
     async def handle_cc_thread_reply(
         self, task_id: str, agent_name: str, user_message: str, agent_data: "AgentData",
     ) -> str | None:
-        """Handle a user follow-up message in a CC agent's task thread (CC-6 AC3)."""
+        """Handle a user follow-up message in a CC agent's task thread."""
         from claude_code.ipc_server import MCSocketServer
         from claude_code.provider import ClaudeCodeProvider
         from claude_code.workspace import CCWorkspaceManager
