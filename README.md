@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="nanobot_logo.png" alt="nanobot" width="500">
-  <h1>nanobot: Ultra-Lightweight Personal AI Assistant</h1>
+  <img src="nanobot_logo.png" alt="nanobot-mcontrol" width="500">
+  <h1>nanobot-mcontrol: Multi-Agent Orchestration Platform</h1>
   <p>
     <a href="https://pypi.org/project/nanobot-ai/"><img src="https://img.shields.io/pypi/v/nanobot-ai" alt="PyPI"></a>
     <a href="https://pepy.tech/project/nanobot-ai"><img src="https://static.pepy.tech/badge/nanobot-ai" alt="Downloads"></a>
@@ -62,6 +62,48 @@
 <p align="center">
   <img src="nanobot_arch.png" alt="nanobot architecture" width="800">
 </p>
+
+## Mission Control
+
+**Mission Control (MC)** is a multi-agent orchestration layer built on top of nanobot.
+It transforms the lightweight single-agent assistant into a platform capable of
+coordinating multiple AI agents working on complex, multi-step tasks.
+
+### What problem does it solve?
+
+Single-agent systems struggle with tasks that require parallel work, specialized
+expertise, or long-running coordination. Mission Control introduces an orchestration
+layer that decomposes tasks into steps, dispatches them to specialized agents, and
+manages the lifecycle of each execution -- all while providing a real-time dashboard
+for observability.
+
+### Key Components
+
+| Component | Description |
+|-----------|-------------|
+| **Bridge** | Bidirectional communication layer between the Python backend and the Convex real-time database |
+| **Gateway** | Receives incoming messages from chat channels and routes them to the orchestrator |
+| **Orchestrator** | Decomposes high-level tasks into ordered steps and manages execution flow |
+| **Executor** | Runs individual steps by spawning agent processes (Claude Code, nanobot agents) |
+| **Memory** | Persistent memory store with FTS indexing and automatic consolidation |
+| **Hooks** | Lifecycle hooks for pre/post processing of agent actions |
+
+### Architecture
+
+For a detailed architecture diagram and component descriptions, see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+### Project Structure
+
+```
+mc/                  # Mission Control Python backend (100% custom code)
+vendor/nanobot/      # Upstream nanobot (git subtree with patches)
+vendor/claude-code/  # Claude Code integration layer
+dashboard/           # Next.js + Convex real-time dashboard
+tests/mc/            # MC test suite
+```
+
+---
 
 ## ✨ Features
 
@@ -933,26 +975,29 @@ If you edit the `.service` file itself, run `systemctl --user daemon-reload` bef
 > loginctl enable-linger $USER
 > ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-nanobot/
-├── agent/          # 🧠 Core agent logic
-│   ├── loop.py     #    Agent loop (LLM ↔ tool execution)
-│   ├── context.py  #    Prompt builder
-│   ├── memory.py   #    Persistent memory
-│   ├── skills.py   #    Skills loader
-│   ├── subagent.py #    Background task execution
-│   └── tools/      #    Built-in tools (incl. spawn)
-├── skills/         # 🎯 Bundled skills (github, weather, tmux...)
-├── channels/       # 📱 Chat channel integrations
-├── bus/            # 🚌 Message routing
-├── cron/           # ⏰ Scheduled tasks
-├── heartbeat/      # 💓 Proactive wake-up
-├── providers/      # 🤖 LLM providers (OpenRouter, etc.)
-├── session/        # 💬 Conversation sessions
-├── config/         # ⚙️ Configuration
-└── cli/            # 🖥️ Commands
+nanobot-mcontrol/
+├── mc/                    # Mission Control backend (orchestration layer)
+│   ├── bridge.py          #   Convex <-> Python sync
+│   ├── gateway.py         #   Message routing & ingestion
+│   ├── orchestrator.py    #   Task decomposition & step management
+│   ├── executor.py        #   Agent process spawning
+│   ├── memory/            #   Persistent memory (store, index, consolidation)
+│   └── hooks/             #   Lifecycle hooks
+├── vendor/nanobot/nanobot/ # Upstream nanobot agent (git subtree)
+│   ├── agent/             #   Core agent logic (loop, context, memory, tools)
+│   ├── channels/          #   Chat channel integrations
+│   ├── bus/               #   Message routing
+│   ├── providers/         #   LLM providers
+│   ├── config/            #   Configuration
+│   └── cli/               #   CLI commands
+├── vendor/claude-code/    # Claude Code integration
+├── dashboard/             # Next.js + Convex real-time UI
+├── tests/mc/              # MC test suite
+├── boot.py                # Entry point (wires vendor path + CLI)
+└── docs/                  # Architecture & design docs
 ```
 
 ## 🤝 Contribute & Roadmap
@@ -973,6 +1018,74 @@ PRs welcome! The codebase is intentionally small and readable. 🤗
   <img src="https://contrib.rocks/image?repo=HKUDS/nanobot&max=100&columns=12&updated=20260210" alt="Contributors" />
 </a>
 
+
+## Dashboard
+
+The dashboard provides a real-time web interface for monitoring and managing
+Mission Control tasks, agents, and activity. It is built with **Next.js** and
+**Convex** as the real-time backend.
+
+### Setup
+
+```bash
+cd dashboard
+npm install
+npx convex dev
+```
+
+This starts the Convex development server and the Next.js frontend. The dashboard
+connects to the Python backend via Convex -- the bridge component in `mc/` syncs
+state bidirectionally between the Python process and the Convex database.
+
+### Structure
+
+```
+dashboard/
+├── app/             # Next.js App Router pages
+├── components/      # React UI components
+├── convex/          # Convex schema, functions, and queries
+├── lib/             # Shared utilities
+└── public/          # Static assets
+```
+
+### Authentication
+
+Set `MC_ACCESS_TOKEN` in `dashboard/.env.local` to require authentication.
+Without it, the dashboard is accessible to anyone on the network.
+
+---
+
+## Development
+
+### Prerequisites
+
+- Python 3.11+ (managed via [uv](https://github.com/astral-sh/uv))
+- Node.js 18+ (for the dashboard)
+
+### Setup
+
+```bash
+uv sync
+```
+
+### Running Tests
+
+```bash
+uv run pytest tests/mc/
+```
+
+### Linting
+
+```bash
+uv run ruff check mc/
+```
+
+### Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting pull requests
+and the development workflow.
+
+---
 
 ## Data Privacy
 
