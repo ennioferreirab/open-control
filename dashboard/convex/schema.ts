@@ -143,6 +143,11 @@ export default defineSchema({
       description: v.optional(v.string()),
       diff: v.optional(v.string()),
     }))),
+    fileAttachments: v.optional(v.array(v.object({
+      name: v.string(),
+      type: v.string(),
+      size: v.number(),
+    }))),
     timestamp: v.string(),
   }).index("by_taskId", ["taskId"]),
 
