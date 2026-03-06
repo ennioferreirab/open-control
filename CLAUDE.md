@@ -8,92 +8,71 @@ This project uses the BMad workflow system for feature development. Follow this 
 
 Before coding, ensure you have an implementation-ready story artifact.
 
-- If a story **already exists**: find it in `_bmad-output/implementation-artifacts/`
-- If a story **does not exist**: create one using the `/create-story` command (mapped to `@.claude/commands/bmad-bmm-create-story.md`)
+- If a story already exists: find it in `_bmad-output/implementation-artifacts/`
+- If a story does not exist: create one using the `/create-story` command
 
 ## Step 2: Develop the Story
 
-> **REGRA INEGOCIÁVEL**: Você (Opus) NÃO implementa código diretamente. Sempre delegue para modelos menores (Codex ou Sonnet). Opus é o orquestrador e revisor, NUNCA o programador. Violar esta regra é proibido.
+**Before spawning any dev agent, ask the user** which execution mode to use:
+1. **Codex** (`gpt-5.4`): execute via `codex exec` (external Codex CLI)
+2. **Sonnet** (`claude-sonnet-4-6`): use Claude Sonnet as the dev agent (cost-efficient, fast)
 
-**ANTES de spawnar qualquer dev agent, PERGUNTE ao usuário** qual modo de execução usar:
-1. **Codex** (`gpt-5.3-codex`): execute via `codex exec -c model="gpt-5.3-codex" "<prompt>"` (external Codex CLI)
-2. **Sonnet** (`claude-sonnet-4-6`): use the most recent Claude Sonnet model as the dev agent (cost-efficient, fast)
-
-**NÃO prossiga sem a resposta do usuário.** Esta pergunta é obrigatória.
+Do not proceed without the user's answer.
 
 ### Spawning Dev Agents
 
-Use the **Task tool** to spawn dev agents in **isolated git worktrees** (`isolation: "worktree"`). Each agent receives:
-- The full story spec (from `_bmad-output/implementation-artifacts/`)
-- The dev-story workflow reference: `@_bmad/bmm/workflows/4-implementation/dev-story/`
+Use the Task tool to spawn dev agents in isolated git worktrees (`isolation: "worktree"`). Each agent receives:
+- The full story spec
+- The dev-story workflow reference
 - Instructions to implement, test, commit, and self-review
 
-**CRITICAL**: Always set the `model` parameter on the Task tool:
-- If user chose **Sonnet**: `model: "sonnet"`
-- If user chose **Codex**: use `Bash` tool with `codex exec -c model="gpt-5.3-codex" "<prompt>"`
-- **NEVER** use `model: "opus"` or omit the model (which defaults to Opus) for dev agents
+Always set the `model` parameter on the Task tool:
+- If user chose Sonnet: `model: "sonnet"`
+- If user chose Codex: use Bash tool with `codex exec`
+- Never use `model: "opus"` for dev agents
 
-**For multiple independent stories**: spawn agents in parallel (one per story) using `run_in_background: true`. Each agent works in its own worktree to avoid conflicts.
-
-**For a single story**: spawn one agent in foreground.
-
-Example agent dispatch pattern:
-```
-Task tool:
-  subagent_type: "general-purpose"
-  model: "sonnet"              # <-- MANDATORY: never opus for dev
-  isolation: "worktree"
-  mode: "bypassPermissions"
-  run_in_background: true  (if parallel)
-  prompt: "Story spec + dev instructions..."
-```
+For multiple independent stories: spawn agents in parallel with `run_in_background: true`.
 
 ## Step 3: Review the Story
 
-After development is complete, spawn **Claude Opus** as a review agent for each completed story:
-
-```
-@_bmad/bmm/workflows/4-implementation/code-review/
-```
-
-### Spawning Review Agents
-
-Use the **Task tool** with `subagent_type: "superpowers:code-reviewer"` to spawn review agents. Each reviewer:
-- Receives the full story spec (acceptance criteria)
-- Reads the actual implementation code (do NOT trust the dev agent's report)
+After development, spawn a review agent (Opus) for each completed story. The reviewer:
+- Reads the actual implementation code
 - Verifies spec compliance line by line
 - Reports PASS or issues with file:line references
 
-**For multiple stories**: spawn review agents in parallel as each dev agent completes (`run_in_background: true`).
-
-The review agent must use **Opus** for thorough, adversarial review quality. (This is the ONLY step where Opus executes directly.)
-
 ## Step 4: Fix Review Findings
 
-Address any HIGH/CRITICAL findings from the review before merging.
+Address any HIGH/CRITICAL findings before merging.
 
 ## Step 5: Merge Worktrees
 
-After all stories pass review, merge each worktree branch back into the main branch. Resolve any conflicts from parallel development (especially in shared files like `schema.ts`, `executor.py`).
+Merge each worktree branch back into main. Resolve conflicts from parallel development.
 
 ## Python Environment
 
-- Always use `uv run python` instead of `python3` (system python3 is macOS stock 3.9)
+- Always use `uv run python` instead of `python3` (system python3 may be outdated)
 - Use `uv` as the package manager (not pip)
 - Run tests with `uv run pytest`
 
 ## Project Structure
 
-- `mc/` — Mission Control Python backend (100% our code, extracted from upstream)
-- `vendor/nanobot/` — git subtree of upstream HKUDS/nanobot (with patches documented in PATCHES.md)
-- `vendor/nanobot/nanobot/` — upstream Python package (agent, bus, channels, cli, config, etc.)
+- `mc/` — Mission Control Python backend (multi-agent orchestration)
+- `vendor/nanobot/` — git subtree of upstream nanobot (with patches documented in PATCHES.md)
+- `vendor/claude-code/` — Claude Code headless backend
+- `dashboard/` — Next.js + Convex frontend
 - `boot.py` — entry point that wires vendor path + CLI
-- `dashboard/` — Next.js + Convex frontend (TypeScript)
 - `tests/mc/` — Python tests for MC module
-- Test runners: pytest (Python), vitest (TypeScript/dashboard)
-- `PATCHES.md` — documents all modifications to vendor/nanobot/ for upstream sync
+
+### Code Conventions
+
+- Linter: ruff (configured in pyproject.toml)
+- Line length: 100 characters
+- Type hints: required on all public functions
+- Naming: snake_case for functions/variables, PascalCase for classes
+- Test runner: pytest (Python), vitest (TypeScript/dashboard)
 
 ### Upstream Sync
+
 ```bash
 git fetch upstream
 git subtree pull --prefix=vendor/nanobot upstream main --squash
