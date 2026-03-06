@@ -43,6 +43,7 @@ export const create = mutation({
       v.literal("step_created"),
       v.literal("step_status_changed"),
       v.literal("step_unblocked"),
+      v.literal("thread_message_sent"),
     ),
     description: v.string(),
     timestamp: v.string(),
