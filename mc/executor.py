@@ -475,58 +475,11 @@ def _build_tag_attributes_context(
 ) -> str:
     """Build a context section describing tag attribute values for the agent.
 
-    Args:
-        tags: List of tag name strings assigned to the task.
-        attr_values: List of tagAttributeValue records (snake_case keys from bridge).
-        attr_catalog: List of tagAttribute records (snake_case keys from bridge).
-
-    Returns:
-        A formatted string section like:
-        [Task Tag Attributes]
-        client-tag: priority=high, deadline=2026-03-01
-        ...
-        Returns empty string if no tags have non-empty attribute values.
+    Delegates to the canonical implementation in the unified execution pipeline.
+    This wrapper preserves backward compatibility for callers within executor.py.
     """
-    if not tags or not attr_values or not attr_catalog:
-        return ""
-
-    # Build attribute id -> name lookup
-    attr_name_map: dict[str, str] = {}
-    for attr in attr_catalog:
-        attr_id = attr.get("id") or attr.get("_id") or ""
-        attr_name = attr.get("name", "")
-        if attr_id and attr_name:
-            attr_name_map[attr_id] = attr_name
-
-    # Group values by tag name
-    tag_attrs: dict[str, list[str]] = {}
-    for val in attr_values:
-        tag_name = val.get("tag_name", "")
-        value = val.get("value", "")
-        attr_id = val.get("attribute_id") or val.get("_attribute_id") or ""
-
-        # Skip empty values
-        if not tag_name or not value or tag_name not in tags:
-            continue
-
-        attr_name = attr_name_map.get(attr_id, "")
-        if not attr_name:
-            continue
-
-        if tag_name not in tag_attrs:
-            tag_attrs[tag_name] = []
-        tag_attrs[tag_name].append(f"{attr_name}={value}")
-
-    if not tag_attrs:
-        return ""
-
-    lines = ["[Task Tag Attributes]"]
-    for tag_name in tags:
-        if tag_name in tag_attrs:
-            pairs = ", ".join(tag_attrs[tag_name])
-            lines.append(f"{tag_name}: {pairs}")
-
-    return "\n".join(lines)
+    from mc.application.execution.context_builder import build_tag_attributes_context
+    return build_tag_attributes_context(tags, attr_values, attr_catalog)
 
 
 class TaskExecutor:

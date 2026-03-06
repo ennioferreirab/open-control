@@ -9,7 +9,6 @@ import pytest
 from mc.mention_handler import (
     extract_mentions,
     is_mention_message,
-    _build_mention_context,
     _list_available_agents,
 )
 
@@ -115,70 +114,6 @@ class TestIsMentionMessage:
 
     def test_returns_false_for_empty(self):
         assert is_mention_message("") is False
-
-
-class TestBuildMentionContext:
-    """Tests for _build_mention_context()."""
-
-    def test_empty_messages(self):
-        result = _build_mention_context([])
-        assert result == ""
-
-    def test_filters_system_events(self):
-        messages = [
-            {
-                "author_name": "System",
-                "author_type": "system",
-                "message_type": "system_event",
-                "content": "Task started",
-            },
-            {
-                "author_name": "Alice",
-                "author_type": "user",
-                "message_type": "user_message",
-                "content": "Hello",
-            },
-        ]
-        result = _build_mention_context(messages)
-        assert "Hello" in result
-        assert "Task started" not in result
-
-    def test_truncates_long_content(self):
-        long_content = "x" * 500
-        messages = [
-            {
-                "author_name": "Alice",
-                "author_type": "user",
-                "content": long_content,
-            }
-        ]
-        result = _build_mention_context(messages)
-        assert "..." in result
-        assert len(result) < len(long_content) + 100  # Significantly shorter
-
-    def test_returns_context_header(self):
-        messages = [
-            {
-                "author_name": "Alice",
-                "author_type": "user",
-                "content": "Test message",
-            }
-        ]
-        result = _build_mention_context(messages)
-        assert "[Recent Thread Context]" in result
-        assert "Alice" in result
-        assert "Test message" in result
-
-    def test_max_messages_limit(self):
-        messages = [
-            {"author_name": f"User{i}", "author_type": "user", "content": f"msg{i}"}
-            for i in range(20)
-        ]
-        result = _build_mention_context(messages, max_messages=5)
-        # Only last 5 messages should appear
-        assert "msg19" in result
-        assert "msg15" in result
-        assert "msg0" not in result
 
 
 class TestExtractMentionsEdgeCases:

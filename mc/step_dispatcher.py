@@ -40,62 +40,6 @@ def _as_positive_int(value: Any, default: int) -> int:
 
 
 
-def _load_agent_config(
-    agent_name: str,
-) -> tuple[str | None, str | None, list[str] | None]:
-    """Load prompt, model and skills from an agent config."""
-    from mc.gateway import AGENTS_DIR
-    from mc.yaml_validator import validate_agent_file
-
-    config_file = AGENTS_DIR / agent_name / "config.yaml"
-    if not config_file.exists():
-        return None, None, None
-
-    result = validate_agent_file(config_file)
-    if isinstance(result, list):
-        logger.warning(
-            "[dispatcher] Agent '%s' config invalid: %s", agent_name, result
-        )
-        return None, None, None
-
-    return result.prompt, result.model, result.skills
-
-
-def _maybe_inject_orientation(
-    agent_name: str, agent_prompt: str | None
-) -> str | None:
-    """Prepend global orientation for non-lead agents."""
-    from mc.orientation import load_orientation
-
-    orientation = load_orientation(agent_name)
-    if not orientation:
-        return agent_prompt
-
-    if agent_prompt:
-        return f"{orientation}\n\n---\n\n{agent_prompt}"
-    return orientation
-
-
-def _build_step_thread_context(
-    messages: list[dict[str, Any]],
-    max_messages: int = 20,
-    predecessor_step_ids: list[str] | None = None,
-) -> str:
-    """Format thread messages as execution context for a step agent.
-
-    Delegates to ThreadContextBuilder with predecessor awareness (AC #3).
-    When predecessor_step_ids is provided, ensures their completion messages
-    are always included even outside the 20-message window.
-    """
-    from mc.thread_context import ThreadContextBuilder
-
-    return ThreadContextBuilder().build(
-        messages,
-        max_messages=max_messages,
-        predecessor_step_ids=predecessor_step_ids,
-    )
-
-
 async def _run_step_agent(
     *,
     agent_name: str,
