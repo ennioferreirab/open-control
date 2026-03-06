@@ -1393,7 +1393,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
 
     # Mention watcher — detects @agent-name mentions in all task threads
     # (covers tasks not handled by plan_negotiator: done, crashed, inbox, etc.)
-    from mc.mention_watcher import MentionWatcher
+    from mc.mentions.watcher import MentionWatcher
 
     mention_watcher = MentionWatcher(bridge)
     mention_task = asyncio.create_task(mention_watcher.run())

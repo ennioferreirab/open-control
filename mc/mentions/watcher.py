@@ -168,7 +168,7 @@ class MentionWatcher:
                     continue
 
                 # Check for @mentions
-                from mc.mention_handler import is_mention_message, handle_all_mentions
+                from mc.mentions.handler import is_mention_message, handle_all_mentions
 
                 if not is_mention_message(content):
                     continue

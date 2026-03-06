@@ -8,7 +8,7 @@ Story 10.2 -- Task 5.
 
 TODO (CC-6 H2): Thread replies to tasks assigned to claude-code (backend="claude-code")
 agents are currently not routed to TaskExecutor.handle_cc_thread_reply(). The
-MentionWatcher in mention_watcher.py handles @mention messages across tasks, but
+MentionWatcher in mc/mentions/watcher.py handles @mention messages across tasks, but
 plain (non-mention) user replies to a done/crashed CC task thread are not forwarded
 to the CC provider for session resumption.
 
