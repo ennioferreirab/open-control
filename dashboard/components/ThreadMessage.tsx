@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, XCircle, MessageCircle } from "lucide-reac
 import { Doc } from "../convex/_generated/dataModel";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ArtifactRenderer } from "./ArtifactRenderer";
+import { FileChip } from "./FileChip";
 import { STRUCTURED_MESSAGE_TYPE } from "@/lib/constants";
 
 interface ThreadMessageProps {
@@ -153,6 +154,20 @@ export function ThreadMessage({
                 : undefined
             }
           />
+        )}
+
+        {/* Render file attachments if present */}
+        {message.fileAttachments && message.fileAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {message.fileAttachments.map((fa) => (
+              <FileChip
+                key={fa.name}
+                name={fa.name}
+                size={fa.size}
+                href={`/api/tasks/${message.taskId}/files/attachments/${encodeURIComponent(fa.name)}`}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>
