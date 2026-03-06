@@ -1,6 +1,6 @@
 """Tool for asking the human user a question and waiting for their reply.
 
-Delegates to mc.ask_user_handler.AskUserHandler for the unified ask_user flow.
+Delegates to mc.ask_user.handler.AskUserHandler for the unified ask_user flow.
 """
 
 from typing import TYPE_CHECKING, Any
@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from nanobot.agent.tools.base import Tool
 
 if TYPE_CHECKING:
-    from mc.ask_user_handler import AskUserHandler
+    from mc.ask_user.handler import AskUserHandler
     from mc.bridge import ConvexBridge
 
 

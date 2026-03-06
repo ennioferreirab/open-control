@@ -4,8 +4,8 @@ import asyncio
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
-from mc.ask_user_handler import AskUserHandler
-from mc.ask_user_registry import AskUserRegistry
+from mc.ask_user.handler import AskUserHandler
+from mc.ask_user.registry import AskUserRegistry
 
 
 def _handler_with_pending(task_id: str) -> AskUserHandler:

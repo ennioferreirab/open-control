@@ -614,7 +614,7 @@ class StepDispatcher:
                     logger.error("[dispatcher] %s", error_msg)
                     raise
 
-                from mc.ask_user_handler import AskUserHandler
+                from mc.ask_user.handler import AskUserHandler
 
                 ask_handler = AskUserHandler()
                 ipc_server = MCSocketServer(self._bridge, None)
