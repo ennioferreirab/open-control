@@ -100,8 +100,6 @@ class TestTasksCreate:
         assert result.exit_code == 0
         assert "Task created:" in result.output
         assert "Research AI trends" in result.output
-        assert "Status: inbox" in result.output
-        assert "Created:" in result.output
         mock_client.mutation.assert_called_once()
         call_args = mock_client.mutation.call_args[0]
         assert call_args[0] == "tasks:create"

@@ -2,6 +2,13 @@
 
 Provides exponential backoff retry for mutation calls and best-effort
 error activity logging on exhaustion.
+
+NOTE: The retry logic in this module is intentionally duplicated in
+ConvexBridge._mutation_with_retry() (mc/bridge/__init__.py) to preserve
+backward compatibility with existing test patches that target
+``mc.bridge.time.sleep`` and ``mc.bridge.os.makedirs``. Bug fixes to
+the retry algorithm must be applied in both places until the legacy
+patch surface is removed (planned for Story 19.1).
 """
 
 from __future__ import annotations
