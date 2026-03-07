@@ -427,8 +427,8 @@ class TestParityWithStateMachine:
     """Verify the contract is equivalent to the legacy state_machine module (Task 4.3)."""
 
     def test_state_machine_delegates_to_contract_for_task_transitions(self) -> None:
-        """mc.state_machine.is_valid_transition must match contract for all pairs."""
-        from mc.state_machine import is_valid_transition
+        """mc.domain.workflow.state_machine.is_valid_transition must match contract for all pairs."""
+        from mc.domain.workflow.state_machine import is_valid_transition
 
         for from_s in TASK_STATUSES:
             for to_s in TASK_STATUSES:
@@ -440,8 +440,8 @@ class TestParityWithStateMachine:
                 )
 
     def test_state_machine_delegates_to_contract_for_step_transitions(self) -> None:
-        """mc.state_machine.is_valid_step_transition must match contract for all pairs."""
-        from mc.state_machine import is_valid_step_transition as sm_step
+        """mc.domain.workflow.state_machine.is_valid_step_transition must match contract for all pairs."""
+        from mc.domain.workflow.state_machine import is_valid_step_transition as sm_step
 
         for from_s in STEP_STATUSES:
             for to_s in STEP_STATUSES:
@@ -453,13 +453,13 @@ class TestParityWithStateMachine:
                 )
 
     def test_no_hardcoded_dicts_in_state_machine(self) -> None:
-        """mc.state_machine should not contain hardcoded transition dictionaries.
+        """mc.domain.workflow.state_machine should not contain hardcoded transition dictionaries.
 
         The module-level dicts must be derived from the contract spec, not
         defined inline. We verify by checking that VALID_TRANSITIONS and
         STEP_VALID_TRANSITIONS match the spec exactly.
         """
-        from mc.state_machine import STEP_VALID_TRANSITIONS, VALID_TRANSITIONS
+        from mc.domain.workflow.state_machine import STEP_VALID_TRANSITIONS, VALID_TRANSITIONS
 
         # Task transitions must match spec
         for status, targets in SPEC["taskTransitions"].items():

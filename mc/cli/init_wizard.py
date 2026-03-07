@@ -12,14 +12,14 @@ from pathlib import Path
 
 import yaml
 
-from mc.agent_assist import (
+from mc.cli.agent_assist import (
     build_llm_provider,
     create_agent_workspace,
     extract_yaml_from_response,
     generate_agent_yaml,
     validate_yaml_content,
 )
-from mc.yaml_validator import validate_agent_file
+from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
 # ---------------------------------------------------------------------------
 # Constants

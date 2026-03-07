@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from mc.yaml_validator import AgentConfig, format_validation_errors
+from mc.infrastructure.agents.yaml_validator import AgentConfig, format_validation_errors
 
 # ---------------------------------------------------------------------------
 # LLM System Prompt

@@ -128,3 +128,23 @@ def test_facade_modules_are_thin_reexports() -> None:
         assert import_path in content, (
             f"{relative_path} should be a thin facade importing from {import_path}"
         )
+
+
+def test_mc_root_contains_only_expected_modules() -> None:
+    root = Path(__file__).resolve().parents[2] / "mc"
+    root_modules = sorted(p.name for p in root.glob("*.py") if p.is_file())
+    assert root_modules == [
+        "__init__.py",
+        "cc_executor.py",
+        "cc_step_runner.py",
+        "chat_handler.py",
+        "executor.py",
+        "gateway.py",
+        "orchestrator.py",
+        "plan_materializer.py",
+        "plan_negotiator.py",
+        "planner.py",
+        "review_handler.py",
+        "step_dispatcher.py",
+        "types.py",
+    ]

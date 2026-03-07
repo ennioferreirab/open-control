@@ -154,7 +154,7 @@ class PlanningWorker:
             planning_model = None
             planning_reasoning_level = None
             try:
-                from mc.tier_resolver import TierResolver
+                from mc.infrastructure.providers.tier_resolver import TierResolver
 
                 tier_resolver = TierResolver(self._bridge)
                 planning_model = tier_resolver.resolve_model("tier:standard-medium")

@@ -116,7 +116,7 @@ def start(
     ),
 ):
     """Start Mission Control (dashboard + agent gateway + nanobot channels)."""
-    from mc.process_manager import ProcessManager
+    from mc.cli.process_manager import ProcessManager
 
     resolved_dir = Path(dashboard_dir) if dashboard_dir else _find_dashboard_dir()
 
@@ -441,7 +441,7 @@ def init(
     """Guided setup wizard — create a full agent team in one go."""
     from rich.rule import Rule
 
-    from mc.init_wizard import (
+    from mc.cli.init_wizard import (
         PRESETS,
         AgentPlan,
         agent_exists,
@@ -664,7 +664,7 @@ def init(
 async def _generate_custom_agent_safe(description: str) -> tuple[str | None, list[str]]:
     """Wrapper around generate_custom_agent that catches provider errors."""
     try:
-        from mc.init_wizard import generate_custom_agent
+        from mc.cli.init_wizard import generate_custom_agent
         return await generate_custom_agent(description)
     except SystemExit as exc:
         return None, [str(exc)]
@@ -1321,7 +1321,7 @@ def sync_agents():
 @agents_app.command("list")
 def list_agents():
     """List all registered agents."""
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     # Scan agent directories for config.yaml files
     agents_dir = AGENTS_DIR
@@ -1364,7 +1364,7 @@ def list_agents():
 @agents_app.command("create")
 def create_agent():
     """Create a new agent via interactive prompts."""
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     console.print("[bold]Create a new agent[/bold]\n")
 
@@ -1428,7 +1428,7 @@ def create_agent():
         memory_file.write_text("")
 
     # Write SOUL.md
-    from mc.agent_assist import ensure_soul_md
+    from mc.cli.agent_assist import ensure_soul_md
     ensure_soul_md(agent_dir, name, role)
 
     # Write config.yaml
@@ -1458,7 +1458,7 @@ def create_agent():
 def assist_agent():
     """Create an agent from a natural language description (LLM-assisted)."""
     from rich.syntax import Syntax
-    from mc.agent_assist import (
+    from mc.cli.agent_assist import (
         build_llm_provider, create_agent_workspace,
         extract_yaml_from_response, generate_agent_yaml, validate_yaml_content,
     )
@@ -1527,7 +1527,7 @@ def assist_agent():
 
 def _save_assisted_agent(agent_name, yaml_text, create_fn):
     """Save an assisted-generated agent, checking for overwrites."""
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     agent_dir = Path.home() / ".nanobot" / "agents" / agent_name
     if agent_dir.exists():

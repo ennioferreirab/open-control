@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mc.provider_factory import ProviderError, create_provider
+from mc.infrastructure.providers.factory import ProviderError, create_provider
 
 
 # ---------------------------------------------------------------------------
@@ -276,33 +276,33 @@ class TestListAvailableModelsCodexDiscovery:
 
     def test_codex_models_added_when_authenticated(self):
         """When get_token() succeeds, Codex models are appended to the list."""
-        from mc.provider_factory import list_available_models
+        from mc.infrastructure.providers.factory import list_available_models
         from nanobot.providers.openai_codex_provider import CODEX_MODELS
         mock_token = MagicMock()
         config = self._make_config()
         with patch('nanobot.config.loader.load_config', return_value=config), \
-             patch('mc.provider_factory._get_codex_token', return_value=mock_token):
+             patch('mc.infrastructure.providers.factory._get_codex_token', return_value=mock_token):
             result = list_available_models()
         for m in CODEX_MODELS:
             assert m in result
 
     def test_codex_models_not_added_when_not_authenticated(self):
         """When get_token() raises, Codex models are NOT added."""
-        from mc.provider_factory import list_available_models
+        from mc.infrastructure.providers.factory import list_available_models
         from nanobot.providers.openai_codex_provider import CODEX_MODELS
         config = self._make_config()
         with patch('nanobot.config.loader.load_config', return_value=config), \
-             patch('mc.provider_factory._get_codex_token', side_effect=Exception('no token')):
+             patch('mc.infrastructure.providers.factory._get_codex_token', side_effect=Exception('no token')):
             result = list_available_models()
         for m in CODEX_MODELS:
             assert m not in result
 
     def test_codex_models_not_duplicated(self):
         """If a Codex model is already in config.agents.models, it appears only once."""
-        from mc.provider_factory import list_available_models
+        from mc.infrastructure.providers.factory import list_available_models
         mock_token = MagicMock()
         config = self._make_config(models=['openai-codex/gpt-5.3-codex', 'anthropic-oauth/claude-sonnet-4-6'])
         with patch('nanobot.config.loader.load_config', return_value=config), \
-             patch('mc.provider_factory._get_codex_token', return_value=mock_token):
+             patch('mc.infrastructure.providers.factory._get_codex_token', return_value=mock_token):
             result = list_available_models()
         assert result.count('openai-codex/gpt-5.3-codex') == 1

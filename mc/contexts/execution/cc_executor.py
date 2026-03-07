@@ -168,7 +168,7 @@ class CCExecutorMixin:
         # 1. Prepare workspace
         try:
             ws_mgr = CCWorkspaceManager()
-            from mc.agent_orientation import load_orientation
+            from mc.infrastructure.orientation import load_orientation
             ws_ctx = ws_mgr.prepare(
                 agent_name, agent_data, task_id,
                 orientation=load_orientation(agent_name),
@@ -288,7 +288,7 @@ class CCExecutorMixin:
                 if _board:
                     _cc_board_name = _board.get("name")
                     if _cc_board_name:
-                        from mc.board_utils import get_agent_memory_mode
+                        from mc.infrastructure.boards import get_agent_memory_mode
                         _cc_memory_mode = get_agent_memory_mode(_board, agent_name)
                         logger.info("[executor] CC: board-scoped workspace for agent '%s' on board '%s' (mode=%s)", agent_name, _cc_board_name, _cc_memory_mode)
             except Exception:
@@ -325,7 +325,7 @@ class CCExecutorMixin:
             try:
                 from claude_code.memory_consolidator import CCMemoryConsolidator
 
-                from mc.tier_resolver import TierResolver
+                from mc.infrastructure.providers.tier_resolver import TierResolver
                 from mc.types import is_tier_reference
                 _model = "tier:standard-low"
                 if is_tier_reference(_model):
@@ -430,7 +430,7 @@ class CCExecutorMixin:
                 if _tr_board:
                     _tr_board_name = _tr_board.get("name")
                     if _tr_board_name:
-                        from mc.board_utils import get_agent_memory_mode
+                        from mc.infrastructure.boards import get_agent_memory_mode
                         _tr_memory_mode = get_agent_memory_mode(_tr_board, agent_name)
                         logger.info("[executor] CC thread reply: board '%s' (mode=%s)", _tr_board_name, _tr_memory_mode)
         except Exception:
@@ -439,7 +439,7 @@ class CCExecutorMixin:
         # Prepare workspace and IPC server
         try:
             ws_mgr = CCWorkspaceManager()
-            from mc.agent_orientation import load_orientation
+            from mc.infrastructure.orientation import load_orientation
             ws_ctx = ws_mgr.prepare(
                 agent_name, agent_data, task_id,
                 orientation=load_orientation(agent_name), task_prompt=user_message,

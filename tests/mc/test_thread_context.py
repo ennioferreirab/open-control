@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from mc.thread_context import ThreadContextBuilder, MAX_THREAD_MESSAGES
+from mc.application.execution.thread_context import ThreadContextBuilder, MAX_THREAD_MESSAGES
 
 
 # ── Test helpers ──────────────────────────────────────────────────────────────

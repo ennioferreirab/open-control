@@ -25,7 +25,7 @@ from mc.types import (
     ExecutionPlanStep,
     is_lead_agent,
 )
-from mc.utils import as_positive_int
+from mc.domain.utils import as_positive_int
 
 logger = logging.getLogger(__name__)
 
@@ -384,7 +384,7 @@ def _load_lead_agent_planning_skills() -> tuple[list[str], str]:
     """
     from nanobot.agent.skills import SkillsLoader
 
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     config_file = Path.home() / ".nanobot" / "agents" / LEAD_AGENT_NAME / "config.yaml"
     if not config_file.exists():

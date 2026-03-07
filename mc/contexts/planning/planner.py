@@ -15,7 +15,7 @@ import logging
 import time
 import uuid
 
-from mc.plan_parser import (  # noqa: F401
+from mc.contexts.planning.parser import (  # noqa: F401
     STANDARD_TOOLS,
     _build_agent_roster,
     _build_file_summary,
@@ -235,7 +235,7 @@ class TaskPlanner:
         """Call LLM to generate the plan."""
         from nanobot.config.loader import load_config
 
-        from mc.provider_factory import create_provider
+        from mc.infrastructure.providers.factory import create_provider
 
         agent_roster = _build_agent_roster(agents)
         user_prompt = USER_PROMPT_TEMPLATE.format(
@@ -311,7 +311,7 @@ class TaskPlanner:
         from claude_code.workspace import CCWorkspaceManager
         from nanobot.config.loader import load_config
 
-        from mc.agent_orientation import load_orientation
+        from mc.infrastructure.orientation import load_orientation
         from mc.ask_user.handler import AskUserHandler
 
         cc_opts = ClaudeCodeOpts()

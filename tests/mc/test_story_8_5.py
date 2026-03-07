@@ -56,7 +56,7 @@ class TestProviderErrorHandling:
     async def test_provider_error_writes_system_message(self):
         """On provider error, a system message with action is written to task thread."""
         from mc.executor import TaskExecutor
-        from mc.provider_factory import ProviderError
+        from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -91,7 +91,7 @@ class TestProviderErrorHandling:
     async def test_provider_error_creates_system_error_activity(self):
         """On provider error, a system_error activity event is created."""
         from mc.executor import TaskExecutor
-        from mc.provider_factory import ProviderError
+        from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -124,7 +124,7 @@ class TestProviderErrorHandling:
     async def test_provider_error_crashes_task(self):
         """On provider error, the task should transition to 'crashed'."""
         from mc.executor import TaskExecutor
-        from mc.provider_factory import ProviderError
+        from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -192,7 +192,7 @@ class TestProviderErrorHandling:
     async def test_provider_error_does_not_auto_retry(self):
         """Provider errors should NOT go through auto-retry (handle_agent_crash)."""
         from mc.executor import TaskExecutor
-        from mc.provider_factory import ProviderError
+        from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -218,7 +218,7 @@ class TestProviderErrorHandling:
     async def test_known_assigned_ids_cleaned_after_provider_error(self):
         """Task ID should be removed from _known_assigned_ids after provider error."""
         from mc.executor import TaskExecutor
-        from mc.provider_factory import ProviderError
+        from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -566,7 +566,7 @@ class TestProviderErrorAction:
     def test_extracts_action_from_provider_error(self):
         """ProviderError.action is returned directly."""
         from mc.executor import _provider_error_action
-        from mc.provider_factory import ProviderError
+        from mc.infrastructure.providers.factory import ProviderError
 
         exc = ProviderError("Token expired", action="nanobot provider login anthropic-oauth")
         assert _provider_error_action(exc) == "nanobot provider login anthropic-oauth"

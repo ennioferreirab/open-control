@@ -359,7 +359,7 @@ class TestExecuteCCTaskHappyPath:
             patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch("mc.agent_orientation.load_orientation", return_value=None),
+            patch("mc.infrastructure.orientation.load_orientation", return_value=None),
             patch("mc.executor._snapshot_output_dir", return_value={}),
             patch("mc.executor._collect_output_artifacts", return_value=[]),
         ):
@@ -998,7 +998,7 @@ class TestLoadAgentData:
         executor = _make_executor()
         with (
             patch("mc.infrastructure.config.AGENTS_DIR", tmp_path),
-            patch("mc.yaml_validator.validate_agent_file", return_value=expected),
+            patch("mc.infrastructure.agents.yaml_validator.validate_agent_file", return_value=expected),
         ):
             result = executor._load_agent_data("my-agent")
 
@@ -1013,7 +1013,7 @@ class TestLoadAgentData:
         executor = _make_executor()
         with (
             patch("mc.infrastructure.config.AGENTS_DIR", tmp_path),
-            patch("mc.yaml_validator.validate_agent_file", return_value=["validation error"]),
+            patch("mc.infrastructure.agents.yaml_validator.validate_agent_file", return_value=["validation error"]),
         ):
             result = executor._load_agent_data("bad-agent")
 
@@ -1061,7 +1061,7 @@ class TestCCBoardScopedWorkspace:
             patch(_PATCH_WS_MGR, return_value=ws_mock),
             patch(_PATCH_IPC_SRV, return_value=ipc_mock),
             patch(_PATCH_PROVIDER, return_value=provider_mock),
-            patch("mc.board_utils.get_agent_memory_mode", return_value="clean"),
+            patch("mc.infrastructure.boards.get_agent_memory_mode", return_value="clean"),
         ):
             await executor._execute_cc_task(
                 task_id="task-99",

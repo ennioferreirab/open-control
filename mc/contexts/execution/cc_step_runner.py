@@ -61,7 +61,7 @@ async def execute_step_via_cc(
     Returns list of unblocked step IDs after completion.
     """
     from mc.infrastructure.config import AGENTS_DIR
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     cc_model_name = extract_cc_model_name(agent_model)
 

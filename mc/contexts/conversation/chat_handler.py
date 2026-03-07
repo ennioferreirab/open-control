@@ -213,7 +213,7 @@ class ChatHandler:
             )
 
             from mc.infrastructure.config import AGENTS_DIR
-            from mc.yaml_validator import validate_agent_file
+            from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
             # Load agent config
             config_file = AGENTS_DIR / agent_name / "config.yaml"
@@ -235,7 +235,7 @@ class ChatHandler:
             from mc.types import is_cc_model, is_tier_reference
 
             if agent_model and is_tier_reference(agent_model):
-                from mc.tier_resolver import TierResolver
+                from mc.infrastructure.providers.tier_resolver import TierResolver
 
                 resolver = TierResolver(self._bridge)
                 agent_model = resolver.resolve_model(agent_model)
@@ -451,7 +451,7 @@ class ChatHandler:
                         CCMemoryConsolidator,
                     )
 
-                    from mc.tier_resolver import TierResolver
+                    from mc.infrastructure.providers.tier_resolver import TierResolver
                     from mc.types import is_tier_reference
 
                     _model = "tier:standard-low"

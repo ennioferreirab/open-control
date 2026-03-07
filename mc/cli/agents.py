@@ -128,7 +128,7 @@ def sync_agents():
 def list_agents():
     """List all registered agents."""
     import mc.cli as _cli
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     agents_dir = _cli.AGENTS_DIR
     valid_agents = []
@@ -171,7 +171,7 @@ def list_agents():
 def create_agent():
     """Create a new agent via interactive prompts."""
     import mc.cli as _cli
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     console.print("[bold]Create a new agent[/bold]\n")
     while True:
@@ -217,7 +217,7 @@ def create_agent():
     memory_file = agent_dir / "memory" / "MEMORY.md"
     if not memory_file.exists():
         memory_file.write_text("")
-    from mc.agent_assist import ensure_soul_md
+    from mc.cli.agent_assist import ensure_soul_md
     ensure_soul_md(agent_dir, name, role)
     config_path = agent_dir / "config.yaml"
     config_path.write_text(
@@ -241,7 +241,7 @@ def create_agent():
 def assist_agent():
     """Create an agent from a natural language description (LLM-assisted)."""
     from rich.syntax import Syntax
-    from mc.agent_assist import (
+    from mc.cli.agent_assist import (
         build_llm_provider, create_agent_workspace,
         extract_yaml_from_response, generate_agent_yaml, validate_yaml_content,
     )
@@ -311,7 +311,7 @@ def assist_agent():
 def _save_assisted_agent(agent_name, yaml_text, create_fn):
     """Save an assisted-generated agent, checking for overwrites."""
     import mc.cli as _cli
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     agent_dir = Path.home() / ".nanobot" / "agents" / agent_name
     if agent_dir.exists():
@@ -348,7 +348,7 @@ def register_init_command(mc_app: typer.Typer) -> None:
         import mc.cli as _cli
         from rich.rule import Rule
 
-        from mc.init_wizard import (
+        from mc.cli.init_wizard import (
             PRESETS,
             AgentPlan,
             agent_exists,
@@ -551,7 +551,7 @@ def register_init_command(mc_app: typer.Typer) -> None:
 async def _generate_custom_agent_safe(description: str) -> tuple[str | None, list[str]]:
     """Wrapper around generate_custom_agent that catches provider errors."""
     try:
-        from mc.init_wizard import generate_custom_agent
+        from mc.cli.init_wizard import generate_custom_agent
         return await generate_custom_agent(description)
     except SystemExit as exc:
         return None, [str(exc)]

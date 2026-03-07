@@ -9,7 +9,7 @@ from pathlib import Path
 
 from mc.memory.policy import find_invalid_memory_files
 from mc.memory.store import HybridMemoryStore
-from mc.provider_factory import create_provider
+from mc.infrastructure.providers.factory import create_provider
 
 logger = logging.getLogger(__name__)
 MEMORY_CONSOLIDATION_MODEL = "tier:standard-medium"

@@ -40,7 +40,7 @@ def categorize_error(exc: Exception) -> ErrorCategory:
 
     # Provider / OAuth errors
     try:
-        from mc.provider_factory import ProviderError
+        from mc.infrastructure.providers.factory import ProviderError
 
         if isinstance(exc, ProviderError):
             return ErrorCategory.PROVIDER

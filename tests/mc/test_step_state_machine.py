@@ -1,10 +1,10 @@
-"""Unit tests for the step-level state machine in mc.state_machine."""
+"""Unit tests for the step-level state machine in mc.domain.workflow.state_machine."""
 
 from __future__ import annotations
 
 import pytest
 
-from mc.state_machine import (
+from mc.domain.workflow.state_machine import (
     STEP_TRANSITION_EVENT_MAP,
     STEP_VALID_TRANSITIONS,
     get_step_event_type,

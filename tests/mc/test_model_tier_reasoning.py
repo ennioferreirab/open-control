@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, call
 
 import pytest
 
-from mc.tier_resolver import TierResolver
+from mc.infrastructure.providers.tier_resolver import TierResolver
 
 # ---------------------------------------------------------------------------
 # Helpers

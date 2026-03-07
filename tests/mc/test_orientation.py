@@ -1,4 +1,4 @@
-"""Tests for mc.agent_orientation — shared orientation loader."""
+"""Tests for mc.infrastructure.orientation — shared orientation loader."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mc.agent_orientation import load_orientation
+from mc.infrastructure.orientation import load_orientation
 
 
 class TestLoadOrientation:
@@ -18,7 +18,7 @@ class TestLoadOrientation:
 
     def test_returns_none_when_file_missing(self, tmp_path: Path) -> None:
         """No orientation file -> None."""
-        with patch("mc.agent_orientation.Path") as mock_path_cls:
+        with patch("mc.infrastructure.orientation.Path") as mock_path_cls:
             mock_home = tmp_path
             mock_path_cls.home.return_value = mock_home
             result = load_orientation("test-agent")
@@ -30,7 +30,7 @@ class TestLoadOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("   \n  ", encoding="utf-8")
 
-        with patch("mc.agent_orientation.Path") as mock_path_cls:
+        with patch("mc.infrastructure.orientation.Path") as mock_path_cls:
             mock_path_cls.home.return_value = tmp_path
             result = load_orientation("test-agent")
         assert result is None
@@ -41,7 +41,7 @@ class TestLoadOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("You are a helpful agent.", encoding="utf-8")
 
-        with patch("mc.agent_orientation.Path") as mock_path_cls:
+        with patch("mc.infrastructure.orientation.Path") as mock_path_cls:
             mock_path_cls.home.return_value = tmp_path
             result = load_orientation("test-agent")
         assert result == "You are a helpful agent."
@@ -54,7 +54,7 @@ class TestLoadOrientation:
             "Agents:\n{agent_roster}", encoding="utf-8"
         )
 
-        with patch("mc.agent_orientation.Path") as mock_path_cls, \
+        with patch("mc.infrastructure.orientation.Path") as mock_path_cls, \
              patch(
                  "mc.infrastructure.orientation_helpers.build_agent_roster",
                  return_value="- **bot** — helper",
@@ -74,7 +74,7 @@ class TestLoadOrientation:
             "Timezone: {host_timezone}", encoding="utf-8"
         )
 
-        with patch("mc.agent_orientation.Path") as mock_path_cls, \
+        with patch("mc.infrastructure.orientation.Path") as mock_path_cls, \
              patch(
                  "mc.infrastructure.orientation_helpers.get_iana_timezone",
                  return_value="America/Vancouver",
@@ -94,7 +94,7 @@ class TestLoadOrientation:
             "TZ: {host_timezone}", encoding="utf-8"
         )
 
-        with patch("mc.agent_orientation.Path") as mock_path_cls, \
+        with patch("mc.infrastructure.orientation.Path") as mock_path_cls, \
              patch(
                  "mc.infrastructure.orientation_helpers.get_iana_timezone",
                  return_value=None,

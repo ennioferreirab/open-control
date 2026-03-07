@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from mc.yaml_validator import validate_agent_file
+from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
@@ -79,7 +79,7 @@ def sync_skills_impl(
 
 def list_available_models() -> list[str]:
     """Delegate to provider_factory.list_available_models."""
-    from mc.provider_factory import list_available_models as _impl
+    from mc.infrastructure.providers.factory import list_available_models as _impl
     return _impl()
 
 

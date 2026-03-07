@@ -172,7 +172,7 @@ class AgentRepository:
         """
         import yaml
 
-        from mc.agent_assist import ensure_soul_md
+        from mc.cli.agent_assist import ensure_soul_md
 
         name = agent_data["name"]
         agent_dir = agents_dir / name

@@ -2,7 +2,7 @@
 
 Ensures that all functions previously in mc/process_monitor.py are accessible
 from their canonical modules (mc.infrastructure.config, mc.infrastructure.agent_bootstrap,
-mc.crash_handler, mc.services.plan_negotiation) and via mc.gateway re-exports.
+mc.contexts.execution.crash_recovery, mc.services.plan_negotiation) and via mc.gateway re-exports.
 """
 
 from __future__ import annotations
@@ -99,14 +99,14 @@ class TestCleanupLogicAccessible:
 
 
 class TestCrashHandlerAccessible:
-    """AgentGateway crash handler extracted to mc.crash_handler."""
+    """AgentGateway crash handler extracted to mc.contexts.execution.crash_recovery."""
 
     def test_agent_gateway_importable(self) -> None:
-        from mc.crash_handler import AgentGateway
+        from mc.contexts.execution.crash_recovery import AgentGateway
         assert AgentGateway is not None
 
     def test_max_auto_retries_importable(self) -> None:
-        from mc.crash_handler import MAX_AUTO_RETRIES
+        from mc.contexts.execution.crash_recovery import MAX_AUTO_RETRIES
         assert MAX_AUTO_RETRIES == 1
 
 

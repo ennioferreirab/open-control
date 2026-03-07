@@ -3,7 +3,7 @@
 import pytest
 
 from mc.types import TaskStatus, ActivityEventType
-from mc.state_machine import (
+from mc.domain.workflow.state_machine import (
     VALID_TRANSITIONS,
     UNIVERSAL_TARGETS,
     is_valid_transition,

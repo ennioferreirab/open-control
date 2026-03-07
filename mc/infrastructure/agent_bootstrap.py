@@ -385,7 +385,7 @@ def _sync_model_tiers(bridge: "ConvexBridge") -> None:
     Story 11.1 — AC #4.
     """
     # Collect available models from provider config
-    from mc.provider_factory import list_available_models
+    from mc.infrastructure.providers.factory import list_available_models
 
     models_list = list_available_models()
 
@@ -495,7 +495,7 @@ def sync_agent_registry(
 
     Returns (synced_agents, errors_by_filename).
     """
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     resolved_default = default_model or _config_default_model()
 
@@ -746,7 +746,7 @@ def sync_nanobot_default_model(bridge: "ConvexBridge") -> bool:
 
     # Resolve tier references (e.g. "tier:standard-low" → "anthropic/claude-haiku-4-5")
     if convex_model.startswith("tier:"):
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         try:
             resolver = TierResolver(bridge)

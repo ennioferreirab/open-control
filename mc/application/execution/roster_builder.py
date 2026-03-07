@@ -31,7 +31,7 @@ def load_agent_config(
         configured; skills is None when no config exists.
     """
     from mc.infrastructure.config import AGENTS_DIR
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     config_file = AGENTS_DIR / agent_name / "config.yaml"
     if not config_file.exists():
@@ -54,7 +54,7 @@ def load_agent_data(agent_name: str) -> AgentData | None:
     not exist or fails validation.
     """
     from mc.infrastructure.config import AGENTS_DIR
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     config_path = AGENTS_DIR / agent_name / "config.yaml"
     if not config_path.exists():
@@ -130,7 +130,7 @@ def inject_orientation(
     Returns the prompt with orientation prepended, or None if
     the agent is a system agent (nanobot) which uses SOUL.md.
     """
-    from mc.agent_orientation import load_orientation
+    from mc.infrastructure.orientation import load_orientation
 
     orientation = load_orientation(agent_name)
     if not orientation:
@@ -176,7 +176,7 @@ def build_agent_roster() -> str:
     and lead-agent.
     """
     from mc.infrastructure.config import AGENTS_DIR
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     lines: list[str] = ["## Available Agents\n"]
     if not AGENTS_DIR.is_dir():

@@ -156,7 +156,7 @@ class TestAgentsCreate:
         config_path = agents_dir / "my-agent" / "config.yaml"
 
         # Validate using the same validator
-        from mc.yaml_validator import validate_agent_file
+        from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
         validation_result = validate_agent_file(config_path)
         assert not isinstance(validation_result, list), f"Validation failed: {validation_result}"

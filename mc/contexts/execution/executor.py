@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from mc.contexts.execution.cc_executor import CCExecutorMixin
-from mc.crash_handler import AgentGateway
+from mc.contexts.execution.crash_recovery import AgentGateway
 from mc.contexts.planning.planner import TaskPlanner
 from mc.types import (
     ActivityEventType,
@@ -77,7 +77,7 @@ def _collect_provider_error_types() -> tuple[type[Exception], ...]:
     separately in _execute_task so they get surfaced with actionable
     instructions instead of being buried in generic crash handling.
     """
-    from mc.provider_factory import ProviderError
+    from mc.infrastructure.providers.factory import ProviderError
 
     types: list[type[Exception]] = [ProviderError]
     try:
@@ -116,7 +116,7 @@ def _provider_error_action(exc: Exception) -> str:
     For ProviderError the action is explicit. For AnthropicOAuthExpired
     the message itself contains the command. Falls back to a generic hint.
     """
-    from mc.provider_factory import ProviderError
+    from mc.infrastructure.providers.factory import ProviderError
 
     if isinstance(exc, ProviderError) and exc.action:
         return exc.action
@@ -133,7 +133,7 @@ def _make_provider(model: str | None = None):
     Delegates to the shared provider_factory.create_provider() to avoid
     duplication with nanobot/cli/commands.py.
     """
-    from mc.provider_factory import create_provider
+    from mc.infrastructure.providers.factory import create_provider
 
     return create_provider(model)
 
@@ -458,7 +458,7 @@ def _build_thread_context(messages: list[dict[str, Any]], max_messages: int = 20
     For step-aware context with predecessor injection, use ThreadContextBuilder
     directly with predecessor_step_ids parameter.
     """
-    from mc.thread_context import ThreadContextBuilder
+    from mc.application.execution.thread_context import ThreadContextBuilder
 
     return ThreadContextBuilder().build(messages, max_messages=max_messages)
 
@@ -494,7 +494,7 @@ class TaskExecutor(CCExecutorMixin):
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance."""
         if self._tier_resolver is None:
-            from mc.tier_resolver import TierResolver
+            from mc.infrastructure.providers.tier_resolver import TierResolver
             self._tier_resolver = TierResolver(self._bridge)
         return self._tier_resolver
 
@@ -722,7 +722,7 @@ class TaskExecutor(CCExecutorMixin):
             meaning "only always-on skills").
         """
         from mc.infrastructure.config import AGENTS_DIR
-        from mc.yaml_validator import validate_agent_file
+        from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
         config_file = AGENTS_DIR / agent_name / "config.yaml"
         if not config_file.exists():
@@ -745,7 +745,7 @@ class TaskExecutor(CCExecutorMixin):
         the config file does not exist or fails validation.
         """
         from mc.infrastructure.config import AGENTS_DIR
-        from mc.yaml_validator import validate_agent_file
+        from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
         config_path = AGENTS_DIR / agent_name / "config.yaml"
         if not config_path.exists():
@@ -824,7 +824,7 @@ class TaskExecutor(CCExecutorMixin):
         string suitable for injection into the lead-agent context.
         """
         from mc.infrastructure.config import AGENTS_DIR
-        from mc.yaml_validator import validate_agent_file
+        from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
         lines: list[str] = ["## Available Agents\n"]
         if not AGENTS_DIR.is_dir():
@@ -850,7 +850,7 @@ class TaskExecutor(CCExecutorMixin):
         self, agent_name: str, agent_prompt: str | None
     ) -> str | None:
         """Prepend global orientation for non-lead-agent MC agents."""
-        from mc.agent_orientation import load_orientation
+        from mc.infrastructure.orientation import load_orientation
 
         orientation = load_orientation(agent_name)
         if not orientation:

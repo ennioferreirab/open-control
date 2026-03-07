@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from mc.contexts.execution.step_dispatcher import StepDispatcher
 from mc.contexts.planning.materializer import PlanMaterializer
-from mc.provider_factory import create_provider
+from mc.infrastructure.providers.factory import create_provider
 from mc.types import (
     LOW_AGENT_NAME,
     MessageType,

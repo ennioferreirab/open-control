@@ -286,7 +286,7 @@ class MCSocketServer:
             }
 
         from mc.infrastructure.config import AGENTS_DIR
-        from mc.yaml_validator import validate_agent_file
+        from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
         config_file = AGENTS_DIR / agent_name / "config.yaml"
         if not config_file.exists():
@@ -305,7 +305,7 @@ class MCSocketServer:
         if agent_model and is_tier_reference(agent_model):
             if self._bridge:
                 try:
-                    from mc.tier_resolver import TierResolver
+                    from mc.infrastructure.providers.tier_resolver import TierResolver
                     agent_model = TierResolver(self._bridge).resolve_model(agent_model)
                 except Exception as exc:
                     return {"error": f"Cannot resolve model tier: {exc}"}
@@ -313,7 +313,7 @@ class MCSocketServer:
                 return {"error": f"Cannot resolve tier model '{agent_model}' without bridge."}
 
         try:
-            from mc.provider_factory import create_provider
+            from mc.infrastructure.providers.factory import create_provider
             provider, resolved_model = create_provider(agent_model)
         except Exception as exc:
             return {"error": f"Failed to create provider for '{agent_name}': {exc}"}

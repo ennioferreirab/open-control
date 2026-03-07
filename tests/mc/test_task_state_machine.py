@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mc.state_machine import (
+from mc.domain.workflow.state_machine import (
     TRANSITION_EVENT_MAP,
     VALID_TRANSITIONS,
     get_event_type,
@@ -52,4 +52,4 @@ class TestReviewTransitions:
 
 
 # Import UNIVERSAL_TARGETS for reachability check
-from mc.state_machine import UNIVERSAL_TARGETS  # noqa: E402
+from mc.domain.workflow.state_machine import UNIVERSAL_TARGETS  # noqa: E402

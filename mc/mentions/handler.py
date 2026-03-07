@@ -167,7 +167,7 @@ async def handle_mention(
 
     # Load agent config
     from mc.infrastructure.config import AGENTS_DIR
-    from mc.yaml_validator import validate_agent_file
+    from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
     config_file = AGENTS_DIR / agent_name / "config.yaml"
     if not config_file.exists():
@@ -207,7 +207,7 @@ async def handle_mention(
     from mc.types import is_tier_reference
     if agent_model and is_tier_reference(agent_model):
         try:
-            from mc.tier_resolver import TierResolver
+            from mc.infrastructure.providers.tier_resolver import TierResolver
             resolver = TierResolver(bridge)
             agent_model = resolver.resolve_model(agent_model)
         except ValueError as exc:
@@ -219,7 +219,7 @@ async def handle_mention(
             agent_model = None
 
     # Inject global orientation for non-lead agents
-    from mc.agent_orientation import load_orientation
+    from mc.infrastructure.orientation import load_orientation
     orientation = load_orientation(agent_name)
     if orientation:
         agent_prompt = f"{orientation}\n\n---\n\n{agent_prompt}" if agent_prompt else orientation
@@ -312,7 +312,7 @@ async def handle_mention(
         from nanobot.agent.loop import AgentLoop
         from nanobot.bus.queue import MessageBus
 
-        from mc.provider_factory import create_provider
+        from mc.infrastructure.providers.factory import create_provider
 
         provider, resolved_model = create_provider(agent_model)
 

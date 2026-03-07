@@ -3,13 +3,6 @@
 These tests enforce module boundary rules by scanning source files for
 forbidden import patterns. They prevent accidental coupling regressions
 as the codebase evolves.
-
-Rules enforced:
-1. Foundation modules (bridge, types, state_machine, thread_context) must
-   NOT import from mc.gateway at top level.
-2. No top-level circular imports between gateway <-> executor/step_dispatcher.
-3. mc.bridge top-level imports must stay minimal (only mc.types).
-4. Canonical type definitions (TaskStatus, NANOBOT_AGENT_NAME) live in mc.types.
 """
 
 from __future__ import annotations
@@ -77,9 +70,12 @@ def _collect_py_files(directory: Path, exclude: set[str] | None = None) -> list[
 
 # ── Rule 1: Foundation modules must not import mc.gateway (any scope) ────
 
-FOUNDATION_MODULES = [
-    "bridge", "types", "state_machine", "thread_context",
-]
+FOUNDATION_FILES = {
+    "mc/bridge/__init__.py": MC_ROOT / "bridge" / "__init__.py",
+    "mc/types.py": MC_ROOT / "types.py",
+    "mc/domain/workflow/state_machine.py": MC_ROOT / "domain" / "workflow" / "state_machine.py",
+    "mc/application/execution/thread_context.py": MC_ROOT / "application" / "execution" / "thread_context.py",
+}
 
 # Directories that form the service/domain/infrastructure/context layers —
 # these must NEVER import from mc.gateway
@@ -103,24 +99,24 @@ EXECUTION_RUNTIME_MODULES.extend(
 )
 
 
-@pytest.mark.parametrize("module_name", FOUNDATION_MODULES)
-def test_foundation_modules_do_not_import_gateway(module_name: str) -> None:
+@pytest.mark.parametrize("relative_path", FOUNDATION_FILES)
+def test_foundation_modules_do_not_import_gateway(relative_path: str) -> None:
     """Foundation modules sit below mc.gateway and must not import from it.
 
     These modules form the base layer of the mc package. Any import of
     mc.gateway (even at function scope) would create an undesirable
     upward dependency.
     """
-    filepath = MC_ROOT / f"{module_name}.py"
+    filepath = FOUNDATION_FILES[relative_path]
     if not filepath.exists():
-        pytest.skip(f"{module_name}.py does not exist")
+        pytest.skip(f"{relative_path} does not exist")
     imports = _get_all_imports(filepath)
     gateway_imports = [
         m for m in imports
         if m == "mc.gateway" or m.startswith("mc.gateway.")
     ]
     assert gateway_imports == [], (
-        f"mc/{module_name}.py imports from mc.gateway — this creates an "
+        f"{relative_path} imports from mc.gateway — this creates an "
         f"upward dependency from a foundation module. Found: {gateway_imports}"
     )
 
@@ -208,21 +204,23 @@ def test_bridge_toplevel_only_imports_types() -> None:
     """mc.bridge top-level imports from mc/ must be limited to mc.types.
 
     The bridge is the Convex integration boundary. Function-scope imports
-    (like mc.agent_assist for ensure_soul_md) are acceptable for optional
+    (like mc.cli.agent_assist for ensure_soul_md) are acceptable for optional
     features, but top-level coupling must stay minimal.
     """
-    filepath = MC_ROOT / "bridge.py"
+    filepath = MC_ROOT / "bridge" / "__init__.py"
     if not filepath.exists():
-        pytest.skip("bridge.py does not exist")
+        pytest.skip("bridge/__init__.py does not exist")
     imports = _get_toplevel_imports(filepath)
     mc_imports = [
         m for m in imports
         if (m == "mc" or m.startswith("mc."))
+        and not m.startswith("mc.bridge.")
         and m not in ("mc.types",)
         and not m.startswith("mc.types.")
     ]
     assert mc_imports == [], (
-        f"mc/bridge.py has top-level imports from mc modules other than mc.types — "
+        "mc/bridge/__init__.py has top-level imports from mc modules other "
+        "than mc.types — "
         f"move these to function scope. Found: {mc_imports}"
     )
 
@@ -254,11 +252,11 @@ def test_runtime_modules_do_not_import_executor(filepath: Path) -> None:
     )
 
 
-def test_agent_orientation_does_not_import_executor() -> None:
+def test_orientation_module_does_not_import_executor() -> None:
     """Orientation loading should depend on infrastructure helpers, not executor."""
-    filepath = MC_ROOT / "agent_orientation.py"
+    filepath = MC_ROOT / "infrastructure" / "orientation.py"
     if not filepath.exists():
-        pytest.skip("agent_orientation.py does not exist")
+        pytest.skip("infrastructure/orientation.py does not exist")
 
     imports = _get_all_imports(filepath)
     executor_imports = [
@@ -266,9 +264,75 @@ def test_agent_orientation_does_not_import_executor() -> None:
         if m == "mc.executor" or m.startswith("mc.executor.")
     ]
     assert executor_imports == [], (
-        "mc/agent_orientation.py imports from mc.executor — "
+        "mc/infrastructure/orientation.py imports from mc.executor — "
         "use mc.infrastructure.orientation_helpers instead. "
         f"Found: {executor_imports}"
+    )
+
+
+# ── Rule 3c: Canonical layers must not import legacy root modules ─────────
+
+CANONICAL_DIRECTORIES = [
+    "application",
+    "cli",
+    "contexts",
+    "domain",
+    "infrastructure",
+    "memory",
+    "mentions",
+    "runtime",
+    "services",
+    "workers",
+]
+
+ROOT_ALLOWLIST = {
+    "__init__",
+    "cc_executor",
+    "cc_step_runner",
+    "chat_handler",
+    "executor",
+    "gateway",
+    "orchestrator",
+    "plan_materializer",
+    "plan_negotiator",
+    "planner",
+    "review_handler",
+    "step_dispatcher",
+    "types",
+}
+
+
+def test_canonical_layers_do_not_import_root_modules() -> None:
+    """Canonical packages must not depend on root compatibility modules.
+
+    The only root-level module canonical code may still import is mc.types.
+    Everything else should come from runtime/contexts/infrastructure/domain.
+    """
+    forbidden_roots = {
+        f"mc.{name}"
+        for name in ROOT_ALLOWLIST
+        if name not in {"__init__", "types"}
+    }
+    violations: list[str] = []
+
+    for directory in CANONICAL_DIRECTORIES:
+        dir_path = MC_ROOT / directory
+        if not dir_path.exists():
+            continue
+        for py_file in _collect_py_files(dir_path):
+            imports = _get_all_imports(py_file)
+            bad = sorted(
+                m for m in imports
+                if m in forbidden_roots
+                or any(m.startswith(f"{root}.") for root in forbidden_roots)
+            )
+            if bad:
+                relative = py_file.relative_to(MC_ROOT.parent)
+                violations.append(f"{relative}: {bad}")
+
+    assert violations == [], (
+        "Canonical packages import root compatibility modules:\n"
+        + "\n".join(f"  - {v}" for v in violations)
     )
 
 
@@ -307,7 +371,23 @@ def test_task_status_canonical_in_types() -> None:
         )
 
 
-# ── Rule 5: Orchestrator must not top-level import gateway ───────────────
+# ── Rule 5: Root must stay minimal and facades must remain thin ──────────
+
+
+def test_root_python_modules_are_allowlisted() -> None:
+    root_modules = {
+        p.stem
+        for p in MC_ROOT.glob("*.py")
+        if p.is_file()
+    }
+    assert root_modules == ROOT_ALLOWLIST, (
+        "Unexpected concrete modules in mc/ root.\n"
+        f"Expected: {sorted(ROOT_ALLOWLIST)}\n"
+        f"Actual: {sorted(root_modules)}"
+    )
+
+
+# ── Rule 6: Orchestrator must not top-level import gateway ───────────────
 
 
 def test_orchestrator_no_toplevel_gateway_import() -> None:
@@ -332,7 +412,7 @@ def test_orchestrator_no_toplevel_gateway_import() -> None:
     )
 
 
-# ── Rule 6: No direct executor private function calls from production code ──
+# ── Rule 7: No direct executor private function calls from production code ──
 
 # Modules allowed to reference executor private functions:
 #   - mc/executor.py itself (defines them)

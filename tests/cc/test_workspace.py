@@ -520,12 +520,12 @@ class TestBoardScopedWorkspace:
         (board_workspace / "memory").mkdir()
         (board_workspace / "sessions").mkdir()
 
-        # Patch at the source module (mc.board_utils) rather than claude_code.workspace,
-        # because workspace.py uses a deferred `from mc.board_utils import …` inside
-        # prepare(), so Python re-resolves the name from mc.board_utils on every call.
+        # Patch at the source module (mc.infrastructure.boards) rather than claude_code.workspace,
+        # because workspace.py uses a deferred `from mc.infrastructure.boards import …` inside
+        # prepare(), so Python re-resolves the name from mc.infrastructure.boards on every call.
         # If workspace.py ever hoists the import to module level, the target must change
         # to "claude_code.workspace.resolve_board_workspace".
-        with patch("mc.board_utils.resolve_board_workspace", return_value=board_workspace) as mock_resolve:
+        with patch("mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace) as mock_resolve:
             ctx = manager.prepare("test-agent", agent, "task123", board_name="myboard", memory_mode="clean")
 
         mock_resolve.assert_called_once_with("myboard", "test-agent", mode="clean")
@@ -551,7 +551,7 @@ class TestBoardScopedWorkspace:
         (board_workspace / "sessions").mkdir()
 
         # See patch-target note in test_board_scoped_workspace_uses_board_path.
-        with patch("mc.board_utils.resolve_board_workspace", return_value=board_workspace) as mock_resolve:
+        with patch("mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace) as mock_resolve:
             manager.prepare("test-agent", agent, "task123", board_name="projboard", memory_mode="with_history")
 
         mock_resolve.assert_called_once_with("projboard", "test-agent", mode="with_history")
@@ -569,7 +569,7 @@ class TestBoardScopedWorkspace:
         (board_workspace / "sessions").mkdir()
 
         # See patch-target note in test_board_scoped_workspace_uses_board_path.
-        with patch("mc.board_utils.resolve_board_workspace", return_value=board_workspace):
+        with patch("mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace):
             ctx = manager.prepare("test-agent", agent, "task999", board_name="b1")
 
         claude_md = board_workspace / "CLAUDE.md"

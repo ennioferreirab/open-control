@@ -9,7 +9,8 @@ Mission Control now uses a hybrid feature-first backend layout:
   review, and agent synchronization.
 - `mc/domain/`, `mc/bridge/`, and `mc/infrastructure/` remain the shared
   stable base for rules, data access, and environment concerns.
-- legacy top-level modules in `mc/` remain as compatibility facades only.
+- the `mc/` root is intentionally small and keeps only public facades plus
+  `mc/types.py`.
 
 The intended dependency shape is:
 
@@ -60,6 +61,7 @@ Primary modules:
 - `mc.contexts.planning.planner`
 - `mc.contexts.planning.materializer`
 - `mc.contexts.planning.negotiation`
+- `mc.contexts.planning.parser`
 - `mc.contexts.planning.title_generation`
 
 ### `mc/contexts/execution`
@@ -75,6 +77,8 @@ Primary modules:
 - `mc.contexts.execution.executor`
 - `mc.contexts.execution.cc_executor`
 - `mc.contexts.execution.cc_step_runner`
+- `mc.contexts.execution.crash_recovery`
+- `mc.contexts.execution.post_processing`
 - `mc.contexts.execution.step_dispatcher`
 
 ### `mc/contexts/conversation`
@@ -113,7 +117,12 @@ Pure rules and shared workflow behavior live here.
 
 - workflow contract adapters
 - transition validation
+- generic pure helpers
 - invariant helpers
+
+Primary modules:
+- `mc.domain.workflow.state_machine`
+- `mc.domain.utils`
 
 #### `mc/bridge`
 
@@ -131,6 +140,15 @@ Environment and framework details.
 - filesystem layout
 - bootstrap helpers
 - runtime adapters
+- agent validation
+- provider creation and model tier resolution
+
+Primary modules:
+- `mc.infrastructure.boards`
+- `mc.infrastructure.orientation`
+- `mc.infrastructure.agents.yaml_validator`
+- `mc.infrastructure.providers.factory`
+- `mc.infrastructure.providers.tier_resolver`
 
 #### `mc/application/execution`
 
@@ -141,6 +159,10 @@ Reusable execution nucleus shared by the execution context.
 - execution engine
 - runner strategies
 - post-processing helpers
+- thread context assembly
+
+Primary modules:
+- `mc.application.execution.thread_context`
 
 Rule:
 - new execution behavior should land in the execution context or this nucleus,
@@ -165,9 +187,11 @@ transition:
 - `mc.services.conversation`
 - `mc.services.conversation_intent`
 - `mc.services.agent_sync`
+- `mc.types`
 
 Rule:
 - these files are facades only
+- the root should not gain new concrete modules
 - new behavior should not be added there
 
 ## Workflow Contract
@@ -201,6 +225,8 @@ Current guardrails enforce:
 
 - protected backend modules do not import `mc.gateway`
 - runtime-facing modules do not import `mc.executor` directly
+- canonical packages do not import root compatibility modules
+- the `mc/` root is restricted to an allowlist of facade files
 - top-level compatibility modules point to `runtime` or `contexts`
 - dashboard feature components avoid direct Convex hooks where feature hooks exist
 - dashboard hooks do not depend on UI components
@@ -212,4 +238,5 @@ Current guardrails enforce:
 3. Convex access stays behind `bridge`.
 4. Environment and filesystem concerns stay in `infrastructure`.
 5. `mc.application.execution` is a reusable kernel, not a competing architecture.
-6. Top-level compatibility shims may exist temporarily, but they are not architectural authority.
+6. The `mc/` root is not an ownership layer.
+7. Top-level compatibility shims may exist temporarily, but they are not architectural authority.

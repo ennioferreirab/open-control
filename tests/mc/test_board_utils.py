@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 class TestResolveBoardWorkspaceClean:
     def test_creates_dirs(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws = resolve_board_workspace("my-board", "worker", mode="clean")
@@ -29,7 +29,7 @@ class TestResolveBoardWorkspaceClean:
         assert (ws / "sessions").is_dir()
 
     def test_returns_correct_path(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws = resolve_board_workspace("project-alpha", "dev-agent", mode="clean")
@@ -38,7 +38,7 @@ class TestResolveBoardWorkspaceClean:
         assert ws == expected
 
     def test_bootstraps_from_global(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         # Create global MEMORY.md
         global_mem_dir = tmp_path / ".nanobot" / "agents" / "dev-agent" / "memory"
@@ -54,7 +54,7 @@ class TestResolveBoardWorkspaceClean:
         assert board_mem.read_text() == "# Global memories"
 
     def test_creates_empty_memory_when_no_global(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws = resolve_board_workspace("my-board", "worker", mode="clean")
@@ -65,7 +65,7 @@ class TestResolveBoardWorkspaceClean:
         assert memory_md.read_text() == ""
 
     def test_creates_empty_history(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws = resolve_board_workspace("my-board", "worker", mode="clean")
@@ -76,7 +76,7 @@ class TestResolveBoardWorkspaceClean:
         assert history_md.read_text() == ""
 
     def test_does_not_overwrite_existing_board_memory(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         # Pre-create board memory
         board_mem_dir = (
@@ -97,7 +97,7 @@ class TestResolveBoardWorkspaceClean:
 
     def test_replaces_symlinks_with_regular_files(self, tmp_path: Path) -> None:
         """Switching from with_history to clean should replace symlinks."""
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         # Create global files
         global_mem_dir = tmp_path / ".nanobot" / "agents" / "dev-agent" / "memory"
@@ -134,7 +134,7 @@ class TestResolveBoardWorkspaceClean:
 
 class TestResolveBoardWorkspaceWithHistory:
     def test_creates_symlinks(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         # Create global files
         global_mem_dir = tmp_path / ".nanobot" / "agents" / "dev-agent" / "memory"
@@ -153,7 +153,7 @@ class TestResolveBoardWorkspaceWithHistory:
         assert history_md.resolve() == (global_mem_dir / "HISTORY.md").resolve()
 
     def test_creates_global_if_missing(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws = resolve_board_workspace("my-board", "dev-agent", mode="with_history")
@@ -172,7 +172,7 @@ class TestResolveBoardWorkspaceWithHistory:
 
     def test_replaces_regular_files_with_symlinks(self, tmp_path: Path) -> None:
         """Switching from clean to with_history should replace regular files with symlinks."""
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         # First set up clean mode (creates regular files)
         with patch("pathlib.Path.home", return_value=tmp_path):
@@ -194,7 +194,7 @@ class TestResolveBoardWorkspaceWithHistory:
 
     def test_symlinks_propagate_writes(self, tmp_path: Path) -> None:
         """Writes to symlinked board files should propagate to global originals."""
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws = resolve_board_workspace("my-board", "dev-agent", mode="with_history")
@@ -206,7 +206,7 @@ class TestResolveBoardWorkspaceWithHistory:
         assert global_memory.read_text() == "# Updated via board"
 
     def test_idempotent_second_call(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws1 = resolve_board_workspace("my-board", "dev-agent", mode="with_history")
@@ -216,7 +216,7 @@ class TestResolveBoardWorkspaceWithHistory:
         assert (ws1 / "memory" / "MEMORY.md").is_symlink()
 
     def test_creates_dirs(self, tmp_path: Path) -> None:
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws = resolve_board_workspace("my-board", "worker", mode="with_history")
@@ -231,24 +231,24 @@ class TestResolveBoardWorkspaceWithHistory:
 
 class TestGetAgentMemoryMode:
     def test_defaults_to_clean_when_no_board_data(self) -> None:
-        from mc.board_utils import get_agent_memory_mode
+        from mc.infrastructure.boards import get_agent_memory_mode
 
         assert get_agent_memory_mode(None, "dev-agent") == "clean"
 
     def test_defaults_to_clean_when_no_modes(self) -> None:
-        from mc.board_utils import get_agent_memory_mode
+        from mc.infrastructure.boards import get_agent_memory_mode
 
         board_data = {"name": "my-board"}
         assert get_agent_memory_mode(board_data, "dev-agent") == "clean"
 
     def test_defaults_to_clean_when_empty_modes(self) -> None:
-        from mc.board_utils import get_agent_memory_mode
+        from mc.infrastructure.boards import get_agent_memory_mode
 
         board_data = {"name": "my-board", "agent_memory_modes": []}
         assert get_agent_memory_mode(board_data, "dev-agent") == "clean"
 
     def test_defaults_to_clean_when_agent_not_listed(self) -> None:
-        from mc.board_utils import get_agent_memory_mode
+        from mc.infrastructure.boards import get_agent_memory_mode
 
         board_data = {
             "name": "my-board",
@@ -259,7 +259,7 @@ class TestGetAgentMemoryMode:
         assert get_agent_memory_mode(board_data, "dev-agent") == "clean"
 
     def test_returns_configured_mode(self) -> None:
-        from mc.board_utils import get_agent_memory_mode
+        from mc.infrastructure.boards import get_agent_memory_mode
 
         board_data = {
             "name": "my-board",
@@ -272,7 +272,7 @@ class TestGetAgentMemoryMode:
         assert get_agent_memory_mode(board_data, "research-agent") == "clean"
 
     def test_defaults_to_clean_when_mode_missing_in_entry(self) -> None:
-        from mc.board_utils import get_agent_memory_mode
+        from mc.infrastructure.boards import get_agent_memory_mode
 
         board_data = {
             "name": "my-board",

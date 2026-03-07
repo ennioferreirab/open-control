@@ -85,7 +85,7 @@ class TestProcessChatMessage:
 
         with (
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     prompt="Test prompt", model=None, skills=[],
                     display_name=None,
@@ -172,7 +172,7 @@ class TestProcessChatMessageErrors:
 
         with (
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     prompt="Test prompt", model=None, skills=[],
                     display_name=None,
@@ -547,7 +547,7 @@ class TestCCModelRouting:
 
         with (
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
@@ -599,7 +599,7 @@ class TestCCModelRouting:
 
         with (
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
@@ -640,7 +640,7 @@ class TestCCModelRouting:
 
         with (
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=self._make_validate_result("gpt-4"),
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
@@ -739,7 +739,7 @@ class TestChatHandlerEngineIntegration:
 
         with (
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     prompt="Be helpful.",
                     model="cc/claude-sonnet-4-6",
@@ -802,7 +802,7 @@ class TestChatHandlerEngineIntegration:
 
         with (
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     prompt="Be helpful.",
                     model="cc/claude-sonnet-4-6",
@@ -852,7 +852,7 @@ class TestChatHandlerEngineIntegration:
 
         with (
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     prompt="Be helpful.",
                     model="gpt-4",

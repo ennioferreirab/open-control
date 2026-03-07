@@ -91,10 +91,10 @@ def _mock_agent_env():
         ),
         patch("mc.infrastructure.config.AGENTS_DIR", mock_agents_dir),
         patch(
-            "mc.yaml_validator.validate_agent_file",
+            "mc.infrastructure.agents.yaml_validator.validate_agent_file",
             return_value=mock_config,
         ),
-        patch("mc.agent_orientation.load_orientation", return_value=None),
+        patch("mc.infrastructure.orientation.load_orientation", return_value=None),
         patch("mc.types.is_tier_reference", return_value=False),
     ):
         yield mock_config
@@ -139,7 +139,7 @@ def run_mention(mock_bridge, _mock_agent_env):
 
         with (
             patch(
-                "mc.provider_factory.create_provider",
+                "mc.infrastructure.providers.factory.create_provider",
                 return_value=("prov", "model"),
             ),
             patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),

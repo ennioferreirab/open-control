@@ -10,7 +10,7 @@ from pathlib import Path
 
 from filelock import FileLock
 
-from mc.provider_factory import create_provider
+from mc.infrastructure.providers.factory import create_provider
 
 logger = logging.getLogger(__name__)
 

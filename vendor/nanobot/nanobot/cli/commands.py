@@ -203,7 +203,7 @@ def _make_provider(config: Config):
     Tries MC provider factory first; falls back to upstream logic.
     """
     try:
-        from mc.provider_factory import ProviderError, create_provider
+        from mc.infrastructure.providers.factory import ProviderError, create_provider
 
         model = config.agents.defaults.model
 

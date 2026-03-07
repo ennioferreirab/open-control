@@ -100,7 +100,7 @@ class TestCCStepRunnerEngineIntegration:
                 agents_dir,
             ),
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     name="test-agent",
                     display_name="Test Agent",
@@ -184,7 +184,7 @@ class TestCCStepRunnerEngineIntegration:
                 agents_dir,
             ),
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     name="test-agent",
                     display_name="Test Agent",
@@ -260,7 +260,7 @@ class TestCCStepRunnerEngineIntegration:
                 agents_dir,
             ),
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     name="test-agent",
                     display_name="Test Agent",
@@ -328,7 +328,7 @@ class TestCCStepRunnerEngineIntegration:
                 agents_dir,
             ),
             patch(
-                "mc.yaml_validator.validate_agent_file",
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
                     name="test-agent",
                     display_name="Test Agent",

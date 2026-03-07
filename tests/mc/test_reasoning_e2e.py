@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.tier_resolver import TierResolver
+from mc.infrastructure.providers.tier_resolver import TierResolver
 from nanobot.providers.litellm_provider import LiteLLMProvider
 
 # ---------------------------------------------------------------------------

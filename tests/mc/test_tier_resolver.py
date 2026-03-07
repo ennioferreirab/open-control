@@ -101,21 +101,21 @@ class TestTierResolverPassThrough:
     """Non-tier model strings pass through unchanged."""
 
     def test_direct_model_string(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
         assert resolver.resolve_model("anthropic/claude-opus-4-6") == "anthropic/claude-opus-4-6"
 
     def test_none_returns_none(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
         assert resolver.resolve_model(None) is None
 
     def test_empty_string_returns_none(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
@@ -126,21 +126,21 @@ class TestTierResolverResolution:
     """Tier references resolve to actual model strings."""
 
     def test_standard_high_resolves(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
         assert resolver.resolve_model("tier:standard-high") == "anthropic/claude-opus-4-6"
 
     def test_standard_medium_resolves(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
         assert resolver.resolve_model("tier:standard-medium") == "anthropic/claude-sonnet-4-6"
 
     def test_standard_low_resolves(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
@@ -151,7 +151,7 @@ class TestTierResolverNullTier:
     """Null-mapped tiers raise ValueError."""
 
     def test_null_reasoning_tier_raises(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
@@ -159,7 +159,7 @@ class TestTierResolverNullTier:
             resolver.resolve_model("tier:reasoning-low")
 
     def test_null_reasoning_high_raises(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
@@ -171,7 +171,7 @@ class TestTierResolverUnknownTier:
     """Unknown tier names raise ValueError."""
 
     def test_unknown_tier_raises(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
@@ -184,7 +184,7 @@ class TestTierResolverMissingSettings:
     """Missing model_tiers setting raises ValueError."""
 
     def test_no_settings_raises(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(None)  # settings:get returns None
         resolver = TierResolver(bridge)
@@ -196,7 +196,7 @@ class TestTierResolverCache:
     """60-second TTL cache avoids repeated Convex queries."""
 
     def test_second_call_uses_cache(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
@@ -210,7 +210,7 @@ class TestTierResolverCache:
         assert bridge.query.call_count == 2
 
     def test_cache_expires_after_ttl(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)
@@ -227,7 +227,7 @@ class TestTierResolverCache:
         assert bridge.query.call_count == 4
 
     def test_invalidate_cache_forces_refresh(self) -> None:
-        from mc.tier_resolver import TierResolver
+        from mc.infrastructure.providers.tier_resolver import TierResolver
 
         bridge = _make_bridge(DEFAULT_TIERS)
         resolver = TierResolver(bridge)

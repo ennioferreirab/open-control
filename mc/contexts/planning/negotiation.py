@@ -181,7 +181,7 @@ async def handle_plan_negotiation(
     )
 
     try:
-        from mc.provider_factory import create_provider
+        from mc.infrastructure.providers.factory import create_provider
 
         current_plan_json = json.dumps(current_plan, indent=2)
         user_prompt = NEGOTIATION_USER_PROMPT.format(

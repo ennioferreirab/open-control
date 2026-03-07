@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mc.agent_assist import (
+from mc.cli.agent_assist import (
     create_agent_workspace,
     extract_yaml_from_response,
     generate_agent_yaml,

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def _collect_provider_error_types() -> tuple[type[Exception], ...]:
     """Collect provider-specific exception types for targeted catching."""
-    from mc.provider_factory import ProviderError
+    from mc.infrastructure.providers.factory import ProviderError
 
     types: list[type[Exception]] = [ProviderError]
     try:
@@ -167,7 +167,7 @@ class ClaudeCodeRunnerStrategy:
         from claude_code.ipc_server import MCSocketServer
         from claude_code.provider import ClaudeCodeProvider
         from claude_code.workspace import CCWorkspaceManager
-        from mc.agent_orientation import load_orientation
+        from mc.infrastructure.orientation import load_orientation
 
         adapter = _CCStrategyAdapter(
             bridge=self._bridge,

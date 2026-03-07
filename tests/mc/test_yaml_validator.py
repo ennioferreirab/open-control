@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from mc.types import AgentData
-from mc.yaml_validator import (
+from mc.infrastructure.agents.yaml_validator import (
     validate_agent_file,
     validate_agents_dir,
 )

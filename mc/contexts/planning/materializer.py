@@ -11,7 +11,7 @@ from mc.types import (
     ExecutionPlan,
     TaskStatus,
 )
-from mc.utils import as_positive_int
+from mc.domain.utils import as_positive_int
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge

@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mc.plan_negotiator import start_plan_negotiation_loop
+from mc.contexts.planning.negotiation import start_plan_negotiation_loop
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge

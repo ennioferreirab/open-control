@@ -344,11 +344,11 @@ class TestProcessPlanningTask:
             ),
             patch("mc.workers.planning.TaskPlanner") as planner_cls,
             patch(
-                "mc.tier_resolver.TierResolver.resolve_model",
+                "mc.infrastructure.providers.tier_resolver.TierResolver.resolve_model",
                 return_value="cc/claude-sonnet-4-6",
             ),
             patch(
-                "mc.tier_resolver.TierResolver.resolve_reasoning_level",
+                "mc.infrastructure.providers.tier_resolver.TierResolver.resolve_reasoning_level",
                 return_value="low",
             ),
         ):

@@ -123,7 +123,7 @@ class CCWorkspaceManager:
             raise ValueError(f"Invalid agent name: {agent_name!r}")
 
         if board_name:
-            from mc.board_utils import resolve_board_workspace
+            from mc.infrastructure.boards import resolve_board_workspace
 
             workspace = resolve_board_workspace(board_name, agent_name, mode=memory_mode)
             # resolve_board_workspace already creates memory/ and sessions/.

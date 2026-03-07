@@ -129,7 +129,7 @@ class TestEnrichCCDescription:
         with patch("claude_code.workspace.CCWorkspaceManager") as MockWS, patch(
             "claude_code.ipc_server.MCSocketServer"
         ) as MockIPC, patch("claude_code.provider.ClaudeCodeProvider") as MockProv, patch(
-            "mc.agent_orientation.load_orientation", return_value=None
+            "mc.infrastructure.orientation.load_orientation", return_value=None
         ):
             MockWS.return_value.prepare.return_value = mock_ws_ctx
             MockIPC.return_value.start = AsyncMock()
@@ -168,7 +168,7 @@ class TestEnrichCCDescription:
         with patch("claude_code.workspace.CCWorkspaceManager") as MockWS, patch(
             "claude_code.ipc_server.MCSocketServer"
         ) as MockIPC, patch("claude_code.provider.ClaudeCodeProvider") as MockProv, patch(
-            "mc.agent_orientation.load_orientation", return_value=None
+            "mc.infrastructure.orientation.load_orientation", return_value=None
         ):
             MockWS.return_value.prepare.return_value = mock_ws_ctx
             MockIPC.return_value.start = AsyncMock()
@@ -202,7 +202,7 @@ class TestEnrichCCDescription:
         # Use real workspace manager but mock IPC/provider
         with patch("claude_code.ipc_server.MCSocketServer") as MockIPC, \
              patch("claude_code.provider.ClaudeCodeProvider") as MockProv, \
-             patch("mc.agent_orientation.load_orientation", return_value=None), \
+             patch("mc.infrastructure.orientation.load_orientation", return_value=None), \
              patch("claude_code.workspace.CCWorkspaceManager", return_value=ws_mgr), \
              patch("mc.executor._snapshot_output_dir", return_value={}), \
              patch("mc.executor._collect_output_artifacts", return_value=[]):

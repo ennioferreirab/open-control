@@ -148,7 +148,7 @@ class TestHandlePlanNegotiation:
         })
 
         with patch(
-            "mc.provider_factory.create_provider"
+            "mc.infrastructure.providers.factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
@@ -183,7 +183,7 @@ class TestHandlePlanNegotiation:
         })
 
         with patch(
-            "mc.provider_factory.create_provider"
+            "mc.infrastructure.providers.factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
@@ -224,7 +224,7 @@ class TestHandlePlanNegotiation:
         })
 
         with patch(
-            "mc.provider_factory.create_provider"
+            "mc.infrastructure.providers.factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
@@ -261,7 +261,7 @@ class TestHandlePlanNegotiation:
             "mc.plan_negotiator.asyncio.wait_for",
             new=AsyncMock(side_effect=_timeout_wait_for),
         ), patch(
-            "mc.provider_factory.create_provider"
+            "mc.infrastructure.providers.factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_create_provider.return_value = (mock_provider, "test-model")
@@ -294,7 +294,7 @@ class TestHandlePlanNegotiation:
         })
 
         with patch(
-            "mc.provider_factory.create_provider"
+            "mc.infrastructure.providers.factory.create_provider"
         ) as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
@@ -365,7 +365,7 @@ class TestHandlePlanNegotiationExecutionContext:
         mock_provider.chat = _fake_chat
 
         with patch(
-            "mc.provider_factory.create_provider",
+            "mc.infrastructure.providers.factory.create_provider",
             return_value=(mock_provider, "test-model"),
         ):
             self._run(
@@ -419,7 +419,7 @@ class TestHandlePlanNegotiationExecutionContext:
         mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
 
         with patch(
-            "mc.provider_factory.create_provider",
+            "mc.infrastructure.providers.factory.create_provider",
             return_value=(mock_provider, "test-model"),
         ):
             self._run(
@@ -467,7 +467,7 @@ class TestHandlePlanNegotiationExecutionContext:
         mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
 
         with patch(
-            "mc.provider_factory.create_provider",
+            "mc.infrastructure.providers.factory.create_provider",
             return_value=(mock_provider, "test-model"),
         ):
             self._run(

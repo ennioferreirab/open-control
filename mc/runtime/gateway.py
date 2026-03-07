@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 # Re-export AgentGateway from crash_handler for backward compatibility
-from mc.crash_handler import MAX_AUTO_RETRIES, AgentGateway  # noqa: F401
+from mc.contexts.execution.crash_recovery import MAX_AUTO_RETRIES, AgentGateway  # noqa: F401
 from mc.infrastructure.agent_bootstrap import (  # noqa: F401
     _NANOBOT_AGENT_CONFIG,
     NANOBOT_AGENT_NAME,
@@ -56,7 +56,7 @@ from mc.infrastructure.config import (  # noqa: F401
     filter_agent_fields,
 )
 from mc.runtime.orchestrator import TaskOrchestrator
-from mc.timeout_checker import TimeoutChecker
+from mc.runtime.timeout_checker import TimeoutChecker
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from mc.timeout_checker import (
+from mc.runtime.timeout_checker import (
     DEFAULT_INTER_AGENT_TIMEOUT_MINUTES,
     DEFAULT_TASK_TIMEOUT_MINUTES,
     TimeoutChecker,
@@ -409,7 +409,7 @@ class TestStartLoop:
 
         checker.check_timeouts = mock_check  # type: ignore[assignment]
 
-        with patch("mc.timeout_checker.asyncio.sleep", new_callable=AsyncMock):
+        with patch("mc.runtime.timeout_checker.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(asyncio.CancelledError):
                 await checker.start()
 
@@ -433,7 +433,7 @@ class TestStartLoop:
 
         checker.check_timeouts = mock_check  # type: ignore[assignment]
 
-        with patch("mc.timeout_checker.asyncio.sleep", new_callable=AsyncMock):
+        with patch("mc.runtime.timeout_checker.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(asyncio.CancelledError):
                 await checker.start()
 

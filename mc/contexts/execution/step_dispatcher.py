@@ -60,7 +60,7 @@ def _maybe_inject_orientation(
     agent_prompt: str | None,
 ) -> str | None:
     """Compatibility shim for older planner/executor orientation tests."""
-    from mc.agent_orientation import load_orientation
+    from mc.infrastructure.orientation import load_orientation
 
     orientation = load_orientation(agent_name)
     if not orientation:
@@ -141,7 +141,7 @@ class StepDispatcher:
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance (shared across steps)."""
         if self._tier_resolver is None:
-            from mc.tier_resolver import TierResolver
+            from mc.infrastructure.providers.tier_resolver import TierResolver
             self._tier_resolver = TierResolver(self._bridge)
         return self._tier_resolver
 

@@ -1,6 +1,6 @@
 """Unified thread context assembly.
 
-Wraps the existing mc.thread_context.ThreadContextBuilder to provide
+Wraps the existing mc.application.execution.thread_context.ThreadContextBuilder to provide
 a shared interface for both task and step context building. Mention
 context and assigned-agent context share the same builder.
 """
@@ -21,7 +21,7 @@ def build_thread_context(
 ) -> str:
     """Build thread context string using the shared ThreadContextBuilder.
 
-    Delegates to mc.thread_context.ThreadContextBuilder.build(), which
+    Delegates to mc.application.execution.thread_context.ThreadContextBuilder.build(), which
     handles both legacy (task) and step-aware (with predecessors) modes.
 
     This is the single entry point for all thread context assembly --
@@ -36,7 +36,7 @@ def build_thread_context(
     Returns:
         Formatted context string, or "" if no relevant context.
     """
-    from mc.thread_context import ThreadContextBuilder
+    from mc.application.execution.thread_context import ThreadContextBuilder
 
     return ThreadContextBuilder().build(
         messages,

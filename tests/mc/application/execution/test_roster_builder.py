@@ -84,13 +84,13 @@ class TestSyncAgentFromConvex:
 class TestInjectOrientation:
     """Tests for inject_orientation."""
 
-    @patch("mc.agent_orientation.load_orientation")
+    @patch("mc.infrastructure.orientation.load_orientation")
     def test_no_orientation_returns_original(self, mock_load: MagicMock) -> None:
         mock_load.return_value = None
         result = inject_orientation("test-agent", "my prompt")
         assert result == "my prompt"
 
-    @patch("mc.agent_orientation.load_orientation")
+    @patch("mc.infrastructure.orientation.load_orientation")
     def test_orientation_prepended(self, mock_load: MagicMock) -> None:
         mock_load.return_value = "Global rules"
         result = inject_orientation("test-agent", "my prompt")
@@ -99,7 +99,7 @@ class TestInjectOrientation:
         assert "---" in result
         assert "my prompt" in result
 
-    @patch("mc.agent_orientation.load_orientation")
+    @patch("mc.infrastructure.orientation.load_orientation")
     def test_orientation_with_no_prompt(self, mock_load: MagicMock) -> None:
         mock_load.return_value = "Global rules"
         result = inject_orientation("test-agent", None)

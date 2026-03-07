@@ -102,7 +102,7 @@ class TestTaskPlannerSingleStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Write a utility function",
                 description="Create a Python helper",
@@ -125,7 +125,7 @@ class TestTaskPlannerSingleStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Fix a typo",
                 description=None,
@@ -150,7 +150,7 @@ class TestTaskPlannerMultiStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Build API endpoint with docs",
                 description="Create a REST endpoint, document it, then review",
@@ -174,7 +174,7 @@ class TestTaskPlannerMultiStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Build API endpoint with docs",
                 description="Create, document, review",
@@ -199,7 +199,7 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             await planner.plan_task(
                 title="Write tests",
                 description="Unit tests for auth module",
@@ -237,7 +237,7 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -264,7 +264,7 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             await planner.plan_task(
                 title="Transcrever e resumir os ultimos 5 videos deste canal",
                 description="Gerar um consolidado dos 5 videos mais recentes do canal no YouTube",
@@ -291,7 +291,7 @@ class TestTaskPlannerPrompt:
         planner = TaskPlanner()
 
         with (
-            patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")),
+            patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")),
             patch(
                 "mc.planner._load_lead_agent_planning_skills",
                 return_value=(
@@ -336,7 +336,7 @@ class TestTaskPlannerNanobotFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Obscure task",
                 description=None,
@@ -365,7 +365,7 @@ class TestTaskPlannerNanobotFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Obscure task",
                 description=None,
@@ -402,7 +402,7 @@ class TestAgentNameValidation:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -422,7 +422,7 @@ class TestAgentNameValidation:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -454,7 +454,7 @@ class TestAgentNameNoneHandling:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -478,7 +478,7 @@ class TestExplicitAgentOverride:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Multi-step task",
                 description="Complex task",
@@ -500,7 +500,7 @@ class TestExplicitAgentOverride:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Task",
                 description="desc",
@@ -524,7 +524,7 @@ class TestLLMFailureFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Write python tests",
                 description="Test the auth module",
@@ -547,7 +547,7 @@ class TestLLMFailureFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Write documentation",
                 description="Document the API",
@@ -571,7 +571,7 @@ class TestLLMFailureFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Calibrate quantum transducer mesh",
                 description=None,
@@ -596,7 +596,7 @@ class TestPlannerReasoningLevel:
         planner = TaskPlanner()
 
         with patch(
-            "mc.provider_factory.create_provider",
+            "mc.infrastructure.providers.factory.create_provider",
             return_value=(mock_provider, "test-model"),
         ) as create_provider_mock:
             await planner.plan_task(
@@ -618,7 +618,7 @@ class TestPlannerReasoningLevel:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             await planner.plan_task(
                 title="Write tests",
                 description="Unit tests for planner",
@@ -683,7 +683,7 @@ class TestPlannerDiagnosticLogging:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")), \
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")), \
              patch("mc.planner.logger") as mock_logger:
             await planner.plan_task(
                 title="Test task",
@@ -708,7 +708,7 @@ class TestPlannerDiagnosticLogging:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")), \
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")), \
              patch("mc.planner.logger") as mock_logger:
             await planner.plan_task(
                 title="Test task",
@@ -740,7 +740,7 @@ class TestPlannerModelParameter:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "anthropic/claude-sonnet-4-6")) as mock_create:
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "anthropic/claude-sonnet-4-6")) as mock_create:
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -765,7 +765,7 @@ class TestPlannerModelParameter:
 
         with (
             patch("nanobot.config.loader.load_config", return_value=mock_config),
-            patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")) as mock_create,
+            patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")) as mock_create,
         ):
             await planner.plan_task(
                 title="Test task",
@@ -798,11 +798,11 @@ class TestPlannerModelParameter:
 
         with (
             patch("nanobot.config.loader.load_config", return_value=mock_config),
-            patch("mc.provider_factory.create_provider") as mock_create,
+            patch("mc.infrastructure.providers.factory.create_provider") as mock_create,
             patch("claude_code.workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
             patch("claude_code.ipc_server.MCSocketServer", return_value=mock_ipc),
             patch("claude_code.provider.ClaudeCodeProvider", return_value=mock_cc_provider),
-            patch("mc.agent_orientation.load_orientation", return_value=None),
+            patch("mc.infrastructure.orientation.load_orientation", return_value=None),
         ):
             plan = await planner.plan_task(
                 title="Test task",
@@ -831,7 +831,7 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Write tests for auth",
                 description="Testing task",
@@ -851,7 +851,7 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Write tests for auth",
                 description="Testing task",
@@ -873,7 +873,7 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -900,7 +900,7 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -933,7 +933,7 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Write a utility function",
                 description="Create a Python helper",
@@ -1182,7 +1182,7 @@ class TestRemoteTerminalExclusion:
 
         planner = TaskPlanner()
 
-        with patch("mc.provider_factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
             plan = await planner.plan_task(
                 title="Research task",
                 description=None,
@@ -1208,7 +1208,7 @@ class TestOrientationRosterInterpolation:
         # Mock load_orientation to return interpolated text (roster interpolation
         # is tested in tests/mc/test_orientation.py; here we test delegation).
         with patch(
-            "mc.agent_orientation.load_orientation",
+            "mc.infrastructure.orientation.load_orientation",
             return_value="# Orientation\n\n- **test-agent** — tester (skills: testing)\n\nEnd.",
         ):
             result = _maybe_inject_orientation("test-agent", None)
@@ -1223,7 +1223,7 @@ class TestOrientationRosterInterpolation:
         from unittest.mock import patch
 
         with patch(
-            "mc.agent_orientation.load_orientation",
+            "mc.infrastructure.orientation.load_orientation",
             return_value="# Orientation\n\nNo placeholder here.\n\nEnd.",
         ):
             result = _maybe_inject_orientation("test-agent", None)

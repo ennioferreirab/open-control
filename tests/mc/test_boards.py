@@ -36,7 +36,7 @@ def _make_executor(bridge=None):
 
 class TestResolveBoardWorkspace:
     def test_returns_correct_path(self, tmp_path):
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             result = resolve_board_workspace("project-alpha", "dev-agent")
@@ -45,7 +45,7 @@ class TestResolveBoardWorkspace:
         assert result == expected
 
     def test_creates_memory_and_sessions_dirs(self, tmp_path):
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             board_ws = resolve_board_workspace("my-board", "worker")
@@ -54,7 +54,7 @@ class TestResolveBoardWorkspace:
         assert (board_ws / "sessions").exists()
 
     def test_creates_empty_memory_md_when_no_global(self, tmp_path):
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             board_ws = resolve_board_workspace("my-board", "worker")
@@ -64,7 +64,7 @@ class TestResolveBoardWorkspace:
         assert memory_md.read_text() == ""
 
     def test_creates_empty_history_md(self, tmp_path):
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             board_ws = resolve_board_workspace("my-board", "worker")
@@ -73,7 +73,7 @@ class TestResolveBoardWorkspace:
         assert history_md.exists()
 
     def test_copies_global_memory_md_when_present(self, tmp_path):
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         # Create global MEMORY.md
         global_memory_dir = tmp_path / ".nanobot" / "agents" / "dev-agent" / "memory"
@@ -89,7 +89,7 @@ class TestResolveBoardWorkspace:
         assert board_memory.read_text() == "# Global memories"
 
     def test_does_not_overwrite_existing_board_memory(self, tmp_path):
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         # Create global MEMORY.md
         global_memory_dir = tmp_path / ".nanobot" / "agents" / "dev-agent" / "memory"
@@ -110,7 +110,7 @@ class TestResolveBoardWorkspace:
         assert board_memory.read_text() == "board-specific"
 
     def test_idempotent_second_call(self, tmp_path):
-        from mc.board_utils import resolve_board_workspace
+        from mc.infrastructure.boards import resolve_board_workspace
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             ws1 = resolve_board_workspace("board-x", "agent-a")

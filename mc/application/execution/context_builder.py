@@ -127,7 +127,7 @@ class ContextBuilder:
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance."""
         if self._tier_resolver is None:
-            from mc.tier_resolver import TierResolver
+            from mc.infrastructure.providers.tier_resolver import TierResolver
             self._tier_resolver = TierResolver(self._bridge)
         return self._tier_resolver
 
@@ -487,7 +487,7 @@ class ContextBuilder:
             if board:
                 board_name = board.get("name")
                 if board_name:
-                    from mc.board_utils import (
+                    from mc.infrastructure.boards import (
                         get_agent_memory_mode,
                         resolve_board_workspace,
                     )
