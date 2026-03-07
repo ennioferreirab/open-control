@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.orchestrator import TaskOrchestrator
+from mc.runtime.orchestrator import TaskOrchestrator
 
 
 def _make_bridge():

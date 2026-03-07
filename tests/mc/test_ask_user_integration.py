@@ -10,7 +10,7 @@ from mc.ask_user.registry import AskUserRegistry
 class TestRegistryWiring:
     def test_step_dispatcher_accepts_registry(self):
         """StepDispatcher.__init__ accepts and stores ask_user_registry."""
-        from mc.step_dispatcher import StepDispatcher
+        from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         registry = AskUserRegistry()
         bridge = MagicMock()
@@ -19,7 +19,7 @@ class TestRegistryWiring:
 
     def test_step_dispatcher_default_none(self):
         """StepDispatcher defaults ask_user_registry to None."""
-        from mc.step_dispatcher import StepDispatcher
+        from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         bridge = MagicMock()
         dispatcher = StepDispatcher(bridge)
@@ -27,7 +27,7 @@ class TestRegistryWiring:
 
     def test_executor_accepts_registry(self):
         """TaskExecutor.__init__ accepts and stores ask_user_registry."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
 
         registry = AskUserRegistry()
         bridge = MagicMock()
@@ -36,7 +36,7 @@ class TestRegistryWiring:
 
     def test_executor_default_none(self):
         """TaskExecutor defaults ask_user_registry to None."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
 
         bridge = MagicMock()
         executor = TaskExecutor(bridge)

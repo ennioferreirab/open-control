@@ -2,22 +2,25 @@
 
 ## Overview
 
-Mission Control now uses a hybrid feature-first backend layout:
+Mission Control uses a hybrid feature-first backend layout:
 
 - `mc/runtime/` owns composition roots, lifecycle loops, and runtime wiring.
 - `mc/contexts/` owns business flows such as planning, execution, conversation,
   review, and agent synchronization.
 - `mc/domain/`, `mc/bridge/`, and `mc/infrastructure/` remain the shared
   stable base for rules, data access, and environment concerns.
-- the `mc/` root is intentionally small and keeps only public facades plus
+- `mc/application/execution/` is the reusable execution kernel shared by the
+  execution context.
+- the `mc/` root is intentionally minimal and keeps only `mc/__init__.py` and
   `mc/types.py`.
 
 The intended dependency shape is:
 
 ```text
 boot.py
-  -> mc.gateway                 # compatibility facade
-    -> mc.runtime.gateway
+  -> mc.cli
+    -> mc.runtime
+      -> mc.runtime.gateway
       -> mc.runtime.orchestrator
       -> mc.contexts.*
         -> mc.application.execution.*
@@ -64,6 +67,12 @@ Primary modules:
 - `mc.contexts.planning.parser`
 - `mc.contexts.planning.title_generation`
 
+Canonical package API:
+- `mc.contexts.planning.TaskPlanner`
+- `mc.contexts.planning.PlanMaterializer`
+- `mc.contexts.planning.handle_plan_negotiation`
+- `mc.contexts.planning.start_plan_negotiation_loop`
+
 ### `mc/contexts/execution`
 
 Execution owns task and step execution entrypoints.
@@ -81,6 +90,12 @@ Primary modules:
 - `mc.contexts.execution.post_processing`
 - `mc.contexts.execution.step_dispatcher`
 
+Canonical package API:
+- `mc.contexts.execution.TaskExecutor`
+- `mc.contexts.execution.StepDispatcher`
+- `mc.contexts.execution.CCExecutorMixin`
+- `mc.contexts.execution.execute_step_via_cc`
+
 ### `mc/contexts/conversation`
 
 Conversation owns thread and user interaction flows.
@@ -95,12 +110,20 @@ Primary modules:
 - `mc.contexts.conversation.service`
 - `mc.contexts.conversation.intent`
 
+Canonical package API:
+- `mc.contexts.conversation.ChatHandler`
+- `mc.contexts.conversation.ConversationService`
+- `mc.contexts.conversation.ConversationIntent`
+
 ### `mc/contexts/review`
 
 Review owns approval, feedback, and review-state transitions.
 
 Primary module:
 - `mc.contexts.review.handler`
+
+Canonical package API:
+- `mc.contexts.review.ReviewHandler`
 
 ### `mc/contexts/agents`
 
@@ -163,36 +186,27 @@ Reusable execution nucleus shared by the execution context.
 
 Primary modules:
 - `mc.application.execution.thread_context`
+- `mc.application.execution.engine`
+- `mc.application.execution.runtime`
 
 Rule:
 - new execution behavior should land in the execution context or this nucleus,
-  not back in top-level `mc/executor.py`.
+  not back in `mc/` root modules.
 
-## Compatibility Layer
+## Package Entry Points
 
-The following top-level modules remain intentionally available during the
-transition:
+The canonical import paths are package-based, not root-file-based.
 
-- `mc.gateway`
-- `mc.orchestrator`
-- `mc.planner`
-- `mc.plan_materializer`
-- `mc.plan_negotiator`
-- `mc.executor`
-- `mc.cc_executor`
-- `mc.cc_step_runner`
-- `mc.step_dispatcher`
-- `mc.chat_handler`
-- `mc.review_handler`
-- `mc.services.conversation`
-- `mc.services.conversation_intent`
-- `mc.services.agent_sync`
-- `mc.types`
+Preferred imports:
 
-Rule:
-- these files are facades only
-- the root should not gain new concrete modules
-- new behavior should not be added there
+- `from mc.runtime import TaskOrchestrator, run_gateway`
+- `from mc.contexts.planning import TaskPlanner, PlanMaterializer`
+- `from mc.contexts.execution import TaskExecutor, StepDispatcher`
+- `from mc.contexts.conversation import ChatHandler, ConversationService`
+- `from mc.contexts.review import ReviewHandler`
+
+Legacy-style imports such as `mc.executor`, `mc.gateway`, `mc.planner`, and
+similar root aliases are intentionally removed.
 
 ## Workflow Contract
 
@@ -202,8 +216,8 @@ The workflow contract is versioned in:
 
 Consumers:
 
-- [mc/domain/workflow_contract.py](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/mc/domain/workflow_contract.py)
-- [dashboard/convex/lib/workflowContract.ts](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/dashboard/convex/lib/workflowContract.ts)
+- `mc/domain/workflow_contract.py`
+- `dashboard/convex/lib/workflowContract.ts`
 
 This contract defines:
 
@@ -217,17 +231,18 @@ This contract defines:
 
 Architecture rules are protected by:
 
-- [tests/mc/test_architecture.py](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/tests/mc/test_architecture.py)
-- [tests/mc/test_module_reorganization.py](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/tests/mc/test_module_reorganization.py)
-- [dashboard/tests/architecture.test.ts](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/dashboard/tests/architecture.test.ts)
+- `tests/mc/test_architecture.py`
+- `tests/mc/test_module_reorganization.py`
+- `tests/mc/infrastructure/test_boundary.py`
+- `dashboard/tests/architecture.test.ts`
 
 Current guardrails enforce:
 
-- protected backend modules do not import `mc.gateway`
-- runtime-facing modules do not import `mc.executor` directly
-- canonical packages do not import root compatibility modules
-- the `mc/` root is restricted to an allowlist of facade files
-- top-level compatibility modules point to `runtime` or `contexts`
+- protected backend modules do not import `mc.runtime.gateway`
+- runtime-facing modules do not import `mc.contexts.execution.executor` directly
+- canonical packages do not import removed root modules
+- the `mc/` root stays restricted to `__init__.py` and `types.py`
+- removed root facade modules stay deleted
 - dashboard feature components avoid direct Convex hooks where feature hooks exist
 - dashboard hooks do not depend on UI components
 
@@ -239,4 +254,4 @@ Current guardrails enforce:
 4. Environment and filesystem concerns stay in `infrastructure`.
 5. `mc.application.execution` is a reusable kernel, not a competing architecture.
 6. The `mc/` root is not an ownership layer.
-7. Top-level compatibility shims may exist temporarily, but they are not architectural authority.
+7. New public imports should come from package `__init__.py` entrypoints where available.

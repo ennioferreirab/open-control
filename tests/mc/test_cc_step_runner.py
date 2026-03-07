@@ -22,15 +22,17 @@ from mc.application.execution.request import (
 MC_ROOT = Path(__file__).resolve().parent.parent.parent / "mc"
 
 
-# ── Architecture: cc_step_runner must not import mc.executor ────────────
+# ── Architecture: cc_step_runner must not import mc.contexts.execution.executor ────────────
 
 
 class TestCCStepRunnerArchitecture:
-    """Verify cc_step_runner does not import mc.executor directly."""
+    """Verify cc_step_runner does not import mc.contexts.execution.executor directly."""
 
     def test_no_executor_imports(self) -> None:
-        """cc_step_runner must not import from mc.executor."""
-        filepath = MC_ROOT / "cc_step_runner.py"
+        """cc_step_runner must not import from mc.contexts.execution.executor."""
+        filepath = (
+            MC_ROOT / "contexts" / "execution" / "cc_step_runner.py"
+        )
         assert filepath.exists(), "cc_step_runner.py must exist"
 
         source = filepath.read_text(encoding="utf-8")
@@ -39,18 +41,18 @@ class TestCCStepRunnerArchitecture:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "mc.executor" or alias.name.startswith(
-                        "mc.executor."
+                    if alias.name == "mc.contexts.execution.executor" or alias.name.startswith(
+                        "mc.contexts.execution.executor."
                     ):
                         executor_imports.append(alias.name)
             elif isinstance(node, ast.ImportFrom):
                 if node.module and (
-                    node.module == "mc.executor"
-                    or node.module.startswith("mc.executor.")
+                    node.module == "mc.contexts.execution.executor"
+                    or node.module.startswith("mc.contexts.execution.executor.")
                 ):
                     executor_imports.append(node.module)
         assert executor_imports == [], (
-            f"cc_step_runner.py still imports from mc.executor: {executor_imports}"
+            f"cc_step_runner.py still imports from mc.contexts.execution.executor: {executor_imports}"
         )
 
 
@@ -63,7 +65,7 @@ class TestCCStepRunnerEngineIntegration:
     @pytest.mark.asyncio
     async def test_delegates_to_execution_engine(self, tmp_path: Path) -> None:
         """execute_step_via_cc must call ExecutionEngine.run()."""
-        from mc.cc_step_runner import execute_step_via_cc
+        from mc.contexts.execution.cc_step_runner import execute_step_via_cc
 
         mock_engine_result = ExecutionResult(
             success=True,
@@ -92,7 +94,7 @@ class TestCCStepRunnerEngineIntegration:
 
         with (
             patch(
-                "mc.cc_step_runner.ExecutionEngine",
+                "mc.contexts.execution.cc_step_runner.ExecutionEngine",
                 return_value=mock_engine,
             ),
             patch(
@@ -142,7 +144,7 @@ class TestCCStepRunnerEngineIntegration:
         self, tmp_path: Path
     ) -> None:
         """The ExecutionRequest has correct step context fields."""
-        from mc.cc_step_runner import execute_step_via_cc
+        from mc.contexts.execution.cc_step_runner import execute_step_via_cc
 
         mock_engine_result = ExecutionResult(
             success=True,
@@ -176,7 +178,7 @@ class TestCCStepRunnerEngineIntegration:
 
         with (
             patch(
-                "mc.cc_step_runner.ExecutionEngine",
+                "mc.contexts.execution.cc_step_runner.ExecutionEngine",
                 return_value=mock_engine,
             ),
             patch(
@@ -222,7 +224,7 @@ class TestCCStepRunnerEngineIntegration:
     @pytest.mark.asyncio
     async def test_post_execution_on_success(self, tmp_path: Path) -> None:
         """On success, post-execution steps (completion, status, activity) run."""
-        from mc.cc_step_runner import execute_step_via_cc
+        from mc.contexts.execution.cc_step_runner import execute_step_via_cc
 
         mock_engine_result = ExecutionResult(
             success=True,
@@ -252,7 +254,7 @@ class TestCCStepRunnerEngineIntegration:
 
         with (
             patch(
-                "mc.cc_step_runner.ExecutionEngine",
+                "mc.contexts.execution.cc_step_runner.ExecutionEngine",
                 return_value=mock_engine,
             ),
             patch(
@@ -297,7 +299,7 @@ class TestCCStepRunnerEngineIntegration:
     @pytest.mark.asyncio
     async def test_engine_failure_raises(self, tmp_path: Path) -> None:
         """When ExecutionEngine returns failure, an exception is raised."""
-        from mc.cc_step_runner import execute_step_via_cc
+        from mc.contexts.execution.cc_step_runner import execute_step_via_cc
 
         mock_engine_result = ExecutionResult(
             success=False,
@@ -320,7 +322,7 @@ class TestCCStepRunnerEngineIntegration:
 
         with (
             patch(
-                "mc.cc_step_runner.ExecutionEngine",
+                "mc.contexts.execution.cc_step_runner.ExecutionEngine",
                 return_value=mock_engine,
             ),
             patch(

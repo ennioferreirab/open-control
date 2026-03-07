@@ -142,7 +142,7 @@ class TestExecutorSkillsOverride:
     @pytest.mark.asyncio
     async def test_convex_skills_override_when_present(self):
         """When Convex agent has skills list, those skills should be used instead of YAML skills."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
 
         bridge = _make_bridge()
         executor = TaskExecutor(bridge, on_task_completed=None)
@@ -156,11 +156,11 @@ class TestExecutorSkillsOverride:
         req = _make_task_execution_request(agent_skills=["github", "memory"])
 
         with _patch_task_context_builder(req), \
-             patch("mc.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
+             patch("mc.contexts.execution.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
              patch.object(executor, "_load_agent_data", return_value=None), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]), \
-             patch("mc.executor.asyncio.to_thread", new=_sync_to_thread):
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
+             patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread):
             try:
                 await executor._execute_task(
                     task_id="task-1",
@@ -178,7 +178,7 @@ class TestExecutorSkillsOverride:
     @pytest.mark.asyncio
     async def test_yaml_skills_kept_when_convex_returns_none(self):
         """When Convex agent has no skills field (None), YAML skills should be used."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
 
         bridge = _make_bridge()
         executor = TaskExecutor(bridge, on_task_completed=None)
@@ -193,11 +193,11 @@ class TestExecutorSkillsOverride:
         req = _make_task_execution_request(agent_skills=yaml_skills)
 
         with _patch_task_context_builder(req), \
-             patch("mc.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
+             patch("mc.contexts.execution.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
              patch.object(executor, "_load_agent_data", return_value=None), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]), \
-             patch("mc.executor.asyncio.to_thread", new=_sync_to_thread):
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
+             patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread):
             try:
                 await executor._execute_task(
                     task_id="task-1",
@@ -215,7 +215,7 @@ class TestExecutorSkillsOverride:
     @pytest.mark.asyncio
     async def test_convex_empty_skills_overrides_yaml(self):
         """Empty list [] from Convex IS a valid override (meaning 'no skills')."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
 
         bridge = _make_bridge()
         executor = TaskExecutor(bridge, on_task_completed=None)
@@ -229,11 +229,11 @@ class TestExecutorSkillsOverride:
         req = _make_task_execution_request(agent_skills=[])
 
         with _patch_task_context_builder(req), \
-             patch("mc.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
+             patch("mc.contexts.execution.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
              patch.object(executor, "_load_agent_data", return_value=None), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]), \
-             patch("mc.executor.asyncio.to_thread", new=_sync_to_thread):
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
+             patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread):
             try:
                 await executor._execute_task(
                     task_id="task-1",
@@ -260,7 +260,7 @@ class TestStepDispatcherNanobotSkillsOverride:
     @pytest.mark.asyncio
     async def test_convex_skills_override_in_nanobot_path(self):
         """When Convex agent has skills, dispatcher should use Convex skills."""
-        from mc.step_dispatcher import StepDispatcher
+        from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         bridge = _make_bridge()
         bridge.get_steps_by_task = MagicMock(return_value=[
@@ -289,10 +289,10 @@ class TestStepDispatcherNanobotSkillsOverride:
         req = _make_step_execution_request(agent_skills=["github", "memory"])
 
         with _patch_step_context_builder(req), \
-             patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]):
+             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
+             patch("mc.contexts.execution.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert captured_skills.get("value") == ["github", "memory"]
@@ -300,7 +300,7 @@ class TestStepDispatcherNanobotSkillsOverride:
     @pytest.mark.asyncio
     async def test_yaml_skills_kept_when_convex_none_nanobot_path(self):
         """When Convex has no skills field, YAML skills should be preserved."""
-        from mc.step_dispatcher import StepDispatcher
+        from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         bridge = _make_bridge()
         bridge.get_steps_by_task = MagicMock(return_value=[
@@ -330,10 +330,10 @@ class TestStepDispatcherNanobotSkillsOverride:
         req = _make_step_execution_request(agent_skills=yaml_skills)
 
         with _patch_step_context_builder(req), \
-             patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]):
+             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
+             patch("mc.contexts.execution.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert captured_skills.get("value") == yaml_skills
@@ -341,7 +341,7 @@ class TestStepDispatcherNanobotSkillsOverride:
     @pytest.mark.asyncio
     async def test_convex_empty_skills_overrides_yaml_nanobot_path(self):
         """Empty list from Convex should override YAML skills in nanobot path."""
-        from mc.step_dispatcher import StepDispatcher
+        from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         bridge = _make_bridge()
         bridge.get_steps_by_task = MagicMock(return_value=[
@@ -370,10 +370,10 @@ class TestStepDispatcherNanobotSkillsOverride:
         req = _make_step_execution_request(agent_skills=[])
 
         with _patch_step_context_builder(req), \
-             patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]):
+             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
+             patch("mc.contexts.execution.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert captured_skills.get("value") == []
@@ -390,7 +390,7 @@ class TestStepDispatcherCCSkillsOverride:
     @pytest.mark.asyncio
     async def test_convex_skills_override_in_cc_path(self):
         """When Convex agent has skills, CC path should set agent_data_for_cc.skills."""
-        from mc.step_dispatcher import StepDispatcher
+        from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         convex_agent = {
             "skills": ["github", "memory"],
@@ -438,9 +438,9 @@ class TestStepDispatcherCCSkillsOverride:
         )
 
         with _patch_step_context_builder(req), \
-             patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]), \
+             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
              patch("claude_code.workspace.CCWorkspaceManager") as mock_ws:
             mock_ws.return_value.prepare.side_effect = capture_ws_prepare
             try:
@@ -453,7 +453,7 @@ class TestStepDispatcherCCSkillsOverride:
     @pytest.mark.asyncio
     async def test_cc_path_keeps_default_skills_when_convex_none(self):
         """When Convex has no skills, CC path should keep default skills."""
-        from mc.step_dispatcher import StepDispatcher
+        from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         convex_agent = {
             "display_name": "Test Agent",
@@ -499,9 +499,9 @@ class TestStepDispatcherCCSkillsOverride:
         )
 
         with _patch_step_context_builder(req), \
-             patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]), \
+             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
              patch("claude_code.workspace.CCWorkspaceManager") as mock_ws:
             mock_ws.return_value.prepare.side_effect = capture_ws_prepare
             try:
@@ -515,7 +515,7 @@ class TestStepDispatcherCCSkillsOverride:
     @pytest.mark.asyncio
     async def test_cc_path_empty_list_overrides(self):
         """Empty list from Convex should override existing skills in CC path."""
-        from mc.step_dispatcher import StepDispatcher
+        from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         convex_agent = {
             "skills": [],
@@ -563,9 +563,9 @@ class TestStepDispatcherCCSkillsOverride:
         )
 
         with _patch_step_context_builder(req), \
-             patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]), \
+             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
              patch("claude_code.workspace.CCWorkspaceManager") as mock_ws:
             mock_ws.return_value.prepare.side_effect = capture_ws_prepare
             try:

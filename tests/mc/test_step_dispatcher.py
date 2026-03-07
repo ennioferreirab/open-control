@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.step_dispatcher import StepDispatcher
+from mc.contexts.execution.step_dispatcher import StepDispatcher
 from mc.types import ActivityEventType, AuthorType, MessageType, StepStatus, TaskStatus
 
 
@@ -95,11 +95,11 @@ def _patch_executor_helpers():
     """Return a context manager stack that stubs out executor artifact helpers."""
     return (
         patch(
-            "mc.executor._snapshot_output_dir",
+            "mc.contexts.execution.executor._snapshot_output_dir",
             return_value={},
         ),
         patch(
-            "mc.executor._collect_output_artifacts",
+            "mc.contexts.execution.executor._collect_output_artifacts",
             return_value=[],
         ),
     )
@@ -247,7 +247,7 @@ class TestStepDispatcher:
         snap_patch, collect_patch = _patch_executor_helpers()
 
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_cc(),
             patch.object(
                 dispatcher,
@@ -272,10 +272,10 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="step output"),
             ),
             snap_patch,
@@ -336,9 +336,9 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -365,9 +365,9 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -397,9 +397,9 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -446,9 +446,9 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -470,10 +470,10 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="ok"),
             ),
             snap_patch,
@@ -496,10 +496,10 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="Report written."),
             ),
             snap_patch,
@@ -524,15 +524,15 @@ class TestStepDispatcher:
         fake_artifacts = [{"path": "output/report.pdf", "action": "created", "description": "PDF, 10 KB"}]
 
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="Analysis done."),
             ),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
             patch(
-                "mc.executor._collect_output_artifacts",
+                "mc.contexts.execution.executor._collect_output_artifacts",
                 return_value=fake_artifacts,
             ),
         ):
@@ -551,10 +551,10 @@ class TestStepDispatcher:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="Computation done."),
             ),
             snap_patch,
@@ -575,7 +575,7 @@ class TestStepDispatcher:
         bridge.send_message.return_value = None
         dispatcher = StepDispatcher(bridge)
 
-        with patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         bridge.send_message.assert_called_once()
@@ -623,9 +623,9 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_with_files(query_data),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -656,9 +656,9 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -684,9 +684,9 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -739,9 +739,9 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_with_files(query_data),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -781,9 +781,9 @@ class TestTaskFileManifestInjection:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_with_files(query_data),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -808,10 +808,10 @@ class TestStepOutputFileSync:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="analysis done"),
             ),
             snap_patch,
@@ -838,10 +838,10 @@ class TestStepOutputFileSync:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="build done"),
             ),
             snap_patch,
@@ -884,10 +884,10 @@ class TestStepOutputFileSync:
         dispatcher = StepDispatcher(bridge)
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(return_value="report done"),
             ),
             snap_patch,
@@ -913,10 +913,10 @@ class TestStepOutputFileSync:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=RuntimeError("agent exploded")),
             ),
             snap_patch,
@@ -937,10 +937,10 @@ class TestStepOutputFileSync:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(
                     return_value=SimpleNamespace(
                         content="Error calling Codex:",
@@ -975,10 +975,10 @@ class TestStepOutputFileSync:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=RuntimeError("agent exploded")),
             ),
             snap_patch,
@@ -1000,7 +1000,7 @@ class TestSupervisedModeSkipsDispatch:
 
     @pytest.mark.asyncio
     async def test_supervised_mode_does_not_trigger_dispatch(self) -> None:
-        from mc.orchestrator import TaskOrchestrator
+        from mc.runtime.orchestrator import TaskOrchestrator
         from mc.types import ExecutionPlan, ExecutionPlanStep
 
         bridge = MagicMock()
@@ -1076,9 +1076,9 @@ class TestPausedTaskDispatch:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_should_not_run),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_should_not_run),
             snap_patch,
             collect_patch,
         ):
@@ -1135,9 +1135,9 @@ class TestTaskLevelFileSummaryInDelegationContext:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_with_files(query_data),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):
@@ -1174,9 +1174,9 @@ class TestTaskLevelFileSummaryInDelegationContext:
 
         snap_patch, collect_patch = _patch_executor_helpers()
         with (
-            patch("mc.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
             snap_patch,
             collect_patch,
         ):

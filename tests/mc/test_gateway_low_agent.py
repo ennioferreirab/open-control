@@ -1,6 +1,6 @@
 """Tests for ensure_low_agent in gateway."""
 from unittest.mock import MagicMock
-from mc.gateway import ensure_low_agent
+from mc.runtime.gateway import ensure_low_agent
 from mc.types import LOW_AGENT_NAME, AgentData
 
 

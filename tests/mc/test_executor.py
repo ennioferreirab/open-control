@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mc.executor import (
+from mc.contexts.execution.executor import (
     _collect_output_artifacts,
     _snapshot_output_dir,
     _build_thread_context,
@@ -433,7 +433,7 @@ class TestDelegateTaskNotAvailableInMCSteps:
     @pytest.mark.asyncio
     async def test_delegate_task_removed_before_agent_runs(self):
         """_run_agent_on_task must unregister delegate_task from the AgentLoop."""
-        from mc.executor import _run_agent_on_task
+        from mc.contexts.execution.executor import _run_agent_on_task
 
         captured_loop = {}
 
@@ -456,7 +456,7 @@ class TestDelegateTaskNotAvailableInMCSteps:
         with (
             patch("nanobot.agent.loop.AgentLoop", FakeAgentLoop),
             patch.dict("sys.modules", {"nanobot.agent.loop": MagicMock(AgentLoop=FakeAgentLoop)}),
-            patch("mc.executor._make_provider", return_value=(MagicMock(), "mock-model")),
+            patch("mc.contexts.execution.executor._make_provider", return_value=(MagicMock(), "mock-model")),
         ):
             await _run_agent_on_task(
                 agent_name="youtube-summarizer",

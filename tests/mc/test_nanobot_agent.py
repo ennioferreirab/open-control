@@ -23,7 +23,7 @@ def _make_agent(name: str, skills: list[str] | None = None) -> AgentData:
 class TestEnsureNanobotAgent:
     @patch("mc.infrastructure.agent_bootstrap._fetch_bot_identity", return_value={"name": "Owl", "role": "General-Purpose Assistant"})
     def test_creates_directory_and_config_when_missing(self, mock_identity, tmp_path: Path) -> None:
-        from mc.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
+        from mc.runtime.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
 
         ensure_nanobot_agent(tmp_path)
 
@@ -42,7 +42,7 @@ class TestEnsureNanobotAgent:
 
     @patch("mc.infrastructure.agent_bootstrap._fetch_bot_identity", return_value={"name": "Owl", "role": "General-Purpose Assistant"})
     def test_is_idempotent_and_preserves_existing_config(self, mock_identity, tmp_path: Path) -> None:
-        from mc.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
+        from mc.runtime.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
 
         agent_dir = tmp_path / NANOBOT_AGENT_NAME
         agent_dir.mkdir(parents=True)
@@ -63,7 +63,7 @@ class TestEnsureNanobotAgent:
 
 class TestSyncAgentRegistryNanobotAgent:
     def test_sync_includes_nanobot_agent_with_is_system_true(self, tmp_path: Path) -> None:
-        from mc.gateway import sync_agent_registry
+        from mc.runtime.gateway import sync_agent_registry
 
         mock_bridge = MagicMock()
 
@@ -115,7 +115,7 @@ class TestBridgeSyncAgentSystemFlag:
 
 class TestPlannerFallback:
     def test_heuristic_fallback_assigns_nanobot_agent(self) -> None:
-        from mc.planner import NANOBOT_AGENT_NAME, TaskPlanner
+        from mc.contexts.planning.planner import NANOBOT_AGENT_NAME, TaskPlanner
 
         planner = TaskPlanner()
         agents = [_make_agent("code-agent", skills=["python", "testing"])]

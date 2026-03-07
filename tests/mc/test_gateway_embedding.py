@@ -9,7 +9,7 @@ def _make_bridge(setting_value):
 
 
 def test_gateway_sets_env_var_when_setting_present():
-    from mc.gateway import _sync_embedding_model
+    from mc.runtime.gateway import _sync_embedding_model
 
     bridge = _make_bridge('openrouter/openai/text-embedding-3-small')
     with patch.dict(os.environ, {}, clear=False):
@@ -18,7 +18,7 @@ def test_gateway_sets_env_var_when_setting_present():
 
 
 def test_gateway_clears_env_var_when_setting_empty():
-    from mc.gateway import _sync_embedding_model
+    from mc.runtime.gateway import _sync_embedding_model
 
     bridge = _make_bridge('')
     with patch.dict(os.environ, {'NANOBOT_MEMORY_EMBEDDING_MODEL': 'old-model'}, clear=False):
@@ -27,7 +27,7 @@ def test_gateway_clears_env_var_when_setting_empty():
 
 
 def test_gateway_clears_env_var_when_setting_none():
-    from mc.gateway import _sync_embedding_model
+    from mc.runtime.gateway import _sync_embedding_model
 
     bridge = _make_bridge(None)
     with patch.dict(os.environ, {'NANOBOT_MEMORY_EMBEDDING_MODEL': 'old-model'}, clear=False):

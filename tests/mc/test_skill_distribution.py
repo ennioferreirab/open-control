@@ -48,13 +48,13 @@ def source_dir_with_skills(tmp_path: Path) -> Path:
 
 
 class TestDistributeBuiltinSkills:
-    """Tests for mc.gateway._distribute_builtin_skills."""
+    """Tests for mc.runtime.gateway._distribute_builtin_skills."""
 
     def test_copies_new_skill_with_skill_md(
         self, workspace_dir: Path, source_dir_with_skills: Path
     ):
         """A skill directory containing SKILL.md is copied to workspace."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         _distribute_builtin_skills(workspace_dir, source_dir_with_skills)
 
@@ -69,7 +69,7 @@ class TestDistributeBuiltinSkills:
         self, workspace_dir: Path, source_dir_with_skills: Path
     ):
         """All skill directories (those with SKILL.md) are copied."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         _distribute_builtin_skills(workspace_dir, source_dir_with_skills)
 
@@ -80,7 +80,7 @@ class TestDistributeBuiltinSkills:
         self, workspace_dir: Path, source_dir_with_skills: Path
     ):
         """Existing workspace skills are NEVER overwritten (preserves user customizations)."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         # Pre-create skill-alpha with custom content
         existing = workspace_dir / "skill-alpha"
@@ -98,7 +98,7 @@ class TestDistributeBuiltinSkills:
         self, workspace_dir: Path, source_dir_with_skills: Path
     ):
         """Directories without SKILL.md are not copied."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         _distribute_builtin_skills(workspace_dir, source_dir_with_skills)
 
@@ -108,7 +108,7 @@ class TestDistributeBuiltinSkills:
         self, tmp_path: Path, source_dir_with_skills: Path
     ):
         """workspace_skills_dir is created if it doesn't exist."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         missing_dir = tmp_path / "nonexistent" / "skills"
         assert not missing_dir.exists()
@@ -122,7 +122,7 @@ class TestDistributeBuiltinSkills:
         self, workspace_dir: Path, tmp_path: Path
     ):
         """If a source_dir doesn't exist, it's skipped without error."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         missing_source = tmp_path / "does_not_exist"
         # Should not raise
@@ -135,7 +135,7 @@ class TestDistributeBuiltinSkills:
         self, workspace_dir: Path, tmp_path: Path
     ):
         """Skills from multiple source directories are all distributed."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         # Source 1
         src1 = tmp_path / "src1"
@@ -158,7 +158,7 @@ class TestDistributeBuiltinSkills:
         self, workspace_dir: Path, source_dir_with_skills: Path, caplog
     ):
         """Each distributed skill is logged with its name."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         with caplog.at_level(logging.INFO, logger="mc.infrastructure.agent_bootstrap"):
             _distribute_builtin_skills(workspace_dir, source_dir_with_skills)
@@ -171,7 +171,7 @@ class TestDistributeBuiltinSkills:
         self, workspace_dir: Path, source_dir_with_skills: Path, caplog
     ):
         """Non-skill directories are not logged as distributed."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         with caplog.at_level(logging.DEBUG, logger="mc.infrastructure.agent_bootstrap"):
             _distribute_builtin_skills(workspace_dir, source_dir_with_skills)
@@ -187,7 +187,7 @@ class TestDistributeBuiltinSkills:
         self, workspace_dir: Path, tmp_path: Path
     ):
         """Files (not directories) in source_dir are ignored."""
-        from mc.gateway import _distribute_builtin_skills
+        from mc.runtime.gateway import _distribute_builtin_skills
 
         src = tmp_path / "source"
         src.mkdir()

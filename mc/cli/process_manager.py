@@ -4,7 +4,7 @@ ProcessManager — Spawns and manages Mission Control subprocesses.
 Manages 4 child processes:
 1. Convex dev server (npx convex dev)
 2. Next.js dev server (npm run dev)
-3. Agent Gateway (python -m mc.gateway)
+3. Agent Gateway (python -m mc.runtime.gateway)
 4. Nanobot Gateway — channels/Telegram (python -m nanobot gateway)
 """
 
@@ -244,7 +244,7 @@ class ProcessManager:
             ProcessConfig(
                 label="gateway",
                 command=sys.executable,
-                args=["-m", "mc.gateway"],
+                args=["-m", "mc.runtime.gateway"],
                 cwd=self._project_root,
             ),
             ProcessConfig(

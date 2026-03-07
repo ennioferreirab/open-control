@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mc.plan_materializer import PlanMaterializer
+from mc.contexts.planning.materializer import PlanMaterializer
 from mc.types import ActivityEventType, ExecutionPlan, ExecutionPlanStep, TaskStatus
 
 

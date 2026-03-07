@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.executor import TaskExecutor
+from mc.contexts.execution.executor import TaskExecutor
 from mc.types import AgentData, CCTaskResult, WorkspaceContext
 
 

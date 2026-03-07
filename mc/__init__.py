@@ -8,6 +8,7 @@ This package provides the Python-side components for Mission Control:
 - contexts: planning, execution, conversation, review, and agent sync
 - infrastructure: config, providers, bootstrap, and filesystem helpers
 - domain: workflow and invariant helpers
+- root package: only `__init__` and `types`
 """
 
 from mc.bridge import ConvexBridge

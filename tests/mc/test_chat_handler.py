@@ -62,7 +62,7 @@ class TestProcessChatMessage:
     @pytest.mark.asyncio
     async def test_happy_path_sends_response_and_marks_done(self, tmp_path):
         """Process a pending message: mark processing, run engine, send response, mark done."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -96,7 +96,7 @@ class TestProcessChatMessage:
                 agents_dir,
             ),
             patch(
-                "mc.chat_handler.ExecutionEngine",
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
                 return_value=mock_engine,
             ),
         ):
@@ -115,7 +115,7 @@ class TestProcessChatMessage:
     @pytest.mark.asyncio
     async def test_skips_message_without_id(self):
         """Messages without an id are skipped silently."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -129,7 +129,7 @@ class TestProcessChatMessage:
     @pytest.mark.asyncio
     async def test_skips_message_without_agent_name(self):
         """Messages without an agent_name are skipped."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -151,7 +151,7 @@ class TestProcessChatMessageErrors:
     @pytest.mark.asyncio
     async def test_error_marks_done_and_sends_error_response(self, tmp_path):
         """On processing error, mark original done and send error response."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -183,7 +183,7 @@ class TestProcessChatMessageErrors:
                 agents_dir,
             ),
             patch(
-                "mc.chat_handler.ExecutionEngine",
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
                 return_value=mock_engine,
             ),
         ):
@@ -209,7 +209,7 @@ class TestChatHandlerPollingLoop:
     @pytest.mark.asyncio
     async def test_run_polls_and_dispatches(self):
         """The run() loop polls for pending messages and processes them."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -237,8 +237,8 @@ class TestChatHandlerPollingLoop:
 
         # Patch both polling intervals to 0 so the loop iterates fast
         with (
-            patch("mc.chat_handler.ACTIVE_POLL_INTERVAL_SECONDS", 0),
-            patch("mc.chat_handler.SLEEP_POLL_INTERVAL_SECONDS", 0),
+            patch("mc.contexts.conversation.chat_handler.ACTIVE_POLL_INTERVAL_SECONDS", 0),
+            patch("mc.contexts.conversation.chat_handler.SLEEP_POLL_INTERVAL_SECONDS", 0),
         ):
             task = asyncio.create_task(handler.run())
             # Wait for processing to happen (with timeout)
@@ -257,7 +257,7 @@ class TestChatHandlerPollingLoop:
     @pytest.mark.asyncio
     async def test_run_handles_poll_error_gracefully(self):
         """Errors during polling don't crash the loop."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
@@ -277,8 +277,8 @@ class TestChatHandlerPollingLoop:
         bridge.get_pending_chat_messages = failing_get_pending
 
         with (
-            patch("mc.chat_handler.ACTIVE_POLL_INTERVAL_SECONDS", 0),
-            patch("mc.chat_handler.SLEEP_POLL_INTERVAL_SECONDS", 0),
+            patch("mc.contexts.conversation.chat_handler.ACTIVE_POLL_INTERVAL_SECONDS", 0),
+            patch("mc.contexts.conversation.chat_handler.SLEEP_POLL_INTERVAL_SECONDS", 0),
         ):
             task = asyncio.create_task(handler.run())
             try:
@@ -297,13 +297,13 @@ class TestChatHandlerPollingLoop:
     @pytest.mark.asyncio
     async def test_run_publishes_sleep_runtime_on_start(self):
         """The handler publishes sleeping runtime metadata before polling."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
 
         sleep_mock = AsyncMock(side_effect=asyncio.CancelledError)
-        with patch("mc.chat_handler.asyncio.sleep", sleep_mock):
+        with patch("mc.contexts.conversation.chat_handler.asyncio.sleep", sleep_mock):
             with pytest.raises(asyncio.CancelledError):
                 await handler.run()
 
@@ -323,7 +323,7 @@ class TestChatHandlerPollingLoop:
     @pytest.mark.asyncio
     async def test_run_ignores_remote_terminal_pending_messages(self):
         """Remote terminal chat messages do not wake or dispatch the chat poller."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         bridge.get_pending_chat_messages = MagicMock(
@@ -336,7 +336,7 @@ class TestChatHandlerPollingLoop:
         handler._process_chat_message = AsyncMock()
 
         sleep_mock = AsyncMock(side_effect=asyncio.CancelledError)
-        with patch("mc.chat_handler.asyncio.sleep", sleep_mock):
+        with patch("mc.contexts.conversation.chat_handler.asyncio.sleep", sleep_mock):
             with pytest.raises(asyncio.CancelledError):
                 await handler.run()
 
@@ -352,7 +352,7 @@ class TestChatHandlerPollingLoop:
     @pytest.mark.asyncio
     async def test_run_switches_to_active_for_non_remote_work_and_back_to_sleep(self):
         """Useful work wakes the handler and it sleeps again when the queue drains."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         msg = _make_pending_msg(agent_name="worker-agent")
@@ -387,7 +387,7 @@ class TestChatHandlerPollingLoop:
                 raise asyncio.CancelledError
 
         with patch(
-            "mc.chat_handler.asyncio.sleep",
+            "mc.contexts.conversation.chat_handler.asyncio.sleep",
             new=AsyncMock(side_effect=fake_sleep),
         ):
             with pytest.raises(asyncio.CancelledError):
@@ -522,7 +522,7 @@ class TestCCModelRouting:
     @pytest.mark.asyncio
     async def test_cc_model_routes_through_engine(self, tmp_path):
         """When model resolves to cc/*, route through ExecutionEngine."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = self._make_cc_bridge()
         handler = ChatHandler(bridge)
@@ -552,7 +552,7 @@ class TestCCModelRouting:
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
-                "mc.chat_handler.ExecutionEngine",
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
                 return_value=mock_engine,
             ),
         ):
@@ -573,7 +573,7 @@ class TestCCModelRouting:
     @pytest.mark.asyncio
     async def test_cc_request_has_claude_code_runner_type(self, tmp_path):
         """CC chat request should have RunnerType.CLAUDE_CODE."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = self._make_cc_bridge()
         handler = ChatHandler(bridge)
@@ -604,7 +604,7 @@ class TestCCModelRouting:
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
-                "mc.chat_handler.ExecutionEngine",
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
                 return_value=mock_engine,
             ),
         ):
@@ -616,7 +616,7 @@ class TestCCModelRouting:
     @pytest.mark.asyncio
     async def test_non_cc_model_routes_through_nanobot_engine(self, tmp_path):
         """Non cc/ model goes through ExecutionEngine with NANOBOT runner."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = self._make_cc_bridge()
         handler = ChatHandler(bridge)
@@ -645,7 +645,7 @@ class TestCCModelRouting:
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
-                "mc.chat_handler.ExecutionEngine",
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
                 return_value=mock_engine,
             ),
         ):
@@ -669,16 +669,16 @@ MC_ROOT = Path(__file__).resolve().parent.parent.parent / "mc"
 
 
 # ---------------------------------------------------------------------------
-# Test: Architecture — chat_handler must not import mc.executor (Story 20.1)
+# Test: Architecture — chat_handler must not import mc.contexts.execution.executor (Story 20.1)
 # ---------------------------------------------------------------------------
 
 
 class TestChatHandlerArchitecture:
-    """Verify chat_handler does not import mc.executor directly."""
+    """Verify chat_handler does not import mc.contexts.execution.executor directly."""
 
     def test_no_executor_imports(self) -> None:
-        """chat_handler.py must not import from mc.executor (AC4)."""
-        filepath = MC_ROOT / "chat_handler.py"
+        """chat_handler.py must not import from mc.contexts.execution.executor (AC4)."""
+        filepath = MC_ROOT / "contexts" / "conversation" / "chat_handler.py"
         assert filepath.exists(), "chat_handler.py must exist"
 
         source = filepath.read_text(encoding="utf-8")
@@ -687,18 +687,18 @@ class TestChatHandlerArchitecture:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "mc.executor" or alias.name.startswith(
-                        "mc.executor."
+                    if alias.name == "mc.contexts.execution.executor" or alias.name.startswith(
+                        "mc.contexts.execution.executor."
                     ):
                         executor_imports.append(alias.name)
             elif isinstance(node, ast.ImportFrom):
                 if node.module and (
-                    node.module == "mc.executor"
-                    or node.module.startswith("mc.executor.")
+                    node.module == "mc.contexts.execution.executor"
+                    or node.module.startswith("mc.contexts.execution.executor.")
                 ):
                     executor_imports.append(node.module)
         assert executor_imports == [], (
-            f"chat_handler.py imports from mc.executor: {executor_imports}"
+            f"chat_handler.py imports from mc.contexts.execution.executor: {executor_imports}"
         )
 
 
@@ -713,7 +713,7 @@ class TestChatHandlerEngineIntegration:
     @pytest.mark.asyncio
     async def test_cc_chat_routes_through_engine(self, tmp_path):
         """CC-model chat messages should route through ExecutionEngine.run()."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         bridge.get_agent_by_name = MagicMock(return_value=None)
@@ -749,7 +749,7 @@ class TestChatHandlerEngineIntegration:
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
-                "mc.chat_handler.ExecutionEngine",
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
                 return_value=mock_engine,
             ),
         ):
@@ -776,7 +776,7 @@ class TestChatHandlerEngineIntegration:
     @pytest.mark.asyncio
     async def test_cc_chat_persists_session(self, tmp_path):
         """CC chat should persist session_id from engine result."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         bridge.get_agent_by_name = MagicMock(return_value=None)
@@ -812,7 +812,7 @@ class TestChatHandlerEngineIntegration:
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
-                "mc.chat_handler.ExecutionEngine",
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
                 return_value=mock_engine,
             ),
         ):
@@ -827,7 +827,7 @@ class TestChatHandlerEngineIntegration:
     @pytest.mark.asyncio
     async def test_nanobot_chat_routes_through_engine(self, tmp_path):
         """Non-CC model chat should route through ExecutionEngine with NANOBOT runner."""
-        from mc.chat_handler import ChatHandler
+        from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         bridge.get_agent_by_name = MagicMock(return_value=None)
@@ -862,7 +862,7 @@ class TestChatHandlerEngineIntegration:
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
             patch(
-                "mc.chat_handler.ExecutionEngine",
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
                 return_value=mock_engine,
             ),
         ):

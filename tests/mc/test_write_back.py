@@ -115,7 +115,7 @@ class TestWriteBackConvexAgents:
 
     def test_writes_back_when_convex_is_newer(self, tmp_path: Path) -> None:
         """If Convex lastActiveAt > local mtime, should write back."""
-        from mc.gateway import _write_back_convex_agents
+        from mc.runtime.gateway import _write_back_convex_agents
 
         # Create a local config.yaml with old mtime
         agent_dir = tmp_path / "my-agent"
@@ -150,7 +150,7 @@ class TestWriteBackConvexAgents:
 
     def test_skips_when_local_is_newer(self, tmp_path: Path) -> None:
         """If local mtime > Convex lastActiveAt, should NOT write back."""
-        from mc.gateway import _write_back_convex_agents
+        from mc.runtime.gateway import _write_back_convex_agents
 
         agent_dir = tmp_path / "my-agent"
         agent_dir.mkdir()
@@ -173,7 +173,7 @@ class TestWriteBackConvexAgents:
 
     def test_creates_new_agent_dir_from_convex(self, tmp_path: Path) -> None:
         """If agent exists in Convex but not locally, should create it."""
-        from mc.gateway import _write_back_convex_agents
+        from mc.runtime.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_agents.return_value = [
@@ -191,7 +191,7 @@ class TestWriteBackConvexAgents:
 
     def test_handles_list_agents_failure(self, tmp_path: Path) -> None:
         """Should not crash if list_agents fails."""
-        from mc.gateway import _write_back_convex_agents
+        from mc.runtime.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_agents.side_effect = Exception("Network error")
@@ -201,7 +201,7 @@ class TestWriteBackConvexAgents:
 
     def test_skips_agent_without_last_active_at(self, tmp_path: Path) -> None:
         """Agents without lastActiveAt should be skipped."""
-        from mc.gateway import _write_back_convex_agents
+        from mc.runtime.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
         mock_bridge.list_agents.return_value = [

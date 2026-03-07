@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.executor import TaskExecutor
+from mc.contexts.execution.executor import TaskExecutor
 from mc.types import AgentData, CCTaskResult, WorkspaceContext
 
 
@@ -61,7 +61,7 @@ class TestEnrichCCDescription:
         ])
         executor = _make_executor(bridge)
 
-        with patch("mc.executor._build_thread_context", return_value="[Thread]\nuser: Please help"):
+        with patch("mc.contexts.execution.executor._build_thread_context", return_value="[Thread]\nuser: Please help"):
             result = await executor._enrich_cc_description("task1", "Base desc", None)
 
         assert "[Thread]" in result or "Please help" in result
@@ -86,7 +86,7 @@ class TestEnrichCCDescription:
 
         task_data = {"tags": ["client"]}
         with patch(
-            "mc.executor._build_tag_attributes_context",
+            "mc.contexts.execution.executor._build_tag_attributes_context",
             return_value="[Task Tag Attributes]\nclient: priority=high",
         ):
             result = await executor._enrich_cc_description("task1", "Base desc", task_data)
@@ -204,8 +204,8 @@ class TestEnrichCCDescription:
              patch("claude_code.provider.ClaudeCodeProvider") as MockProv, \
              patch("mc.infrastructure.orientation.load_orientation", return_value=None), \
              patch("claude_code.workspace.CCWorkspaceManager", return_value=ws_mgr), \
-             patch("mc.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.executor._collect_output_artifacts", return_value=[]):
+             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
+             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]):
             MockIPC.return_value.start = AsyncMock()
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=mock_result)

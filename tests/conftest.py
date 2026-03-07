@@ -12,4 +12,4 @@ def _preimport_heavy_modules():
     timeout starts, so importing here ensures every test file sees a warm
     import cache — regardless of execution order or file isolation.
     """
-    import mc.executor  # noqa: F401
+    import mc.contexts.execution.executor  # noqa: F401

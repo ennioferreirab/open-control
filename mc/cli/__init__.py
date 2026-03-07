@@ -43,7 +43,7 @@ def _kill_stale_processes() -> None:
     dashboard_dir = str(_find_dashboard_dir())
     # Always-kill patterns (nanobot-specific, safe to match globally)
     patterns = [
-        "mc.gateway",
+        "mc.runtime.gateway",
         "-m nanobot gateway",
     ]
     # Dashboard-scoped patterns (only kill if the command references our dashboard)
@@ -171,7 +171,7 @@ def start(
 
     # Pre-sync: update config.json from Convex BEFORE nanobot gateway starts.
     # This avoids a race condition where the nanobot process reads config.json
-    # before mc.gateway has finished syncing the model from Convex.
+    # before mc.runtime.gateway has finished syncing the model from Convex.
     try:
         bridge = _get_bridge()
         from mc.infrastructure.agent_bootstrap import sync_nanobot_default_model
@@ -179,7 +179,7 @@ def start(
         if sync_nanobot_default_model(bridge):
             console.print("[green]✓[/green] Synced nanobot default model from dashboard")
     except Exception:
-        pass  # Non-critical; mc.gateway will retry during its own startup
+        pass  # Non-critical; mc.runtime.gateway will retry during its own startup
 
     async def _run():
         pm = ProcessManager(dashboard_dir=resolved_dir)

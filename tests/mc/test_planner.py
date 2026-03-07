@@ -94,7 +94,7 @@ class TestTaskPlannerSingleStep:
     @pytest.mark.asyncio
     async def test_single_step_plan_generation(self):
         """A simple task should produce a 1-step plan via LLM."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -117,7 +117,7 @@ class TestTaskPlannerSingleStep:
     @pytest.mark.asyncio
     async def test_every_task_gets_a_plan(self):
         """Even simple tasks should always produce a plan (AC #1)."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -142,7 +142,7 @@ class TestTaskPlannerMultiStep:
     @pytest.mark.asyncio
     async def test_multi_step_plan_with_dependencies(self):
         """A complex task should produce a multi-step plan with dependencies."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _multi_step_plan_json()
         mock_provider = MagicMock()
@@ -166,7 +166,7 @@ class TestTaskPlannerMultiStep:
     @pytest.mark.asyncio
     async def test_multi_step_plan_assigns_different_agents(self):
         """Multi-step plan should assign different agents to different steps."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _multi_step_plan_json()
         mock_provider = MagicMock()
@@ -191,7 +191,7 @@ class TestTaskPlannerPrompt:
     @pytest.mark.asyncio
     async def test_prompt_includes_task_info_and_agent_roster(self):
         """The LLM call should include task info and agent roster."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -229,7 +229,7 @@ class TestTaskPlannerPrompt:
     @pytest.mark.asyncio
     async def test_prompt_includes_agent_skills(self):
         """Agent skills should be listed in the prompt for LLM reasoning."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -256,7 +256,7 @@ class TestTaskPlannerPrompt:
     @pytest.mark.asyncio
     async def test_prompt_includes_batch_parallelization_hint_for_multi_item_requests(self):
         """Multi-item requests should carry an explicit batching hint to the LLM."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -282,7 +282,7 @@ class TestTaskPlannerPrompt:
     @pytest.mark.asyncio
     async def test_prompt_injects_lead_agent_planning_skill_content(self):
         """Direct planner path should inline configured planning skill content."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -293,7 +293,7 @@ class TestTaskPlannerPrompt:
         with (
             patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")),
             patch(
-                "mc.planner._load_lead_agent_planning_skills",
+                "mc.contexts.planning.planner._load_lead_agent_planning_skills",
                 return_value=(
                     ["writing-plans"],
                     "### Skill: writing-plans\n\nAlways decompose multi-step work carefully.",
@@ -319,7 +319,7 @@ class TestTaskPlannerNanobotFallback:
     @pytest.mark.asyncio
     async def test_llm_assigns_nanobot_when_no_specialist(self):
         """LLM plan with nanobot assignment should be preserved."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
             "steps": [
@@ -348,7 +348,7 @@ class TestTaskPlannerNanobotFallback:
     @pytest.mark.asyncio
     async def test_llm_lead_agent_assignment_is_rewritten_to_general(self):
         """Lead-agent step assignments should be rewritten to nanobot."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
             "steps": [
@@ -385,7 +385,7 @@ class TestAgentNameValidation:
     @pytest.mark.asyncio
     async def test_invalid_agent_name_replaced_with_nanobot(self):
         """Invalid agent names in LLM response should be replaced with nanobot."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
             "steps": [
@@ -414,7 +414,7 @@ class TestAgentNameValidation:
     @pytest.mark.asyncio
     async def test_valid_agent_names_preserved(self):
         """Valid agent names in LLM response should remain unchanged."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()  # uses "code-agent"
         mock_provider = MagicMock()
@@ -438,7 +438,7 @@ class TestAgentNameNoneHandling:
     @pytest.mark.asyncio
     async def test_none_assigned_agent_defaults_to_nanobot(self):
         """When LLM omits assigned_agent, it should default to nanobot."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
             "steps": [
@@ -470,7 +470,7 @@ class TestExplicitAgentOverride:
     @pytest.mark.asyncio
     async def test_explicit_agent_overrides_all_steps(self):
         """When explicit_agent is set, all steps should be assigned to that agent."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _multi_step_plan_json()  # 3 steps with different agents
         mock_provider = MagicMock()
@@ -492,7 +492,7 @@ class TestExplicitAgentOverride:
     @pytest.mark.asyncio
     async def test_explicit_lead_agent_override_rewritten_to_general(self):
         """An explicit lead-agent override is blocked and replaced."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -517,7 +517,7 @@ class TestLLMFailureFallback:
     @pytest.mark.asyncio
     async def test_provider_error_falls_back_to_heuristic(self):
         """When LLM provider raises an error, fallback to heuristic planning."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(side_effect=RuntimeError("Provider unavailable"))
@@ -540,7 +540,7 @@ class TestLLMFailureFallback:
     @pytest.mark.asyncio
     async def test_timeout_error_falls_back_to_heuristic(self):
         """When LLM times out, fallback to heuristic planning."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(side_effect=TimeoutError("Request timed out"))
@@ -560,7 +560,7 @@ class TestLLMFailureFallback:
     @pytest.mark.asyncio
     async def test_heuristic_fallback_never_returns_lead_agent(self):
         """Heuristic fallback should use nanobot when no specialist matches."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(side_effect=RuntimeError("Provider unavailable"))
@@ -587,7 +587,7 @@ class TestPlannerReasoningLevel:
     @pytest.mark.asyncio
     async def test_default_model_is_forwarded_to_provider(self):
         """Planner should pass the resolved default model into create_provider()."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -610,7 +610,7 @@ class TestPlannerReasoningLevel:
     @pytest.mark.asyncio
     async def test_reasoning_level_is_forwarded_to_provider(self):
         """Non-CC provider calls should receive the planner reasoning level."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -632,7 +632,7 @@ class TestPlannerReasoningLevel:
     @pytest.mark.asyncio
     async def test_cc_planning_receives_configured_lead_agent_skills(self):
         """CC planner path should pass configured lead-agent skills into _cc_plan()."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         planner = TaskPlanner(bridge=MagicMock())
         expected_plan = ExecutionPlan(
@@ -651,7 +651,7 @@ class TestPlannerReasoningLevel:
 
         with (
             patch(
-                "mc.planner._load_lead_agent_planning_skills",
+                "mc.contexts.planning.planner._load_lead_agent_planning_skills",
                 return_value=(["using-superpowers", "writing-plans"], "skill body"),
             ),
             patch.object(planner, "_cc_plan", AsyncMock(return_value=expected_plan)) as cc_plan_mock,
@@ -676,7 +676,7 @@ class TestPlannerDiagnosticLogging:
     @pytest.mark.asyncio
     async def test_timeout_logs_specific_message(self):
         """Timeout should log a distinct warning with timeout duration."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(side_effect=asyncio.TimeoutError())
@@ -684,7 +684,7 @@ class TestPlannerDiagnosticLogging:
         planner = TaskPlanner()
 
         with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")), \
-             patch("mc.planner.logger") as mock_logger:
+             patch("mc.contexts.planning.planner.logger") as mock_logger:
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -701,7 +701,7 @@ class TestPlannerDiagnosticLogging:
     @pytest.mark.asyncio
     async def test_general_error_logs_with_traceback(self):
         """General errors should log with exc_info=True."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(side_effect=RuntimeError("API exploded"))
@@ -709,7 +709,7 @@ class TestPlannerDiagnosticLogging:
         planner = TaskPlanner()
 
         with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")), \
-             patch("mc.planner.logger") as mock_logger:
+             patch("mc.contexts.planning.planner.logger") as mock_logger:
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -732,7 +732,7 @@ class TestPlannerModelParameter:
     @pytest.mark.asyncio
     async def test_model_param_passed_to_provider(self):
         """When model is specified, it should be passed to create_provider."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -753,7 +753,7 @@ class TestPlannerModelParameter:
     @pytest.mark.asyncio
     async def test_no_model_param_passes_none(self):
         """When no model specified, create_provider gets the resolved default model."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         mock_provider = MagicMock()
@@ -778,7 +778,7 @@ class TestPlannerModelParameter:
     @pytest.mark.asyncio
     async def test_cc_model_routes_to_claude_code_backend(self):
         """cc/ models must use Claude Code backend instead of LiteLLM create_provider()."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         bridge = MagicMock()
         planner = TaskPlanner(bridge=bridge)
@@ -824,7 +824,7 @@ class TestMalformedJSONFallback:
     @pytest.mark.asyncio
     async def test_invalid_json_falls_back_to_heuristic(self):
         """When LLM returns invalid JSON, fallback to heuristic planning."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=LLMResponse(content="This is not JSON at all"))
@@ -844,7 +844,7 @@ class TestMalformedJSONFallback:
     @pytest.mark.asyncio
     async def test_json_missing_steps_key_falls_back(self):
         """When LLM returns JSON without 'steps' key, fallback to heuristic."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=LLMResponse(content='{"plan": "something"}'))
@@ -864,7 +864,7 @@ class TestMalformedJSONFallback:
     @pytest.mark.asyncio
     async def test_markdown_fenced_json_is_parsed(self):
         """LLM response with markdown code fencing should still be parsed."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         fenced_response = f"```json\n{json.dumps(plan_json)}\n```"
@@ -887,7 +887,7 @@ class TestMalformedJSONFallback:
     @pytest.mark.asyncio
     async def test_json_with_preamble_and_postamble_is_parsed(self):
         """LLM response with extra prose around JSON should still be parsed."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = _single_step_plan_json()
         wrapped_response = (
@@ -914,7 +914,7 @@ class TestMalformedJSONFallback:
     @pytest.mark.asyncio
     async def test_slightly_malformed_json_is_repaired(self):
         """LLM response with minor JSON formatting errors should be repaired."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         malformed = """
         {
@@ -955,7 +955,7 @@ class TestOrchestratorPlannerIntegration:
     @pytest.mark.asyncio
     async def test_planning_task_uses_planner(self):
         """_process_planning_task should use TaskPlanner instead of heuristic scoring."""
-        from mc.orchestrator import TaskOrchestrator
+        from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -988,7 +988,7 @@ class TestOrchestratorPlannerIntegration:
     @pytest.mark.asyncio
     async def test_explicit_agent_passed_to_planner(self):
         """When task has assigned_agent, it should be passed as explicit_agent to planner."""
-        from mc.orchestrator import TaskOrchestrator
+        from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -1024,7 +1024,7 @@ class TestOrchestratorPlannerIntegration:
     @pytest.mark.asyncio
     async def test_plan_stored_and_dispatched(self):
         """After planning, plan should be stored and steps dispatched."""
-        from mc.orchestrator import TaskOrchestrator
+        from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -1060,7 +1060,7 @@ class TestOrchestratorPlannerIntegration:
     @pytest.mark.asyncio
     async def test_manual_task_still_skipped(self):
         """Manual tasks should still be skipped (not sent to planner)."""
-        from mc.orchestrator import TaskOrchestrator
+        from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -1091,7 +1091,7 @@ class TestEnrichedPlannerFeatures:
 
     def test_enriched_roster_includes_tools(self):
         """_build_agent_roster output must include a 'Tools:' line with STANDARD_TOOLS."""
-        from mc.planner import _build_agent_roster, STANDARD_TOOLS
+        from mc.contexts.planning.planner import _build_agent_roster, STANDARD_TOOLS
 
         agents = [_make_agent("test-agent", "tester", ["python", "testing"])]
         roster = _build_agent_roster(agents)
@@ -1102,7 +1102,7 @@ class TestEnrichedPlannerFeatures:
 
     def test_enriched_roster_multiline_format(self):
         """_build_agent_roster uses bold-name multi-line format with Skills: line."""
-        from mc.planner import _build_agent_roster
+        from mc.contexts.planning.planner import _build_agent_roster
 
         agents = [_make_agent("code-agent", "developer", ["python", "javascript"])]
         roster = _build_agent_roster(agents)
@@ -1112,7 +1112,7 @@ class TestEnrichedPlannerFeatures:
 
     def test_system_prompt_has_decomposition_guidance(self):
         """SYSTEM_PROMPT must contain key conceptual sections."""
-        from mc.planner import SYSTEM_PROMPT
+        from mc.contexts.planning.planner import SYSTEM_PROMPT
 
         assert "Decomposition" in SYSTEM_PROMPT
         assert "Anti-Patterns" in SYSTEM_PROMPT
@@ -1121,14 +1121,14 @@ class TestEnrichedPlannerFeatures:
 
     def test_system_prompt_encourages_multi_step_for_complex_tasks(self):
         """SYSTEM_PROMPT should NOT say 'most tasks need 1 step'."""
-        from mc.planner import SYSTEM_PROMPT
+        from mc.contexts.planning.planner import SYSTEM_PROMPT
 
         assert "most tasks need exactly 1 step" not in SYSTEM_PROMPT
         assert "most tasks need only 1 step" not in SYSTEM_PROMPT
 
     def test_system_prompt_has_few_shot_examples(self):
         """SYSTEM_PROMPT must include at least three numbered examples."""
-        from mc.planner import SYSTEM_PROMPT
+        from mc.contexts.planning.planner import SYSTEM_PROMPT
 
         assert "Example 1" in SYSTEM_PROMPT
         assert "Example 2" in SYSTEM_PROMPT
@@ -1136,7 +1136,7 @@ class TestEnrichedPlannerFeatures:
 
     def test_user_prompt_template_does_not_bias_single_step(self):
         """USER_PROMPT_TEMPLATE should not bias toward single-step plans."""
-        from mc.planner import USER_PROMPT_TEMPLATE
+        from mc.contexts.planning.planner import USER_PROMPT_TEMPLATE
 
         lower = USER_PROMPT_TEMPLATE.lower()
         assert "most tasks need only 1 step" not in lower
@@ -1148,7 +1148,7 @@ class TestRemoteTerminalExclusion:
 
     def test_roster_excludes_remote_terminal(self):
         """Agents with role='remote-terminal' must not appear in roster."""
-        from mc.planner import _build_agent_roster
+        from mc.contexts.planning.planner import _build_agent_roster
 
         agents = [
             _make_agent("nanobot", "generalist", ["general"]),
@@ -1162,7 +1162,7 @@ class TestRemoteTerminalExclusion:
     @pytest.mark.asyncio
     async def test_remote_terminal_agent_replaced_with_nanobot(self):
         """If LLM assigns a remote-terminal agent, it should be replaced."""
-        from mc.planner import TaskPlanner
+        from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
             "steps": [{
@@ -1202,7 +1202,7 @@ class TestOrientationRosterInterpolation:
 
     def test_orientation_roster_interpolation(self):
         """{agent_roster} placeholder in orientation file is replaced with roster text."""
-        from mc.step_dispatcher import _maybe_inject_orientation
+        from mc.contexts.execution.step_dispatcher import _maybe_inject_orientation
         from unittest.mock import patch
 
         # Mock load_orientation to return interpolated text (roster interpolation
@@ -1219,7 +1219,7 @@ class TestOrientationRosterInterpolation:
 
     def test_orientation_without_placeholder(self):
         """Orientation files without {agent_roster} are returned unchanged (backwards compat)."""
-        from mc.step_dispatcher import _maybe_inject_orientation
+        from mc.contexts.execution.step_dispatcher import _maybe_inject_orientation
         from unittest.mock import patch
 
         with patch(

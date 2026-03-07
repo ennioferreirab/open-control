@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from mc.orchestrator import generate_title_via_low_agent
+from mc.runtime.orchestrator import generate_title_via_low_agent
 
 
 @pytest.mark.asyncio
@@ -29,10 +29,10 @@ async def test_generate_title_via_low_agent_calls_llm_with_low_tier():
         return func(*args, **kwargs)
 
     with patch(
-        "mc.orchestrator.create_provider",
+        "mc.runtime.orchestrator.create_provider",
         return_value=(mock_provider, "anthropic/claude-haiku-3-5"),
     ) as mock_create:
-        with patch("mc.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
+        with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
             result = await generate_title_via_low_agent(
                 mock_bridge,
                 "When users try to log in with an email that contains special characters "
@@ -68,10 +68,10 @@ async def test_generate_title_via_low_agent_falls_back_to_default_on_missing_tie
         return func(*args, **kwargs)
 
     with patch(
-        "mc.orchestrator.create_provider",
+        "mc.runtime.orchestrator.create_provider",
         return_value=(mock_provider, "default-model"),
     ) as mock_create:
-        with patch("mc.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
+        with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
             result = await generate_title_via_low_agent(mock_bridge, "Some task description")
 
     assert result == "Short description title"
@@ -88,7 +88,7 @@ async def test_generate_title_via_low_agent_returns_none_when_agent_not_found():
     async def _sync_to_thread(func, *args, **kwargs):
         return func(*args, **kwargs)
 
-    with patch("mc.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
+    with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
         result = await generate_title_via_low_agent(mock_bridge, "Some task description")
 
     assert result is None
@@ -110,10 +110,10 @@ async def test_generate_title_via_low_agent_strips_quotes():
         return func(*args, **kwargs)
 
     with patch(
-        "mc.orchestrator.create_provider",
+        "mc.runtime.orchestrator.create_provider",
         return_value=(mock_provider, "anthropic/claude-haiku-3-5"),
     ):
-        with patch("mc.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
+        with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
             result = await generate_title_via_low_agent(mock_bridge, "description")
 
     assert result == "Fix the login bug"

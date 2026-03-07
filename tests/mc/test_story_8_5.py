@@ -55,7 +55,7 @@ class TestProviderErrorHandling:
     @pytest.mark.asyncio
     async def test_provider_error_writes_system_message(self):
         """On provider error, a system message with action is written to task thread."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
         from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
@@ -71,7 +71,7 @@ class TestProviderErrorHandling:
         )
 
         with patch(
-            "mc.executor._run_agent_on_task",
+            "mc.contexts.execution.executor._run_agent_on_task",
             new_callable=AsyncMock,
             side_effect=provider_err,
         ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
@@ -90,7 +90,7 @@ class TestProviderErrorHandling:
     @pytest.mark.asyncio
     async def test_provider_error_creates_system_error_activity(self):
         """On provider error, a system_error activity event is created."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
         from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
@@ -105,7 +105,7 @@ class TestProviderErrorHandling:
         )
 
         with patch(
-            "mc.executor._run_agent_on_task",
+            "mc.contexts.execution.executor._run_agent_on_task",
             new_callable=AsyncMock,
             side_effect=provider_err,
         ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
@@ -123,7 +123,7 @@ class TestProviderErrorHandling:
     @pytest.mark.asyncio
     async def test_provider_error_crashes_task(self):
         """On provider error, the task should transition to 'crashed'."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
         from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
@@ -136,7 +136,7 @@ class TestProviderErrorHandling:
         provider_err = ProviderError("Config broken")
 
         with patch(
-            "mc.executor._run_agent_on_task",
+            "mc.contexts.execution.executor._run_agent_on_task",
             new_callable=AsyncMock,
             side_effect=provider_err,
         ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
@@ -154,7 +154,7 @@ class TestProviderErrorHandling:
     @pytest.mark.asyncio
     async def test_anthropic_oauth_expired_surfaces_login_command(self):
         """AnthropicOAuthExpired should surface the 'nanobot provider login' command."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -172,7 +172,7 @@ class TestProviderErrorHandling:
         )
 
         with patch(
-            "mc.executor._run_agent_on_task",
+            "mc.contexts.execution.executor._run_agent_on_task",
             new_callable=AsyncMock,
             side_effect=oauth_err,
         ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
@@ -191,7 +191,7 @@ class TestProviderErrorHandling:
     @pytest.mark.asyncio
     async def test_provider_error_does_not_auto_retry(self):
         """Provider errors should NOT go through auto-retry (handle_agent_crash)."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
         from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
@@ -202,7 +202,7 @@ class TestProviderErrorHandling:
         executor = TaskExecutor(mock_bridge)
 
         with patch(
-            "mc.executor._run_agent_on_task",
+            "mc.contexts.execution.executor._run_agent_on_task",
             new_callable=AsyncMock,
             side_effect=ProviderError("Broken"),
         ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
@@ -217,7 +217,7 @@ class TestProviderErrorHandling:
     @pytest.mark.asyncio
     async def test_known_assigned_ids_cleaned_after_provider_error(self):
         """Task ID should be removed from _known_assigned_ids after provider error."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
         from mc.infrastructure.providers.factory import ProviderError
 
         mock_bridge = MagicMock()
@@ -230,7 +230,7 @@ class TestProviderErrorHandling:
         executor._known_assigned_ids.add("task_prov_cleanup")
 
         with patch(
-            "mc.executor._run_agent_on_task",
+            "mc.contexts.execution.executor._run_agent_on_task",
             new_callable=AsyncMock,
             side_effect=ProviderError("Broken"),
         ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
@@ -252,7 +252,7 @@ class TestSyncSkillsPublicAPI:
 
     def test_no_private_method_calls(self, tmp_path):
         """sync_skills should not call any _private methods on SkillsLoader."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
         skill_dir = skills_dir / "test-skill"
@@ -424,7 +424,7 @@ class TestParseUtcTimestamp:
 
     def test_z_suffix(self):
         """Handles Z suffix correctly."""
-        from mc.gateway import _parse_utc_timestamp
+        from mc.runtime.gateway import _parse_utc_timestamp
 
         result = _parse_utc_timestamp("2026-01-01T00:00:00Z")
         assert result is not None
@@ -433,7 +433,7 @@ class TestParseUtcTimestamp:
 
     def test_plus_zero_offset(self):
         """Handles +00:00 suffix correctly."""
-        from mc.gateway import _parse_utc_timestamp
+        from mc.runtime.gateway import _parse_utc_timestamp
 
         result = _parse_utc_timestamp("2026-01-01T12:00:00+00:00")
         assert result is not None
@@ -441,7 +441,7 @@ class TestParseUtcTimestamp:
 
     def test_naive_timestamp_treated_as_utc(self):
         """Naive (no tz) timestamps are treated as UTC."""
-        from mc.gateway import _parse_utc_timestamp
+        from mc.runtime.gateway import _parse_utc_timestamp
 
         result = _parse_utc_timestamp("2026-01-01T00:00:00")
         assert result is not None
@@ -450,26 +450,26 @@ class TestParseUtcTimestamp:
 
     def test_invalid_string_returns_none(self):
         """Invalid timestamp strings return None."""
-        from mc.gateway import _parse_utc_timestamp
+        from mc.runtime.gateway import _parse_utc_timestamp
 
         assert _parse_utc_timestamp("not-a-date") is None
         assert _parse_utc_timestamp("") is None
 
     def test_none_returns_none(self):
         """None input returns None (graceful handling)."""
-        from mc.gateway import _parse_utc_timestamp
+        from mc.runtime.gateway import _parse_utc_timestamp
 
         assert _parse_utc_timestamp(None) is None  # type: ignore[arg-type]
 
     def test_non_string_returns_none(self):
         """Non-string input returns None."""
-        from mc.gateway import _parse_utc_timestamp
+        from mc.runtime.gateway import _parse_utc_timestamp
 
         assert _parse_utc_timestamp(12345) is None  # type: ignore[arg-type]
 
     def test_both_z_and_offset_produce_comparable_results(self):
         """Z and +00:00 for the same time should produce equal datetimes."""
-        from mc.gateway import _parse_utc_timestamp
+        from mc.runtime.gateway import _parse_utc_timestamp
 
         t1 = _parse_utc_timestamp("2026-06-15T10:30:00Z")
         t2 = _parse_utc_timestamp("2026-06-15T10:30:00+00:00")
@@ -482,7 +482,7 @@ class TestWriteBackTimestampComparison:
 
     def test_z_suffix_timestamp_is_comparable(self, tmp_path):
         """Convex timestamps with Z suffix should be properly compared."""
-        from mc.gateway import _write_back_convex_agents
+        from mc.runtime.gateway import _write_back_convex_agents
 
         # Create a local config with old mtime
         agent_dir = tmp_path / "test-agent"
@@ -508,7 +508,7 @@ class TestWriteBackTimestampComparison:
 
     def test_unparseable_timestamp_skipped(self, tmp_path):
         """Agents with unparseable timestamps should be skipped, not crash."""
-        from mc.gateway import _write_back_convex_agents
+        from mc.runtime.gateway import _write_back_convex_agents
 
         agent_dir = tmp_path / "bad-ts-agent"
         agent_dir.mkdir()
@@ -530,7 +530,7 @@ class TestWriteBackTimestampComparison:
 
     def test_naive_convex_timestamp_treated_as_utc(self, tmp_path):
         """Naive Convex timestamps should be treated as UTC for comparison."""
-        from mc.gateway import _write_back_convex_agents
+        from mc.runtime.gateway import _write_back_convex_agents
 
         agent_dir = tmp_path / "naive-agent"
         agent_dir.mkdir()
@@ -565,7 +565,7 @@ class TestProviderErrorAction:
 
     def test_extracts_action_from_provider_error(self):
         """ProviderError.action is returned directly."""
-        from mc.executor import _provider_error_action
+        from mc.contexts.execution.executor import _provider_error_action
         from mc.infrastructure.providers.factory import ProviderError
 
         exc = ProviderError("Token expired", action="nanobot provider login anthropic-oauth")
@@ -573,7 +573,7 @@ class TestProviderErrorAction:
 
     def test_extracts_run_command_from_message(self):
         """For errors with 'Run:' in message, extract from there."""
-        from mc.executor import _provider_error_action
+        from mc.contexts.execution.executor import _provider_error_action
 
         class FakeError(Exception):
             pass
@@ -585,7 +585,7 @@ class TestProviderErrorAction:
 
     def test_fallback_generic_action(self):
         """For generic errors, return config check hint."""
-        from mc.executor import _provider_error_action
+        from mc.contexts.execution.executor import _provider_error_action
 
         exc = RuntimeError("Something went wrong")
         result = _provider_error_action(exc)

@@ -42,9 +42,8 @@ from mc.infrastructure.agent_bootstrap import (  # noqa: F401
     sync_skills,
 )
 
-# Re-export from infrastructure for backward compatibility.
-# External callers (tests, vendor code) that historically imported these
-# from mc.gateway will continue to work.
+# Re-export from infrastructure so the runtime gateway remains the canonical
+# process entrypoint and composition root for bootstrap helpers.
 from mc.infrastructure.config import (  # noqa: F401
     AGENTS_DIR,
     _config_default_model,

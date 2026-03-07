@@ -18,7 +18,7 @@ class TestOrchestratorSkipsManualTasks:
     @pytest.mark.asyncio
     async def test_manual_task_skipped_in_process_inbox(self):
         """_process_inbox_task should return early for manual tasks."""
-        from mc.orchestrator import TaskOrchestrator
+        from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -46,7 +46,7 @@ class TestOrchestratorSkipsManualTasks:
     @pytest.mark.asyncio
     async def test_non_manual_task_still_routed(self):
         """Tasks without is_manual should still be routed normally."""
-        from mc.orchestrator import TaskOrchestrator
+        from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -71,7 +71,7 @@ class TestOrchestratorSkipsManualTasks:
     @pytest.mark.asyncio
     async def test_manual_task_skipped_in_routing_loop(self):
         """Manual tasks appearing in inbox subscription should be skipped."""
-        from mc.orchestrator import TaskOrchestrator
+        from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -121,7 +121,7 @@ class TestExecutorSkipsManualTasks:
     @pytest.mark.asyncio
     async def test_manual_task_not_picked_up_by_executor(self):
         """Manual task in assigned queue should be skipped — no _pickup_task call."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()
@@ -162,7 +162,7 @@ class TestExecutorSkipsManualTasks:
     @pytest.mark.asyncio
     async def test_non_manual_task_still_executed(self):
         """Agent tasks in assigned queue should still be picked up normally."""
-        from mc.executor import TaskExecutor
+        from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
         mock_bridge.update_task_status = MagicMock()

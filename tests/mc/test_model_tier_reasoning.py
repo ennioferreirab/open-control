@@ -175,7 +175,7 @@ class TestReasoningPropagationToProviderChat:
     @pytest.mark.asyncio
     async def test_standard_medium_reasoning_low_reaches_provider_chat(self) -> None:
         """When reasoning_level='low' is passed, provider.chat() receives it."""
-        from mc.executor import _run_agent_on_task
+        from mc.contexts.execution.executor import _run_agent_on_task
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=MagicMock(
@@ -185,7 +185,7 @@ class TestReasoningPropagationToProviderChat:
         mock_provider.get_default_model = MagicMock(return_value=SONNET_MODEL)
 
         with patch(
-            "mc.executor._make_provider",
+            "mc.contexts.execution.executor._make_provider",
             return_value=(mock_provider, SONNET_MODEL),
         ):
             await _run_agent_on_task(
@@ -215,7 +215,7 @@ class TestReasoningPropagationToProviderChat:
         once reasoning IS implemented, calls with reasoning=off must still omit the
         thinking param.
         """
-        from mc.executor import _run_agent_on_task
+        from mc.contexts.execution.executor import _run_agent_on_task
 
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=MagicMock(
@@ -225,7 +225,7 @@ class TestReasoningPropagationToProviderChat:
         mock_provider.get_default_model = MagicMock(return_value=SONNET_MODEL)
 
         with patch(
-            "mc.executor._make_provider",
+            "mc.contexts.execution.executor._make_provider",
             return_value=(mock_provider, SONNET_MODEL),
         ):
             await _run_agent_on_task(

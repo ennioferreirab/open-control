@@ -20,8 +20,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import mc.executor as _executor_module
-from mc.executor import TaskExecutor
+import mc.contexts.execution.executor as _executor_module
+from mc.contexts.execution.executor import TaskExecutor
 from mc.types import (
     ActivityEventType,
     AgentData,
@@ -154,7 +154,7 @@ class TestBackendRouting:
                 return_value=engine,
                 create=True,
             ),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             await executor._execute_task(
                 task_id="t1",
@@ -198,9 +198,9 @@ class TestBackendRouting:
             patch.object(executor, "_load_agent_data", return_value=agent_data),
             patch.object(executor, "_execute_cc_task", new_callable=AsyncMock) as mock_cc,
             # Patch the nanobot path so it doesn't actually run
-            patch("mc.executor._run_agent_on_task", new_callable=AsyncMock) as mock_run,
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock) as mock_run,
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             mock_run.return_value = ("result", "key", MagicMock())
             await executor._execute_task(
@@ -239,9 +239,9 @@ class TestBackendRouting:
             ),
             patch.object(executor, "_load_agent_data", return_value=None),
             patch.object(executor, "_execute_cc_task", new_callable=AsyncMock) as mock_cc,
-            patch("mc.executor._run_agent_on_task", new_callable=AsyncMock) as mock_run,
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock) as mock_run,
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             mock_run.return_value = ("result", "key", MagicMock())
             await executor._execute_task(
@@ -281,7 +281,7 @@ class TestExecuteCCTaskHappyPath:
             patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch("mc.executor._relocate_invalid_memory_files", return_value=[] ) as mock_relocate,
+            patch("mc.contexts.execution.executor._relocate_invalid_memory_files", return_value=[] ) as mock_relocate,
         ):
             await executor._execute_cc_task(
                 "t1", "My task", "desc", "my-cc-agent", agent_data
@@ -360,8 +360,8 @@ class TestExecuteCCTaskHappyPath:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             await executor._execute_cc_task(
                 "t1", "Title only", None, "agent", agent_data,
@@ -888,7 +888,7 @@ class TestCCModelRouting:
                 return_value=engine,
                 create=True,
             ),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             await executor._execute_task(
                 task_id="task-123",
@@ -950,7 +950,7 @@ class TestCCModelRouting:
                 return_value=engine,
                 create=True,
             ),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             await executor._execute_task(
                 task_id="task-456",

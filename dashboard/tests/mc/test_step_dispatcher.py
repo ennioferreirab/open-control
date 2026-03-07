@@ -1,4 +1,4 @@
-"""Tests for crash-handling and human-step behaviors in mc.step_dispatcher."""
+"""Tests for crash-handling and human-step behaviors in mc.contexts.execution.step_dispatcher."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.step_dispatcher import StepDispatcher
+from mc.contexts.execution.step_dispatcher import StepDispatcher
 from mc.types import StepStatus
 
 
@@ -66,13 +66,13 @@ class TestExecuteStepCrashHandler:
 
         with (
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=exc),
             ),
-            patch("mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.step_dispatcher._load_agent_config", return_value=(None, None, None)),
+            patch("mc.contexts.execution.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
+            patch("mc.contexts.execution.step_dispatcher._build_step_thread_context", return_value=""),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
         ):
             with pytest.raises(RuntimeError):
                 await dispatcher._execute_step("task-abc", step)
@@ -95,13 +95,13 @@ class TestExecuteStepCrashHandler:
 
         with (
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=exc),
             ),
-            patch("mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.step_dispatcher._load_agent_config", return_value=(None, None, None)),
+            patch("mc.contexts.execution.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
+            patch("mc.contexts.execution.step_dispatcher._build_step_thread_context", return_value=""),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
         ):
             with pytest.raises(RuntimeError):
                 await dispatcher._execute_step("task-abc", step)
@@ -124,13 +124,13 @@ class TestExecuteStepCrashHandler:
 
         with (
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=exc),
             ),
-            patch("mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.step_dispatcher._load_agent_config", return_value=(None, None, None)),
+            patch("mc.contexts.execution.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
+            patch("mc.contexts.execution.step_dispatcher._build_step_thread_context", return_value=""),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
         ):
             with pytest.raises(ValueError):
                 await dispatcher._execute_step("task-abc", step)
@@ -150,13 +150,13 @@ class TestExecuteStepCrashHandler:
 
         with (
             patch(
-                "mc.step_dispatcher._run_step_agent",
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
                 new=AsyncMock(side_effect=RuntimeError("boom")),
             ),
-            patch("mc.step_dispatcher._load_agent_config", return_value=(None, None, None)),
-            patch("mc.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
-            patch("mc.step_dispatcher._build_step_thread_context", return_value=""),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.step_dispatcher._load_agent_config", return_value=(None, None, None)),
+            patch("mc.contexts.execution.step_dispatcher._maybe_inject_orientation", side_effect=lambda n, p: p),
+            patch("mc.contexts.execution.step_dispatcher._build_step_thread_context", return_value=""),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
         ):
             with pytest.raises(RuntimeError, match="boom"):
                 await dispatcher._execute_step("task-abc", step)

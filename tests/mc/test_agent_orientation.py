@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 
 def _make_executor(bridge=None):
-    from mc.executor import TaskExecutor
+    from mc.contexts.execution.executor import TaskExecutor
     return TaskExecutor(bridge or MagicMock())
 
 

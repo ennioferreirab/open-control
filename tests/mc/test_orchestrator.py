@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.orchestrator import TaskOrchestrator, generate_title_via_low_agent
+from mc.runtime.orchestrator import TaskOrchestrator, generate_title_via_low_agent
 from mc.types import (
     ActivityEventType,
     AuthorType,
@@ -435,11 +435,11 @@ class TestGenerateTitleViaLowAgent:
         mock_provider.chat.return_value = mock_response
 
         with patch(
-            "mc.orchestrator.create_provider",
+            "mc.runtime.orchestrator.create_provider",
             return_value=(mock_provider, "anthropic/claude-haiku"),
         ):
             with patch(
-                "mc.orchestrator.asyncio.to_thread",
+                "mc.runtime.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
                 result = await generate_title_via_low_agent(
@@ -461,11 +461,11 @@ class TestGenerateTitleViaLowAgent:
         mock_provider.chat.return_value = mock_response
 
         with patch(
-            "mc.orchestrator.create_provider",
+            "mc.runtime.orchestrator.create_provider",
             return_value=(mock_provider, "anthropic/claude-haiku"),
         ):
             with patch(
-                "mc.orchestrator.asyncio.to_thread",
+                "mc.runtime.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
                 result = await generate_title_via_low_agent(
@@ -480,7 +480,7 @@ class TestGenerateTitleViaLowAgent:
         bridge.get_agent_by_name.return_value = None
 
         with patch(
-            "mc.orchestrator.asyncio.to_thread",
+            "mc.runtime.orchestrator.asyncio.to_thread",
             side_effect=_sync_to_thread,
         ):
             result = await generate_title_via_low_agent(
@@ -504,11 +504,11 @@ class TestGenerateTitleViaLowAgent:
         long_desc = "x" * 10000
 
         with patch(
-            "mc.orchestrator.create_provider",
+            "mc.runtime.orchestrator.create_provider",
             return_value=(mock_provider, "anthropic/claude-haiku"),
         ):
             with patch(
-                "mc.orchestrator.asyncio.to_thread",
+                "mc.runtime.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
                 result = await generate_title_via_low_agent(bridge, long_desc)

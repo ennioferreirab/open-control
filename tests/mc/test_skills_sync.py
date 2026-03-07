@@ -50,7 +50,7 @@ class TestSyncSkills:
 
     def test_discovers_builtin_skills_and_calls_upsert(self, tmp_path):
         """sync_skills should find SKILL.md files and call upsert for each."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
         _create_skill_dir(skills_dir, "github", _make_skill_md(
@@ -78,7 +78,7 @@ class TestSyncSkills:
 
     def test_strips_frontmatter_from_content(self, tmp_path):
         """Content field should be the body without frontmatter."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         body = "# GitHub Skill\n\nUse `gh` CLI."
         skills_dir = tmp_path / "skills"
@@ -96,7 +96,7 @@ class TestSyncSkills:
 
     def test_sets_always_field(self, tmp_path):
         """Skills with always: true in frontmatter should have always=True."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
         _create_skill_dir(skills_dir, "memory", _make_skill_md(
@@ -112,7 +112,7 @@ class TestSyncSkills:
 
     def test_sets_source_builtin(self, tmp_path):
         """Skills from builtin dir should have source='builtin'."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
         _create_skill_dir(skills_dir, "weather", _make_skill_md(
@@ -128,7 +128,7 @@ class TestSyncSkills:
 
     def test_calls_deactivate_except(self, tmp_path):
         """Should call deactivateExcept with active skill names."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
         _create_skill_dir(skills_dir, "github", _make_skill_md("github", "GitHub"))
@@ -147,7 +147,7 @@ class TestSyncSkills:
 
     def test_checks_requirements_availability(self, tmp_path):
         """Skills with unmet requirements should have available=False."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
         _create_skill_dir(skills_dir, "github", _make_skill_md(
@@ -165,7 +165,7 @@ class TestSyncSkills:
 
     def test_empty_skills_dir(self, tmp_path):
         """No error when skills directory is empty."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
@@ -183,7 +183,7 @@ class TestSyncSkills:
 
     def test_metadata_json_stored(self, tmp_path):
         """Metadata from frontmatter should be stored as JSON string."""
-        from mc.gateway import sync_skills
+        from mc.runtime.gateway import sync_skills
 
         meta = {"nanobot": {"emoji": "\U0001f419", "requires": {"bins": ["gh"]}}}
         skills_dir = tmp_path / "skills"

@@ -16,7 +16,7 @@ def _write_config(path: Path, model: str) -> None:
 
 
 def test_updates_config_when_convex_model_differs(tmp_path, monkeypatch):
-    from mc.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
+    from mc.runtime.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
 
     config_path = tmp_path / ".nanobot" / "config.json"
     _write_config(config_path, model="anthropic/old-model")
@@ -40,7 +40,7 @@ def test_updates_config_when_convex_model_differs(tmp_path, monkeypatch):
 
 
 def test_no_write_when_models_match(tmp_path, monkeypatch):
-    from mc.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
+    from mc.runtime.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
 
     config_path = tmp_path / ".nanobot" / "config.json"
     _write_config(config_path, model="anthropic/match-model")
@@ -63,7 +63,7 @@ def test_no_write_when_models_match(tmp_path, monkeypatch):
 
 
 def test_skips_when_agent_absent(tmp_path, monkeypatch):
-    from mc.gateway import sync_nanobot_default_model
+    from mc.runtime.gateway import sync_nanobot_default_model
 
     config_path = tmp_path / ".nanobot" / "config.json"
     _write_config(config_path, model="anthropic/current-model")
@@ -81,7 +81,7 @@ def test_skips_when_agent_absent(tmp_path, monkeypatch):
 
 
 def test_skips_when_agent_model_empty_or_none(tmp_path, monkeypatch):
-    from mc.gateway import sync_nanobot_default_model
+    from mc.runtime.gateway import sync_nanobot_default_model
 
     config_path = tmp_path / ".nanobot" / "config.json"
     _write_config(config_path, model="anthropic/current-model")
@@ -99,7 +99,7 @@ def test_skips_when_agent_model_empty_or_none(tmp_path, monkeypatch):
 
 
 def test_resolves_tier_reference_before_writing(tmp_path, monkeypatch):
-    from mc.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
+    from mc.runtime.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
 
     config_path = tmp_path / ".nanobot" / "config.json"
     _write_config(config_path, model="anthropic/old-model")
@@ -130,7 +130,7 @@ def test_resolves_tier_reference_before_writing(tmp_path, monkeypatch):
 
 
 def test_skips_when_tier_resolution_fails(tmp_path, monkeypatch):
-    from mc.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
+    from mc.runtime.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
 
     config_path = tmp_path / ".nanobot" / "config.json"
     _write_config(config_path, model="anthropic/old-model")
@@ -156,7 +156,7 @@ def test_skips_when_tier_resolution_fails(tmp_path, monkeypatch):
 
 
 def test_skips_when_config_missing(tmp_path, monkeypatch):
-    from mc.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
+    from mc.runtime.gateway import NANOBOT_AGENT_NAME, sync_nanobot_default_model
 
     missing_config = tmp_path / ".nanobot" / "config.json"
     monkeypatch.setattr(

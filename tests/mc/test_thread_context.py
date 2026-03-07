@@ -605,7 +605,7 @@ class TestFormatArtifacts:
 class TestExecutorShim:
     def test_shim_delegates_to_thread_context_builder(self):
         """_build_thread_context shim in executor delegates to ThreadContextBuilder."""
-        from mc.executor import _build_thread_context
+        from mc.contexts.execution.executor import _build_thread_context
 
         messages = [
             _agent_msg("Agent started."),
@@ -617,19 +617,19 @@ class TestExecutorShim:
         assert result == expected
 
     def test_shim_empty_returns_empty(self):
-        from mc.executor import _build_thread_context
+        from mc.contexts.execution.executor import _build_thread_context
 
         assert _build_thread_context([]) == ""
 
     def test_shim_no_user_messages_returns_empty(self):
-        from mc.executor import _build_thread_context
+        from mc.contexts.execution.executor import _build_thread_context
 
         messages = [_agent_msg("Some work.")]
         assert _build_thread_context(messages) == ""
 
     def test_shim_step_completion_with_artifacts(self):
         """Shim correctly handles step_completion messages with artifacts."""
-        from mc.executor import _build_thread_context
+        from mc.contexts.execution.executor import _build_thread_context
 
         messages = [
             _step_completion_msg(

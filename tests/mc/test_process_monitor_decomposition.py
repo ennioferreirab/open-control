@@ -2,7 +2,7 @@
 
 Ensures that all functions previously in mc/process_monitor.py are accessible
 from their canonical modules (mc.infrastructure.config, mc.infrastructure.agent_bootstrap,
-mc.contexts.execution.crash_recovery, mc.services.plan_negotiation) and via mc.gateway re-exports.
+mc.contexts.execution.crash_recovery, mc.services.plan_negotiation) and via mc.runtime.gateway re-exports.
 """
 
 from __future__ import annotations
@@ -119,10 +119,10 @@ class TestPlanNegotiationAccessible:
 
 
 class TestGatewayReExports:
-    """Backward compat: mc.gateway re-exports all decomposed symbols."""
+    """Backward compat: mc.runtime.gateway re-exports all decomposed symbols."""
 
     def test_gateway_reexports_config_functions(self) -> None:
-        from mc.gateway import (
+        from mc.runtime.gateway import (
             AGENTS_DIR,
             _config_default_model,
             _parse_utc_timestamp,
@@ -142,7 +142,7 @@ class TestGatewayReExports:
         assert callable(_read_session_data)
 
     def test_gateway_reexports_bootstrap_functions(self) -> None:
-        from mc.gateway import (
+        from mc.runtime.gateway import (
             _NANOBOT_AGENT_CONFIG,
             NANOBOT_AGENT_NAME,
             _cleanup_deleted_agents,
@@ -174,7 +174,7 @@ class TestGatewayReExports:
         assert callable(_fetch_bot_identity)
 
     def test_gateway_reexports_crash_handler(self) -> None:
-        from mc.gateway import MAX_AUTO_RETRIES, AgentGateway
+        from mc.runtime.gateway import MAX_AUTO_RETRIES, AgentGateway
         assert AgentGateway is not None
         assert MAX_AUTO_RETRIES == 1
 

@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.plan_negotiator import (
+from mc.contexts.planning.negotiation import (
     _parse_negotiation_response,
     handle_plan_negotiation,
     start_plan_negotiation_loop,
@@ -258,7 +258,7 @@ class TestHandlePlanNegotiation:
             raise asyncio.TimeoutError
 
         with patch(
-            "mc.plan_negotiator.asyncio.wait_for",
+            "mc.contexts.planning.negotiation.asyncio.wait_for",
             new=AsyncMock(side_effect=_timeout_wait_for),
         ), patch(
             "mc.infrastructure.providers.factory.create_provider"
@@ -528,10 +528,10 @@ class TestHandlePlanNegotiationExecutionContext:
         # We verify by checking that query was called (status check happened) and
         # that the loop didn't stop before the first message was processed.
         with patch(
-            "mc.plan_negotiator.asyncio.to_thread",
+            "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
         ), patch(
-            "mc.plan_negotiator.handle_plan_negotiation",
+            "mc.contexts.planning.negotiation.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle:
             try:
@@ -571,10 +571,10 @@ class TestHandlePlanNegotiationExecutionContext:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "mc.plan_negotiator.asyncio.to_thread",
+            "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
         ), patch(
-            "mc.plan_negotiator.handle_plan_negotiation",
+            "mc.contexts.planning.negotiation.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle:
             _asyncio.run(
@@ -605,7 +605,7 @@ class TestHandlePlanNegotiationExecutionContext:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "mc.plan_negotiator.asyncio.to_thread",
+            "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
         ):
             _asyncio.run(

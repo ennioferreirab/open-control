@@ -10,7 +10,7 @@ import pytest
 async def test_mention_handler_no_import_error():
     """The mention handler should not raise ImportError for _maybe_inject_orientation."""
     # This test verifies the bug fix: mention_handler no longer imports
-    # _maybe_inject_orientation from mc.executor (it was an instance method).
+    # _maybe_inject_orientation from mc.contexts.execution.executor (it was an instance method).
     # After the fix, it uses mc.infrastructure.orientation.load_orientation instead.
 
     # Simply importing the module should not error

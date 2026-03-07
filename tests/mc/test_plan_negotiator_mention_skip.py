@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.plan_negotiator import start_plan_negotiation_loop
+from mc.contexts.planning.negotiation import start_plan_negotiation_loop
 
 # ---------------------------------------------------------------------------
 # Fixtures & Helpers
@@ -98,12 +98,12 @@ class TestPlanNegotiatorMentionSkip:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "mc.plan_negotiator.asyncio.to_thread",
+            "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(
                 side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
             ),
         ), patch(
-            "mc.plan_negotiator.handle_plan_negotiation",
+            "mc.contexts.planning.negotiation.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle:
             try:
@@ -148,12 +148,12 @@ class TestPlanNegotiatorMentionSkip:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "mc.plan_negotiator.asyncio.to_thread",
+            "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(
                 side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
             ),
         ), patch(
-            "mc.plan_negotiator.handle_plan_negotiation",
+            "mc.contexts.planning.negotiation.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle:
             try:
@@ -206,12 +206,12 @@ class TestPlanNegotiatorMentionSkip:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "mc.plan_negotiator.asyncio.to_thread",
+            "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(
                 side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
             ),
         ), patch(
-            "mc.plan_negotiator.handle_plan_negotiation",
+            "mc.contexts.planning.negotiation.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle:
             try:
@@ -259,12 +259,12 @@ class TestPlanNegotiatorMentionSkip:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "mc.plan_negotiator.asyncio.to_thread",
+            "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(
                 side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
             ),
         ), patch(
-            "mc.plan_negotiator.handle_plan_negotiation",
+            "mc.contexts.planning.negotiation.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle:
             try:
@@ -323,12 +323,12 @@ class TestNoDoubleProcessing:
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
         with patch(
-            "mc.plan_negotiator.asyncio.to_thread",
+            "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(
                 side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
             ),
         ), patch(
-            "mc.plan_negotiator.handle_plan_negotiation",
+            "mc.contexts.planning.negotiation.handle_plan_negotiation",
             new=AsyncMock(return_value=None),
         ) as mock_handle_negotiation:
             try:

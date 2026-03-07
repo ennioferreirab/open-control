@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.executor import TaskExecutor
+from mc.contexts.execution.executor import TaskExecutor
 from mc.types import (
     AgentData,
     CCTaskResult,
@@ -71,8 +71,8 @@ class TestTrustLevel:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
             MockIPC.return_value.start = AsyncMock()
@@ -103,8 +103,8 @@ class TestTrustLevel:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
             MockIPC.return_value.start = AsyncMock()
@@ -137,9 +137,9 @@ class TestArtifacts:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}) as mock_snap,
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}) as mock_snap,
             patch(
-                "mc.executor._collect_output_artifacts",
+                "mc.contexts.execution.executor._collect_output_artifacts",
                 return_value=[{"path": "output/report.pdf", "action": "created"}],
             ),
         ):
@@ -171,8 +171,8 @@ class TestHeartbeat:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
             patch("pathlib.Path.home", return_value=tmp_path),
         ):
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
@@ -203,7 +203,7 @@ class TestProviderError:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
             patch.object(executor, "_handle_provider_error", new_callable=AsyncMock) as mock_handle,
         ):
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
@@ -229,8 +229,8 @@ class TestEffortLevel:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
             MockIPC.return_value.start = AsyncMock()
@@ -261,8 +261,8 @@ class TestEffortLevel:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
             MockIPC.return_value.start = AsyncMock()
@@ -315,8 +315,8 @@ class TestClearRetryCount:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.executor._snapshot_output_dir", return_value={}),
-            patch("mc.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
             MockIPC.return_value.start = AsyncMock()

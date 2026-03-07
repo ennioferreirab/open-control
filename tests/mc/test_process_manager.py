@@ -49,7 +49,7 @@ def project_root(tmp_path):
 
 @pytest.mark.asyncio
 async def test_startup_order(dashboard_dir, project_root):
-    """Processes start in correct order: dashboard (npm), gateway (python mc.gateway), nanobot."""
+    """Processes start in correct order: dashboard (npm), gateway (python mc.runtime.gateway), nanobot."""
     spawn_order = []
 
     async def mock_create_subprocess(*args, **kwargs):
@@ -66,7 +66,7 @@ async def test_startup_order(dashboard_dir, project_root):
 
         assert len(spawn_order) == 3
         assert spawn_order[0] == "npm"        # Dashboard first
-        assert "python" in spawn_order[1]     # Gateway (mc.gateway) second
+        assert "python" in spawn_order[1]     # Gateway (mc.runtime.gateway) second
         assert "python" in spawn_order[2]     # Nanobot gateway third
 
         await pm.stop()
@@ -86,7 +86,7 @@ async def test_process_configs(dashboard_dir, project_root):
     assert configs[0].cwd == dashboard_dir
 
     assert configs[1].label == "gateway"
-    assert configs[1].args == ["-m", "mc.gateway"]
+    assert configs[1].args == ["-m", "mc.runtime.gateway"]
     assert configs[1].cwd == project_root
 
     assert configs[2].label == "nanobot"

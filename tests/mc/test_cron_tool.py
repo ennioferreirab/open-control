@@ -187,7 +187,7 @@ class TestSendTelegramDirectGuard:
     @pytest.mark.asyncio
     async def test_non_numeric_chat_id_is_rejected_without_crash(self):
         """_send_telegram_direct logs an error and returns when chat_id is not numeric."""
-        from mc.gateway import run_gateway  # noqa: F401 — ensure module is importable
+        from mc.runtime.gateway import run_gateway  # noqa: F401 — ensure module is importable
 
         # Import the inner function indirectly by instantiating the gateway closure
         # We test the guard logic directly by calling the function in an isolated scope.

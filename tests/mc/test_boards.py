@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 def _make_executor(bridge=None):
     """Return a TaskExecutor with an optional mock bridge."""
-    from mc.executor import TaskExecutor
+    from mc.contexts.execution.executor import TaskExecutor
 
     if bridge is None:
         bridge = MagicMock()
@@ -138,7 +138,7 @@ class TestBoardSessionKey:
 
     async def test_run_agent_uses_board_session_key(self, tmp_path):
         """_run_agent_on_task uses board-scoped session key when board_name provided."""
-        from mc.executor import _run_agent_on_task
+        from mc.contexts.execution.executor import _run_agent_on_task
         from unittest.mock import AsyncMock, patch
 
         captured_session_key = {}
@@ -153,7 +153,7 @@ class TestBoardSessionKey:
 
         with (
             patch("pathlib.Path.home", return_value=tmp_path),
-            patch("mc.executor._make_provider", return_value=(MagicMock(), "model")),
+            patch("mc.contexts.execution.executor._make_provider", return_value=(MagicMock(), "model")),
             patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
             patch("nanobot.bus.queue.MessageBus"),
         ):
