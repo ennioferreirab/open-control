@@ -5,7 +5,6 @@ import fcntl
 import json
 import re
 import time
-from pathlib import Path
 
 from .config import get_config, get_project_root
 
