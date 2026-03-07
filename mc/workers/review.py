@@ -2,6 +2,7 @@
 
 Extracted from mc.orchestrator per Story 17.1 (AC3).
 Implements FR27 (review transitions), FR28 (feedback), FR29 (revision), FR30 (approval).
+Updated to accept RuntimeContext per Story 20.3.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from mc.types import (
 )
 
 if TYPE_CHECKING:
-    from mc.bridge import ConvexBridge
+    from mc.infrastructure.runtime_context import RuntimeContext
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,11 @@ class ReviewWorker:
 
     def __init__(
         self,
-        bridge: ConvexBridge,
+        ctx: RuntimeContext,
         ask_user_registry: Any | None = None,
     ) -> None:
-        self._bridge = bridge
+        self._ctx = ctx
+        self._bridge = ctx.bridge
         self._ask_user_registry = ask_user_registry
         self._known_review_task_ids: set[str] = set()
 

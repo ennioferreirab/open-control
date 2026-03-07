@@ -2,6 +2,7 @@
 
 Extracted from mc.orchestrator per Story 17.1 (AC2).
 Delegates to TaskPlanner and PlanMaterializer services.
+Updated to accept RuntimeContext per Story 20.3.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from mc.types import (
 )
 
 if TYPE_CHECKING:
-    from mc.bridge import ConvexBridge
+    from mc.infrastructure.runtime_context import RuntimeContext
     from mc.plan_materializer import PlanMaterializer
     from mc.step_dispatcher import StepDispatcher
 
@@ -35,13 +36,14 @@ class PlanningWorker:
 
     def __init__(
         self,
-        bridge: ConvexBridge,
+        ctx: RuntimeContext,
         plan_materializer: PlanMaterializer,
         step_dispatcher: StepDispatcher,
         *,
         known_kickoff_ids: set[str] | None = None,
     ) -> None:
-        self._bridge = bridge
+        self._ctx = ctx
+        self._bridge = ctx.bridge
         self._plan_materializer = plan_materializer
         self._step_dispatcher = step_dispatcher
         self._lead_agent_name = LEAD_AGENT_NAME

@@ -1,6 +1,7 @@
 """Inbox worker — handles new task processing, auto-title, and initial routing.
 
 Extracted from mc.orchestrator per Story 17.1 (AC1).
+Updated to accept RuntimeContext per Story 20.3.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from mc.orchestrator import generate_title_via_low_agent
 
 if TYPE_CHECKING:
-    from mc.bridge import ConvexBridge
+    from mc.infrastructure.runtime_context import RuntimeContext
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,9 @@ logger = logging.getLogger(__name__)
 class InboxWorker:
     """Processes inbox tasks: auto-title generation and routing to planning/assigned."""
 
-    def __init__(self, bridge: ConvexBridge) -> None:
-        self._bridge = bridge
+    def __init__(self, ctx: RuntimeContext) -> None:
+        self._ctx = ctx
+        self._bridge = ctx.bridge
         self._known_inbox_ids: set[str] = set()
 
     async def process_batch(self, tasks: list[dict[str, Any]]) -> None:

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mc.infrastructure.runtime_context import RuntimeContext
 from mc.workers.inbox import InboxWorker
 
 
@@ -22,13 +24,19 @@ def _make_bridge() -> MagicMock:
     return bridge
 
 
+def _make_ctx(bridge: MagicMock | None = None) -> RuntimeContext:
+    if bridge is None:
+        bridge = _make_bridge()
+    return RuntimeContext(bridge=bridge, agents_dir=Path("/tmp/test-agents"))
+
+
 class TestInboxWorkerProcessTask:
     """Happy path and error path tests for InboxWorker.process_task."""
 
     @pytest.mark.asyncio
     async def test_routes_to_planning_when_no_assigned_agent(self) -> None:
         bridge = _make_bridge()
-        worker = InboxWorker(bridge)
+        worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-1",
@@ -46,7 +54,7 @@ class TestInboxWorkerProcessTask:
     @pytest.mark.asyncio
     async def test_routes_to_assigned_when_agent_set(self) -> None:
         bridge = _make_bridge()
-        worker = InboxWorker(bridge)
+        worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-2",
@@ -64,7 +72,7 @@ class TestInboxWorkerProcessTask:
     @pytest.mark.asyncio
     async def test_skips_manual_tasks(self) -> None:
         bridge = _make_bridge()
-        worker = InboxWorker(bridge)
+        worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-manual",
@@ -80,7 +88,7 @@ class TestInboxWorkerProcessTask:
     @pytest.mark.asyncio
     async def test_auto_title_called_when_requested(self) -> None:
         bridge = _make_bridge()
-        worker = InboxWorker(bridge)
+        worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-3",
@@ -109,7 +117,7 @@ class TestInboxWorkerProcessTask:
     @pytest.mark.asyncio
     async def test_auto_title_failure_still_transitions(self) -> None:
         bridge = _make_bridge()
-        worker = InboxWorker(bridge)
+        worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-4",
@@ -139,7 +147,7 @@ class TestInboxWorkerProcessBatch:
     @pytest.mark.asyncio
     async def test_deduplicates_tasks_in_same_batch(self) -> None:
         bridge = _make_bridge()
-        worker = InboxWorker(bridge)
+        worker = InboxWorker(_make_ctx(bridge))
 
         tasks = [
             {
@@ -167,7 +175,7 @@ class TestInboxWorkerProcessBatch:
     @pytest.mark.asyncio
     async def test_prunes_stale_ids_so_reentry_works(self) -> None:
         bridge = _make_bridge()
-        worker = InboxWorker(bridge)
+        worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-1",
@@ -192,7 +200,7 @@ class TestInboxWorkerProcessBatch:
     @pytest.mark.asyncio
     async def test_error_in_one_task_does_not_block_others(self) -> None:
         bridge = _make_bridge()
-        worker = InboxWorker(bridge)
+        worker = InboxWorker(_make_ctx(bridge))
 
         # First task will error, second should still process
         call_count = 0

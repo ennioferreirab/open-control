@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mc.infrastructure.runtime_context import RuntimeContext
 from mc.types import (
     ActivityEventType,
     ExecutionPlan,
@@ -31,6 +33,12 @@ def _make_bridge() -> MagicMock:
     bridge.create_activity.return_value = None
     bridge.send_message.return_value = None
     return bridge
+
+
+def _make_ctx(bridge: MagicMock | None = None) -> RuntimeContext:
+    if bridge is None:
+        bridge = _make_bridge()
+    return RuntimeContext(bridge=bridge, agents_dir=Path("/tmp/test-agents"))
 
 
 def _make_materializer() -> MagicMock:
@@ -97,7 +105,7 @@ class TestPlanningWorkerProcessTask:
         ]
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = PlanningWorker(bridge, materializer, dispatcher)
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
         task = _make_task()
         plan = _make_plan()
 
@@ -144,7 +152,7 @@ class TestPlanningWorkerProcessTask:
         bridge.list_agents.return_value = []
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = PlanningWorker(bridge, materializer, dispatcher)
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
         task = _make_task(task_id="task-supervised", title="Supervised")
         task["supervision_mode"] = "supervised"
         plan = _make_plan()
@@ -170,7 +178,7 @@ class TestPlanningWorkerProcessTask:
         bridge.list_agents.return_value = []
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = PlanningWorker(bridge, materializer, dispatcher)
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
         task = _make_task(task_id="task-fail", title="Failing plan")
 
         with (
@@ -203,7 +211,7 @@ class TestPlanningWorkerProcessTask:
         bridge.list_agents.return_value = []
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = PlanningWorker(bridge, materializer, dispatcher)
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
         task = _make_task()
         task["is_manual"] = True
 
@@ -230,7 +238,7 @@ class TestPlanningWorkerProcessTask:
         ]
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = PlanningWorker(bridge, materializer, dispatcher)
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
 
         files = [
             {"name": "invoice.pdf", "type": "application/pdf", "size": 867328}
@@ -270,7 +278,7 @@ class TestPlanningWorkerProcessBatch:
         bridge.list_agents.return_value = []
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = PlanningWorker(bridge, materializer, dispatcher)
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
         plan = _make_plan()
 
         tasks = [_make_task(), _make_task()]  # same ID
@@ -302,7 +310,7 @@ class TestPlanningWorkerProcessBatch:
         bridge.list_agents.return_value = []
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = PlanningWorker(bridge, materializer, dispatcher)
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
         plan = _make_plan()
 
         def _capture_create_task(coro):

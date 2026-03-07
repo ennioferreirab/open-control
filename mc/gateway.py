@@ -312,8 +312,18 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
 
     ask_user_registry = AskUserRegistry()
 
+    # Create RuntimeContext — single source of runtime dependencies (Story 20.3)
+    from mc.infrastructure.runtime_context import RuntimeContext
+
+    runtime_ctx = RuntimeContext(
+        bridge=bridge,
+        agents_dir=AGENTS_DIR,
+        admin_key=os.environ.get("CONVEX_ADMIN_KEY", ""),
+        admin_url=os.environ.get("CONVEX_URL", ""),
+    )
+
     orchestrator = TaskOrchestrator(
-        bridge, cron_service=cron, ask_user_registry=ask_user_registry
+        runtime_ctx, cron_service=cron, ask_user_registry=ask_user_registry
     )
 
     async def _inbox_loop_with_crash_log() -> None:
