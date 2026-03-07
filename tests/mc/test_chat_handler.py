@@ -1,11 +1,19 @@
-"""Tests for the ChatHandler (Story 10.2)."""
+"""Tests for the ChatHandler (Story 10.2, Story 20.1)."""
 
 from __future__ import annotations
 
+import ast
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from mc.application.execution.request import (
+    ExecutionRequest,
+    ExecutionResult,
+    RunnerType,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -52,17 +60,12 @@ class TestProcessChatMessage:
 
     @pytest.mark.asyncio
     async def test_happy_path_sends_response_and_marks_done(self, tmp_path):
-        """Process a pending message: mark processing, run agent, send response, mark done."""
+        """Process a pending message: mark processing, run engine, send response, mark done."""
         from mc.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
         msg = _make_pending_msg()
-
-        mock_agent_loop = MagicMock()
-        mock_agent_loop.process_direct = AsyncMock(
-            return_value="Agent response here"
-        )
 
         # Set up agents dir
         agents_dir = tmp_path / "agents"
@@ -70,42 +73,32 @@ class TestProcessChatMessage:
         config_dir.mkdir(parents=True, exist_ok=True)
         (config_dir / "config.yaml").write_text("name: test-agent")
 
-        # Patch lazy imports inside _process_chat_message
+        engine_result = ExecutionResult(
+            success=True,
+            output="Agent response here",
+            session_id="sess-1",
+        )
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(return_value=engine_result)
+
         with (
-            patch(
-                "importlib.util.spec_from_file_location"
-            ) as mock_spec_from,
-            patch("importlib.util.module_from_spec") as mock_mod_from,
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=(MagicMock(), "test-model"),
-            ),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
-                    prompt="Test prompt", model=None, skills=[]
+                    prompt="Test prompt", model=None, skills=[],
+                    display_name=None,
                 ),
             ),
             patch(
                 "mc.infrastructure.config.AGENTS_DIR",
                 agents_dir,
             ),
+            patch(
+                "mc.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
         ):
-            # Set up the spec/module mocks to return our mock AgentLoop
-            mock_spec = MagicMock()
-            mock_spec_from.return_value = mock_spec
-
-            mock_loop_module = MagicMock()
-            mock_loop_module.AgentLoop = MagicMock(
-                return_value=mock_agent_loop
-            )
-            mock_bus_module = MagicMock()
-            mock_bus_module.MessageBus = MagicMock
-
-            # First call is for loop.py, second for queue.py
-            mock_mod_from.side_effect = [mock_loop_module, mock_bus_module]
-            mock_spec.loader = MagicMock()
-
             await handler._process_chat_message(msg)
 
         # Assertions: mark_chat_processing called with chat_id
@@ -155,7 +148,7 @@ class TestProcessChatMessageErrors:
     """Test error handling during message processing."""
 
     @pytest.mark.asyncio
-    async def test_error_marks_done_and_sends_error_response(self):
+    async def test_error_marks_done_and_sends_error_response(self, tmp_path):
         """On processing error, mark original done and send error response."""
         from mc.chat_handler import ChatHandler
 
@@ -163,11 +156,35 @@ class TestProcessChatMessageErrors:
         handler = ChatHandler(bridge)
         msg = _make_pending_msg()
 
-        # Force an error during processing by making mark_chat_processing
-        # succeed but the lazy import fail
-        with patch(
-            "importlib.util.spec_from_file_location",
-            side_effect=RuntimeError("import failed"),
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "test-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("name: test-agent")
+
+        engine_result = ExecutionResult(
+            success=False,
+            error_message="Engine execution failed",
+        )
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(return_value=engine_result)
+
+        with (
+            patch(
+                "mc.yaml_validator.validate_agent_file",
+                return_value=MagicMock(
+                    prompt="Test prompt", model=None, skills=[],
+                    display_name=None,
+                ),
+            ),
+            patch(
+                "mc.infrastructure.config.AGENTS_DIR",
+                agents_dir,
+            ),
+            patch(
+                "mc.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
         ):
             await handler._process_chat_message(msg)
 
@@ -371,7 +388,7 @@ class TestBridgeChatHelpers:
 
 
 class TestCCModelRouting:
-    """Test that cc/ model prefix routes messages to ClaudeCodeProvider."""
+    """Test that cc/ model prefix routes messages via CC runner through engine."""
 
     def _make_cc_bridge(self) -> MagicMock:
         bridge = _make_bridge()
@@ -387,48 +404,30 @@ class TestCCModelRouting:
         )
 
     @pytest.mark.asyncio
-    async def test_cc_model_routes_to_cc_provider(self, tmp_path):
-        """When model resolves to cc/*, route to ClaudeCodeProvider and bypass AgentLoop."""
+    async def test_cc_model_routes_through_engine(self, tmp_path):
+        """When model resolves to cc/*, route through ExecutionEngine."""
         from mc.chat_handler import ChatHandler
-        from mc.types import CCTaskResult, WorkspaceContext
 
         bridge = self._make_cc_bridge()
         handler = ChatHandler(bridge)
         msg = _make_pending_msg(agent_name="cc-agent", content="Hello CC!")
 
-        # Set up agents dir
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "cc-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
-
-        ws_ctx = WorkspaceContext(
-            cwd=tmp_path / "ws",
-            mcp_config=tmp_path / "ws" / ".mcp.json",
-            claude_md=tmp_path / "ws" / "CLAUDE.md",
-            socket_path="/tmp/test-cc-chat.sock",
+        (config_dir / "config.yaml").write_text(
+            "name: cc-agent\nmodel: cc/claude-sonnet-4-6"
         )
 
-        cc_result = CCTaskResult(
+        engine_result = ExecutionResult(
+            success=True,
             output="CC response",
             session_id="sess-1",
-            cost_usd=0.01,
-            usage={},
-            is_error=False,
+            memory_workspace=tmp_path,
         )
 
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc_server = MagicMock()
-        mock_ipc_server.start = AsyncMock()
-        mock_ipc_server.stop = AsyncMock()
-
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(return_value=cc_result)
-
-        mock_cfg = MagicMock()
-        mock_cfg.claude_code.cli_path = "/usr/bin/claude"
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(return_value=engine_result)
 
         with (
             patch(
@@ -436,16 +435,15 @@ class TestCCModelRouting:
                 return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
-            patch("claude_code.workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
-            patch("claude_code.ipc_server.MCSocketServer", return_value=mock_ipc_server),
-            patch("claude_code.provider.ClaudeCodeProvider", return_value=mock_provider),
-            patch("nanobot.config.loader.load_config", return_value=mock_cfg),
-            patch("importlib.util.spec_from_file_location") as mock_spec_from,
+            patch(
+                "mc.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
         ):
             await handler._process_chat_message(msg)
 
-        # execute_task was called
-        mock_provider.execute_task.assert_called_once()
+        # ExecutionEngine.run() was called
+        mock_engine.run.assert_called_once()
 
         # send_chat_response called with the CC response
         bridge.send_chat_response.assert_called_once()
@@ -457,54 +455,31 @@ class TestCCModelRouting:
         bridge.mark_chat_done.assert_called_once_with("chat123")
 
     @pytest.mark.asyncio
-    async def test_cc_prefix_stripped_in_agent_data(self, tmp_path):
-        """AgentData passed to execute_task must have model without cc/ prefix."""
+    async def test_cc_request_has_claude_code_runner_type(self, tmp_path):
+        """CC chat request should have RunnerType.CLAUDE_CODE."""
         from mc.chat_handler import ChatHandler
-        from mc.types import CCTaskResult, WorkspaceContext
 
         bridge = self._make_cc_bridge()
         handler = ChatHandler(bridge)
-        msg = _make_pending_msg(agent_name="cc-agent", content="Strip prefix test")
+        msg = _make_pending_msg(agent_name="cc-agent", content="Check runner type")
 
-        # Set up agents dir
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "cc-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
-
-        ws_ctx = WorkspaceContext(
-            cwd=tmp_path / "ws",
-            mcp_config=tmp_path / "ws" / ".mcp.json",
-            claude_md=tmp_path / "ws" / "CLAUDE.md",
-            socket_path="/tmp/test-cc-chat2.sock",
+        (config_dir / "config.yaml").write_text(
+            "name: cc-agent\nmodel: cc/claude-sonnet-4-6"
         )
 
-        cc_result = CCTaskResult(
-            output="response",
-            session_id="sess-2",
-            cost_usd=0.0,
-            usage={},
-            is_error=False,
-        )
+        captured_requests: list[ExecutionRequest] = []
 
-        captured_agent_config = {}
+        async def capture_run(req):
+            captured_requests.append(req)
+            return ExecutionResult(
+                success=True, output="done", memory_workspace=tmp_path
+            )
 
-        async def capture_execute_task(**kwargs):
-            captured_agent_config.update({"agent_config": kwargs.get("agent_config")})
-            return cc_result
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc_server = MagicMock()
-        mock_ipc_server.start = AsyncMock()
-        mock_ipc_server.stop = AsyncMock()
-
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(side_effect=capture_execute_task)
-
-        mock_cfg = MagicMock()
-        mock_cfg.claude_code.cli_path = "/usr/bin/claude"
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(side_effect=capture_run)
 
         with (
             patch(
@@ -512,69 +487,282 @@ class TestCCModelRouting:
                 return_value=self._make_validate_result("cc/claude-sonnet-4-6"),
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
-            patch("claude_code.workspace.CCWorkspaceManager", return_value=mock_ws_mgr),
-            patch("claude_code.ipc_server.MCSocketServer", return_value=mock_ipc_server),
-            patch("claude_code.provider.ClaudeCodeProvider", return_value=mock_provider),
-            patch("nanobot.config.loader.load_config", return_value=mock_cfg),
-            patch("importlib.util.spec_from_file_location"),
+            patch(
+                "mc.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
         ):
             await handler._process_chat_message(msg)
 
-        agent_config = captured_agent_config.get("agent_config")
-        assert agent_config is not None
-        assert agent_config.model == "claude-sonnet-4-6", (
-            f"Expected 'claude-sonnet-4-6', got {agent_config.model!r}"
-        )
+        assert len(captured_requests) == 1
+        assert captured_requests[0].runner_type == RunnerType.CLAUDE_CODE
 
     @pytest.mark.asyncio
-    async def test_non_cc_model_falls_through(self, tmp_path):
-        """Non cc/ model goes through the nanobot AgentLoop path, not CC provider."""
+    async def test_non_cc_model_routes_through_nanobot_engine(self, tmp_path):
+        """Non cc/ model goes through ExecutionEngine with NANOBOT runner."""
         from mc.chat_handler import ChatHandler
 
         bridge = self._make_cc_bridge()
         handler = ChatHandler(bridge)
         msg = _make_pending_msg(agent_name="gpt-agent", content="Hello GPT!")
 
-        # Set up agents dir
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "gpt-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text("name: gpt-agent\nmodel: gpt-4")
+        (config_dir / "config.yaml").write_text(
+            "name: gpt-agent\nmodel: gpt-4"
+        )
 
-        mock_agent_loop = MagicMock()
-        mock_agent_loop.process_direct = AsyncMock(return_value="GPT response")
+        engine_result = ExecutionResult(
+            success=True,
+            output="GPT response",
+            session_id="nb-sess-1",
+        )
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(return_value=engine_result)
 
         with (
-            patch(
-                "importlib.util.spec_from_file_location"
-            ) as mock_spec_from,
-            patch("importlib.util.module_from_spec") as mock_mod_from,
-            patch(
-                "mc.provider_factory.create_provider",
-                return_value=(MagicMock(), "gpt-4"),
-            ),
             patch(
                 "mc.yaml_validator.validate_agent_file",
                 return_value=self._make_validate_result("gpt-4"),
             ),
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
-            patch("claude_code.provider.ClaudeCodeProvider") as mock_cc_provider_cls,
+            patch(
+                "mc.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
         ):
-            mock_spec = MagicMock()
-            mock_spec_from.return_value = mock_spec
-
-            mock_loop_module = MagicMock()
-            mock_loop_module.AgentLoop = MagicMock(return_value=mock_agent_loop)
-            mock_bus_module = MagicMock()
-            mock_bus_module.MessageBus = MagicMock
-
-            mock_mod_from.side_effect = [mock_loop_module, mock_bus_module]
-            mock_spec.loader = MagicMock()
-
             await handler._process_chat_message(msg)
 
-        # AgentLoop path was used (spec_from_file_location called for loop.py and bus)
-        assert mock_spec_from.call_count >= 1
+        # Engine was called
+        mock_engine.run.assert_called_once()
 
-        # ClaudeCodeProvider was NOT instantiated
-        mock_cc_provider_cls.assert_not_called()
+        # Request has nanobot runner type
+        req = mock_engine.run.call_args[0][0]
+        assert req.runner_type == RunnerType.NANOBOT
+
+        # Response sent
+        bridge.send_chat_response.assert_called_once()
+        call_args = bridge.send_chat_response.call_args[0]
+        assert call_args[0] == "gpt-agent"
+        assert call_args[1] == "GPT response"
+
+
+MC_ROOT = Path(__file__).resolve().parent.parent.parent / "mc"
+
+
+# ---------------------------------------------------------------------------
+# Test: Architecture — chat_handler must not import mc.executor (Story 20.1)
+# ---------------------------------------------------------------------------
+
+
+class TestChatHandlerArchitecture:
+    """Verify chat_handler does not import mc.executor directly."""
+
+    def test_no_executor_imports(self) -> None:
+        """chat_handler.py must not import from mc.executor (AC4)."""
+        filepath = MC_ROOT / "chat_handler.py"
+        assert filepath.exists(), "chat_handler.py must exist"
+
+        source = filepath.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(filepath))
+        executor_imports: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "mc.executor" or alias.name.startswith(
+                        "mc.executor."
+                    ):
+                        executor_imports.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and (
+                    node.module == "mc.executor"
+                    or node.module.startswith("mc.executor.")
+                ):
+                    executor_imports.append(node.module)
+        assert executor_imports == [], (
+            f"chat_handler.py imports from mc.executor: {executor_imports}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Test: Chat handler ExecutionEngine integration (Story 20.1, Task 4)
+# ---------------------------------------------------------------------------
+
+
+class TestChatHandlerEngineIntegration:
+    """Verify chat_handler routes CC and nanobot execution through ExecutionEngine."""
+
+    @pytest.mark.asyncio
+    async def test_cc_chat_routes_through_engine(self, tmp_path):
+        """CC-model chat messages should route through ExecutionEngine.run()."""
+        from mc.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        bridge.get_agent_by_name = MagicMock(return_value=None)
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(agent_name="cc-agent", content="Hello via engine!")
+
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "cc-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text(
+            "name: cc-agent\nmodel: cc/claude-sonnet-4-6"
+        )
+
+        engine_result = ExecutionResult(
+            success=True,
+            output="Engine CC response",
+            session_id="sess-engine-1",
+            memory_workspace=tmp_path,
+        )
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(return_value=engine_result)
+
+        with (
+            patch(
+                "mc.yaml_validator.validate_agent_file",
+                return_value=MagicMock(
+                    prompt="Be helpful.",
+                    model="cc/claude-sonnet-4-6",
+                    skills=[],
+                    display_name="CC Test Agent",
+                ),
+            ),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
+            patch(
+                "mc.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
+        ):
+            await handler._process_chat_message(msg)
+
+        # ExecutionEngine.run() was called
+        mock_engine.run.assert_called_once()
+
+        # The request is correctly typed
+        req = mock_engine.run.call_args[0][0]
+        assert isinstance(req, ExecutionRequest)
+        assert req.runner_type == RunnerType.CLAUDE_CODE
+        assert req.agent_name == "cc-agent"
+
+        # Response was sent
+        bridge.send_chat_response.assert_called_once()
+        call_args = bridge.send_chat_response.call_args[0]
+        assert call_args[0] == "cc-agent"
+        assert call_args[1] == "Engine CC response"
+
+        # Message marked done
+        bridge.mark_chat_done.assert_called_once_with("chat123")
+
+    @pytest.mark.asyncio
+    async def test_cc_chat_persists_session(self, tmp_path):
+        """CC chat should persist session_id from engine result."""
+        from mc.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        bridge.get_agent_by_name = MagicMock(return_value=None)
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(agent_name="cc-agent", content="Persist session")
+
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "cc-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text(
+            "name: cc-agent\nmodel: cc/claude-sonnet-4-6"
+        )
+
+        engine_result = ExecutionResult(
+            success=True,
+            output="Session response",
+            session_id="new-session-id",
+            memory_workspace=tmp_path,
+        )
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(return_value=engine_result)
+
+        with (
+            patch(
+                "mc.yaml_validator.validate_agent_file",
+                return_value=MagicMock(
+                    prompt="Be helpful.",
+                    model="cc/claude-sonnet-4-6",
+                    skills=[],
+                    display_name="CC Test Agent",
+                ),
+            ),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
+            patch(
+                "mc.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
+        ):
+            await handler._process_chat_message(msg)
+
+        # Session was persisted via bridge.mutation
+        bridge.mutation.assert_called()
+        mutation_call = bridge.mutation.call_args
+        assert mutation_call[0][0] == "settings:set"
+        assert mutation_call[0][1]["value"] == "new-session-id"
+
+    @pytest.mark.asyncio
+    async def test_nanobot_chat_routes_through_engine(self, tmp_path):
+        """Non-CC model chat should route through ExecutionEngine with NANOBOT runner."""
+        from mc.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        bridge.get_agent_by_name = MagicMock(return_value=None)
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(agent_name="nb-agent", content="Hello nanobot!")
+
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "nb-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text(
+            "name: nb-agent\nmodel: gpt-4"
+        )
+
+        engine_result = ExecutionResult(
+            success=True,
+            output="Nanobot response",
+            session_id="nb-sess-1",
+        )
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(return_value=engine_result)
+
+        with (
+            patch(
+                "mc.yaml_validator.validate_agent_file",
+                return_value=MagicMock(
+                    prompt="Be helpful.",
+                    model="gpt-4",
+                    skills=[],
+                    display_name="NB Test Agent",
+                ),
+            ),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
+            patch(
+                "mc.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
+        ):
+            await handler._process_chat_message(msg)
+
+        # ExecutionEngine.run() was called
+        mock_engine.run.assert_called_once()
+
+        # The request has NANOBOT runner type
+        req = mock_engine.run.call_args[0][0]
+        assert isinstance(req, ExecutionRequest)
+        assert req.runner_type == RunnerType.NANOBOT
+        assert req.agent_name == "nb-agent"
+
+        # Response was sent
+        bridge.send_chat_response.assert_called_once()
+        call_args = bridge.send_chat_response.call_args[0]
+        assert call_args[0] == "nb-agent"
+        assert call_args[1] == "Nanobot response"

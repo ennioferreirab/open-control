@@ -1,8 +1,9 @@
 """Claude Code step execution backend.
 
 Handles step execution through the Claude Code CLI when a step's model
-uses the cc/ prefix (e.g. cc/claude-sonnet-4-6). Sets up workspace,
-IPC server, and delegates to ClaudeCodeProvider.
+uses the cc/ prefix (e.g. cc/claude-sonnet-4-6). Delegates to
+ExecutionEngine.run() with a ClaudeCodeRunnerStrategy so that all
+execution flows through the single entrypoint.
 
 Extracted from mc.step_dispatcher to separate backend concerns.
 """
@@ -13,10 +14,21 @@ import asyncio
 import logging
 from typing import Any
 
+from mc.application.execution.engine import ExecutionEngine
+from mc.application.execution.request import (
+    EntityType,
+    ExecutionRequest,
+    ExecutionResult,
+    RunnerType,
+)
+from mc.application.execution.runtime import (
+    collect_output_artifacts,
+    relocate_invalid_memory_files,
+)
 from mc.types import (
+    ActivityEventType,
     AgentData,
     ClaudeCodeOpts,
-    ActivityEventType,
     StepStatus,
     extract_cc_model_name,
 )
@@ -39,14 +51,15 @@ async def execute_step_via_cc(
     pre_snapshot: Any,
     ask_user_registry: Any | None = None,
 ) -> list[str]:
-    """Execute a step using the Claude Code backend.
+    """Execute a step using the Claude Code backend via ExecutionEngine.
+
+    Builds an ExecutionRequest with step context and delegates to
+    ExecutionEngine.run(). Post-execution steps (artifact collection,
+    memory relocation, completion posting) are handled after the engine
+    returns.
 
     Returns list of unblocked step IDs after completion.
     """
-    from mc.executor import (
-        _collect_output_artifacts,
-        _relocate_invalid_memory_files,
-    )
     from mc.infrastructure.config import AGENTS_DIR
     from mc.yaml_validator import validate_agent_file
 
@@ -79,7 +92,9 @@ async def execute_step_via_cc(
             bridge.get_agent_by_name, agent_name
         )
         if convex_agent_raw:
-            agent_data_for_cc.display_name = convex_agent_raw.get("display_name", agent_name)
+            agent_data_for_cc.display_name = convex_agent_raw.get(
+                "display_name", agent_name
+            )
             agent_data_for_cc.role = convex_agent_raw.get("role", "agent")
             # Sync skills from Convex (same pattern as prompt/model)
             convex_skills = convex_agent_raw.get("skills")
@@ -87,7 +102,9 @@ async def execute_step_via_cc(
                 if convex_skills != agent_data_for_cc.skills:
                     logger.info(
                         "[dispatcher] CC skills synced from Convex for '%s': %s -> %s",
-                        agent_name, agent_data_for_cc.skills, convex_skills,
+                        agent_name,
+                        agent_data_for_cc.skills,
+                        convex_skills,
                     )
                 agent_data_for_cc.skills = convex_skills
             cc_opts_raw = convex_agent_raw.get("claude_code_opts")
@@ -95,82 +112,63 @@ async def execute_step_via_cc(
                 agent_data_for_cc.claude_code_opts = ClaudeCodeOpts(
                     max_budget_usd=cc_opts_raw.get("max_budget_usd"),
                     max_turns=cc_opts_raw.get("max_turns"),
-                    permission_mode=cc_opts_raw.get("permission_mode", "acceptEdits"),
+                    permission_mode=cc_opts_raw.get(
+                        "permission_mode", "acceptEdits"
+                    ),
                     allowed_tools=cc_opts_raw.get("allowed_tools"),
                     disallowed_tools=cc_opts_raw.get("disallowed_tools"),
                 )
     except Exception:
-        logger.warning("[dispatcher] Could not enrich agent data for CC routing")
-
-    # Execute step via CC backend
-    from claude_code.workspace import CCWorkspaceManager
-    from claude_code.provider import ClaudeCodeProvider
-    from claude_code.ipc_server import MCSocketServer
-
-    try:
-        ws_mgr = CCWorkspaceManager()
-        from mc.agent_orientation import load_orientation
-        orientation = load_orientation(agent_name)
-        ws_ctx = ws_mgr.prepare(agent_name, agent_data_for_cc, task_id, orientation=orientation,
-                                task_prompt=step_title)
-    except Exception as exc:
-        error_msg = f"CC workspace preparation failed for step '{step_title}': {exc}"
-        logger.error("[dispatcher] %s", error_msg)
-        raise
-
-    from mc.ask_user.handler import AskUserHandler
-
-    ask_handler = AskUserHandler()
-    ipc_server = MCSocketServer(bridge, None)
-    ipc_server.set_ask_user_handler(ask_handler)
-    if ask_user_registry is not None:
-        ask_user_registry.register(task_id, ask_handler)
-    try:
-        await ipc_server.start(ws_ctx.socket_path)
-    except Exception as exc:
-        error_msg = f"MCP IPC server failed for step '{step_title}': {exc}"
-        logger.error("[dispatcher] %s", error_msg)
-        raise
-
-    try:
-        from nanobot.config.loader import load_config
-        _cfg = load_config()
-        provider = ClaudeCodeProvider(
-            cli_path=_cfg.claude_code.cli_path,
-            defaults=_cfg.claude_code,
+        logger.warning(
+            "[dispatcher] Could not enrich agent data for CC routing"
         )
 
-        prompt = f"{step_title}\n\n{execution_description}"
-
-        result_obj = await provider.execute_task(
-            prompt=prompt,
-            agent_config=agent_data_for_cc,
-            task_id=task_id,
-            workspace_ctx=ws_ctx,
-            session_id=None,
-        )
-        if result_obj.is_error:
-            raise RuntimeError(
-                f"Claude Code error: {result_obj.output[:1000]}"
-            )
-        result = result_obj.output
-    except Exception as exc:
-        error_msg = f"CC execution failed for step '{step_title}': {exc}"
-        logger.error("[dispatcher] %s", error_msg)
-        raise
-    finally:
-        if ask_user_registry is not None:
-            ask_user_registry.unregister(task_id)
-        await ipc_server.stop()
-
-    # Post completion -- same as nanobot path
-    await asyncio.to_thread(
-        _relocate_invalid_memory_files,
-        task_id,
-        ws_ctx.cwd,
+    # Build ExecutionRequest for the step
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id=step_id,
+        task_id=task_id,
+        title=step_title,
+        description=execution_description,
+        agent=agent_data_for_cc,
+        agent_name=agent_name,
+        agent_prompt=agent_prompt,
+        agent_model=agent_model,
+        agent_skills=agent_skills,
+        runner_type=RunnerType.CLAUDE_CODE,
+        step_id=step_id,
+        task_data=task_data,
+        is_cc=True,
     )
+
+    # Execute via ExecutionEngine
+    engine = ExecutionEngine(
+        strategies={
+            RunnerType.CLAUDE_CODE: _make_cc_strategy(
+                bridge=bridge,
+                ask_user_registry=ask_user_registry,
+            ),
+        },
+    )
+    engine_result: ExecutionResult = await engine.run(request)
+
+    if not engine_result.success:
+        raise RuntimeError(
+            engine_result.error_message
+            or f"CC execution failed for step '{step_title}'"
+        )
+
+    output = engine_result.output
+
+    # Post completion — relocate invalid memory files and collect artifacts
+    if engine_result.memory_workspace:
+        await asyncio.to_thread(
+            relocate_invalid_memory_files,
+            task_id,
+            engine_result.memory_workspace,
+        )
     artifacts = await asyncio.to_thread(
-        _collect_output_artifacts, task_id, pre_snapshot
+        collect_output_artifacts, task_id, pre_snapshot
     )
     try:
         await asyncio.to_thread(
@@ -189,7 +187,7 @@ async def execute_step_via_cc(
         task_id,
         step_id,
         agent_name,
-        result,
+        output,
         artifacts or None,
     )
     await asyncio.to_thread(
@@ -208,3 +206,19 @@ async def execute_step_via_cc(
         bridge.check_and_unblock_dependents, step_id
     )
     return unblocked_ids if isinstance(unblocked_ids, list) else []
+
+
+def _make_cc_strategy(
+    *,
+    bridge: Any,
+    ask_user_registry: Any | None = None,
+) -> Any:
+    """Create a ClaudeCodeRunnerStrategy wired to the given bridge."""
+    from mc.application.execution.strategies.claude_code import (
+        ClaudeCodeRunnerStrategy,
+    )
+
+    return ClaudeCodeRunnerStrategy(
+        bridge=bridge,
+        ask_user_registry=ask_user_registry,
+    )
