@@ -324,3 +324,66 @@ def test_orchestrator_no_toplevel_gateway_import() -> None:
         f"this creates a circular import since gateway imports orchestrator. "
         f"Move to function scope. Found: {gateway_imports}"
     )
+
+
+# ── Rule 6: No direct executor private function calls from production code ──
+
+# Modules allowed to reference executor private functions:
+#   - mc/executor.py itself (defines them)
+#   - mc/application/execution/runtime.py (stable adapter layer)
+#   - mc/application/execution/background_tasks.py (adapter for _background_tasks)
+_EXECUTOR_PRIVATE_ALLOWED = {
+    MC_ROOT / "executor.py",
+    MC_ROOT / "application" / "execution" / "runtime.py",
+    MC_ROOT / "application" / "execution" / "background_tasks.py",
+}
+
+# Executor private functions that must not be called from production code
+_EXECUTOR_PRIVATE_PATTERNS = [
+    r"executor\._run_agent_on_task",
+    r"executor\._collect_output_artifacts",
+    r"executor\._relocate_invalid_memory_files",
+    r"executor\._background_tasks",
+    r"executor\._snapshot_output_dir",
+    r"executor\._make_provider",
+    r"executor\._human_size",
+    r"executor\._build_thread_context",
+    r"executor\._build_tag_attributes_context",
+]
+
+
+def test_no_direct_executor_private_calls() -> None:
+    """Production code must not call executor private functions directly.
+
+    Story 20.1 AC4: No module outside of mc/executor.py and
+    mc/application/execution/runtime.py may call executor._run_agent_on_task,
+    executor._collect_output_artifacts, executor._relocate_invalid_memory_files,
+    or executor._background_tasks.
+
+    The canonical path is through the runtime.py facade or ExecutionEngine.
+    """
+    import re as _re
+
+    violations: list[str] = []
+
+    for py_file in _collect_py_files(MC_ROOT):
+        if py_file in _EXECUTOR_PRIVATE_ALLOWED:
+            continue
+        # Skip test files
+        if "test" in py_file.name:
+            continue
+
+        source = py_file.read_text(encoding="utf-8")
+        for pattern in _EXECUTOR_PRIVATE_PATTERNS:
+            matches = _re.findall(pattern, source)
+            if matches:
+                relative = py_file.relative_to(MC_ROOT.parent)
+                violations.append(
+                    f"{relative} references {matches[0]} — "
+                    "use mc.application.execution.runtime adapter instead"
+                )
+
+    assert violations == [], (
+        "Direct executor private function calls found in production code:\n"
+        + "\n".join(f"  - {v}" for v in violations)
+    )
