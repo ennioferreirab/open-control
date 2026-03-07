@@ -1,6 +1,6 @@
 # Story 20.5: Decompose process_monitor
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -48,9 +48,9 @@ so that it stops being the last utility god file at 778 lines.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Analyze process_monitor.py** (AC: #1, #2, #3)
-  - [ ] 1.1 Read `mc/process_monitor.py` completely (778 lines)
-  - [ ] 1.2 Categorize each function by responsibility:
+- [x] **Task 1: Analyze process_monitor.py** (AC: #1, #2, #3)
+  - [x] 1.1 Read `mc/process_monitor.py` completely (778 lines)
+  - [x] 1.2 Categorize each function by responsibility:
     - Config/defaults (lines ~28-72)
     - Timestamp parsing (line ~112)
     - File I/O helpers (line ~138)
@@ -61,31 +61,31 @@ so that it stops being the last utility god file at 778 lines.
     - Model tier sync (line ~321)
     - Embedding model sync (line ~392)
     - Skill distribution (line ~421)
-  - [ ] 1.3 Map dependencies between functions
+  - [x] 1.3 Map dependencies between functions
 
-- [ ] **Task 2: Extract config/defaults** (AC: #1)
-  - [ ] 2.1 Move config resolution to `mc/infrastructure/config.py`
-  - [ ] 2.2 Move timestamp parsing to infrastructure
-  - [ ] 2.3 Update imports in process_monitor.py
+- [x] **Task 2: Extract config/defaults** (AC: #1)
+  - [x] 2.1 Move config resolution to `mc/infrastructure/config.py`
+  - [x] 2.2 Move timestamp parsing to infrastructure
+  - [x] 2.3 Update imports in process_monitor.py
 
-- [ ] **Task 3: Extract sync utilities** (AC: #2)
-  - [ ] 3.1 Move model tier sync, embedding model sync, skill distribution to appropriate module
-  - [ ] 3.2 Consider `mc/infrastructure/startup_sync.py` or similar
-  - [ ] 3.3 Update imports
+- [x] **Task 3: Extract sync utilities** (AC: #2)
+  - [x] 3.1 Move model tier sync, embedding model sync, skill distribution to appropriate module
+  - [x] 3.2 Consider `mc/infrastructure/startup_sync.py` or similar
+  - [x] 3.3 Update imports
 
-- [ ] **Task 4: Extract cleanup logic** (AC: #3)
-  - [ ] 4.1 Move deleted agent cleanup, archived file restoration
-  - [ ] 4.2 Update imports
+- [x] **Task 4: Extract cleanup logic** (AC: #3)
+  - [x] 4.1 Move deleted agent cleanup, archived file restoration
+  - [x] 4.2 Update imports
 
-- [ ] **Task 5: Verify agent_sync.py overlap** (AC: #4)
-  - [ ] 5.1 Read `mc/agent_sync.py` (627 lines)
-  - [ ] 5.2 Identify duplication with process_monitor.py and agent_bootstrap.py
-  - [ ] 5.3 Consolidate if appropriate
+- [x] **Task 5: Verify agent_sync.py overlap** (AC: #4)
+  - [x] 5.1 Read `mc/agent_sync.py` (627 lines)
+  - [x] 5.2 Identify duplication with process_monitor.py and agent_bootstrap.py
+  - [x] 5.3 Consolidate if appropriate
 
-- [ ] **Task 6: Verify and test** (AC: #5)
-  - [ ] 6.1 Run `uv run pytest tests/`
-  - [ ] 6.2 Verify process_monitor.py is under 300 lines
-  - [ ] 6.3 Verify gateway startup still works
+- [x] **Task 6: Verify and test** (AC: #5)
+  - [x] 6.1 Run `uv run pytest tests/`
+  - [x] 6.2 Verify process_monitor.py is under 300 lines
+  - [x] 6.3 Verify gateway startup still works
 
 ## Dev Notes
 
@@ -127,11 +127,34 @@ so that it stops being the last utility god file at 778 lines.
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+N/A
 
 ### Completion Notes List
+- Analysis revealed that process_monitor.py (778 lines) and agent_sync.py (627 lines) were fully dead code -- every function had already been extracted to canonical modules by previous stories (17.2, 19.1):
+  - Config/defaults/timestamp/file-I/O: `mc/infrastructure/config.py`
+  - Sync utilities/cleanup/bot identity/agent registry: `mc/infrastructure/agent_bootstrap.py`
+  - AgentGateway crash handler: `mc/crash_handler.py`
+  - AgentSyncService: `mc/services/agent_sync.py`
+  - Plan negotiation manager: `mc/services/plan_negotiation.py`
+- Gateway re-exports all symbols for backward compatibility
+- Neither file was imported by any module or test in the codebase
+- Both dead files deleted; KNOWN_ISSUES.md updated to reference correct file
+- 28 new decomposition verification tests added
+- 1917 mc tests pass (1 pre-existing failure in vendor code, unrelated)
+- 0 lines remaining in process_monitor.py (file deleted entirely)
 
 ### File List
+- `mc/process_monitor.py` -- DELETED (778 lines of dead code removed)
+- `mc/agent_sync.py` -- DELETED (627 lines of dead code removed)
+- `KNOWN_ISSUES.md` -- Updated file reference from `mc/process_monitor.py` to `mc/infrastructure/agent_bootstrap.py`
+- `tests/mc/test_process_monitor_decomposition.py` -- NEW (28 tests verifying decomposition completeness)
 
 ## Change Log
+- 2026-03-07: Analyzed process_monitor.py and agent_sync.py; found all 1405 lines are dead code already extracted to canonical modules
+- 2026-03-07: Deleted mc/process_monitor.py (778 lines) and mc/agent_sync.py (627 lines)
+- 2026-03-07: Added 28 decomposition verification tests
+- 2026-03-07: Updated KNOWN_ISSUES.md reference
+- 2026-03-07: All mc tests pass (1917 passed, 1 pre-existing failure)
