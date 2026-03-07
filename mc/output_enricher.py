@@ -11,13 +11,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.types import (
-    is_lead_agent,
-    LeadAgentExecutionError,
     task_safe_id,
 )
 
 if TYPE_CHECKING:
-    from mc.bridge import ConvexBridge
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -321,223 +319,85 @@ def build_executor_agent_roster() -> str:
     return build_agent_roster()
 
 
-async def _run_agent_on_task(
-    agent_name: str,
-    agent_prompt: str | None,
-    agent_model: str | None,
-    reasoning_level: str | None = None,
-    task_title: str = "",
-    task_description: str | None = None,
-    agent_skills: list[str] | None = None,
-    board_name: str | None = None,
-    memory_workspace: Path | None = None,
-    cron_service: Any | None = None,
-    task_id: str | None = None,
-    bridge: "ConvexBridge | None" = None,
-    ask_user_registry: Any | None = None,
-) -> tuple[Any, str, "AgentLoop"]:
-    """Run the nanobot agent loop on a task and return the result.
-
-    Uses AgentLoop.process_direct() with the agent's system prompt and model.
-    The task title + description become the message input.
-    When board_name is provided, uses board-scoped session key and memory_workspace.
-    """
-    if is_lead_agent(agent_name):
-        raise LeadAgentExecutionError(
-            "INVARIANT VIOLATION: Lead Agent must never be passed to "
-            "_run_agent_on_task(). Execution structurally blocked."
-        )
-
-    from nanobot.agent.loop import AgentLoop
-    from nanobot.bus.queue import MessageBus
-
-    workspace = Path.home() / ".nanobot" / "agents" / agent_name
-    workspace.mkdir(parents=True, exist_ok=True)
-
-    # Global workspace skills (installed via ClawHub or manually)
-    global_skills_dir = Path.home() / ".nanobot" / "workspace" / "skills"
-
-    # Build the message from task title + description (structured format)
-    message = build_task_message(task_title, task_description)
-
-    # Prefix with agent system prompt if available (ContextBuilder reads
-    # bootstrap files from workspace, but the YAML prompt isn't a bootstrap
-    # file — so we include it in the message content).
-    if agent_prompt:
-        message = f"[System instructions]\n{agent_prompt}\n\n[Task]\n{message}"
-
-    logger.info(
-        "[_run_agent_on_task] Agent '%s': workspace=%s, memory_workspace=%s",
-        agent_name, workspace, memory_workspace,
-    )
-    logger.info(
-        "[_run_agent_on_task] Agent '%s': final message len=%d, first 500 chars:\n%s",
-        agent_name, len(message), repr(message[:500]),
-    )
-
-    # Board-scoped session key format (AC6); include task_id for per-task isolation
-    if board_name:
-        session_key = f"mc:board:{board_name}:task:{agent_name}:{task_id}" if task_id else f"mc:board:{board_name}:task:{agent_name}"
-    else:
-        session_key = f"mc:task:{agent_name}:{task_id}" if task_id else f"mc:task:{agent_name}"
-    logger.info(
-        "[_run_agent_on_task] Agent '%s': session_key='%s', board_name=%s",
-        agent_name, session_key, board_name,
-    )
-
-    # Create provider from user config (respects OAuth, API keys, etc.)
-    # Resolve through mc.executor so test patches on "mc.executor._make_provider" work.
-    import mc.executor as _exe
-    provider, resolved_model = _exe._make_provider(agent_model)
-
-    bus = MessageBus()
-    loop = AgentLoop(
-        bus=bus,
-        provider=provider,
-        workspace=workspace,
-        model=resolved_model,
-        reasoning_level=reasoning_level,
-        allowed_skills=agent_skills,
-        global_skills_dir=global_skills_dir,
-        memory_workspace=memory_workspace,
-        cron_service=cron_service,
-        agent_name=agent_name,
-        mc_consolidation_system_prompt=(
-            "You are a memory consolidation agent processing MC task history. "
-            "User messages may contain <title>...</title> and <description>...</description> XML tags identifying the task. "
-            "Descriptions may include: file manifests (input files attached to the task), "
-            "[Task Tag Attributes] (tags and their attribute key=value pairs), "
-            "and ## Thread Context (prior human messages in the task thread). "
-            "When writing history_entry, use this format for each task: "
-            "'[YYYY-MM-DD HH:MM] Task \"<title>\": <summary>. "
-            "Tags: <tag>(<attr=val>, ...). "
-            "Files read: <paths>. Files written: <paths>.' "
-            "Omit any field that has no data. "
-            "Call the save_memory tool with your consolidation."
-        ),
-    )
-
-    # Agents running MC steps should execute tasks directly, not re-delegate.
-    # Remove delegate_task to prevent circular delegation loops.
-    loop.tools.unregister("delegate_task")
-
-    # Inject Telegram default chat_id into CronTool so agents running in MC
-    # context can schedule cron jobs that deliver to Telegram without needing
-    # to know the numeric chat_id explicitly.
-    if cron_tool := loop.tools.get("cron"):
-        from nanobot.agent.tools.cron import CronTool as _CronTool
-        if isinstance(cron_tool, _CronTool):
-            from nanobot.config.loader import load_config as _load_config
-            _cfg = _load_config()
-            _tg_ids = [x for x in _cfg.channels.telegram.allow_from if x.lstrip("-").isdigit()]
-            if _tg_ids:
-                cron_tool.set_telegram_default(_tg_ids[0])
-
-    # Set MC context on ask_agent tool for inter-agent conversations (Story 10.3)
-    if ask_tool := loop.tools.get("ask_agent"):
-        from nanobot.agent.tools.ask_agent import AskAgentTool
-        if isinstance(ask_tool, AskAgentTool):
-            ask_tool.set_context(
-                caller_agent=agent_name,
-                task_id=task_id,
-                depth=0,
-                bridge=bridge,
-            )
-
-    # Set MC context on ask_user tool for interactive user questions
-    _ask_user_cleanup: tuple[Any | None, str | None] | None = None
-    if ask_user_tool := loop.tools.get("ask_user"):
-        from nanobot.agent.tools.ask_user import AskUserTool
-        if isinstance(ask_user_tool, AskUserTool):
-            from mc.ask_user.handler import AskUserHandler
-
-            handler = AskUserHandler()
-            if ask_user_registry and task_id:
-                ask_user_registry.register(task_id, handler)
-            ask_user_tool.set_context(
-                agent_name=agent_name,
-                task_id=task_id,
-                bridge=bridge,
-                handler=handler,
-            )
-            _ask_user_cleanup = (ask_user_registry, task_id)
-
-    try:
-        process_direct_result = getattr(loop.__class__, "process_direct_result", None)
-        if callable(process_direct_result):
-            result = await loop.process_direct_result(
-                content=message,
-                session_key=session_key,
-                channel="mc",
-                chat_id=agent_name,
-                task_id=task_id,
-            )
-        else:
-            result = await loop.process_direct(
-                content=message,
-                session_key=session_key,
-                channel="mc",
-                chat_id=agent_name,
-                task_id=task_id,
-            )
-    finally:
-        if _ask_user_cleanup is not None:
-            reg, tid = _ask_user_cleanup
-            if reg and tid:
-                reg.unregister(tid)
-
-    return result, session_key, loop
-
-
 async def _enrich_nanobot_description(
     bridge: Any, task_id: str, title: str,
     description: str | None, task_data: dict | None,
 ) -> str:
     """Enrich nanobot task description with file manifest, thread context, and tag attributes.
 
-    Uses mc.executor module references so that test patches on
-    "mc.executor._build_thread_context" etc. take effect.
+    Uses local helper functions and execution runtime adapters
+    (Story 20.1 cleanup).
     """
     import asyncio
-    import mc.executor as _exe
+
+    from mc.application.execution.runtime import (
+        build_tag_attributes_context,
+        build_thread_context,
+    )
 
     description = description or ""
     safe_id = task_safe_id(task_id)
     files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
     try:
-        fresh_task = await asyncio.to_thread(bridge.query, "tasks:getById", {"task_id": task_id})
+        fresh_task = await asyncio.to_thread(
+            bridge.query, "tasks:getById", {"task_id": task_id}
+        )
         raw_files = (fresh_task or {}).get("files") or []
     except Exception:
-        logger.warning("[executor] Failed to fetch fresh task data for '%s', using snapshot", title)
+        logger.warning(
+            "[executor] Failed to fetch fresh task data for '%s', using snapshot",
+            title,
+        )
         raw_files = (task_data or {}).get("files") or []
     file_manifest = [
-        {"name": f.get("name", "unknown"), "type": f.get("type", "application/octet-stream"),
-         "size": f.get("size", 0), "subfolder": f.get("subfolder", "attachments")}
+        {
+            "name": f.get("name", "unknown"),
+            "type": f.get("type", "application/octet-stream"),
+            "size": f.get("size", 0),
+            "subfolder": f.get("subfolder", "attachments"),
+        }
         for f in raw_files
     ]
     output_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id / "output")
     task_instruction = (
         f"Task workspace: {files_dir}\n"
-        f"Save ALL output files (reports, summaries, generated content) to: {output_dir}\n"
+        f"Save ALL output files (reports, summaries, generated content) "
+        f"to: {output_dir}\n"
         f"Do NOT save output files outside this directory."
     )
     if file_manifest:
-        manifest_summary = ", ".join(f"{f['name']} ({f['subfolder']}, {_exe._human_size(f['size'])})" for f in file_manifest)
-        task_instruction += f"\nTask has {len(file_manifest)} attached file(s) at {files_dir}/attachments. File manifest: {manifest_summary}"
+        manifest_summary = ", ".join(
+            f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
+            for f in file_manifest
+        )
+        task_instruction += (
+            f"\nTask has {len(file_manifest)} attached file(s) at "
+            f"{files_dir}/attachments. File manifest: {manifest_summary}"
+        )
     description = (description or "") + f"\n\n{task_instruction}"
     try:
-        thread_messages = await asyncio.to_thread(bridge.get_task_messages, task_id)
-        thread_context = _exe._build_thread_context(thread_messages)
+        thread_messages = await asyncio.to_thread(
+            bridge.get_task_messages, task_id
+        )
+        thread_context = build_thread_context(thread_messages)
         if thread_context:
             description = (description or "") + f"\n{thread_context}"
     except Exception:
-        logger.warning("[executor] Failed to fetch thread messages for '%s'", title, exc_info=True)
+        logger.warning(
+            "[executor] Failed to fetch thread messages for '%s'",
+            title,
+            exc_info=True,
+        )
     try:
         task_tags = (task_data or {}).get("tags") or []
         if task_tags:
-            tag_attr_values = await asyncio.to_thread(bridge.query, "tagAttributeValues:getByTask", {"task_id": task_id})
-            tag_attr_catalog = await asyncio.to_thread(bridge.query, "tagAttributes:list", {})
-            tag_attrs_context = _exe._build_tag_attributes_context(
+            tag_attr_values = await asyncio.to_thread(
+                bridge.query, "tagAttributeValues:getByTask", {"task_id": task_id}
+            )
+            tag_attr_catalog = await asyncio.to_thread(
+                bridge.query, "tagAttributes:list", {}
+            )
+            tag_attrs_context = build_tag_attributes_context(
                 task_tags,
                 tag_attr_values if isinstance(tag_attr_values, list) else [],
                 tag_attr_catalog if isinstance(tag_attr_catalog, list) else [],
@@ -545,5 +405,9 @@ async def _enrich_nanobot_description(
             if tag_attrs_context:
                 description = (description or "") + f"\n\n{tag_attrs_context}"
     except Exception:
-        logger.warning("[executor] Failed to fetch tag attributes for '%s'", title, exc_info=True)
+        logger.warning(
+            "[executor] Failed to fetch tag attributes for '%s'",
+            title,
+            exc_info=True,
+        )
     return description
