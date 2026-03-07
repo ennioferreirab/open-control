@@ -260,7 +260,7 @@ class TestExecutionLoop:
         }
 
         # async_subscribe returns an asyncio.Queue
-        mock_bridge.async_subscribe = lambda fn, args: _make_test_queue([task_data])
+        mock_bridge.async_subscribe = lambda fn, args, **kw: _make_test_queue([task_data])
 
         executor = TaskExecutor(mock_bridge)
 
@@ -300,7 +300,7 @@ class TestExecutionLoop:
             "trust_level": "autonomous",
         }
 
-        mock_bridge.async_subscribe = lambda fn, args: _make_test_queue([task_data])
+        mock_bridge.async_subscribe = lambda fn, args, **kw: _make_test_queue([task_data])
 
         executor = TaskExecutor(mock_bridge)
 
@@ -333,7 +333,7 @@ class TestExecutionLoop:
             "trust_level": "autonomous",
         }
 
-        mock_bridge.async_subscribe = lambda fn, args: _make_test_queue([task_data])
+        mock_bridge.async_subscribe = lambda fn, args, **kw: _make_test_queue([task_data])
 
         executor = TaskExecutor(mock_bridge)
 
@@ -975,7 +975,7 @@ class TestOrchestratorDeduplication:
         q = asyncio.Queue()
         q.put_nowait([task_data])
         q.put_nowait([task_data])
-        mock_bridge.async_subscribe = lambda fn, args: q
+        mock_bridge.async_subscribe = lambda fn, args, **kw: q
 
         orch = TaskOrchestrator(mock_bridge)
 
@@ -1007,7 +1007,7 @@ class TestOrchestratorDeduplication:
         q = asyncio.Queue()
         q.put_nowait([task1])
         q.put_nowait([task2])
-        mock_bridge.async_subscribe = lambda fn, args: q
+        mock_bridge.async_subscribe = lambda fn, args, **kw: q
 
         orch = TaskOrchestrator(mock_bridge)
 

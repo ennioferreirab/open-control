@@ -498,22 +498,18 @@ class TestMentionWatcherWithConversationService:
             bridge, conversation_service=conversation_service
         )
 
-        # Mock: tasks with a new mention message
-        bridge.query = MagicMock(side_effect=lambda fn, args: (
-            [{"id": "task-1", "status": "done", "title": "Test"}]
-            if args.get("status") == "done"
-            else []
-        ))
-        bridge.get_task_messages = MagicMock(return_value=[
+        # Mock: global recent user messages query returns a mention message
+        bridge.get_recent_user_messages = MagicMock(return_value=[
             {
                 "_id": "msg-1",
                 "author_type": "user",
                 "content": "@researcher help",
+                "task_id": "task-1",
             },
         ])
-
-        # Pre-populate seen IDs (so first-encounter skip is bypassed)
-        watcher._per_task_seen["task-1"] = set()
+        bridge.query = MagicMock(return_value={
+            "id": "task-1", "status": "done", "title": "Test"
+        })
 
         # Patch ConversationService.handle_message to verify routing
         with patch(
@@ -541,20 +537,18 @@ class TestMentionWatcherWithConversationService:
 
         watcher = MentionWatcher(bridge)
 
-        bridge.query = MagicMock(side_effect=lambda fn, args: (
-            [{"id": "task-1", "status": "done", "title": "Test"}]
-            if args.get("status") == "done"
-            else []
-        ))
-        bridge.get_task_messages = MagicMock(return_value=[
+        # Mock: global recent user messages query returns a mention message
+        bridge.get_recent_user_messages = MagicMock(return_value=[
             {
                 "_id": "msg-1",
                 "author_type": "user",
                 "content": "@researcher help",
+                "task_id": "task-1",
             },
         ])
-
-        watcher._per_task_seen["task-1"] = set()
+        bridge.query = MagicMock(return_value={
+            "id": "task-1", "status": "done", "title": "Test"
+        })
 
         with patch(
             "mc.mentions.handler.handle_all_mentions",

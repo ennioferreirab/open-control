@@ -19,10 +19,16 @@ logger = logging.getLogger(__name__)
 
 
 class SubscriptionManager:
-    """Manages Convex subscriptions and async polling."""
+    """Manages Convex subscriptions and async polling.
+
+    Supports subscription dedup: when multiple callers subscribe to the same
+    function+args, a single poll loop is shared and results are fanned out
+    to all consumer queues.
+    """
 
     def __init__(self, client: "BridgeClient"):
         self._client = client
+        self._shared_polls: dict[tuple, tuple[asyncio.Task, list[asyncio.Queue]]] = {}  # type: ignore[type-arg]
 
     def subscribe(
         self, function_name: str, args: dict[str, Any] | None = None
@@ -50,9 +56,11 @@ class SubscriptionManager:
         """Subscribe to a Convex query, returning an asyncio.Queue.
 
         Uses a polling strategy: periodically queries Convex and pushes
-        results into an asyncio.Queue when data changes.  This avoids
-        the thread-safety issues with the Convex Python SDK's blocking
-        subscription iterator and ``call_soon_threadsafe``.
+        results into an asyncio.Queue when data changes.
+
+        **Dedup:** When multiple callers subscribe to the same function+args,
+        a single poll loop is shared. The first subscriber's poll_interval
+        is used for all consumers of that key.
 
         Args:
             function_name: Convex query in colon notation.
@@ -64,37 +72,74 @@ class SubscriptionManager:
         """
         import asyncio
 
+        key = (function_name, self._freeze_args(args))
         queue: asyncio.Queue[Any] = asyncio.Queue()
 
-        async def _poll() -> None:
-            last_result: Any = None
-            consecutive_errors = 0
-            max_errors = 10
-            while True:
-                try:
-                    result = await asyncio.to_thread(
-                        self._client.query, function_name, args
-                    )
-                    consecutive_errors = 0
-                    if result != last_result:
-                        queue.put_nowait(result)
-                        last_result = result
-                except Exception as exc:
-                    consecutive_errors += 1
-                    if consecutive_errors >= max_errors:
-                        logger.error(
-                            "Poll %s failed %d times consecutively: %s",
-                            function_name, max_errors, exc,
-                        )
-                        queue.put_nowait(
-                            {"_error": True, "message": str(exc)}
-                        )
-                        return
-                    logger.warning(
-                        "Poll %s error (attempt %d/%d): %s",
-                        function_name, consecutive_errors, max_errors, exc,
-                    )
-                await asyncio.sleep(poll_interval)
+        if key in self._shared_polls:
+            task, consumers = self._shared_polls[key]
+            if not task.done():
+                consumers.append(queue)
+                logger.debug(
+                    "Dedup: reusing poll loop for %s (now %d consumers)",
+                    function_name,
+                    len(consumers),
+                )
+                return queue
+            del self._shared_polls[key]
 
-        asyncio.get_running_loop().create_task(_poll())
+        consumers: list[asyncio.Queue] = [queue]  # type: ignore[no-redef]
+        task = asyncio.get_running_loop().create_task(
+            self._poll_loop(function_name, args, poll_interval, consumers)
+        )
+        self._shared_polls[key] = (task, consumers)
         return queue
+
+    async def _poll_loop(
+        self,
+        function_name: str,
+        args: dict[str, Any] | None,
+        poll_interval: float,
+        consumers: list["asyncio.Queue[Any]"],
+    ) -> None:
+        """Shared poll loop that fans out results to all consumer queues."""
+        last_result: Any = None
+        consecutive_errors = 0
+        max_errors = 10
+        while True:
+            try:
+                result = await asyncio.to_thread(
+                    self._client.query, function_name, args
+                )
+                consecutive_errors = 0
+                if result != last_result:
+                    last_result = result
+                    for q in consumers:
+                        q.put_nowait(result)
+            except Exception as exc:
+                consecutive_errors += 1
+                if consecutive_errors >= max_errors:
+                    logger.error(
+                        "Poll %s failed %d times consecutively: %s",
+                        function_name,
+                        max_errors,
+                        exc,
+                    )
+                    error_msg = {"_error": True, "message": str(exc)}
+                    for q in consumers:
+                        q.put_nowait(error_msg)
+                    return
+                logger.warning(
+                    "Poll %s error (attempt %d/%d): %s",
+                    function_name,
+                    consecutive_errors,
+                    max_errors,
+                    exc,
+                )
+            await asyncio.sleep(poll_interval)
+
+    @staticmethod
+    def _freeze_args(args: dict[str, Any] | None) -> tuple:
+        """Convert args dict to a hashable key for dedup."""
+        if not args:
+            return ()
+        return tuple(sorted(args.items()))

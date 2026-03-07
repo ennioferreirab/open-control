@@ -23,7 +23,9 @@ the full resume + session update + response posting logic (CC-6 AC3).
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.background_tasks import create_background_task
@@ -41,7 +43,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 2
+ACTIVE_POLL_INTERVAL_SECONDS = 5
+SLEEP_POLL_INTERVAL_SECONDS = 60
+POLL_INTERVAL_SECONDS = ACTIVE_POLL_INTERVAL_SECONDS
+RUNTIME_SETTINGS_KEY = "chat_handler_runtime"
 
 
 class ChatHandler:
@@ -52,22 +57,135 @@ class ChatHandler:
     ) -> None:
         self._bridge = bridge
         self._ask_user_registry = ask_user_registry
+        self._mode: str = "sleep"
+        self._in_flight = 0
+        self._last_transition_at = self._utc_now()
+        self._last_work_found_at: str | None = None
+        self._remote_terminal_cache: dict[str, bool] = {}
 
     async def run(self) -> None:
-        """Polling loop: fetch pending chats every POLL_INTERVAL_SECONDS."""
+        """Polling loop with adaptive sleep/active intervals."""
         logger.info("[chat] ChatHandler started")
+        await self._persist_runtime(force=True)
         while True:
             try:
                 pending = await asyncio.to_thread(
                     self._bridge.get_pending_chat_messages
                 )
-                for msg in pending or []:
-                    asyncio.create_task(self._process_chat_message(msg))
+                useful_pending = await self._filter_useful_pending(
+                    pending or []
+                )
+                for msg in useful_pending:
+                    self._dispatch_message(msg)
+                if useful_pending:
+                    await self._persist_runtime(
+                        mode="active",
+                        work_found=True,
+                    )
+                elif self._mode == "active" and self._in_flight == 0:
+                    await self._persist_runtime(mode="sleep")
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("[chat] Error polling pending chats")
-            await asyncio.sleep(POLL_INTERVAL_SECONDS)
+            await asyncio.sleep(self._current_poll_interval())
+
+    def _current_poll_interval(self) -> int:
+        if self._mode == "active":
+            return ACTIVE_POLL_INTERVAL_SECONDS
+        return SLEEP_POLL_INTERVAL_SECONDS
+
+    def _utc_now(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    async def _persist_runtime(
+        self,
+        *,
+        mode: str | None = None,
+        work_found: bool = False,
+        force: bool = False,
+    ) -> None:
+        next_mode = mode or self._mode
+        if not force and next_mode == self._mode:
+            return
+
+        now = self._utc_now()
+        self._mode = next_mode
+        self._last_transition_at = now
+        if work_found:
+            self._last_work_found_at = now
+
+        payload: dict[str, Any] = {
+            "mode": self._mode,
+            "pollIntervalSeconds": self._current_poll_interval(),
+            "lastTransitionAt": self._last_transition_at,
+            "inFlight": self._in_flight,
+        }
+        if self._last_work_found_at is not None:
+            payload["lastWorkFoundAt"] = self._last_work_found_at
+
+        try:
+            await asyncio.to_thread(
+                self._bridge.mutation,
+                "settings:set",
+                {
+                    "key": RUNTIME_SETTINGS_KEY,
+                    "value": json.dumps(payload),
+                },
+            )
+        except Exception:
+            logger.exception("[chat] Failed to persist runtime state")
+
+    async def _filter_useful_pending(
+        self,
+        pending: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        useful: list[dict[str, Any]] = []
+        for msg in pending:
+            agent_name = msg.get("agent_name", "")
+            if not agent_name:
+                continue
+            if await self._is_remote_terminal_agent(agent_name):
+                logger.debug(
+                    "[chat] Ignoring pending chat for remote terminal @%s",
+                    agent_name,
+                )
+                continue
+            useful.append(msg)
+        return useful
+
+    async def _is_remote_terminal_agent(self, agent_name: str) -> bool:
+        cached = self._remote_terminal_cache.get(agent_name)
+        if cached is not None:
+            return cached
+
+        try:
+            agent = await asyncio.to_thread(
+                self._bridge.get_agent_by_name, agent_name
+            )
+        except Exception:
+            logger.exception(
+                "[chat] Failed to resolve agent role for @%s",
+                agent_name,
+            )
+            self._remote_terminal_cache[agent_name] = False
+            return False
+
+        is_remote_terminal = bool(
+            agent and agent.get("role") == "remote-terminal"
+        )
+        self._remote_terminal_cache[agent_name] = is_remote_terminal
+        return is_remote_terminal
+
+    def _dispatch_message(self, msg: dict[str, Any]) -> None:
+        self._in_flight += 1
+        create_background_task(self._process_with_tracking(msg))
+
+    async def _process_with_tracking(self, msg: dict[str, Any]) -> None:
+        try:
+            await self._process_chat_message(msg)
+        finally:
+            self._in_flight = max(0, self._in_flight - 1)
 
     async def _process_chat_message(self, msg: dict[str, Any]) -> None:
         """Process a single pending chat message.

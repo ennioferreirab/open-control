@@ -36,6 +36,18 @@ const fileAttachmentsValidator = v.optional(v.array(v.object({
   size: v.number(),
 })));
 
+export const listRecentUserMessages = query({
+  args: { sinceTimestamp: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("messages")
+      .withIndex("by_authorType_timestamp", (q) =>
+        q.eq("authorType", "user").gte("timestamp", args.sinceTimestamp)
+      )
+      .collect();
+  },
+});
+
 export const listByTask = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {

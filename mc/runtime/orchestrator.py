@@ -208,7 +208,7 @@ class TaskOrchestrator:
         """Subscribe to inbox tasks and route to InboxWorker."""
         logger.info("[orchestrator] Starting inbox routing loop")
         queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "inbox"}
+            "tasks:listByStatus", {"status": "inbox"}, poll_interval=3.0
         )
         while True:
             tasks = await queue.get()
@@ -220,7 +220,7 @@ class TaskOrchestrator:
         """Subscribe to planning tasks and route to PlanningWorker."""
         logger.info("[orchestrator] Starting planning routing loop")
         queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "planning"}
+            "tasks:listByStatus", {"status": "planning"}, poll_interval=5.0
         )
         while True:
             tasks = await queue.get()
@@ -232,7 +232,7 @@ class TaskOrchestrator:
         """Subscribe to review tasks and route to ReviewWorker."""
         logger.info("[orchestrator] Starting review routing loop")
         queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "review"}
+            "tasks:listByStatus", {"status": "review"}, poll_interval=5.0
         )
         while True:
             tasks = await queue.get()
@@ -244,7 +244,7 @@ class TaskOrchestrator:
         """Subscribe to in_progress tasks and route to KickoffResumeWorker."""
         logger.info("[orchestrator] Starting kickoff watch loop")
         queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "in_progress"}
+            "tasks:listByStatus", {"status": "in_progress"}, poll_interval=5.0
         )
         while True:
             tasks = await queue.get()

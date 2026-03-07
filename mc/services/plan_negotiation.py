@@ -117,10 +117,10 @@ class PlanNegotiationSupervisor:
         logger.info("[plan_negotiation] Plan negotiation supervisor started")
 
         review_queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "review"}
+            "tasks:listByStatus", {"status": "review"}, poll_interval=5.0
         )
         in_progress_queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "in_progress"}
+            "tasks:listByStatus", {"status": "in_progress"}, poll_interval=5.0
         )
 
         async def _drain_queue(queue: asyncio.Queue) -> None:  # type: ignore[type-arg]

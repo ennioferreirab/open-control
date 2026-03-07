@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -234,8 +235,11 @@ class TestChatHandlerPollingLoop:
 
         handler._process_chat_message = mock_process
 
-        # Patch POLL_INTERVAL_SECONDS to 0 so the loop iterates fast
-        with patch("mc.chat_handler.POLL_INTERVAL_SECONDS", 0):
+        # Patch both polling intervals to 0 so the loop iterates fast
+        with (
+            patch("mc.chat_handler.ACTIVE_POLL_INTERVAL_SECONDS", 0),
+            patch("mc.chat_handler.SLEEP_POLL_INTERVAL_SECONDS", 0),
+        ):
             task = asyncio.create_task(handler.run())
             # Wait for processing to happen (with timeout)
             try:
@@ -272,7 +276,10 @@ class TestChatHandlerPollingLoop:
 
         bridge.get_pending_chat_messages = failing_get_pending
 
-        with patch("mc.chat_handler.POLL_INTERVAL_SECONDS", 0):
+        with (
+            patch("mc.chat_handler.ACTIVE_POLL_INTERVAL_SECONDS", 0),
+            patch("mc.chat_handler.SLEEP_POLL_INTERVAL_SECONDS", 0),
+        ):
             task = asyncio.create_task(handler.run())
             try:
                 await asyncio.wait_for(second_poll_done.wait(), timeout=5.0)
@@ -286,6 +293,115 @@ class TestChatHandlerPollingLoop:
 
         # The loop survived the error and polled again
         assert call_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_run_publishes_sleep_runtime_on_start(self):
+        """The handler publishes sleeping runtime metadata before polling."""
+        from mc.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        handler = ChatHandler(bridge)
+
+        sleep_mock = AsyncMock(side_effect=asyncio.CancelledError)
+        with patch("mc.chat_handler.asyncio.sleep", sleep_mock):
+            with pytest.raises(asyncio.CancelledError):
+                await handler.run()
+
+        runtime_calls = [
+            call.args
+            for call in bridge.mutation.call_args_list
+            if call.args and call.args[0] == "settings:set"
+        ]
+        assert runtime_calls, "Expected chat runtime to be persisted on startup"
+
+        payload = json.loads(runtime_calls[0][1]["value"])
+        assert runtime_calls[0][1]["key"] == "chat_handler_runtime"
+        assert payload["mode"] == "sleep"
+        assert payload["pollIntervalSeconds"] == 60
+        assert payload["inFlight"] == 0
+
+    @pytest.mark.asyncio
+    async def test_run_ignores_remote_terminal_pending_messages(self):
+        """Remote terminal chat messages do not wake or dispatch the chat poller."""
+        from mc.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        bridge.get_pending_chat_messages = MagicMock(
+            return_value=[_make_pending_msg(agent_name="remote-agent")]
+        )
+        bridge.get_agent_by_name = MagicMock(
+            return_value={"name": "remote-agent", "role": "remote-terminal"}
+        )
+        handler = ChatHandler(bridge)
+        handler._process_chat_message = AsyncMock()
+
+        sleep_mock = AsyncMock(side_effect=asyncio.CancelledError)
+        with patch("mc.chat_handler.asyncio.sleep", sleep_mock):
+            with pytest.raises(asyncio.CancelledError):
+                await handler.run()
+
+        handler._process_chat_message.assert_not_called()
+        runtime_calls = [
+            call.args
+            for call in bridge.mutation.call_args_list
+            if call.args and call.args[0] == "settings:set"
+        ]
+        payload = json.loads(runtime_calls[-1][1]["value"])
+        assert payload["mode"] == "sleep"
+
+    @pytest.mark.asyncio
+    async def test_run_switches_to_active_for_non_remote_work_and_back_to_sleep(self):
+        """Useful work wakes the handler and it sleeps again when the queue drains."""
+        from mc.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        msg = _make_pending_msg(agent_name="worker-agent")
+        polls = [[msg], [], []]
+
+        def get_pending():
+            if polls:
+                return polls.pop(0)
+            return []
+
+        bridge.get_pending_chat_messages = get_pending
+        bridge.get_agent_by_name = MagicMock(
+            return_value={"name": "worker-agent", "role": "developer"}
+        )
+
+        handler = ChatHandler(bridge)
+        processed = asyncio.Event()
+
+        async def mock_process(_msg):
+            processed.set()
+
+        handler._process_chat_message = mock_process
+
+        real_sleep = asyncio.sleep
+        sleep_calls = 0
+
+        async def fake_sleep(_delay):
+            nonlocal sleep_calls
+            sleep_calls += 1
+            await real_sleep(0)
+            if sleep_calls >= 3:
+                raise asyncio.CancelledError
+
+        with patch(
+            "mc.chat_handler.asyncio.sleep",
+            new=AsyncMock(side_effect=fake_sleep),
+        ):
+            with pytest.raises(asyncio.CancelledError):
+                await handler.run()
+
+        assert processed.is_set()
+
+        runtime_payloads = [
+            json.loads(call.args[1]["value"])
+            for call in bridge.mutation.call_args_list
+            if call.args and call.args[0] == "settings:set"
+        ]
+        modes = [payload["mode"] for payload in runtime_payloads]
+        assert modes[:3] == ["sleep", "active", "sleep"]
 
 
 # ---------------------------------------------------------------------------

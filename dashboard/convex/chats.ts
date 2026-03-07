@@ -46,11 +46,10 @@ export const send = mutation({
 export const listPending = query({
   args: {},
   handler: async (ctx) => {
-    const all = await ctx.db
+    return await ctx.db
       .query("chats")
-      .withIndex("by_timestamp")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
       .collect();
-    return all.filter((msg) => msg.status === "pending");
   },
 });
 

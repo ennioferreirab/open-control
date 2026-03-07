@@ -29,6 +29,7 @@ import { BoardSettingsSheet } from "@/components/BoardSettingsSheet";
 import { CronJobsModal } from "@/components/CronJobsModal";
 import { SearchBar } from "@/components/SearchBar";
 import { parseSearch } from "@/lib/searchParser";
+import { useChatSyncRuntime } from "@/hooks/useChatSyncRuntime";
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
@@ -55,6 +56,17 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
 
   const parsedSearch = useMemo(() => parseSearch(searchQuery), [searchQuery]);
   const { openTerminals, closeAllTerminals } = useBoard();
+  const chatSyncRuntime = useChatSyncRuntime();
+  const chatSyncLabel =
+    chatSyncRuntime == null
+      ? "Chat sync unavailable"
+      : `Chat sync ${chatSyncRuntime.mode === "sleep" ? "sleeping" : "active"} · ${chatSyncRuntime.pollIntervalSeconds}s`;
+  const chatSyncClasses =
+    chatSyncRuntime?.mode === "sleep"
+      ? "border-sky-200 bg-sky-50 text-sky-700"
+      : chatSyncRuntime?.mode === "active"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : "border-border bg-muted text-muted-foreground";
 
   return (
     <SidebarProvider defaultOpen={isXl} className="h-screen overflow-hidden">
@@ -76,7 +88,12 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
               <BoardSelector onOpenSettings={() => setBoardSettingsOpen(true)} />
               <SearchBar onSearchChange={setSearchQuery} />
             </div>
-            <div className="flex items-center gap-1 shrink-0 ml-auto">
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <span
+                className={`hidden rounded-full border px-2 py-1 text-[11px] font-medium md:inline-flex ${chatSyncClasses}`}
+              >
+                {chatSyncLabel}
+              </span>
               <button
                 aria-label="Open cron jobs"
                 onClick={() => setCronOpen(true)}

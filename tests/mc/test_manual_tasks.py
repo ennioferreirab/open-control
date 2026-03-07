@@ -90,7 +90,7 @@ class TestOrchestratorSkipsManualTasks:
 
         q = asyncio.Queue()
         q.put_nowait([manual_task, agent_task])
-        mock_bridge.async_subscribe = lambda fn, args: q
+        mock_bridge.async_subscribe = lambda fn, args, **kw: q
 
         orch = TaskOrchestrator(mock_bridge)
 
@@ -138,7 +138,7 @@ class TestExecutorSkipsManualTasks:
 
         q = asyncio.Queue()
         q.put_nowait([manual_task])
-        mock_bridge.async_subscribe = lambda fn, args: q
+        mock_bridge.async_subscribe = lambda fn, args, **kw: q
 
         executor = TaskExecutor(mock_bridge)
 
@@ -178,7 +178,7 @@ class TestExecutorSkipsManualTasks:
 
         q = asyncio.Queue()
         q.put_nowait([agent_task])
-        mock_bridge.async_subscribe = lambda fn, args: q
+        mock_bridge.async_subscribe = lambda fn, args, **kw: q
 
         executor = TaskExecutor(mock_bridge)
 
