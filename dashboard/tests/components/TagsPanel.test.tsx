@@ -3,58 +3,41 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConvexError } from "convex/values";
 
-// Mock convex/react hooks
-vi.mock("convex/react", () => ({
-  useQuery: vi.fn(),
-  useMutation: vi.fn(),
-}));
-
-vi.mock("../../convex/_generated/api", () => ({
-  api: {
-    taskTags: {
-      list: "taskTags:list",
-      create: "taskTags:create",
-      remove: "taskTags:remove",
-      updateAttributeIds: "taskTags:updateAttributeIds",
-    },
-    tagAttributes: {
-      list: "tagAttributes:list",
-      create: "tagAttributes:create",
-      remove: "tagAttributes:remove",
-    },
-  },
-}));
-
-import { useQuery, useMutation } from "convex/react";
 import { TagsPanel } from "../../components/TagsPanel";
+import type { TagsPanelData } from "@/hooks/useTagsPanelData";
 
-const mockUseQuery = useQuery as ReturnType<typeof vi.fn>;
-const mockUseMutation = useMutation as ReturnType<typeof vi.fn>;
+const mockCreateTag = vi.fn();
+const mockRemoveTag = vi.fn();
+const mockCreateAttribute = vi.fn();
+const mockRemoveAttribute = vi.fn();
+const mockUpdateTagAttributeIds = vi.fn();
+
+let hookOverrides: Partial<TagsPanelData> = {};
+
+const defaultHookData: TagsPanelData = {
+  tags: [],
+  createTag: mockCreateTag,
+  removeTag: mockRemoveTag,
+  attributes: [],
+  createAttribute: mockCreateAttribute,
+  removeAttribute: mockRemoveAttribute,
+  updateTagAttributeIds: mockUpdateTagAttributeIds,
+};
+
+vi.mock("@/hooks/useTagsPanelData", () => ({
+  useTagsPanelData: () => ({ ...defaultHookData, ...hookOverrides }),
+}));
 
 describe("TagsPanel", () => {
-  const mockCreateTag = vi.fn();
-  const mockRemoveTag = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseMutation.mockImplementation((ref) => {
-      if (String(ref).includes("create")) return mockCreateTag;
-      if (String(ref).includes("remove")) return mockRemoveTag;
-      return vi.fn();
-    });
-    mockUseQuery.mockImplementation((ref) => {
-      if (String(ref).includes("taskTags")) return [];
-      if (String(ref).includes("tagAttributes")) return [];
-      return undefined;
-    });
+    hookOverrides = {};
     mockCreateTag.mockResolvedValue(undefined);
     mockRemoveTag.mockResolvedValue(undefined);
   });
 
   it("shows empty state when no tags exist", () => {
-    mockUseQuery.mockImplementation((ref) =>
-      String(ref).includes("tagAttributes") ? [] : []
-    );
+    hookOverrides = { tags: [] };
     render(<TagsPanel />);
     expect(
       screen.getByText("No tags yet. Add your first tag below.")
@@ -62,9 +45,7 @@ describe("TagsPanel", () => {
   });
 
   it("shows no list when tags are loading (undefined)", () => {
-    mockUseQuery.mockImplementation((ref) =>
-      String(ref).includes("tagAttributes") ? [] : undefined
-    );
+    hookOverrides = { tags: undefined };
     render(<TagsPanel />);
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
     expect(
@@ -73,16 +54,12 @@ describe("TagsPanel", () => {
   });
 
   it("renders existing tags with name and delete button", () => {
-    mockUseQuery.mockImplementation((ref) => {
-      if (String(ref).includes("taskTags")) {
-        return [
-          { _id: "id1", name: "Bug", color: "red" },
-          { _id: "id2", name: "Feature", color: "blue" },
-        ];
-      }
-      if (String(ref).includes("tagAttributes")) return [];
-      return undefined;
-    });
+    hookOverrides = {
+      tags: [
+        { _id: "id1", name: "Bug", color: "red" },
+        { _id: "id2", name: "Feature", color: "blue" },
+      ] as never[],
+    };
     render(<TagsPanel />);
     expect(screen.getByText("Bug")).toBeInTheDocument();
     expect(screen.getByText("Feature")).toBeInTheDocument();
@@ -91,7 +68,6 @@ describe("TagsPanel", () => {
 
   it("disables Add button when name input is empty", () => {
     const { getByRole } = render(<TagsPanel />);
-    // Get the "Add" button specifically (not the color swatches)
     const addButton = getByRole("button", { name: /^Add$/ });
     expect(addButton).toBeDisabled();
   });
@@ -149,13 +125,9 @@ describe("TagsPanel", () => {
   });
 
   it("calls removeTag when delete button is clicked", async () => {
-    mockUseQuery.mockImplementation((ref) => {
-      if (String(ref).includes("taskTags")) {
-        return [{ _id: "id1", name: "Bug", color: "red" }];
-      }
-      if (String(ref).includes("tagAttributes")) return [];
-      return undefined;
-    });
+    hookOverrides = {
+      tags: [{ _id: "id1", name: "Bug", color: "red" }] as never[],
+    };
     render(<TagsPanel />);
     await userEvent.click(
       screen.getByRole("button", { name: /Delete tag Bug/i })
