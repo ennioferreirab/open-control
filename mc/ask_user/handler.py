@@ -8,7 +8,7 @@ Any backend that needs ask_user creates an AskUserHandler and calls handler.ask(
 import asyncio
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge

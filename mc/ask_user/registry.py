@@ -8,7 +8,7 @@ and deliver user replies via deliver_user_reply().
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mc.ask_user.handler import AskUserHandler

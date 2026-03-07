@@ -1,7 +1,6 @@
 """Plan capture — captures plan approval via ExitPlanMode."""
 from __future__ import annotations
 
-from pathlib import Path
 
 from ..config import get_config, get_project_root
 from ..handler import BaseHandler
