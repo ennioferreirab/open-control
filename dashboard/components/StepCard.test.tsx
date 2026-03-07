@@ -1,19 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StepCard } from "./StepCard";
+import type { StepCardActionsData } from "@/hooks/useStepCardActions";
 
-vi.mock("convex/react", () => ({
-  useMutation: vi.fn(() => vi.fn()),
-}));
+const mockDeleteStep = vi.fn();
+const mockAcceptHumanStep = vi.fn();
+const mockManualMoveStep = vi.fn();
 
-vi.mock("../convex/_generated/api", () => ({
-  api: {
-    steps: {
-      deleteStep: "steps:deleteStep",
-      acceptHumanStep: "steps:acceptHumanStep",
-      manualMoveStep: "steps:manualMoveStep",
-    },
-  },
+const defaultHookData: StepCardActionsData = {
+  deleteStep: mockDeleteStep,
+  acceptHumanStep: mockAcceptHumanStep,
+  manualMoveStep: mockManualMoveStep,
+};
+
+vi.mock("@/hooks/useStepCardActions", () => ({
+  useStepCardActions: () => defaultHookData,
 }));
 
 vi.mock("motion/react-client", () => ({
@@ -145,7 +146,7 @@ describe("StepCard", () => {
 
   it("does not show file indicator when no attachedFiles", () => {
     render(<StepCard step={baseStep} parentTaskTitle="Q4 Forecast Task" />);
-    // baseStep has no attachedFiles — ensure no numeric count is displayed in a file span
+    // baseStep has no attachedFiles -- ensure no numeric count is displayed in a file span
     const card = screen.getByRole("article");
     const fileSpans = card.querySelectorAll("span.inline-flex");
     const fileIndicator = Array.from(fileSpans).find(

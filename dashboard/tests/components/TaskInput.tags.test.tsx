@@ -2,26 +2,33 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { useMutation, useQuery } from "convex/react";
-
 import { TaskInput } from "../../components/TaskInput";
+import type { TaskInputData } from "@/hooks/useTaskInputData";
+
+const SAMPLE_TAGS = [
+  { _id: "t1", name: "bug", color: "red" },
+  { _id: "t2", name: "feature", color: "blue" },
+];
+
+// Mock the feature hook instead of convex/react
+const mockCreateTask = vi.fn();
+const mockUpsertAttrValue = vi.fn();
+
+let hookOverrides: Partial<TaskInputData> = {};
+
+const defaultHookData: TaskInputData = {
+  createTask: mockCreateTask,
+  predefinedTags: SAMPLE_TAGS as never[],
+  allAttributes: [],
+  upsertAttrValue: mockUpsertAttrValue,
+  isAutoTitle: false,
+};
+
+vi.mock("@/hooks/useTaskInputData", () => ({
+  useTaskInputData: () => ({ ...defaultHookData, ...hookOverrides }),
+}));
 
 vi.mock("@/components/ui/select", async () => import("../mocks/select-mock"));
-
-vi.mock("convex/react", () => ({
-  useMutation: vi.fn(),
-  useQuery: vi.fn(),
-}));
-
-vi.mock("../../convex/_generated/api", () => ({
-  api: {
-    tasks: { create: "tasks:create" },
-    taskTags: { list: "taskTags:list" },
-    tagAttributes: { list: "tagAttributes:list" },
-    tagAttributeValues: { upsert: "tagAttributeValues:upsert" },
-    settings: { get: "settings:get" },
-  },
-}));
 
 vi.mock("@/hooks/useSelectableAgents", () => ({
   useSelectableAgents: () => [],
@@ -33,31 +40,12 @@ vi.mock("@/components/BoardContext", () => ({
   }),
 }));
 
-const SAMPLE_TAGS = [
-  { _id: "t1", name: "bug", color: "red" },
-  { _id: "t2", name: "feature", color: "blue" },
-];
-
-const mockUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
-const mockUseQuery = useQuery as unknown as ReturnType<typeof vi.fn>;
-const mockCreateTask = vi.fn();
-
 describe("TaskInput tag selection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    hookOverrides = {};
     mockCreateTask.mockResolvedValue("task-123");
-    mockUseMutation.mockImplementation((ref: string) => {
-      if (ref === "tasks:create") return mockCreateTask;
-      return vi.fn().mockResolvedValue(undefined);
-    });
-    mockUseQuery.mockImplementation((ref: string, args?: { key?: string }) => {
-      if (ref === "taskTags:list") return SAMPLE_TAGS;
-      if (ref === "tagAttributes:list") return [];
-      if (ref === "settings:get" && args?.key === "auto_title_enabled") {
-        return "false";
-      }
-      return undefined;
-    });
+    mockUpsertAttrValue.mockResolvedValue(undefined);
   });
 
   it("shows tag chips without extra expansion UI", () => {
@@ -68,15 +56,7 @@ describe("TaskInput tag selection", () => {
   });
 
   it("shows no tag chips when no tags are configured", () => {
-    mockUseQuery.mockImplementation((ref: string, args?: { key?: string }) => {
-      if (ref === "taskTags:list") return [];
-      if (ref === "tagAttributes:list") return [];
-      if (ref === "settings:get" && args?.key === "auto_title_enabled") {
-        return "false";
-      }
-      return undefined;
-    });
-
+    hookOverrides = { predefinedTags: [] };
     render(<TaskInput />);
     expect(screen.queryByRole("button", { name: "bug" })).not.toBeInTheDocument();
   });

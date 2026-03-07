@@ -2,20 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
 import { SearchBar } from "./SearchBar";
+import type { SearchBarFiltersData } from "@/hooks/useSearchBarFilters";
 
-vi.mock("convex/react", () => ({
-  useQuery: vi.fn((ref: string) => {
-    if (ref === "taskTags:list") return [];
-    if (ref === "tagAttributes:list") return [];
-    return undefined;
-  }),
-}));
+const defaultHookData: SearchBarFiltersData = {
+  tags: [],
+  allAttributes: [],
+  attrById: new Map(),
+  tagsWithAttrs: [],
+};
 
-vi.mock("../convex/_generated/api", () => ({
-  api: {
-    taskTags: { list: "taskTags:list" },
-    tagAttributes: { list: "tagAttributes:list" },
-  },
+vi.mock("@/hooks/useSearchBarFilters", () => ({
+  useSearchBarFilters: () => defaultHookData,
 }));
 
 describe("SearchBar", () => {

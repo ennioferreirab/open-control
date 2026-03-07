@@ -11,6 +11,7 @@
  * 2. Hook files must not import UI components (no upward deps).
  * 3. Feature view hooks must consume the aggregated read models instead
  *    of reassembling task/board state from many raw Convex queries.
+ * 4. Component test files in components/ must mock hooks, not convex/react.
  */
 
 import { describe, it, expect } from "vitest";
@@ -125,4 +126,62 @@ describe("Architecture: Feature view hooks must consume read models", () => {
       "useBoardView.ts must not orchestrate board state from raw task/step counter queries",
     ).toBe(false);
   });
+});
+
+describe("Architecture: Component tests must mock hooks, not convex/react directly", () => {
+  // Feature component test files in components/ directory must not import
+  // useQuery/useMutation from convex/react. They should mock the feature hook
+  // instead. Hook tests (in hooks/ or hooks/__tests__/) are the only place
+  // where Convex mocks should appear.
+  const targetTestFiles = [
+    "TaskInput.test.tsx",
+    "AgentConfigSheet.test.tsx",
+    "SearchBar.test.tsx",
+    "StepCard.test.tsx",
+    "AgentSidebarItem.test.tsx",
+  ];
+
+  for (const testFile of targetTestFiles) {
+    it(`components/${testFile} should not import from convex/react`, () => {
+      const filePath = path.join(DASHBOARD_ROOT, "components", testFile);
+      const content = readFileIfExists(filePath);
+      if (!content) return;
+
+      const hasConvexImport =
+        /import\s+.*from\s+["']convex\/react["']/.test(content) ||
+        /vi\.mock\(\s*["']convex\/react["']/.test(content);
+      expect(
+        hasConvexImport,
+        `${testFile} must mock feature hooks instead of importing/mocking convex/react directly`,
+      ).toBe(false);
+    });
+  }
+
+  // Also check the tests/components/ directory for our target component tests
+  const testsComponentsTargets = [
+    "TagsPanel.test.tsx",
+    "TaskInput.layout.test.tsx",
+    "TaskInput.tags.test.tsx",
+  ];
+
+  for (const testFile of testsComponentsTargets) {
+    it(`tests/components/${testFile} should not import from convex/react`, () => {
+      const filePath = path.join(
+        DASHBOARD_ROOT,
+        "tests",
+        "components",
+        testFile,
+      );
+      const content = readFileIfExists(filePath);
+      if (!content) return;
+
+      const hasConvexImport =
+        /import\s+.*from\s+["']convex\/react["']/.test(content) ||
+        /vi\.mock\(\s*["']convex\/react["']/.test(content);
+      expect(
+        hasConvexImport,
+        `tests/components/${testFile} must mock feature hooks instead of importing/mocking convex/react directly`,
+      ).toBe(false);
+    });
+  }
 });

@@ -1,17 +1,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { AgentSidebarItem, getInitials, getAvatarColor } from "./AgentSidebarItem";
+import type { AgentSidebarItemStateData } from "@/hooks/useAgentSidebarItemState";
 
-vi.mock("convex/react", () => ({
-  useQuery: vi.fn(() => []),
-}));
+const defaultHookData: AgentSidebarItemStateData = {
+  terminalSessions: [],
+};
 
-vi.mock("../convex/_generated/api", () => ({
-  api: {
-    terminalSessions: {
-      listSessions: "terminalSessions:listSessions",
-    },
-  },
+vi.mock("@/hooks/useAgentSidebarItemState", () => ({
+  useAgentSidebarItemState: () => defaultHookData,
 }));
 
 vi.mock("@/components/BoardContext", () => ({

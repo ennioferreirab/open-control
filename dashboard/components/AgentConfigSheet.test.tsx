@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { AgentConfigSheet } from "./AgentConfigSheet";
+import type { AgentConfigSheetData } from "@/hooks/useAgentConfigSheetData";
 
-// Mock convex react hooks
+// Mock agent data
 const mockAgent = {
   _id: "agent1" as never,
   _creationTime: 1000,
@@ -21,41 +22,30 @@ let mockQueryResult: typeof mockAgent | null | undefined = mockAgent;
 const mockUpdateConfig = vi.fn();
 const mockSetEnabled = vi.fn();
 
-vi.mock("convex/react", () => ({
-  useQuery: (fn: unknown, args: unknown) => {
-    if (args === "skip") return undefined;
-    if (fn === "agents:getByName") return mockQueryResult;
-    if (fn === "skills:list") return [];
-    if (fn === "settings:get") {
-      if ((args as { key?: string })?.key === "connected_models") {
-        return JSON.stringify(["claude-sonnet-4-6"]);
-      }
-      if ((args as { key?: string })?.key === "model_tiers") {
-        return JSON.stringify({
-          low: "claude-haiku-4-5",
-          medium: "claude-sonnet-4-6",
-          high: "claude-opus-4-6",
-        });
-      }
-      return undefined;
-    }
-    return undefined;
-  },
-  useMutation: (fn: unknown) => {
-    if (fn === "agents:setEnabled") return mockSetEnabled;
-    return mockUpdateConfig;
-  },
-}));
+let hookOverrides: Partial<AgentConfigSheetData> = {};
 
-vi.mock("../convex/_generated/api", () => ({
-  api: {
-    agents: {
-      getByName: "agents:getByName",
-      updateConfig: "agents:updateConfig",
-      setEnabled: "agents:setEnabled",
-    },
-    skills: { list: "skills:list" },
-    settings: { get: "settings:get" },
+const defaultHookData: AgentConfigSheetData = {
+  agent: mockAgent,
+  updateConfig: mockUpdateConfig,
+  setEnabled: mockSetEnabled,
+  connectedModels: ["claude-sonnet-4-6"],
+  modelTiers: {
+    low: "claude-haiku-4-5",
+    medium: "claude-sonnet-4-6",
+    high: "claude-opus-4-6",
+  },
+};
+
+vi.mock("@/hooks/useAgentConfigSheetData", () => ({
+  useAgentConfigSheetData: (agentName: string | null) => {
+    if (!agentName) {
+      return { ...defaultHookData, agent: undefined, ...hookOverrides };
+    }
+    return {
+      ...defaultHookData,
+      agent: mockQueryResult,
+      ...hookOverrides,
+    };
   },
 }));
 
@@ -145,6 +135,7 @@ vi.mock("@/components/ui/switch", () => ({
 describe("AgentConfigSheet", () => {
   beforeEach(() => {
     mockQueryResult = mockAgent;
+    hookOverrides = {};
     mockUpdateConfig.mockReset();
     mockUpdateConfig.mockResolvedValue(undefined);
     mockSetEnabled.mockReset();
@@ -307,7 +298,7 @@ describe("AgentConfigSheet", () => {
     const toggle = screen.getByTestId("enabled-switch");
     fireEvent.click(toggle);
 
-    // Toggle only updates local state — mutation fires on Save
+    // Toggle only updates local state -- mutation fires on Save
     expect(mockSetEnabled).not.toHaveBeenCalled();
   });
 

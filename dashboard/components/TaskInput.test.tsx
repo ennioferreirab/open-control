@@ -1,27 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-
-import { useMutation, useQuery } from "convex/react";
 
 import { TaskInput } from "./TaskInput";
+import type { TaskInputData } from "@/hooks/useTaskInputData";
+
+// Mock the feature hook instead of convex/react
+const mockCreateTask = vi.fn();
+const mockUpsertAttrValue = vi.fn();
+
+const defaultHookData: TaskInputData = {
+  createTask: mockCreateTask,
+  predefinedTags: [],
+  allAttributes: [],
+  upsertAttrValue: mockUpsertAttrValue,
+  isAutoTitle: false,
+};
+
+let hookOverrides: Partial<TaskInputData> = {};
+
+vi.mock("@/hooks/useTaskInputData", () => ({
+  useTaskInputData: () => ({ ...defaultHookData, ...hookOverrides }),
+}));
 
 vi.mock("@/components/ui/select", async () => import("../tests/mocks/select-mock"));
-
-vi.mock("convex/react", () => ({
-  useMutation: vi.fn(),
-  useQuery: vi.fn(),
-}));
-
-vi.mock("../convex/_generated/api", () => ({
-  api: {
-    tasks: { create: "tasks:create" },
-    taskTags: { list: "taskTags:list" },
-    tagAttributes: { list: "tagAttributes:list" },
-    tagAttributeValues: { upsert: "tagAttributeValues:upsert" },
-    settings: { get: "settings:get" },
-  },
-}));
 
 const mockAgents = [
   {
@@ -60,11 +61,6 @@ vi.mock("@/components/BoardContext", () => ({
   }),
 }));
 
-const mockUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
-const mockUseQuery = useQuery as unknown as ReturnType<typeof vi.fn>;
-const mockCreateTask = vi.fn();
-const mockUpsertAttrValue = vi.fn();
-
 function setFileInputFiles(input: HTMLInputElement, files: File[]) {
   Object.defineProperty(input, "files", {
     configurable: true,
@@ -83,21 +79,9 @@ function getFileInput(): HTMLInputElement {
 describe("TaskInput", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    hookOverrides = {};
     mockCreateTask.mockResolvedValue("task-123");
     mockUpsertAttrValue.mockResolvedValue(undefined);
-    mockUseMutation.mockImplementation((ref: string) => {
-      if (ref === "tasks:create") return mockCreateTask;
-      if (ref === "tagAttributeValues:upsert") return mockUpsertAttrValue;
-      return vi.fn();
-    });
-    mockUseQuery.mockImplementation((ref: string, args?: { key?: string }) => {
-      if (ref === "taskTags:list") return [];
-      if (ref === "tagAttributes:list") return [];
-      if (ref === "settings:get" && args?.key === "auto_title_enabled") {
-        return "false";
-      }
-      return undefined;
-    });
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
