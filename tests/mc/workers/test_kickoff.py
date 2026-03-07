@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mc.infrastructure.runtime_context import RuntimeContext
 from mc.types import (
     ActivityEventType,
     StepStatus,
@@ -25,6 +27,12 @@ def _make_bridge() -> MagicMock:
     bridge.create_activity.return_value = None
     bridge.get_steps_by_task.return_value = []
     return bridge
+
+
+def _make_ctx(bridge: MagicMock | None = None) -> RuntimeContext:
+    if bridge is None:
+        bridge = _make_bridge()
+    return RuntimeContext(bridge=bridge, agents_dir=Path("/tmp/test-agents"))
 
 
 def _make_materializer() -> MagicMock:
@@ -66,7 +74,7 @@ class TestKickoffWorkerKickoff:
         bridge.get_steps_by_task.return_value = []  # No existing steps
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = KickoffResumeWorker(bridge, materializer, dispatcher)
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
 
         scheduled_coroutines: list[object] = []
 
@@ -105,7 +113,7 @@ class TestKickoffWorkerKickoff:
         materializer = _make_materializer()
         materializer.materialize.side_effect = RuntimeError("mat failed")
         dispatcher = _make_dispatcher()
-        worker = KickoffResumeWorker(bridge, materializer, dispatcher)
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
 
         task_data = {
             "id": "task-1",
@@ -131,7 +139,7 @@ class TestKickoffWorkerKickoff:
         bridge = _make_bridge()
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = KickoffResumeWorker(bridge, materializer, dispatcher)
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
 
         task_data = {
             "id": "task-1",
@@ -159,7 +167,7 @@ class TestKickoffWorkerResume:
         ]
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = KickoffResumeWorker(bridge, materializer, dispatcher)
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
 
         scheduled_coroutines: list[object] = []
 
@@ -203,7 +211,7 @@ class TestKickoffWorkerResume:
         ]
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = KickoffResumeWorker(bridge, materializer, dispatcher)
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
 
         scheduled_coroutines: list[object] = []
 
@@ -240,7 +248,7 @@ class TestKickoffWorkerResume:
         ]
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = KickoffResumeWorker(bridge, materializer, dispatcher)
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
 
         task_data = {
             "id": "task-1",
@@ -269,7 +277,7 @@ class TestKickoffWorkerProcessBatch:
         bridge.get_steps_by_task.return_value = []
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = KickoffResumeWorker(bridge, materializer, dispatcher)
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
 
         task = {
             "id": "task-1",
@@ -301,7 +309,7 @@ class TestKickoffWorkerProcessBatch:
         bridge.get_steps_by_task.return_value = []
         materializer = _make_materializer()
         dispatcher = _make_dispatcher()
-        worker = KickoffResumeWorker(bridge, materializer, dispatcher)
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
 
         task = {
             "id": "task-1",
@@ -338,7 +346,7 @@ class TestKickoffWorkerProcessBatch:
         dispatcher = _make_dispatcher()
         shared_ids: set[str] = {"task-1"}  # Pre-registered by planning
         worker = KickoffResumeWorker(
-            bridge, materializer, dispatcher, known_kickoff_ids=shared_ids
+            _make_ctx(bridge), materializer, dispatcher, known_kickoff_ids=shared_ids
         )
 
         task = {

@@ -7,6 +7,7 @@ Receives subscription events and delegates to domain-specific workers:
 - KickoffResumeWorker: task kickoff and resume flows
 
 Story 17.1: Orchestrator Worker Extraction (AC5).
+Updated to accept RuntimeContext per Story 20.3.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from mc.types import (
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
+    from mc.infrastructure.runtime_context import RuntimeContext
 
 logger = logging.getLogger(__name__)
 
@@ -148,14 +150,24 @@ class TaskOrchestrator:
 
     def __init__(
         self,
-        bridge: ConvexBridge,
+        bridge_or_ctx: ConvexBridge | RuntimeContext,
         cron_service: Any | None = None,
         ask_user_registry: Any | None = None,
     ) -> None:
-        self._bridge = bridge
-        self._plan_materializer = PlanMaterializer(bridge)
+        # Accept either RuntimeContext (new) or bare bridge (backward compat).
+        from mc.infrastructure.runtime_context import RuntimeContext
+
+        if isinstance(bridge_or_ctx, RuntimeContext):
+            self._ctx = bridge_or_ctx
+            self._bridge = bridge_or_ctx.bridge
+        else:
+            # Legacy call site — wrap bridge in a RuntimeContext.
+            self._ctx = RuntimeContext(bridge=bridge_or_ctx)
+            self._bridge = bridge_or_ctx
+
+        self._plan_materializer = PlanMaterializer(self._bridge)
         self._step_dispatcher = StepDispatcher(
-            bridge,
+            self._bridge,
             cron_service=cron_service,
             ask_user_registry=ask_user_registry,
         )
@@ -171,18 +183,18 @@ class TaskOrchestrator:
         from mc.workers.planning import PlanningWorker
         from mc.workers.review import ReviewWorker
 
-        self._inbox_worker = InboxWorker(bridge)
+        self._inbox_worker = InboxWorker(self._ctx)
         self._planning_worker = PlanningWorker(
-            bridge,
+            self._ctx,
             self._plan_materializer,
             self._step_dispatcher,
             known_kickoff_ids=self._known_kickoff_ids,
         )
         self._review_worker = ReviewWorker(
-            bridge, ask_user_registry=ask_user_registry
+            self._ctx, ask_user_registry=ask_user_registry
         )
         self._kickoff_worker = KickoffResumeWorker(
-            bridge,
+            self._ctx,
             self._plan_materializer,
             self._step_dispatcher,
             known_kickoff_ids=self._known_kickoff_ids,

@@ -177,7 +177,13 @@ class TestRunGateway:
                 except asyncio.CancelledError:
                     pass
 
-            MockOrch.assert_called_once_with(mock_bridge, cron_service=ANY, ask_user_registry=ANY)
+            # Story 20.3: gateway now passes RuntimeContext instead of bare bridge
+            MockOrch.assert_called_once_with(ANY, cron_service=ANY, ask_user_registry=ANY)
+            # Verify the first arg is a RuntimeContext wrapping the expected bridge
+            from mc.infrastructure.runtime_context import RuntimeContext
+            ctx_arg = MockOrch.call_args[0][0]
+            assert isinstance(ctx_arg, RuntimeContext)
+            assert ctx_arg.bridge is mock_bridge
             MockTC.assert_called_once_with(mock_bridge)
             mock_orch_instance.start_routing_loop.assert_called_once()
             mock_orch_instance.start_review_routing_loop.assert_called_once()

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mc.infrastructure.runtime_context import RuntimeContext
 from mc.types import (
     ActivityEventType,
     AuthorType,
@@ -31,13 +33,19 @@ def _make_bridge() -> MagicMock:
     return bridge
 
 
+def _make_ctx(bridge: MagicMock | None = None) -> RuntimeContext:
+    if bridge is None:
+        bridge = _make_bridge()
+    return RuntimeContext(bridge=bridge, agents_dir=Path("/tmp/test-agents"))
+
+
 class TestHandleReviewTransition:
     """Happy path and error path tests for review transitions."""
 
     @pytest.mark.asyncio
     async def test_autonomous_no_reviewers_auto_completes(self) -> None:
         bridge = _make_bridge()
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-1",
@@ -57,7 +65,7 @@ class TestHandleReviewTransition:
     @pytest.mark.asyncio
     async def test_skips_awaiting_kickoff(self) -> None:
         bridge = _make_bridge()
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-1",
@@ -76,7 +84,7 @@ class TestHandleReviewTransition:
         bridge = _make_bridge()
         registry = MagicMock()
         registry.has_pending_ask.return_value = True
-        worker = ReviewWorker(bridge, ask_user_registry=registry)
+        worker = ReviewWorker(_make_ctx(bridge), ask_user_registry=registry)
 
         task = {
             "id": "task-1",
@@ -97,7 +105,7 @@ class TestHandleReviewTransition:
             {"id": "step-1", "status": "completed"},
             {"id": "step-2", "status": "assigned"},
         ]
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-1",
@@ -115,7 +123,7 @@ class TestHandleReviewTransition:
     @pytest.mark.asyncio
     async def test_routes_to_reviewers(self) -> None:
         bridge = _make_bridge()
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-1",
@@ -138,7 +146,7 @@ class TestHandleReviewTransition:
     @pytest.mark.asyncio
     async def test_human_approved_no_reviewers_requests_hitl(self) -> None:
         bridge = _make_bridge()
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-1",
@@ -161,7 +169,7 @@ class TestSendAgentMessage:
     async def test_sends_message(self) -> None:
         bridge = _make_bridge()
         bridge.send_message.return_value = "msg-id"
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
             result = await worker.send_agent_message(
@@ -178,7 +186,7 @@ class TestHandleReviewFeedback:
     @pytest.mark.asyncio
     async def test_sends_feedback_and_creates_activity(self) -> None:
         bridge = _make_bridge()
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_feedback(
@@ -203,7 +211,7 @@ class TestHandleReviewApproval:
             "title": "Test",
             "trust_level": TrustLevel.AUTONOMOUS,
         }
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_approval("task-1", "reviewer-bot")
@@ -219,7 +227,7 @@ class TestHandleReviewApproval:
             "title": "Test",
             "trust_level": TrustLevel.HUMAN_APPROVED,
         }
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_approval("task-1", "reviewer-bot")
@@ -241,7 +249,7 @@ class TestReviewWorkerProcessBatch:
     @pytest.mark.asyncio
     async def test_deduplicates_tasks(self) -> None:
         bridge = _make_bridge()
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         tasks = [
             {
@@ -269,7 +277,7 @@ class TestReviewWorkerProcessBatch:
     @pytest.mark.asyncio
     async def test_prunes_stale_ids(self) -> None:
         bridge = _make_bridge()
-        worker = ReviewWorker(bridge)
+        worker = ReviewWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-1",
