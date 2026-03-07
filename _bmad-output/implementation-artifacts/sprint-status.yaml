@@ -135,14 +135,14 @@ development_status:
   10-3-harden-python-startup-admin-key: review
   epic-10-retrospective: optional
 
-  # Epic 20: MC Architecture Stabilization — Remaining Gaps
+  # Epic 20: Architecture Stabilization Completion
   # Closes remaining gaps from the MC Architecture Stabilization Plan v2:
   # Wave 2 (ExecutionEngine sole path), Wave 3 (runtime integration),
   # Wave 5 (hook abstraction), and god file decomposition.
   epic-20: in-progress
   20-1-integrate-cc-step-runner-and-chat-handler-into-execution-engine: ready-for-dev
-  20-2-wire-conversation-service-into-gateway-runtime: ready-for-dev
-  20-3-adopt-runtime-context-across-workers-and-services: review
+  20-2-wire-conversation-service-into-gateway-runtime: review
+  20-3-adopt-runtime-context-across-workers-and-services: ready-for-dev
   20-4-semantic-hook-apis-and-test-decoupling: ready-for-dev
   20-5-decompose-process-monitor: ready-for-dev
   epic-20-retrospective: optional

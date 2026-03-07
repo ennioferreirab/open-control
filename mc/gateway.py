@@ -356,6 +356,14 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         _run_plan_negotiation_manager(bridge, ask_user_registry=ask_user_registry)
     )
 
+    # Unified ConversationService — routes all thread messages through a
+    # single pipeline (intent classification → dispatch).  Story 20.2.
+    from mc.services.conversation import ConversationService
+
+    conversation_service = ConversationService(
+        bridge=bridge, ask_user_registry=ask_user_registry
+    )
+
     # Chat handler — polls for pending direct-chat messages (Story 10.2)
     from mc.chat_handler import ChatHandler
 
@@ -364,13 +372,19 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
 
     # Mention watcher — detects @agent-name mentions in all task threads
     # (covers tasks not handled by plan_negotiator: done, crashed, inbox, etc.)
+    # Routes through ConversationService for unified intent classification.
     from mc.mentions.watcher import MentionWatcher
 
-    mention_watcher = MentionWatcher(bridge)
+    mention_watcher = MentionWatcher(
+        bridge, conversation_service=conversation_service
+    )
     mention_task = asyncio.create_task(mention_watcher.run())
 
     # Ask-user reply watcher — delivers user replies to pending ask_user calls
-    ask_user_watcher = AskUserReplyWatcher(bridge, ask_user_registry)
+    # Routes through ConversationService for unified intent classification.
+    ask_user_watcher = AskUserReplyWatcher(
+        bridge, ask_user_registry, conversation_service=conversation_service
+    )
     ask_user_watcher_task = asyncio.create_task(ask_user_watcher.run())
 
     # Wait for shutdown signal

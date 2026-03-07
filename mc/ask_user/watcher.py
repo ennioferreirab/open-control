@@ -11,8 +11,8 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.bridge import ConvexBridge
     from mc.ask_user.registry import AskUserRegistry
+    from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,21 @@ class AskUserReplyWatcher:
 
     Only polls tasks that have an active pending ask_user (via registry).
     Delivers the first unseen user message as the reply.
+
+    When a ``conversation_service`` is provided (Story 20.2), incoming
+    user replies are routed through ConversationService for unified
+    intent classification before delivery.
     """
 
-    def __init__(self, bridge: ConvexBridge, registry: AskUserRegistry) -> None:
+    def __init__(
+        self,
+        bridge: ConvexBridge,
+        registry: AskUserRegistry,
+        conversation_service: Any | None = None,
+    ) -> None:
         self._bridge = bridge
         self._registry = registry
+        self._conversation_service = conversation_service
         self._seen_messages: dict[str, set[str]] = {}
 
     async def run(self) -> None:
@@ -91,6 +101,38 @@ class AskUserReplyWatcher:
                 content = (msg.get("content") or "").strip()
                 if not content:
                     continue
+
+                # When ConversationService is available (Story 20.2), classify
+                # the message to confirm it's a manual_reply (not an @mention
+                # that should be routed differently).
+                if self._conversation_service is not None:
+                    try:
+                        task_data = await asyncio.to_thread(
+                            self._bridge.get_task, task_id
+                        )
+                        if task_data is None:
+                            task_data = {}
+                        result = self._conversation_service.classify(
+                            content, task_data, task_id=task_id
+                        )
+                        from mc.services.conversation_intent import (
+                            ConversationIntent,
+                        )
+                        if result.intent == ConversationIntent.MENTION:
+                            # @mention takes priority — skip delivery, let
+                            # MentionWatcher handle it.
+                            logger.debug(
+                                "[ask_user_watcher] Skipping reply for task %s "
+                                "— classified as mention",
+                                task_id,
+                            )
+                            continue
+                    except Exception:
+                        logger.debug(
+                            "[ask_user_watcher] Classification failed for "
+                            "task %s — falling back to direct delivery",
+                            task_id,
+                        )
 
                 delivered = self._registry.deliver_reply(task_id, content)
                 if delivered:
