@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
+const mockUseChatSyncRuntime = vi.fn(() => null);
+
 // Mock heavy child components to avoid loading entire dependency tree
 vi.mock("@/components/AgentSidebar", () => ({
   AgentSidebar: () => <div data-testid="agent-sidebar">Agents</div>,
@@ -62,6 +64,10 @@ vi.mock("@/components/CronJobsModal", () => ({
   CronJobsModal: () => null,
 }));
 
+vi.mock("@/hooks/useChatSyncRuntime", () => ({
+  useChatSyncRuntime: () => mockUseChatSyncRuntime(),
+}));
+
 // Mock ShadCN sidebar
 vi.mock("@/components/ui/sidebar", () => ({
   SidebarProvider: ({ children }: React.PropsWithChildren) => <div data-testid="sidebar-provider">{children}</div>,
@@ -119,6 +125,7 @@ describe("DashboardLayout", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockUseChatSyncRuntime.mockReturnValue(null);
   });
 
   it("renders dashboard content when width < 1024px", () => {
@@ -184,5 +191,29 @@ describe("DashboardLayout", () => {
 
     expect(screen.getByTestId("settings-sheet")).toBeInTheDocument();
     expect(screen.getByTestId("settings-panel")).toBeInTheDocument();
+  });
+
+  it("renders sleeping chat sync badge when runtime reports sleep", () => {
+    window.matchMedia = createMatchMedia(1280);
+    mockUseChatSyncRuntime.mockReturnValue({
+      mode: "sleep",
+      pollIntervalSeconds: 60,
+    });
+
+    render(<DashboardLayout />);
+
+    expect(screen.getByText("Chat sync sleeping · 60s")).toBeInTheDocument();
+  });
+
+  it("renders active chat sync badge when runtime reports active", () => {
+    window.matchMedia = createMatchMedia(1280);
+    mockUseChatSyncRuntime.mockReturnValue({
+      mode: "active",
+      pollIntervalSeconds: 5,
+    });
+
+    render(<DashboardLayout />);
+
+    expect(screen.getByText("Chat sync active · 5s")).toBeInTheDocument();
   });
 });

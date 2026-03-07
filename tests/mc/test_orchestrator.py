@@ -76,7 +76,7 @@ class TestPlanningRoutingLoop:
             await loop_task
 
         bridge.async_subscribe.assert_called_once_with(
-            "tasks:listByStatus", {"status": "planning"}
+            "tasks:listByStatus", {"status": "planning"}, poll_interval=5.0
         )
 
 

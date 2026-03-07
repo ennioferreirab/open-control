@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -24,10 +25,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # How often to poll for new messages (seconds)
-POLL_INTERVAL_SECONDS = 3
+POLL_INTERVAL_SECONDS = 10
 
 # Max seen message IDs to keep in memory before pruning
 _SEEN_IDS_MAX = 5000
+
+# Overlap window to handle clock drift between Python and Convex (seconds)
+_OVERLAP_SECONDS = 30
 
 
 def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
@@ -43,19 +47,10 @@ def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
 
 
 class MentionWatcher:
-    """Polls all task messages and dispatches @mention handling.
+    """Polls all user messages globally and dispatches @mention handling.
 
-    Subscribes to a global recent-messages feed (or polls per-task) to
-    detect @mentions in user messages and invoke the mention_handler.
-
-    Design notes:
-    - Uses a single global poll of recent messages (tasks:listRecentUserMessages
-      or a similar query) to avoid per-task subscriptions.
-    - Falls back to polling tasks:listByStatus for all active tasks if no
-      global messages query is available.
-    - Deduplicates via _per_task_seen to avoid double-processing.
-    - Handles ALL task statuses — the PlanNegotiator skips @mention messages
-      so there is no double-processing.
+    Uses a single query (messages:listRecentUserMessages) per cycle instead
+    of polling per-status + per-task. Deduplicates via _seen_message_ids.
 
     When a ``conversation_service`` is provided (Story 20.2), @mention
     detections are routed through ConversationService.handle_message()
@@ -70,10 +65,8 @@ class MentionWatcher:
         self._bridge = bridge
         self._conversation_service = conversation_service
         self._seen_message_ids: set[str] = set()
-        # Track tasks whose messages we've subscribed to
-        self._watched_task_ids: set[str] = set()
-        # Per-task seen message IDs (for tasks we watch directly)
-        self._per_task_seen: dict[str, set[str]] = {}
+        self._startup_timestamp: str = _now_iso()
+        self._last_poll_timestamp: str | None = None
 
     async def run(self) -> None:
         """Main polling loop: watch for @mentions in all task threads."""
@@ -89,117 +82,90 @@ class MentionWatcher:
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
     async def _poll_all_tasks(self) -> None:
-        """Poll all tasks and check their messages for @mentions."""
-        # Fetch all tasks (we need to check messages across all statuses)
-        # We use a broad query to get tasks that could have user messages
-        all_tasks: list[dict[str, Any]] = []
+        """Poll recent user messages globally and check for @mentions."""
+        if self._last_poll_timestamp:
+            base = datetime.fromisoformat(self._last_poll_timestamp)
+            since = (base - timedelta(seconds=_OVERLAP_SECONDS)).isoformat()
+        else:
+            since = self._startup_timestamp
 
-        for status in ("done", "crashed", "review", "in_progress", "inbox", "assigned", "retrying"):
-            try:
-                tasks = await asyncio.to_thread(
-                    self._bridge.query,
-                    "tasks:listByStatus",
-                    {"status": status},
-                )
-                if isinstance(tasks, list):
-                    all_tasks.extend(tasks)
-            except Exception:
-                logger.debug(
-                    "[mention_watcher] Could not fetch tasks with status=%s", status
-                )
+        self._last_poll_timestamp = _now_iso()
 
-        for task_data in all_tasks:
-            task_id = task_data.get("id")
-            task_status = task_data.get("status", "")
-            task_title = task_data.get("title", "")
+        messages = await asyncio.to_thread(
+            self._bridge.get_recent_user_messages,
+            since,
+        )
 
+        if not messages:
+            return
+
+        for msg in messages:
+            msg_id = msg.get("_id") or msg.get("id") or ""
+            if not msg_id or msg_id in self._seen_message_ids:
+                continue
+            self._seen_message_ids.add(msg_id)
+
+            content = msg.get("content", "")
+            if not content.strip():
+                continue
+
+            from mc.mentions.handler import handle_all_mentions, is_mention_message
+
+            if not is_mention_message(content):
+                continue
+
+            task_id = msg.get("task_id")
             if not task_id:
                 continue
 
-            # Fetch messages for this task
+            logger.info(
+                "[mention_watcher] @mention detected in task %s: %r",
+                task_id,
+                content[:80],
+            )
+
+            task_data: dict[str, Any] = {}
             try:
-                messages = await asyncio.to_thread(
-                    self._bridge.get_task_messages, task_id
-                )
+                task_data = await asyncio.to_thread(
+                    self._bridge.query,
+                    "tasks:getById",
+                    {"task_id": task_id},
+                ) or {}
             except Exception:
                 logger.debug(
-                    "[mention_watcher] Could not fetch messages for task %s", task_id
-                )
-                continue
-
-            if not messages:
-                continue
-
-            # Initialize per-task seen set
-            if task_id not in self._per_task_seen:
-                # On first encounter, mark all existing messages as seen
-                # to avoid re-processing old messages on startup
-                self._per_task_seen[task_id] = {
-                    m.get("_id") or m.get("id") or ""
-                    for m in messages
-                    if m.get("_id") or m.get("id")
-                }
-                continue
-
-            seen = self._per_task_seen[task_id]
-
-            for msg in messages:
-                msg_id = msg.get("_id") or msg.get("id") or ""
-                author_type = msg.get("author_type") or msg.get("authorType") or ""
-
-                if msg_id in seen:
-                    continue
-                seen.add(msg_id)
-
-                # Only process user messages
-                if author_type != "user":
-                    continue
-
-                content = msg.get("content", "")
-                if not content.strip():
-                    continue
-
-                # Check for @mentions
-                from mc.mentions.handler import handle_all_mentions, is_mention_message
-
-                if not is_mention_message(content):
-                    continue
-
-                logger.info(
-                    "[mention_watcher] @mention detected in task %s (status=%s): %r",
-                    task_id,
-                    task_status,
-                    content[:80],
+                    "[mention_watcher] Could not fetch task %s", task_id
                 )
 
-                # Route through ConversationService when available (Story 20.2).
-                # ConversationService.handle_message() classifies the intent and
-                # dispatches to handle_all_mentions internally for MENTION intents.
-                if self._conversation_service is not None:
-                    bg_task = asyncio.create_task(
-                        self._conversation_service.handle_message(
-                            task_id=task_id,
-                            content=content,
-                            task_data=task_data,
-                        )
-                    )
-                else:
-                    # Fallback: direct dispatch (backward compat)
-                    bg_task = asyncio.create_task(
-                        handle_all_mentions(
-                            bridge=self._bridge,
-                            task_id=task_id,
-                            content=content,
-                            task_title=task_title,
-                        )
-                    )
-                bg_task.add_done_callback(_log_task_exception)
+            task_title = task_data.get("title", "")
 
-            # Prune seen IDs if too large
-            if len(seen) > _SEEN_IDS_MAX:
-                # Rebuild from current message batch
-                self._per_task_seen[task_id] = {
-                    m.get("_id") or m.get("id") or ""
-                    for m in messages
-                    if m.get("_id") or m.get("id")
-                }
+            if self._conversation_service is not None:
+                bg_task = asyncio.create_task(
+                    self._conversation_service.handle_message(
+                        task_id=task_id,
+                        content=content,
+                        task_data=task_data,
+                    )
+                )
+            else:
+                bg_task = asyncio.create_task(
+                    handle_all_mentions(
+                        bridge=self._bridge,
+                        task_id=task_id,
+                        content=content,
+                        task_title=task_title,
+                    )
+                )
+            bg_task.add_done_callback(_log_task_exception)
+
+        if len(self._seen_message_ids) > _SEEN_IDS_MAX:
+            current_ids = {
+                msg.get("_id") or msg.get("id") or ""
+                for msg in messages
+                if msg.get("_id") or msg.get("id")
+            }
+            self._seen_message_ids = current_ids
+
+
+def _now_iso() -> str:
+    """Return current UTC time as ISO 8601 string."""
+    return datetime.now(timezone.utc).isoformat()

@@ -161,7 +161,7 @@ describe("ExecutionPlanTab", () => {
     expect(screen.getByTestId("react-flow-readonly")).toBeInTheDocument();
   });
 
-  it("renders PlanEditor when isEditMode=true and plan is available", () => {
+  it("renders inline edit controls when isEditMode=true and plan is available", () => {
     const plan = {
       steps: [
         makeStep({ stepId: "s1", description: "Step one", title: "One" }),
@@ -178,8 +178,9 @@ describe("ExecutionPlanTab", () => {
         onLocalPlanChange={vi.fn()}
       />
     );
-    expect(screen.getByTestId("plan-editor")).toBeInTheDocument();
-    expect(screen.queryByText(/steps completed/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("add-step-button")).toBeInTheDocument();
+    expect(screen.getByText("0/1 steps completed")).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-editor")).not.toBeInTheDocument();
   });
 
   it("renders read-only view when isEditMode=false", () => {

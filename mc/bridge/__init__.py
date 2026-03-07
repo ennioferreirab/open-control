@@ -346,6 +346,11 @@ class ConvexBridge:
         self._ensure_repos()
         return self._messages.post_lead_agent_message(task_id, content, msg_type)
 
+    def get_recent_user_messages(self, since_timestamp: str) -> list[dict[str, Any]]:
+        """Fetch all user messages created since the given ISO timestamp."""
+        self._ensure_repos()
+        return self._messages.get_recent_user_messages(since_timestamp)
+
     def post_system_error(
         self,
         task_id: str,

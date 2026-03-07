@@ -149,7 +149,8 @@ export default defineSchema({
       size: v.number(),
     }))),
     timestamp: v.string(),
-  }).index("by_taskId", ["taskId"]),
+  }).index("by_taskId", ["taskId"])
+    .index("by_authorType_timestamp", ["authorType", "timestamp"]),
 
   agents: defineTable({
     name: v.string(),
@@ -261,6 +262,7 @@ export default defineSchema({
     timestamp: v.string(),
   })
     .index("by_agentName", ["agentName"])
+    .index("by_status", ["status"])
     .index("by_timestamp", ["timestamp"]),
 
   tagAttributes: defineTable({

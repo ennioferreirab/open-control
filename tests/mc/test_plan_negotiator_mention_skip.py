@@ -347,24 +347,20 @@ class TestNoDoubleProcessing:
         from mc.mentions.watcher import MentionWatcher
 
         watcher_bridge = MagicMock()
-        watcher_bridge.query = MagicMock(
-            side_effect=lambda q, p: [_make_task_data()] if "listByStatus" in q else []
-        )
-
-        # Simulate: task with in_progress status returning the mention message
         in_progress_task = {
             "id": "task_both",
             "status": "in_progress",
             "title": "Test Task",
         }
 
-        def _watcher_query(query_name: str, params: dict) -> list:
-            if query_name == "tasks:listByStatus" and params.get("status") == "in_progress":
-                return [in_progress_task]
-            return []
-
-        watcher_bridge.query = _watcher_query
-        watcher_bridge.get_task_messages = MagicMock(return_value=[mention_msg])
+        new_mention = {
+            "_id": "msg_double_2",
+            "author_type": "user",
+            "content": "@researcher new question",
+            "task_id": "task_both",
+        }
+        watcher_bridge.get_recent_user_messages = MagicMock(return_value=[new_mention])
+        watcher_bridge.query = MagicMock(return_value=in_progress_task)
 
         watcher = MentionWatcher(watcher_bridge)
 
@@ -378,19 +374,6 @@ class TestNoDoubleProcessing:
             "mc.mentions.watcher.asyncio.to_thread",
             new=_to_thread_mock,
         ):
-            # First poll: seed seen messages
-            self._run(watcher._poll_all_tasks())
-
-            # Second poll with a new message
-            new_mention = {
-                "_id": "msg_double_2",
-                "author_type": "user",
-                "content": "@researcher new question",
-            }
-            watcher_bridge.get_task_messages = MagicMock(
-                return_value=[mention_msg, new_mention]
-            )
-
             with patch(
                 "mc.mentions.handler.handle_all_mentions",
                 new=AsyncMock(return_value=True),
