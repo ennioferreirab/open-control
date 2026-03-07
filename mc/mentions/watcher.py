@@ -56,10 +56,19 @@ class MentionWatcher:
     - Deduplicates via _per_task_seen to avoid double-processing.
     - Handles ALL task statuses — the PlanNegotiator skips @mention messages
       so there is no double-processing.
+
+    When a ``conversation_service`` is provided (Story 20.2), @mention
+    detections are routed through ConversationService.handle_message()
+    for unified intent classification before dispatch.
     """
 
-    def __init__(self, bridge: "ConvexBridge") -> None:
+    def __init__(
+        self,
+        bridge: "ConvexBridge",
+        conversation_service: Any | None = None,
+    ) -> None:
         self._bridge = bridge
+        self._conversation_service = conversation_service
         self._seen_message_ids: set[str] = set()
         # Track tasks whose messages we've subscribed to
         self._watched_task_ids: set[str] = set()
@@ -151,7 +160,7 @@ class MentionWatcher:
                     continue
 
                 # Check for @mentions
-                from mc.mentions.handler import is_mention_message, handle_all_mentions
+                from mc.mentions.handler import handle_all_mentions, is_mention_message
 
                 if not is_mention_message(content):
                     continue
@@ -163,15 +172,27 @@ class MentionWatcher:
                     content[:80],
                 )
 
-                # Dispatch mention handling as a background task
-                bg_task = asyncio.create_task(
-                    handle_all_mentions(
-                        bridge=self._bridge,
-                        task_id=task_id,
-                        content=content,
-                        task_title=task_title,
+                # Route through ConversationService when available (Story 20.2).
+                # ConversationService.handle_message() classifies the intent and
+                # dispatches to handle_all_mentions internally for MENTION intents.
+                if self._conversation_service is not None:
+                    bg_task = asyncio.create_task(
+                        self._conversation_service.handle_message(
+                            task_id=task_id,
+                            content=content,
+                            task_data=task_data,
+                        )
                     )
-                )
+                else:
+                    # Fallback: direct dispatch (backward compat)
+                    bg_task = asyncio.create_task(
+                        handle_all_mentions(
+                            bridge=self._bridge,
+                            task_id=task_id,
+                            content=content,
+                            task_title=task_title,
+                        )
+                    )
                 bg_task.add_done_callback(_log_task_exception)
 
             # Prune seen IDs if too large
