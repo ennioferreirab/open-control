@@ -81,9 +81,15 @@ FOUNDATION_MODULES = [
     "bridge", "types", "state_machine", "thread_context",
 ]
 
-# Directories that form the service/domain/infrastructure layers —
+# Directories that form the service/domain/infrastructure/context layers —
 # these must NEVER import from mc.gateway
-PROTECTED_DIRECTORIES = ["workers", "services", "domain", "infrastructure"]
+PROTECTED_DIRECTORIES = [
+    "contexts",
+    "domain",
+    "infrastructure",
+    "services",
+    "workers",
+]
 
 EXECUTION_RUNTIME_MODULES = [
     MC_ROOT / "step_dispatcher.py",
@@ -123,7 +129,7 @@ def test_foundation_modules_do_not_import_gateway(module_name: str) -> None:
 
 @pytest.mark.parametrize("directory", PROTECTED_DIRECTORIES)
 def test_protected_directories_do_not_import_gateway(directory: str) -> None:
-    """Workers, services, domain, and infrastructure must not import mc.gateway.
+    """Workers, services, contexts, domain, and infrastructure must not import mc.gateway.
 
     These layers sit below the gateway facade and must use
     mc.infrastructure.* or mc.types directly.

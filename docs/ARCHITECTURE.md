@@ -2,27 +2,31 @@
 
 ## Overview
 
-Mission Control is organized around one rule: domain behavior should be
-owned in stable modules, while entrypoints stay thin.
+Mission Control now uses a hybrid feature-first backend layout:
 
-- Python owns orchestration, execution context, workers, and runtime services.
-- Convex owns transactional state, realtime read models, and workflow validation.
-- Next.js renders feature UIs using hooks backed by aggregated read models.
+- `mc/runtime/` owns composition roots, lifecycle loops, and runtime wiring.
+- `mc/contexts/` owns business flows such as planning, execution, conversation,
+  review, and agent synchronization.
+- `mc/domain/`, `mc/bridge/`, and `mc/infrastructure/` remain the shared
+  stable base for rules, data access, and environment concerns.
+- legacy top-level modules in `mc/` remain as compatibility facades only.
 
-The current stabilization target is:
+The intended dependency shape is:
 
 ```text
 boot.py
-  -> mc.gateway (composition root only)
-    -> mc.workers/*
-      -> mc.application/*
-        -> mc.domain/*
-        -> mc.bridge/*
-        -> mc.infrastructure/*
+  -> mc.gateway                 # compatibility facade
+    -> mc.runtime.gateway
+      -> mc.runtime.orchestrator
+      -> mc.contexts.*
+        -> mc.application.execution.*
+        -> mc.domain.*
+        -> mc.bridge.*
+        -> mc.infrastructure.*
 
 dashboard/components/*
   -> dashboard/hooks/*
-    -> dashboard/convex/* read models + mutations
+    -> dashboard/convex/*
       -> dashboard/convex/lib/*
 
 shared/workflow/workflow_spec.json
@@ -30,100 +34,141 @@ shared/workflow/workflow_spec.json
   -> dashboard/convex/lib/workflowContract.ts
 ```
 
-## Backend Layers
+## Backend Structure
 
-### `mc.gateway`
+### `mc/runtime`
 
-`mc.gateway` is the composition root.
+Runtime modules are the composition layer.
 
-- It wires dependencies.
-- It starts workers.
-- It must not become the home for business rules.
-- Modules below bootstrap must not import it.
+- `mc.runtime.gateway` wires long-running services and process lifecycle.
+- `mc.runtime.orchestrator` subscribes to task streams and delegates to workers.
+- `mc.runtime.workers` is the runtime-facing worker namespace.
 
-### `mc.workers`
+Rule:
+- runtime modules compose flows but do not become the home for business logic.
 
-Workers poll, subscribe, and route work.
+### `mc/contexts/planning`
 
-- They observe events and call services.
-- They do not own dense domain logic.
-- They should be individually testable.
+Planning owns pre-execution task shaping.
 
-Examples:
-- inbox routing
-- planning kickoff
-- review handling
-- resume / dispatch triggers
+- task planning
+- plan materialization
+- plan negotiation
+- title generation
 
-### `mc.application`
+Primary modules:
+- `mc.contexts.planning.planner`
+- `mc.contexts.planning.materializer`
+- `mc.contexts.planning.negotiation`
+- `mc.contexts.planning.title_generation`
 
-This layer coordinates use cases.
+### `mc/contexts/execution`
 
-- execution context building
-- execution engine selection
-- post-execution hooks
-- conversation and mention routing
-- planning and orchestration services
+Execution owns task and step execution entrypoints.
 
-Key rule:
-- `ExecutionEngine.run()` is the runtime entrypoint for execution flows.
+- task execution
+- Claude Code execution helpers
+- step dispatch
+- execution adapters layered over `mc.application.execution`
 
-### `mc.domain`
+Primary modules:
+- `mc.contexts.execution.executor`
+- `mc.contexts.execution.cc_executor`
+- `mc.contexts.execution.cc_step_runner`
+- `mc.contexts.execution.step_dispatcher`
 
-Pure domain rules live here.
+### `mc/contexts/conversation`
+
+Conversation owns thread and user interaction flows.
+
+- chat handling
+- intent resolution
+- plan-chat routing
+- mention and ask-user ownership during the transition
+
+Primary modules:
+- `mc.contexts.conversation.chat_handler`
+- `mc.contexts.conversation.service`
+- `mc.contexts.conversation.intent`
+
+### `mc/contexts/review`
+
+Review owns approval, feedback, and review-state transitions.
+
+Primary module:
+- `mc.contexts.review.handler`
+
+### `mc/contexts/agents`
+
+Agent management owns sync and registry coordination.
+
+Primary module:
+- `mc.contexts.agents.sync`
+
+### Shared Base Layers
+
+#### `mc/domain`
+
+Pure rules and shared workflow behavior live here.
 
 - workflow contract adapters
 - transition validation
-- state and invariant helpers
+- invariant helpers
 
-Key rule:
-- workflow state cannot be duplicated across Python, Convex, and UI code.
+#### `mc/bridge`
 
-### `mc.bridge`
+Convex data-access boundary.
 
-`mc.bridge` is the backend data-access boundary for Convex.
+- repositories and subscriptions
+- SDK adaptation
+- backend-facing data access
 
-- façade compatibility stays here
-- repositories and subscriptions sit behind it
-- application/services depend on repositories or façade methods, not raw SDK details
+#### `mc/infrastructure`
 
-### `mc.infrastructure`
-
-Framework and environment details live here.
+Environment and framework details.
 
 - config paths
 - filesystem layout
-- bootstrap loaders
-- external runtime adapters
+- bootstrap helpers
+- runtime adapters
 
-## Execution Runtime
+#### `mc/application/execution`
 
-The execution runtime is split into explicit pieces:
+Reusable execution nucleus shared by the execution context.
 
-```text
-ContextBuilder
-  -> ExecutionRequest
-  -> ExecutionEngine
-    -> NanobotRunnerStrategy
-    -> ClaudeCodeRunnerStrategy
-    -> HumanRunnerStrategy
-    -> post-processing hooks
-```
+- request/result types
+- context builders
+- execution engine
+- runner strategies
+- post-processing helpers
 
-Responsibilities:
+Rule:
+- new execution behavior should land in the execution context or this nucleus,
+  not back in top-level `mc/executor.py`.
 
-- `ContextBuilder`
-  builds normalized task/step context once.
-- `ExecutionEngine`
-  chooses the runner and normalizes failures.
-- `RunnerStrategy`
-  performs the backend-specific execution only.
-- `post_processing`
-  handles cross-cutting follow-up like memory relocation/consolidation.
+## Compatibility Layer
 
-Compatibility note:
-- the legacy executor still exists as a compatibility layer and legacy test seam,
-  but runtime-facing modules should depend on `mc.application.execution.*`.
+The following top-level modules remain intentionally available during the
+transition:
+
+- `mc.gateway`
+- `mc.orchestrator`
+- `mc.planner`
+- `mc.plan_materializer`
+- `mc.plan_negotiator`
+- `mc.executor`
+- `mc.cc_executor`
+- `mc.cc_step_runner`
+- `mc.step_dispatcher`
+- `mc.chat_handler`
+- `mc.review_handler`
+- `mc.services.conversation`
+- `mc.services.conversation_intent`
+- `mc.services.agent_sync`
+
+Rule:
+- these files are facades only
+- new behavior should not be added there
 
 ## Workflow Contract
 
@@ -133,8 +178,8 @@ The workflow contract is versioned in:
 
 Consumers:
 
-- [mc/domain/workflow_contract.py](/Users/ennio/Documents/nanobot-ennio/.worktrees/mc-architecture-stabilization-v2/mc/domain/workflow_contract.py)
-- [dashboard/convex/lib/workflowContract.ts](/Users/ennio/Documents/nanobot-ennio/.worktrees/mc-architecture-stabilization-v2/dashboard/convex/lib/workflowContract.ts)
+- [mc/domain/workflow_contract.py](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/mc/domain/workflow_contract.py)
+- [dashboard/convex/lib/workflowContract.ts](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/dashboard/convex/lib/workflowContract.ts)
 
 This contract defines:
 
@@ -142,66 +187,29 @@ This contract defines:
 - step statuses
 - valid transitions
 - workflow action mappings
-- thread / workflow message semantics
-
-## Dashboard Architecture
-
-The dashboard is feature-first.
-
-```text
-components/
-  presentational and composition-focused UI
-hooks/
-  feature hooks and action hooks
-convex/
-  read models, queries, mutations
-convex/lib/
-  pure workflow and view-model helpers
-```
-
-Key rules:
-
-- feature components should not call `useQuery` / `useMutation` directly when a
-  feature hook already exists
-- hooks must not import UI components
-- primary reads should come from aggregated read models
-
-Current preferred read APIs:
-
-- `tasks.getDetailView`
-- `boards.getBoardView`
-
-These queries are the server-side source for:
-
-- task detail state
-- board grouping and counters
-- UI flags
-- allowed actions
-- tag and metadata rendering inputs
+- thread and workflow message semantics
 
 ## Guardrails
 
-Architecture rules are protected by tests:
+Architecture rules are protected by:
 
-- [tests/mc/test_architecture.py](/Users/ennio/Documents/nanobot-ennio/.worktrees/mc-architecture-stabilization-v2/tests/mc/test_architecture.py)
-- [dashboard/tests/architecture.test.ts](/Users/ennio/Documents/nanobot-ennio/.worktrees/mc-architecture-stabilization-v2/dashboard/tests/architecture.test.ts)
+- [tests/mc/test_architecture.py](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/tests/mc/test_architecture.py)
+- [tests/mc/test_module_reorganization.py](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/tests/mc/test_module_reorganization.py)
+- [dashboard/tests/architecture.test.ts](/Users/ennio/Documents/nanobot-ennio/.worktrees/codex/hybrid-contexts/dashboard/tests/architecture.test.ts)
 
 Current guardrails enforce:
 
 - protected backend modules do not import `mc.gateway`
 - runtime-facing modules do not import `mc.executor` directly
-- major feature components avoid direct Convex hooks
-- view hooks consume aggregated read models
-- hooks do not depend on UI components
+- top-level compatibility modules point to `runtime` or `contexts`
+- dashboard feature components avoid direct Convex hooks where feature hooks exist
+- dashboard hooks do not depend on UI components
 
 ## Design Rules
 
-These are the working architecture rules for MC v2 stabilization:
-
-1. Rules of the workflow belong in shared/domain modules, not UI or boot code.
-2. Bootstrap wires dependencies; it does not own business behavior.
-3. Workers trigger services; they do not become god files.
-4. Execution uses `ExecutionRequest -> ExecutionEngine -> RunnerStrategy`.
-5. Convex read models are preferred over client-side reconstruction.
-6. Feature hooks own data orchestration; components focus on rendering and user intent.
-7. Compatibility shims may exist temporarily, but they are not architectural authority.
+1. Runtime modules compose flows; contexts own behavior.
+2. Shared rules belong in `domain`, not in runtime or UI.
+3. Convex access stays behind `bridge`.
+4. Environment and filesystem concerns stay in `infrastructure`.
+5. `mc.application.execution` is a reusable kernel, not a competing architecture.
+6. Top-level compatibility shims may exist temporarily, but they are not architectural authority.

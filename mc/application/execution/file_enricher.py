@@ -112,7 +112,7 @@ def build_file_context(
 
         # Inject file routing context
         if raw_files:
-            from mc.planner import _build_file_summary
+            from mc.contexts.planning.planner import _build_file_summary
 
             file_routing_summary = _build_file_summary(raw_files)
             if file_routing_summary:

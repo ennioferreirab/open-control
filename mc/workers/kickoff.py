@@ -20,8 +20,8 @@ from mc.types import (
 
 if TYPE_CHECKING:
     from mc.infrastructure.runtime_context import RuntimeContext
-    from mc.plan_materializer import PlanMaterializer
-    from mc.step_dispatcher import StepDispatcher
+    from mc.contexts.execution.step_dispatcher import StepDispatcher
+    from mc.contexts.planning.materializer import PlanMaterializer
 
 logger = logging.getLogger(__name__)
 

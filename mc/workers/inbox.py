@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mc.orchestrator import generate_title_via_low_agent
+from mc.contexts.planning.title_generation import generate_title_via_low_agent
 
 if TYPE_CHECKING:
     from mc.infrastructure.runtime_context import RuntimeContext

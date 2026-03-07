@@ -231,6 +231,28 @@ class AgentLoop:
             return f'{tc.name}("{val[:40]}…")' if len(val) > 40 else f'{tc.name}("{val}")'
         return ", ".join(_fmt(tc) for tc in tool_calls)
 
+    @staticmethod
+    def _unpack_agent_loop_result(
+        result: tuple,
+    ) -> tuple[str | None, list[str], list[dict], str | None]:
+        """Normalize legacy and current _run_agent_loop() return formats.
+
+        Historically some tests and overrides returned a 3-tuple
+        ``(final_content, tools_used, messages)``. The current contract adds a
+        fourth ``error_message`` field. Accept both forms to keep older fakes
+        and test seams working during the transition.
+        """
+        if len(result) == 4:
+            final_content, tools_used, messages, error_message = result
+            return final_content, tools_used, messages, error_message
+        if len(result) == 3:
+            final_content, tools_used, messages = result
+            return final_content, tools_used, messages, None
+        raise ValueError(
+            "_run_agent_loop() must return a 3-tuple or 4-tuple, "
+            f"got {len(result)} values"
+        )
+
     async def _run_agent_loop(
         self,
         initial_messages: list[dict],
@@ -422,7 +444,9 @@ class AgentLoop:
                 current_message=msg.content, channel=channel, chat_id=chat_id,
                 skill_names=self.allowed_skills,
             )
-            final_content, _, all_msgs, error_message = await self._run_agent_loop(messages)
+            final_content, _, all_msgs, error_message = self._unpack_agent_loop_result(
+                await self._run_agent_loop(messages)
+            )
             self._save_turn(session, all_msgs, 1 + len(history))
             self.sessions.save(session)
             self._last_turn_error_message = error_message
@@ -515,8 +539,10 @@ class AgentLoop:
                 channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=meta,
             ))
 
-        final_content, _, all_msgs, error_message = await self._run_agent_loop(
-            initial_messages, on_progress=on_progress or _bus_progress,
+        final_content, _, all_msgs, error_message = self._unpack_agent_loop_result(
+            await self._run_agent_loop(
+                initial_messages, on_progress=on_progress or _bus_progress,
+            )
         )
 
         if final_content is None:

@@ -49,7 +49,7 @@ class _CCStrategyAdapter:
         cron_service: Any | None = None,
         ask_user_registry: Any | None = None,
     ) -> None:
-        from mc.cc_executor import CCExecutorMixin
+        from mc.contexts.execution.cc_executor import CCExecutorMixin
 
         class _Adapter(CCExecutorMixin):
             def __init__(self) -> None:

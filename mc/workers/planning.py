@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mc.planner import TaskPlanner
+from mc.contexts.planning.planner import TaskPlanner
 from mc.types import (
     LEAD_AGENT_NAME,
     NANOBOT_AGENT_NAME,
@@ -25,8 +25,8 @@ from mc.types import (
 
 if TYPE_CHECKING:
     from mc.infrastructure.runtime_context import RuntimeContext
-    from mc.plan_materializer import PlanMaterializer
-    from mc.step_dispatcher import StepDispatcher
+    from mc.contexts.execution.step_dispatcher import StepDispatcher
+    from mc.contexts.planning.materializer import PlanMaterializer
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class PlanningWorker:
 
         # Fetch all enabled, delegatable agents (filter extra Convex fields)
         from mc.infrastructure.config import filter_agent_fields
-        from mc.planner import _is_delegatable
+        from mc.contexts.planning.planner import _is_delegatable
 
         agents_data = await asyncio.to_thread(self._bridge.list_agents)
         agents = [AgentData(**filter_agent_fields(a)) for a in agents_data]

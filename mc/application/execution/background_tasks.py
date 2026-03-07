@@ -23,7 +23,9 @@ def get_background_tasks() -> set[asyncio.Task[Any]]:
     """
     global _background_tasks_ref
     if _background_tasks_ref is None:
-        from mc.executor import _background_tasks as legacy_background_tasks
+        from mc.contexts.execution.executor import (
+            _background_tasks as legacy_background_tasks,
+        )
 
         _background_tasks_ref = legacy_background_tasks
     return _background_tasks_ref
