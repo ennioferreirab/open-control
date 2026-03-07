@@ -21,16 +21,6 @@ export const list = query({
   },
 });
 
-export const getByName = query({
-  args: { name: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("boards")
-      .withIndex("by_name", (q) => q.eq("name", args.name))
-      .first();
-  },
-});
-
 export const getDefault = query({
   args: {},
   handler: async (ctx) => {
@@ -148,34 +138,6 @@ export const softDelete = mutation({
     await ctx.db.insert("activities", {
       eventType: "board_deleted",
       description: `Board "${board.displayName}" deleted`,
-      timestamp: now,
-    });
-  },
-});
-
-export const setDefault = mutation({
-  args: { boardId: v.id("boards") },
-  handler: async (ctx, args) => {
-    const board = await ctx.db.get(args.boardId);
-    if (!board || board.deletedAt) {
-      throw new Error("Board not found");
-    }
-
-    // Unset the previous default
-    const currentDefault = await ctx.db
-      .query("boards")
-      .withIndex("by_isDefault", (q) => q.eq("isDefault", true))
-      .first();
-    if (currentDefault && currentDefault._id !== args.boardId) {
-      await ctx.db.patch(currentDefault._id, { isDefault: undefined });
-    }
-
-    const now = new Date().toISOString();
-    await ctx.db.patch(args.boardId, { isDefault: true, updatedAt: now });
-
-    await ctx.db.insert("activities", {
-      eventType: "board_updated",
-      description: `Board "${board.displayName}" set as default`,
       timestamp: now,
     });
   },

@@ -144,96 +144,6 @@ export const toggleFavorite = mutation({
   },
 });
 
-export const listFavorites = query({
-  args: {},
-  handler: async (ctx) => {
-    const all = await ctx.db.query("tasks").collect();
-    return all.filter((t) => t.isFavorite === true && t.status !== "deleted");
-  },
-});
-
-export const listByBoard = query({
-  args: {
-    boardId: v.id("boards"),
-    includeNoBoardId: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    const boardTasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_boardId", (q) => q.eq("boardId", args.boardId))
-      .collect();
-
-    const result = boardTasks.filter((t) => t.status !== "deleted");
-
-    if (args.includeNoBoardId) {
-      const NON_DELETED_STATUSES = [
-        "planning", "ready", "failed", "inbox", "assigned",
-        "in_progress", "review", "done", "retrying", "crashed",
-      ] as const;
-      const ids = new Set(result.map((t) => t._id));
-      const batches = await Promise.all(
-        NON_DELETED_STATUSES.map((status) =>
-          ctx.db
-            .query("tasks")
-            .withIndex("by_status", (q) => q.eq("status", status))
-            .collect()
-        )
-      );
-      for (const batch of batches) {
-        for (const task of batch) {
-          if (!task.boardId && !ids.has(task._id)) {
-            result.push(task);
-            ids.add(task._id);
-          }
-        }
-      }
-    }
-
-    return result;
-  },
-});
-
-export const search = query({
-  args: {
-    query: v.string(),
-    boardId: v.optional(v.id("boards")),
-  },
-  handler: async (ctx, { query: searchQuery, boardId }) => {
-    const trimmed = searchQuery.trim();
-    if (!trimmed) {
-      return [];
-    }
-
-    const titleResults = await ctx.db
-      .query("tasks")
-      .withSearchIndex("search_title", (q) => {
-        let sq = q.search("title", trimmed);
-        if (boardId) sq = sq.eq("boardId", boardId);
-        return sq;
-      })
-      .take(100);
-
-    const descriptionResults = await ctx.db
-      .query("tasks")
-      .withSearchIndex("search_description", (q) => {
-        let sq = q.search("description", trimmed);
-        if (boardId) sq = sq.eq("boardId", boardId);
-        return sq;
-      })
-      .take(100);
-
-    const merged = [...titleResults, ...descriptionResults];
-    const seen = new Set<string>();
-
-    return merged.filter((task) => {
-      if (task.status === "deleted") return false;
-      if (seen.has(task._id)) return false;
-      seen.add(task._id);
-      return true;
-    });
-  },
-});
-
 export const listDeleted = query({
   args: {},
   handler: async (ctx) => {
@@ -271,41 +181,6 @@ export const listDoneHistory = query({
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
     return all;
-  },
-});
-
-export const countHitlPending = query({
-  args: {},
-  handler: async (ctx) => {
-    const reviewTasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "review"))
-      .collect();
-    return reviewTasks.filter((t) => t.trustLevel === "human_approved").length;
-  },
-});
-
-export const listByStatus = query({
-  args: {
-    status: v.union(
-      v.literal("planning"),
-      v.literal("ready"),
-      v.literal("failed"),
-      v.literal("inbox"),
-      v.literal("assigned"),
-      v.literal("in_progress"),
-      v.literal("review"),
-      v.literal("done"),
-      v.literal("retrying"),
-      v.literal("crashed"),
-      v.literal("deleted"),
-    ),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", args.status))
-      .collect();
   },
 });
 
