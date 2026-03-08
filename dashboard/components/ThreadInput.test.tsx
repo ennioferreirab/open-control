@@ -10,7 +10,7 @@ import { getFunctionName } from "convex/server";
 const mutationMocks = new Map<string, ReturnType<typeof vi.fn>>();
 
 function getMutationMock(ref: unknown): ReturnType<typeof vi.fn> {
-  const key = getFunctionName(ref as any);
+  const key = getFunctionName(ref as never);
   if (!mutationMocks.has(key)) {
     mutationMocks.set(key, vi.fn().mockResolvedValue("msg-id"));
   }
@@ -24,8 +24,24 @@ vi.mock("convex/react", () => ({
 
 // Mock useSelectableAgents to return known agents
 const mockAgents = [
-  { _id: "a1", name: "coder", displayName: "Coder", role: "developer", enabled: true, status: "active", skills: [] },
-  { _id: "a2", name: "reviewer", displayName: "Reviewer", role: "reviewer", enabled: true, status: "active", skills: [] },
+  {
+    _id: "a1",
+    name: "coder",
+    displayName: "Coder",
+    role: "developer",
+    enabled: true,
+    status: "active",
+    skills: [],
+  },
+  {
+    _id: "a2",
+    name: "reviewer",
+    displayName: "Reviewer",
+    role: "reviewer",
+    enabled: true,
+    status: "active",
+    skills: [],
+  },
 ];
 
 vi.mock("@/hooks/useSelectableAgents", () => ({
@@ -47,29 +63,43 @@ vi.mock("@/hooks/useFileUpload", () => ({
 }));
 
 // Mock AgentMentionAutocomplete
-vi.mock("./AgentMentionAutocomplete", () => ({
+vi.mock("@/components/AgentMentionAutocomplete", () => ({
   AgentMentionAutocomplete: () => null,
 }));
 
 // Mock UI components minimally
 vi.mock("@/components/ui/textarea", () => ({
-  Textarea: vi.fn().mockImplementation(
-    ({ value, onChange, onKeyDown, disabled, placeholder, ...props }: any) => (
-      <textarea
-        data-testid="thread-textarea"
-        value={value}
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        disabled={disabled}
-        placeholder={placeholder}
-        {...props}
-      />
-    )
-  ),
+  Textarea: vi
+    .fn()
+    .mockImplementation(
+      ({
+        value,
+        onChange,
+        onKeyDown,
+        disabled,
+        placeholder,
+        ...props
+      }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+        <textarea
+          data-testid="thread-textarea"
+          value={value}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          disabled={disabled}
+          placeholder={placeholder}
+          {...props}
+        />
+      ),
+    ),
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, disabled, ...props }: any) => (
+  Button: ({
+    children,
+    onClick,
+    disabled,
+    ...props
+  }: React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>) => (
     <button onClick={onClick} disabled={disabled} data-testid="send-button" {...props}>
       {children}
     </button>
@@ -77,15 +107,24 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/ui/select", () => ({
-  Select: ({ children, value, onValueChange }: any) => (
-    <div data-testid="agent-select">{children}</div>
-  ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => (
+  Select: ({
+    children,
+    value,
+    onValueChange,
+  }: React.PropsWithChildren<{
+    onValueChange?: (value: string) => void;
+    value?: string;
+  }>) => {
+    void value;
+    void onValueChange;
+    return <div data-testid="agent-select">{children}</div>;
+  },
+  SelectTrigger: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  SelectContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  SelectItem: ({ children, value }: React.PropsWithChildren<{ value: string }>) => (
     <option value={value}>{children}</option>
   ),
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
+  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
 }));
 
 vi.mock("lucide-react", () => ({
@@ -97,7 +136,7 @@ vi.mock("lucide-react", () => ({
 }));
 
 const baseTask = {
-  _id: "task1" as any,
+  _id: "task1" as never,
   _creationTime: 1000,
   title: "Test task",
   description: "A test task",
@@ -133,7 +172,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
           taskId: "task1",
           content: "@coder please review this",
           mentionedAgent: "coder",
-        })
+        }),
       );
     });
   });
@@ -153,7 +192,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
           taskId: "task1",
           content: "please fix the bug",
           agentName: "coder",
-        })
+        }),
       );
     });
   });
@@ -172,7 +211,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
       expect(mentionMock).toHaveBeenCalledWith(
         expect.objectContaining({
           mentionedAgent: "reviewer",
-        })
+        }),
       );
       expect(sendMock).not.toHaveBeenCalled();
     });
@@ -195,9 +234,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
   it("still renders input for manual tasks", () => {
     const manualTask = { ...baseTask, isManual: true };
     render(<ThreadInput task={manualTask} />);
-    expect(
-      screen.getByPlaceholderText("Send a message to the agent...")
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Send a message to the agent...")).toBeInTheDocument();
   });
 
   it("renders restore UI for deleted tasks", () => {
@@ -226,7 +263,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
         expect.objectContaining({
           taskId: "task1",
           content: "@coder update the plan",
-        })
+        }),
       );
       expect(mentionMock).not.toHaveBeenCalled();
     });
@@ -247,7 +284,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
       expect(sendMock).toHaveBeenCalledWith(
         expect.objectContaining({
           agentName: "coder",
-        })
+        }),
       );
       expect(mentionMock).not.toHaveBeenCalled();
     });

@@ -1,52 +1,62 @@
-# Welcome to your Convex + Next.js app
+# Dashboard
 
-This is a [Convex](https://convex.dev/) project created with [`npm create convex`](https://www.npmjs.com/package/create-convex).
+The dashboard is the web UI for Mission Control.
 
-After the initial setup (<2 minutes) you'll have a working full-stack app using:
+It is built with:
 
-- Convex as your backend (database, server logic)
-- [React](https://react.dev/) as your frontend (web page interactivity)
-- [Next.js](https://nextjs.org/) for optimized web hosting and page routing
-- [Tailwind](https://tailwindcss.com/) and [shadcn/ui](https://ui.shadcn.com/) for building great looking accessible UI fast
+- Next.js App Router
+- React
+- TypeScript
+- Convex for realtime data and mutations
+- Vitest for frontend architecture and behavior tests
 
-## Get started
+## Development
 
-If you just cloned this codebase and didn't use `npm create convex`, run:
-
-```
+```bash
 npm install
 npm run dev
 ```
 
-If you're reading this README on GitHub and want to use this template, run:
+## Baseline Checks
 
+```bash
+npm run format:check
+npm run lint
+npm run typecheck
+npm run test
+npm run test:architecture
 ```
-npm create convex@latest -- -t nextjs-shadcn
+
+For quick local iteration on touched files:
+
+```bash
+npm run format:file:check -- path/to/file.tsx
+npm run lint:file -- path/to/file.tsx
 ```
 
-## Learn more
+## Ownership Model
 
-To learn more about developing your project with Convex, check out:
+The dashboard is being migrated to a feature-first structure under `dashboard/features/`.
 
-- The [Tour of Convex](https://docs.convex.dev/get-started) for a thorough introduction to Convex principles.
-- The rest of [Convex docs](https://docs.convex.dev/) to learn about all Convex features.
-- [Stack](https://stack.convex.dev/) for in-depth articles on advanced topics.
+Current shared layers:
 
-## Join the community
+- `app/` for routing and page composition
+- `components/ui/` for reusable UI primitives
+- `components/viewers/` for shared document and media viewers
+- `convex/` for data contract boundaries
+- `lib/` for truly cross-feature utilities
 
-Join thousands of developers building full-stack apps with Convex:
+Feature ownership should move into:
 
-## Deploy on Vercel
+- `features/<feature>/components/` for feature UI
+- `features/<feature>/hooks/` for orchestration and view-model hooks
+- `features/<feature>/lib/` for pure feature helpers
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Architecture Rules
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Feature UI should not import `convex/react` directly.
+- Feature hooks may depend on Convex/read-model layers but must not depend on feature UI components.
+- `app/` should compose feature entry points instead of becoming the home for feature logic.
+- New logic should land in the owning feature, not in broad root-level buckets by default.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-# Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
-
-- Join the [Convex Discord community](https://convex.dev/community) to get help in real-time.
-- Follow [Convex on GitHub](https://github.com/get-convex/), star and contribute to the open-source implementation of Convex.
+See `dashboard/tests/architecture.test.ts` for the currently enforced guardrails.

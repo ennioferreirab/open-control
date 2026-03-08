@@ -12,6 +12,8 @@
  * 3. Feature view hooks must consume the aggregated read models instead
  *    of reassembling task/board state from many raw Convex queries.
  * 4. Component test files in components/ must mock hooks, not convex/react.
+ * 5. Feature-first ownership lives under dashboard/features/ with
+ *    per-feature components/hooks/lib boundaries.
  */
 
 import { describe, it, expect } from "vitest";
@@ -38,6 +40,169 @@ function fileContains(pattern: RegExp, content: string): boolean {
   return pattern.test(content);
 }
 
+function listFeatureFiles(featureName: string, subdir: "components" | "hooks"): string[] {
+  const dir = path.join(DASHBOARD_ROOT, "features", featureName, subdir);
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(dir)
+    .filter((f: string) => f.endsWith(".ts") || f.endsWith(".tsx"))
+    .filter((f: string) => !f.includes(".test."))
+    .map((f: string) => path.join(dir, f));
+}
+
+const FEATURE_COMPONENT_DIRECT_CONVEX_IMPORT_EXCEPTIONS = new Set([
+  "features/tasks/components/ExecutionPlanTab.tsx",
+  "features/tasks/components/TaskCard.tsx",
+]);
+
+describe("Architecture: feature shell exists for staged modularization", () => {
+  it("dashboard/features/ README and first-wave feature directories exist", () => {
+    expect(fs.existsSync(path.join(DASHBOARD_ROOT, "features"))).toBe(true);
+    expect(fs.existsSync(path.join(DASHBOARD_ROOT, "features", "README.md"))).toBe(true);
+
+    const featureDirs = [
+      "tasks",
+      "boards",
+      "agents",
+      "thread",
+      "activity",
+      "search",
+      "settings",
+      "terminal",
+    ];
+
+    for (const featureDir of featureDirs) {
+      expect(
+        fs.existsSync(path.join(DASHBOARD_ROOT, "features", featureDir)),
+        `features/${featureDir} should exist as a migration target`,
+      ).toBe(true);
+    }
+  });
+
+  it("tasks feature entry points exist in the feature-owned structure", () => {
+    const requiredFiles = [
+      "features/tasks/components/TaskDetailSheet.tsx",
+      "features/tasks/components/TaskInput.tsx",
+      "features/tasks/components/ExecutionPlanTab.tsx",
+      "features/tasks/components/TaskCard.tsx",
+      "features/tasks/components/StepCard.tsx",
+      "features/tasks/hooks/useTaskDetailView.ts",
+      "features/tasks/hooks/useTaskDetailActions.ts",
+      "features/tasks/hooks/useTaskInputData.ts",
+    ];
+
+    for (const relativePath of requiredFiles) {
+      expect(
+        fs.existsSync(path.join(DASHBOARD_ROOT, relativePath)),
+        `${relativePath} should exist once the tasks entry-point migration begins`,
+      ).toBe(true);
+    }
+  });
+
+  it("boards and search feature entry points exist in the feature-owned structure", () => {
+    const requiredFiles = [
+      "features/boards/components/KanbanBoard.tsx",
+      "features/boards/components/BoardSettingsSheet.tsx",
+      "features/boards/hooks/useBoardView.ts",
+      "features/search/components/SearchBar.tsx",
+      "features/search/hooks/useSearchBarFilters.ts",
+    ];
+
+    for (const relativePath of requiredFiles) {
+      expect(
+        fs.existsSync(path.join(DASHBOARD_ROOT, relativePath)),
+        `${relativePath} should exist once the boards/search migration begins`,
+      ).toBe(true);
+    }
+  });
+
+  it("agents and settings feature entry points exist in the feature-owned structure", () => {
+    const requiredFiles = [
+      "features/agents/components/AgentConfigSheet.tsx",
+      "features/agents/components/AgentSidebarItem.tsx",
+      "features/agents/hooks/useAgentConfigSheetData.ts",
+      "features/agents/hooks/useAgentSidebarItemState.ts",
+      "features/settings/components/SettingsPanel.tsx",
+      "features/settings/components/ModelTierSettings.tsx",
+      "features/settings/components/TagsPanel.tsx",
+      "features/settings/hooks/useTagsPanelData.ts",
+    ];
+
+    for (const relativePath of requiredFiles) {
+      expect(
+        fs.existsSync(path.join(DASHBOARD_ROOT, relativePath)),
+        `${relativePath} should exist once the agents/settings migration begins`,
+      ).toBe(true);
+    }
+  });
+
+  it("thread and activity feature entry points exist in the feature-owned structure", () => {
+    const requiredFiles = [
+      "features/thread/components/ThreadInput.tsx",
+      "features/thread/components/ThreadMessage.tsx",
+      "features/activity/components/ActivityFeed.tsx",
+      "features/activity/hooks/useActivityFeed.ts",
+      "features/thread/hooks/useThreadInputController.ts",
+    ];
+
+    for (const relativePath of requiredFiles) {
+      expect(
+        fs.existsSync(path.join(DASHBOARD_ROOT, relativePath)),
+        `${relativePath} should exist once the thread/activity migration begins`,
+      ).toBe(true);
+    }
+  });
+});
+
+describe("Architecture: feature modules keep local boundaries", () => {
+  const featureDirs = [
+    "tasks",
+    "boards",
+    "agents",
+    "thread",
+    "activity",
+    "search",
+    "settings",
+    "terminal",
+  ];
+
+  for (const featureDir of featureDirs) {
+    it(`features/${featureDir}/components should not import convex/react directly`, () => {
+      for (const filePath of listFeatureFiles(featureDir, "components")) {
+        const relativePath = path.relative(DASHBOARD_ROOT, filePath);
+        if (FEATURE_COMPONENT_DIRECT_CONVEX_IMPORT_EXCEPTIONS.has(relativePath)) {
+          continue;
+        }
+        const content = readFileIfExists(filePath);
+        if (!content) continue;
+        expect(
+          fileContainsDirectConvexImport(content),
+          `${relativePath} must use feature hooks instead of direct convex/react imports`,
+        ).toBe(false);
+      }
+    });
+
+    it(`features/${featureDir}/hooks should not depend on feature UI components`, () => {
+      for (const filePath of listFeatureFiles(featureDir, "hooks")) {
+        const content = readFileIfExists(filePath);
+        if (!content) continue;
+        const componentImports = content
+          .split("\n")
+          .filter((line: string) =>
+            new RegExp(`from\\s+["'].*features\\/${featureDir}\\/components\\/`).test(line),
+          );
+        expect(
+          componentImports,
+          `${path.relative(DASHBOARD_ROOT, filePath)} must not import feature UI components`,
+        ).toEqual([]);
+      }
+    });
+  }
+});
+
 describe("Architecture: Hook files must not import UI components", () => {
   it("hooks/ directory files should not import from components/", () => {
     const hooksDir = path.join(DASHBOARD_ROOT, "hooks");
@@ -51,17 +216,15 @@ describe("Architecture: Hook files must not import UI components", () => {
       .filter((f: string) => !f.includes(".test."));
 
     for (const hookFile of hookFiles) {
-      const content = fs.readFileSync(
-        path.join(hooksDir, hookFile),
-        "utf-8",
-      );
+      const content = fs.readFileSync(path.join(hooksDir, hookFile), "utf-8");
       // Allow imports from context providers (e.g. BoardContext) —
       // these are shared state hooks that happen to live in components/
-      const lines = content.split("\n").filter(
-        (line: string) =>
-          /from\s+["']@?\.?\.?\/?components\//.test(line) &&
-          !/Context["']/.test(line)
-      );
+      const lines = content
+        .split("\n")
+        .filter(
+          (line: string) =>
+            /from\s+["']@?\.?\.?\/?components\//.test(line) && !/Context["']/.test(line),
+        );
       const componentImports = lines.length > 0 ? lines : null;
       expect(
         componentImports,
@@ -98,7 +261,15 @@ describe("Architecture: Feature components must use hooks, not direct Convex imp
 
 describe("Architecture: Feature view hooks must consume read models", () => {
   it("useTaskDetailView.ts should read from tasks.getDetailView", () => {
-    const filePath = path.join(DASHBOARD_ROOT, "hooks", "useTaskDetailView.ts");
+    const featureOwnedFilePath = path.join(
+      DASHBOARD_ROOT,
+      "features",
+      "tasks",
+      "hooks",
+      "useTaskDetailView.ts",
+    );
+    const legacyFilePath = path.join(DASHBOARD_ROOT, "hooks", "useTaskDetailView.ts");
+    const filePath = fs.existsSync(featureOwnedFilePath) ? featureOwnedFilePath : legacyFilePath;
     const content = readFileIfExists(filePath);
     if (!content) return;
 
@@ -113,7 +284,15 @@ describe("Architecture: Feature view hooks must consume read models", () => {
   });
 
   it("useBoardView.ts should read from boards.getBoardView", () => {
-    const filePath = path.join(DASHBOARD_ROOT, "hooks", "useBoardView.ts");
+    const featureOwnedFilePath = path.join(
+      DASHBOARD_ROOT,
+      "features",
+      "boards",
+      "hooks",
+      "useBoardView.ts",
+    );
+    const legacyFilePath = path.join(DASHBOARD_ROOT, "hooks", "useBoardView.ts");
+    const filePath = fs.existsSync(featureOwnedFilePath) ? featureOwnedFilePath : legacyFilePath;
     const content = readFileIfExists(filePath);
     if (!content) return;
 
@@ -122,7 +301,10 @@ describe("Architecture: Feature view hooks must consume read models", () => {
       "useBoardView.ts must use api.boards.getBoardView as its primary read path",
     ).toBe(true);
     expect(
-      fileContains(/api\.tasks\.(list|search|listByBoard)|api\.steps\.(listAll|listByBoard)|api\.tasks\.countHitlPending|api\.tasks\.listDeleted/, content),
+      fileContains(
+        /api\.tasks\.(list|search|listByBoard)|api\.steps\.(listAll|listByBoard)|api\.tasks\.countHitlPending|api\.tasks\.listDeleted/,
+        content,
+      ),
       "useBoardView.ts must not orchestrate board state from raw task/step counter queries",
     ).toBe(false);
   });
@@ -166,12 +348,7 @@ describe("Architecture: Component tests must mock hooks, not convex/react direct
 
   for (const testFile of testsComponentsTargets) {
     it(`tests/components/${testFile} should not import from convex/react`, () => {
-      const filePath = path.join(
-        DASHBOARD_ROOT,
-        "tests",
-        "components",
-        testFile,
-      );
+      const filePath = path.join(DASHBOARD_ROOT, "tests", "components", testFile);
       const content = readFileIfExists(filePath);
       if (!content) return;
 

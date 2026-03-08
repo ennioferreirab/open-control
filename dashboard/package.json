@@ -9,8 +9,15 @@
     "predev": "convex dev --until-success",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
-    "test": "vitest run"
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "format:file": "prettier --write",
+    "format:file:check": "prettier --check",
+    "lint": "eslint . --max-warnings=0",
+    "lint:file": "eslint --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:architecture": "vitest run tests/architecture.test.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
