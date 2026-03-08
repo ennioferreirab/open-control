@@ -6,4 +6,21 @@ export default defineConfig([
   ...nextCoreWebVitals,
   ...nextTypescript,
   globalIgnores(["convex/_generated"]),
+  {
+    files: ["components/**/*.{ts,tsx}", "tests/components/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "convex/react",
+              message:
+                "Use feature hooks or view-model hooks instead of importing convex/react in UI-facing modules.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

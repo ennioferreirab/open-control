@@ -32,7 +32,7 @@ def test_context_packages_reexport_public_api() -> None:
         CCExecutorMixin as ContextCCExecutorMixin,
     )
     from mc.contexts.execution.cc_step_runner import (
-        execute_step_via_cc as ContextExecuteStepViaCc,
+        execute_step_via_cc as context_execute_step_via_cc,
     )
     from mc.contexts.execution.executor import TaskExecutor as ContextTaskExecutor
     from mc.contexts.execution.step_dispatcher import (
@@ -41,7 +41,6 @@ def test_context_packages_reexport_public_api() -> None:
     from mc.contexts.planning import (
         PlanMaterializer,
         TaskPlanner,
-        generate_title_via_low_agent,
         handle_plan_negotiation,
         start_plan_negotiation_loop,
     )
@@ -49,25 +48,27 @@ def test_context_packages_reexport_public_api() -> None:
         PlanMaterializer as ContextPlanMaterializer,
     )
     from mc.contexts.planning.negotiation import (
-        handle_plan_negotiation as ContextHandlePlanNegotiation,
+        handle_plan_negotiation as context_handle_plan_negotiation,
     )
     from mc.contexts.planning.negotiation import (
-        start_plan_negotiation_loop as ContextStartPlanNegotiationLoop,
+        start_plan_negotiation_loop as context_start_plan_negotiation_loop,
     )
     from mc.contexts.planning.planner import TaskPlanner as ContextTaskPlanner
     from mc.contexts.planning.title_generation import (
-        generate_title_via_low_agent as ContextGenerateTitle,
+        generate_title_via_low_agent as context_generate_title,
     )
     from mc.contexts.review import ReviewHandler
     from mc.contexts.review.handler import ReviewHandler as ContextReviewHandler
     from mc.runtime import (
         TaskOrchestrator,
-        generate_title_via_low_agent as RuntimeGenerateTitle,
         main,
         run_gateway,
     )
-    from mc.runtime.gateway import main as RuntimeMain
-    from mc.runtime.gateway import run_gateway as RuntimeRunGateway
+    from mc.runtime import (
+        generate_title_via_low_agent as runtime_generate_title,
+    )
+    from mc.runtime.gateway import main as runtime_main
+    from mc.runtime.gateway import run_gateway as runtime_run_gateway
     from mc.runtime.orchestrator import TaskOrchestrator as RuntimeTaskOrchestrator
     from mc.services.agent_sync import AgentSyncService
     from mc.services.conversation import ConversationService as ServiceConversation
@@ -76,17 +77,17 @@ def test_context_packages_reexport_public_api() -> None:
     )
 
     assert TaskOrchestrator is RuntimeTaskOrchestrator
-    assert main is RuntimeMain
-    assert run_gateway is RuntimeRunGateway
-    assert RuntimeGenerateTitle is ContextGenerateTitle
+    assert main is runtime_main
+    assert run_gateway is runtime_run_gateway
+    assert runtime_generate_title is context_generate_title
     assert TaskPlanner is ContextTaskPlanner
     assert PlanMaterializer is ContextPlanMaterializer
-    assert handle_plan_negotiation is ContextHandlePlanNegotiation
-    assert start_plan_negotiation_loop is ContextStartPlanNegotiationLoop
+    assert handle_plan_negotiation is context_handle_plan_negotiation
+    assert start_plan_negotiation_loop is context_start_plan_negotiation_loop
     assert TaskExecutor is ContextTaskExecutor
     assert StepDispatcher is ContextStepDispatcher
     assert CCExecutorMixin is ContextCCExecutorMixin
-    assert execute_step_via_cc is ContextExecuteStepViaCc
+    assert execute_step_via_cc is context_execute_step_via_cc
     assert ChatHandler is ContextChatHandler
     assert ConversationService is ContextConversationService
     assert ConversationIntent is ContextConversationIntent
@@ -105,8 +106,14 @@ def test_runtime_workers_package_reexports_existing_workers() -> None:
     )
     from mc.workers import (
         InboxWorker as LegacyInboxWorker,
+    )
+    from mc.workers import (
         KickoffResumeWorker as LegacyKickoffResumeWorker,
+    )
+    from mc.workers import (
         PlanningWorker as LegacyPlanningWorker,
+    )
+    from mc.workers import (
         ReviewWorker as LegacyReviewWorker,
     )
 
