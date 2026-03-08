@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as motion from "motion/react-client";
-import { useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskCard } from "@/components/TaskCard";
@@ -11,6 +9,7 @@ import { Doc, Id } from "../convex/_generated/dataModel";
 import { Eraser, List } from "lucide-react";
 import { StepCard } from "@/components/StepCard";
 import { TaskGroupHeader } from "@/components/TaskGroupHeader";
+import { useKanbanColumnInteractions } from "@/features/boards/hooks/useKanbanColumnInteractions";
 
 interface KanbanColumnProps {
   title: string;
@@ -49,8 +48,7 @@ export function KanbanColumn({
   const [isPulsing, setIsPulsing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const manualMove = useMutation(api.tasks.manualMove);
-  const manualMoveStep = useMutation(api.steps.manualMoveStep);
+  const { moveStep, moveTask } = useKanbanColumnInteractions();
 
   useEffect(() => {
     if (hitlCount > prevCountRef.current) {
@@ -68,7 +66,7 @@ export function KanbanColumn({
 
   return (
     <div
-      className={`flex min-h-0 w-[85vw] shrink-0 snap-center flex-col overflow-hidden rounded-lg border border-border/70 bg-muted/40 p-3 transition-colors md:min-w-0 md:w-auto md:shrink md:snap-none ${isDragOver ? "ring-2 ring-blue-400 bg-blue-50/30 dark:bg-blue-950/30" : ""}`}
+      className={`flex min-h-0 w-[85vw] shrink-0 snap-center flex-col overflow-hidden rounded-lg transition-colors md:min-w-0 md:w-auto md:shrink md:snap-none ${isDragOver ? "ring-2 ring-blue-400 bg-blue-50/30 dark:bg-blue-950/30" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
@@ -98,7 +96,7 @@ export function KanbanColumn({
           const targetStepStatus = stepStatusMap[status];
           if (targetStepStatus) {
             try {
-              await manualMoveStep({ stepId: stepId as Id<"steps">, newStatus: targetStepStatus });
+              await moveStep(stepId as Id<"steps">, targetStepStatus);
             } catch (err) {
               console.error("[KanbanColumn] Step move failed:", err);
             }
@@ -108,14 +106,24 @@ export function KanbanColumn({
         // Task drops
         const taskId = e.dataTransfer.getData("text/plain");
         if (taskId) {
-          await manualMove({ taskId: taskId as Id<"tasks">, newStatus: status as "inbox" | "assigned" | "in_progress" | "review" | "done" | "retrying" | "crashed" });
+          await moveTask(
+            taskId as Id<"tasks">,
+            status as
+              | "inbox"
+              | "assigned"
+              | "in_progress"
+              | "review"
+              | "done"
+              | "retrying"
+              | "crashed",
+          );
         }
       }}
     >
-      <div className="mb-2 flex items-center gap-2">
-        <div className={`h-4 w-1 rounded-full ${accentColor}`} />
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+      <div className="mb-3 flex items-center gap-2 px-1">
+        <div className={`h-2 w-2 rounded-full ${accentColor}`} />
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        <Badge variant="secondary" className="text-xs">
           {totalCount}
         </Badge>
         {hitlCount > 0 && (
@@ -173,7 +181,7 @@ export function KanbanColumn({
           </div>
         </motion.div>
       )}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {tasks.length === 0 && stepGroups.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No tasks</p>
         ) : (
@@ -183,18 +191,14 @@ export function KanbanColumn({
                 <TaskGroupHeader
                   taskTitle={group.taskTitle}
                   stepCount={group.steps.length}
-                  onClick={
-                    onTaskClick ? () => onTaskClick(group.taskId) : undefined
-                  }
+                  onClick={onTaskClick ? () => onTaskClick(group.taskId) : undefined}
                 />
                 {group.steps.map((step) => (
                   <StepCard
                     key={step._id}
                     step={step}
                     parentTaskTitle={group.taskTitle}
-                    onClick={
-                      onTaskClick ? () => onTaskClick(step.taskId) : undefined
-                    }
+                    onClick={onTaskClick ? () => onTaskClick(step.taskId) : undefined}
                   />
                 ))}
               </div>

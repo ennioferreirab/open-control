@@ -16,6 +16,16 @@ const textFile = { name: "readme.txt", subfolder: "attachments" };
 const binaryFile = { name: "photo.png", subfolder: "output" };
 const pdfFile = { name: "report.pdf", subfolder: "attachments" };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("useDocumentFetch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,11 +88,17 @@ describe("useDocumentFetch", () => {
 
     // fetch is called synchronously at start of effect
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/tasks/task_1/files/attachments/readme.txt"
+      "/api/tasks/task_1/files/attachments/readme.txt",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
     );
 
     // drain pending microtasks to avoid act() warnings
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
   });
 
   it("URL-encodes filename in fetch URL", async () => {
@@ -96,11 +112,17 @@ describe("useDocumentFetch", () => {
     renderHook(() => useDocumentFetch("task_1", fileWithSpaces));
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/tasks/task_1/files/attachments/my%20file.txt"
+      "/api/tasks/task_1/files/attachments/my%20file.txt",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
     );
 
     // drain pending microtasks to avoid act() warnings
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
   });
 
   // ---- Binary file fetch ----
@@ -210,7 +232,7 @@ describe("useDocumentFetch", () => {
     const { rerender } = renderHook(
       ({ file }: { file: { name: string; subfolder: string } | null }) =>
         useDocumentFetch("task_1", file),
-      { initialProps: { file: binaryFile } }
+      { initialProps: { file: binaryFile } },
     );
 
     await act(async () => {
@@ -245,7 +267,7 @@ describe("useDocumentFetch", () => {
     const { result, rerender } = renderHook(
       ({ file }: { file: { name: string; subfolder: string } | null }) =>
         useDocumentFetch("task_1", file),
-      { initialProps: { file: textFile as { name: string; subfolder: string } | null } }
+      { initialProps: { file: textFile as { name: string; subfolder: string } | null } },
     );
 
     await act(async () => {
@@ -259,6 +281,69 @@ describe("useDocumentFetch", () => {
 
     expect(result.current.content).toBeNull();
     expect(result.current.blobUrl).toBeNull();
+    expect(result.current.error).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("aborts the in-flight request when the hook unmounts", () => {
+    const fetchDeferred = deferred<Response>();
+    mockFetch.mockReturnValue(fetchDeferred.promise);
+
+    const { unmount } = renderHook(() => useDocumentFetch("task_1", textFile));
+
+    const [, init] = mockFetch.mock.calls[0] as [string, { signal?: AbortSignal } | undefined];
+    expect(init?.signal).toBeDefined();
+    expect(init?.signal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(init?.signal?.aborted).toBe(true);
+    fetchDeferred.reject(new Error("aborted"));
+  });
+
+  it("ignores stale responses when the file changes mid-request", async () => {
+    const firstFetch = deferred<{
+      ok: boolean;
+      text: () => Promise<string>;
+      blob: () => Promise<Blob>;
+    }>();
+    const secondFetch = deferred<{
+      ok: boolean;
+      text: () => Promise<string>;
+      blob: () => Promise<Blob>;
+    }>();
+
+    mockFetch.mockReturnValueOnce(firstFetch.promise).mockReturnValueOnce(secondFetch.promise);
+
+    const { result, rerender } = renderHook(
+      ({ file }: { file: { name: string; subfolder: string } | null }) =>
+        useDocumentFetch("task_1", file),
+      { initialProps: { file: textFile as { name: string; subfolder: string } | null } },
+    );
+
+    rerender({ file: { name: "fresh.txt", subfolder: "attachments" } });
+
+    await act(async () => {
+      secondFetch.resolve({
+        ok: true,
+        text: vi.fn().mockResolvedValue("fresh content"),
+        blob: vi.fn(),
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.content).toBe("fresh content");
+
+    await act(async () => {
+      firstFetch.resolve({
+        ok: true,
+        text: vi.fn().mockResolvedValue("stale content"),
+        blob: vi.fn(),
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.content).toBe("fresh content");
     expect(result.current.error).toBeNull();
     expect(result.current.loading).toBe(false);
   });

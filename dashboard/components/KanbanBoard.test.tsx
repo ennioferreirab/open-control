@@ -117,10 +117,7 @@ function defaultBoardView(overrides: Partial<BoardViewData> = {}): BoardViewData
   };
 }
 
-function buildColumns(
-  tasks: Doc<"tasks">[],
-  steps: Doc<"steps">[] = []
-): ColumnData[] {
+function buildColumns(tasks: Doc<"tasks">[], steps: Doc<"steps">[] = []): ColumnData[] {
   // Simplified column builder for tests — delegates to the same logic
   // as the real hook. For these component tests we manually build columns.
   const COLS = [
@@ -131,18 +128,11 @@ function buildColumns(
     { title: "Done", status: "done" as const, accentColor: "bg-green-500" },
   ];
 
-  const taskStatusMap = new Map(
-    tasks.map((t) => [t._id, t.status] as const)
-  );
-  const taskTitleMap = new Map(
-    tasks.map((t) => [t._id, t.title] as const)
-  );
+  const taskStatusMap = new Map(tasks.map((t) => [t._id, t.status] as const));
+  const taskTitleMap = new Map(tasks.map((t) => [t._id, t.title] as const));
 
   // Step grouping logic (matches useBoardColumns)
-  function stepStatusToCol(
-    stepStatus: string,
-    taskStatus?: string
-  ): string | null {
+  function stepStatusToCol(stepStatus: string, taskStatus?: string): string | null {
     switch (stepStatus) {
       case "assigned":
       case "blocked":
@@ -170,19 +160,18 @@ function buildColumns(
   }
 
   const hasSteps = new Set(stepsByTaskId.keys());
-  const regularTasks = tasks.filter(
-    (t) => !hasSteps.has(t._id) || t.status === "review"
-  );
+  const regularTasks = tasks.filter((t) => !hasSteps.has(t._id) || t.status === "review");
 
   return COLS.map((col) => {
-    const columnTasks = regularTasks.filter((t) => {
-      if (col.status === "in_progress")
-        return ["in_progress", "retrying", "crashed", "failed"].includes(t.status);
-      if (col.status === "assigned")
-        return ["assigned", "planning", "ready"].includes(t.status);
-      if (col.status === "inbox") return t.status === "inbox";
-      return t.status === col.status;
-    }).sort((a, b) => b._creationTime - a._creationTime);
+    const columnTasks = regularTasks
+      .filter((t) => {
+        if (col.status === "in_progress")
+          return ["in_progress", "retrying", "crashed", "failed"].includes(t.status);
+        if (col.status === "assigned") return ["assigned", "planning", "ready"].includes(t.status);
+        if (col.status === "inbox") return t.status === "inbox";
+        return t.status === col.status;
+      })
+      .sort((a, b) => b._creationTime - a._creationTime);
 
     const stepGroups = Array.from(stepsByTaskId.entries())
       .map(([taskId, taskSteps]) => {
@@ -202,9 +191,7 @@ function buildColumns(
       ...col,
       tasks: columnTasks,
       stepGroups,
-      totalCount:
-        columnTasks.length +
-        stepGroups.reduce((c, g) => c + g.steps.length, 0),
+      totalCount: columnTasks.length + stepGroups.reduce((c, g) => c + g.steps.length, 0),
     };
   });
 }
@@ -232,12 +219,22 @@ describe("KanbanBoard", () => {
     expect(screen.getByText("Done")).toBeInTheDocument();
   });
 
+  it("renders the lighter column heading treatment", () => {
+    const tasks = [makeTask()];
+    mockBoardView = defaultBoardView({ tasks });
+    mockColumns = buildColumns(tasks);
+
+    render(<KanbanBoard />);
+
+    expect(screen.getByText("Inbox")).toHaveClass("text-lg");
+  });
+
   it("shows empty state message when no tasks exist", () => {
     mockBoardView = defaultBoardView({ tasks: [], deletedCount: 0 });
     mockColumns = buildColumns([]);
     render(<KanbanBoard />);
     expect(
-      screen.getByText("No tasks yet. Type above to create your first task.")
+      screen.getByText("No tasks yet. Type above to create your first task."),
     ).toBeInTheDocument();
   });
 
@@ -303,9 +300,7 @@ describe("KanbanBoard", () => {
   });
 
   it("shows 'No tasks' for empty columns when other columns have tasks", () => {
-    const tasks = [
-      makeTask({ _id: "t1" as Id<"tasks">, status: "inbox" }),
-    ];
+    const tasks = [makeTask({ _id: "t1" as Id<"tasks">, status: "inbox" })];
     mockBoardView = defaultBoardView({ tasks });
     mockColumns = buildColumns(tasks);
     render(<KanbanBoard />);
@@ -316,8 +311,16 @@ describe("KanbanBoard", () => {
 
   it("renders steps grouped by parent task and keeps tasks without steps as TaskCards", () => {
     const tasks = [
-      makeTask({ _id: "task_with_steps" as Id<"tasks">, title: "Task With Steps", status: "assigned" }),
-      makeTask({ _id: "task_without_steps" as Id<"tasks">, title: "Task Without Steps", status: "assigned" }),
+      makeTask({
+        _id: "task_with_steps" as Id<"tasks">,
+        title: "Task With Steps",
+        status: "assigned",
+      }),
+      makeTask({
+        _id: "task_without_steps" as Id<"tasks">,
+        title: "Task Without Steps",
+        status: "assigned",
+      }),
     ];
     const steps = [
       makeStep({
@@ -354,18 +357,16 @@ describe("KanbanBoard", () => {
     expect(screen.getByText("Step Two")).toBeInTheDocument();
     expect(screen.getByText("Step Blocked")).toBeInTheDocument();
     expect(screen.getByText("Step Crashed")).toBeInTheDocument();
-    expect(
-      screen.getAllByRole("heading", { name: "Task With Steps", level: 3 })
-    ).toHaveLength(2);
+    expect(screen.getAllByRole("heading", { name: "Task With Steps", level: 3 })).toHaveLength(2);
     const assignedHeaderRow = screen.getByText("Assigned").parentElement;
     const inProgressHeaderRow = screen.getByText("In Progress").parentElement;
     expect(within(assignedHeaderRow!).getByText("3")).toBeInTheDocument();
     expect(within(inProgressHeaderRow!).getByText("2")).toBeInTheDocument();
     expect(
-      screen.getByRole("article", { name: "Task Without Steps - assigned" })
+      screen.getByRole("article", { name: "Task Without Steps - assigned" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("article", { name: "Task With Steps - assigned" })
+      screen.queryByRole("article", { name: "Task With Steps - assigned" }),
     ).not.toBeInTheDocument();
   });
 });

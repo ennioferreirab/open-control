@@ -46,10 +46,24 @@ describe("TaskCard", () => {
     expect(screen.getByText("Test task")).toBeInTheDocument();
   });
 
-  it("renders description when provided", () => {
+  it("shows a title expand control and toggles it when clicked", () => {
     render(
-      <TaskCard task={{ ...baseTask, description: "A task description" }} />
+      <TaskCard
+        task={{
+          ...baseTask,
+          title:
+            "A very long task title that should be collapsible back to the lighter board presentation",
+        }}
+      />,
     );
+
+    const toggle = screen.getByRole("button", { name: "Expand title" });
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Collapse title" })).toBeInTheDocument();
+  });
+
+  it("renders description when provided", () => {
+    render(<TaskCard task={{ ...baseTask, description: "A task description" }} />);
     expect(screen.getByText("A task description")).toBeInTheDocument();
   });
 
@@ -70,17 +84,13 @@ describe("TaskCard", () => {
   });
 
   it("renders assigned agent name", () => {
-    render(
-      <TaskCard task={{ ...baseTask, assignedAgent: "agent-alpha" }} />
-    );
+    render(<TaskCard task={{ ...baseTask, assignedAgent: "agent-alpha" }} />);
     expect(screen.getByText("agent-alpha")).toBeInTheDocument();
   });
 
   it("has correct aria-label with title and status", () => {
     render(<TaskCard task={baseTask} />);
-    expect(
-      screen.getByRole("article", { name: "Test task - inbox" })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Test task - inbox" })).toBeInTheDocument();
   });
 
   it("applies violet border for inbox status", () => {
@@ -90,9 +100,7 @@ describe("TaskCard", () => {
   });
 
   it("applies blue border for in_progress status", () => {
-    render(
-      <TaskCard task={{ ...baseTask, status: "in_progress" }} />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "in_progress" }} />);
     const card = screen.getByRole("article");
     expect(card.className).toContain("border-l-blue-500");
   });
@@ -117,37 +125,25 @@ describe("TaskCard", () => {
   });
 
   it("shows HITL badge for human_approved tasks", () => {
-    render(
-      <TaskCard task={{ ...baseTask, trustLevel: "human_approved" }} />
-    );
+    render(<TaskCard task={{ ...baseTask, trustLevel: "human_approved" }} />);
     expect(screen.getByText("HITL")).toBeInTheDocument();
   });
 
   // --- Story 6.1: Approve button ---
 
   it("shows Approve button for human_approved tasks in review", () => {
-    render(
-      <TaskCard
-        task={{ ...baseTask, status: "review", trustLevel: "human_approved" }}
-      />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review", trustLevel: "human_approved" }} />);
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
   });
 
   it("does not show Approve button for autonomous tasks in review", () => {
-    render(
-      <TaskCard
-        task={{ ...baseTask, status: "review", trustLevel: "autonomous" }}
-      />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review", trustLevel: "autonomous" }} />);
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 
   it("does not show Approve button for human_approved tasks not in review", () => {
     render(
-      <TaskCard
-        task={{ ...baseTask, status: "in_progress", trustLevel: "human_approved" }}
-      />
+      <TaskCard task={{ ...baseTask, status: "in_progress", trustLevel: "human_approved" }} />,
     );
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
@@ -159,7 +155,7 @@ describe("TaskCard", () => {
       <TaskCard
         task={{ ...baseTask, status: "review", trustLevel: "human_approved" }}
         onClick={onClick}
-      />
+      />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(mockApproveMutation).toHaveBeenCalledWith({ taskId: "task1" });
@@ -170,28 +166,18 @@ describe("TaskCard", () => {
   // --- Story 7.1: Awaiting Kick-off badge (AC: 6.2) ---
 
   it("shows Awaiting Kick-off badge when task is in review with awaitingKickoff=true", () => {
-    render(
-      <TaskCard
-        task={{ ...baseTask, status: "review", awaitingKickoff: true } as never}
-      />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review", awaitingKickoff: true } as never} />);
     expect(screen.getByTestId("awaiting-kickoff-badge")).toBeInTheDocument();
     expect(screen.getByText("Awaiting Kick-off")).toBeInTheDocument();
   });
 
   it("does not show Awaiting Kick-off badge for review tasks without awaitingKickoff", () => {
-    render(
-      <TaskCard task={{ ...baseTask, status: "review" }} />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review" }} />);
     expect(screen.queryByTestId("awaiting-kickoff-badge")).not.toBeInTheDocument();
   });
 
   it("does not show regular status badge when awaitingKickoff=true (badge is suppressed)", () => {
-    render(
-      <TaskCard
-        task={{ ...baseTask, status: "review", awaitingKickoff: true } as never}
-      />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review", awaitingKickoff: true } as never} />);
     // The regular review status badge is hidden when awaitingKickoff=true
     const badges = screen.queryAllByText("review");
     expect(badges).toHaveLength(0);
@@ -200,19 +186,13 @@ describe("TaskCard", () => {
   // --- Story 7.4: Paused badge ---
 
   it("shows Paused badge when task is in review without awaitingKickoff (AC 6)", () => {
-    render(
-      <TaskCard task={{ ...baseTask, status: "review" }} />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review" }} />);
     expect(screen.getByTestId("paused-badge")).toBeInTheDocument();
     expect(screen.getByText("Paused")).toBeInTheDocument();
   });
 
   it("does NOT show Paused badge when task has awaitingKickoff=true (AC 6)", () => {
-    render(
-      <TaskCard
-        task={{ ...baseTask, status: "review", awaitingKickoff: true } as never}
-      />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review", awaitingKickoff: true } as never} />);
     expect(screen.queryByTestId("paused-badge")).not.toBeInTheDocument();
   });
 
@@ -222,20 +202,14 @@ describe("TaskCard", () => {
   });
 
   it("suppresses regular status badge for all review tasks (AC 6)", () => {
-    render(
-      <TaskCard task={{ ...baseTask, status: "review" }} />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review" }} />);
     // The regular status badge showing "review" text must not appear
     const reviewBadges = screen.queryAllByText("review");
     expect(reviewBadges).toHaveLength(0);
   });
 
   it("suppresses regular status badge for review+awaitingKickoff tasks (AC 6)", () => {
-    render(
-      <TaskCard
-        task={{ ...baseTask, status: "review", awaitingKickoff: true } as never}
-      />
-    );
+    render(<TaskCard task={{ ...baseTask, status: "review", awaitingKickoff: true } as never} />);
     const reviewBadges = screen.queryAllByText("review");
     expect(reviewBadges).toHaveLength(0);
   });
@@ -257,7 +231,7 @@ describe("TaskCard", () => {
             },
           ],
         }}
-      />
+      />,
     );
     expect(screen.getByText("1")).toBeInTheDocument();
   });
@@ -268,7 +242,7 @@ describe("TaskCard", () => {
     const card = screen.getByRole("article");
     const fileSpans = card.querySelectorAll("span.inline-flex");
     const fileIndicator = Array.from(fileSpans).find(
-      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? "")
+      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? ""),
     );
     expect(fileIndicator).toBeUndefined();
   });
@@ -302,7 +276,7 @@ describe("TaskCard", () => {
             },
           ],
         }}
-      />
+      />,
     );
     expect(screen.getByText("3")).toBeInTheDocument();
   });

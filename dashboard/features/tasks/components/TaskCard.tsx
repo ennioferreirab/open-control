@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   Clock,
   ListChecks,
   Paperclip,
@@ -40,6 +42,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
   const [showRejection, setShowRejection] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [titleExpanded, setTitleExpanded] = useState(false);
   const colors = STATUS_COLORS[task.status as TaskStatus] ?? STATUS_COLORS.inbox;
   const showHitlButtons = task.status === "review" && task.trustLevel === "human_approved";
   const isManual = task.isManual === true;
@@ -51,14 +54,6 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
   const showProgress =
     totalSteps > 1 && (task.status === "in_progress" || task.status === "retrying");
   const awaitingKickoff = task.awaitingKickoff === true;
-  const assignedAgentInitials = task.assignedAgent
-    ? task.assignedAgent
-        .split(/[\s-_]+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((word) => word[0]?.toUpperCase() ?? "")
-        .join("")
-    : "?";
 
   return (
     <div
@@ -81,7 +76,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
       >
         <Card
           className={[
-            "cursor-pointer rounded-[10px] border-l-[3px] p-3.5 transition-shadow hover:shadow-md",
+            "cursor-pointer rounded-[10px] border-l-[3px] p-4 transition-shadow hover:shadow-md",
             colors.border,
             isDragging ? "opacity-50 shadow-lg" : "",
             isManual ? "cursor-grab" : "",
@@ -90,8 +85,12 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
           role="article"
           aria-label={`${task.title} - ${task.status}`}
         >
-          <div className="mb-1.5 flex items-start justify-between gap-2">
-            <h3 className="min-w-0 text-sm font-semibold text-foreground line-clamp-2">
+          <div className="flex items-start justify-between gap-2">
+            <h3
+              className={`min-w-0 text-sm font-semibold text-foreground ${
+                titleExpanded ? "" : "line-clamp-2"
+              }`}
+            >
               {task.title}
             </h3>
             <div className="mt-0.5 flex shrink-0 items-center gap-1">
@@ -107,14 +106,29 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
                 }}
               />
               {isManual && <User className="h-3.5 w-3.5 text-muted-foreground" />}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTitleExpanded((value) => !value);
+                }}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={titleExpanded ? "Collapse title" : "Expand title"}
+              >
+                {titleExpanded ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+              </button>
               {task.status === "crashed" && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
             </div>
           </div>
           {task.description && (
-            <p className="mb-2 text-xs text-muted-foreground line-clamp-2">{task.description}</p>
+            <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{task.description}</p>
           )}
           {task.tags && task.tags.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1">
+            <div className="mt-2 flex flex-wrap gap-1">
               {task.tags.map((tag) => {
                 const colorKey = tagColorMap?.[tag];
                 const color = colorKey ? TAG_COLORS[colorKey] : null;
@@ -134,8 +148,8 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
               })}
             </div>
           )}
-          {totalSteps > 1 && (
-            <div className="mb-1 flex items-center gap-1">
+          {totalSteps > 0 && (
+            <div className="mt-1.5 flex items-center gap-1">
               <ListChecks className="h-3 w-3 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">
                 {completedSteps}/{totalSteps} steps
@@ -143,19 +157,17 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
             </div>
           )}
           {showProgress && (
-            <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-blue-500 transition-[width] duration-200"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
           )}
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {task.assignedAgent && (
-              <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                <span className="flex h-4 w-4 items-center justify-center rounded-[5px] bg-muted text-[9px] font-semibold text-foreground">
-                  {assignedAgentInitials}
-                </span>
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-400" />
                 <span className="truncate">{task.assignedAgent}</span>
               </span>
             )}
@@ -187,7 +199,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
               </Badge>
             )}
           </div>
-          <div className="mt-2 flex items-center justify-between">
+          <div className="mt-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {task.trustLevel !== "autonomous" && (
                 <span className="inline-flex items-center gap-1">

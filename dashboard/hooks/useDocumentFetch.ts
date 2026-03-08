@@ -1,9 +1,17 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 
 interface FileRef {
   name: string;
   subfolder: string;
+}
+
+interface FetchState {
+  requestKey: string | null;
+  content: string | null;
+  blobUrl: string | null;
+  error: string | null;
 }
 
 interface FetchResult {
@@ -15,52 +23,108 @@ interface FetchResult {
 
 const BINARY_EXTS = new Set(["pdf", "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg"]);
 
+const INITIAL_STATE: FetchState = {
+  requestKey: null,
+  content: null,
+  blobUrl: null,
+  error: null,
+};
+
 function isBinary(filename: string): boolean {
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   return BINARY_EXTS.has(ext);
 }
 
+function getRequestKey(taskId: string, file: FileRef | null): string | null {
+  if (!file) {
+    return null;
+  }
+
+  return `${taskId}:${file.subfolder}:${file.name}`;
+}
+
 export function useDocumentFetch(taskId: string, file: FileRef | null): FetchResult {
-  const [content, setContent] = useState<string | null>(null);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<FetchState>(INITIAL_STATE);
+  const requestKey = useMemo(() => getRequestKey(taskId, file), [taskId, file]);
 
   useEffect(() => {
-    if (!file) {
-      setContent(null);
-      setBlobUrl(null);
-      setError(null);
+    if (!file || !requestKey) {
       return;
     }
 
-    let objectUrl: string | null = null;
-    setLoading(true);
-    setContent(null);
-    setBlobUrl(null);
-    setError(null);
+    const controller = new AbortController();
+    let isActive = true;
+    let createdObjectUrl: string | null = null;
 
-    const url = `/api/tasks/${taskId}/files/${file.subfolder}/${encodeURIComponent(file.name)}`;
+    const load = async () => {
+      try {
+        const url = `/api/tasks/${taskId}/files/${file.subfolder}/${encodeURIComponent(file.name)}`;
+        const response = await fetch(url, { signal: controller.signal });
 
-    fetch(url)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        if (isBinary(file.name)) {
-          const blob = await res.blob();
-          objectUrl = URL.createObjectURL(blob);
-          setBlobUrl(objectUrl);
-        } else {
-          const text = await res.text();
-          setContent(text);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
-      })
-      .catch((err) => setError(err.message ?? "Failed to load file"))
-      .finally(() => setLoading(false));
+
+        let nextContent: string | null = null;
+        if (isBinary(file.name)) {
+          const blob = await response.blob();
+          createdObjectUrl = URL.createObjectURL(blob);
+        } else {
+          nextContent = await response.text();
+        }
+
+        if (!isActive) {
+          if (createdObjectUrl) {
+            URL.revokeObjectURL(createdObjectUrl);
+          }
+          return;
+        }
+
+        setState({
+          requestKey,
+          content: nextContent,
+          blobUrl: createdObjectUrl,
+          error: null,
+        });
+      } catch (error) {
+        if (!isActive || controller.signal.aborted) {
+          return;
+        }
+
+        setState({
+          requestKey,
+          content: null,
+          blobUrl: null,
+          error: error instanceof Error ? error.message : "Failed to load file",
+        });
+      }
+    };
+
+    void load();
 
     return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      isActive = false;
+      controller.abort();
+      if (createdObjectUrl) {
+        URL.revokeObjectURL(createdObjectUrl);
+      }
     };
-  }, [taskId, file?.name, file?.subfolder]);
+  }, [file, requestKey, taskId]);
 
-  return { content, blobUrl, loading, error };
+  if (!file || !requestKey) {
+    return {
+      content: null,
+      blobUrl: null,
+      loading: false,
+      error: null,
+    };
+  }
+
+  const isResolvedForCurrentFile = state.requestKey === requestKey;
+  return {
+    content: isResolvedForCurrentFile ? state.content : null,
+    blobUrl: isResolvedForCurrentFile ? state.blobUrl : null,
+    loading: !isResolvedForCurrentFile,
+    error: isResolvedForCurrentFile ? state.error : null,
+  };
 }
