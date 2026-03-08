@@ -1,0 +1,991 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Check, Lock, Pencil, Trash2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SkillsSelector } from "@/components/SkillsSelector";
+import { PromptEditModal, type PromptVariable } from "@/components/PromptEditModal";
+import { AgentTextViewerModal } from "@/components/AgentTextViewerModal";
+import { getAvatarColor, getInitials } from "@/components/AgentSidebarItem";
+import { useAgentConfigSheetData } from "@/hooks/useAgentConfigSheetData";
+import type { AgentStatus } from "@/lib/constants";
+import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
+
+const STATUS_DOT_STYLES: Record<string, string> = {
+  active: "bg-blue-500",
+  idle: "bg-muted-foreground",
+  crashed: "bg-red-500",
+};
+
+type ModelMode = "default" | "tier" | "cc" | "custom";
+
+const TIER_LEVEL_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+] as const;
+
+const CC_MODEL_OPTIONS = ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-6"] as const;
+
+function readOptionalStringField(value: unknown, field: string): string {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const candidate = (value as Record<string, unknown>)[field];
+  return typeof candidate === "string" ? candidate : "";
+}
+
+/** Parse a stored model string into modelMode + tierLevel + hadReasoning + customModel. */
+function parseModelValue(model: string): {
+  modelMode: ModelMode;
+  tierLevel: string;
+  hadReasoning: boolean;
+  customModel: string;
+} {
+  if (!model) {
+    return { modelMode: "default", tierLevel: "", hadReasoning: false, customModel: "" };
+  }
+  if (model.startsWith("cc/")) {
+    return { modelMode: "cc", tierLevel: "", hadReasoning: false, customModel: model.slice(3) };
+  }
+  if (model.startsWith("tier:reasoning-")) {
+    return {
+      modelMode: "tier",
+      tierLevel: model.replace("tier:reasoning-", ""),
+      hadReasoning: true,
+      customModel: "",
+    };
+  }
+  if (model.startsWith("tier:standard-")) {
+    return {
+      modelMode: "tier",
+      tierLevel: model.replace("tier:standard-", ""),
+      hadReasoning: false,
+      customModel: "",
+    };
+  }
+  if (model.startsWith("tier:")) {
+    return {
+      modelMode: "tier",
+      tierLevel: model.replace("tier:", ""),
+      hadReasoning: false,
+      customModel: "",
+    };
+  }
+  return { modelMode: "custom", tierLevel: "", hadReasoning: false, customModel: model };
+}
+
+interface AgentConfigSheetProps {
+  agentName: string | null;
+  onClose: () => void;
+}
+
+interface FormErrors {
+  role?: string;
+  prompt?: string;
+}
+
+export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) {
+  const { agent, updateConfig, setEnabled, connectedModels, modelTiers } =
+    useAgentConfigSheetData(agentName);
+
+  // Form state
+  const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [skills, setSkills] = useState<string[]>([]);
+  const [modelMode, setModelMode] = useState<ModelMode>("default");
+  const [tierLevel, setTierLevel] = useState("");
+  const [reasoningLevel, setReasoningLevel] = useState("");
+  const [customModel, setCustomModel] = useState("");
+  const [ccPermissionMode, setCcPermissionMode] = useState<string>("bypassPermissions");
+  const [ccMaxBudget, setCcMaxBudget] = useState<string>("");
+  const [ccMaxTurns, setCcMaxTurns] = useState<string>("");
+  const [enabled, setEnabledState] = useState(true);
+
+  // UI state
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  const [variables, setVariables] = useState<PromptVariable[]>([]);
+  const [showPromptModal, setShowPromptModal] = useState(false);
+
+  // Memory/history state (read-only, not part of form dirty state)
+  const [memory, setMemory] = useState<string | null>(null);
+  const [history, setHistory] = useState<string | null>(null);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [showMemoryModal, setShowMemoryModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  // Compute the model string from the current mode
+  const computedModel = useMemo(() => {
+    switch (modelMode) {
+      case "tier":
+        return tierLevel ? `tier:standard-${tierLevel}` : "";
+      case "cc":
+        return customModel ? `cc/${customModel}` : "";
+      case "custom":
+        return customModel;
+      default:
+        return "";
+    }
+  }, [modelMode, tierLevel, customModel]);
+
+  // Initialize local draft state from the persisted agent record.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (agent) {
+      setDisplayName(agent.displayName);
+      setRole(agent.role);
+      setPrompt(agent.prompt || "");
+      setSkills(agent.skills);
+      const parsed = parseModelValue(agent.model || "");
+      setModelMode(parsed.modelMode);
+      setTierLevel(parsed.tierLevel);
+      // Reasoning only applies to custom mode; tier uses global settings
+      setReasoningLevel(
+        parsed.modelMode === "custom" ? readOptionalStringField(agent, "reasoningLevel") : "",
+      );
+      setCustomModel(parsed.customModel);
+      const ccOpts = agent.claudeCodeOpts;
+      setCcPermissionMode(ccOpts?.permissionMode ?? "bypassPermissions");
+      setCcMaxBudget(ccOpts?.maxBudgetUsd != null ? String(ccOpts.maxBudgetUsd) : "");
+      setCcMaxTurns(ccOpts?.maxTurns != null ? String(ccOpts.maxTurns) : "");
+      setEnabledState(agent.enabled !== false);
+      setErrors({});
+      setSaveError(null);
+      setShowSuccess(false);
+      setVariables(agent.variables || []);
+    }
+  }, [agent]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Fetch memory/history files (read-only, does NOT affect isDirty)
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!agentName) return;
+    let cancelled = false;
+    setMemory(null);
+    setHistory(null);
+    setMemoryLoading(true);
+    setHistoryLoading(true);
+
+    fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/MEMORY.md`)
+      .then((r) => (r.ok ? r.text() : null))
+      .then((text) => {
+        if (!cancelled) setMemory(text);
+      })
+      .finally(() => {
+        if (!cancelled) setMemoryLoading(false);
+      });
+
+    fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/HISTORY.md`)
+      .then((r) => (r.ok ? r.text() : null))
+      .then((text) => {
+        if (!cancelled) setHistory(text);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agentName]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const handleSaveMemory = useCallback(
+    async (content: string) => {
+      if (!agentName) return;
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/MEMORY.md`, {
+        method: "PUT",
+        body: content,
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setMemory(content || null);
+    },
+    [agentName],
+  );
+
+  const handleSaveHistory = useCallback(
+    async (content: string) => {
+      if (!agentName) return;
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/HISTORY.md`, {
+        method: "PUT",
+        body: content,
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setHistory(content || null);
+    },
+    [agentName],
+  );
+
+  const [clearTarget, setClearTarget] = useState<"memory" | "history" | null>(null);
+
+  const handleConfirmClear = useCallback(async () => {
+    if (!agentName || !clearTarget) return;
+    const filename = clearTarget === "memory" ? "MEMORY.md" : "HISTORY.md";
+    await fetch(`/api/agents/${encodeURIComponent(agentName)}/memory/${filename}`, {
+      method: "PUT",
+      body: "",
+    });
+    if (clearTarget === "memory") setMemory(null);
+    else setHistory(null);
+    setClearTarget(null);
+  }, [agentName, clearTarget]);
+
+  // Dirty state detection
+  const isDirty = useMemo(() => {
+    if (!agent) return false;
+    const existingCc = agent.claudeCodeOpts;
+    const ccDirty =
+      modelMode === "cc" &&
+      (ccPermissionMode !== (existingCc?.permissionMode ?? "bypassPermissions") ||
+        ccMaxBudget !== (existingCc?.maxBudgetUsd != null ? String(existingCc.maxBudgetUsd) : "") ||
+        ccMaxTurns !== (existingCc?.maxTurns != null ? String(existingCc.maxTurns) : ""));
+    return (
+      displayName !== agent.displayName ||
+      role !== agent.role ||
+      prompt !== (agent.prompt || "") ||
+      JSON.stringify(skills) !== JSON.stringify(agent.skills) ||
+      computedModel !== (agent.model || "") ||
+      (reasoningLevel || "") !== readOptionalStringField(agent, "reasoningLevel") ||
+      ccDirty ||
+      enabled !== (agent.enabled !== false) ||
+      JSON.stringify(variables) !== JSON.stringify(agent.variables || [])
+    );
+  }, [
+    agent,
+    displayName,
+    role,
+    prompt,
+    skills,
+    computedModel,
+    reasoningLevel,
+    modelMode,
+    ccPermissionMode,
+    ccMaxBudget,
+    ccMaxTurns,
+    enabled,
+    variables,
+  ]);
+
+  // Validation
+  const validate = useCallback((): boolean => {
+    const newErrors: FormErrors = {};
+    if (!role.trim()) {
+      newErrors.role = "Agent role cannot be empty.";
+    }
+    if (!prompt.trim()) {
+      newErrors.prompt = "Agent prompt cannot be empty.";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [role, prompt]);
+
+  const handleSave = useCallback(async () => {
+    if (!validate() || !agentName) return;
+    setSaveError(null);
+
+    try {
+      const claudeCodeOpts =
+        modelMode === "cc"
+          ? {
+              permissionMode: ccPermissionMode || undefined,
+              maxBudgetUsd: ccMaxBudget ? parseFloat(ccMaxBudget) : undefined,
+              maxTurns: ccMaxTurns ? parseInt(ccMaxTurns, 10) : undefined,
+            }
+          : undefined;
+      await Promise.all([
+        // Save to Convex
+        updateConfig({
+          name: agentName,
+          displayName,
+          role,
+          prompt,
+          skills,
+          model: computedModel || undefined,
+          variables,
+          reasoningLevel: reasoningLevel || undefined,
+          claudeCodeOpts,
+        }),
+        // Write YAML directly to disk
+        fetch(`/api/agents/${encodeURIComponent(agentName)}/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            role,
+            prompt,
+            model: computedModel || null,
+            display_name: displayName,
+            skills,
+            claude_code:
+              modelMode === "cc"
+                ? {
+                    permission_mode: ccPermissionMode || undefined,
+                    max_budget_usd: ccMaxBudget ? parseFloat(ccMaxBudget) : null,
+                    max_turns: ccMaxTurns ? parseInt(ccMaxTurns, 10) : null,
+                  }
+                : undefined,
+          }),
+        }),
+      ]);
+
+      // Persist enabled state change if it differs from server
+      if (agent && enabled !== (agent.enabled !== false)) {
+        await setEnabled({ agentName: agent.name, enabled });
+      }
+
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 1500);
+    } catch {
+      setSaveError("Failed to save. Please try again.");
+    }
+  }, [
+    agentName,
+    agent,
+    displayName,
+    role,
+    prompt,
+    skills,
+    computedModel,
+    modelMode,
+    reasoningLevel,
+    ccPermissionMode,
+    ccMaxBudget,
+    ccMaxTurns,
+    enabled,
+    variables,
+    validate,
+    updateConfig,
+    setEnabled,
+  ]);
+
+  const handleClose = useCallback(() => {
+    if (isDirty) {
+      setShowDiscardDialog(true);
+    } else {
+      onClose();
+    }
+  }, [isDirty, onClose]);
+
+  const handleDiscard = useCallback(() => {
+    setShowDiscardDialog(false);
+    onClose();
+  }, [onClose]);
+
+  const handlePromptModalSave = useCallback(
+    (newPrompt: string, newVariables: PromptVariable[]) => {
+      setPrompt(newPrompt);
+      setVariables(newVariables);
+      if (errors.prompt && newPrompt.trim()) {
+        setErrors((prev) => ({ ...prev, prompt: undefined }));
+      }
+    },
+    [errors.prompt],
+  );
+
+  const isLoaded = agent != null && typeof agent === "object" && "name" in agent;
+  const isSystemAgent = isLoaded && SYSTEM_AGENT_NAMES.has(agent.name);
+  const hasErrors = Object.keys(errors).length > 0;
+
+  return (
+    <>
+      <Sheet open={!!agentName} onOpenChange={(open) => !open && handleClose()}>
+        <SheetContent side="right" className="w-[480px] sm:w-[480px] flex flex-col p-0">
+          {isLoaded ? (
+            <>
+              <SheetHeader className="px-6 pt-6 pb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white ${getAvatarColor(agent.name)}`}
+                  >
+                    {getInitials(agent.displayName)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <SheetTitle className="text-lg font-semibold">{agent.displayName}</SheetTitle>
+                    <SheetDescription asChild>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`h-2 w-2 rounded-full ${agent.enabled === false ? "bg-red-500" : STATUS_DOT_STYLES[agent.status as AgentStatus] || STATUS_DOT_STYLES.idle}`}
+                        />
+                        <span className="text-xs">
+                          {agent.enabled === false ? "Deactivated" : agent.status}
+                        </span>
+                      </div>
+                    </SheetDescription>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              <Separator />
+
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                {saveError && (
+                  <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
+                    <p className="text-sm text-destructive">{saveError}</p>
+                  </div>
+                )}
+
+                {/* Active toggle */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="agent-enabled-toggle" className="text-sm font-medium">
+                      {isSystemAgent ? "Active (System)" : enabled ? "Active" : "Deactivated"}
+                    </label>
+                    <Switch
+                      id="agent-enabled-toggle"
+                      checked={enabled}
+                      onCheckedChange={(checked) => setEnabledState(checked)}
+                      disabled={isSystemAgent}
+                    />
+                  </div>
+                  {isSystemAgent ? (
+                    <p className="text-xs text-muted-foreground">
+                      System agents cannot be deactivated
+                    </p>
+                  ) : !enabled ? (
+                    <p className="text-xs text-muted-foreground">
+                      This agent will not receive new tasks
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Name (read-only) */}
+                <div className="space-y-1">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    Name
+                    <Lock className="h-3 w-3 text-muted-foreground" />
+                  </label>
+                  <Input value={agent.name} disabled className="bg-muted" />
+                </div>
+
+                {/* Display Name */}
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Display Name</label>
+                  <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+                </div>
+
+                {/* Role */}
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Role</label>
+                  <Input
+                    value={role}
+                    onChange={(e) => {
+                      setRole(e.target.value);
+                      if (errors.role) setErrors((prev) => ({ ...prev, role: undefined }));
+                    }}
+                    onBlur={() => {
+                      if (!role.trim())
+                        setErrors((prev) => ({ ...prev, role: "Agent role cannot be empty." }));
+                    }}
+                    className={errors.role ? "border-red-500" : ""}
+                  />
+                  {errors.role && <p className="text-xs text-red-500">{errors.role}</p>}
+                </div>
+
+                {/* Prompt */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="agent-prompt" className="text-sm font-medium">
+                      Prompt
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Edit prompt"
+                      className="h-6 px-2 text-xs gap-1"
+                      onClick={() => setShowPromptModal(true)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </Button>
+                  </div>
+                  <Textarea
+                    id="agent-prompt"
+                    value={prompt}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      if (errors.prompt) setErrors((prev) => ({ ...prev, prompt: undefined }));
+                    }}
+                    onBlur={() => {
+                      if (!prompt.trim())
+                        setErrors((prev) => ({ ...prev, prompt: "Agent prompt cannot be empty." }));
+                    }}
+                    className={`font-mono min-h-[150px] resize-y ${errors.prompt ? "border-red-500" : ""}`}
+                    rows={6}
+                  />
+                  {errors.prompt && <p className="text-xs text-red-500">{errors.prompt}</p>}
+                  {variables.length > 0 && (
+                    <TooltipProvider>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {variables.map((v) => (
+                          <Tooltip key={v.name}>
+                            <TooltipTrigger asChild>
+                              <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-mono font-semibold cursor-default">
+                                {`{{${v.name}}}`}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {v.value ? (
+                                <span className="font-mono">{v.value}</span>
+                              ) : (
+                                <span className="italic text-muted-foreground">no value set</span>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    </TooltipProvider>
+                  )}
+                </div>
+
+                {/* Model */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Model</label>
+                  <Select
+                    value={
+                      modelMode === "default"
+                        ? "__default__"
+                        : modelMode === "cc"
+                          ? "__cc__"
+                          : modelMode === "tier"
+                            ? tierLevel || "__default__"
+                            : "__custom__"
+                    }
+                    onValueChange={(value) => {
+                      if (value === "__default__") {
+                        setModelMode("default");
+                        setTierLevel("");
+                        setCustomModel("");
+                      } else if (value === "__custom__") {
+                        setModelMode("custom");
+                        setTierLevel("");
+                      } else if (value === "__cc__") {
+                        setModelMode("cc");
+                        setTierLevel("");
+                        setReasoningLevel("");
+                        setCustomModel("claude-sonnet-4-6");
+                        setCcPermissionMode("bypassPermissions");
+                      } else {
+                        // Must be a tier level value (low/medium/high)
+                        setModelMode("tier");
+                        setTierLevel(value);
+                        setReasoningLevel("");
+                        setCustomModel("");
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select model configuration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">System Default</SelectItem>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel>Tier Presets</SelectLabel>
+                        {TIER_LEVEL_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectSeparator />
+                      <SelectItem value="__cc__">Claude Code...</SelectItem>
+                      <SelectSeparator />
+                      <SelectItem value="__custom__">Custom...</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {modelMode === "custom" && (
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">Reasoning</label>
+                      <Select
+                        value={reasoningLevel || "__off__"}
+                        onValueChange={(val) => setReasoningLevel(val === "__off__" ? "" : val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__off__">Off</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="max">Max</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Reasoning, if model supports it
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Custom model selector — only visible in custom mode */}
+                  {modelMode === "custom" && (
+                    <Select
+                      value={customModel || "__none__"}
+                      onValueChange={(value) => {
+                        setCustomModel(value === "__none__" ? "" : value);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a connected model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__" disabled>
+                          Select a model...
+                        </SelectItem>
+                        {connectedModels.map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {/* Visual indicator badge */}
+                  {modelMode === "default" && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-muted text-muted-foreground font-normal"
+                    >
+                      System Default
+                    </Badge>
+                  )}
+                  {modelMode === "tier" &&
+                    tierLevel &&
+                    (() => {
+                      const fullTier = `standard-${tierLevel}`;
+                      const tierLabel = tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1);
+                      const resolvedModel = modelTiers[fullTier];
+                      const isConfigured = resolvedModel != null && resolvedModel !== "";
+                      return isConfigured ? (
+                        <Badge
+                          variant="secondary"
+                          className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-normal"
+                        >
+                          {tierLabel} &rarr; {resolvedModel}
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="secondary"
+                          className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal"
+                        >
+                          {tierLabel} (not configured)
+                        </Badge>
+                      );
+                    })()}
+                  {modelMode === "custom" && customModel && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal"
+                    >
+                      Custom: {customModel}
+                    </Badge>
+                  )}
+                  {modelMode === "cc" && customModel && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-normal"
+                    >
+                      Claude Code: cc/{customModel}
+                    </Badge>
+                  )}
+                </div>
+
+                {modelMode === "cc" && (
+                  <div className="space-y-3 border-t pt-3">
+                    <label className="text-sm font-semibold">Claude Code Settings</label>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">CC Model</label>
+                      <Select
+                        value={customModel || "__none__"}
+                        onValueChange={(value) => {
+                          setCustomModel(value === "__none__" ? "" : value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Claude Code model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__" disabled>
+                            Select a model...
+                          </SelectItem>
+                          {CC_MODEL_OPTIONS.map((m) => (
+                            <SelectItem key={m} value={m}>
+                              {m}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Permission Mode</label>
+                      <Select value={ccPermissionMode} onValueChange={setCcPermissionMode}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bypassPermissions">
+                            Bypass - all tools run without approval
+                          </SelectItem>
+                          <SelectItem value="acceptEdits">
+                            Accept Edits - file edits auto-approved
+                          </SelectItem>
+                          <SelectItem value="default">
+                            Default - follows system CC defaults
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Max Budget (USD)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        placeholder="No limit"
+                        value={ccMaxBudget}
+                        onChange={(e) => setCcMaxBudget(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Max Turns</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="No limit"
+                        value={ccMaxTurns}
+                        onChange={(e) => setCcMaxTurns(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Skills */}
+                <SkillsSelector selected={skills} onChange={setSkills} />
+
+                {/* Memory */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Memory</label>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs gap-1"
+                        onClick={() => setShowMemoryModal(true)}
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Edit
+                      </Button>
+                      {memory && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive"
+                          onClick={() => setClearTarget("memory")}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {memoryLoading ? (
+                    <p className="text-xs text-muted-foreground">Loading...</p>
+                  ) : memory ? (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 max-h-[80px] overflow-hidden">
+                      <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap line-clamp-4">
+                        {memory}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">No memory yet.</p>
+                  )}
+                </div>
+
+                {/* History */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">History</label>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs gap-1"
+                        onClick={() => setShowHistoryModal(true)}
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Edit
+                      </Button>
+                      {history && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive"
+                          onClick={() => setClearTarget("history")}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {historyLoading ? (
+                    <p className="text-xs text-muted-foreground">Loading...</p>
+                  ) : history ? (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 max-h-[80px] overflow-hidden">
+                      <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap line-clamp-4">
+                        {history}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">No history yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 px-6 py-4">
+                <Button variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={!isDirty || hasErrors}>
+                  {showSuccess ? (
+                    <span className="flex items-center gap-1.5">
+                      <Check className="h-4 w-4 text-green-500" />
+                      Saved
+                    </span>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : agentName ? (
+            <SheetHeader className="px-6 pt-6 pb-4">
+              <SheetTitle className="text-lg font-semibold">Loading...</SheetTitle>
+              <SheetDescription>Loading agent configuration</SheetDescription>
+            </SheetHeader>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+
+      <AlertDialog
+        open={!!clearTarget}
+        onOpenChange={(open) => {
+          if (!open) setClearTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Clear {clearTarget === "memory" ? "Memory" : "History"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently erase the agent&apos;s{" "}
+              {clearTarget === "memory" ? "memory" : "history"}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmClear}
+            >
+              Clear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to close without saving?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDiscard}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {isLoaded && (
+        <>
+          <PromptEditModal
+            open={showPromptModal}
+            onClose={() => setShowPromptModal(false)}
+            onSave={handlePromptModalSave}
+            initialPrompt={prompt}
+            initialVariables={variables}
+          />
+          <AgentTextViewerModal
+            open={showMemoryModal}
+            onClose={() => setShowMemoryModal(false)}
+            title="Memory"
+            content={memory || ""}
+            editable
+            onSave={handleSaveMemory}
+          />
+          <AgentTextViewerModal
+            open={showHistoryModal}
+            onClose={() => setShowHistoryModal(false)}
+            title="History"
+            content={history || ""}
+            editable
+            onSave={handleSaveHistory}
+          />
+        </>
+      )}
+    </>
+  );
+}

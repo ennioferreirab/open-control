@@ -5,8 +5,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 MC_ROOT = Path(__file__).resolve().parents[3] / "mc"
 ALLOWED_RELATIVE_PATHS = {
     Path("__init__.py"),
@@ -48,6 +46,5 @@ def test_no_internal_module_imports_runtime_gateway() -> None:
             violations.append(f"{relative}: {lines}")
 
     assert violations == [], (
-        "Internal modules must not import mc.runtime.gateway directly.\n"
-        + "\n".join(violations)
+        "Internal modules must not import mc.runtime.gateway directly.\n" + "\n".join(violations)
     )

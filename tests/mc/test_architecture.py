@@ -14,7 +14,10 @@ FOUNDATION_FILES = {
     "mc/bridge/__init__.py": MC_ROOT / "bridge" / "__init__.py",
     "mc/types.py": MC_ROOT / "types.py",
     "mc/domain/workflow/state_machine.py": MC_ROOT / "domain" / "workflow" / "state_machine.py",
-    "mc/application/execution/thread_context.py": MC_ROOT / "application" / "execution" / "thread_context.py",
+    "mc/application/execution/thread_context.py": MC_ROOT
+    / "application"
+    / "execution"
+    / "thread_context.py",
 }
 
 PROTECTED_DIRECTORIES = [
@@ -111,9 +114,7 @@ def _get_all_imports(filepath: Path) -> list[str]:
 def _collect_py_files(directory: Path, exclude: set[str] | None = None) -> list[Path]:
     excluded = exclude or set()
     return [
-        path
-        for path in directory.rglob("*.py")
-        if path.is_file() and path.stem not in excluded
+        path for path in directory.rglob("*.py") if path.is_file() and path.stem not in excluded
     ]
 
 
@@ -126,12 +127,9 @@ def test_foundation_modules_do_not_import_runtime_gateway(
     gateway_imports = [
         module
         for module in imports
-        if module == "mc.runtime.gateway"
-        or module.startswith("mc.runtime.gateway.")
+        if module == "mc.runtime.gateway" or module.startswith("mc.runtime.gateway.")
     ]
-    assert gateway_imports == [], (
-        f"{relative_path} imports mc.runtime.gateway: {gateway_imports}"
-    )
+    assert gateway_imports == [], f"{relative_path} imports mc.runtime.gateway: {gateway_imports}"
 
 
 @pytest.mark.parametrize("directory", PROTECTED_DIRECTORIES)
@@ -148,8 +146,7 @@ def test_protected_directories_do_not_import_runtime_gateway(
         bad = [
             module
             for module in imports
-            if module == "mc.runtime.gateway"
-            or module.startswith("mc.runtime.gateway.")
+            if module == "mc.runtime.gateway" or module.startswith("mc.runtime.gateway.")
         ]
         if bad:
             violations.append(f"{py_file.relative_to(MC_ROOT.parent)}: {bad}")
@@ -163,7 +160,8 @@ def test_runtime_gateway_has_no_toplevel_execution_cycle_imports() -> None:
     forbidden = [
         module
         for module in imports
-        if module in (
+        if module
+        in (
             "mc.contexts.execution.executor",
             "mc.contexts.execution.step_dispatcher",
         )
@@ -179,8 +177,7 @@ def test_execution_executor_does_not_import_runtime_gateway() -> None:
     gateway_imports = [
         module
         for module in imports
-        if module == "mc.runtime.gateway"
-        or module.startswith("mc.runtime.gateway.")
+        if module == "mc.runtime.gateway" or module.startswith("mc.runtime.gateway.")
     ]
     assert gateway_imports == [], gateway_imports
 
@@ -266,11 +263,7 @@ def test_task_status_canonical_in_types() -> None:
 
 
 def test_root_python_modules_are_minimal() -> None:
-    root_modules = sorted(
-        path.stem
-        for path in MC_ROOT.glob("*.py")
-        if path.is_file()
-    )
+    root_modules = sorted(path.stem for path in MC_ROOT.glob("*.py") if path.is_file())
     assert root_modules == ["__init__", "types"], root_modules
 
 
@@ -280,8 +273,7 @@ def test_runtime_orchestrator_has_no_toplevel_gateway_import() -> None:
     gateway_imports = [
         module
         for module in imports
-        if module == "mc.runtime.gateway"
-        or module.startswith("mc.runtime.gateway.")
+        if module == "mc.runtime.gateway" or module.startswith("mc.runtime.gateway.")
     ]
     assert gateway_imports == [], gateway_imports
 
