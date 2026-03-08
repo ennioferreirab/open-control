@@ -115,6 +115,9 @@ class TestIsValidStepTransitionInvalid:
     def test_waiting_human_to_blocked(self) -> None:
         assert is_valid_step_transition(StepStatus.WAITING_HUMAN, StepStatus.BLOCKED) is False
 
+    def test_deleted_to_assigned(self) -> None:
+        assert is_valid_step_transition(StepStatus.DELETED, StepStatus.ASSIGNED) is False
+
 
 # ---------------------------------------------------------------------------
 # validate_step_transition
@@ -244,6 +247,7 @@ def test_step_valid_transitions_match_convex_spec() -> None:
         "crashed": ["assigned"],
         "blocked": ["assigned", "crashed"],
         "waiting_human": ["running", "completed", "crashed"],
+        "deleted": [],
     }
     # Check all expected states are present in Python dict
     assert set(STEP_VALID_TRANSITIONS.keys()) == set(expected.keys()), (

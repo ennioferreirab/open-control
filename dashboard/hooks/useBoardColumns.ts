@@ -44,6 +44,7 @@ export function stepStatusToColumnStatus(
     case "crashed":
       return "in_progress";
     case "completed":
+    case "deleted":
       // Done tasks already skip all steps (line 248-252 of original), so this only
       // affects non-done tasks. Old completed steps from previous runs
       // must not pull an active task into the "Done" column.

@@ -577,6 +577,9 @@ export const retry = mutation({
       });
 
       for (const step of steps) {
+        if (step.status === "deleted") {
+          continue;
+        }
         const nextStatus = (step.blockedBy?.length ?? 0) > 0
           ? "blocked"
           : "assigned";

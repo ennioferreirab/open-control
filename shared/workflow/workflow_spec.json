@@ -83,7 +83,8 @@
     "completed",
     "crashed",
     "blocked",
-    "waiting_human"
+    "waiting_human",
+    "deleted"
   ],
 
   "stepTransitions": {
@@ -93,7 +94,8 @@
     "completed": [],
     "crashed": ["assigned"],
     "blocked": ["assigned", "crashed"],
-    "waiting_human": ["running", "completed", "crashed"]
+    "waiting_human": ["running", "completed", "crashed"],
+    "deleted": []
   },
 
   "stepTransitionEvents": {

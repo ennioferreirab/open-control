@@ -22,6 +22,7 @@ export const STEP_STATUS = {
   CRASHED: "crashed",
   BLOCKED: "blocked",
   WAITING_HUMAN: "waiting_human",
+  DELETED: "deleted",
 } as const;
 
 // Trust level values
@@ -229,6 +230,11 @@ export const STEP_STATUS_COLORS: Record<
     border: "border-l-amber-500",
     bg: "bg-amber-50 dark:bg-amber-950",
     text: "text-amber-700 dark:text-amber-300",
+  },
+  deleted: {
+    border: "border-l-gray-400",
+    bg: "bg-gray-100 dark:bg-gray-900",
+    text: "text-gray-500 dark:text-gray-400",
   },
 };
 

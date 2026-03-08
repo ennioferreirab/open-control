@@ -121,8 +121,11 @@ class TestStepStatuses:
     def test_contains_waiting_human(self) -> None:
         assert "waiting_human" in STEP_STATUSES
 
+    def test_contains_deleted(self) -> None:
+        assert "deleted" in STEP_STATUSES
+
     def test_count(self) -> None:
-        assert len(STEP_STATUSES) == 7
+        assert len(STEP_STATUSES) == 8
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +318,10 @@ class TestGetStepAllowedTransitions:
 
     def test_completed_allowed_empty(self) -> None:
         allowed = get_step_allowed_transitions("completed")
+        assert allowed == []
+
+    def test_deleted_allowed_empty(self) -> None:
+        allowed = get_step_allowed_transitions("deleted")
         assert allowed == []
 
     def test_unknown_status_returns_empty(self) -> None:
@@ -515,6 +522,7 @@ class TestParityWithConvex:
             "crashed": ["assigned"],
             "blocked": ["assigned", "crashed"],
             "waiting_human": ["running", "completed", "crashed"],
+            "deleted": [],
         }
 
         spec_transitions = SPEC["stepTransitions"]

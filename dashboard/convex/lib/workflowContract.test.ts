@@ -38,15 +38,15 @@ describe("STEP_STATUSES", () => {
   it("contains all expected step statuses", () => {
     const expected = [
       "planned", "assigned", "running", "completed",
-      "crashed", "blocked", "waiting_human",
+      "crashed", "blocked", "waiting_human", "deleted",
     ];
     for (const s of expected) {
       expect(STEP_STATUSES).toContain(s);
     }
   });
 
-  it("has exactly 7 statuses", () => {
-    expect(STEP_STATUSES).toHaveLength(7);
+  it("has exactly 8 statuses", () => {
+    expect(STEP_STATUSES).toHaveLength(8);
   });
 });
 
@@ -318,6 +318,10 @@ describe("getStepAllowedTransitions", () => {
 
   it("returns empty for completed", () => {
     expect(getStepAllowedTransitions("completed")).toEqual([]);
+  });
+
+  it("returns empty for deleted", () => {
+    expect(getStepAllowedTransitions("deleted")).toEqual([]);
   });
 
   it("returns empty for unknown status", () => {

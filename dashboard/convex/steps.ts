@@ -177,8 +177,11 @@ export const updateStatus = internalMutation({
   handler: async (ctx, args) => {
     const step = await ctx.db.get(args.stepId);
     if (!step) {
-      // Step may have been deleted as part of task cleanup while the agent was
+      // Step may have been soft-deleted while the agent was
       // still running. Treat late-arriving status updates as a no-op.
+      return;
+    }
+    if (step.status === "deleted") {
       return;
     }
 
@@ -729,32 +732,25 @@ export const deleteStep = mutation({
       throw new ConvexError("Step not found");
     }
 
-    // Only planned, blocked, or assigned human steps can be deleted
-    const deletableStatuses = ["planned", "blocked"];
-    const isAssignedHuman = step.status === "assigned" && step.assignedAgent === "human";
-    if (!deletableStatuses.includes(step.status) && !isAssignedHuman) {
-      throw new ConvexError(
-        `Cannot delete step in '${step.status}' status. Only planned, blocked, or assigned human steps can be deleted.`
-      );
+    if (step.status === "deleted") {
+      return;
     }
 
-    // Clean up blockedBy references in sibling steps
-    const taskSteps = await ctx.db
-      .query("steps")
-      .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
-      .collect();
+    const timestamp = new Date().toISOString();
 
-    for (const sibling of taskSteps) {
-      if (sibling._id === args.stepId) continue;
-      if (sibling.blockedBy && sibling.blockedBy.includes(args.stepId)) {
-        const newBlockedBy = sibling.blockedBy.filter((id) => id !== args.stepId);
-        await ctx.db.patch(sibling._id, {
-          blockedBy: newBlockedBy.length > 0 ? newBlockedBy : undefined,
-        });
-      }
-    }
+    await ctx.db.patch(args.stepId, {
+      status: "deleted",
+      deletedAt: timestamp,
+    });
 
-    await ctx.db.delete(args.stepId);
+    await logStepStatusChange(ctx, {
+      taskId: step.taskId,
+      stepTitle: step.title,
+      previousStatus: step.status,
+      nextStatus: "deleted",
+      assignedAgent: step.assignedAgent,
+      timestamp,
+    });
   },
 });
 

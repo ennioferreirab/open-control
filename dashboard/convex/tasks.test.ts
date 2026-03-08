@@ -360,6 +360,46 @@ describe("tasks.retry", () => {
     });
   });
 
+  it("preserves soft-deleted steps when retrying a task", async () => {
+    const handler = getRetryHandler();
+    const patchedSteps: Record<string, Record<string, unknown>> = {};
+    const task = {
+      _id: "task-1",
+      status: "crashed",
+      title: "Retry with deleted step",
+      executionPlan: { steps: [{ tempId: "s1" }, { tempId: "s2" }] },
+    };
+    const steps = [
+      { _id: "step-1", blockedBy: [], status: "deleted" },
+      { _id: "step-2", blockedBy: ["step-1"], status: "crashed" },
+    ];
+
+    const ctx = {
+      db: {
+        get: async (id: string) => (id === "task-1" ? task : null),
+        patch: async (id: string, value: Record<string, unknown>) => {
+          if (id !== "task-1") patchedSteps[id] = { ...(patchedSteps[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_index: string, _fn: unknown) => ({
+            collect: async () => steps,
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { taskId: "task-1" });
+
+    expect(patchedSteps["step-1"]).toBeUndefined();
+    expect(patchedSteps["step-2"]).toMatchObject({
+      status: "blocked",
+      errorMessage: undefined,
+      startedAt: undefined,
+      completedAt: undefined,
+    });
+  });
+
   it("keeps inbox fallback for failed tasks without plan or steps", async () => {
     const handler = getRetryHandler();
     const patch = vi.fn(async () => undefined);

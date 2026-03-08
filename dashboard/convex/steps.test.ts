@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   acceptHumanStep,
   batchCreate,
+  deleteStep,
   findBlockedStepsReadyToUnblock,
   isValidStepTransition,
   isValidStepStatus,
   retryStep,
   resolveBlockedByIds,
   resolveInitialStepStatus,
+  updateStatus,
 } from "./steps";
 
 describe("isValidStepStatus", () => {
@@ -20,6 +22,7 @@ describe("isValidStepStatus", () => {
     expect(isValidStepStatus("crashed")).toBe(true);
     expect(isValidStepStatus("blocked")).toBe(true);
     expect(isValidStepStatus("waiting_human")).toBe(true);
+    expect(isValidStepStatus("deleted")).toBe(true);
   });
 
   it("rejects unsupported step statuses", () => {
@@ -389,6 +392,40 @@ describe("batchCreate", () => {
   });
 });
 
+describe("updateStatus", () => {
+  function getHandler() {
+    return (updateStatus as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
+    })._handler;
+  }
+
+  it("ignores late-arriving status updates for soft-deleted steps", async () => {
+    const handler = getHandler();
+    const patchedValues: Record<string, unknown>[] = [];
+
+    const ctx = {
+      db: {
+        get: async () => ({
+          _id: "step-1",
+          taskId: "task-1",
+          title: "Run integration",
+          assignedAgent: "nanobot",
+          status: "deleted",
+          deletedAt: "2026-03-08T13:20:00Z",
+        }),
+        patch: async (_id: string, values: Record<string, unknown>) => {
+          patchedValues.push(values);
+        },
+        insert: async () => "activity-1",
+      },
+    };
+
+    await handler(ctx, { stepId: "step-1", status: "completed" });
+
+    expect(patchedValues).toEqual([]);
+  });
+});
+
 describe("retryStep", () => {
   function getHandler() {
     return (retryStep as unknown as {
@@ -474,5 +511,87 @@ describe("retryStep", () => {
     await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(
       /not in crashed status/
     );
+  });
+});
+
+describe("deleteStep", () => {
+  function getHandler() {
+    return (deleteStep as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
+    })._handler;
+  }
+
+  it("soft-deletes a step in running status and preserves sibling blockers", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+    const deletedIds: string[] = [];
+    const inserted: Array<{ table: string; value: Record<string, unknown> }> = [];
+    const taskId = "task-1";
+
+    const runningStep = {
+      _id: "step-1",
+      taskId,
+      title: "Run integration",
+      description: "Execute workflow",
+      assignedAgent: "nanobot",
+      status: "running",
+      blockedBy: [],
+      parallelGroup: 1,
+      order: 1,
+      createdAt: "2026-03-08T12:00:00Z",
+    };
+    const blockedSibling = {
+      _id: "step-2",
+      taskId,
+      title: "Finalize",
+      description: "Wait for previous step",
+      assignedAgent: "nanobot",
+      status: "blocked",
+      blockedBy: ["step-1"],
+      parallelGroup: 2,
+      order: 2,
+      createdAt: "2026-03-08T12:01:00Z",
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return runningStep;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        delete: async (id: string) => {
+          deletedIds.push(id);
+        },
+        insert: async (table: string, value: Record<string, unknown>) => {
+          inserted.push({ table, value });
+          return `${table}-1`;
+        },
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [runningStep, blockedSibling],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { stepId: "step-1" });
+
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "deleted",
+    });
+    expect(typeof patchedById["step-1"]?.deletedAt).toBe("string");
+    expect(patchedById["step-2"]).toBeUndefined();
+    expect(deletedIds).toEqual([]);
+    expect(
+      inserted.some(
+        ({ table, value }) =>
+          table === "activities" &&
+          value.eventType === "step_status_changed" &&
+          String(value.description).includes("deleted")
+      )
+    ).toBe(true);
   });
 });

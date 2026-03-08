@@ -29,6 +29,10 @@ describe("isValidStepStatus", () => {
     expect(isValidStepStatus("failed")).toBe(false);
     expect(isValidStepStatus("")).toBe(false);
   });
+
+  it("accepts deleted as a supported terminal step status", () => {
+    expect(isValidStepStatus("deleted")).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -56,6 +60,11 @@ describe("isValidStepTransition", () => {
   it("rejects transitions with invalid statuses", () => {
     expect(isValidStepTransition("inbox", "assigned")).toBe(false);
     expect(isValidStepTransition("assigned", "done")).toBe(false);
+  });
+
+  it("treats deleted as terminal with no outgoing transitions", () => {
+    expect(isValidStepTransition("deleted", "assigned")).toBe(false);
+    expect(isValidStepTransition("completed", "deleted")).toBe(false);
   });
 });
 

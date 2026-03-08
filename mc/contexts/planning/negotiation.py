@@ -108,14 +108,14 @@ EXECUTION_CONTEXT_PROMPT = """\
 
 Current execution state:
 - Steps that CAN be modified (planned or blocked): {modifiable_steps}
-- Steps that are LOCKED (assigned, running, completed, waiting_human, or crashed — cannot be modified): {locked_steps}
+- Steps that are LOCKED (assigned, running, completed, waiting_human, crashed, or deleted — cannot be modified): {locked_steps}
 
 If the user asks to modify a locked step, respond with action=clarify and explain \
 that the step is already in progress or completed and cannot be changed.
 """
 
 # Step statuses that are "in flight" or done — cannot be modified mid-execution
-LOCKED_STEP_STATUSES = {"assigned", "running", "completed", "waiting_human", "crashed"}
+LOCKED_STEP_STATUSES = {"assigned", "running", "completed", "waiting_human", "crashed", "deleted"}
 # Step statuses that can still be modified
 MODIFIABLE_STEP_STATUSES = {"planned", "blocked"}
 

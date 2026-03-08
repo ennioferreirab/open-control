@@ -101,6 +101,7 @@ class StepStatus(StrEnum):
     CRASHED = "crashed"
     BLOCKED = "blocked"
     WAITING_HUMAN = "waiting_human"
+    DELETED = "deleted"
 
 
 class TrustLevel(StrEnum):
