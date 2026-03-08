@@ -12,8 +12,9 @@ interface TerminalPanelProps {
 
 export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanelProps) {
   const [input, setInput] = useState("");
-  const outputEndRef = useRef<HTMLDivElement>(null);
+  const outputContainerRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
 
   const session = useQuery(api.terminalSessions.get, { sessionId });
   const sendInput = useMutation(api.terminalSessions.sendInput);
@@ -29,14 +30,31 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
   const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
-    if (session?.output) {
+    if (session?.output && isAtBottom) {
       requestAnimationFrame(() => {
-        outputEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        const outputContainer = outputContainerRef.current;
+        if (!outputContainer) return;
+        outputContainer.scrollTop = Math.max(
+          0,
+          outputContainer.scrollHeight - outputContainer.clientHeight,
+        );
       });
     }
-  }, [session?.output]);
+  }, [session?.output, isAtBottom]);
 
   const [error, setError] = useState<string | null>(null);
+
+  const handleOutputScroll = () => {
+    const outputContainer = outputContainerRef.current;
+    if (!outputContainer) return;
+
+    const distanceFromBottom =
+      outputContainer.scrollHeight -
+      outputContainer.clientHeight -
+      outputContainer.scrollTop;
+
+    setIsAtBottom(distanceFromBottom <= 8);
+  };
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -158,12 +176,16 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
       </div>
 
       {/* Output display */}
-      <div className="flex-1 overflow-y-auto bg-zinc-950 p-3">
+      <div
+        ref={outputContainerRef}
+        data-testid="terminal-output"
+        onScroll={handleOutputScroll}
+        className="flex-1 overflow-y-auto bg-zinc-950 p-3"
+      >
         <pre className="whitespace-pre-wrap break-words font-mono text-xs text-green-400">{session?.output || "Waiting for bridge connection..."}</pre>
         {error && (
           <p className="mt-2 text-xs text-red-400">{error}</p>
         )}
-        <div ref={outputEndRef} />
       </div>
 
       {/* TUI Navigation */}
