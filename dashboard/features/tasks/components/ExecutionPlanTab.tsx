@@ -324,20 +324,20 @@ export function ExecutionPlanTab({
   // Editable plan steps for canvas operations
   const editablePlanSteps = useMemo(() => normalizedStepsToPlanSteps(steps), [steps]);
 
-  // Helper: apply a graph transformation and persist via onLocalPlanChange
+  // Helper: apply a graph transformation and persist via onLocalPlanChange.
+  // Uses editablePlanSteps (normalized IDs) so canvas node IDs match transform lookups.
   const applyGraphTransform = useCallback(
     (transformFn: (steps: PlanStep[]) => PlanStep[]) => {
       if (!onLocalPlanChange) return;
       const currentPlan = executionPlan as ExecutionPlan | null;
-      const currentSteps = currentPlan?.steps ?? [];
-      const updatedSteps = transformFn(currentSteps);
+      const updatedSteps = transformFn(editablePlanSteps);
       onLocalPlanChange({
         steps: updatedSteps,
         generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
         generatedBy: currentPlan?.generatedBy ?? "lead-agent",
       });
     },
-    [executionPlan, onLocalPlanChange],
+    [editablePlanSteps, executionPlan, onLocalPlanChange],
   );
 
   // Canvas directional button handlers — insert step immediately, no form
@@ -399,9 +399,10 @@ export function ExecutionPlanTab({
       if (n.id === "__start__" || n.id === "__end__") return n;
       // Compute hasParallelSiblings for merge button visibility
       const stepData = editablePlanSteps.find((s) => s.tempId === n.id);
-      const hasParallelSiblings = stepData
-        ? editablePlanSteps.filter((s) => s.parallelGroup === stepData.parallelGroup).length > 1
-        : false;
+      const hasParallelSiblings =
+        stepData && stepData.parallelGroup > 0
+          ? editablePlanSteps.filter((s) => s.parallelGroup === stepData.parallelGroup).length > 1
+          : false;
       return {
         ...n,
         data: {
