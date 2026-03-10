@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
 const mockUseGatewaySleepRuntime = vi.fn(() => null);
+const mockUseGatewaySleepCountdown = vi.fn(() => null);
 const mockGatewaySleepMutation = vi.fn().mockResolvedValue(undefined);
 
 // Mock heavy child components to avoid loading entire dependency tree
@@ -67,6 +68,7 @@ vi.mock("@/components/CronJobsModal", () => ({
 
 vi.mock("@/hooks/useGatewaySleepRuntime", () => ({
   useGatewaySleepRuntime: () => mockUseGatewaySleepRuntime(),
+  useGatewaySleepCountdown: () => mockUseGatewaySleepCountdown(),
 }));
 
 vi.mock("convex/react", async () => {
@@ -135,6 +137,7 @@ describe("DashboardLayout", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     mockUseGatewaySleepRuntime.mockReturnValue(null);
+    mockUseGatewaySleepCountdown.mockReturnValue(null);
     mockGatewaySleepMutation.mockClear();
   });
 
@@ -247,5 +250,50 @@ describe("DashboardLayout", () => {
     fireEvent.click(screen.getByRole("button", { name: "Wake now" }));
 
     expect(mockGatewaySleepMutation).toHaveBeenCalledWith({ mode: "active" });
+  });
+
+  it("shows countdown in sleep mode badge", () => {
+    window.matchMedia = createMatchMedia(1280);
+    mockUseGatewaySleepRuntime.mockReturnValue({
+      mode: "sleep",
+      pollIntervalSeconds: 300,
+      manualRequested: false,
+      reason: "idle",
+    });
+    mockUseGatewaySleepCountdown.mockReturnValue("4:32");
+
+    render(<DashboardLayout />);
+
+    expect(screen.getByText("Gateway sleeping · sync in 4:32")).toBeInTheDocument();
+  });
+
+  it("shows countdown in active mode badge", () => {
+    window.matchMedia = createMatchMedia(1280);
+    mockUseGatewaySleepRuntime.mockReturnValue({
+      mode: "active",
+      pollIntervalSeconds: 5,
+      manualRequested: false,
+      reason: "work_found",
+    });
+    mockUseGatewaySleepCountdown.mockReturnValue("3:15");
+
+    render(<DashboardLayout />);
+
+    expect(screen.getByText("Gateway active · sleep in 3:15")).toBeInTheDocument();
+  });
+
+  it("falls back to pollIntervalSeconds when countdown is null", () => {
+    window.matchMedia = createMatchMedia(1280);
+    mockUseGatewaySleepRuntime.mockReturnValue({
+      mode: "active",
+      pollIntervalSeconds: 5,
+      manualRequested: true,
+      reason: "manual",
+    });
+    mockUseGatewaySleepCountdown.mockReturnValue(null);
+
+    render(<DashboardLayout />);
+
+    expect(screen.getByText("Gateway active · 5s")).toBeInTheDocument();
   });
 });
