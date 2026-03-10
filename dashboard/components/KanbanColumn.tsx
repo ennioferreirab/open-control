@@ -241,6 +241,7 @@ export function KanbanColumn({
                           step={step}
                           parentTaskTitle={group.taskTitle}
                           onClick={onTaskClick ? () => onTaskClick(step.taskId) : undefined}
+                          onNavigateToTask={onTaskClick ? () => onTaskClick(step.taskId) : undefined}
                         />
                       ))}
                     </div>

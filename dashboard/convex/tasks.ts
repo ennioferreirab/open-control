@@ -943,6 +943,20 @@ export const softDelete = mutation({
       updatedAt: now,
     });
 
+    // Cascade-delete all steps belonging to this task
+    const steps = await ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+      .collect();
+    for (const step of steps) {
+      if (step.status !== "deleted") {
+        await ctx.db.patch(step._id, {
+          status: "deleted",
+          deletedAt: now,
+        });
+      }
+    }
+
     await logActivity(ctx, {
       taskId: args.taskId,
       agentName: task.assignedAgent,

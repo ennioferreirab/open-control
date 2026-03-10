@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, Fragment } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import * as motion from "motion/react-client";
 import { useReducedMotion } from "motion/react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -126,6 +128,22 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
 
   const { activePlan, localPlan, setLocalPlan, activeTab, setActiveTab } = planState;
 
+  const softDeleteMutation = useMutation(api.tasks.softDelete);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteTask = async () => {
+    if (!task || !isTaskLoaded) return;
+    setIsDeleting(true);
+    try {
+      await softDeleteMutation({ taskId: task._id });
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch {
+      setIsDeleting(false);
+    }
+  };
+
   const shouldReduceMotion = useReducedMotion();
   const [viewerFile, setViewerFile] = useState<{
     name: string;
@@ -174,6 +192,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   useEffect(() => {
     setIsEditingTitle(false);
     setIsEditingDescription(false);
+    setShowDeleteConfirm(false);
   }, [taskId]);
 
   const handleSaveTitle = async () => {
@@ -615,11 +634,56 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                       )}
                     </>
                   )}
+                  {task!.status !== "deleted" && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="ml-auto flex-shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+                      aria-label="Delete task"
+                      title="Delete task"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </SheetDescription>
               {showRejection && taskId && (
                 <div className="pt-2">
                   <InlineRejection taskId={taskId} onClose={() => setShowRejection(false)} />
+                </div>
+              )}
+              {showDeleteConfirm && (
+                <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                  <p className="text-xs text-red-800 mb-2">
+                    Delete this task and all its steps? This action cannot be undone.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={handleDeleteTask}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        "Yes, delete"
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={isDeleting}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               )}
               {isAwaitingKickoff && (
