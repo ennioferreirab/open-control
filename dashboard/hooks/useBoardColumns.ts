@@ -17,12 +17,19 @@ export interface StepGroup {
   steps: Doc<"steps">[];
 }
 
+export interface TagGroup {
+  tag: string;
+  displayName: string;
+  tasks: Doc<"tasks">[];
+}
+
 export interface ColumnData {
   title: string;
   status: ColumnStatus;
   accentColor: string;
   tasks: Doc<"tasks">[];
   stepGroups: StepGroup[];
+  tagGroups: TagGroup[];
   totalCount: number;
 }
 
@@ -32,7 +39,7 @@ export interface ColumnData {
  */
 export function stepStatusToColumnStatus(
   stepStatus: Doc<"steps">["status"],
-  taskStatus?: Doc<"tasks">["status"]
+  taskStatus?: Doc<"tasks">["status"],
 ): ColumnStatus | null {
   switch (stepStatus) {
     case "assigned":
@@ -65,24 +72,18 @@ export function stepStatusToColumnStatus(
  */
 export function useBoardColumns(
   tasks: Doc<"tasks">[] | undefined,
-  allSteps: Doc<"steps">[] | undefined
+  allSteps: Doc<"steps">[] | undefined,
 ): ColumnData[] | undefined {
   return useMemo(() => {
     if (tasks === undefined || allSteps === undefined) return undefined;
 
     const visibleTaskIds = new Set(tasks.map((task) => task._id));
-    const boardSteps = allSteps.filter((step) =>
-      visibleTaskIds.has(step.taskId)
-    );
-    const taskTitleMap = new Map(
-      tasks.map((task) => [task._id, task.title] as const)
-    );
+    const boardSteps = allSteps.filter((step) => visibleTaskIds.has(step.taskId));
+    const taskTitleMap = new Map(tasks.map((task) => [task._id, task.title] as const));
     const taskCreationTimeMap = new Map(
-      tasks.map((task) => [task._id, task._creationTime] as const)
+      tasks.map((task) => [task._id, task._creationTime] as const),
     );
-    const taskStatusMap = new Map(
-      tasks.map((task) => [task._id, task.status] as const)
-    );
+    const taskStatusMap = new Map(tasks.map((task) => [task._id, task.status] as const));
 
     // Group steps by taskId, skipping done/review tasks and completed steps
     const stepsByTaskId = new Map<Id<"tasks">, Doc<"steps">[]>();
@@ -105,8 +106,7 @@ export function useBoardColumns(
     // (not as step groups in In Progress), even if they have running steps
     // -- e.g. when ask_user pauses execution for user input.
     const regularTasks = tasks.filter(
-      (task) =>
-        !tasksWithRenderableSteps.has(task._id) || task.status === "review"
+      (task) => !tasksWithRenderableSteps.has(task._id) || task.status === "review",
     );
 
     return COLUMNS.map((col) => {
@@ -121,11 +121,7 @@ export function useBoardColumns(
             );
           }
           if (col.status === "assigned") {
-            return (
-              t.status === "assigned" ||
-              t.status === "planning" ||
-              t.status === "ready"
-            );
+            return t.status === "assigned" || t.status === "planning" || t.status === "ready";
           }
           if (col.status === "inbox") {
             return t.status === "inbox";
@@ -134,15 +130,39 @@ export function useBoardColumns(
         })
         .sort((a, b) => b._creationTime - a._creationTime);
 
+      // Derive tag groups from column tasks
+      const tagBuckets = new Map<string, Doc<"tasks">[]>();
+      for (const task of columnTasks) {
+        const taskTags = (task as { tags?: string[] }).tags;
+        if (taskTags && taskTags.length > 0) {
+          for (const tag of taskTags) {
+            const bucket = tagBuckets.get(tag) ?? [];
+            bucket.push(task);
+            tagBuckets.set(tag, bucket);
+          }
+        } else {
+          const bucket = tagBuckets.get("__untagged__") ?? [];
+          bucket.push(task);
+          tagBuckets.set("__untagged__", bucket);
+        }
+      }
+      const tagGroups: TagGroup[] = Array.from(tagBuckets.entries())
+        .map(([tag, groupTasks]) => ({
+          tag,
+          displayName: tag === "__untagged__" ? "Untagged" : tag,
+          tasks: groupTasks,
+        }))
+        .sort((a, b) => {
+          if (a.tag === "__untagged__") return 1;
+          if (b.tag === "__untagged__") return -1;
+          return a.displayName.localeCompare(b.displayName);
+        });
+
       const stepGroups = Array.from(stepsByTaskId.entries())
         .map(([taskId, taskSteps]) => {
           const taskStatus = taskStatusMap.get(taskId);
           const steps = taskSteps
-            .filter(
-              (step) =>
-                stepStatusToColumnStatus(step.status, taskStatus) ===
-                col.status
-            )
+            .filter((step) => stepStatusToColumnStatus(step.status, taskStatus) === col.status)
             .sort((a, b) => a.order - b.order);
           return {
             taskId,
@@ -153,17 +173,16 @@ export function useBoardColumns(
         .filter((group) => group.steps.length > 0)
         .sort(
           (a, b) =>
-            (taskCreationTimeMap.get(b.taskId) ?? 0) -
-            (taskCreationTimeMap.get(a.taskId) ?? 0)
+            (taskCreationTimeMap.get(b.taskId) ?? 0) - (taskCreationTimeMap.get(a.taskId) ?? 0),
         );
 
       return {
         ...col,
         tasks: columnTasks,
         stepGroups,
+        tagGroups,
         totalCount:
-          columnTasks.length +
-          stepGroups.reduce((count, group) => count + group.steps.length, 0),
+          columnTasks.length + stepGroups.reduce((count, group) => count + group.steps.length, 0),
       };
     });
   }, [tasks, allSteps]);

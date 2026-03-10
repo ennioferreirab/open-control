@@ -81,6 +81,7 @@ export function KanbanBoard({ onTaskClick, search }: KanbanBoardProps) {
                 status={col.status}
                 tasks={col.tasks}
                 stepGroups={col.stepGroups}
+                tagGroups={col.tagGroups}
                 totalCount={col.totalCount}
                 accentColor={col.accentColor}
                 onTaskClick={onTaskClick}
