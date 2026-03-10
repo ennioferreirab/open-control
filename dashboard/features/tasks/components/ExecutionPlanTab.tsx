@@ -810,7 +810,7 @@ export function ExecutionPlanTab({
           }}
           nodesDraggable={false}
           nodesConnectable={false}
-          elementsSelectable={false}
+          elementsSelectable={canEditCanvas}
           panOnDrag={true}
           zoomOnScroll={true}
           fitView
