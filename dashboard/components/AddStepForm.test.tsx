@@ -2,12 +2,11 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { AddStepForm, type ExistingStep } from "./AddStepForm";
 
-// Mock convex/react
-vi.mock("convex/react", () => ({
-  useQuery: vi.fn(() => ({
+// Mock useBoardById hook
+vi.mock("@/hooks/useBoardById", () => ({
+  useBoardById: () => ({
     enabledAgents: ["agent-a", "agent-b"],
-  })),
-  useMutation: vi.fn(() => vi.fn()),
+  }),
 }));
 
 // Mock useSelectableAgents to return test agents
@@ -46,14 +45,7 @@ const existingSteps: ExistingStep[] = [
 
 describe("AddStepForm", () => {
   it("renders all form fields", () => {
-    render(
-      <AddStepForm
-
-        existingSteps={existingSteps}
-        onAdd={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
+    render(<AddStepForm existingSteps={existingSteps} onAdd={vi.fn()} onCancel={vi.fn()} />);
 
     expect(screen.getByTestId("add-step-form")).toBeInTheDocument();
     expect(screen.getByTestId("add-step-title")).toBeInTheDocument();
@@ -65,14 +57,7 @@ describe("AddStepForm", () => {
   });
 
   it("Add button is disabled when required fields are empty", () => {
-    render(
-      <AddStepForm
-
-        existingSteps={[]}
-        onAdd={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
+    render(<AddStepForm existingSteps={[]} onAdd={vi.fn()} onCancel={vi.fn()} />);
 
     const addButton = screen.getByTestId("add-step-submit");
     expect(addButton).toBeDisabled();
@@ -80,43 +65,20 @@ describe("AddStepForm", () => {
 
   it("calls onCancel when Cancel is clicked", () => {
     const onCancel = vi.fn();
-    render(
-      <AddStepForm
-
-        existingSteps={[]}
-        onAdd={vi.fn()}
-        onCancel={onCancel}
-      />
-    );
+    render(<AddStepForm existingSteps={[]} onAdd={vi.fn()} onCancel={onCancel} />);
 
     fireEvent.click(screen.getByTestId("add-step-cancel"));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it("does not render blocked-by selector when no existing steps", () => {
-    render(
-      <AddStepForm
+    render(<AddStepForm existingSteps={[]} onAdd={vi.fn()} onCancel={vi.fn()} />);
 
-        existingSteps={[]}
-        onAdd={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
-
-    expect(
-      screen.queryByTestId("add-step-blocked-by-trigger")
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-step-blocked-by-trigger")).not.toBeInTheDocument();
   });
 
   it("filters out lead-agent from selectable agents", () => {
-    render(
-      <AddStepForm
-
-        existingSteps={[]}
-        onAdd={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
+    render(<AddStepForm existingSteps={[]} onAdd={vi.fn()} onCancel={vi.fn()} />);
 
     // Open the agent select dropdown
     const trigger = screen.getByTestId("add-step-agent-select");
@@ -129,16 +91,32 @@ describe("AddStepForm", () => {
     expect(screen.getByText("Agent B")).toBeInTheDocument();
   });
 
-  it("calls onAdd with correct data when form is submitted", () => {
+  it("initializes blockedByIds from defaultBlockedByIds prop", () => {
     const onAdd = vi.fn();
     render(
       <AddStepForm
-
-        existingSteps={[]}
+        existingSteps={existingSteps}
+        defaultBlockedByIds={["step-1"]}
         onAdd={onAdd}
         onCancel={vi.fn()}
-      />
+      />,
     );
+
+    // The trigger should show "1 step selected" because step-1 is pre-selected
+    const trigger = screen.getByTestId("add-step-blocked-by-trigger");
+    expect(trigger.textContent).toContain("1 step selected");
+  });
+
+  it("initializes empty blockedByIds when defaultBlockedByIds is not provided", () => {
+    render(<AddStepForm existingSteps={existingSteps} onAdd={vi.fn()} onCancel={vi.fn()} />);
+
+    const trigger = screen.getByTestId("add-step-blocked-by-trigger");
+    expect(trigger.textContent).toContain("Select dependencies...");
+  });
+
+  it("calls onAdd with correct data when form is submitted", () => {
+    const onAdd = vi.fn();
+    render(<AddStepForm existingSteps={[]} onAdd={onAdd} onCancel={vi.fn()} />);
 
     // Fill in title
     fireEvent.change(screen.getByTestId("add-step-title"), {

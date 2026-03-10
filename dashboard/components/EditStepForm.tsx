@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
+import { useBoardById } from "@/hooks/useBoardById";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,16 +43,14 @@ export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: Edit
   const [description, setDescription] = useState(step.description);
   const [assignedAgent, setAssignedAgent] = useState(step.assignedAgent);
 
-  const board = useQuery(api.boards.getById, boardId ? { boardId } : "skip");
+  const board = useBoardById(boardId);
   const agents = useSelectableAgents(board?.enabledAgents);
   const selectableAgents = (agents ?? []).filter((a) => a.name !== "lead-agent");
 
   const isLocked = step.status !== "planned" && step.status !== "blocked";
 
   const isValid =
-    title.trim().length > 0 &&
-    description.trim().length > 0 &&
-    assignedAgent.length > 0;
+    title.trim().length > 0 && description.trim().length > 0 && assignedAgent.length > 0;
 
   const hasChanges =
     title !== step.title ||
@@ -84,7 +81,9 @@ export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: Edit
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="edit-step-title" className="text-xs">Title</Label>
+        <Label htmlFor="edit-step-title" className="text-xs">
+          Title
+        </Label>
         <Input
           id="edit-step-title"
           data-testid="edit-step-title"
@@ -96,7 +95,9 @@ export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: Edit
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="edit-step-description" className="text-xs">Description</Label>
+        <Label htmlFor="edit-step-description" className="text-xs">
+          Description
+        </Label>
         <Textarea
           id="edit-step-description"
           data-testid="edit-step-description"
@@ -141,12 +142,7 @@ export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: Edit
             Save
           </Button>
         )}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onCancel}
-          data-testid="edit-step-cancel"
-        >
+        <Button size="sm" variant="ghost" onClick={onCancel} data-testid="edit-step-cancel">
           {isLocked ? "Close" : "Cancel"}
         </Button>
         {!isLocked && onDelete && (

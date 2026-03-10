@@ -17,14 +17,14 @@ export interface FlowLayoutOptions {
 const DEFAULTS: Required<FlowLayoutOptions> = {
   nodeWidth: 220,
   nodeHeight: 80,
-  rankSep: 80,
-  nodeSep: 40,
+  rankSep: 120,
+  nodeSep: 60,
   direction: "LR",
 };
 
 const START_NODE_ID = "__start__";
-const END_NODE_ID   = "__end__";
-const START_END_WIDTH  = 120;
+const END_NODE_ID = "__end__";
+const START_END_WIDTH = 120;
 const START_END_HEIGHT = 50;
 
 /**
@@ -33,7 +33,7 @@ const START_END_HEIGHT = 50;
  */
 export function stepsToNodesAndEdges(
   steps: PlanStep[],
-  options?: FlowLayoutOptions
+  options?: FlowLayoutOptions,
 ): { nodes: Node[]; edges: Edge[] } {
   const opts = { ...DEFAULTS, ...options };
 
@@ -64,7 +64,9 @@ export function stepsToNodesAndEdges(
   if (steps.length === 0) {
     return {
       nodes: [startNode, endNode],
-      edges: [{ id: `e-${START_NODE_ID}-${END_NODE_ID}`, source: START_NODE_ID, target: END_NODE_ID }],
+      edges: [
+        { id: `e-${START_NODE_ID}-${END_NODE_ID}`, source: START_NODE_ID, target: END_NODE_ID },
+      ],
     };
   }
 
@@ -119,11 +121,7 @@ export function stepsToNodesAndEdges(
  * Position nodes using dagre (left-to-right layout).
  * Respects per-node width/height for accurate sizing of START/END nodes.
  */
-export function layoutWithDagre(
-  nodes: Node[],
-  edges: Edge[],
-  options?: FlowLayoutOptions
-): Node[] {
+export function layoutWithDagre(nodes: Node[], edges: Edge[], options?: FlowLayoutOptions): Node[] {
   const opts = { ...DEFAULTS, ...options };
 
   const g = new dagre.graphlib.Graph();

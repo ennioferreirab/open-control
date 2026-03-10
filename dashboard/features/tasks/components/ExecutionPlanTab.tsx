@@ -14,6 +14,7 @@ import { EditStepForm, type EditStepData } from "@/components/EditStepForm";
 import { Button } from "@/components/ui/button";
 import { stepsToNodesAndEdges, layoutWithDagre } from "@/lib/flowLayout";
 import type { ExecutionPlan, PlanStep } from "@/lib/types";
+import { insertSequentialStep, insertParallelStep, insertMergeStep } from "@/lib/planUtils";
 
 const nodeTypes = { flowStep: FlowStepNode, start: StartNode, end: EndNode };
 
@@ -135,13 +136,10 @@ function mergeStepsWithLiveData(
       (planStep.title
         ? takeMatch(
             (candidate) =>
-              candidate.title === planStep.title &&
-              candidate.description === planStep.description,
+              candidate.title === planStep.title && candidate.description === planStep.description,
           )
         : undefined) ??
-      (planStep.title
-        ? takeMatch((candidate) => candidate.title === planStep.title)
-        : undefined) ??
+      (planStep.title ? takeMatch((candidate) => candidate.title === planStep.title) : undefined) ??
       takeMatch((candidate) => candidate.description === planStep.description) ??
       takeMatch((candidate) => candidate.order === planStep.order);
     return { planStep, liveStep };
@@ -282,6 +280,87 @@ export function ExecutionPlanTab({
   const isReviewMode = taskStatus === "review" || taskStatus === "inbox" || isEditMode;
   const isLiveMode = taskStatus === "in_progress" || taskStatus === "done";
   const canAddOrEdit = isReviewMode || isLiveMode;
+  const canEditCanvas = isReviewMode && !!onLocalPlanChange;
+
+  const handleDeleteStep = useCallback(
+    async (stepId: string) => {
+      if (isReviewMode && onLocalPlanChange) {
+        const currentPlan = executionPlan as ExecutionPlan | null;
+        const currentSteps = currentPlan?.steps ?? [];
+        if (currentSteps.length <= 1) {
+          setEditStepError("Cannot delete the last step. A plan must have at least one step.");
+          return;
+        }
+        const updatedSteps = currentSteps
+          .filter((s) => s.tempId !== stepId)
+          .map((s) => ({
+            ...s,
+            blockedBy: s.blockedBy.filter((dep) => dep !== stepId),
+          }));
+        const updatedPlan: ExecutionPlan = {
+          steps: updatedSteps,
+          generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
+          generatedBy: currentPlan?.generatedBy ?? "lead-agent",
+        };
+        onLocalPlanChange(updatedPlan);
+        setEditingStepId(null);
+        setEditStepError(null);
+      } else if (isLiveMode && stepId) {
+        const foundStep = steps.find((s) => s.stepId === stepId);
+        const realStepId = foundStep?.liveId ?? stepId;
+        try {
+          await deleteStepMutation({ stepId: realStepId as Id<"steps"> });
+          setEditingStepId(null);
+          setEditStepError(null);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Failed to delete step";
+          setEditStepError(message);
+        }
+      }
+    },
+    [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange, steps, deleteStepMutation],
+  );
+
+  // Editable plan steps for canvas operations
+  const editablePlanSteps = useMemo(() => normalizedStepsToPlanSteps(steps), [steps]);
+
+  // Helper: apply a graph transformation and persist via onLocalPlanChange.
+  // Uses editablePlanSteps (normalized IDs) so canvas node IDs match transform lookups.
+  const applyGraphTransform = useCallback(
+    (transformFn: (steps: PlanStep[]) => PlanStep[]) => {
+      if (!onLocalPlanChange) return;
+      const currentPlan = executionPlan as ExecutionPlan | null;
+      const updatedSteps = transformFn(editablePlanSteps);
+      onLocalPlanChange({
+        steps: updatedSteps,
+        generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
+        generatedBy: currentPlan?.generatedBy ?? "lead-agent",
+      });
+    },
+    [editablePlanSteps, executionPlan, onLocalPlanChange],
+  );
+
+  // Canvas directional button handlers — insert step immediately, no form
+  const handleAddSequential = useCallback(
+    (stepId: string) => {
+      applyGraphTransform((steps) => insertSequentialStep(steps, stepId));
+    },
+    [applyGraphTransform],
+  );
+
+  const handleAddParallel = useCallback(
+    (stepId: string) => {
+      applyGraphTransform((steps) => insertParallelStep(steps, stepId));
+    },
+    [applyGraphTransform],
+  );
+
+  const handleMergePaths = useCallback(
+    (stepId: string) => {
+      applyGraphTransform((steps) => insertMergeStep(steps, stepId));
+    },
+    [applyGraphTransform],
+  );
 
   const handleStepClick = useCallback(
     (stepId: string) => {
@@ -302,22 +381,40 @@ export function ExecutionPlanTab({
     [canAddOrEdit, handleStepClick],
   );
 
-  // Build flow nodes/edges for read-only view
+  // Compute leaf steps: steps that no other step depends on (closest to END)
+  const leafStepIds = useMemo(() => {
+    const allDeps = new Set(editablePlanSteps.flatMap((s) => s.blockedBy));
+    return new Set(editablePlanSteps.filter((s) => !allDeps.has(s.tempId)).map((s) => s.tempId));
+  }, [editablePlanSteps]);
+
+  // Build flow nodes/edges
   const { flowNodes, flowEdges } = useMemo(() => {
     if (steps.length === 0) return { flowNodes: [], flowEdges: [] };
     const planSteps = normalizedStepsToPlanSteps(steps);
     const { nodes: rawNodes, edges: rawEdges } = stepsToNodesAndEdges(planSteps);
 
-    // Inject status + accept handlers into node data (skip START/END terminal nodes)
+    // Inject status + handlers into node data (skip START/END terminal nodes)
     const statusMap = new Map(steps.map((s) => [s.stepId, s.status]));
     const nodesWithStatus = rawNodes.map((n) => {
       if (n.id === "__start__" || n.id === "__end__") return n;
+      // Compute hasParallelSiblings for merge button visibility
+      const stepData = editablePlanSteps.find((s) => s.tempId === n.id);
+      const hasParallelSiblings =
+        stepData && stepData.parallelGroup > 0
+          ? editablePlanSteps.filter((s) => s.parallelGroup === stepData.parallelGroup).length > 1
+          : false;
       return {
         ...n,
         data: {
           ...(n.data as FlowStepNodeData),
           status: statusMap.get(n.id) ?? "planned",
-          isEditMode: false as const,
+          isEditMode: canEditCanvas,
+          hasParallelSiblings,
+          isLeafStep: leafStepIds.has(n.id),
+          onAddSequential: canEditCanvas ? handleAddSequential : undefined,
+          onAddParallel: canEditCanvas ? handleAddParallel : undefined,
+          onMergePaths: canEditCanvas ? handleMergePaths : undefined,
+          onDeleteStep: canEditCanvas ? handleDeleteStep : undefined,
           onAccept: handleAccept,
           onRetry: handleRetry,
           isAccepting: acceptingStepId === n.id,
@@ -333,6 +430,13 @@ export function ExecutionPlanTab({
     return { flowNodes: positioned, flowEdges: rawEdges };
   }, [
     steps,
+    editablePlanSteps,
+    leafStepIds,
+    canEditCanvas,
+    handleAddSequential,
+    handleAddParallel,
+    handleMergePaths,
+    handleDeleteStep,
     handleAccept,
     handleRetry,
     acceptingStepId,
@@ -504,46 +608,6 @@ export function ExecutionPlanTab({
     ],
   );
 
-  const handleDeleteStep = useCallback(
-    async (stepId: string) => {
-      if (isReviewMode && onLocalPlanChange) {
-        const currentPlan = executionPlan as ExecutionPlan | null;
-        const currentSteps = currentPlan?.steps ?? [];
-        if (currentSteps.length <= 1) {
-          setEditStepError("Cannot delete the last step. A plan must have at least one step.");
-          return;
-        }
-        const updatedSteps = currentSteps
-          .filter((s) => s.tempId !== stepId)
-          .map((s) => ({
-            ...s,
-            blockedBy: s.blockedBy.filter((dep) => dep !== stepId),
-          }));
-        const updatedPlan: ExecutionPlan = {
-          steps: updatedSteps,
-          generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
-          generatedBy: currentPlan?.generatedBy ?? "lead-agent",
-        };
-        onLocalPlanChange(updatedPlan);
-        setEditingStepId(null);
-        setEditStepError(null);
-      } else if (isLiveMode && stepId) {
-        // Use the real Convex step _id if available
-        const foundStep = steps.find((s) => s.stepId === stepId);
-        const realStepId = foundStep?.liveId ?? stepId;
-        try {
-          await deleteStepMutation({ stepId: realStepId as Id<"steps"> });
-          setEditingStepId(null);
-          setEditStepError(null);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "Failed to delete step";
-          setEditStepError(message);
-        }
-      }
-    },
-    [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange, steps, deleteStepMutation],
-  );
-
   const dismissEdit = useCallback(
     (event: React.MouseEvent) => {
       if (!editingStepId) return;
@@ -683,7 +747,7 @@ export function ExecutionPlanTab({
           }}
           nodesDraggable={false}
           nodesConnectable={false}
-          elementsSelectable={false}
+          elementsSelectable={canEditCanvas}
           panOnDrag={true}
           zoomOnScroll={true}
           fitView

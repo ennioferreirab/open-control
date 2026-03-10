@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,14 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { User } from "lucide-react";
+import { useBoardById } from "@/hooks/useBoardById";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 import { HUMAN_AGENT_NAME } from "@/lib/constants";
 import { getStatusMeta } from "./FlowStepNode";
@@ -43,6 +38,7 @@ export interface AddStepData {
 interface AddStepFormProps {
   existingSteps: ExistingStep[];
   boardId?: Id<"boards">;
+  defaultBlockedByIds?: string[];
   onAdd: (data: AddStepData) => void;
   onCancel: () => void;
 }
@@ -50,31 +46,25 @@ interface AddStepFormProps {
 export function AddStepForm({
   existingSteps,
   boardId,
+  defaultBlockedByIds,
   onAdd,
   onCancel,
 }: AddStepFormProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignedAgent, setAssignedAgent] = useState("");
-  const [blockedByIds, setBlockedByIds] = useState<string[]>([]);
+  const [blockedByIds, setBlockedByIds] = useState<string[]>(defaultBlockedByIds ?? []);
   const [blockerPopoverOpen, setBlockerPopoverOpen] = useState(false);
 
-  const board = useQuery(
-    api.boards.getById,
-    boardId ? { boardId } : "skip"
-  );
+  const board = useBoardById(boardId);
 
   const agents = useSelectableAgents(board?.enabledAgents);
 
   // Filter out lead-agent (must NEVER be assignable to steps)
-  const selectableAgents = (agents ?? []).filter(
-    (a) => a.name !== "lead-agent"
-  );
+  const selectableAgents = (agents ?? []).filter((a) => a.name !== "lead-agent");
 
   const isValid =
-    title.trim().length > 0 &&
-    description.trim().length > 0 &&
-    assignedAgent.length > 0;
+    title.trim().length > 0 && description.trim().length > 0 && assignedAgent.length > 0;
 
   const handleSubmit = () => {
     if (!isValid) return;
@@ -88,9 +78,7 @@ export function AddStepForm({
 
   const toggleBlocker = (stepId: string) => {
     setBlockedByIds((prev) =>
-      prev.includes(stepId)
-        ? prev.filter((id) => id !== stepId)
-        : [...prev, stepId]
+      prev.includes(stepId) ? prev.filter((id) => id !== stepId) : [...prev, stepId],
     );
   };
 
@@ -131,10 +119,7 @@ export function AddStepForm({
       <div className="space-y-1.5">
         <Label className="text-xs">Assigned Agent</Label>
         <Select value={assignedAgent} onValueChange={setAssignedAgent}>
-          <SelectTrigger
-            className="h-8 text-sm"
-            data-testid="add-step-agent-select"
-          >
+          <SelectTrigger className="h-8 text-sm" data-testid="add-step-agent-select">
             <SelectValue placeholder="Select agent" />
           </SelectTrigger>
           <SelectContent>
@@ -156,10 +141,7 @@ export function AddStepForm({
       {existingSteps.length > 0 && (
         <div className="space-y-1.5">
           <Label className="text-xs">Blocked By (optional)</Label>
-          <Popover
-            open={blockerPopoverOpen}
-            onOpenChange={setBlockerPopoverOpen}
-          >
+          <Popover open={blockerPopoverOpen} onOpenChange={setBlockerPopoverOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
@@ -204,20 +186,10 @@ export function AddStepForm({
       )}
 
       <div className="flex items-center gap-2 pt-1">
-        <Button
-          size="sm"
-          disabled={!isValid}
-          onClick={handleSubmit}
-          data-testid="add-step-submit"
-        >
+        <Button size="sm" disabled={!isValid} onClick={handleSubmit} data-testid="add-step-submit">
           Add
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onCancel}
-          data-testid="add-step-cancel"
-        >
+        <Button size="sm" variant="ghost" onClick={onCancel} data-testid="add-step-cancel">
           Cancel
         </Button>
       </div>
