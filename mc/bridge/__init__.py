@@ -476,10 +476,16 @@ class ConvexBridge:
         function_name: str,
         args: dict[str, Any] | None = None,
         poll_interval: float = 2.0,
+        sleep_controller: Any | None = None,
     ) -> "asyncio.Queue[Any]":
         """Subscribe to a Convex query, returning an asyncio.Queue."""
         self._ensure_repos()
-        return self._subscriptions.async_subscribe(function_name, args, poll_interval)
+        return self._subscriptions.async_subscribe(
+            function_name,
+            args,
+            poll_interval,
+            sleep_controller=sleep_controller,
+        )
 
     # ── Activity (shared infrastructure, not in a repository) ────────
 

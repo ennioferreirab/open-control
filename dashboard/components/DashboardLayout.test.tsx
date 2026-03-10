@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
-const mockUseChatSyncRuntime = vi.fn(() => null);
+const mockUseGatewaySleepRuntime = vi.fn(() => null);
+const mockGatewaySleepMutation = vi.fn().mockResolvedValue(undefined);
 
 // Mock heavy child components to avoid loading entire dependency tree
 vi.mock("@/components/AgentSidebar", () => ({
@@ -64,9 +65,17 @@ vi.mock("@/components/CronJobsModal", () => ({
   CronJobsModal: () => null,
 }));
 
-vi.mock("@/hooks/useChatSyncRuntime", () => ({
-  useChatSyncRuntime: () => mockUseChatSyncRuntime(),
+vi.mock("@/hooks/useGatewaySleepRuntime", () => ({
+  useGatewaySleepRuntime: () => mockUseGatewaySleepRuntime(),
 }));
+
+vi.mock("convex/react", async () => {
+  const actual = await vi.importActual<typeof import("convex/react")>("convex/react");
+  return {
+    ...actual,
+    useMutation: () => mockGatewaySleepMutation,
+  };
+});
 
 // Mock ShadCN sidebar
 vi.mock("@/components/ui/sidebar", () => ({
@@ -125,7 +134,8 @@ describe("DashboardLayout", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockUseChatSyncRuntime.mockReturnValue(null);
+    mockUseGatewaySleepRuntime.mockReturnValue(null);
+    mockGatewaySleepMutation.mockClear();
   });
 
   it("renders dashboard content when width < 1024px", () => {
@@ -193,27 +203,49 @@ describe("DashboardLayout", () => {
     expect(screen.getByTestId("settings-panel")).toBeInTheDocument();
   });
 
-  it("renders sleeping chat sync badge when runtime reports sleep", () => {
+  it("renders sleeping gateway badge and wake button when runtime reports sleep", () => {
     window.matchMedia = createMatchMedia(1280);
-    mockUseChatSyncRuntime.mockReturnValue({
+    mockUseGatewaySleepRuntime.mockReturnValue({
       mode: "sleep",
-      pollIntervalSeconds: 60,
+      pollIntervalSeconds: 300,
+      manualRequested: true,
+      reason: "manual",
     });
 
     render(<DashboardLayout />);
 
-    expect(screen.getByText("Chat sync sleeping · 60s")).toBeInTheDocument();
+    expect(screen.getByText("Gateway sleeping · 300s")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Wake now" })).toBeInTheDocument();
   });
 
-  it("renders active chat sync badge when runtime reports active", () => {
+  it("renders active gateway badge and sleep button when runtime reports active", () => {
     window.matchMedia = createMatchMedia(1280);
-    mockUseChatSyncRuntime.mockReturnValue({
+    mockUseGatewaySleepRuntime.mockReturnValue({
       mode: "active",
       pollIntervalSeconds: 5,
+      manualRequested: false,
+      reason: "startup",
     });
 
     render(<DashboardLayout />);
 
-    expect(screen.getByText("Chat sync active · 5s")).toBeInTheDocument();
+    expect(screen.getByText("Gateway active · 5s")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sleep now" })).toBeInTheDocument();
+  });
+
+  it("requests manual wake from the header button", () => {
+    window.matchMedia = createMatchMedia(1280);
+    mockUseGatewaySleepRuntime.mockReturnValue({
+      mode: "sleep",
+      pollIntervalSeconds: 300,
+      manualRequested: true,
+      reason: "manual",
+    });
+
+    render(<DashboardLayout />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Wake now" }));
+
+    expect(mockGatewaySleepMutation).toHaveBeenCalledWith({ mode: "active" });
   });
 });

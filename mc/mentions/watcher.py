@@ -61,9 +61,11 @@ class MentionWatcher:
         self,
         bridge: "ConvexBridge",
         conversation_service: Any | None = None,
+        sleep_controller: Any | None = None,
     ) -> None:
         self._bridge = bridge
         self._conversation_service = conversation_service
+        self._sleep_controller = sleep_controller
         self._seen_message_ids: set[str] = set()
         self._startup_timestamp: str = _now_iso()
         self._last_poll_timestamp: str | None = None
@@ -74,14 +76,24 @@ class MentionWatcher:
 
         while True:
             try:
-                await self._poll_all_tasks()
+                if self._sleep_controller is not None and self._sleep_controller.mode == "sleep":
+                    await self._sleep_controller.wait_for_next_cycle(POLL_INTERVAL_SECONDS)
+                found_work = await self._poll_all_tasks()
+                if self._sleep_controller is not None:
+                    if found_work:
+                        await self._sleep_controller.record_work_found()
+                    else:
+                        await self._sleep_controller.record_idle()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("[mention_watcher] Error in polling loop")
-            await asyncio.sleep(POLL_INTERVAL_SECONDS)
+            if self._sleep_controller is not None:
+                await self._sleep_controller.wait_for_next_cycle(POLL_INTERVAL_SECONDS)
+            else:
+                await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
-    async def _poll_all_tasks(self) -> None:
+    async def _poll_all_tasks(self) -> bool:
         """Poll recent user messages globally and check for @mentions."""
         if self._last_poll_timestamp:
             base = datetime.fromisoformat(self._last_poll_timestamp)
@@ -97,7 +109,9 @@ class MentionWatcher:
         )
 
         if not messages:
-            return
+            return False
+
+        found_work = False
 
         for msg in messages:
             msg_id = msg.get("_id") or msg.get("id") or ""
@@ -123,6 +137,7 @@ class MentionWatcher:
                 task_id,
                 content[:80],
             )
+            found_work = True
 
             task_data: dict[str, Any] = {}
             try:
@@ -164,6 +179,7 @@ class MentionWatcher:
                 if msg.get("_id") or msg.get("id")
             }
             self._seen_message_ids = current_ids
+        return found_work
 
 
 def _now_iso() -> str:

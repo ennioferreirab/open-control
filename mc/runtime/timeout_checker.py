@@ -45,8 +45,9 @@ def _format_duration(td: timedelta) -> str:
 class TimeoutChecker:
     """Periodic checker for stalled tasks and timed-out reviews."""
 
-    def __init__(self, bridge: ConvexBridge) -> None:
+    def __init__(self, bridge: ConvexBridge, sleep_controller: Any | None = None) -> None:
         self._bridge = bridge
+        self._sleep_controller = sleep_controller
         self._flagged_stalled: set[str] = set()
         self._flagged_reviews: set[str] = set()
 
@@ -55,14 +56,23 @@ class TimeoutChecker:
         logger.info("[timeout] Timeout checker started")
         while True:
             try:
-                await self.check_timeouts()
+                found_work = await self.check_timeouts()
+                if self._sleep_controller is not None:
+                    if found_work:
+                        await self._sleep_controller.record_work_found()
+                    else:
+                        await self._sleep_controller.record_idle()
             except Exception:
                 logger.exception("[timeout] Timeout check failed")
-            await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+            if self._sleep_controller is not None:
+                await self._sleep_controller.wait_for_next_cycle(CHECK_INTERVAL_SECONDS)
+            else:
+                await asyncio.sleep(CHECK_INTERVAL_SECONDS)
 
-    async def check_timeouts(self) -> None:
+    async def check_timeouts(self) -> bool:
         """Run a single timeout check cycle."""
         now = datetime.now(timezone.utc)
+        found_work = False
 
         # Read global timeout settings
         task_timeout_minutes = await self._get_setting(
@@ -77,14 +87,15 @@ class TimeoutChecker:
             self._bridge.query, "tasks:listByStatus", {"status": "in_progress"}
         )
         for task in in_progress_tasks or []:
-            await self._check_task_stall(task, now, task_timeout_minutes)
+            found_work = await self._check_task_stall(task, now, task_timeout_minutes) or found_work
 
         # Check review tasks for inter-agent timeout
         review_tasks = await asyncio.to_thread(
             self._bridge.query, "tasks:listByStatus", {"status": "review"}
         )
         for task in review_tasks or []:
-            await self._check_review_timeout(task, now, inter_agent_timeout_minutes)
+            found_work = await self._check_review_timeout(task, now, inter_agent_timeout_minutes) or found_work
+        return found_work
 
     async def _get_setting(self, key: str, default: int) -> int:
         """Read a timeout setting from Convex, falling back to default."""
@@ -100,17 +111,17 @@ class TimeoutChecker:
 
     async def _check_task_stall(
         self, task: dict[str, Any], now: datetime, global_timeout: int
-    ) -> None:
+    ) -> bool:
         """Check a single in_progress task for stalling."""
         task_id = task.get("id")
         if not task_id or task_id in self._flagged_stalled:
-            return
+            return False
 
         # Per-task override > global default > hardcoded fallback
         timeout_minutes = task.get("task_timeout") or global_timeout
         updated_at_str = task.get("updated_at")
         if not updated_at_str:
-            return
+            return False
 
         updated_at = datetime.fromisoformat(updated_at_str)
         if updated_at.tzinfo is None:
@@ -119,6 +130,8 @@ class TimeoutChecker:
         elapsed = now - updated_at
         if elapsed > timedelta(minutes=timeout_minutes):
             await self._flag_stalled_task(task_id, task, elapsed)
+            return True
+        return False
 
     async def _flag_stalled_task(
         self, task_id: str, task: dict[str, Any], elapsed: timedelta
@@ -157,22 +170,22 @@ class TimeoutChecker:
 
     async def _check_review_timeout(
         self, task: dict[str, Any], now: datetime, global_timeout: int
-    ) -> None:
+    ) -> bool:
         """Check a single review task for inter-agent timeout."""
         task_id = task.get("id")
         if not task_id or task_id in self._flagged_reviews:
-            return
+            return False
 
         # Only check tasks with configured reviewers
         reviewers = task.get("reviewers")
         if not reviewers:
-            return
+            return False
 
         # Per-task override > global default > hardcoded fallback
         timeout_minutes = task.get("inter_agent_timeout") or global_timeout
         updated_at_str = task.get("updated_at")
         if not updated_at_str:
-            return
+            return False
 
         updated_at = datetime.fromisoformat(updated_at_str)
         if updated_at.tzinfo is None:
@@ -181,6 +194,8 @@ class TimeoutChecker:
         elapsed = now - updated_at
         if elapsed > timedelta(minutes=timeout_minutes):
             await self._escalate_review(task_id, task, elapsed)
+            return True
+        return False
 
     async def _escalate_review(
         self, task_id: str, task: dict[str, Any], elapsed: timedelta

@@ -407,6 +407,7 @@ async def start_plan_negotiation_loop(
     task_id: str,
     poll_interval: float = 2.0,
     ask_user_registry: "Any | None" = None,
+    sleep_controller: Any | None = None,
 ) -> None:
     """Subscribe to main thread messages for a task in review or in_progress status
     and dispatch each new user message to the plan negotiation handler.
@@ -437,6 +438,7 @@ async def start_plan_negotiation_loop(
         "messages:listByTask",
         {"task_id": task_id},
         poll_interval=poll_interval,
+        sleep_controller=sleep_controller,
     )
 
     seen_message_ids: set[str] = set()
