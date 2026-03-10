@@ -2,7 +2,6 @@
 
 import json
 import sqlite3
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,9 +11,9 @@ from mc.memory.service import (
     consolidate_task_output,
     create_memory_store,
     quarantine_invalid_memory_files,
+    resolve_consolidation_model,
 )
 from mc.memory.store import HybridMemoryStore
-
 
 # ── create_memory_store ─────────────────────────────────────────────────────
 
@@ -157,10 +156,12 @@ class TestQuarantineInvalidMemoryFiles:
 def _make_llm_response(history_entry: str, memory_update: str):
     """Build a mock provider response with a save_memory tool call."""
     tool_call = MagicMock()
-    tool_call.arguments = json.dumps({
-        "history_entry": history_entry,
-        "memory_update": memory_update,
-    })
+    tool_call.arguments = json.dumps(
+        {
+            "history_entry": history_entry,
+            "memory_update": memory_update,
+        }
+    )
     response = MagicMock()
     response.tool_calls = [tool_call]
     return response
@@ -192,7 +193,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
@@ -213,7 +216,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(side_effect=Exception("API error"))
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
@@ -229,7 +234,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
@@ -250,7 +257,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
@@ -271,7 +280,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
@@ -290,7 +301,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
@@ -312,7 +325,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
@@ -332,17 +347,21 @@ class TestConsolidateTaskOutput:
     async def test_string_args_from_llm(self, workspace):
         """When the LLM returns arguments as a JSON string (not pre-parsed dict)."""
         tool_call = MagicMock()
-        tool_call.arguments = json.dumps({
-            "history_entry": "[2026-03-05] String args",
-            "memory_update": "# New memory",
-        })
+        tool_call.arguments = json.dumps(
+            {
+                "history_entry": "[2026-03-05] String args",
+                "memory_update": "# New memory",
+            }
+        )
         response = MagicMock()
         response.tool_calls = [tool_call]
 
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test",
@@ -363,7 +382,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test",
@@ -384,7 +405,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test",
@@ -408,7 +431,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 workspace,
                 task_title="Test",
@@ -430,7 +455,9 @@ class TestConsolidateTaskOutput:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        with patch("mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")):
+        with patch(
+            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+        ):
             result = await consolidate_task_output(
                 tmp_path,
                 task_title="First Task",
@@ -454,3 +481,92 @@ class TestConstants:
 
     def test_system_prompt_mentions_save_memory(self):
         assert "save_memory" in DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT
+
+
+# ── resolve_consolidation_model ────────────────────────────────────────────
+
+
+class TestResolveConsolidationModel:
+    """Tests for resolve_consolidation_model()."""
+
+    def test_tier_resolution_success(self):
+        """When TierResolver works, returns the resolved model."""
+        bridge = MagicMock()
+        with patch("mc.infrastructure.providers.tier_resolver.TierResolver") as mock_resolver:
+            mock_resolver.return_value.resolve_model.return_value = "openai-codex/gpt-5.4"
+            result = resolve_consolidation_model(bridge)
+
+        assert result == "openai-codex/gpt-5.4"
+
+    def test_tier_resolution_failure_falls_back_to_config(self):
+        """When TierResolver fails, falls back to config default model."""
+        bridge = MagicMock()
+        mock_config = MagicMock()
+        mock_config.agents.defaults.model = "anthropic-oauth/claude-sonnet-4-6"
+
+        with (
+            patch(
+                "mc.infrastructure.providers.tier_resolver.TierResolver",
+                side_effect=ValueError("no tier"),
+            ),
+            patch("nanobot.config.loader.load_config", return_value=mock_config),
+        ):
+            result = resolve_consolidation_model(bridge)
+
+        assert result == "anthropic-oauth/claude-sonnet-4-6"
+
+    def test_both_fail_returns_none(self):
+        """When both tier and config fail, returns None."""
+        bridge = MagicMock()
+
+        with (
+            patch(
+                "mc.infrastructure.providers.tier_resolver.TierResolver",
+                side_effect=Exception("convex down"),
+            ),
+            patch(
+                "nanobot.config.loader.load_config",
+                side_effect=Exception("no config"),
+            ),
+        ):
+            result = resolve_consolidation_model(bridge)
+
+        assert result is None
+
+    def test_no_bridge_skips_tier_uses_config(self):
+        """When bridge is None, skips tier resolution entirely."""
+        mock_config = MagicMock()
+        mock_config.agents.defaults.model = "anthropic-oauth/claude-sonnet-4-6"
+
+        with patch("nanobot.config.loader.load_config", return_value=mock_config):
+            result = resolve_consolidation_model(None)
+
+        assert result == "anthropic-oauth/claude-sonnet-4-6"
+
+    def test_no_bridge_no_config_returns_none(self):
+        """When bridge is None and config fails, returns None."""
+        with patch(
+            "nanobot.config.loader.load_config",
+            side_effect=Exception("no config"),
+        ):
+            result = resolve_consolidation_model(None)
+
+        assert result is None
+
+    def test_never_raises(self):
+        """Regardless of failures, never raises — returns None."""
+        bridge = MagicMock()
+
+        with (
+            patch(
+                "mc.infrastructure.providers.tier_resolver.TierResolver",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "nanobot.config.loader.load_config",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            result = resolve_consolidation_model(bridge)
+
+        assert result is None
