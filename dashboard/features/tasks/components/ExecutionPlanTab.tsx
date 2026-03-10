@@ -197,6 +197,9 @@ type PendingCanvasOp = {
   type: "sequential" | "parallel" | "merge";
   sourceStepId: string;
   defaultBlockedByIds: string[];
+  newStepTempId: string;
+  previousPlan: ExecutionPlan;
+  planWithPlaceholder: ExecutionPlan;
 };
 
 /* ── Component ── */
@@ -333,29 +336,67 @@ export function ExecutionPlanTab({
   // Editable plan steps for canvas operations
   const editablePlanSteps = useMemo(() => normalizedStepsToPlanSteps(steps), [steps]);
 
-  // Canvas directional button handlers
-  const handleAddSequential = useCallback((stepId: string) => {
-    setPendingCanvasOp({
-      type: "sequential",
-      sourceStepId: stepId,
-      defaultBlockedByIds: [stepId],
-    });
-    setShowAddForm(true);
-    setEditingStepId(null);
-  }, []);
+  // Helper: insert placeholder step immediately into canvas and open form
+  const insertPlaceholderAndOpenForm = useCallback(
+    (
+      type: PendingCanvasOp["type"],
+      sourceStepId: string,
+      defaultBlockedByIds: string[],
+      insertFn: (steps: PlanStep[]) => PlanStep[],
+    ) => {
+      if (!onLocalPlanChange) return;
+      const currentPlan = executionPlan as ExecutionPlan | null;
+      const currentSteps = currentPlan?.steps ?? [];
+      const previousPlan: ExecutionPlan = {
+        steps: currentSteps,
+        generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
+        generatedBy: currentPlan?.generatedBy ?? "lead-agent",
+      };
 
-  const handleAddParallel = useCallback(
-    (stepId: string) => {
-      const sourceStep = editablePlanSteps.find((s) => s.tempId === stepId);
+      const updatedSteps = insertFn(currentSteps);
+      const existingIds = new Set(currentSteps.map((s) => s.tempId));
+      const newStep = updatedSteps.find((s) => !existingIds.has(s.tempId));
+      if (!newStep) return;
+
+      const planWithPlaceholder: ExecutionPlan = {
+        ...previousPlan,
+        steps: updatedSteps,
+      };
+      onLocalPlanChange(planWithPlaceholder);
+
       setPendingCanvasOp({
-        type: "parallel",
-        sourceStepId: stepId,
-        defaultBlockedByIds: sourceStep?.blockedBy ?? [],
+        type,
+        sourceStepId,
+        defaultBlockedByIds,
+        newStepTempId: newStep.tempId,
+        previousPlan,
+        planWithPlaceholder,
       });
       setShowAddForm(true);
       setEditingStepId(null);
     },
-    [editablePlanSteps],
+    [executionPlan, onLocalPlanChange],
+  );
+
+  // Canvas directional button handlers
+  const handleAddSequential = useCallback(
+    (stepId: string) => {
+      insertPlaceholderAndOpenForm("sequential", stepId, [stepId], (steps) =>
+        insertSequentialStep(steps, stepId),
+      );
+    },
+    [insertPlaceholderAndOpenForm],
+  );
+
+  const handleAddParallel = useCallback(
+    (stepId: string) => {
+      const sourceStep = editablePlanSteps.find((s) => s.tempId === stepId);
+      const blockers = sourceStep?.blockedBy ?? [];
+      insertPlaceholderAndOpenForm("parallel", stepId, blockers, (steps) =>
+        insertParallelStep(steps, stepId),
+      );
+    },
+    [editablePlanSteps, insertPlaceholderAndOpenForm],
   );
 
   const handleMergePaths = useCallback(
@@ -365,26 +406,34 @@ export function ExecutionPlanTab({
       const siblings = editablePlanSteps.filter(
         (s) => s.parallelGroup === sourceStep.parallelGroup,
       );
-      setPendingCanvasOp({
-        type: "merge",
-        sourceStepId: stepId,
-        defaultBlockedByIds: siblings.map((s) => s.tempId),
-      });
-      setShowAddForm(true);
-      setEditingStepId(null);
+      insertPlaceholderAndOpenForm(
+        "merge",
+        stepId,
+        siblings.map((s) => s.tempId),
+        (steps) => insertMergeStep(steps, stepId),
+      );
     },
-    [editablePlanSteps],
+    [editablePlanSteps, insertPlaceholderAndOpenForm],
   );
+
+  // Cancel a pending canvas operation: restore the plan to its pre-insertion state
+  const cancelCanvasOp = useCallback(() => {
+    if (pendingCanvasOp?.previousPlan && onLocalPlanChange) {
+      onLocalPlanChange(pendingCanvasOp.previousPlan);
+    }
+    setPendingCanvasOp(null);
+    setShowAddForm(false);
+  }, [pendingCanvasOp, onLocalPlanChange]);
 
   const handleStepClick = useCallback(
     (stepId: string) => {
       if (!canAddOrEdit) return;
+      if (pendingCanvasOp) cancelCanvasOp();
       setEditingStepId(stepId);
       setEditStepError(null);
       setShowAddForm(false);
-      setPendingCanvasOp(null);
     },
-    [canAddOrEdit],
+    [canAddOrEdit, pendingCanvasOp, cancelCanvasOp],
   );
 
   const handleNodeClick = useCallback(
@@ -473,37 +522,22 @@ export function ExecutionPlanTab({
 
   const handleAddStep = useCallback(
     async (data: AddStepData) => {
-      // Canvas operation: use planUtils for graph-aware insertion
+      // Canvas operation: update the placeholder step with form data
       if (pendingCanvasOp && isReviewMode && onLocalPlanChange) {
-        const currentPlan = executionPlan as ExecutionPlan | null;
-        const currentSteps = currentPlan?.steps ?? [];
-        const stepData = {
-          title: data.title,
-          description: data.description,
-          assignedAgent: data.assignedAgent,
-        };
-
-        let updatedSteps: PlanStep[] = currentSteps;
-        switch (pendingCanvasOp.type) {
-          case "sequential":
-            updatedSteps = insertSequentialStep(
-              currentSteps,
-              pendingCanvasOp.sourceStepId,
-              stepData,
-            );
-            break;
-          case "parallel":
-            updatedSteps = insertParallelStep(currentSteps, pendingCanvasOp.sourceStepId, stepData);
-            break;
-          case "merge":
-            updatedSteps = insertMergeStep(currentSteps, pendingCanvasOp.sourceStepId, stepData);
-            break;
-        }
+        const basePlan = pendingCanvasOp.planWithPlaceholder;
+        const updatedSteps = basePlan.steps.map((s) => {
+          if (s.tempId !== pendingCanvasOp.newStepTempId) return s;
+          return {
+            ...s,
+            title: data.title,
+            description: data.description,
+            assignedAgent: data.assignedAgent,
+          };
+        });
 
         const updatedPlan: ExecutionPlan = {
+          ...basePlan,
           steps: updatedSteps,
-          generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
-          generatedBy: currentPlan?.generatedBy ?? "lead-agent",
         };
         onLocalPlanChange(updatedPlan);
         setPendingCanvasOp(null);
@@ -699,8 +733,8 @@ export function ExecutionPlanTab({
               size="sm"
               className="h-6 px-2 text-xs"
               onClick={() => {
+                if (pendingCanvasOp) cancelCanvasOp();
                 setAddStepError(null);
-                setPendingCanvasOp(null);
                 setShowAddForm((prev) => !prev);
               }}
               data-testid="add-step-button"
@@ -717,10 +751,7 @@ export function ExecutionPlanTab({
               boardId={boardId}
               defaultBlockedByIds={pendingCanvasOp?.defaultBlockedByIds}
               onAdd={handleAddStep}
-              onCancel={() => {
-                setShowAddForm(false);
-                setPendingCanvasOp(null);
-              }}
+              onCancel={pendingCanvasOp ? cancelCanvasOp : () => setShowAddForm(false)}
             />
             {addStepError && (
               <p className="text-xs text-destructive mt-1" data-testid="add-step-error">
@@ -748,6 +779,7 @@ export function ExecutionPlanTab({
             size="sm"
             className="h-6 px-2 text-xs"
             onClick={() => {
+              if (pendingCanvasOp) cancelCanvasOp();
               setAddStepError(null);
               setShowAddForm((prev) => !prev);
             }}
@@ -767,10 +799,7 @@ export function ExecutionPlanTab({
             boardId={boardId}
             defaultBlockedByIds={pendingCanvasOp?.defaultBlockedByIds}
             onAdd={handleAddStep}
-            onCancel={() => {
-              setShowAddForm(false);
-              setPendingCanvasOp(null);
-            }}
+            onCancel={pendingCanvasOp ? cancelCanvasOp : () => setShowAddForm(false)}
           />
           {addStepError && (
             <p className="text-xs text-destructive mt-1" data-testid="add-step-error">

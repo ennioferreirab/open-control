@@ -736,14 +736,15 @@ describe("ExecutionPlanTab", () => {
         />,
       );
 
-      // Click sequential on step_1
+      // Click sequential on step_1 — inserts placeholder immediately (1st call)
       fireEvent.click(screen.getByTestId("flow-node-add-sequential-step_1"));
-
-      // Submit the form
-      fireEvent.click(screen.getByTestId("mock-add-btn"));
-
       expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
-      const updatedPlan = onLocalPlanChange.mock.calls[0][0];
+
+      // Submit the form — updates placeholder with form data (2nd call)
+      fireEvent.click(screen.getByTestId("mock-add-btn"));
+      expect(onLocalPlanChange).toHaveBeenCalledTimes(2);
+
+      const updatedPlan = onLocalPlanChange.mock.calls[1][0];
 
       // Should have 3 steps now
       expect(updatedPlan.steps).toHaveLength(3);
@@ -820,11 +821,12 @@ describe("ExecutionPlanTab", () => {
       expect(defaultBlockers).toContain("step_3");
       expect(defaultBlockers).toHaveLength(2);
 
-      // Submit the form
+      // Submit the form — updates placeholder with form data (2nd call)
       fireEvent.click(screen.getByTestId("mock-add-btn"));
 
-      expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
-      const updatedPlan = onLocalPlanChange.mock.calls[0][0];
+      // 1st call: placeholder insertion, 2nd call: form submit update
+      expect(onLocalPlanChange).toHaveBeenCalledTimes(2);
+      const updatedPlan = onLocalPlanChange.mock.calls[1][0];
 
       // Should have 4 steps now (3 original + 1 merge)
       expect(updatedPlan.steps).toHaveLength(4);
@@ -840,7 +842,7 @@ describe("ExecutionPlanTab", () => {
       expect(mergeStep.title).toBe("New Step");
     });
 
-    it("canceling the form after canvas op clears pendingCanvasOp", () => {
+    it("canceling the form after canvas op restores previous plan", () => {
       const onLocalPlanChange = vi.fn();
       render(
         <ExecutionPlanTab
@@ -851,16 +853,23 @@ describe("ExecutionPlanTab", () => {
         />,
       );
 
-      // Click sequential on step_1
+      // Click sequential on step_1 — inserts placeholder (1st call)
       fireEvent.click(screen.getByTestId("flow-node-add-sequential-step_1"));
       expect(screen.getByTestId("add-step-form")).toBeInTheDocument();
+      expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
 
-      // Cancel
+      // Cancel — restores previous plan (2nd call)
       fireEvent.click(screen.getByTestId("mock-cancel-btn"));
       expect(screen.queryByTestId("add-step-form")).not.toBeInTheDocument();
 
-      // onLocalPlanChange should not have been called
-      expect(onLocalPlanChange).not.toHaveBeenCalled();
+      // 2nd call restores the original plan (2 steps, no placeholder)
+      expect(onLocalPlanChange).toHaveBeenCalledTimes(2);
+      const restoredPlan = onLocalPlanChange.mock.calls[1][0];
+      expect(restoredPlan.steps).toHaveLength(2);
+      expect(restoredPlan.steps.map((s: { tempId: string }) => s.tempId)).toEqual([
+        "step_1",
+        "step_2",
+      ]);
     });
   });
 });
