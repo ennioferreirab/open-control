@@ -437,6 +437,12 @@ export const retryStep = mutation({
       timestamp,
     });
 
+    await ctx.db.patch(step.taskId, {
+      status: "in_progress",
+      stalledAt: undefined,
+      updatedAt: timestamp,
+    });
+
     return step.taskId;
   },
 });

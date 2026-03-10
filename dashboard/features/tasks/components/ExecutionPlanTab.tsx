@@ -112,39 +112,50 @@ function mergeStepsWithLiveData(
 ): NormalizedStep[] {
   if (!liveSteps || liveSteps.length === 0) return planSteps;
 
-  const byOrder = new Map<number, LiveStep>();
-  const byTitle = new Map<string, LiveStep>();
-  const byDescription = new Map<string, LiveStep>();
   const byLiveId = new Map<string, LiveStep>();
-
   for (const liveStep of liveSteps) {
-    byOrder.set(liveStep.order, liveStep);
-    byTitle.set(liveStep.title, liveStep);
-    byDescription.set(liveStep.description, liveStep);
     byLiveId.set(liveStep._id, liveStep);
   }
 
+  const unusedLiveSteps = [...liveSteps];
+  const takeMatch = (predicate: (liveStep: LiveStep) => boolean): LiveStep | undefined => {
+    const index = unusedLiveSteps.findIndex(predicate);
+    if (index === -1) return undefined;
+    return unusedLiveSteps.splice(index, 1)[0];
+  };
+
   const matched = planSteps.map((planStep) => {
     const liveStep =
-      byOrder.get(planStep.order) ??
-      (planStep.title ? byTitle.get(planStep.title) : undefined) ??
-      byDescription.get(planStep.description);
+      takeMatch(
+        (candidate) =>
+          candidate.order === planStep.order &&
+          candidate.title === planStep.title &&
+          candidate.description === planStep.description,
+      ) ??
+      (planStep.title
+        ? takeMatch(
+            (candidate) =>
+              candidate.title === planStep.title &&
+              candidate.description === planStep.description,
+          )
+        : undefined) ??
+      (planStep.title
+        ? takeMatch((candidate) => candidate.title === planStep.title)
+        : undefined) ??
+      takeMatch((candidate) => candidate.description === planStep.description) ??
+      takeMatch((candidate) => candidate.order === planStep.order);
     return { planStep, liveStep };
   });
 
   const planIdByLiveId = new Map<string, string>();
-  const planIdByOrder = new Map<number, string>();
   for (const { planStep, liveStep } of matched) {
-    planIdByOrder.set(planStep.order, planStep.stepId);
     if (liveStep?._id) planIdByLiveId.set(liveStep._id, planStep.stepId);
   }
 
   const resolveDependencyId = (dependencyId: string): string => {
     const mappedById = planIdByLiveId.get(dependencyId);
     if (mappedById) return mappedById;
-    const dependencyLiveStep = byLiveId.get(dependencyId);
-    if (!dependencyLiveStep) return dependencyId;
-    return planIdByOrder.get(dependencyLiveStep.order) ?? dependencyId;
+    return byLiveId.get(dependencyId)?._id ?? dependencyId;
   };
 
   return matched.map(({ planStep, liveStep }) => {

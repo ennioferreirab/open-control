@@ -49,6 +49,18 @@ function getMimeType(filename: string): string {
   return MIME_MAP[ext] ?? "application/octet-stream";
 }
 
+function isValidFilename(subfolder: string, filename: string): boolean {
+  if (subfolder === "attachments") {
+    return FILENAME_RE.test(filename) && filename !== "..";
+  }
+
+  if (subfolder !== "output" || !filename || filename.startsWith("/") || filename.includes("\\")) {
+    return false;
+  }
+
+  return filename.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ taskId: string; subfolder: string; filename: string }> },
@@ -61,7 +73,7 @@ export async function GET(
   if (!VALID_SUBFOLDERS.has(subfolder)) {
     return NextResponse.json({ error: "Invalid subfolder" }, { status: 400 });
   }
-  if (!FILENAME_RE.test(filename) || filename === "..") {
+  if (!isValidFilename(subfolder, filename)) {
     return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   }
 

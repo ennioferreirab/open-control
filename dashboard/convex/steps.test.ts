@@ -436,6 +436,7 @@ describe("retryStep", () => {
   it("retries a crashed step and moves parent task to retrying", async () => {
     const handler = getHandler();
     const patchedById: Record<string, Record<string, unknown>> = {};
+    const taskPatches: Record<string, unknown>[] = [];
     const inserted: Array<{ table: string; value: Record<string, unknown> }> = [];
 
     const step = {
@@ -462,6 +463,9 @@ describe("retryStep", () => {
           return null;
         },
         patch: async (id: string, value: Record<string, unknown>) => {
+          if (id === "task-1") {
+            taskPatches.push(value);
+          }
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async (table: string, value: Record<string, unknown>) => {
@@ -481,6 +485,10 @@ describe("retryStep", () => {
       completedAt: undefined,
     });
     expect(patchedById["task-1"]).toMatchObject({
+      status: "in_progress",
+      stalledAt: undefined,
+    });
+    expect(taskPatches[0]).toMatchObject({
       status: "retrying",
       stalledAt: undefined,
     });

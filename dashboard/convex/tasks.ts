@@ -606,6 +606,12 @@ export const retry = mutation({
         messageType: "system_event",
         timestamp: now,
       });
+
+      await ctx.db.patch(args.taskId, {
+        status: "in_progress",
+        stalledAt: undefined,
+        updatedAt: now,
+      });
       return;
     }
 

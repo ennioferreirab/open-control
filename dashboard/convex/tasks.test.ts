@@ -346,6 +346,10 @@ describe("tasks.retry", () => {
       status: "retrying",
       stalledAt: undefined,
     });
+    expect(patchedTasks[1]).toMatchObject({
+      status: "in_progress",
+      stalledAt: undefined,
+    });
     expect(patchedSteps["step-1"]).toMatchObject({
       status: "assigned",
       errorMessage: undefined,

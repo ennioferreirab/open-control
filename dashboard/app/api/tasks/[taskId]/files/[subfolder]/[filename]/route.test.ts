@@ -189,8 +189,11 @@ describe("GET /api/tasks/[taskId]/files/[subfolder]/[filename]", () => {
     expect(body.error).toBe("Invalid filename");
   });
 
-  it("returns 400 for filename containing '/'", async () => {
-    const res = await GET(makeReq("task-1", "output", "sub/file.txt"), makeParams("task-1", "output", "sub/file.txt"));
+  it("returns 400 for attachment filename containing '/'", async () => {
+    const res = await GET(
+      makeReq("task-1", "attachments", "sub/file.txt"),
+      makeParams("task-1", "attachments", "sub/file.txt"),
+    );
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("Invalid filename");
@@ -215,6 +218,39 @@ describe("GET /api/tasks/[taskId]/files/[subfolder]/[filename]", () => {
     mockReadFile.mockResolvedValue(buf);
     const res = await GET(makeReq("task-1", "output", "file..txt"), makeParams("task-1", "output", "file..txt"));
     expect(res.status).toBe(200);
+  });
+
+  it("accepts nested paths under output", async () => {
+    const buf = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    mockReadFile.mockResolvedValue(buf);
+    const res = await GET(
+      makeReq("task-1", "output", "logos/provit_logo_v2_moderno.png"),
+      makeParams("task-1", "output", "logos/provit_logo_v2_moderno.png"),
+    );
+    expect(res.status).toBe(200);
+    expect(mockReadFile).toHaveBeenCalledWith(
+      "/home/test/.nanobot/tasks/task-1/output/logos/provit_logo_v2_moderno.png",
+    );
+  });
+
+  it("returns 400 for output filename containing path traversal", async () => {
+    const res = await GET(
+      makeReq("task-1", "output", "../etc/passwd"),
+      makeParams("task-1", "output", "../etc/passwd"),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Invalid filename");
+  });
+
+  it("returns 400 for output filename with nested traversal segment", async () => {
+    const res = await GET(
+      makeReq("task-1", "output", "logos/../secret.txt"),
+      makeParams("task-1", "output", "logos/../secret.txt"),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Invalid filename");
   });
 
   it("does not access filesystem when taskId validation fails", async () => {

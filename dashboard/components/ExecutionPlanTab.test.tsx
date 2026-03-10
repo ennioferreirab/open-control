@@ -31,7 +31,11 @@ vi.mock("@xyflow/react", () => ({
         .filter((n) => n.id !== "__start__" && n.id !== "__end__")
         .map((n) => (
           <div key={n.id}>
-            <div data-testid={`flow-node-${n.id}`} data-status={n.data.status ?? "planned"}>
+            <div
+              data-testid={`flow-node-${n.id}`}
+              data-status={n.data.status ?? "planned"}
+              data-agent={n.data.step && "assignedAgent" in n.data.step ? String(n.data.step.assignedAgent ?? "") : ""}
+            >
               {n.data.step?.title || n.data.step?.title === "" ? n.data.step.title : "Untitled"}
             </div>
             {n.data.onAccept && (
@@ -280,6 +284,78 @@ describe("ExecutionPlanTab", () => {
     );
     const node = screen.getByTestId("flow-node-s1");
     expect(node.getAttribute("data-status")).toBe("running");
+  });
+
+  it("preserves distinct assigned agents for parallel live steps sharing the same order", () => {
+    const plan = {
+      steps: [
+        makeStep({
+          stepId: "sales",
+          title: "Brainstorm vendas",
+          description: "Perspectiva comercial",
+          assignedAgent: "sales-revops",
+          order: 1,
+          parallelGroup: 1,
+        }),
+        makeStep({
+          stepId: "finance",
+          title: "Brainstorm finanças",
+          description: "Perspectiva financeira",
+          assignedAgent: "finance-pricing",
+          order: 1,
+          parallelGroup: 1,
+        }),
+        makeStep({
+          stepId: "marketing",
+          title: "Brainstorm marketing",
+          description: "Perspectiva de posicionamento",
+          assignedAgent: "marketing-copy",
+          order: 1,
+          parallelGroup: 1,
+        }),
+      ],
+      createdAt: "2026-01-01",
+    };
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        taskStatus="in_progress"
+        liveSteps={[
+          {
+            _id: "live-sales",
+            title: "Brainstorm vendas",
+            description: "Perspectiva comercial",
+            assignedAgent: "sales-revops",
+            status: "completed",
+            parallelGroup: 1,
+            order: 1,
+          },
+          {
+            _id: "live-finance",
+            title: "Brainstorm finanças",
+            description: "Perspectiva financeira",
+            assignedAgent: "finance-pricing",
+            status: "completed",
+            parallelGroup: 1,
+            order: 1,
+          },
+          {
+            _id: "live-marketing",
+            title: "Brainstorm marketing",
+            description: "Perspectiva de posicionamento",
+            assignedAgent: "marketing-copy",
+            status: "completed",
+            parallelGroup: 1,
+            order: 1,
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId("flow-node-sales")).toHaveAttribute("data-agent", "sales-revops");
+    expect(screen.getByTestId("flow-node-finance")).toHaveAttribute("data-agent", "finance-pricing");
+    expect(screen.getByTestId("flow-node-marketing")).toHaveAttribute("data-agent", "marketing-copy");
   });
 
   it("retries a crashed step from the read-only flow", async () => {
