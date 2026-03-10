@@ -4,28 +4,84 @@ import { ExecutionPlanTab } from "./ExecutionPlanTab";
 
 // Mock PlanEditor so we can test without React Flow and Convex dependencies
 vi.mock("./PlanEditor", () => ({
-  PlanEditor: ({ plan, taskId }: { plan: unknown; taskId: string; onPlanChange?: (p: unknown) => void }) => (
+  PlanEditor: ({
+    plan,
+    taskId,
+  }: {
+    plan: unknown;
+    taskId: string;
+    onPlanChange?: (p: unknown) => void;
+  }) => (
     <div data-testid="plan-editor" data-task-id={taskId}>
       PlanEditor: {plan ? "plan loaded" : "no plan"}
     </div>
   ),
 }));
 
-// Mock AddStepForm
+// Mock AddStepForm — exposes defaultBlockedByIds for assertions
 vi.mock("./AddStepForm", () => ({
-  AddStepForm: ({ onAdd, onCancel }: { existingSteps: unknown[]; boardId?: string; onAdd: (data: { title: string; description: string; assignedAgent: string; blockedByIds: string[] }) => void; onCancel: () => void }) => {
+  AddStepForm: ({
+    onAdd,
+    onCancel,
+    defaultBlockedByIds,
+  }: {
+    existingSteps: unknown[];
+    boardId?: string;
+    defaultBlockedByIds?: string[];
+    onAdd: (data: {
+      title: string;
+      description: string;
+      assignedAgent: string;
+      blockedByIds: string[];
+    }) => void;
+    onCancel: () => void;
+  }) => {
     return (
-      <div data-testid="add-step-form">
-        <button data-testid="mock-add-btn" onClick={() => onAdd({ title: "New Step", description: "Desc", assignedAgent: "agent-a", blockedByIds: [] })}>Add</button>
-        <button data-testid="mock-cancel-btn" onClick={onCancel}>Cancel</button>
+      <div
+        data-testid="add-step-form"
+        data-default-blocked-by={JSON.stringify(defaultBlockedByIds ?? [])}
+      >
+        <button
+          data-testid="mock-add-btn"
+          onClick={() =>
+            onAdd({
+              title: "New Step",
+              description: "Desc",
+              assignedAgent: "agent-a",
+              blockedByIds: defaultBlockedByIds ?? [],
+            })
+          }
+        >
+          Add
+        </button>
+        <button data-testid="mock-cancel-btn" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
     );
   },
 }));
 
-// Mock React Flow for read-only view
+// Mock React Flow for read-only view — also exposes canvas operation handlers
 vi.mock("@xyflow/react", () => ({
-  ReactFlow: ({ nodes }: { nodes: { id: string; data: { step?: { title: string }; status?: string; onAccept?: (id: string) => void; onRetry?: (id: string) => void } }[]; [key: string]: unknown }) => (
+  ReactFlow: ({
+    nodes,
+  }: {
+    nodes: {
+      id: string;
+      data: {
+        step?: { title: string; tempId?: string; assignedAgent?: string };
+        status?: string;
+        isEditMode?: boolean;
+        onAccept?: (id: string) => void;
+        onRetry?: (id: string) => void;
+        onAddSequential?: (id: string) => void;
+        onAddParallel?: (id: string) => void;
+        onMergePaths?: (id: string) => void;
+      };
+    }[];
+    [key: string]: unknown;
+  }) => (
     <div data-testid="react-flow-readonly">
       {nodes
         .filter((n) => n.id !== "__start__" && n.id !== "__end__")
@@ -34,7 +90,12 @@ vi.mock("@xyflow/react", () => ({
             <div
               data-testid={`flow-node-${n.id}`}
               data-status={n.data.status ?? "planned"}
-              data-agent={n.data.step && "assignedAgent" in n.data.step ? String(n.data.step.assignedAgent ?? "") : ""}
+              data-agent={
+                n.data.step && "assignedAgent" in n.data.step
+                  ? String(n.data.step.assignedAgent ?? "")
+                  : ""
+              }
+              data-edit-mode={n.data.isEditMode ? "true" : "false"}
             >
               {n.data.step?.title || n.data.step?.title === "" ? n.data.step.title : "Untitled"}
             </div>
@@ -54,6 +115,33 @@ vi.mock("@xyflow/react", () => ({
                 onClick={() => n.data.onRetry?.(n.id)}
               >
                 Retry
+              </button>
+            )}
+            {n.data.onAddSequential && (
+              <button
+                type="button"
+                data-testid={`flow-node-add-sequential-${n.id}`}
+                onClick={() => n.data.onAddSequential?.(n.id)}
+              >
+                Add Sequential
+              </button>
+            )}
+            {n.data.onAddParallel && (
+              <button
+                type="button"
+                data-testid={`flow-node-add-parallel-${n.id}`}
+                onClick={() => n.data.onAddParallel?.(n.id)}
+              >
+                Add Parallel
+              </button>
+            )}
+            {n.data.onMergePaths && (
+              <button
+                type="button"
+                data-testid={`flow-node-merge-paths-${n.id}`}
+                onClick={() => n.data.onMergePaths?.(n.id)}
+              >
+                Merge Paths
               </button>
             )}
           </div>
@@ -156,9 +244,7 @@ describe("ExecutionPlanTab", () => {
 
   it("renders React Flow canvas in read-only mode", () => {
     const plan = {
-      steps: [
-        makeStep({ stepId: "s1", title: "First", description: "Step one" }),
-      ],
+      steps: [makeStep({ stepId: "s1", title: "First", description: "Step one" })],
       createdAt: "2026-01-01",
     };
     render(<ExecutionPlanTab executionPlan={plan} />);
@@ -167,9 +253,7 @@ describe("ExecutionPlanTab", () => {
 
   it("renders inline edit controls when isEditMode=true and plan is available", () => {
     const plan = {
-      steps: [
-        makeStep({ stepId: "s1", description: "Step one", title: "One" }),
-      ],
+      steps: [makeStep({ stepId: "s1", description: "Step one", title: "One" })],
       generatedAt: "2026-01-01T00:00:00Z",
       generatedBy: "lead-agent",
       createdAt: "2026-01-01",
@@ -180,7 +264,7 @@ describe("ExecutionPlanTab", () => {
         isEditMode={true}
         taskId="task-abc"
         onLocalPlanChange={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByTestId("add-step-button")).toBeInTheDocument();
     expect(screen.getByText("0/1 steps completed")).toBeInTheDocument();
@@ -189,27 +273,17 @@ describe("ExecutionPlanTab", () => {
 
   it("renders read-only view when isEditMode=false", () => {
     const plan = {
-      steps: [
-        makeStep({ stepId: "s1", description: "Step one" }),
-      ],
+      steps: [makeStep({ stepId: "s1", description: "Step one" })],
       createdAt: "2026-01-01",
     };
-    render(
-      <ExecutionPlanTab
-        executionPlan={plan}
-        isEditMode={false}
-        taskId="task-abc"
-      />
-    );
+    render(<ExecutionPlanTab executionPlan={plan} isEditMode={false} taskId="task-abc" />);
     expect(screen.getByText("0/1 steps completed")).toBeInTheDocument();
     expect(screen.queryByTestId("plan-editor")).not.toBeInTheDocument();
   });
 
   it("renders read-only view by default (no isEditMode prop)", () => {
     const plan = {
-      steps: [
-        makeStep({ stepId: "s1", description: "Step one" }),
-      ],
+      steps: [makeStep({ stepId: "s1", description: "Step one" })],
       createdAt: "2026-01-01",
     };
     render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" />);
@@ -219,26 +293,17 @@ describe("ExecutionPlanTab", () => {
 
   it("does NOT render PlanEditor when isEditMode=true but no taskId", () => {
     const plan = {
-      steps: [
-        makeStep({ stepId: "s1", description: "Step one" }),
-      ],
+      steps: [makeStep({ stepId: "s1", description: "Step one" })],
       createdAt: "2026-01-01",
     };
-    render(
-      <ExecutionPlanTab
-        executionPlan={plan}
-        isEditMode={true}
-      />
-    );
+    render(<ExecutionPlanTab executionPlan={plan} isEditMode={true} />);
     expect(screen.getByText("0/1 steps completed")).toBeInTheDocument();
     expect(screen.queryByTestId("plan-editor")).not.toBeInTheDocument();
   });
 
   it("does NOT render PlanEditor when isEditMode=true but generatedAt is absent", () => {
     const plan = {
-      steps: [
-        makeStep({ stepId: "s1", description: "Step one", title: "One" }),
-      ],
+      steps: [makeStep({ stepId: "s1", description: "Step one", title: "One" })],
       createdAt: "2026-01-01",
     };
     render(
@@ -247,7 +312,7 @@ describe("ExecutionPlanTab", () => {
         isEditMode={true}
         taskId="task-abc"
         onLocalPlanChange={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByText("0/1 steps completed")).toBeInTheDocument();
     expect(screen.queryByTestId("plan-editor")).not.toBeInTheDocument();
@@ -280,7 +345,7 @@ describe("ExecutionPlanTab", () => {
             order: 1,
           },
         ]}
-      />
+      />,
     );
     const node = screen.getByTestId("flow-node-s1");
     expect(node.getAttribute("data-status")).toBe("running");
@@ -350,12 +415,18 @@ describe("ExecutionPlanTab", () => {
             order: 1,
           },
         ]}
-      />
+      />,
     );
 
     expect(screen.getByTestId("flow-node-sales")).toHaveAttribute("data-agent", "sales-revops");
-    expect(screen.getByTestId("flow-node-finance")).toHaveAttribute("data-agent", "finance-pricing");
-    expect(screen.getByTestId("flow-node-marketing")).toHaveAttribute("data-agent", "marketing-copy");
+    expect(screen.getByTestId("flow-node-finance")).toHaveAttribute(
+      "data-agent",
+      "finance-pricing",
+    );
+    expect(screen.getByTestId("flow-node-marketing")).toHaveAttribute(
+      "data-agent",
+      "marketing-copy",
+    );
   });
 
   it("retries a crashed step from the read-only flow", async () => {
@@ -386,7 +457,7 @@ describe("ExecutionPlanTab", () => {
             order: 1,
           },
         ]}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByTestId("flow-node-retry-step-1"));
@@ -426,9 +497,7 @@ describe("ExecutionPlanTab", () => {
       steps: [makeStep({ stepId: "s1", description: "Step one" })],
       createdAt: "2026-01-01",
     };
-    render(
-      <ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />
-    );
+    render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />);
 
     // Initially form is hidden
     expect(screen.queryByTestId("add-step-form")).not.toBeInTheDocument();
@@ -445,9 +514,7 @@ describe("ExecutionPlanTab", () => {
       steps: [makeStep({ stepId: "s1", description: "Step one" })],
       createdAt: "2026-01-01",
     };
-    render(
-      <ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />
-    );
+    render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />);
 
     fireEvent.click(screen.getByTestId("add-step-button"));
     expect(screen.getByTestId("add-step-form")).toBeInTheDocument();
@@ -482,7 +549,7 @@ describe("ExecutionPlanTab", () => {
         taskStatus="review"
         isEditMode={false}
         onLocalPlanChange={onLocalPlanChange}
-      />
+      />,
     );
 
     // Show the form
@@ -507,21 +574,13 @@ describe("ExecutionPlanTab", () => {
 
   it("in in_progress mode, onAdd calls addStep mutation", async () => {
     const plan = {
-      steps: [
-        makeStep({ stepId: "s1", description: "Step one", order: 1 }),
-      ],
+      steps: [makeStep({ stepId: "s1", description: "Step one", order: 1 })],
       createdAt: "2026-01-01",
     };
 
     mockMutationFn.mockClear();
 
-    render(
-      <ExecutionPlanTab
-        executionPlan={plan}
-        taskId="task-abc"
-        taskStatus="in_progress"
-      />
-    );
+    render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />);
 
     // Show the form
     fireEvent.click(screen.getByTestId("add-step-button"));
@@ -544,21 +603,13 @@ describe("ExecutionPlanTab", () => {
 
   it("in done mode, onAdd calls addStep mutation", async () => {
     const plan = {
-      steps: [
-        makeStep({ stepId: "s1", description: "Step one", order: 1 }),
-      ],
+      steps: [makeStep({ stepId: "s1", description: "Step one", order: 1 })],
       createdAt: "2026-01-01",
     };
 
     mockMutationFn.mockClear();
 
-    render(
-      <ExecutionPlanTab
-        executionPlan={plan}
-        taskId="task-abc"
-        taskStatus="done"
-      />
-    );
+    render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="done" />);
 
     // Show the form
     fireEvent.click(screen.getByTestId("add-step-button"));
@@ -576,6 +627,159 @@ describe("ExecutionPlanTab", () => {
       description: "Desc",
       assignedAgent: "agent-a",
       blockedByStepIds: undefined,
+    });
+  });
+
+  describe("canvas directional buttons", () => {
+    const reviewPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          stepId: "step_1",
+          title: "Step A",
+          description: "First step",
+          assignedAgent: "agent-a",
+          blockedBy: [] as string[],
+          parallelGroup: 1,
+          order: 1,
+        },
+        {
+          tempId: "step_2",
+          stepId: "step_2",
+          title: "Step B",
+          description: "Second step",
+          assignedAgent: "agent-b",
+          blockedBy: ["step_1"] as string[],
+          parallelGroup: 2,
+          order: 2,
+        },
+      ],
+      generatedAt: "2026-01-01T00:00:00Z",
+      generatedBy: "lead-agent" as const,
+      createdAt: "2026-01-01",
+    };
+
+    it("shows canvas edit mode buttons when in review mode with onLocalPlanChange", () => {
+      render(
+        <ExecutionPlanTab
+          executionPlan={reviewPlan}
+          taskId="task-abc"
+          taskStatus="review"
+          onLocalPlanChange={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("flow-node-step_1")).toHaveAttribute("data-edit-mode", "true");
+      expect(screen.getByTestId("flow-node-add-sequential-step_1")).toBeInTheDocument();
+      expect(screen.getByTestId("flow-node-add-parallel-step_1")).toBeInTheDocument();
+    });
+
+    it("does NOT show canvas edit buttons when onLocalPlanChange is absent", () => {
+      render(<ExecutionPlanTab executionPlan={reviewPlan} taskId="task-abc" taskStatus="review" />);
+
+      expect(screen.getByTestId("flow-node-step_1")).toHaveAttribute("data-edit-mode", "false");
+      expect(screen.queryByTestId("flow-node-add-sequential-step_1")).not.toBeInTheDocument();
+    });
+
+    it("clicking sequential button opens AddStepForm with sourceStepId as blocker", () => {
+      const onLocalPlanChange = vi.fn();
+      render(
+        <ExecutionPlanTab
+          executionPlan={reviewPlan}
+          taskId="task-abc"
+          taskStatus="review"
+          onLocalPlanChange={onLocalPlanChange}
+        />,
+      );
+
+      // Initially no form
+      expect(screen.queryByTestId("add-step-form")).not.toBeInTheDocument();
+
+      // Click sequential button on step_1
+      fireEvent.click(screen.getByTestId("flow-node-add-sequential-step_1"));
+
+      // Form should appear with step_1 as default blocker
+      const form = screen.getByTestId("add-step-form");
+      expect(form).toBeInTheDocument();
+      expect(JSON.parse(form.getAttribute("data-default-blocked-by") ?? "[]")).toEqual(["step_1"]);
+    });
+
+    it("clicking parallel button opens AddStepForm with source's blockers pre-filled", () => {
+      const onLocalPlanChange = vi.fn();
+      render(
+        <ExecutionPlanTab
+          executionPlan={reviewPlan}
+          taskId="task-abc"
+          taskStatus="review"
+          onLocalPlanChange={onLocalPlanChange}
+        />,
+      );
+
+      // Click parallel button on step_2 (which has blockedBy: ["step_1"])
+      fireEvent.click(screen.getByTestId("flow-node-add-parallel-step_2"));
+
+      const form = screen.getByTestId("add-step-form");
+      expect(form).toBeInTheDocument();
+      expect(JSON.parse(form.getAttribute("data-default-blocked-by") ?? "[]")).toEqual(["step_1"]);
+    });
+
+    it("submitting form after sequential canvas op calls onLocalPlanChange with graph transformation", () => {
+      const onLocalPlanChange = vi.fn();
+      render(
+        <ExecutionPlanTab
+          executionPlan={reviewPlan}
+          taskId="task-abc"
+          taskStatus="review"
+          onLocalPlanChange={onLocalPlanChange}
+        />,
+      );
+
+      // Click sequential on step_1
+      fireEvent.click(screen.getByTestId("flow-node-add-sequential-step_1"));
+
+      // Submit the form
+      fireEvent.click(screen.getByTestId("mock-add-btn"));
+
+      expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
+      const updatedPlan = onLocalPlanChange.mock.calls[0][0];
+
+      // Should have 3 steps now
+      expect(updatedPlan.steps).toHaveLength(3);
+
+      // The new step should be blocked by step_1
+      const newStep = updatedPlan.steps.find(
+        (s: { tempId: string }) => s.tempId !== "step_1" && s.tempId !== "step_2",
+      );
+      expect(newStep).toBeDefined();
+      expect(newStep.blockedBy).toEqual(["step_1"]);
+      expect(newStep.title).toBe("New Step");
+
+      // step_2 should now be rerouted to depend on the new step
+      const step2 = updatedPlan.steps.find((s: { tempId: string }) => s.tempId === "step_2");
+      expect(step2.blockedBy).toEqual([newStep.tempId]);
+    });
+
+    it("canceling the form after canvas op clears pendingCanvasOp", () => {
+      const onLocalPlanChange = vi.fn();
+      render(
+        <ExecutionPlanTab
+          executionPlan={reviewPlan}
+          taskId="task-abc"
+          taskStatus="review"
+          onLocalPlanChange={onLocalPlanChange}
+        />,
+      );
+
+      // Click sequential on step_1
+      fireEvent.click(screen.getByTestId("flow-node-add-sequential-step_1"));
+      expect(screen.getByTestId("add-step-form")).toBeInTheDocument();
+
+      // Cancel
+      fireEvent.click(screen.getByTestId("mock-cancel-btn"));
+      expect(screen.queryByTestId("add-step-form")).not.toBeInTheDocument();
+
+      // onLocalPlanChange should not have been called
+      expect(onLocalPlanChange).not.toHaveBeenCalled();
     });
   });
 });
