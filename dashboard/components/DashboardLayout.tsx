@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useMutation } from "convex/react";
 import { Id } from "../convex/_generated/dataModel";
+import { api } from "../convex/_generated/api";
 import {
   SidebarInset,
   SidebarProvider,
@@ -29,7 +31,7 @@ import { BoardSettingsSheet } from "@/components/BoardSettingsSheet";
 import { CronJobsModal } from "@/components/CronJobsModal";
 import { SearchBar } from "@/components/SearchBar";
 import { parseSearch } from "@/lib/searchParser";
-import { useChatSyncRuntime } from "@/hooks/useChatSyncRuntime";
+import { useGatewaySleepRuntime } from "@/hooks/useGatewaySleepRuntime";
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
@@ -56,17 +58,22 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
 
   const parsedSearch = useMemo(() => parseSearch(searchQuery), [searchQuery]);
   const { openTerminals, closeAllTerminals } = useBoard();
-  const chatSyncRuntime = useChatSyncRuntime();
-  const chatSyncLabel =
-    chatSyncRuntime == null
-      ? "Chat sync unavailable"
-      : `Chat sync ${chatSyncRuntime.mode === "sleep" ? "sleeping" : "active"} · ${chatSyncRuntime.pollIntervalSeconds}s`;
-  const chatSyncClasses =
-    chatSyncRuntime?.mode === "sleep"
+  const gatewaySleepRuntime = useGatewaySleepRuntime();
+  const requestGatewaySleepMode = useMutation(api.settings.requestGatewaySleepMode);
+  const gatewaySleepLabel =
+    gatewaySleepRuntime == null
+      ? "Gateway unavailable"
+      : `Gateway ${gatewaySleepRuntime.mode === "sleep" ? "sleeping" : "active"} · ${gatewaySleepRuntime.pollIntervalSeconds}s`;
+  const gatewaySleepClasses =
+    gatewaySleepRuntime?.mode === "sleep"
       ? "border-sky-200 bg-sky-50 text-sky-700"
-      : chatSyncRuntime?.mode === "active"
+      : gatewaySleepRuntime?.mode === "active"
         ? "border-emerald-200 bg-emerald-50 text-emerald-700"
         : "border-border bg-muted text-muted-foreground";
+  const gatewaySleepButtonLabel =
+    gatewaySleepRuntime?.mode === "sleep" ? "Wake now" : "Sleep now";
+  const gatewaySleepNextMode =
+    gatewaySleepRuntime?.mode === "sleep" ? "active" : "sleep";
 
   return (
     <SidebarProvider defaultOpen={isXl} className="h-screen overflow-hidden">
@@ -89,11 +96,24 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
               <SearchBar onSearchChange={setSearchQuery} />
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-auto">
-              <span
-                className={`hidden rounded-full border px-2 py-1 text-[11px] font-medium md:inline-flex ${chatSyncClasses}`}
-              >
-                {chatSyncLabel}
-              </span>
+              <div className="hidden items-center gap-2 md:flex">
+                <span
+                  className={`rounded-full border px-2 py-1 text-[11px] font-medium ${gatewaySleepClasses}`}
+                >
+                  {gatewaySleepLabel}
+                </span>
+                {gatewaySleepRuntime && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void requestGatewaySleepMode({ mode: gatewaySleepNextMode });
+                    }}
+                    className="rounded-full border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-accent"
+                  >
+                    {gatewaySleepButtonLabel}
+                  </button>
+                )}
+              </div>
               <button
                 aria-label="Open cron jobs"
                 onClick={() => setCronOpen(true)}

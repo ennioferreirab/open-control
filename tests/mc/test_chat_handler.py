@@ -207,6 +207,51 @@ class TestChatHandlerPollingLoop:
     """Test the polling loop behavior."""
 
     @pytest.mark.asyncio
+    async def test_run_waits_for_sleep_controller_before_first_poll(self):
+        """When the shared controller is sleeping, polling pauses until wake."""
+        from mc.contexts.conversation.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+
+        gate = asyncio.Event()
+
+        class SleepController:
+            mode = "sleep"
+
+            async def wait_for_next_cycle(self, _delay):
+                await gate.wait()
+
+            async def record_work_found(self):
+                return None
+
+            async def record_idle(self):
+                return None
+
+            def current_poll_interval(self, active_interval):
+                return active_interval
+
+        controller = SleepController()
+        handler = ChatHandler(bridge, sleep_controller=controller)
+
+        task = asyncio.create_task(handler.run())
+        await asyncio.sleep(0.05)
+        assert bridge.get_pending_chat_messages.call_count == 0
+
+        controller.mode = "active"
+        gate.set()
+
+        for _ in range(20):
+            if bridge.get_pending_chat_messages.call_count > 0:
+                break
+            await asyncio.sleep(0.01)
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert bridge.get_pending_chat_messages.call_count > 0
+
+    @pytest.mark.asyncio
     async def test_run_polls_and_dispatches(self):
         """The run() loop polls for pending messages and processes them."""
         from mc.contexts.conversation.chat_handler import ChatHandler

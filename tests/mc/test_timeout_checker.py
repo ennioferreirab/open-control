@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 from mc.runtime.timeout_checker import (
+    CHECK_INTERVAL_SECONDS,
     DEFAULT_INTER_AGENT_TIMEOUT_MINUTES,
     DEFAULT_TASK_TIMEOUT_MINUTES,
     TimeoutChecker,
@@ -392,6 +393,23 @@ class TestReviewEscalation:
 
 class TestStartLoop:
     """AC #7: Timeout checking runs as a periodic check."""
+
+    @pytest.mark.asyncio
+    async def test_start_uses_sleep_controller_waiter(self) -> None:
+        """Shared sleep controller replaces the fixed asyncio.sleep cadence."""
+        bridge = _make_bridge()
+        controller = MagicMock()
+        controller.record_work_found = AsyncMock()
+        controller.record_idle = AsyncMock()
+        controller.wait_for_next_cycle = AsyncMock(side_effect=asyncio.CancelledError())
+        checker = TimeoutChecker(bridge, sleep_controller=controller)
+        checker.check_timeouts = AsyncMock()
+
+        with pytest.raises(asyncio.CancelledError):
+            await checker.start()
+
+        checker.check_timeouts.assert_awaited_once()
+        controller.wait_for_next_cycle.assert_awaited_once_with(CHECK_INTERVAL_SECONDS)
 
     @pytest.mark.asyncio
     async def test_start_runs_check_and_sleeps(self) -> None:

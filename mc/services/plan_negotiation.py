@@ -34,9 +34,11 @@ class PlanNegotiationSupervisor:
         self,
         bridge: "ConvexBridge",
         ask_user_registry: Any | None = None,
+        sleep_controller: Any | None = None,
     ) -> None:
         self._bridge = bridge
         self._ask_user_registry = ask_user_registry
+        self._sleep_controller = sleep_controller
         self._active_negotiation_ids: set[str] = set()
         self._cron_requeued_ids: set[str] = set()
 
@@ -60,6 +62,7 @@ class PlanNegotiationSupervisor:
                     self._bridge,
                     task_id,
                     ask_user_registry=self._ask_user_registry,
+                    sleep_controller=self._sleep_controller,
                 )
             except asyncio.CancelledError:
                 raise
@@ -117,10 +120,16 @@ class PlanNegotiationSupervisor:
         logger.info("[plan_negotiation] Plan negotiation supervisor started")
 
         review_queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "review"}, poll_interval=5.0
+            "tasks:listByStatus",
+            {"status": "review"},
+            poll_interval=5.0,
+            sleep_controller=self._sleep_controller,
         )
         in_progress_queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "in_progress"}, poll_interval=5.0
+            "tasks:listByStatus",
+            {"status": "in_progress"},
+            poll_interval=5.0,
+            sleep_controller=self._sleep_controller,
         )
 
         async def _drain_queue(queue: asyncio.Queue) -> None:  # type: ignore[type-arg]
