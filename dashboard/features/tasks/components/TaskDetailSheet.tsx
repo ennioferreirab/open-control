@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Fragment } from "react";
 import * as motion from "motion/react-client";
 import { useReducedMotion } from "motion/react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -394,7 +394,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                 )}
               </SheetTitle>
               <SheetDescription asChild>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant="outline"
                     className={`text-xs ${colors?.bg} ${colors?.text} border-0`}
@@ -404,6 +404,53 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                   {task!.assignedAgent && (
                     <span className="text-xs text-muted-foreground">{task!.assignedAgent}</span>
                   )}
+                  {(task!.tags ?? []).map((tag) => {
+                    const colorKey = tagColorMap[tag];
+                    const color = colorKey ? TAG_COLORS[colorKey] : null;
+                    const chipClass = `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs max-w-[200px] ${
+                      color
+                        ? `${color.bg} ${color.text}`
+                        : "bg-muted text-muted-foreground"
+                    }`;
+                    const renderDot = () =>
+                      color ? (
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`}
+                        />
+                      ) : null;
+                    const attrs = (
+                      tagAttrValues?.filter((v) => v.tagName === tag && v.value) ?? []
+                    );
+                    if (attrs.length === 0) {
+                      return (
+                        <span key={tag} className={chipClass} title={tag}>
+                          {renderDot()}
+                          <span className="truncate">{tag}</span>
+                        </span>
+                      );
+                    }
+                    return (
+                      <Fragment key={tag}>
+                        {attrs.map((attr) => {
+                          const attrDef = tagAttributesList?.find(
+                            (a) => a._id === attr.attributeId,
+                          );
+                          if (!attrDef) return null;
+                          const label = `${tag}:${attrDef.name}=${attr.value}`;
+                          return (
+                            <span
+                              key={`${tag}-${attr.attributeId}`}
+                              className={chipClass}
+                              title={label}
+                            >
+                              {renderDot()}
+                              <span className="truncate">{label}</span>
+                            </span>
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  })}
                   {task!.status === "review" && task!.trustLevel === "human_approved" && (
                     <>
                       <Button
