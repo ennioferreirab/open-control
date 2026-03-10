@@ -148,7 +148,17 @@ function makeTask(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeDetailView(task: ReturnType<typeof makeTask>, tagCatalog = SAMPLE_TAGS_CATALOG) {
+const SAMPLE_TAG_ATTRIBUTES = [
+  { _id: "attr1", name: "priority", type: "select", options: ["high", "medium", "low"], createdAt: "2024-01-01" },
+  { _id: "attr2", name: "severity", type: "text", createdAt: "2024-01-01" },
+];
+
+function makeDetailView(
+  task: ReturnType<typeof makeTask>,
+  tagCatalog = SAMPLE_TAGS_CATALOG,
+  tagAttributes: any[] = [],
+  tagAttributeValues: any[] = [],
+) {
   return {
     task,
     board: null,
@@ -157,8 +167,8 @@ function makeDetailView(task: ReturnType<typeof makeTask>, tagCatalog = SAMPLE_T
     files: [],
     tags: task.tags ?? [],
     tagCatalog,
-    tagAttributes: [],
-    tagAttributeValues: [],
+    tagAttributes,
+    tagAttributeValues,
     uiFlags: {
       isAwaitingKickoff: false,
       isPaused: task.status === "review",
@@ -291,5 +301,89 @@ describe("TaskDetailSheet — tag editing (Story 9-3)", () => {
     const chip = within(configTab).getByText("legacy-tag").closest("span");
     expect(chip?.className).toContain("bg-muted");
     expect(chip?.className).toContain("text-muted-foreground");
+  });
+});
+
+describe("TaskDetailSheet — header tag chips", () => {
+  const noop = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    noop.mockResolvedValue(undefined);
+    mockUseMutation.mockReturnValue(noop);
+  });
+
+  function renderWithAttrs(
+    taskOverrides: Record<string, unknown> = {},
+    tagAttributes: any[] = [],
+    tagAttributeValues: any[] = [],
+  ) {
+    const task = makeTask(taskOverrides);
+    mockUseQuery.mockImplementation((ref: string) => {
+      if (String(ref).includes("getDetailView"))
+        return makeDetailView(task, SAMPLE_TAGS_CATALOG, tagAttributes, tagAttributeValues);
+      return undefined;
+    });
+    render(<TaskDetailSheet taskId={"task1" as any} onClose={vi.fn()} />);
+    return task;
+  }
+
+  it("shows tag name next to status badge when no attribute values exist", () => {
+    renderWithAttrs({ tags: ["bug"] });
+    // The header area (outside tabs) should contain the tag chip
+    const allBugTexts = screen.getAllByText("bug");
+    // At least one should be outside the config tab (in the header)
+    const headerChip = allBugTexts.find(
+      (el) => !el.closest("[data-testid='tab-config']"),
+    );
+    expect(headerChip).toBeTruthy();
+  });
+
+  it("shows tag:attr=value format when attribute values exist", () => {
+    renderWithAttrs(
+      { tags: ["bug"] },
+      SAMPLE_TAG_ATTRIBUTES,
+      [{ tagName: "bug", attributeId: "attr1", value: "high" }],
+    );
+    const chip = screen.getByText("bug:priority=high");
+    expect(chip).toBeInTheDocument();
+  });
+
+  it("uses tag color from catalog for header chips", () => {
+    renderWithAttrs({ tags: ["bug"] });
+    const allBugTexts = screen.getAllByText("bug");
+    // The text is inside <span class="truncate"> inside <span class="chipClass">
+    // Go up to the outer chip span (parent of the truncate span)
+    const headerText = allBugTexts.find(
+      (el) => !el.closest("[data-testid='tab-config']"),
+    );
+    const chipSpan = headerText?.parentElement;
+    expect(chipSpan?.className).toContain("bg-red-100");
+    expect(chipSpan?.className).toContain("text-red-700");
+  });
+
+  it("applies muted style for tags not in catalog", () => {
+    renderWithAttrs({ tags: ["unknown-tag"] });
+    const allTexts = screen.getAllByText("unknown-tag");
+    const headerText = allTexts.find(
+      (el) => !el.closest("[data-testid='tab-config']"),
+    );
+    const chipSpan = headerText?.parentElement;
+    expect(chipSpan?.className).toContain("bg-muted");
+  });
+
+  it("shows truncate class for overflow protection", () => {
+    renderWithAttrs({ tags: ["bug"] });
+    const allBugTexts = screen.getAllByText("bug");
+    const headerText = allBugTexts.find(
+      (el) => !el.closest("[data-testid='tab-config']"),
+    );
+    expect(headerText?.className).toContain("truncate");
+  });
+
+  it("does not render header chips when task has no tags", () => {
+    renderWithAttrs({ tags: [] });
+    // Status badge should still be there
+    expect(screen.getByText("in progress")).toBeInTheDocument();
   });
 });
