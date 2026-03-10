@@ -52,9 +52,7 @@ RUNTIME_SETTINGS_KEY = "chat_handler_runtime"
 class ChatHandler:
     """Polls for pending chat messages and dispatches them to agents."""
 
-    def __init__(
-        self, bridge: ConvexBridge, ask_user_registry: Any | None = None
-    ) -> None:
+    def __init__(self, bridge: ConvexBridge, ask_user_registry: Any | None = None) -> None:
         self._bridge = bridge
         self._ask_user_registry = ask_user_registry
         self._mode: str = "sleep"
@@ -69,12 +67,8 @@ class ChatHandler:
         await self._persist_runtime(force=True)
         while True:
             try:
-                pending = await asyncio.to_thread(
-                    self._bridge.get_pending_chat_messages
-                )
-                useful_pending = await self._filter_useful_pending(
-                    pending or []
-                )
+                pending = await asyncio.to_thread(self._bridge.get_pending_chat_messages)
+                useful_pending = await self._filter_useful_pending(pending or [])
                 for msg in useful_pending:
                     self._dispatch_message(msg)
                 if useful_pending:
@@ -160,9 +154,7 @@ class ChatHandler:
             return cached
 
         try:
-            agent = await asyncio.to_thread(
-                self._bridge.get_agent_by_name, agent_name
-            )
+            agent = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
         except Exception:
             logger.exception(
                 "[chat] Failed to resolve agent role for @%s",
@@ -171,9 +163,7 @@ class ChatHandler:
             self._remote_terminal_cache[agent_name] = False
             return False
 
-        is_remote_terminal = bool(
-            agent and agent.get("role") == "remote-terminal"
-        )
+        is_remote_terminal = bool(agent and agent.get("role") == "remote-terminal")
         self._remote_terminal_cache[agent_name] = is_remote_terminal
         return is_remote_terminal
 
@@ -208,12 +198,10 @@ class ChatHandler:
 
         try:
             # Mark as processing
-            await asyncio.to_thread(
-                self._bridge.mark_chat_processing, chat_id
-            )
+            await asyncio.to_thread(self._bridge.mark_chat_processing, chat_id)
 
-            from mc.infrastructure.config import AGENTS_DIR
             from mc.infrastructure.agents.yaml_validator import validate_agent_file
+            from mc.infrastructure.config import AGENTS_DIR
 
             # Load agent config
             config_file = AGENTS_DIR / agent_name / "config.yaml"
@@ -262,8 +250,7 @@ class ChatHandler:
 
             if not engine_result.success:
                 raise RuntimeError(
-                    engine_result.error_message
-                    or f"Execution failed for chat with @{agent_name}"
+                    engine_result.error_message or f"Execution failed for chat with @{agent_name}"
                 )
 
             result_text = engine_result.output
@@ -277,21 +264,15 @@ class ChatHandler:
             )
 
             # Mark original message as done
-            await asyncio.to_thread(
-                self._bridge.mark_chat_done, chat_id
-            )
+            await asyncio.to_thread(self._bridge.mark_chat_done, chat_id)
 
             logger.info("[chat] Response sent for @%s", agent_name)
 
         except Exception as exc:
-            logger.exception(
-                "[chat] Error processing chat for @%s: %s", agent_name, exc
-            )
+            logger.exception("[chat] Error processing chat for @%s: %s", agent_name, exc)
             # Mark original as done to avoid re-processing
             try:
-                await asyncio.to_thread(
-                    self._bridge.mark_chat_done, chat_id
-                )
+                await asyncio.to_thread(self._bridge.mark_chat_done, chat_id)
             except Exception:
                 logger.exception("[chat] Failed to mark chat done after error")
 
@@ -345,9 +326,7 @@ class ChatHandler:
 
         # Enrich from Convex agent data
         try:
-            convex_agent_raw = await asyncio.to_thread(
-                self._bridge.get_agent_by_name, agent_name
-            )
+            convex_agent_raw = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
             if convex_agent_raw:
                 agent_data_for_cc.display_name = convex_agent_raw.get(
                     "display_name", agent_display_name
@@ -358,26 +337,19 @@ class ChatHandler:
                     agent_data_for_cc.claude_code_opts = ClaudeCodeOpts(
                         max_budget_usd=cc_opts_raw.get("max_budget_usd"),
                         max_turns=cc_opts_raw.get("max_turns"),
-                        permission_mode=cc_opts_raw.get(
-                            "permission_mode", "acceptEdits"
-                        ),
+                        permission_mode=cc_opts_raw.get("permission_mode", "acceptEdits"),
                         allowed_tools=cc_opts_raw.get("allowed_tools"),
                         disallowed_tools=cc_opts_raw.get("disallowed_tools"),
                     )
         except Exception:
-            logger.warning(
-                "[chat] Could not enrich agent data for CC routing"
-            )
+            logger.warning("[chat] Could not enrich agent data for CC routing")
 
         task_id = f"chat-{agent_name}"
 
         # Build prompt with system instructions
         prompt = content
         if agent_prompt:
-            prompt = (
-                f"[System instructions]\n{agent_prompt}\n\n"
-                f"[Chat message]\n{content}"
-            )
+            prompt = f"[System instructions]\n{agent_prompt}\n\n[Chat message]\n{content}"
 
         # Build ExecutionRequest for CC chat
         request = ExecutionRequest(
@@ -435,9 +407,7 @@ class ChatHandler:
                     {"key": settings_key, "value": engine_result.session_id},
                 )
             except Exception:
-                logger.warning(
-                    "[chat] Failed to persist CC session for %s", agent_name
-                )
+                logger.warning("[chat] Failed to persist CC session for %s", agent_name)
 
         # Fire-and-forget memory consolidation
         _ws_cwd = engine_result.memory_workspace
@@ -451,15 +421,15 @@ class ChatHandler:
                         CCMemoryConsolidator,
                     )
 
-                    from mc.infrastructure.providers.tier_resolver import TierResolver
-                    from mc.types import is_tier_reference
+                    from mc.memory.service import resolve_consolidation_model
 
-                    _model = "tier:standard-low"
-                    if is_tier_reference(_model):
-                        _model = (
-                            TierResolver(self._bridge).resolve_model(_model)
-                            or _model
+                    _model = resolve_consolidation_model(self._bridge)
+                    if _model is None:
+                        logger.warning(
+                            "[chat] No model available for CC memory consolidation of @%s",
+                            agent_name,
                         )
+                        return
                     consolidator = CCMemoryConsolidator(_ws_cwd)
                     await consolidator.consolidate(
                         task_title=f"chat with @{agent_name}",
@@ -500,10 +470,7 @@ class ChatHandler:
         # Build prompt with system instructions
         message = content
         if agent_prompt:
-            message = (
-                f"[System instructions]\n{agent_prompt}\n\n"
-                f"[Chat message]\n{content}"
-            )
+            message = f"[System instructions]\n{agent_prompt}\n\n[Chat message]\n{content}"
 
         task_id = f"chat-{agent_name}"
         session_key = f"mc-chat:{agent_name}"

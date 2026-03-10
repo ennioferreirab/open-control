@@ -7,12 +7,51 @@ import logging
 import shutil
 from pathlib import Path
 
+from mc.infrastructure.providers.factory import create_provider
 from mc.memory.policy import find_invalid_memory_files
 from mc.memory.store import HybridMemoryStore
-from mc.infrastructure.providers.factory import create_provider
 
 logger = logging.getLogger(__name__)
 MEMORY_CONSOLIDATION_MODEL = "tier:standard-medium"
+
+
+def resolve_consolidation_model(bridge: object | None = None) -> str | None:
+    """Resolve the LLM model for memory consolidation with graceful fallback.
+
+    Resolution order:
+      1. tier:standard-low via TierResolver (requires Convex)
+      2. Config default model (from nanobot config, no Convex needed)
+
+    Returns None if both fail — caller should skip consolidation.
+    """
+    # 1. Try tier resolution (needs Convex)
+    if bridge is not None:
+        try:
+            from mc.infrastructure.providers.tier_resolver import TierResolver
+            from mc.types import is_tier_reference
+
+            tier_ref = "tier:standard-low"
+            if is_tier_reference(tier_ref):
+                resolved = TierResolver(bridge).resolve_model(tier_ref)
+                if resolved:
+                    return resolved
+        except Exception:
+            logger.warning(
+                "[memory] Tier resolution failed for consolidation model, trying config default"
+            )
+
+    # 2. Try config default model (no Convex needed)
+    try:
+        from nanobot.config.loader import load_config
+
+        default_model = load_config().agents.defaults.model
+        if default_model:
+            return default_model
+    except Exception:
+        logger.warning("[memory] Config default model also unavailable, skipping consolidation")
+
+    return None
+
 
 _SAVE_MEMORY_TOOL = [
     {
@@ -142,7 +181,10 @@ async def consolidate_task_output(
         provider, resolved_model = create_provider(model or MEMORY_CONSOLIDATION_MODEL)
         response = await provider.chat(
             messages=[
-                {"role": "system", "content": system_prompt or DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT},
+                {
+                    "role": "system",
+                    "content": system_prompt or DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT,
+                },
                 {"role": "user", "content": prompt},
             ],
             tools=_SAVE_MEMORY_TOOL,
