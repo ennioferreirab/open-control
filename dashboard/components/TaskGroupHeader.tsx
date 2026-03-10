@@ -1,29 +1,49 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import type { KeyboardEvent } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import type { KeyboardEvent, MouseEvent } from "react";
 
 interface TaskGroupHeaderProps {
   taskTitle: string;
   stepCount: number;
   onClick?: () => void;
+  isCollapsible?: boolean;
+  isOpen?: boolean;
+  onToggle?: () => void;
+  dotColors?: string[];
 }
 
 export function TaskGroupHeader({
   taskTitle,
   stepCount,
   onClick,
+  isCollapsible,
+  isOpen,
+  onToggle,
+  dotColors,
 }: TaskGroupHeaderProps) {
-  const isInteractive = typeof onClick === "function";
+  const isInteractive = typeof onClick === "function" || isCollapsible;
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!isInteractive) {
       return;
     }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      onClick();
+      if (isCollapsible && onToggle) {
+        onToggle();
+      } else if (onClick) {
+        onClick();
+      }
     }
   };
+
+  const handleClick = isCollapsible
+    ? (e: MouseEvent) => {
+        e.stopPropagation();
+        onToggle?.();
+      }
+    : onClick;
 
   return (
     <div
@@ -33,14 +53,30 @@ export function TaskGroupHeader({
           ? "cursor-pointer transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           : "",
       ].join(" ")}
-      onClick={onClick}
+      onClick={handleClick}
       onKeyDown={handleKeyDown}
       role={isInteractive ? "button" : undefined}
       tabIndex={isInteractive ? 0 : undefined}
       aria-label={
-        isInteractive ? `Open task: ${taskTitle} (${stepCount} steps)` : undefined
+        isCollapsible
+          ? `${isOpen ? "Collapse" : "Expand"} ${taskTitle} (${stepCount} items)`
+          : isInteractive
+            ? `Open task: ${taskTitle} (${stepCount} steps)`
+            : undefined
       }
+      aria-expanded={isCollapsible ? isOpen : undefined}
     >
+      {isCollapsible &&
+        (isOpen ? (
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+        ))}
+      {dotColors &&
+        dotColors.length > 0 &&
+        dotColors.map((color, i) => (
+          <span key={i} className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
+        ))}
       <h3 className="min-w-0 flex-1 truncate text-xs font-semibold text-muted-foreground">
         {taskTitle}
       </h3>
