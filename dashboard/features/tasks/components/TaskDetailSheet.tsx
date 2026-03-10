@@ -131,15 +131,18 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
   const softDeleteMutation = useMutation(api.tasks.softDelete);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTaskError, setDeleteTaskError] = useState("");
 
   const handleDeleteTask = async () => {
     if (!task || !isTaskLoaded) return;
     setIsDeleting(true);
+    setDeleteTaskError("");
     try {
       await softDeleteMutation({ taskId: task._id });
       setShowDeleteConfirm(false);
       onClose();
-    } catch {
+    } catch (err) {
+      setDeleteTaskError(err instanceof Error ? err.message : "Failed to delete task");
       setIsDeleting(false);
     }
   };
@@ -193,6 +196,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
     setIsEditingTitle(false);
     setIsEditingDescription(false);
     setShowDeleteConfirm(false);
+    setDeleteTaskError("");
   }, [taskId]);
 
   const handleSaveTitle = async () => {
@@ -638,7 +642,7 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                     <button
                       type="button"
                       onClick={() => setShowDeleteConfirm(true)}
-                      className="ml-auto flex-shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+                      className="ml-auto flex-shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
                       aria-label="Delete task"
                       title="Delete task"
                     >
@@ -653,10 +657,13 @@ export function TaskDetailSheet({ taskId, onClose }: TaskDetailSheetProps) {
                 </div>
               )}
               {showDeleteConfirm && (
-                <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                  <p className="text-xs text-red-800 mb-2">
-                    Delete this task and all its steps? This action cannot be undone.
+                <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-950">
+                  <p className="text-xs text-red-800 dark:text-red-200 mb-2">
+                    Delete this task and all its steps?
                   </p>
+                  {deleteTaskError && (
+                    <p className="text-xs text-red-600 dark:text-red-400 mb-2">{deleteTaskError}</p>
+                  )}
                   <div className="flex items-center gap-2">
                     <Button
                       variant="destructive"

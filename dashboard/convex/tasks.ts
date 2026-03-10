@@ -19,10 +19,7 @@ import { computeUiFlags, computeAllowedActions } from "./lib/readModels";
  * Check if a state transition is valid.
  * Delegates to the taskLifecycle module.
  */
-export function isValidTransition(
-  currentStatus: string,
-  newStatus: string
-): boolean {
+export function isValidTransition(currentStatus: string, newStatus: string): boolean {
   return isValidTaskTransition(currentStatus, newStatus);
 }
 
@@ -39,16 +36,18 @@ export const create = mutation({
     cronParentTaskId: v.optional(v.string()),
     sourceAgent: v.optional(v.string()),
     autoTitle: v.optional(v.boolean()),
-    supervisionMode: v.optional(
-      v.union(v.literal("autonomous"), v.literal("supervised"))
+    supervisionMode: v.optional(v.union(v.literal("autonomous"), v.literal("supervised"))),
+    files: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          type: v.string(),
+          size: v.number(),
+          subfolder: v.string(),
+          uploadedAt: v.string(),
+        }),
+      ),
     ),
-    files: v.optional(v.array(v.object({
-      name: v.string(),
-      type: v.string(),
-      size: v.number(),
-      subfolder: v.string(),
-      uploadedAt: v.string(),
-    }))),
   },
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
@@ -62,12 +61,8 @@ export const create = mutation({
     const initialStatus = isManual ? "inbox" : "inbox";
     const trustLevel = isManual
       ? "autonomous"
-      : ((args.trustLevel ?? "autonomous") as
-          | "autonomous"
-          | "human_approved");
-    const supervisionMode = isManual
-      ? "autonomous"
-      : (args.supervisionMode ?? "autonomous");
+      : ((args.trustLevel ?? "autonomous") as "autonomous" | "human_approved");
+    const supervisionMode = isManual ? "autonomous" : (args.supervisionMode ?? "autonomous");
 
     // Resolve boardId: use provided value or fall back to default board
     let boardId = args.boardId;
@@ -195,15 +190,10 @@ export const listDoneHistory = query({
       .withIndex("by_status", (q) => q.eq("status", "deleted"))
       .collect();
 
-    const clearedDone = deletedTasks.filter(
-      (t) => t.previousStatus === "done"
-    );
+    const clearedDone = deletedTasks.filter((t) => t.previousStatus === "done");
 
     const all = [...doneTasks, ...clearedDone];
-    all.sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+    all.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     return all;
   },
 });
@@ -227,16 +217,18 @@ export const updateExecutionPlan = internalMutation({
 
 // Reusable schema for execution plan validation
 const executionPlanSchema = v.object({
-  steps: v.array(v.object({
-    tempId: v.string(),
-    title: v.string(),
-    description: v.string(),
-    assignedAgent: v.string(),
-    blockedBy: v.array(v.string()),
-    parallelGroup: v.number(),
-    order: v.number(),
-    attachedFiles: v.optional(v.array(v.string())),
-  })),
+  steps: v.array(
+    v.object({
+      tempId: v.string(),
+      title: v.string(),
+      description: v.string(),
+      assignedAgent: v.string(),
+      blockedBy: v.array(v.string()),
+      parallelGroup: v.number(),
+      order: v.number(),
+      attachedFiles: v.optional(v.array(v.string())),
+    }),
+  ),
   generatedAt: v.string(),
   generatedBy: v.literal("lead-agent"),
 });
@@ -258,7 +250,7 @@ export const saveExecutionPlan = mutation({
     const allowed = ["inbox", "review"];
     if (!allowed.includes(task.status)) {
       throw new ConvexError(
-        `Cannot save execution plan on task in status '${task.status}'. Allowed: ${allowed.join(", ")}`
+        `Cannot save execution plan on task in status '${task.status}'. Allowed: ${allowed.join(", ")}`,
       );
     }
     if (args.executionPlan.steps.length === 0) {
@@ -288,32 +280,27 @@ export const startInboxTask = mutation({
       throw new ConvexError("Task not found");
     }
     if (task.status !== "inbox") {
-      throw new ConvexError(
-        `Cannot start task in status '${task.status}'. Expected: inbox`
-      );
+      throw new ConvexError(`Cannot start task in status '${task.status}'. Expected: inbox`);
     }
     if (task.isManual !== true) {
       throw new ConvexError(
-        "Only manual inbox tasks can be started with a plan. Non-manual tasks are routed automatically."
+        "Only manual inbox tasks can be started with a plan. Non-manual tasks are routed automatically.",
       );
     }
 
     // Use provided plan, or fall back to plan already saved on the task
-    const planToSave = args.executionPlan ?? (task.executionPlan as typeof args.executionPlan | undefined);
-    if (
-      !planToSave ||
-      !Array.isArray(planToSave.steps) ||
-      planToSave.steps.length === 0
-    ) {
+    const planToSave =
+      args.executionPlan ?? (task.executionPlan as typeof args.executionPlan | undefined);
+    if (!planToSave || !Array.isArray(planToSave.steps) || planToSave.steps.length === 0) {
       throw new ConvexError(
-        "Cannot start task without an execution plan. Add at least one step first."
+        "Cannot start task without an execution plan. Add at least one step first.",
       );
     }
     // Validate that the fallback plan has the required fields
     for (const step of planToSave.steps) {
       if (!step.tempId || !step.title || !step.assignedAgent) {
         throw new ConvexError(
-          "Existing execution plan has invalid steps. Please rebuild the plan."
+          "Existing execution plan has invalid steps. Please rebuild the plan.",
         );
       }
     }
@@ -349,6 +336,18 @@ export const updateTags = mutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new ConvexError("Task not found");
     const uniqueTags = [...new Set(args.tags)];
+
+    if (uniqueTags.length > 0) {
+      const registeredTags = await ctx.db.query("taskTags").withIndex("by_name").collect();
+      const registeredNames = new Set(registeredTags.map((t) => t.name));
+      const invalid = uniqueTags.filter((t) => !registeredNames.has(t));
+      if (invalid.length > 0) {
+        throw new ConvexError(
+          `Tags not registered: ${invalid.join(", ")}. Use the dashboard to create tags first.`,
+        );
+      }
+    }
+
     await ctx.db.patch(args.taskId, {
       tags: uniqueTags.length > 0 ? uniqueTags : undefined,
       updatedAt: new Date().toISOString(),
@@ -367,16 +366,10 @@ export const kickOff = internalMutation({
       throw new ConvexError("Task not found");
     }
 
-    const allowedStatuses = [
-      "planning",
-      "review",
-      "ready",
-      "inbox",
-      "assigned",
-    ] as const;
+    const allowedStatuses = ["planning", "review", "ready", "inbox", "assigned"] as const;
     if (!allowedStatuses.includes(task.status as (typeof allowedStatuses)[number])) {
       throw new ConvexError(
-        `Cannot kick off task in status '${task.status}'. Expected one of: ${allowedStatuses.join(", ")}`
+        `Cannot kick off task in status '${task.status}'. Expected one of: ${allowedStatuses.join(", ")}`,
       );
     }
     if (args.stepCount < 0) {
@@ -415,9 +408,7 @@ export const pauseTask = mutation({
       throw new ConvexError("Task not found");
     }
     if (task.status !== "in_progress") {
-      throw new ConvexError(
-        `Cannot pause task in status '${task.status}'. Expected: in_progress`
-      );
+      throw new ConvexError(`Cannot pause task in status '${task.status}'. Expected: in_progress`);
     }
 
     const now = new Date().toISOString();
@@ -455,13 +446,11 @@ export const resumeTask = mutation({
       throw new ConvexError("Task not found");
     }
     if (task.status !== "review") {
-      throw new ConvexError(
-        `Cannot resume task in status '${task.status}'. Expected: review`
-      );
+      throw new ConvexError(`Cannot resume task in status '${task.status}'. Expected: review`);
     }
     if ((task as any).awaitingKickoff === true) {
       throw new ConvexError(
-        "Cannot use resumeTask on a pre-kickoff task. Use approveAndKickOff instead."
+        "Cannot use resumeTask on a pre-kickoff task. Use approveAndKickOff instead.",
       );
     }
 
@@ -505,7 +494,7 @@ export const approveAndKickOff = mutation({
     }
     if (task.status !== "review" || task.awaitingKickoff !== true) {
       throw new ConvexError(
-        `Cannot kick off task in status '${task.status}'. Expected: review with awaitingKickoff`
+        `Cannot kick off task in status '${task.status}'. Expected: review with awaitingKickoff`,
       );
     }
 
@@ -555,14 +544,9 @@ export const retry = mutation({
       .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
       .collect();
     const hasCrashedStep = steps.some((step) => step.status === "crashed");
-    const canRetryTask =
-      task.status === "crashed" ||
-      task.status === "failed" ||
-      hasCrashedStep;
+    const canRetryTask = task.status === "crashed" || task.status === "failed" || hasCrashedStep;
     if (!canRetryTask) {
-      throw new ConvexError(
-        `Task is not retryable (current: ${task.status})`
-      );
+      throw new ConvexError(`Task is not retryable (current: ${task.status})`);
     }
 
     const now = new Date().toISOString();
@@ -580,9 +564,7 @@ export const retry = mutation({
         if (step.status === "deleted") {
           continue;
         }
-        const nextStatus = (step.blockedBy?.length ?? 0) > 0
-          ? "blocked"
-          : "assigned";
+        const nextStatus = (step.blockedBy?.length ?? 0) > 0 ? "blocked" : "assigned";
         await ctx.db.patch(step._id, {
           status: nextStatus,
           errorMessage: undefined,
@@ -655,9 +637,7 @@ export const approve = mutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new ConvexError("Task not found");
     if (task.status !== "review") {
-      throw new ConvexError(
-        `Task is not in review state (current: ${task.status})`
-      );
+      throw new ConvexError(`Task is not in review state (current: ${task.status})`);
     }
     if (task.trustLevel !== "human_approved") {
       throw new ConvexError("Task does not require human approval");
@@ -753,9 +733,7 @@ export const updateStatus = internalMutation({
 
     // Validate transition using lifecycle module
     if (!isValidTaskTransition(currentStatus, newStatus)) {
-      throw new ConvexError(
-        `Cannot transition from '${currentStatus}' to '${newStatus}'`
-      );
+      throw new ConvexError(`Cannot transition from '${currentStatus}' to '${newStatus}'`);
     }
 
     const now = new Date().toISOString();
@@ -804,9 +782,7 @@ export const deny = mutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new ConvexError("Task not found");
     if (task.status !== "review") {
-      throw new ConvexError(
-        `Task is not in review state (current: ${task.status})`
-      );
+      throw new ConvexError(`Task is not in review state (current: ${task.status})`);
     }
     if (task.trustLevel !== "human_approved") {
       throw new ConvexError("Task does not require human approval");
@@ -815,9 +791,7 @@ export const deny = mutation({
     const now = new Date().toISOString();
     const userName = args.userName || "User";
     const feedbackPreview =
-      args.feedback.length > 100
-        ? args.feedback.slice(0, 100) + "..."
-        : args.feedback;
+      args.feedback.length > 100 ? args.feedback.slice(0, 100) + "..." : args.feedback;
 
     // Task stays in "review" -- only update timestamp
     await ctx.db.patch(args.taskId, { updatedAt: now });
@@ -856,9 +830,7 @@ export const returnToLeadAgent = mutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new ConvexError("Task not found");
     if (task.status !== "review") {
-      throw new ConvexError(
-        `Task is not in review state (current: ${task.status})`
-      );
+      throw new ConvexError(`Task is not in review state (current: ${task.status})`);
     }
     if (task.trustLevel !== "human_approved") {
       throw new ConvexError("Task does not require human approval");
@@ -998,6 +970,20 @@ export const clearAllDone = mutation({
         deletedAt: now,
         updatedAt: now,
       });
+
+      // Cascade-delete all steps belonging to this task
+      const steps = await ctx.db
+        .query("steps")
+        .withIndex("by_taskId", (q) => q.eq("taskId", task._id))
+        .collect();
+      for (const step of steps) {
+        if (step.status !== "deleted") {
+          await ctx.db.patch(step._id, {
+            status: "deleted",
+            deletedAt: now,
+          });
+        }
+      }
     }
 
     await logActivity(ctx, {
@@ -1024,7 +1010,7 @@ export const updateTaskOutputFiles = internalMutation({
         size: v.number(),
         subfolder: v.string(),
         uploadedAt: v.string(),
-      })
+      }),
     ),
   },
   handler: async (ctx, { taskId, outputFiles }) => {
@@ -1125,6 +1111,20 @@ export const restore = mutation({
     }
     await ctx.db.patch(args.taskId, patch);
 
+    // Restore cascade-deleted steps back to "planned" so the orchestrator can re-dispatch
+    const steps = await ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+      .collect();
+    for (const step of steps) {
+      if (step.status === "deleted" && step.deletedAt === task.deletedAt) {
+        await ctx.db.patch(step._id, {
+          status: "planned",
+          deletedAt: undefined,
+        });
+      }
+    }
+
     await logActivity(ctx, {
       taskId: args.taskId,
       agentName: task.assignedAgent,
@@ -1193,23 +1193,24 @@ export const getDetailView = query({
     if (!task) return null;
 
     // Batch-load related data in parallel
-    const [board, messages, steps, tagCatalog, tagAttributes, tagAttributeValues] = await Promise.all([
-      task.boardId ? ctx.db.get(task.boardId) : Promise.resolve(null),
-      ctx.db
-        .query("messages")
-        .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-        .collect(),
-      ctx.db
-        .query("steps")
-        .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-        .collect(),
-      ctx.db.query("taskTags").collect(),
-      ctx.db.query("tagAttributes").collect(),
-      ctx.db
-        .query("tagAttributeValues")
-        .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-        .collect(),
-    ]);
+    const [board, messages, steps, tagCatalog, tagAttributes, tagAttributeValues] =
+      await Promise.all([
+        task.boardId ? ctx.db.get(task.boardId) : Promise.resolve(null),
+        ctx.db
+          .query("messages")
+          .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+          .collect(),
+        ctx.db
+          .query("steps")
+          .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+          .collect(),
+        ctx.db.query("taskTags").collect(),
+        ctx.db.query("tagAttributes").collect(),
+        ctx.db
+          .query("tagAttributeValues")
+          .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+          .collect(),
+      ]);
 
     // Sort steps by order for display
     const sortedSteps = steps.sort((a, b) => a.order - b.order);
