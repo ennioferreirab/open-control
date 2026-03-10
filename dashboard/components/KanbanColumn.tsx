@@ -250,8 +250,12 @@ export function KanbanColumn({
             ))}
             {hasTagGroups
               ? tagGroups.map((group) => {
-                  const colorKey = tagColorMap?.[group.tag];
-                  const color = colorKey ? TAG_COLORS[colorKey] : null;
+                  const dotColors = group.tags
+                    .map((t) => {
+                      const key = tagColorMap?.[t];
+                      return key ? TAG_COLORS[key]?.dot : undefined;
+                    })
+                    .filter((d): d is string => Boolean(d));
                   return (
                     <Collapsible
                       key={group.tag}
@@ -265,7 +269,7 @@ export function KanbanColumn({
                           isCollapsible
                           isOpen={openTagGroups.has(group.tag)}
                           onToggle={() => toggleTagGroup(group.tag)}
-                          dotColor={color?.dot}
+                          dotColors={dotColors.length > 0 ? dotColors : undefined}
                         />
                         <CollapsibleContent>
                           <div className="flex flex-col gap-1.5">

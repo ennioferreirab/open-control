@@ -19,6 +19,7 @@ export interface StepGroup {
 
 export interface TagGroup {
   tag: string;
+  tags: string[];
   displayName: string;
   tasks: Doc<"tasks">[];
 }
@@ -130,26 +131,21 @@ export function useBoardColumns(
         })
         .sort((a, b) => b._creationTime - a._creationTime);
 
-      // Derive tag groups from column tasks
-      const tagBuckets = new Map<string, Doc<"tasks">[]>();
+      // Derive tag groups from column tasks, keyed by exact tag set
+      const tagBuckets = new Map<string, { tags: string[]; tasks: Doc<"tasks">[] }>();
       for (const task of columnTasks) {
         const taskTags = (task as { tags?: string[] }).tags;
-        if (taskTags && taskTags.length > 0) {
-          for (const tag of taskTags) {
-            const bucket = tagBuckets.get(tag) ?? [];
-            bucket.push(task);
-            tagBuckets.set(tag, bucket);
-          }
-        } else {
-          const bucket = tagBuckets.get("__untagged__") ?? [];
-          bucket.push(task);
-          tagBuckets.set("__untagged__", bucket);
-        }
+        const sortedTags = taskTags && taskTags.length > 0 ? [...taskTags].sort() : [];
+        const key = sortedTags.length > 0 ? sortedTags.join(",") : "__untagged__";
+        const bucket = tagBuckets.get(key) ?? { tags: sortedTags, tasks: [] };
+        bucket.tasks.push(task);
+        tagBuckets.set(key, bucket);
       }
       const tagGroups: TagGroup[] = Array.from(tagBuckets.entries())
-        .map(([tag, groupTasks]) => ({
-          tag,
-          displayName: tag === "__untagged__" ? "Untagged" : tag,
+        .map(([key, { tags, tasks: groupTasks }]) => ({
+          tag: key,
+          tags,
+          displayName: key === "__untagged__" ? "Untagged" : tags.join(", "),
           tasks: groupTasks,
         }))
         .sort((a, b) => {

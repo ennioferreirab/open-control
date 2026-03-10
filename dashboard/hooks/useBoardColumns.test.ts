@@ -289,16 +289,23 @@ describe("useBoardColumns", () => {
       ]);
     });
 
-    it("places a task with multiple tags in each matching tag group", () => {
+    it("groups multi-tag tasks by their exact tag set (no duplication)", () => {
       const tasks = [
         makeTask({ _id: "t1", status: "inbox", tags: ["frontend", "backend"] }),
+        makeTask({ _id: "t2", status: "inbox", tags: ["backend", "frontend"] }),
+        makeTask({ _id: "t3", status: "inbox", tags: ["frontend"] }),
       ];
       const { result } = renderHook(() => useBoardColumns(tasks, []));
       const inboxCol = result.current![0];
 
+      // "backend,frontend" group (sorted key) and "frontend" group
       expect(inboxCol.tagGroups).toHaveLength(2);
-      expect(inboxCol.tagGroups[0].tasks).toHaveLength(1);
-      expect(inboxCol.tagGroups[1].tasks).toHaveLength(1);
+      const multiGroup = inboxCol.tagGroups.find((g) => g.tag === "backend,frontend");
+      const singleGroup = inboxCol.tagGroups.find((g) => g.tag === "frontend");
+      expect(multiGroup?.tasks).toHaveLength(2);
+      expect(multiGroup?.tags).toEqual(["backend", "frontend"]);
+      expect(multiGroup?.displayName).toBe("backend, frontend");
+      expect(singleGroup?.tasks).toHaveLength(1);
     });
 
     it("returns empty tagGroups for columns with no tasks", () => {

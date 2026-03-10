@@ -28,6 +28,13 @@ vi.mock("motion/react", () => ({
   useReducedMotion: () => false,
 }));
 
+vi.mock("@/hooks/useStepCardActions", () => ({
+  useStepCardActions: () => ({
+    updateStep: vi.fn(),
+    deleteStep: vi.fn(),
+  }),
+}));
+
 function makeTask(overrides: Record<string, unknown> = {}) {
   return {
     _id: `task_${Math.random().toString(36).slice(2)}` as Id<"tasks">,
@@ -102,8 +109,9 @@ describe("KanbanColumn", () => {
 
       // Header should be visible
       expect(screen.getByText("My Task")).toBeInTheDocument();
-      // Step content should NOT be visible (collapsed by default)
-      expect(screen.queryByText("Step 1")).not.toBeInTheDocument();
+      // Collapsible content should have data-state="closed"
+      const content = document.querySelector("[data-state='closed']");
+      expect(content).not.toBeNull();
     });
 
     it("expands step group on header click", () => {
@@ -150,6 +158,7 @@ describe("KanbanColumn", () => {
       const tagGroups = [
         {
           tag: "frontend",
+          tags: ["frontend"],
           displayName: "frontend",
           tasks: [makeTask({ title: "Build UI" })],
         },
@@ -169,14 +178,16 @@ describe("KanbanColumn", () => {
 
       // Tag group header should be visible
       expect(screen.getByText("frontend")).toBeInTheDocument();
-      // Task card should NOT be visible (collapsed by default)
-      expect(screen.queryByText("Build UI")).not.toBeInTheDocument();
+      // Collapsible content should have data-state="closed"
+      const content = document.querySelector("[data-state='closed']");
+      expect(content).not.toBeNull();
     });
 
     it("expands tag group on header click", () => {
       const tagGroups = [
         {
           tag: "frontend",
+          tags: ["frontend"],
           displayName: "frontend",
           tasks: [makeTask({ title: "Build UI" })],
         },

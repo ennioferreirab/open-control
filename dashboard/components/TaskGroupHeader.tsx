@@ -11,7 +11,7 @@ interface TaskGroupHeaderProps {
   isCollapsible?: boolean;
   isOpen?: boolean;
   onToggle?: () => void;
-  dotColor?: string;
+  dotColors?: string[];
 }
 
 export function TaskGroupHeader({
@@ -21,7 +21,7 @@ export function TaskGroupHeader({
   isCollapsible,
   isOpen,
   onToggle,
-  dotColor,
+  dotColors,
 }: TaskGroupHeaderProps) {
   const isInteractive = typeof onClick === "function" || isCollapsible;
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -72,7 +72,11 @@ export function TaskGroupHeader({
         ) : (
           <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
         ))}
-      {dotColor && <span className={`h-2 w-2 shrink-0 rounded-full ${dotColor}`} />}
+      {dotColors &&
+        dotColors.length > 0 &&
+        dotColors.map((color, i) => (
+          <span key={i} className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
+        ))}
       <h3 className="min-w-0 flex-1 truncate text-xs font-semibold text-muted-foreground">
         {taskTitle}
       </h3>
