@@ -241,4 +241,72 @@ describe("useBoardColumns", () => {
       expect(col.stepGroups).toHaveLength(0);
     }
   });
+
+  describe("tagGroups", () => {
+    it("groups tasks by tags within each column", () => {
+      const tasks = [
+        makeTask({ _id: "t1", status: "inbox", tags: ["frontend"] }),
+        makeTask({ _id: "t2", status: "inbox", tags: ["backend"] }),
+        makeTask({ _id: "t3", status: "inbox", tags: ["frontend"] }),
+      ];
+      const { result } = renderHook(() => useBoardColumns(tasks, []));
+      const inboxCol = result.current![0];
+
+      expect(inboxCol.tagGroups).toHaveLength(2);
+      const backendGroup = inboxCol.tagGroups.find((g) => g.tag === "backend");
+      const frontendGroup = inboxCol.tagGroups.find((g) => g.tag === "frontend");
+      expect(backendGroup?.tasks).toHaveLength(1);
+      expect(frontendGroup?.tasks).toHaveLength(2);
+    });
+
+    it("places tagless tasks in __untagged__ bucket", () => {
+      const tasks = [
+        makeTask({ _id: "t1", status: "inbox", tags: ["frontend"] }),
+        makeTask({ _id: "t2", status: "inbox" }),
+      ];
+      const { result } = renderHook(() => useBoardColumns(tasks, []));
+      const inboxCol = result.current![0];
+
+      const untagged = inboxCol.tagGroups.find((g) => g.tag === "__untagged__");
+      expect(untagged).toBeDefined();
+      expect(untagged?.displayName).toBe("Untagged");
+      expect(untagged?.tasks).toHaveLength(1);
+    });
+
+    it("sorts tag groups alphabetically with Untagged last", () => {
+      const tasks = [
+        makeTask({ _id: "t1", status: "inbox", tags: ["zebra"] }),
+        makeTask({ _id: "t2", status: "inbox", tags: ["alpha"] }),
+        makeTask({ _id: "t3", status: "inbox" }),
+      ];
+      const { result } = renderHook(() => useBoardColumns(tasks, []));
+      const inboxCol = result.current![0];
+
+      expect(inboxCol.tagGroups.map((g) => g.tag)).toEqual([
+        "alpha",
+        "zebra",
+        "__untagged__",
+      ]);
+    });
+
+    it("places a task with multiple tags in each matching tag group", () => {
+      const tasks = [
+        makeTask({ _id: "t1", status: "inbox", tags: ["frontend", "backend"] }),
+      ];
+      const { result } = renderHook(() => useBoardColumns(tasks, []));
+      const inboxCol = result.current![0];
+
+      expect(inboxCol.tagGroups).toHaveLength(2);
+      expect(inboxCol.tagGroups[0].tasks).toHaveLength(1);
+      expect(inboxCol.tagGroups[1].tasks).toHaveLength(1);
+    });
+
+    it("returns empty tagGroups for columns with no tasks", () => {
+      const tasks = [makeTask({ _id: "t1", status: "inbox", tags: ["test"] })];
+      const { result } = renderHook(() => useBoardColumns(tasks, []));
+      const assignedCol = result.current![1];
+
+      expect(assignedCol.tagGroups).toHaveLength(0);
+    });
+  });
 });

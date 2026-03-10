@@ -32,9 +32,10 @@ interface TaskCardProps {
   task: Doc<"tasks">;
   onClick?: () => void;
   tagColorMap?: Record<string, string>;
+  layoutIdPrefix?: string;
 }
 
-export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
+export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix }: TaskCardProps) {
   const shouldReduceMotion = useReducedMotion();
   const approveMutation = useMutation(api.tasks.approve);
   const softDeleteMutation = useMutation(api.tasks.softDelete);
@@ -70,7 +71,7 @@ export function TaskCard({ task, onClick, tagColorMap }: TaskCardProps) {
       onDragEnd={isManual ? () => setIsDragging(false) : undefined}
     >
       <motion.div
-        layoutId={task._id}
+        layoutId={layoutIdPrefix ? `${layoutIdPrefix}-${task._id}` : task._id}
         layout={!isDragging}
         transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.3 }}
       >

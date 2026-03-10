@@ -4,12 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import * as motion from "motion/react-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { TaskCard } from "@/components/TaskCard";
 import { Doc, Id } from "../convex/_generated/dataModel";
 import { Eraser, List } from "lucide-react";
 import { StepCard } from "@/components/StepCard";
 import { TaskGroupHeader } from "@/components/TaskGroupHeader";
 import { useKanbanColumnInteractions } from "@/features/boards/hooks/useKanbanColumnInteractions";
+import { TAG_COLORS } from "@/lib/constants";
+import type { TagGroup } from "@/hooks/useBoardColumns";
 
 interface KanbanColumnProps {
   title: string;
@@ -20,6 +23,7 @@ interface KanbanColumnProps {
     taskTitle: string;
     steps: Doc<"steps">[];
   }[];
+  tagGroups?: TagGroup[];
   totalCount: number;
   accentColor: string;
   onTaskClick?: (taskId: Id<"tasks">) => void;
@@ -35,6 +39,7 @@ export function KanbanColumn({
   status,
   tasks,
   stepGroups,
+  tagGroups,
   totalCount,
   accentColor,
   onTaskClick,
@@ -48,7 +53,33 @@ export function KanbanColumn({
   const [isPulsing, setIsPulsing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [openStepGroups, setOpenStepGroups] = useState<Set<string>>(new Set());
+  const [openTagGroups, setOpenTagGroups] = useState<Set<string>>(new Set());
   const { moveStep, moveTask } = useKanbanColumnInteractions();
+
+  const toggleStepGroup = (taskId: string) => {
+    setOpenStepGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  };
+
+  const toggleTagGroup = (tag: string) => {
+    setOpenTagGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (hitlCount > prevCountRef.current) {
@@ -63,6 +94,8 @@ export function KanbanColumn({
     }
     prevCountRef.current = hitlCount;
   }, [hitlCount]);
+
+  const hasTagGroups = tagGroups && tagGroups.length > 0;
 
   return (
     <div
@@ -187,30 +220,78 @@ export function KanbanColumn({
         ) : (
           <div className="flex flex-col gap-2">
             {stepGroups.map((group) => (
-              <div key={group.taskId} className="flex flex-col gap-1.5">
-                <TaskGroupHeader
-                  taskTitle={group.taskTitle}
-                  stepCount={group.steps.length}
-                  onClick={onTaskClick ? () => onTaskClick(group.taskId) : undefined}
-                />
-                {group.steps.map((step) => (
-                  <StepCard
-                    key={step._id}
-                    step={step}
-                    parentTaskTitle={group.taskTitle}
-                    onClick={onTaskClick ? () => onTaskClick(step.taskId) : undefined}
+              <Collapsible
+                key={group.taskId}
+                open={openStepGroups.has(group.taskId)}
+                onOpenChange={() => toggleStepGroup(group.taskId)}
+              >
+                <div className="flex flex-col gap-1.5">
+                  <TaskGroupHeader
+                    taskTitle={group.taskTitle}
+                    stepCount={group.steps.length}
+                    isCollapsible
+                    isOpen={openStepGroups.has(group.taskId)}
+                    onToggle={() => toggleStepGroup(group.taskId)}
+                  />
+                  <CollapsibleContent>
+                    <div className="flex flex-col gap-1.5">
+                      {group.steps.map((step) => (
+                        <StepCard
+                          key={step._id}
+                          step={step}
+                          parentTaskTitle={group.taskTitle}
+                          onClick={onTaskClick ? () => onTaskClick(step.taskId) : undefined}
+                        />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </div>
+              </Collapsible>
+            ))}
+            {hasTagGroups
+              ? tagGroups.map((group) => {
+                  const colorKey = tagColorMap?.[group.tag];
+                  const color = colorKey ? TAG_COLORS[colorKey] : null;
+                  return (
+                    <Collapsible
+                      key={group.tag}
+                      open={openTagGroups.has(group.tag)}
+                      onOpenChange={() => toggleTagGroup(group.tag)}
+                    >
+                      <div className="flex flex-col gap-1.5">
+                        <TaskGroupHeader
+                          taskTitle={group.displayName}
+                          stepCount={group.tasks.length}
+                          isCollapsible
+                          isOpen={openTagGroups.has(group.tag)}
+                          onToggle={() => toggleTagGroup(group.tag)}
+                          dotColor={color?.dot}
+                        />
+                        <CollapsibleContent>
+                          <div className="flex flex-col gap-1.5">
+                            {group.tasks.map((task) => (
+                              <TaskCard
+                                key={`${group.tag}-${task._id}`}
+                                task={task}
+                                onClick={onTaskClick ? () => onTaskClick(task._id) : undefined}
+                                tagColorMap={tagColorMap}
+                                layoutIdPrefix={group.tag}
+                              />
+                            ))}
+                          </div>
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+                  );
+                })
+              : tasks.map((task) => (
+                  <TaskCard
+                    key={task._id}
+                    task={task}
+                    onClick={onTaskClick ? () => onTaskClick(task._id) : undefined}
+                    tagColorMap={tagColorMap}
                   />
                 ))}
-              </div>
-            ))}
-            {tasks.map((task) => (
-              <TaskCard
-                key={task._id}
-                task={task}
-                onClick={onTaskClick ? () => onTaskClick(task._id) : undefined}
-                tagColorMap={tagColorMap}
-              />
-            ))}
           </div>
         )}
       </div>
