@@ -52,9 +52,15 @@ RUNTIME_SETTINGS_KEY = "chat_handler_runtime"
 class ChatHandler:
     """Polls for pending chat messages and dispatches them to agents."""
 
-    def __init__(self, bridge: ConvexBridge, ask_user_registry: Any | None = None) -> None:
+    def __init__(
+        self,
+        bridge: ConvexBridge,
+        ask_user_registry: Any | None = None,
+        sleep_controller: Any | None = None,
+    ) -> None:
         self._bridge = bridge
         self._ask_user_registry = ask_user_registry
+        self._sleep_controller = sleep_controller
         self._mode: str = "sleep"
         self._in_flight = 0
         self._last_transition_at = self._utc_now()
@@ -67,22 +73,33 @@ class ChatHandler:
         await self._persist_runtime(force=True)
         while True:
             try:
+                if self._sleep_controller is not None and self._sleep_controller.mode == "sleep":
+                    await self._sleep_controller.wait_for_next_cycle(ACTIVE_POLL_INTERVAL_SECONDS)
                 pending = await asyncio.to_thread(self._bridge.get_pending_chat_messages)
                 useful_pending = await self._filter_useful_pending(pending or [])
                 for msg in useful_pending:
                     self._dispatch_message(msg)
                 if useful_pending:
+                    if self._sleep_controller is not None:
+                        await self._sleep_controller.record_work_found()
                     await self._persist_runtime(
                         mode="active",
                         work_found=True,
                     )
                 elif self._mode == "active" and self._in_flight == 0:
-                    await self._persist_runtime(mode="sleep")
+                    if self._sleep_controller is not None:
+                        await self._sleep_controller.record_idle()
+                        await self._persist_runtime(mode=self._sleep_controller.mode)
+                    else:
+                        await self._persist_runtime(mode="sleep")
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("[chat] Error polling pending chats")
-            await asyncio.sleep(self._current_poll_interval())
+            if self._sleep_controller is not None:
+                await self._sleep_controller.wait_for_next_cycle(ACTIVE_POLL_INTERVAL_SECONDS)
+            else:
+                await asyncio.sleep(self._current_poll_interval())
 
     def _current_poll_interval(self) -> int:
         if self._mode == "active":

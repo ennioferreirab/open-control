@@ -482,7 +482,8 @@ class TaskExecutor(CCExecutorMixin):
 
     def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None,
                  on_task_completed: Any | None = None,
-                 ask_user_registry: Any | None = None) -> None:
+                 ask_user_registry: Any | None = None,
+                 sleep_controller: Any | None = None) -> None:
         self._bridge = bridge
         self._agent_gateway = AgentGateway(bridge)
         self._known_assigned_ids: set[str] = set()
@@ -490,6 +491,7 @@ class TaskExecutor(CCExecutorMixin):
         self._on_task_completed = on_task_completed
         self._tier_resolver: Any | None = None
         self._ask_user_registry = ask_user_registry
+        self._sleep_controller = sleep_controller
 
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance."""
@@ -565,7 +567,9 @@ class TaskExecutor(CCExecutorMixin):
         logger.info("[executor] Starting execution loop")
 
         queue = self._bridge.async_subscribe(
-            "tasks:listByStatus", {"status": "assigned"}
+            "tasks:listByStatus",
+            {"status": "assigned"},
+            sleep_controller=self._sleep_controller,
         )
 
         while True:

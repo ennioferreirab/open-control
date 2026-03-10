@@ -74,7 +74,9 @@ _plan_negotiation_supervisor: "PlanNegotiationSupervisor | None" = None
 
 
 async def _run_plan_negotiation_manager(
-    bridge: "ConvexBridge", ask_user_registry: "Any | None" = None
+    bridge: "ConvexBridge",
+    ask_user_registry: "Any | None" = None,
+    sleep_controller: "Any | None" = None,
 ) -> None:
     """Manage per-task plan negotiation loops.
 
@@ -84,7 +86,9 @@ async def _run_plan_negotiation_manager(
 
     global _plan_negotiation_supervisor
     _plan_negotiation_supervisor = PlanNegotiationSupervisor(
-        bridge=bridge, ask_user_registry=ask_user_registry
+        bridge=bridge,
+        ask_user_registry=ask_user_registry,
+        sleep_controller=sleep_controller,
     )
     await _plan_negotiation_supervisor.run()
 
@@ -308,8 +312,11 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     # Ask-user reply routing — registry + watcher (CC agents only)
     from mc.contexts.conversation.ask_user.registry import AskUserRegistry
     from mc.contexts.conversation.ask_user.watcher import AskUserReplyWatcher
+    from mc.runtime.sleep_controller import RuntimeSleepController
 
     ask_user_registry = AskUserRegistry()
+    sleep_controller = RuntimeSleepController(bridge)
+    await sleep_controller.initialize()
 
     # Create RuntimeContext — single source of runtime dependencies (Story 20.3)
     from mc.infrastructure.runtime_context import RuntimeContext
@@ -322,7 +329,10 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     )
 
     orchestrator = TaskOrchestrator(
-        runtime_ctx, cron_service=cron, ask_user_registry=ask_user_registry
+        runtime_ctx,
+        cron_service=cron,
+        ask_user_registry=ask_user_registry,
+        sleep_controller=sleep_controller,
     )
 
     async def _inbox_loop_with_crash_log() -> None:
@@ -344,15 +354,20 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         cron_service=cron,
         on_task_completed=on_task_completed,
         ask_user_registry=ask_user_registry,
+        sleep_controller=sleep_controller,
     )
     execution_task = asyncio.create_task(executor.start_execution_loop())
 
-    timeout_checker = TimeoutChecker(bridge)
+    timeout_checker = TimeoutChecker(bridge, sleep_controller=sleep_controller)
     timeout_task = asyncio.create_task(timeout_checker.start())
 
     # Plan negotiation manager — spawns per-task loops for review/in_progress tasks
     plan_negotiation_task = asyncio.create_task(
-        _run_plan_negotiation_manager(bridge, ask_user_registry=ask_user_registry)
+        _run_plan_negotiation_manager(
+            bridge,
+            ask_user_registry=ask_user_registry,
+            sleep_controller=sleep_controller,
+        )
     )
 
     # Unified ConversationService — routes all thread messages through a
@@ -366,7 +381,11 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     # Chat handler — polls for pending direct-chat messages (Story 10.2)
     from mc.contexts.conversation.chat_handler import ChatHandler
 
-    chat_handler = ChatHandler(bridge, ask_user_registry=ask_user_registry)
+    chat_handler = ChatHandler(
+        bridge,
+        ask_user_registry=ask_user_registry,
+        sleep_controller=sleep_controller,
+    )
     chat_task = asyncio.create_task(chat_handler.run())
 
     # Mention watcher — detects @agent-name mentions in all task threads
@@ -375,16 +394,22 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
     mention_watcher = MentionWatcher(
-        bridge, conversation_service=conversation_service
+        bridge,
+        conversation_service=conversation_service,
+        sleep_controller=sleep_controller,
     )
     mention_task = asyncio.create_task(mention_watcher.run())
 
     # Ask-user reply watcher — delivers user replies to pending ask_user calls
     # Routes through ConversationService for unified intent classification.
     ask_user_watcher = AskUserReplyWatcher(
-        bridge, ask_user_registry, conversation_service=conversation_service
+        bridge,
+        ask_user_registry,
+        conversation_service=conversation_service,
+        sleep_controller=sleep_controller,
     )
     ask_user_watcher_task = asyncio.create_task(ask_user_watcher.run())
+    sleep_control_task = asyncio.create_task(sleep_controller.watch_control())
 
     # Wait for shutdown signal
     await stop_event.wait()
@@ -403,6 +428,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     chat_task.cancel()
     mention_task.cancel()
     ask_user_watcher_task.cancel()
+    sleep_control_task.cancel()
     for task in (
         inbox_task,
         routing_task,
@@ -414,6 +440,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         chat_task,
         mention_task,
         ask_user_watcher_task,
+        sleep_control_task,
     ):
         try:
             await task

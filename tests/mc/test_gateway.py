@@ -135,11 +135,12 @@ class TestRunGateway:
              patch("mc.runtime.gateway.TimeoutChecker") as MockTC, \
              patch("mc.contexts.execution.executor.TaskExecutor") as MockExec, \
              patch("mc.contexts.conversation.chat_handler.ChatHandler") as MockCH, \
+             patch("mc.contexts.conversation.ask_user.watcher.AskUserReplyWatcher") as MockAUW, \
+             patch("mc.services.plan_negotiation.PlanNegotiationSupervisor") as MockPNS, \
              patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls), \
              patch("nanobot.config.loader.load_config"), \
              patch("nanobot.bus.queue.MessageBus"), \
              patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel), \
-             patch("mc.runtime.gateway._run_plan_negotiation_manager", new=AsyncMock()), \
              patch("mc.mentions.watcher.MentionWatcher") as MockMW:
             mock_orch_instance = MockOrch.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
@@ -157,6 +158,8 @@ class TestRunGateway:
             mock_ch_instance.run = AsyncMock()
 
             MockMW.return_value.run = AsyncMock()
+            MockAUW.return_value.run = AsyncMock()
+            MockPNS.return_value.run = AsyncMock()
 
             # run_gateway waits on a stop_event; we need to trigger it
             async def trigger_stop():
@@ -178,13 +181,23 @@ class TestRunGateway:
                     pass
 
             # Story 20.3: gateway now passes RuntimeContext instead of bare bridge
-            MockOrch.assert_called_once_with(ANY, cron_service=ANY, ask_user_registry=ANY)
+            MockOrch.assert_called_once_with(
+                ANY,
+                cron_service=ANY,
+                ask_user_registry=ANY,
+                sleep_controller=ANY,
+            )
             # Verify the first arg is a RuntimeContext wrapping the expected bridge
             from mc.infrastructure.runtime_context import RuntimeContext
             ctx_arg = MockOrch.call_args[0][0]
             assert isinstance(ctx_arg, RuntimeContext)
             assert ctx_arg.bridge is mock_bridge
-            MockTC.assert_called_once_with(mock_bridge)
+            assert MockTC.call_args.kwargs["sleep_controller"] is not None
+            assert MockExec.call_args.kwargs["sleep_controller"] is not None
+            assert MockCH.call_args.kwargs["sleep_controller"] is not None
+            assert MockMW.call_args.kwargs["sleep_controller"] is not None
+            assert MockAUW.call_args.kwargs["sleep_controller"] is not None
+            assert MockPNS.call_args.kwargs["sleep_controller"] is not None
             mock_orch_instance.start_routing_loop.assert_called_once()
             mock_orch_instance.start_review_routing_loop.assert_called_once()
             mock_orch_instance.start_kickoff_watch_loop.assert_called_once()

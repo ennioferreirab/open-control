@@ -35,10 +35,12 @@ class AskUserReplyWatcher:
         bridge: ConvexBridge,
         registry: AskUserRegistry,
         conversation_service: Any | None = None,
+        sleep_controller: Any | None = None,
     ) -> None:
         self._bridge = bridge
         self._registry = registry
         self._conversation_service = conversation_service
+        self._sleep_controller = sleep_controller
         self._seen_messages: dict[str, set[str]] = {}
 
     async def run(self) -> None:
@@ -46,18 +48,30 @@ class AskUserReplyWatcher:
         logger.info("[ask_user_watcher] AskUserReplyWatcher started")
         while True:
             try:
-                await self._poll_once()
+                if self._sleep_controller is not None and self._sleep_controller.mode == "sleep":
+                    await self._sleep_controller.wait_for_next_cycle(POLL_INTERVAL_SECONDS)
+                found_work = await self._poll_once()
+                if self._sleep_controller is not None:
+                    if found_work:
+                        await self._sleep_controller.record_work_found()
+                    else:
+                        await self._sleep_controller.record_idle()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("[ask_user_watcher] Error in polling loop")
-            await asyncio.sleep(POLL_INTERVAL_SECONDS)
+            if self._sleep_controller is not None:
+                await self._sleep_controller.wait_for_next_cycle(POLL_INTERVAL_SECONDS)
+            else:
+                await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
-    async def _poll_once(self) -> None:
+    async def _poll_once(self) -> bool:
         """Check all tasks with pending ask_user calls for new user messages."""
         active_task_ids = self._registry.active_task_ids()
         if not active_task_ids:
-            return
+            return False
+
+        delivered_any = False
 
         for task_id in active_task_ids:
             if not self._registry.has_pending_ask(task_id):
@@ -136,6 +150,7 @@ class AskUserReplyWatcher:
 
                 delivered = self._registry.deliver_reply(task_id, content)
                 if delivered:
+                    delivered_any = True
                     logger.info(
                         "[ask_user_watcher] Delivered user reply for task %s: %r",
                         task_id,
@@ -146,3 +161,4 @@ class AskUserReplyWatcher:
         stale_ids = set(self._seen_messages) - set(self._registry._handlers)
         for tid in stale_ids:
             del self._seen_messages[tid]
+        return delivered_any

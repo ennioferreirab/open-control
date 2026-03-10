@@ -52,6 +52,7 @@ class SubscriptionManager:
         function_name: str,
         args: dict[str, Any] | None = None,
         poll_interval: float = 2.0,
+        sleep_controller: Any | None = None,
     ) -> "asyncio.Queue[Any]":
         """Subscribe to a Convex query, returning an asyncio.Queue.
 
@@ -89,7 +90,13 @@ class SubscriptionManager:
 
         consumers: list[asyncio.Queue] = [queue]  # type: ignore[no-redef]
         task = asyncio.get_running_loop().create_task(
-            self._poll_loop(function_name, args, poll_interval, consumers)
+            self._poll_loop(
+                function_name,
+                args,
+                poll_interval,
+                consumers,
+                sleep_controller=sleep_controller,
+            )
         )
         self._shared_polls[key] = (task, consumers)
         return queue
@@ -100,17 +107,34 @@ class SubscriptionManager:
         args: dict[str, Any] | None,
         poll_interval: float,
         consumers: list["asyncio.Queue[Any]"],
+        sleep_controller: Any | None = None,
     ) -> None:
         """Shared poll loop that fans out results to all consumer queues."""
         last_result: Any = None
         consecutive_errors = 0
         max_errors = 10
         while True:
+            if sleep_controller is not None and getattr(sleep_controller, "mode", "active") == "sleep":
+                await sleep_controller.wait_for_next_cycle(poll_interval)
             try:
                 result = await asyncio.to_thread(
                     self._client.query, function_name, args
                 )
                 consecutive_errors = 0
+                is_error = isinstance(result, dict) and result.get("_error") is True
+                should_wake = (
+                    not is_error
+                    and bool(result)
+                    and (
+                        getattr(sleep_controller, "mode", "active") == "sleep"
+                        or result != last_result
+                    )
+                )
+                if sleep_controller is not None:
+                    if should_wake:
+                        await sleep_controller.record_work_found()
+                    else:
+                        await sleep_controller.record_idle()
                 if result != last_result:
                     last_result = result
                     for q in consumers:
@@ -135,7 +159,10 @@ class SubscriptionManager:
                     max_errors,
                     exc,
                 )
-            await asyncio.sleep(poll_interval)
+            if sleep_controller is not None:
+                await sleep_controller.wait_for_next_cycle(poll_interval)
+            else:
+                await asyncio.sleep(poll_interval)
 
     @staticmethod
     def _freeze_args(args: dict[str, Any] | None) -> tuple:
