@@ -41,9 +41,7 @@ def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
     except asyncio.CancelledError:
         return
     if exc is not None:
-        logger.error(
-            "[mention_watcher] Background task failed: %s", exc, exc_info=exc
-        )
+        logger.error("[mention_watcher] Background task failed: %s", exc, exc_info=exc)
 
 
 class MentionWatcher:
@@ -62,10 +60,13 @@ class MentionWatcher:
         bridge: "ConvexBridge",
         conversation_service: Any | None = None,
         sleep_controller: Any | None = None,
+        *,
+        poll_interval_seconds: int = POLL_INTERVAL_SECONDS,
     ) -> None:
         self._bridge = bridge
         self._conversation_service = conversation_service
         self._sleep_controller = sleep_controller
+        self._poll_interval = poll_interval_seconds
         self._seen_message_ids: set[str] = set()
         self._startup_timestamp: str = _now_iso()
         self._last_poll_timestamp: str | None = None
@@ -77,7 +78,7 @@ class MentionWatcher:
         while True:
             try:
                 if self._sleep_controller is not None and self._sleep_controller.mode == "sleep":
-                    await self._sleep_controller.wait_for_next_cycle(POLL_INTERVAL_SECONDS)
+                    await self._sleep_controller.wait_for_next_cycle(self._poll_interval)
                 found_work = await self._poll_all_tasks()
                 if self._sleep_controller is not None:
                     if found_work:
@@ -89,9 +90,9 @@ class MentionWatcher:
             except Exception:
                 logger.exception("[mention_watcher] Error in polling loop")
             if self._sleep_controller is not None:
-                await self._sleep_controller.wait_for_next_cycle(POLL_INTERVAL_SECONDS)
+                await self._sleep_controller.wait_for_next_cycle(self._poll_interval)
             else:
-                await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                await asyncio.sleep(self._poll_interval)
 
     async def _poll_all_tasks(self) -> bool:
         """Poll recent user messages globally and check for @mentions."""
@@ -141,15 +142,16 @@ class MentionWatcher:
 
             task_data: dict[str, Any] = {}
             try:
-                task_data = await asyncio.to_thread(
-                    self._bridge.query,
-                    "tasks:getById",
-                    {"task_id": task_id},
-                ) or {}
-            except Exception:
-                logger.debug(
-                    "[mention_watcher] Could not fetch task %s", task_id
+                task_data = (
+                    await asyncio.to_thread(
+                        self._bridge.query,
+                        "tasks:getById",
+                        {"task_id": task_id},
+                    )
+                    or {}
                 )
+            except Exception:
+                logger.debug("[mention_watcher] Could not fetch task %s", task_id)
 
             task_title = task_data.get("title", "")
 

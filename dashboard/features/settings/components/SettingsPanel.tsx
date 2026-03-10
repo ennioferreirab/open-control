@@ -15,6 +15,7 @@ import { Check } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ModelTierSettings } from "@/components/ModelTierSettings";
 import { useSettingsPanelState } from "@/features/settings/hooks/useSettingsPanelState";
+import { POLLING_FIELDS } from "@/features/settings/polling-fields";
 
 const TIER_OPTIONS = [
   { value: "tier:standard-low", label: "Low" },
@@ -28,12 +29,16 @@ function SettingNumberField({
   defaultValue,
   onSave,
   saved,
+  min = 1,
+  max,
 }: {
   label: string;
   settingKey: string;
   defaultValue: string;
   onSave: (key: string, value: string) => void;
   saved: boolean;
+  min?: number;
+  max?: number;
 }) {
   const [localValue, setLocalValue] = useState(defaultValue);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,6 +46,16 @@ function SettingNumberField({
   useEffect(() => {
     setLocalValue(defaultValue);
   }, [defaultValue]);
+
+  const clamp = useCallback(
+    (raw: string): string => {
+      const n = Number(raw);
+      if (isNaN(n)) return raw;
+      const clamped = Math.max(min, max !== undefined ? Math.min(max, n) : n);
+      return String(clamped);
+    },
+    [min, max],
+  );
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,9 +75,11 @@ function SettingNumberField({
   const handleBlur = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (localValue.trim() !== "") {
-      onSave(settingKey, localValue);
+      const clamped = clamp(localValue);
+      setLocalValue(clamped);
+      onSave(settingKey, clamped);
     }
-  }, [onSave, settingKey, localValue]);
+  }, [onSave, settingKey, localValue, clamp]);
 
   useEffect(() => {
     return () => {
@@ -76,7 +93,14 @@ function SettingNumberField({
         <label className="text-sm font-medium">{label}</label>
         {saved && <Check className="h-4 w-4 text-green-500 transition-opacity" />}
       </div>
-      <Input type="number" min={1} value={localValue} onChange={handleChange} onBlur={handleBlur} />
+      <Input
+        type="number"
+        min={min}
+        max={max}
+        value={localValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
+      />
     </div>
   );
 }
@@ -244,6 +268,53 @@ export function SettingsPanel() {
               : "Enable to use FTS + vector search. FTS-only when disabled."}
           </p>
         </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold">Polling & Sleep</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Polling intervals for gateway components. Changes take effect on gateway restart.
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Gateway Sleep
+          </p>
+        </div>
+        {POLLING_FIELDS.filter((f) => f.group === "gateway").map((f) => (
+          <SettingNumberField
+            key={f.key}
+            label={f.label}
+            settingKey={f.key}
+            defaultValue={getValue(f.key)}
+            onSave={handleSave}
+            saved={!!savedFields[f.key]}
+            min={f.min}
+            max={f.max}
+          />
+        ))}
+
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Component Intervals
+          </p>
+        </div>
+        {POLLING_FIELDS.filter((f) => f.group === "component").map((f) => (
+          <SettingNumberField
+            key={f.key}
+            label={f.label}
+            settingKey={f.key}
+            defaultValue={getValue(f.key)}
+            onSave={handleSave}
+            saved={!!savedFields[f.key]}
+            min={f.min}
+            max={f.max}
+          />
+        ))}
       </div>
     </div>
   );

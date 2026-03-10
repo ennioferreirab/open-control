@@ -63,6 +63,64 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Polling settings — read from Convex at startup with sane defaults
+# ---------------------------------------------------------------------------
+
+POLLING_DEFAULTS: dict[str, int] = {
+    "gateway_active_poll_seconds": 5,
+    "gateway_sleep_poll_seconds": 300,
+    "gateway_auto_sleep_seconds": 300,
+    "chat_active_poll_seconds": 5,
+    "chat_sleep_poll_seconds": 60,
+    "mention_poll_seconds": 10,
+    "timeout_check_seconds": 60,
+}
+
+POLLING_BOUNDS: dict[str, tuple[int, int]] = {
+    "gateway_active_poll_seconds": (1, 60),
+    "gateway_sleep_poll_seconds": (10, 3600),
+    "gateway_auto_sleep_seconds": (30, 3600),
+    "chat_active_poll_seconds": (1, 60),
+    "chat_sleep_poll_seconds": (5, 600),
+    "mention_poll_seconds": (1, 120),
+    "timeout_check_seconds": (10, 600),
+}
+
+
+def _read_polling_settings(bridge: "ConvexBridge") -> dict[str, int]:
+    """Read polling/sleep settings from Convex, falling back to defaults.
+
+    Uses a single ``settings:list`` query instead of per-key lookups.
+    Values are clamped to POLLING_BOUNDS to prevent misconfiguration.
+
+    Note: fetches the full settings table (~25 rows). If the table grows
+    significantly, consider a ``settings:getMultiple`` batch query.
+
+    IMPORTANT: Keep POLLING_DEFAULTS and POLLING_BOUNDS in sync with
+    dashboard/features/settings/polling-fields.ts (single source of truth
+    for the UI; Python applies the same bounds server-side).
+    """
+    store: dict[str, str] = {}
+    try:
+        all_settings = bridge.query("settings:list") or []
+        for s in all_settings:
+            store[s["key"]] = s["value"]
+    except Exception:
+        logger.warning("[gateway] Could not fetch settings — using polling defaults")
+        return dict(POLLING_DEFAULTS)
+
+    result: dict[str, int] = {}
+    for key, default in POLLING_DEFAULTS.items():
+        lo, hi = POLLING_BOUNDS[key]
+        try:
+            raw = store.get(key)
+            val = int(raw) if raw else default
+        except (ValueError, TypeError):
+            val = default
+        result[key] = max(lo, min(hi, val))
+    return result
+
 
 # ---------------------------------------------------------------------------
 # Plan negotiation manager
@@ -162,7 +220,8 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
                 await _send_telegram_direct(to, result)
                 logger.info(
                     "[gateway] Delivered cron result for task %s → telegram:%s",
-                    task_id, to,
+                    task_id,
+                    to,
                 )
             else:
                 logger.warning("[gateway] Delivery to '%s' not supported", channel)
@@ -194,9 +253,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         )
 
         try:
-            task = await asyncio.to_thread(
-                b.query, "tasks:getById", {"task_id": task_id}
-            )
+            task = await asyncio.to_thread(b.query, "tasks:getById", {"task_id": task_id})
         except Exception:
             logger.warning(
                 "[gateway] Could not fetch cron origin task %s — creating new task instead",
@@ -223,7 +280,8 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         if current_status in ("in_progress", "assigned", "deleted"):
             logger.info(
                 "[gateway] Cron origin task %s is '%s' — skipping re-queue",
-                task_id, current_status,
+                task_id,
+                current_status,
             )
             return False
 
@@ -314,8 +372,17 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     from mc.contexts.conversation.ask_user.watcher import AskUserReplyWatcher
     from mc.runtime.sleep_controller import RuntimeSleepController
 
+    # Read configurable polling/sleep intervals from Convex settings
+    polling_cfg = _read_polling_settings(bridge)
+    logger.info("[gateway] Polling config: %s", polling_cfg)
+
     ask_user_registry = AskUserRegistry()
-    sleep_controller = RuntimeSleepController(bridge)
+    sleep_controller = RuntimeSleepController(
+        bridge,
+        active_poll_interval_seconds=polling_cfg["gateway_active_poll_seconds"],
+        sleep_poll_interval_seconds=polling_cfg["gateway_sleep_poll_seconds"],
+        auto_sleep_after_seconds=polling_cfg["gateway_auto_sleep_seconds"],
+    )
     await sleep_controller.initialize()
 
     # Create RuntimeContext — single source of runtime dependencies (Story 20.3)
@@ -358,7 +425,11 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     )
     execution_task = asyncio.create_task(executor.start_execution_loop())
 
-    timeout_checker = TimeoutChecker(bridge, sleep_controller=sleep_controller)
+    timeout_checker = TimeoutChecker(
+        bridge,
+        sleep_controller=sleep_controller,
+        check_interval_seconds=polling_cfg["timeout_check_seconds"],
+    )
     timeout_task = asyncio.create_task(timeout_checker.start())
 
     # Plan negotiation manager — spawns per-task loops for review/in_progress tasks
@@ -374,9 +445,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     # single pipeline (intent classification → dispatch).  Story 20.2.
     from mc.contexts.conversation.service import ConversationService
 
-    conversation_service = ConversationService(
-        bridge=bridge, ask_user_registry=ask_user_registry
-    )
+    conversation_service = ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
 
     # Chat handler — polls for pending direct-chat messages (Story 10.2)
     from mc.contexts.conversation.chat_handler import ChatHandler
@@ -385,6 +454,8 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         bridge,
         ask_user_registry=ask_user_registry,
         sleep_controller=sleep_controller,
+        active_poll_interval_seconds=polling_cfg["chat_active_poll_seconds"],
+        sleep_poll_interval_seconds=polling_cfg["chat_sleep_poll_seconds"],
     )
     chat_task = asyncio.create_task(chat_handler.run())
 
@@ -397,6 +468,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         bridge,
         conversation_service=conversation_service,
         sleep_controller=sleep_controller,
+        poll_interval_seconds=polling_cfg["mention_poll_seconds"],
     )
     mention_task = asyncio.create_task(mention_watcher.run())
 
@@ -507,11 +579,7 @@ async def main() -> None:
 
             _ws = _lc().workspace_path
             _builtin_dir = (
-                Path(__file__).parent.parent
-                / "vendor"
-                / "nanobot"
-                / "nanobot"
-                / "skills"
+                Path(__file__).parent.parent / "vendor" / "nanobot" / "nanobot" / "skills"
             )
             _distribute_builtin_skills(_ws / "skills", _builtin_dir, MC_SKILLS_DIR)
         except Exception:

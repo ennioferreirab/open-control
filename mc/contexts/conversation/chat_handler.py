@@ -45,7 +45,6 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_POLL_INTERVAL_SECONDS = 5
 SLEEP_POLL_INTERVAL_SECONDS = 60
-POLL_INTERVAL_SECONDS = ACTIVE_POLL_INTERVAL_SECONDS
 RUNTIME_SETTINGS_KEY = "chat_handler_runtime"
 
 
@@ -57,10 +56,15 @@ class ChatHandler:
         bridge: ConvexBridge,
         ask_user_registry: Any | None = None,
         sleep_controller: Any | None = None,
+        *,
+        active_poll_interval_seconds: int = ACTIVE_POLL_INTERVAL_SECONDS,
+        sleep_poll_interval_seconds: int = SLEEP_POLL_INTERVAL_SECONDS,
     ) -> None:
         self._bridge = bridge
         self._ask_user_registry = ask_user_registry
         self._sleep_controller = sleep_controller
+        self._active_poll_interval = active_poll_interval_seconds
+        self._sleep_poll_interval = sleep_poll_interval_seconds
         self._mode: str = "sleep"
         self._in_flight = 0
         self._last_transition_at = self._utc_now()
@@ -74,7 +78,7 @@ class ChatHandler:
         while True:
             try:
                 if self._sleep_controller is not None and self._sleep_controller.mode == "sleep":
-                    await self._sleep_controller.wait_for_next_cycle(ACTIVE_POLL_INTERVAL_SECONDS)
+                    await self._sleep_controller.wait_for_next_cycle(self._active_poll_interval)
                 pending = await asyncio.to_thread(self._bridge.get_pending_chat_messages)
                 useful_pending = await self._filter_useful_pending(pending or [])
                 for msg in useful_pending:
@@ -97,14 +101,14 @@ class ChatHandler:
             except Exception:
                 logger.exception("[chat] Error polling pending chats")
             if self._sleep_controller is not None:
-                await self._sleep_controller.wait_for_next_cycle(ACTIVE_POLL_INTERVAL_SECONDS)
+                await self._sleep_controller.wait_for_next_cycle(self._active_poll_interval)
             else:
                 await asyncio.sleep(self._current_poll_interval())
 
     def _current_poll_interval(self) -> int:
         if self._mode == "active":
-            return ACTIVE_POLL_INTERVAL_SECONDS
-        return SLEEP_POLL_INTERVAL_SECONDS
+            return self._active_poll_interval
+        return self._sleep_poll_interval
 
     def _utc_now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -129,6 +133,8 @@ class ChatHandler:
         payload: dict[str, Any] = {
             "mode": self._mode,
             "pollIntervalSeconds": self._current_poll_interval(),
+            "configuredActiveInterval": self._active_poll_interval,
+            "configuredSleepInterval": self._sleep_poll_interval,
             "lastTransitionAt": self._last_transition_at,
             "inFlight": self._in_flight,
         }

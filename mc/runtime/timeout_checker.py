@@ -45,9 +45,16 @@ def _format_duration(td: timedelta) -> str:
 class TimeoutChecker:
     """Periodic checker for stalled tasks and timed-out reviews."""
 
-    def __init__(self, bridge: ConvexBridge, sleep_controller: Any | None = None) -> None:
+    def __init__(
+        self,
+        bridge: ConvexBridge,
+        sleep_controller: Any | None = None,
+        *,
+        check_interval_seconds: int = CHECK_INTERVAL_SECONDS,
+    ) -> None:
         self._bridge = bridge
         self._sleep_controller = sleep_controller
+        self._check_interval = check_interval_seconds
         self._flagged_stalled: set[str] = set()
         self._flagged_reviews: set[str] = set()
 
@@ -65,9 +72,9 @@ class TimeoutChecker:
             except Exception:
                 logger.exception("[timeout] Timeout check failed")
             if self._sleep_controller is not None:
-                await self._sleep_controller.wait_for_next_cycle(CHECK_INTERVAL_SECONDS)
+                await self._sleep_controller.wait_for_next_cycle(self._check_interval)
             else:
-                await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+                await asyncio.sleep(self._check_interval)
 
     async def check_timeouts(self) -> bool:
         """Run a single timeout check cycle."""
@@ -94,15 +101,16 @@ class TimeoutChecker:
             self._bridge.query, "tasks:listByStatus", {"status": "review"}
         )
         for task in review_tasks or []:
-            found_work = await self._check_review_timeout(task, now, inter_agent_timeout_minutes) or found_work
+            found_work = (
+                await self._check_review_timeout(task, now, inter_agent_timeout_minutes)
+                or found_work
+            )
         return found_work
 
     async def _get_setting(self, key: str, default: int) -> int:
         """Read a timeout setting from Convex, falling back to default."""
         try:
-            value = await asyncio.to_thread(
-                self._bridge.query, "settings:get", {"key": key}
-            )
+            value = await asyncio.to_thread(self._bridge.query, "settings:get", {"key": key})
             if value is not None:
                 return int(value)
         except (ValueError, TypeError):
@@ -205,7 +213,9 @@ class TimeoutChecker:
         duration = _format_duration(elapsed)
 
         self._flagged_reviews.add(task_id)
-        logger.warning("[timeout] Review for '%s' timed out after %s -- escalating", title, duration)
+        logger.warning(
+            "[timeout] Review for '%s' timed out after %s -- escalating", title, duration
+        )
 
         # Activity event
         await asyncio.to_thread(

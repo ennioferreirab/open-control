@@ -3,12 +3,14 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { POLLING_DEFAULTS } from "@/features/settings/polling-fields";
 
 const DEFAULTS: Record<string, string> = {
   task_timeout_minutes: "30",
   inter_agent_timeout_minutes: "10",
   default_llm_model: "tier:standard-medium",
   auto_title_enabled: "false",
+  ...POLLING_DEFAULTS,
 };
 
 const DEFAULT_EMBEDDING_MODEL = "openrouter/openai/text-embedding-3-small";
