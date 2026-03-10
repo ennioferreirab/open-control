@@ -33,6 +33,7 @@ export interface TaskDetailActionsResult {
   retry: (taskId: Id<"tasks">) => Promise<void>;
   // Tags
   updateTags: (taskId: Id<"tasks">, tags: string[]) => void;
+  updateTagsError: string;
   removeTagAttrValues: (taskId: Id<"tasks">, tagName: string) => void;
   // Title / Description
   updateTitle: (taskId: Id<"tasks">, title: string) => Promise<void>;
@@ -87,6 +88,7 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
   const [resumeError, setResumeError] = useState("");
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [savePlanError, setSavePlanError] = useState("");
+  const [updateTagsError, setUpdateTagsError] = useState("");
   const [isStartingInbox, setIsStartingInbox] = useState(false);
   const [startInboxError, setStartInboxError] = useState("");
   const [isCreatingMergeTask, setIsCreatingMergeTask] = useState(false);
@@ -191,7 +193,11 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
 
   const updateTags = useCallback(
     (taskId: Id<"tasks">, tags: string[]) => {
-      updateTagsMutation({ taskId, tags });
+      setUpdateTagsError("");
+      updateTagsMutation({ taskId, tags }).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setUpdateTagsError(msg);
+      });
     },
     [updateTagsMutation],
   );
@@ -281,6 +287,7 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
     resumeError,
     retry,
     updateTags,
+    updateTagsError,
     removeTagAttrValues,
     updateTitle,
     updateDescription,
