@@ -367,23 +367,26 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
               <ArrowRight className="h-3 w-3 rotate-90" />
             </button>
           </div>
-          {/* Trash (left edge, only when selected) */}
-          {selected && (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2">
-              <button
-                type="button"
-                data-testid={`delete-step-${step.tempId}`}
-                className="flex items-center justify-center w-5 h-5 rounded-full bg-muted hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-colors shadow-sm border border-border cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteStep?.(step.tempId);
-                }}
-                title="Delete step"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
-          )}
+          {/* Trash (left edge) */}
+          <div
+            className={cn(
+              "absolute left-0 top-1/2 -translate-y-1/2 transition-opacity",
+              btnVisibility,
+            )}
+          >
+            <button
+              type="button"
+              data-testid={`delete-step-${step.tempId}`}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-muted hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-colors shadow-sm border border-border cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteStep?.(step.tempId);
+              }}
+              title="Delete step"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
         </>
       )}
     </div>
