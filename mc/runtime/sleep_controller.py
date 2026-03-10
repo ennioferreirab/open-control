@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Literal
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
@@ -106,7 +109,7 @@ class RuntimeSleepController:
             return
 
         mode = raw.get("mode")
-        requested_at = raw.get("requested_at")
+        requested_at = raw.get("requestedAt") or raw.get("requested_at")
         if mode not in {"sleep", "active"} or not requested_at:
             return
 
@@ -156,6 +159,7 @@ class RuntimeSleepController:
             or self._manual_requested != manual_requested
             or self._reason != reason
         )
+        prev_mode = self._mode
         self._mode = mode
         self._manual_requested = manual_requested
         self._reason = reason
@@ -163,6 +167,10 @@ class RuntimeSleepController:
             self._last_transition_at = self._utc_now()
             await self._persist_runtime(force=True)
         if should_notify:
+            logger.info(
+                "[sleep] %s → %s (reason=%s, manual=%s)",
+                prev_mode, mode, reason, manual_requested,
+            )
             old_event = self._state_event
             self._state_event = asyncio.Event()
             old_event.set()
