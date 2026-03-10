@@ -31,7 +31,10 @@ import { BoardSettingsSheet } from "@/components/BoardSettingsSheet";
 import { CronJobsModal } from "@/components/CronJobsModal";
 import { SearchBar } from "@/components/SearchBar";
 import { parseSearch } from "@/lib/searchParser";
-import { useGatewaySleepRuntime } from "@/hooks/useGatewaySleepRuntime";
+import {
+  useGatewaySleepRuntime,
+  useGatewaySleepCountdown,
+} from "@/hooks/useGatewaySleepRuntime";
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
@@ -59,11 +62,14 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
   const parsedSearch = useMemo(() => parseSearch(searchQuery), [searchQuery]);
   const { openTerminals, closeAllTerminals } = useBoard();
   const gatewaySleepRuntime = useGatewaySleepRuntime();
+  const gatewaySleepCountdown = useGatewaySleepCountdown(gatewaySleepRuntime);
   const requestGatewaySleepMode = useMutation(api.settings.requestGatewaySleepMode);
   const gatewaySleepLabel =
     gatewaySleepRuntime == null
       ? "Gateway unavailable"
-      : `Gateway ${gatewaySleepRuntime.mode === "sleep" ? "sleeping" : "active"} · ${gatewaySleepRuntime.pollIntervalSeconds}s`;
+      : gatewaySleepRuntime.mode === "sleep"
+        ? `Gateway sleeping · ${gatewaySleepCountdown ? `sync in ${gatewaySleepCountdown}` : `${gatewaySleepRuntime.pollIntervalSeconds}s`}`
+        : `Gateway active · ${gatewaySleepCountdown ? `sleep in ${gatewaySleepCountdown}` : `${gatewaySleepRuntime.pollIntervalSeconds}s`}`;
   const gatewaySleepClasses =
     gatewaySleepRuntime?.mode === "sleep"
       ? "border-sky-200 bg-sky-50 text-sky-700"
