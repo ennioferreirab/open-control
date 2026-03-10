@@ -9,11 +9,16 @@ export type StepData = Partial<Pick<PlanStep, "title" | "description" | "assigne
 
 /** Generate the next unique tempId for a step. */
 function nextTempId(steps: PlanStep[]): string {
+  const existingIds = new Set(steps.map((s) => s.tempId));
   const existingNums = steps
     .map((s) => s.tempId)
     .filter((id) => /^step_\d+$/.test(id))
     .map((id) => parseInt(id.replace("step_", ""), 10));
-  const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : steps.length + 1;
+  let nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : steps.length + 1;
+  // Guard against collisions with existing IDs of any format
+  while (existingIds.has(`step_${nextNum}`)) {
+    nextNum++;
+  }
   return `step_${nextNum}`;
 }
 

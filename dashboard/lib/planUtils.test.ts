@@ -200,6 +200,28 @@ describe("insertMergeStep", () => {
     expect(step4.blockedBy).not.toContain("step_2");
   });
 
+  it("reroutes downstream step depending on multiple siblings into single merge dep", () => {
+    const steps = [
+      makeStep({ tempId: "step_1", order: 1, parallelGroup: 1 }),
+      makeStep({ tempId: "step_2", order: 2, parallelGroup: 2, blockedBy: ["step_1"] }),
+      makeStep({ tempId: "step_3", order: 2, parallelGroup: 2, blockedBy: ["step_1"] }),
+      makeStep({
+        tempId: "step_4",
+        order: 3,
+        parallelGroup: 3,
+        blockedBy: ["step_2", "step_3"],
+      }),
+    ];
+    const result = insertMergeStep(steps, "step_2");
+
+    const mergeStep = result.find(
+      (s) => !["step_1", "step_2", "step_3", "step_4"].includes(s.tempId),
+    )!;
+    const step4 = result.find((s) => s.tempId === "step_4")!;
+    // Both sibling deps replaced by single merge dep (no duplicates)
+    expect(step4.blockedBy).toEqual([mergeStep.tempId]);
+  });
+
   it("returns original steps when source not found", () => {
     const steps = [makeStep({ tempId: "step_1" })];
     const result = insertMergeStep(steps, "nonexistent");
