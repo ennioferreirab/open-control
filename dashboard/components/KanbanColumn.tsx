@@ -66,7 +66,7 @@ export function KanbanColumn({
 
   return (
     <div
-      className={`flex min-h-0 w-[85vw] shrink-0 snap-center flex-col overflow-hidden rounded-lg transition-colors md:min-w-0 md:w-auto md:shrink md:snap-none ${isDragOver ? "ring-2 ring-blue-400 bg-blue-50/30 dark:bg-blue-950/30" : ""}`}
+      className={`flex min-h-0 w-[85vw] shrink-0 snap-center flex-col overflow-hidden rounded-lg border border-border/70 bg-muted/40 transition-colors md:min-w-0 md:w-auto md:shrink md:snap-none ${isDragOver ? "ring-2 ring-blue-400 bg-blue-50/30 dark:bg-blue-950/30" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
