@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useStepCardActions } from "@/hooks/useStepCardActions";
-import { AlertTriangle, CheckCircle, Lock, Paperclip, Trash2, User } from "lucide-react";
+import { AlertTriangle, CheckCircle, ExternalLink, Lock, Paperclip, Trash2, User } from "lucide-react";
 import { Doc } from "@/convex/_generated/dataModel";
 import { STEP_STATUS_COLORS, type StepStatus } from "@/lib/constants";
 
@@ -16,9 +16,10 @@ interface StepCardProps {
   step: Doc<"steps">;
   parentTaskTitle: string;
   onClick?: () => void;
+  onNavigateToTask?: () => void;
 }
 
-export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
+export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: StepCardProps) {
   const shouldReduceMotion = useReducedMotion();
   const { deleteStep, acceptHumanStep, manualMoveStep } = useStepCardActions();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -82,9 +83,25 @@ export function StepCard({ step, parentTaskTitle, onClick }: StepCardProps) {
           role="article"
           aria-label={`Step: ${step.title} - ${step.status} - assigned to ${assignedAgentName}`}
         >
-          <p className="mb-1 truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-            {parentTaskTitle}
-          </p>
+          <div className="mb-1 flex items-center gap-1">
+            <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+              {parentTaskTitle}
+            </p>
+            {onNavigateToTask && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigateToTask();
+                }}
+                className="flex-shrink-0 rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+                aria-label="Open parent task"
+                title="Open parent task"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </button>
+            )}
+          </div>
 
           <div className="mb-1.5 flex items-start justify-between gap-2">
             <h3 className="min-w-0 text-sm font-semibold text-foreground line-clamp-2">
