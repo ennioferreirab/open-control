@@ -12,6 +12,7 @@ interface ThreadMessageProps {
   message: Doc<"messages">;
   steps?: Doc<"steps">[];
   onArtifactClick?: (artifactPath: string, sourceTaskId?: Doc<"messages">["taskId"]) => void;
+  taskIdOverride?: Doc<"messages">["taskId"];
 }
 
 function getInitials(name: string): string {
@@ -62,8 +63,14 @@ function getMessageStyles(message: Doc<"messages">): MessageStyles {
   return getLegacyMessageStyles(message.messageType, message.authorType);
 }
 
-export function ThreadMessage({ message, steps, onArtifactClick }: ThreadMessageProps) {
+export function ThreadMessage({
+  message,
+  steps,
+  onArtifactClick,
+  taskIdOverride,
+}: ThreadMessageProps) {
   const styles = getMessageStyles(message);
+  const resolvedTaskId = taskIdOverride ?? message.taskId;
   // Lead Agent messages have authorType "system" but should render as Markdown
   // (not plain italic text). Exclude lead_agent_plan and lead_agent_chat from
   // the isSystem flag so they get MarkdownRenderer treatment.
@@ -124,7 +131,7 @@ export function ThreadMessage({ message, steps, onArtifactClick }: ThreadMessage
           <ArtifactRenderer
             artifacts={message.artifacts}
             onArtifactClick={
-              onArtifactClick ? (artifact) => onArtifactClick(artifact.path, message.taskId) : undefined
+              onArtifactClick ? (artifact) => onArtifactClick(artifact.path, resolvedTaskId) : undefined
             }
           />
         )}
@@ -137,7 +144,7 @@ export function ThreadMessage({ message, steps, onArtifactClick }: ThreadMessage
                 key={fa.name}
                 name={fa.name}
                 size={fa.size}
-                href={`/api/tasks/${message.taskId}/files/attachments/${encodeURIComponent(fa.name)}`}
+                href={`/api/tasks/${resolvedTaskId}/files/attachments/${encodeURIComponent(fa.name)}`}
               />
             ))}
           </div>

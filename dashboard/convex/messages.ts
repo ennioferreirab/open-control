@@ -36,6 +36,16 @@ const fileAttachmentsValidator = v.optional(v.array(v.object({
   size: v.number(),
 })));
 
+const planReviewValidator = v.optional(v.object({
+  kind: v.union(
+    v.literal("request"),
+    v.literal("feedback"),
+    v.literal("decision"),
+  ),
+  planGeneratedAt: v.string(),
+  decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
+}));
+
 function assertTaskThreadWritable(task: { status: string; mergedIntoTaskId?: string }) {
   if (task.status === "deleted") {
     throw new ConvexError("Cannot send messages on deleted tasks");
@@ -92,6 +102,7 @@ export const create = internalMutation({
     stepId: v.optional(v.id("steps")),
     artifacts: artifactsValidator,
     fileAttachments: fileAttachmentsValidator,
+    planReview: planReviewValidator,
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("messages", {
@@ -105,6 +116,7 @@ export const create = internalMutation({
       stepId: args.stepId,
       artifacts: args.artifacts,
       fileAttachments: args.fileAttachments,
+      planReview: args.planReview,
     });
   },
 });
@@ -193,6 +205,7 @@ export const postLeadAgentMessage = internalMutation({
       v.literal("lead_agent_plan"),
       v.literal("lead_agent_chat"),
     ),
+    planReview: planReviewValidator,
   },
   handler: async (ctx, args) => {
     const timestamp = new Date().toISOString();
@@ -203,6 +216,7 @@ export const postLeadAgentMessage = internalMutation({
       content: args.content,
       messageType: "system_event", // Legacy field
       type: args.type,             // New unified thread type
+      planReview: args.planReview,
       timestamp,
     });
 
@@ -232,6 +246,7 @@ export const postUserPlanMessage = mutation({
     taskId: v.id("tasks"),
     content: v.string(),
     fileAttachments: fileAttachmentsValidator,
+    planReviewAction: v.optional(v.literal("rejected")),
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -249,6 +264,21 @@ export const postUserPlanMessage = mutation({
     }
 
     const timestamp = new Date().toISOString();
+    const planGeneratedAt =
+      typeof task.executionPlan === "object" &&
+      task.executionPlan !== null &&
+      "generatedAt" in task.executionPlan &&
+      typeof task.executionPlan.generatedAt === "string"
+        ? task.executionPlan.generatedAt
+        : undefined;
+    const planReview =
+      planGeneratedAt === undefined
+        ? undefined
+        : {
+            kind: "feedback" as const,
+            planGeneratedAt,
+            decision: args.planReviewAction,
+          };
 
     const messageId = await ctx.db.insert("messages", {
       taskId: args.taskId,
@@ -258,6 +288,7 @@ export const postUserPlanMessage = mutation({
       messageType: "user_message",
       type: "user_message",
       fileAttachments: args.fileAttachments,
+      planReview,
       timestamp,
     });
 
@@ -394,9 +425,15 @@ export const sendThreadMessage = mutation({
       throw new ConvexError("Task not found");
     }
     assertTaskThreadWritable(task);
+    const allowHumanInProgressReassignment =
+      !task.isManual && task.status === "in_progress" && task.assignedAgent === "human";
     const blockedStatuses = task.isManual
       ? ["retrying", "deleted"]
-      : ["in_progress", "retrying", "deleted"];
+      : [
+          ...(allowHumanInProgressReassignment ? [] : ["in_progress"]),
+          "retrying",
+          "deleted",
+        ];
     if (blockedStatuses.includes(task.status)) {
       throw new ConvexError(
         `Cannot send messages while task is ${task.status}`

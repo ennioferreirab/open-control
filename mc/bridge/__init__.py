@@ -248,6 +248,11 @@ class ConvexBridge:
         self._ensure_repos()
         self._tasks.create_task_directory(task_id)
 
+    def get_task(self, task_id: str) -> dict[str, Any] | None:
+        """Fetch a single task document by id."""
+        self._ensure_repos()
+        return self._tasks.get_task(task_id)
+
     def sync_task_output_files(
         self, task_id: str, task_data: dict, agent_name: str = "agent"
     ) -> None:
@@ -341,10 +346,13 @@ class ConvexBridge:
         task_id: str,
         content: str,
         msg_type: str,
+        plan_review: dict[str, Any] | None = None,
     ) -> Any:
         """Post a Lead Agent plan or chat message to the unified task thread."""
         self._ensure_repos()
-        return self._messages.post_lead_agent_message(task_id, content, msg_type)
+        return self._messages.post_lead_agent_message(
+            task_id, content, msg_type, plan_review=plan_review
+        )
 
     def get_recent_user_messages(self, since_timestamp: str) -> list[dict[str, Any]]:
         """Fetch all user messages created since the given ISO timestamp."""

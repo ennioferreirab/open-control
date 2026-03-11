@@ -1,14 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { postMentionMessage } from "./messages";
+import { postMentionMessage, postUserPlanMessage, sendThreadMessage } from "./messages";
 
 type InsertCall = {
   table: string;
   value: Record<string, unknown>;
 };
 
-function getHandler() {
+function getMentionHandler() {
   return (postMentionMessage as unknown as {
+    _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+  })._handler;
+}
+
+function getSendHandler() {
+  return (sendThreadMessage as unknown as {
+    _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string | void>;
+  })._handler;
+}
+
+function getPlanHandler() {
+  return (postUserPlanMessage as unknown as {
     _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
   })._handler;
 }
@@ -39,7 +51,7 @@ describe("messages.postMentionMessage", () => {
   };
 
   it("inserts a user_message and activity event without changing task status (AC 1)", async () => {
-    const handler = getHandler();
+    const handler = getMentionHandler();
     const { ctx, inserts, mocks } = makeCtx(baseTask);
 
     const result = await handler(ctx, {
@@ -70,7 +82,7 @@ describe("messages.postMentionMessage", () => {
   });
 
   it("uses generic description when mentionedAgent is not provided", async () => {
-    const handler = getHandler();
+    const handler = getMentionHandler();
     const { ctx, inserts } = makeCtx(baseTask);
 
     await handler(ctx, {
@@ -83,7 +95,7 @@ describe("messages.postMentionMessage", () => {
   });
 
   it("throws when task is not found", async () => {
-    const handler = getHandler();
+    const handler = getMentionHandler();
     const { ctx } = makeCtx(null);
 
     await expect(
@@ -95,7 +107,7 @@ describe("messages.postMentionMessage", () => {
   });
 
   it("throws when task status is deleted (AC 2)", async () => {
-    const handler = getHandler();
+    const handler = getMentionHandler();
     const { ctx } = makeCtx({ ...baseTask, status: "deleted" });
 
     await expect(
@@ -107,7 +119,7 @@ describe("messages.postMentionMessage", () => {
   });
 
   it("throws when source task is merge-locked into task C", async () => {
-    const handler = getHandler();
+    const handler = getMentionHandler();
     const { ctx } = makeCtx({ ...baseTask, mergedIntoTaskId: "task-c" });
 
     await expect(
@@ -131,7 +143,7 @@ describe("messages.postMentionMessage", () => {
 
   for (const status of allowedStatuses) {
     it(`accepts task in "${status}" status (AC 2)`, async () => {
-      const handler = getHandler();
+      const handler = getMentionHandler();
       const { ctx } = makeCtx({ ...baseTask, status });
 
       const result = await handler(ctx, {
@@ -145,7 +157,7 @@ describe("messages.postMentionMessage", () => {
   }
 
   it("returns the message ID (Task 1.3)", async () => {
-    const handler = getHandler();
+    const handler = getMentionHandler();
     const { ctx } = makeCtx(baseTask);
 
     const result = await handler(ctx, {
@@ -155,5 +167,90 @@ describe("messages.postMentionMessage", () => {
     });
 
     expect(result).toBe("msg-id-123");
+  });
+});
+
+describe("messages.sendThreadMessage", () => {
+  it("reassigns in-progress human tasks back to assigned", async () => {
+    const handler = getSendHandler();
+    const { ctx, inserts, mocks } = makeCtx({
+      _id: "task-1",
+      status: "in_progress",
+      assignedAgent: "human",
+      isManual: false,
+    });
+
+    await handler(ctx, {
+      taskId: "task-1",
+      content: "please take this over",
+      agentName: "reviewer",
+    });
+
+    const msgInsert = inserts.find((entry) => entry.table === "messages");
+    expect(msgInsert?.value.content).toBe("please take this over");
+
+    expect(mocks.patch).toHaveBeenCalledWith("task-1", {
+      status: "assigned",
+      assignedAgent: "reviewer",
+      previousStatus: "in_progress",
+      executionPlan: undefined,
+      stalledAt: undefined,
+      updatedAt: expect.any(String),
+    });
+  });
+
+  it("keeps rejecting in-progress tasks assigned to non-human agents", async () => {
+    const handler = getSendHandler();
+    const { ctx, mocks } = makeCtx({
+      _id: "task-1",
+      status: "in_progress",
+      assignedAgent: "coder",
+      isManual: false,
+    });
+
+    await expect(
+      handler(ctx, {
+        taskId: "task-1",
+        content: "please take this over",
+        agentName: "reviewer",
+      }),
+    ).rejects.toThrow(/Cannot send messages while task is in_progress/);
+
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+});
+
+describe("messages.postUserPlanMessage", () => {
+  it("stores rejection feedback with plan review metadata for the current plan version", async () => {
+    const handler = getPlanHandler();
+    const { ctx, inserts } = makeCtx({
+      _id: "task-1",
+      status: "review",
+      title: "Plan review task",
+      awaitingKickoff: true,
+      executionPlan: {
+        generatedAt: "2026-03-10T10:00:00Z",
+        generatedBy: "lead-agent",
+        steps: [{ tempId: "step_1" }],
+      },
+    });
+
+    const result = await handler(ctx, {
+      taskId: "task-1",
+      content: "Please split implementation and tests into separate steps.",
+      planReviewAction: "rejected",
+    });
+
+    expect(result).toBe("msg-id-123");
+
+    const msgInsert = inserts.find((entry) => entry.table === "messages");
+    expect(msgInsert?.value.authorType).toBe("user");
+    expect(msgInsert?.value.messageType).toBe("user_message");
+    expect(msgInsert?.value.type).toBe("user_message");
+    expect(msgInsert?.value.planReview).toEqual({
+      decision: "rejected",
+      kind: "feedback",
+      planGeneratedAt: "2026-03-10T10:00:00Z",
+    });
   });
 });

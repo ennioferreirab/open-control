@@ -8,12 +8,34 @@ import type { Doc } from "@/convex/_generated/dataModel";
 // Mock convex/react
 const mockUseQuery = vi.fn();
 const mockMutationFn = vi.fn().mockResolvedValue(undefined);
+const mockDocumentViewerModal = vi.hoisted(() => vi.fn());
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => {
     const result = mockUseQuery(...args);
     return result;
   },
   useMutation: () => mockMutationFn,
+}));
+
+vi.mock("./DocumentViewerModal", () => ({
+  DocumentViewerModal: ({
+    taskId,
+    file,
+  }: {
+    taskId: string;
+    file: { name: string } | null;
+    onClose: () => void;
+  }) => {
+    mockDocumentViewerModal({ taskId, file });
+    if (!file) return null;
+    return (
+      <div
+        data-testid="document-viewer-modal"
+        data-task-id={taskId}
+        data-file-name={file.name}
+      />
+    );
+  },
 }));
 
 // Mock ExecutionPlanTab to prevent it from calling useQuery internally
@@ -24,6 +46,10 @@ vi.mock("./ExecutionPlanTab", () => ({
     readOnly,
     taskId,
     onLocalPlanChange,
+    viewMode,
+    onViewModeChange,
+    onClearPlan,
+    isClearingPlan,
   }: {
     executionPlan?: unknown;
     liveSteps?: unknown;
@@ -32,13 +58,41 @@ vi.mock("./ExecutionPlanTab", () => ({
     readOnly?: boolean;
     taskId?: string;
     onLocalPlanChange?: (plan: unknown) => void;
+    viewMode?: "both" | "canvas" | "conversation";
+    onViewModeChange?: (mode: "both" | "canvas" | "conversation") => void;
+    onClearPlan?: () => void;
+    isClearingPlan?: boolean;
   }) => (
     <div
       data-testid="execution-plan-tab"
       data-edit-mode={isEditMode ? "true" : "false"}
       data-read-only={readOnly ? "true" : "false"}
       data-task-id={taskId}
+      data-view-mode={viewMode ?? "both"}
     >
+      {onViewModeChange && (
+        <div data-testid="mock-plan-view-switcher">
+          <button type="button" onClick={() => onViewModeChange("both")}>
+            Both
+          </button>
+          <button type="button" onClick={() => onViewModeChange("canvas")}>
+            Canvas
+          </button>
+          <button type="button" onClick={() => onViewModeChange("conversation")}>
+            Lead Agent Conversation
+          </button>
+        </div>
+      )}
+      {onClearPlan && (
+        <button
+          type="button"
+          data-testid="mock-plan-clear-button"
+          disabled={isClearingPlan}
+          onClick={onClearPlan}
+        >
+          {isClearingPlan ? "Cleaning..." : "Clean"}
+        </button>
+      )}
       {(() => {
         const firstStepTitle =
           executionPlan &&
@@ -145,6 +199,7 @@ describe("TaskDetailSheet", () => {
     cleanup();
     mockUseQuery.mockReset();
     mockMutationFn.mockClear();
+    mockDocumentViewerModal.mockReset();
   });
 
   function setupQueryMock(task: TaskDoc, messages: unknown[] = []) {
@@ -364,6 +419,72 @@ describe("TaskDetailSheet", () => {
     expect(screen.getAllByText("B").length).toBeGreaterThan(0);
   });
 
+  it("opens merged source artifacts using the source thread task id", async () => {
+    const user = userEvent.setup();
+    const mergeTask = {
+      ...baseTask,
+      _id: "task-c" as never,
+      title: "Merged Task C",
+      status: "review" as const,
+      isMergeTask: true,
+      files: [],
+    };
+
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (args === undefined) return [];
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return {
+          ...buildDetailView(mergeTask, [baseMessage]),
+          mergeSourceThreads: [
+            {
+              taskId: "task-b",
+              taskTitle: "Task B",
+              label: "B",
+              messages: [
+                {
+                  ...baseMessage,
+                  _id: "msg-b1",
+                  taskId: "task-c",
+                  type: "step_completion" as const,
+                  content: "Source thread B message",
+                  artifacts: [{ path: "/output/source-b.md", action: "created" as const }],
+                },
+              ],
+            },
+          ],
+          mergeSourceFiles: [
+            {
+              name: "source-b.md",
+              type: "text/markdown",
+              size: 512,
+              subfolder: "output",
+              sourceTaskId: "task-b",
+              sourceTaskTitle: "Task B",
+              sourceLabel: "B",
+            },
+          ],
+        };
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task-c" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByText("Thread B"));
+    await user.click(screen.getByRole("button", { name: "/output/source-b.md" }));
+
+    expect(screen.getByTestId("document-viewer-modal")).toHaveAttribute("data-task-id", "task-b");
+    expect(screen.getByTestId("document-viewer-modal")).toHaveAttribute(
+      "data-file-name",
+      "source-b.md"
+    );
+  });
+
   it("renders attach controls in config for existing merged tasks and adds a source", async () => {
     const user = userEvent.setup();
     const mergeTask = {
@@ -508,7 +629,9 @@ describe("TaskDetailSheet", () => {
 
     await user.click(screen.getByRole("tab", { name: /Config/i }));
 
-    expect(screen.getByText(/Merged tasks must keep at least 2 direct sources/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Merged tasks must keep at least 2 direct sources/i),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove merge source A" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove merge source B" })).not.toBeInTheDocument();
   });
@@ -553,9 +676,15 @@ describe("TaskDetailSheet", () => {
 
     await user.click(screen.getByRole("tab", { name: /Config/i }));
 
-    expect(screen.getByText(/Merged tasks must keep at least 2 direct sources/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Remove merge source A.A" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Remove merge source A.B" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Merged tasks must keep at least 2 direct sources/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Remove merge source A.A" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Remove merge source A.B" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove merge source A" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove merge source B" })).not.toBeInTheDocument();
   });
@@ -1008,9 +1137,9 @@ describe("TaskDetailSheet", () => {
     expect(mockMutationFn).toHaveBeenCalledWith({ taskId: "task1" });
   });
 
-  // --- Story 4.6: Kick-off button for review + awaitingKickoff tasks ---
+  // --- Story 4.6: AwaitingKickoff header state ---
 
-  it("shows Kick-off button when task status is review with awaitingKickoff", () => {
+  it("does not show a header Kick-off button when task status is review with awaitingKickoff", () => {
     const reviewingTask = {
       ...baseTask,
       status: "review" as const,
@@ -1021,7 +1150,7 @@ describe("TaskDetailSheet", () => {
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
-    expect(screen.getByTestId("kick-off-button")).toBeInTheDocument();
+    expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
   });
 
   it("does NOT show Kick-off button when task status is in_progress", () => {
@@ -1598,6 +1727,459 @@ describe("TaskDetailSheet", () => {
     expect(planTab.getAttribute("data-edit-mode")).toBe("true");
   });
 
+  it("constrains the canvas width in the execution plan tab on larger layouts", async () => {
+    const user = userEvent.setup();
+    const reviewingTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+    };
+    oneRenderPass(reviewingTask);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+
+    const canvasShell = screen.getByTestId("plan-canvas-shell");
+    expect(canvasShell.className).toContain("max-w-5xl");
+    expect(canvasShell.className).toContain("self-center");
+  });
+
+  it("shows the plan review panel and hides header kick-off controls during awaitingKickoff", () => {
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-10T10:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const reviewingTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+      executionPlan,
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-1" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Plan ready for approval",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
+    oneRenderPass(reviewingTask, [planRequestMessage]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    expect(screen.getByText("Lead Agent Review")).toBeInTheDocument();
+    expect(screen.getByText("Plan ready for approval")).toBeInTheDocument();
+    expect(screen.getByTestId("plan-primary-button")).toHaveTextContent("Approve");
+    expect(screen.getByTestId("plan-reject-button")).toBeInTheDocument();
+    expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
+  });
+
+  it("defaults the execution plan view to both canvas and lead agent conversation", async () => {
+    const user = userEvent.setup();
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-10T10:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const reviewingTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+      executionPlan,
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-default-both" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Plan ready for approval",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
+    oneRenderPass(reviewingTask, [planRequestMessage]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+
+    expect(screen.getByTestId("execution-plan-tab")).toHaveAttribute("data-view-mode", "both");
+    expect(screen.getByTestId("plan-review-panel")).toBeInTheDocument();
+  });
+
+  it("switches the execution plan area to canvas-only mode", async () => {
+    const user = userEvent.setup();
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-10T10:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const reviewingTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+      executionPlan,
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-canvas-only" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Plan ready for approval",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
+    oneRenderPass(reviewingTask, [planRequestMessage]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+    await user.click(screen.getByRole("button", { name: "Canvas" }));
+
+    expect(screen.getByTestId("execution-plan-tab")).toHaveAttribute("data-view-mode", "canvas");
+    expect(screen.queryByTestId("plan-review-panel")).not.toBeInTheDocument();
+  });
+
+  it("clears a manual review plan after confirmation", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-10T10:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const manualReviewTask = {
+      ...baseTask,
+      status: "review" as const,
+      isManual: true,
+      executionPlan,
+    };
+    oneRenderPass(manualReviewTask);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+    await user.click(screen.getByTestId("mock-plan-clear-button"));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(mockMutationFn).toHaveBeenCalledWith({ taskId: "task1" });
+    });
+
+    confirmSpy.mockRestore();
+  });
+
+  it("switches the execution plan area to lead-agent-conversation-only mode", async () => {
+    const user = userEvent.setup();
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-10T10:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const reviewingTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+      executionPlan,
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-conversation-only" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Plan ready for approval",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
+    oneRenderPass(reviewingTask, [planRequestMessage]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+    await user.click(screen.getByRole("button", { name: "Lead Agent Conversation" }));
+
+    expect(screen.getByTestId("execution-plan-tab")).toHaveAttribute(
+      "data-view-mode",
+      "conversation",
+    );
+    expect(screen.getByTestId("plan-review-panel")).toBeInTheDocument();
+  });
+
+  it("shows Start in the plan panel for manual review tasks before any steps are materialized", async () => {
+    const user = userEvent.setup();
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-11T12:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const manualReviewTask = {
+      ...baseTask,
+      status: "review" as const,
+      isManual: true,
+      executionPlan,
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-manual-review" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Initial plan ready for review",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
+    oneRenderPass(manualReviewTask, [planRequestMessage]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+
+    expect(screen.getByTestId("plan-review-panel")).toBeInTheDocument();
+    expect(screen.getByText("Initial plan ready for review")).toBeInTheDocument();
+    expect(screen.getByTestId("plan-primary-button")).toHaveTextContent("Start");
+    expect(screen.getByTestId("plan-reject-button")).toBeInTheDocument();
+  });
+
+  it("switches manual review tasks to Resume when live steps already exist", async () => {
+    const user = userEvent.setup();
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-11T12:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const manualReviewTask = {
+      ...baseTask,
+      status: "review" as const,
+      isManual: true,
+      executionPlan,
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-manual-review-resume" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Updated plan ready",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (args === undefined) return [];
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return {
+          ...buildDetailView(manualReviewTask, [planRequestMessage]),
+          steps: [
+            {
+              _id: "step-live-1",
+              status: "completed" as const,
+              title: "Plan step",
+            },
+          ],
+        };
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+
+    expect(screen.getByTestId("resume-manual-plan-button")).toHaveTextContent("Resume");
+    expect(screen.getByTestId("plan-primary-button")).toHaveTextContent("Resume");
+  });
+
+  it("hides plan approval actions while a manual task is already in progress", async () => {
+    const user = userEvent.setup();
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-11T12:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const manualTask = {
+      ...baseTask,
+      status: "in_progress" as const,
+      isManual: true,
+      executionPlan,
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-in-progress" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Updated plan ready",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
+    oneRenderPass(manualTask, [planRequestMessage]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+
+    expect(screen.queryByTestId("plan-primary-button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("plan-reject-button")).not.toBeInTheDocument();
+  });
+
+  it("lets the plan review panel grow to fill more vertical space below the canvas", () => {
+    const executionPlan = {
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Plan step",
+          description: "Do the work",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 1,
+        },
+      ],
+      generatedAt: "2026-03-10T10:00:00Z",
+      generatedBy: "lead-agent" as const,
+    };
+    const reviewingTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+      executionPlan,
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-grow" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Plan ready for approval",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
+    oneRenderPass(reviewingTask, [planRequestMessage]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    const panel = screen.getByTestId("plan-review-panel");
+    const timeline = screen.getByTestId("plan-review-scroll-area");
+    expect(panel.className).toContain("flex-1");
+    expect(panel.className).toContain("min-h-[34vh]");
+    expect(timeline.className).toContain("flex-1");
+    expect(timeline.className).toContain("min-h-0");
+  });
+
   it("does not auto-switch to plan tab for non-awaitingKickoff tasks (thread tab is active by default)", () => {
     oneRenderPass(baseTask);
 
@@ -1611,7 +2193,7 @@ describe("TaskDetailSheet", () => {
 
   // --- Story 7.1: Kick-off calls approveAndKickOff with executionPlan (AC: 2) ---
 
-  it("calls approveAndKickOff with executionPlan when Kick-off button is clicked", async () => {
+  it("calls approveAndKickOff with executionPlan when plan approval is clicked", async () => {
     const user = userEvent.setup();
     const executionPlan = {
       steps: [
@@ -1634,12 +2216,25 @@ describe("TaskDetailSheet", () => {
       awaitingKickoff: true,
       executionPlan,
     };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-2" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Plan ready for approval",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: executionPlan.generatedAt,
+      },
+    };
     mockMutationFn.mockResolvedValue(undefined);
-    oneRenderPass(reviewingTask);
+    oneRenderPass(reviewingTask, [planRequestMessage]);
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
-    const kickOffBtn = screen.getByTestId("kick-off-button");
+    const kickOffBtn = screen.getByTestId("plan-primary-button");
     expect(kickOffBtn).toBeInTheDocument();
     await user.click(kickOffBtn);
 
@@ -1647,7 +2242,7 @@ describe("TaskDetailSheet", () => {
       expect(mockMutationFn).toHaveBeenCalledWith(expect.objectContaining({ taskId: "task1" }));
     });
     await vi.waitFor(() => {
-      expect(screen.getByTestId("kick-off-button")).not.toBeDisabled();
+      expect(screen.getByTestId("plan-primary-button")).not.toBeDisabled();
     });
   });
 });
@@ -1806,6 +2401,32 @@ describe("ThreadMessage", () => {
     expect(screen.getByText("/output/result.csv")).toBeInTheDocument();
     expect(screen.getByText("created")).toBeInTheDocument();
     expect(screen.getByText("Result file")).toBeInTheDocument();
+  });
+
+  it("uses taskIdOverride for artifact clicks", async () => {
+    const user = userEvent.setup();
+    const onArtifactClick = vi.fn();
+    const msgWithArtifacts = {
+      ...baseMessage,
+      type: "step_completion" as const,
+      taskId: "task-merge" as never,
+      content: "Step completed",
+      artifacts: [
+        { path: "/output/result.csv", action: "created" as const, description: "Result file" },
+      ],
+    };
+
+    render(
+      <ThreadMessage
+        message={msgWithArtifacts}
+        onArtifactClick={onArtifactClick}
+        taskIdOverride={"task-source" as never}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "/output/result.csv" }));
+
+    expect(onArtifactClick).toHaveBeenCalledWith("/output/result.csv", "task-source");
   });
 
   it("resolves step title from steps prop when stepId is present", () => {

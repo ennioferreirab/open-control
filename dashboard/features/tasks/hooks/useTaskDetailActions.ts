@@ -66,6 +66,9 @@ export interface TaskDetailActionsResult {
   savePlan: (taskId: Id<"tasks">, plan: ExecutionPlan) => Promise<void>;
   isSavingPlan: boolean;
   savePlanError: string;
+  clearExecutionPlan: (taskId: Id<"tasks">) => Promise<void>;
+  isClearingPlan: boolean;
+  clearPlanError: string;
   // Start inbox task
   startInbox: (taskId: Id<"tasks">, plan: ExecutionPlan | undefined) => Promise<void>;
   isStartingInbox: boolean;
@@ -116,6 +119,7 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
   const pauseTaskMutation = useMutation(api.tasks.pauseTask);
   const resumeTaskMutation = useMutation(api.tasks.resumeTask);
   const saveExecutionPlanMutation = useMutation(api.tasks.saveExecutionPlan);
+  const clearExecutionPlanMutation = useMutation(api.tasks.clearExecutionPlan);
   const startInboxTaskMutation = useMutation(api.tasks.startInboxTask);
   const retryMutation = useMutation(api.tasks.retry);
   const updateTagsMutation = useMutation(api.tasks.updateTags);
@@ -137,6 +141,8 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
   const [resumeError, setResumeError] = useState("");
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [savePlanError, setSavePlanError] = useState("");
+  const [isClearingPlan, setIsClearingPlan] = useState(false);
+  const [clearPlanError, setClearPlanError] = useState("");
   const [updateTagsError, setUpdateTagsError] = useState("");
   const [isStartingInbox, setIsStartingInbox] = useState(false);
   const [startInboxError, setStartInboxError] = useState("");
@@ -218,6 +224,23 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
       }
     },
     [saveExecutionPlanMutation],
+  );
+
+  const clearExecutionPlan = useCallback(
+    async (taskId: Id<"tasks">) => {
+      setIsClearingPlan(true);
+      setClearPlanError("");
+      try {
+        await clearExecutionPlanMutation({ taskId });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setClearPlanError(`Clean failed: ${message}`);
+        throw err;
+      } finally {
+        setIsClearingPlan(false);
+      }
+    },
+    [clearExecutionPlanMutation],
   );
 
   const startInbox = useCallback(
@@ -364,6 +387,9 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
     savePlan,
     isSavingPlan,
     savePlanError,
+    clearExecutionPlan,
+    isClearingPlan,
+    clearPlanError,
     startInbox,
     isStartingInbox,
     startInboxError,

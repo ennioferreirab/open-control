@@ -35,12 +35,13 @@ import {
   X,
 } from "lucide-react";
 import { ThreadMessage } from "@/components/ThreadMessage";
-import { ExecutionPlanTab } from "@/components/ExecutionPlanTab";
+import { ExecutionPlanTab, type ExecutionPlanViewMode } from "@/components/ExecutionPlanTab";
 import { TAG_COLORS } from "@/lib/constants";
 import { InlineRejection } from "@/components/InlineRejection";
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
 import { ThreadInput } from "@/components/ThreadInput";
 import { TagAttributeEditor } from "@/components/TagAttributeEditor";
+import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useTaskDetailView } from "@/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/hooks/useTaskDetailActions";
@@ -98,11 +99,7 @@ function hasExecutablePlanSteps(plan: ExecutionPlan | undefined): boolean {
   return Boolean(plan?.steps?.length);
 }
 
-function getDisplayFileKey(file: {
-  name: string;
-  subfolder: string;
-  sourceTaskId?: Id<"tasks">;
-}) {
+function getDisplayFileKey(file: { name: string; subfolder: string; sourceTaskId?: Id<"tasks"> }) {
   return `${file.sourceTaskId ?? "local"}:${file.subfolder}:${file.name}`;
 }
 
@@ -147,6 +144,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     savePlan,
     isSavingPlan,
     savePlanError,
+    clearExecutionPlan,
+    isClearingPlan,
+    clearPlanError,
     startInbox,
     isStartingInbox,
     startInboxError,
@@ -176,6 +176,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   } = actions;
 
   const { activePlan, localPlan, setLocalPlan, activeTab, setActiveTab } = planState;
+  const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("both");
 
   const softDeleteMutation = useMutation(api.tasks.softDelete);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -234,6 +235,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   );
   const mergeAlias = task?.isMergeTask ? buildMergeAliasDisplay(directMergeSources) : undefined;
   const planForDisplay = activePlan ?? taskExecutionPlan ?? null;
+  const hasMaterializedLiveSteps = Boolean(
+    liveSteps?.some((step) => step.status !== "deleted"),
+  );
   const hasManualMergePlanReady =
     taskStatus === "review" &&
     task?.isManual &&
@@ -241,6 +245,10 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const hasSourceThreads = (mergeSourceThreads?.length ?? 0) > 0;
   const directSourceCount = directMergeSources?.length ?? 0;
   const canRemoveDirectSources = directSourceCount > 2;
+
+  useEffect(() => {
+    setPlanViewMode("both");
+  }, [taskId]);
 
   // Track if user is at bottom via IntersectionObserver
   useEffect(() => {
@@ -358,6 +366,56 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     const planToSave = localPlan ?? taskExecutionPlan;
     await resume(task._id, planToSave);
   };
+
+  const handleClearPlan = async () => {
+    if (!task || !isTaskLoaded) return;
+    if (
+      !window.confirm(
+        "Clear the current execution plan and remove its materialized steps? This will reset the task to build a new plan.",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await clearExecutionPlan(task._id);
+      setLocalPlan(undefined);
+    } catch {
+      // error is surfaced by the hook
+    }
+  };
+
+  const manualPlanPrimaryAction = hasManualMergePlanReady
+    ? hasMaterializedLiveSteps
+      ? {
+          label: "Resume",
+          pendingLabel: "Resuming...",
+          onClick: handleResume,
+          testId: "resume-manual-plan-button",
+        }
+      : {
+          label: "Start",
+          pendingLabel: "Starting...",
+          onClick: handleKickOff,
+          testId: "start-manual-plan-button",
+        }
+    : null;
+  const planPanelPrimaryAction =
+    taskStatus === "review"
+      ? task?.isManual
+        ? manualPlanPrimaryAction
+        : isAwaitingKickoff
+          ? {
+              label: "Approve",
+              pendingLabel: "Approving...",
+              onClick: handleKickOff,
+            }
+          : null
+      : null;
+  const canClearPlan =
+    Boolean(task?.isManual) &&
+    (taskStatus === "review" || taskStatus === "inbox" || taskStatus === "in_progress") &&
+    (hasExecutablePlanSteps(localPlan ?? taskExecutionPlan) || hasMaterializedLiveSteps);
 
   const handleAttachFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!task || !isTaskLoaded) return;
@@ -579,7 +637,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       </Fragment>
                     );
                   })}
-                  {task!.status === "review" && !task!.isManual && (
+                  {task!.status === "review" && !task!.isManual && !isAwaitingKickoff && (
                     <>
                       <Button
                         variant="default"
@@ -671,34 +729,12 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                     </>
                   )}
                   {isAwaitingKickoff && (
-                    <>
-                      <Badge
-                        variant="outline"
-                        className="text-xs bg-amber-50 text-amber-700 border-amber-200"
-                      >
-                        Awaiting Kick-off
-                      </Badge>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                        onClick={handleKickOff}
-                        disabled={isKickingOff}
-                        data-testid="kick-off-button"
-                      >
-                        {isKickingOff ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                            Kicking off...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="h-3.5 w-3.5 mr-1" />
-                            Kick-off
-                          </>
-                        )}
-                      </Button>
-                    </>
+                    <Badge
+                      variant="outline"
+                      className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+                    >
+                      Awaiting Kick-off
+                    </Badge>
                   )}
                   {taskStatus === "inbox" && (
                     <>
@@ -764,24 +800,24 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       )}
                     </Button>
                   )}
-                  {hasManualMergePlanReady && (
+                  {manualPlanPrimaryAction && (
                     <Button
                       variant="default"
                       size="sm"
                       className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                      onClick={handleKickOff}
-                      disabled={isKickingOff}
-                      data-testid="start-manual-plan-button"
+                      onClick={manualPlanPrimaryAction.onClick}
+                      disabled={hasMaterializedLiveSteps ? isResuming : isKickingOff}
+                      data-testid={manualPlanPrimaryAction.testId}
                     >
-                      {isKickingOff ? (
+                      {(hasMaterializedLiveSteps ? isResuming : isKickingOff) ? (
                         <>
                           <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                          Starting...
+                          {manualPlanPrimaryAction.pendingLabel}
                         </>
                       ) : (
                         <>
                           <Play className="h-3.5 w-3.5 mr-1" />
-                          Start
+                          {manualPlanPrimaryAction.label}
                         </>
                       )}
                     </Button>
@@ -846,13 +882,18 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                   className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"
                   data-testid="reviewing-plan-banner"
                 >
-                  This task is awaiting your approval. Review the execution plan and click Kick-off
-                  when ready.
+                  This task is awaiting your approval. Review the execution plan and respond in the
+                  Lead Agent panel below.
                 </div>
               )}
               {kickOffError && (
                 <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
                   {kickOffError}
+                </div>
+              )}
+              {clearPlanError && (
+                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
+                  {clearPlanError}
                 </div>
               )}
               {pauseError && (
@@ -992,9 +1033,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                               variant="ghost"
                               size="sm"
                               className="h-7 px-2 text-xs"
-                              onClick={() =>
-                                setIsMergedSourceGroupCollapsed((current) => !current)
-                              }
+                              onClick={() => setIsMergedSourceGroupCollapsed((current) => !current)}
                             >
                               {isMergedSourceGroupCollapsed ? "Expand" : "Collapse"}
                             </Button>
@@ -1021,6 +1060,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                                           message={msg}
                                           steps={undefined}
                                           onArtifactClick={handleOpenArtifact}
+                                          taskIdOverride={sourceThread.taskId}
                                         />
                                       ))
                                     )}
@@ -1068,23 +1108,50 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 value="plan"
                 className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
               >
-                <div className="flex-1 min-h-0 px-6 py-4">
-                  <ExecutionPlanTab
-                    executionPlan={planForDisplay}
-                    liveSteps={liveSteps ?? undefined}
-                    isPlanning={task!.status === "planning"}
-                    isEditMode={task!.status === "review"}
-                    taskId={task!._id}
-                    taskStatus={taskStatus}
-                    boardId={task?.boardId}
-                    onLocalPlanChange={setLocalPlan}
-                    mergeAlias={mergeAlias}
-                    onOpenParentTask={
-                      onTaskOpen
-                        ? (parentTaskId) => onTaskOpen(parentTaskId as Id<"tasks">)
-                        : undefined
-                    }
-                  />
+                <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
+                  <div
+                    data-testid="plan-canvas-shell"
+                    className="w-full self-center lg:max-w-5xl xl:max-w-[60rem]"
+                  >
+                    <ExecutionPlanTab
+                      executionPlan={planForDisplay}
+                      liveSteps={liveSteps ?? undefined}
+                      isPlanning={task!.status === "planning"}
+                      isEditMode={task!.status === "review"}
+                      taskId={task!._id}
+                      taskStatus={taskStatus}
+                      boardId={task?.boardId}
+                      onLocalPlanChange={setLocalPlan}
+                      mergeAlias={mergeAlias}
+                      viewMode={planViewMode}
+                      onViewModeChange={setPlanViewMode}
+                      onClearPlan={canClearPlan ? handleClearPlan : undefined}
+                      isClearingPlan={isClearingPlan}
+                      onOpenParentTask={
+                        onTaskOpen
+                          ? (parentTaskId) => onTaskOpen(parentTaskId as Id<"tasks">)
+                          : undefined
+                      }
+                    />
+                  </div>
+                  {task && messages && !isMergeLockedSource && planViewMode !== "canvas" && (
+                    <PlanReviewPanel
+                      className={planViewMode === "conversation" ? "mt-2 min-h-0" : undefined}
+                      primaryActionLabel={planPanelPrimaryAction?.label}
+                      primaryActionPendingLabel={planPanelPrimaryAction?.pendingLabel}
+                      isPrimaryActionPending={
+                        planPanelPrimaryAction == null
+                          ? false
+                          : planPanelPrimaryAction.label === "Resume"
+                            ? isResuming
+                            : isKickingOff
+                      }
+                      liveSteps={liveSteps ?? undefined}
+                      messages={messages}
+                      onPrimaryAction={planPanelPrimaryAction?.onClick}
+                      task={task}
+                    />
+                  )}
                 </div>
               </TabsContent>
 

@@ -699,6 +699,66 @@ export const saveExecutionPlan = mutation({
 });
 
 /**
+ * Clear a manual execution plan and delete its materialized steps so the next
+ * generated plan starts from a clean slate.
+ */
+export const clearExecutionPlan = mutation({
+  args: {
+    taskId: v.id("tasks"),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    if (task.isManual !== true) {
+      throw new ConvexError("Only manual tasks can clear an execution plan.");
+    }
+    if (task.status !== "review" && task.status !== "inbox" && task.status !== "in_progress") {
+      throw new ConvexError("Cannot clear an execution plan from the current task status.");
+    }
+
+    const now = new Date().toISOString();
+    const nextStatus = task.status === "in_progress" ? "review" : task.status;
+    await ctx.db.patch(args.taskId, {
+      status: nextStatus,
+      executionPlan: undefined,
+      awaitingKickoff: undefined,
+      stalledAt: undefined,
+      updatedAt: now,
+    });
+
+    const steps = await ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+      .collect();
+    for (const step of steps) {
+      if (step.status === "deleted") {
+        continue;
+      }
+      await ctx.db.patch(step._id, {
+        status: "deleted",
+        deletedAt: now,
+      });
+    }
+
+    await ctx.db.insert("messages", {
+      taskId: args.taskId,
+      authorName: "System",
+      authorType: "system",
+      content:
+        nextStatus === "review"
+          ? "Execution plan cleared. The task returned to review so you can build a fresh plan."
+          : "Execution plan cleared. Start a new Lead Agent conversation to build the next plan.",
+      messageType: "system_event",
+      timestamp: now,
+    });
+
+    return args.taskId;
+  },
+});
+
+/**
  * Start an inbox task that has a manually-built execution plan.
  * Saves the plan, transitions inbox → in_progress, so the orchestrator
  * materializes steps and dispatches them.
@@ -934,6 +994,14 @@ export const approveAndKickOff = mutation({
     }
 
     const now = new Date().toISOString();
+    const plan = args.executionPlan ?? task.executionPlan;
+    const planGeneratedAt =
+      typeof plan === "object" &&
+      plan !== null &&
+      "generatedAt" in plan &&
+      typeof plan.generatedAt === "string"
+        ? plan.generatedAt
+        : undefined;
 
     // Save updated plan if provided (user made edits); clear awaitingKickoff
     const patch: Record<string, unknown> = {
@@ -946,8 +1014,23 @@ export const approveAndKickOff = mutation({
     }
     await ctx.db.patch(args.taskId, patch);
 
+    if (planGeneratedAt) {
+      await ctx.db.insert("messages", {
+        taskId: args.taskId,
+        authorName: "User",
+        authorType: "user",
+        content: "Approved the execution plan and started the task.",
+        messageType: "approval",
+        planReview: {
+          kind: "decision",
+          planGeneratedAt,
+          decision: "approved",
+        },
+        timestamp: now,
+      });
+    }
+
     // Count steps from the plan for the activity event
-    const plan = args.executionPlan ?? task.executionPlan;
     const stepCount = plan?.steps?.length ?? 0;
 
     await logActivity(ctx, {
@@ -1178,9 +1261,16 @@ export const updateStatus = internalMutation({
 
     const currentStatus = task.status;
     const newStatus = args.status;
+    const currentAwaitingKickoff = task.awaitingKickoff === true;
+    const nextAwaitingKickoff = args.awaitingKickoff === true;
+    const isReviewKickoffToggle =
+      currentStatus === "review" &&
+      newStatus === "review" &&
+      args.awaitingKickoff !== undefined &&
+      currentAwaitingKickoff !== nextAwaitingKickoff;
 
     // Validate transition using lifecycle module
-    if (!isValidTaskTransition(currentStatus, newStatus)) {
+    if (!isReviewKickoffToggle && !isValidTaskTransition(currentStatus, newStatus)) {
       throw new ConvexError(`Cannot transition from '${currentStatus}' to '${newStatus}'`);
     }
 
@@ -1210,14 +1300,16 @@ export const updateStatus = internalMutation({
     }
 
     // Write activity event via lifecycle helper
-    await logTaskStatusChange(ctx, {
-      taskId: args.taskId,
-      fromStatus: currentStatus,
-      toStatus: newStatus,
-      agentName: args.agentName,
-      taskTitle: task.title,
-      timestamp: now,
-    });
+    if (!isReviewKickoffToggle) {
+      await logTaskStatusChange(ctx, {
+        taskId: args.taskId,
+        fromStatus: currentStatus,
+        toStatus: newStatus,
+        agentName: args.agentName,
+        taskTitle: task.title,
+        timestamp: now,
+      });
+    }
   },
 });
 

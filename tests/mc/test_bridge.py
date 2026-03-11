@@ -747,6 +747,19 @@ class TestConvenienceMethods:
         )
 
     @patch("mc.bridge.ConvexClient")
+    def test_get_task(self, MockClient):
+        mock_client = MockClient.return_value
+        mock_client.query.return_value = {"_id": "task-123", "assignedAgent": "nanobot"}
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        result = bridge.get_task("task-123")
+
+        assert result == {"id": "task-123", "assigned_agent": "nanobot"}
+        mock_client.query.assert_called_once_with(
+            "tasks:getById", {"taskId": "task-123"}
+        )
+
+    @patch("mc.bridge.ConvexClient")
     def test_check_and_unblock_dependents(self, MockClient):
         mock_client = MockClient.return_value
         mock_client.mutation.return_value = ["step-2", "step-3"]

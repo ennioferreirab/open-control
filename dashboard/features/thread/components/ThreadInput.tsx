@@ -16,11 +16,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useThreadInputController } from "@/hooks/useThreadInputController";
 
 interface ThreadInputProps {
+  mode?: "default" | "lead-agent";
   task: Doc<"tasks">;
   onMessageSent?: () => void;
 }
 
-export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
+export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInputProps) {
   const {
     canSend,
     closeMentionAutocomplete,
@@ -42,9 +43,12 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     handleTextFocus,
     inputMode,
     isBlocked,
+    isHumanDelegationThread,
+    isLeadAgentMode,
     isDragOver,
     isInProgress,
     isPlanChatMode,
+    isReplyOnlyThread,
     isRestoring,
     isSubmitting,
     isUploading,
@@ -57,7 +61,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     setInputMode,
     setSelectedAgent,
     textareaRef,
-  } = useThreadInputController({ onMessageSent, task });
+  } = useThreadInputController({ mode, onMessageSent, task });
 
   const modePill = (primaryLabel: string) => (
     <div className="inline-flex rounded-full bg-muted p-0.5 text-xs">
@@ -122,11 +126,30 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     return (
       <div className="px-6 py-3 border-t space-y-2">
         {error && <p className="text-xs text-red-500">{error}</p>}
-        <div className="flex items-center gap-2">{modePill("Plan Chat")}</div>
-        {inputMode === "comment" ? (
-          <p className="text-xs text-muted-foreground">Add a note without triggering agents...</p>
+        {isLeadAgentMode ? (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                Lead Agent
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Send changes directly to the Lead Agent. Mentions and delegation are disabled here.
+            </p>
+          </>
         ) : (
-          <p className="text-xs text-muted-foreground">Ask the Lead Agent to modify the plan...</p>
+          <>
+            <div className="flex items-center gap-2">{modePill("Plan Chat")}</div>
+            {inputMode === "comment" ? (
+              <p className="text-xs text-muted-foreground">
+                Add a note without triggering agents...
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Ask the Lead Agent to modify the plan...
+              </p>
+            )}
+          </>
         )}
         {fileUploadError && <p className="text-xs text-red-500">{fileUploadError}</p>}
         {pendingFiles.length > 0 && (
@@ -149,9 +172,11 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         >
           <Textarea
             placeholder={
-              inputMode === "comment"
-                ? "Add a comment..."
-                : "e.g. Add a step to write tests, or remove the deployment step..."
+              isLeadAgentMode
+                ? "Ask the Lead Agent to change the plan..."
+                : inputMode === "comment"
+                  ? "Add a comment..."
+                  : "e.g. Add a step to write tests, or remove the deployment step..."
             }
             value={content}
             onChange={(event) => onDirectContentChange(event.target.value)}
@@ -201,8 +226,8 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
     <div className="px-6 py-3 border-t space-y-2">
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex items-center gap-2">
-        {modePill(isInProgress ? "Reply" : "Message Agent")}
-        {inputMode === "agent" && !isInProgress && (
+        {modePill(isReplyOnlyThread ? "Reply" : "Message Agent")}
+        {inputMode === "agent" && !isReplyOnlyThread && (
           <Select value={selectedAgent} onValueChange={setSelectedAgent}>
             <SelectTrigger className="w-[180px] h-7 text-xs">
               <SelectValue placeholder="Select agent" />
@@ -241,7 +266,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
           placeholder={
             inputMode === "comment"
               ? "Add a comment..."
-              : isInProgress
+              : isReplyOnlyThread
                 ? "Reply to the thread..."
                 : "Send a message to the agent..."
           }
@@ -285,7 +310,7 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
         {inputMode === "agent" &&
           mentionQuery !== null &&
           !isPlanChatMode &&
-          !isInProgress &&
+          !isReplyOnlyThread &&
           filteredAgents && (
             <AgentMentionAutocomplete
               agents={filteredAgents.map((agent) => ({
@@ -300,6 +325,12 @@ export function ThreadInput({ task, onMessageSent }: ThreadInputProps) {
             />
           )}
       </div>
+      {isHumanDelegationThread && (
+        <p className="text-xs text-muted-foreground">
+          This thread is waiting on a human. Pick an agent or use <code>@mention</code> to hand it
+          back off.
+        </p>
+      )}
       <input
         ref={fileInputRef}
         type="file"

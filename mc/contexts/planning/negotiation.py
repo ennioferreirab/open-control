@@ -1,9 +1,10 @@
 """Plan Negotiation Handler — allows users to chat with the Lead Agent to modify
-an execution plan before kick-off or during execution.
+an execution plan before kick-off, while paused in review, or during execution.
 
 Implements Story 4.5 AC4 and AC10 (pre-kickoff plan chat) and Story 7.3 (thread-based
 negotiation during both review and in_progress phases):
-- Subscribes to user thread messages on review (awaitingKickoff) and in_progress tasks.
+- Subscribes to user thread messages on review tasks with an execution plan and
+  in_progress tasks.
 - Dispatches each user message to the LLM.
 - Either updates the execution plan and explains the change, or responds
   with a clarification/acknowledgment message.
@@ -24,8 +25,16 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from mc.contexts.planning.planner import TaskPlanner
+from mc.contexts.planning.review_messages import (
+    build_plan_review_message,
+    build_plan_review_metadata,
+)
 from mc.types import (
+    ActivityEventType,
+    AgentData,
     ExecutionPlan,
+    TaskStatus,
     ThreadMessageType,
 )
 
@@ -44,9 +53,8 @@ def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
     except asyncio.CancelledError:
         return
     if exc is not None:
-        logger.error(
-            "[plan_negotiator] Background task failed: %s", exc, exc_info=exc
-        )
+        logger.error("[plan_negotiator] Background task failed: %s", exc, exc_info=exc)
+
 
 NEGOTIATION_SYSTEM_PROMPT = """\
 You are the Lead Agent, responsible for managing and refining execution plans
@@ -118,6 +126,57 @@ that the step is already in progress or completed and cannot be changed.
 LOCKED_STEP_STATUSES = {"assigned", "running", "completed", "waiting_human", "crashed", "deleted"}
 # Step statuses that can still be modified
 MODIFIABLE_STEP_STATUSES = {"planned", "blocked"}
+
+
+def _has_execution_plan(task: dict[str, Any]) -> bool:
+    """Return True when task_data carries a non-empty execution plan."""
+    plan = task.get("execution_plan") or task.get("executionPlan")
+    return bool(isinstance(plan, dict) and plan.get("steps"))
+
+
+def _is_manual_review_without_plan(task: dict[str, Any]) -> bool:
+    """Return True when a manual task is paused in review before first plan creation."""
+    return (
+        task.get("status", "") == "review"
+        and bool(task.get("is_manual") or task.get("isManual"))
+        and not bool(task.get("awaiting_kickoff") or task.get("awaitingKickoff"))
+        and not _has_execution_plan(task)
+    )
+
+
+def _extract_plan_review(message: dict[str, Any]) -> dict[str, Any] | None:
+    """Return plan-review metadata from either snake_case or camelCase payloads."""
+    plan_review = message.get("plan_review")
+    if isinstance(plan_review, dict):
+        return plan_review
+    plan_review = message.get("planReview")
+    if isinstance(plan_review, dict):
+        return plan_review
+    return None
+
+
+def _has_current_plan_review_request(
+    messages: list[dict[str, Any]],
+    *,
+    plan_generated_at: str | None,
+) -> bool:
+    """Return True when the thread already contains a review request for the active plan."""
+    if not plan_generated_at:
+        return False
+
+    for message in messages:
+        if (message.get("type") or message.get("message_type")) != "lead_agent_plan":
+            continue
+        plan_review = _extract_plan_review(message)
+        if not isinstance(plan_review, dict):
+            continue
+        if (
+            plan_review.get("kind") == "request"
+            and plan_review.get("plan_generated_at") == plan_generated_at
+        ):
+            return True
+
+    return False
 
 
 def _parse_negotiation_response(raw: str) -> dict[str, Any]:
@@ -247,9 +306,7 @@ async def handle_plan_negotiation(
 
         if action == "update_plan":
             updated_plan_dict = response_data.get("updated_plan")
-            explanation = response_data.get(
-                "explanation", "I've updated the plan as requested."
-            )
+            explanation = response_data.get("explanation", "I've updated the plan as requested.")
 
             if updated_plan_dict and isinstance(updated_plan_dict, dict):
                 # Enforcement: when task is in_progress, veto update_plan responses
@@ -323,6 +380,14 @@ async def handle_plan_negotiation(
                     explanation,
                     ThreadMessageType.LEAD_AGENT_CHAT,
                 )
+                if task_status == "review":
+                    await asyncio.to_thread(
+                        bridge.post_lead_agent_message,
+                        task_id,
+                        build_plan_review_message(new_plan),
+                        ThreadMessageType.LEAD_AGENT_PLAN,
+                        plan_review=build_plan_review_metadata(new_plan),
+                    )
             else:
                 logger.warning(
                     "[plan_negotiator] action=update_plan but no valid updated_plan "
@@ -381,24 +446,150 @@ async def handle_plan_negotiation(
         )
 
 
+async def create_initial_plan_from_message(
+    bridge: "ConvexBridge",
+    task_id: str,
+    user_message: str,
+    *,
+    task_data: dict[str, Any],
+) -> None:
+    """Generate the first execution plan for a manual review task from thread input."""
+    title = task_data.get("title", "")
+    description = task_data.get("description")
+    assigned_agent = task_data.get("assigned_agent") or task_data.get("assignedAgent")
+    files = task_data.get("files") or []
+
+    logger.info(
+        "[plan_negotiator] Creating initial execution plan for manual review task %s",
+        task_id,
+    )
+
+    description_parts = []
+    if isinstance(description, str) and description.strip():
+        description_parts.append(description.strip())
+    description_parts.append(
+        f"User guidance for the initial execution plan:\n{user_message.strip()}"
+    )
+    planning_description = "\n\n".join(description_parts)
+
+    try:
+        from mc.contexts.planning.planner import _is_delegatable
+        from mc.infrastructure.config import filter_agent_fields
+        from mc.infrastructure.providers.tier_resolver import TierResolver
+
+        agents_data = await asyncio.to_thread(bridge.list_agents)
+        agents = [AgentData(**filter_agent_fields(agent)) for agent in agents_data]
+        agents = [
+            agent for agent in agents if agent.enabled is not False and _is_delegatable(agent)
+        ]
+
+        board_id = task_data.get("board_id") or task_data.get("boardId")
+        if board_id:
+            try:
+                board = await asyncio.to_thread(bridge.get_board_by_id, board_id)
+                if board:
+                    board_enabled_agents = (
+                        board.get("enabled_agents") or board.get("enabledAgents") or []
+                    )
+                    if board_enabled_agents:
+                        agents = [
+                            agent
+                            for agent in agents
+                            if agent.name in board_enabled_agents
+                            or getattr(agent, "is_system", False)
+                        ]
+            except Exception:
+                logger.warning(
+                    "[plan_negotiator] Failed to load board config for task %s",
+                    task_id,
+                    exc_info=True,
+                )
+
+        planning_model = None
+        planning_reasoning_level = None
+        try:
+            tier_resolver = TierResolver(bridge)
+            planning_model = tier_resolver.resolve_model("tier:standard-medium")
+            planning_reasoning_level = tier_resolver.resolve_reasoning_level("tier:standard-medium")
+        except Exception as exc:
+            logger.debug(
+                "[plan_negotiator] Could not resolve planning tier for task %s: %s",
+                task_id,
+                exc,
+            )
+
+        planner = TaskPlanner(bridge)
+        plan = await planner.plan_task(
+            title,
+            planning_description,
+            agents,
+            explicit_agent=assigned_agent,
+            files=files,
+            model=planning_model,
+            reasoning_level=planning_reasoning_level,
+        )
+
+        await asyncio.to_thread(bridge.update_execution_plan, task_id, plan.to_dict())
+        await asyncio.to_thread(
+            bridge.update_task_status,
+            task_id,
+            TaskStatus.REVIEW,
+            None,
+            f"Initial plan ready for review: '{title}'",
+            True,
+        )
+        await asyncio.to_thread(
+            bridge.create_activity,
+            ActivityEventType.TASK_PLANNING,
+            f"Lead Agent created the initial execution plan for '{title}' from review conversation",
+            task_id,
+            "lead-agent",
+        )
+        await asyncio.to_thread(
+            bridge.post_lead_agent_message,
+            task_id,
+            build_plan_review_message(plan),
+            ThreadMessageType.LEAD_AGENT_PLAN,
+            plan_review=build_plan_review_metadata(plan),
+        )
+    except Exception:
+        logger.exception(
+            "[plan_negotiator] Failed to create initial execution plan for task %s",
+            task_id,
+        )
+        await asyncio.to_thread(
+            bridge.post_lead_agent_message,
+            task_id,
+            "I couldn't create the initial execution plan from that message. "
+            "Please try again with a bit more detail about the changes you want.",
+            ThreadMessageType.LEAD_AGENT_CHAT,
+        )
+
+
 def _is_negotiable_status(task: dict[str, Any]) -> bool:
     """Return True if the task is in a status where plan negotiation is active.
 
     Active statuses:
     - "review" with awaitingKickoff=True (pre-kickoff plan review)
+    - "review" with an execution_plan (paused plan revision before resume)
     - "in_progress" with an execution_plan (during planned execution)
 
     Tasks assigned directly via sendThreadMessage (no execution plan) are NOT
     negotiable — lead-agent should not intercept direct agent assignments.
     """
     status = task.get("status", "")
+    has_execution_plan = _has_execution_plan(task)
     if status == "in_progress":
         # Only negotiable if there's an execution plan to negotiate.
         # Tasks sent directly to an agent via thread message have no plan.
-        plan = task.get("execution_plan") or task.get("executionPlan")
-        return bool(plan and plan.get("steps"))
-    if status == "review" and task.get("awaiting_kickoff"):
-        return True
+        return has_execution_plan
+    if status == "review":
+        return bool(
+            task.get("awaiting_kickoff")
+            or task.get("awaitingKickoff")
+            or has_execution_plan
+            or _is_manual_review_without_plan(task)
+        )
     return False
 
 
@@ -445,7 +636,7 @@ async def start_plan_negotiation_loop(
     # Cap on seen IDs to prevent unbounded growth in long-running tasks.
     # When the cap is exceeded the oldest IDs are trimmed by rebuilding the set
     # from the current subscription batch (all current IDs become "seen").
-    _SEEN_IDS_MAX = 1000
+    seen_ids_max = 1000
 
     while True:
         messages = await queue.get()
@@ -464,19 +655,13 @@ async def start_plan_negotiation_loop(
 
         # Check that the task is still in a negotiable status
         try:
-            task = await asyncio.to_thread(
-                bridge.query, "tasks:getById", {"task_id": task_id}
-            )
+            task = await asyncio.to_thread(bridge.query, "tasks:getById", {"task_id": task_id})
         except Exception:
-            logger.exception(
-                "[plan_negotiator] Failed to fetch task %s; stopping loop", task_id
-            )
+            logger.exception("[plan_negotiator] Failed to fetch task %s; stopping loop", task_id)
             break
 
         if not task:
-            logger.info(
-                "[plan_negotiator] Task %s not found; stopping loop", task_id
-            )
+            logger.info("[plan_negotiator] Task %s not found; stopping loop", task_id)
             break
 
         if not _is_negotiable_status(task):
@@ -492,6 +677,39 @@ async def start_plan_negotiation_loop(
 
         # Get current plan from task
         current_plan = task.get("execution_plan") or task.get("executionPlan") or {}
+        bootstrap_initial_plan = _is_manual_review_without_plan(task)
+        current_plan_generated_at = (
+            current_plan.get("generated_at") or current_plan.get("generatedAt")
+            if isinstance(current_plan, dict)
+            else None
+        )
+
+        if (
+            task_status == "review"
+            and _has_execution_plan(task)
+            and not _has_current_plan_review_request(
+                messages,
+                plan_generated_at=current_plan_generated_at,
+            )
+        ):
+            try:
+                plan = ExecutionPlan.from_dict(current_plan)
+                await asyncio.to_thread(
+                    bridge.post_lead_agent_message,
+                    task_id,
+                    build_plan_review_message(plan),
+                    ThreadMessageType.LEAD_AGENT_PLAN,
+                    plan_review=build_plan_review_metadata(plan),
+                )
+                logger.info(
+                    "[plan_negotiator] Backfilled missing plan review request for task %s",
+                    task_id,
+                )
+            except Exception:
+                logger.exception(
+                    "[plan_negotiator] Failed to backfill missing plan review request for task %s",
+                    task_id,
+                )
 
         # Process only new user messages (not ones we've already seen).
         # Pruning happens AFTER processing so that new messages in the current
@@ -507,6 +725,14 @@ async def start_plan_negotiation_loop(
             # Only process user messages (skip agent completions, system events,
             # and the Lead Agent's own responses to avoid an infinite loop)
             if author_type != "user":
+                continue
+
+            plan_review = _extract_plan_review(msg)
+            if isinstance(plan_review, dict) and plan_review.get("kind") == "decision":
+                logger.debug(
+                    "[plan_negotiator] Skipping plan review decision on task %s",
+                    task_id,
+                )
                 continue
 
             # Skip if an ask_user call is pending — that reply belongs to the
@@ -536,8 +762,7 @@ async def start_plan_negotiation_loop(
 
             if is_mention_message(content):
                 logger.debug(
-                    "[plan_negotiator] Skipping @mention message "
-                    "(handled by MentionWatcher): %s",
+                    "[plan_negotiator] Skipping @mention message (handled by MentionWatcher): %s",
                     content[:80],
                 )
                 continue
@@ -566,6 +791,18 @@ async def start_plan_negotiation_loop(
                 # Skip plan negotiation for @mention messages
                 continue
 
+            if bootstrap_initial_plan:
+                bg_task = asyncio.create_task(
+                    create_initial_plan_from_message(
+                        bridge,
+                        task_id,
+                        content,
+                        task_data=task,
+                    )
+                )
+                bg_task.add_done_callback(_log_task_exception)
+                break
+
             # Dispatch to plan negotiation handler as a background task with error logging
             bg_task = asyncio.create_task(
                 handle_plan_negotiation(
@@ -582,11 +819,9 @@ async def start_plan_negotiation_loop(
         # so that new messages in the current batch are never skipped.
         # Since the subscription returns the full current message list each time,
         # we rebuild the set from the current batch (all returned IDs become "seen").
-        if len(seen_message_ids) > _SEEN_IDS_MAX:
+        if len(seen_message_ids) > seen_ids_max:
             seen_message_ids = {
-                m.get("_id") or m.get("id") or ""
-                for m in messages
-                if m.get("_id") or m.get("id")
+                m.get("_id") or m.get("id") or "" for m in messages if m.get("_id") or m.get("id")
             }
             logger.debug(
                 "[plan_negotiator] Pruned seen_message_ids for task %s (now %d)",

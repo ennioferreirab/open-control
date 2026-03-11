@@ -2,8 +2,8 @@
 ProcessManager — Spawns and manages Mission Control subprocesses.
 
 Manages 4 child processes:
-1. Convex dev server (npx convex dev)
-2. Next.js dev server (npm run dev)
+1. Convex dev server (npm run dev:backend)
+2. Next.js dev server (npm run dev:frontend)
 3. Agent Gateway (python -m mc.runtime.gateway)
 4. Nanobot Gateway — channels/Telegram (python -m nanobot gateway)
 """
@@ -69,8 +69,8 @@ class ProcessManager:
                       called when a child crashes
         """
         self._dashboard_dir = str(dashboard_dir)
-        self._project_root = str(project_root) if project_root else str(
-            Path(self._dashboard_dir).parent
+        self._project_root = (
+            str(project_root) if project_root else str(Path(self._dashboard_dir).parent)
         )
         self._on_crash = on_crash
         self._processes: list[ManagedProcess] = []
@@ -80,7 +80,7 @@ class ProcessManager:
 
     async def start(self) -> None:
         """
-        Start all 3 child processes in order.
+        Start all child processes in order.
 
         Raises:
             RuntimeError: If any process fails to start within
@@ -92,16 +92,12 @@ class ProcessManager:
         configs = self._get_process_configs()
 
         try:
-            await asyncio.wait_for(
-                self._start_all(configs), timeout=STARTUP_TIMEOUT_SECONDS
-            )
+            await asyncio.wait_for(self._start_all(configs), timeout=STARTUP_TIMEOUT_SECONDS)
         except (asyncio.TimeoutError, RuntimeError) as exc:
             logger.error(f"[MC] Startup failed: {exc}")
             # Abort: stop any processes that did start
             await self.stop()
-            raise RuntimeError(
-                f"Startup failed within {STARTUP_TIMEOUT_SECONDS}s: {exc}"
-            ) from exc
+            raise RuntimeError(f"Startup failed within {STARTUP_TIMEOUT_SECONDS}s: {exc}") from exc
 
         self._running = True
         self._register_signal_handlers()
@@ -136,9 +132,7 @@ class ProcessManager:
             # Calculate per-process timeout
             num_processes = len(self._processes)
             per_process_timeout = (
-                SHUTDOWN_TIMEOUT_SECONDS / num_processes
-                if num_processes
-                else 30.0
+                SHUTDOWN_TIMEOUT_SECONDS / num_processes if num_processes else 30.0
             )
 
             # Stop in reverse startup order
@@ -171,16 +165,12 @@ class ProcessManager:
 
         # Only wait on critical processes
         critical = [
-            m for m in self._processes
-            if m.config.critical and m.process.returncode is None
+            m for m in self._processes if m.config.critical and m.process.returncode is None
         ]
         if not critical:
             return
 
-        wait_tasks = [
-            asyncio.create_task(managed.process.wait())
-            for managed in critical
-        ]
+        wait_tasks = [asyncio.create_task(managed.process.wait()) for managed in critical]
         if wait_tasks:
             await asyncio.wait(wait_tasks, return_when=asyncio.FIRST_COMPLETED)
 
@@ -198,10 +188,7 @@ class ProcessManager:
         """True if all managed processes are still running."""
         if not self._processes or not self._running:
             return False
-        return all(
-            managed.process.returncode is None
-            for managed in self._processes
-        )
+        return all(managed.process.returncode is None for managed in self._processes)
 
     async def _start_all(self, configs: list[ProcessConfig]) -> None:
         """Spawn all processes sequentially."""
@@ -213,8 +200,7 @@ class ProcessManager:
             # Check it didn't immediately crash
             if managed.process.returncode is not None:
                 raise RuntimeError(
-                    f"{config.label} exited immediately with code "
-                    f"{managed.process.returncode}"
+                    f"{config.label} exited immediately with code {managed.process.returncode}"
                 )
 
     def _get_venv_python(self) -> str:
@@ -227,15 +213,24 @@ class ProcessManager:
     def _get_process_configs(self) -> list[ProcessConfig]:
         """Return the process configurations in startup order.
 
-        Note: ``npm run dev`` already starts both Next.js and Convex dev,
-        so we do NOT spawn a separate ``npx convex dev`` process.
+        Start Convex and Next separately so frontend boot is not blocked by
+        ``predev`` hooks attached to ``npm run dev``.
         """
         venv_python = self._get_venv_python()
         return [
             ProcessConfig(
+                label="convex",
+                command="npm",
+                args=["run", "dev:backend"],
+                cwd=self._dashboard_dir,
+                env={"NODE_OPTIONS": "--max-old-space-size=1536"},
+                critical=False,
+                restart_on_crash=True,
+            ),
+            ProcessConfig(
                 label="dashboard",
                 command="npm",
-                args=["run", "dev"],
+                args=["run", "dev:frontend"],
                 cwd=self._dashboard_dir,
                 env={"NODE_OPTIONS": "--max-old-space-size=1536"},
                 critical=False,
@@ -280,9 +275,7 @@ class ProcessManager:
 
         logger.info(f"[MC] Started {config.label} (PID: {process.pid})")
 
-        output_task = asyncio.create_task(
-            self._forward_output(config.label, process)
-        )
+        output_task = asyncio.create_task(self._forward_output(config.label, process))
 
         return ManagedProcess(
             config=config,
@@ -290,9 +283,7 @@ class ProcessManager:
             output_task=output_task,
         )
 
-    async def _forward_output(
-        self, label: str, process: asyncio.subprocess.Process
-    ) -> None:
+    async def _forward_output(self, label: str, process: asyncio.subprocess.Process) -> None:
         """
         Read and forward child process output to stderr (visible to user).
 
@@ -339,14 +330,11 @@ class ProcessManager:
 
         try:
             await asyncio.wait_for(process.wait(), timeout=timeout)
-            logger.info(
-                f"[MC] Stopped {label} (exit code: {process.returncode})"
-            )
+            logger.info(f"[MC] Stopped {label} (exit code: {process.returncode})")
             return "stopped"
         except asyncio.TimeoutError:
             logger.warning(
-                f"[MC] Force-killing {label} (PID: {process.pid}) "
-                f"after {timeout}s timeout"
+                f"[MC] Force-killing {label} (PID: {process.pid}) after {timeout}s timeout"
             )
             try:
                 process.kill()
@@ -355,8 +343,7 @@ class ProcessManager:
                 pass
             except asyncio.TimeoutError:
                 logger.error(
-                    f"[MC] Process {label} (PID: {process.pid}) "
-                    f"did not exit after SIGKILL"
+                    f"[MC] Process {label} (PID: {process.pid}) did not exit after SIGKILL"
                 )
             return "killed"
 
@@ -388,9 +375,7 @@ class ProcessManager:
                         try:
                             restarted = await self._spawn_process(managed.config)
                             self._processes[i] = restarted
-                            logger.info(
-                                f"[MC] Restarted {label} (PID: {restarted.process.pid})"
-                            )
+                            logger.info(f"[MC] Restarted {label} (PID: {restarted.process.pid})")
                         except Exception as exc:
                             logger.error(f"[MC] Failed to restart {label}: {exc}")
                         continue
@@ -412,7 +397,5 @@ class ProcessManager:
 
     async def _handle_signal(self, sig: signal.Signals) -> None:
         """Handle shutdown signal."""
-        logger.info(
-            f"[MC] Received {sig.name}, initiating graceful shutdown..."
-        )
+        logger.info(f"[MC] Received {sig.name}, initiating graceful shutdown...")
         await self.stop()

@@ -63,6 +63,8 @@ interface MergeAliasDisplay {
   description: string;
 }
 
+export type ExecutionPlanViewMode = "both" | "canvas" | "conversation";
+
 interface ExecutionPlanTabProps {
   executionPlan:
     | { steps: ExecutionPlanStep[]; createdAt?: string; generatedAt?: string }
@@ -78,6 +80,10 @@ interface ExecutionPlanTabProps {
   readOnly?: boolean;
   mergeAlias?: MergeAliasDisplay;
   onOpenParentTask?: (taskId: string) => void;
+  viewMode?: ExecutionPlanViewMode;
+  onViewModeChange?: (mode: ExecutionPlanViewMode) => void;
+  onClearPlan?: () => void;
+  isClearingPlan?: boolean;
 }
 
 interface NormalizedStep {
@@ -287,6 +293,10 @@ export function ExecutionPlanTab({
   readOnly = false,
   mergeAlias,
   onOpenParentTask,
+  viewMode = "both",
+  onViewModeChange,
+  onClearPlan,
+  isClearingPlan = false,
 }: ExecutionPlanTabProps) {
   const acceptHumanStepMutation = useMutation(api.steps.acceptHumanStep);
   const retryStepMutation = useMutation(api.steps.retryStep);
@@ -371,6 +381,55 @@ export function ExecutionPlanTab({
   const isLiveMode = taskStatus === "in_progress" || taskStatus === "done";
   const canAddOrEdit = !readOnly && (isReviewMode || isLiveMode);
   const canEditCanvas = !readOnly && isReviewMode && !!onLocalPlanChange;
+  const showCanvasContent = viewMode !== "conversation";
+
+  const renderViewControls = () => {
+    if (!onViewModeChange && !onClearPlan) return null;
+
+    const modes: Array<{ label: string; value: ExecutionPlanViewMode }> = [
+      { label: "Both", value: "both" },
+      { label: "Canvas", value: "canvas" },
+      { label: "Lead Agent Conversation", value: "conversation" },
+    ];
+
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {onViewModeChange ? (
+          <div
+            className="inline-flex items-center rounded-full border border-border bg-background/80 p-1"
+            data-testid="execution-plan-view-switcher"
+          >
+            {modes.map((mode) => (
+              <Button
+                key={mode.value}
+                type="button"
+                variant={viewMode === mode.value ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 rounded-full px-3 text-xs"
+                data-testid={`execution-plan-view-${mode.value}`}
+                onClick={() => onViewModeChange(mode.value)}
+              >
+                {mode.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+        {onClearPlan ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 rounded-full px-3 text-xs"
+            data-testid="execution-plan-clear-button"
+            disabled={isClearingPlan}
+            onClick={onClearPlan}
+          >
+            {isClearingPlan ? "Cleaning..." : "Clean"}
+          </Button>
+        ) : null}
+      </div>
+    );
+  };
 
   const handleDeleteStep = useCallback(
     async (stepId: string) => {
@@ -743,13 +802,14 @@ export function ExecutionPlanTab({
     // canAddOrEdit: show empty state with Add Step button
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between mb-2 px-1">
+        <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
           <span className="text-xs text-muted-foreground">No steps yet</span>
+          <div className="flex justify-center">{renderViewControls()}</div>
           {taskId && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-xs"
+              className="h-6 justify-self-end px-2 text-xs"
               onClick={() => {
                 setAddStepError(null);
                 setShowAddForm((prev) => !prev);
@@ -776,24 +836,27 @@ export function ExecutionPlanTab({
             )}
           </div>
         )}
-        <p className="text-sm text-muted-foreground text-center py-8">
-          No steps yet &mdash; use &ldquo;Add Step&rdquo; to build a plan
-        </p>
+        {showCanvasContent ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No steps yet &mdash; use &ldquo;Add Step&rdquo; to build a plan
+          </p>
+        ) : null}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full" onClick={dismissEdit}>
-      <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-xs text-muted-foreground">
-          {completedCount}/{steps.length} steps completed
-        </span>
+        <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
+          <span className="text-xs text-muted-foreground">
+            {completedCount}/{steps.length} steps completed
+          </span>
+          <div className="flex justify-center">{renderViewControls()}</div>
         {taskId && (isReviewMode || isLiveMode) && (
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs"
+            className="h-6 justify-self-end px-2 text-xs"
             onClick={() => {
               setAddStepError(null);
               setShowAddForm((prev) => !prev);
@@ -839,30 +902,32 @@ export function ExecutionPlanTab({
         </div>
       )}
 
-      <div className="flex-1 min-h-[300px] border border-border rounded-md bg-muted/20">
-        <ReactFlow
-          nodes={flowNodes}
-          edges={flowEdges}
-          nodeTypes={nodeTypes}
-          defaultEdgeOptions={defaultEdgeOptions}
-          onNodeClick={handleNodeClick}
-          onPaneClick={() => {
-            setEditingStepId(null);
-            setEditStepError(null);
-          }}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={canEditCanvas}
-          panOnDrag={true}
-          zoomOnScroll={true}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background color="hsl(var(--border))" gap={15} size={1} />
-          <Controls />
-        </ReactFlow>
-      </div>
+      {showCanvasContent ? (
+        <div className="flex-1 min-h-[300px] rounded-md border border-border bg-muted/20">
+          <ReactFlow
+            nodes={flowNodes}
+            edges={flowEdges}
+            nodeTypes={nodeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            onNodeClick={handleNodeClick}
+            onPaneClick={() => {
+              setEditingStepId(null);
+              setEditStepError(null);
+            }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={canEditCanvas}
+            panOnDrag={true}
+            zoomOnScroll={true}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background color="hsl(var(--border))" gap={15} size={1} />
+            <Controls />
+          </ReactFlow>
+        </div>
+      ) : null}
     </div>
   );
 }

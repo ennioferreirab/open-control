@@ -20,13 +20,14 @@ import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from mc.contexts.planning.negotiation import (
+    _has_current_plan_review_request,
     _parse_negotiation_response,
+    create_initial_plan_from_message,
     handle_plan_negotiation,
     start_plan_negotiation_loop,
 )
+from mc.types import ExecutionPlan, ExecutionPlanStep
 
 
 class _FakeLLMResponse:
@@ -39,6 +40,7 @@ class _FakeLLMResponse:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_bridge(
     post_lead_agent_message=None,
@@ -97,6 +99,7 @@ UPDATED_PLAN: dict = {
 # _parse_negotiation_response
 # ---------------------------------------------------------------------------
 
+
 class TestParseNegotiationResponse:
     def test_plain_json(self):
         raw = json.dumps({"action": "clarify", "message": "Could you clarify?"})
@@ -110,7 +113,11 @@ class TestParseNegotiationResponse:
         assert result["action"] == "clarify"
 
     def test_json_with_surrounding_text(self):
-        payload = {"action": "update_plan", "updated_plan": UPDATED_PLAN, "explanation": "Added step 2."}
+        payload = {
+            "action": "update_plan",
+            "updated_plan": UPDATED_PLAN,
+            "explanation": "Added step 2.",
+        }
         raw = "Here is my response:\n" + json.dumps(payload) + "\nEnd."
         result = _parse_negotiation_response(raw)
         assert result["action"] == "update_plan"
@@ -126,9 +133,40 @@ class TestParseNegotiationResponse:
         assert result["message"] == "(No response from model)"
 
 
+class TestCurrentPlanReviewRequestDetection:
+    def test_detects_matching_review_request(self):
+        assert _has_current_plan_review_request(
+            [
+                {
+                    "type": "lead_agent_plan",
+                    "plan_review": {
+                        "kind": "request",
+                        "plan_generated_at": SAMPLE_PLAN["generatedAt"],
+                    },
+                }
+            ],
+            plan_generated_at=SAMPLE_PLAN["generatedAt"],
+        )
+
+    def test_ignores_non_matching_messages(self):
+        assert not _has_current_plan_review_request(
+            [
+                {
+                    "type": "lead_agent_chat",
+                    "plan_review": {
+                        "kind": "request",
+                        "plan_generated_at": SAMPLE_PLAN["generatedAt"],
+                    },
+                }
+            ],
+            plan_generated_at=SAMPLE_PLAN["generatedAt"],
+        )
+
+
 # ---------------------------------------------------------------------------
 # handle_plan_negotiation
 # ---------------------------------------------------------------------------
+
 
 class TestHandlePlanNegotiation:
     """Unit tests for handle_plan_negotiation function."""
@@ -142,14 +180,14 @@ class TestHandlePlanNegotiation:
     def test_handler_posts_clarification_message(self):
         """When LLM responds with action=clarify, post_lead_agent_message is called."""
         bridge = _make_bridge()
-        llm_response = json.dumps({
-            "action": "clarify",
-            "message": "Could you tell me more about what you need?",
-        })
+        llm_response = json.dumps(
+            {
+                "action": "clarify",
+                "message": "Could you tell me more about what you need?",
+            }
+        )
 
-        with patch(
-            "mc.infrastructure.providers.factory.create_provider"
-        ) as mock_create_provider:
+        with patch("mc.infrastructure.providers.factory.create_provider") as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
             mock_create_provider.return_value = (mock_provider, "test-model")
@@ -176,15 +214,15 @@ class TestHandlePlanNegotiation:
         """When LLM returns action=update_plan, both update and message are called."""
         bridge = _make_bridge()
         explanation = "I added a summary step at the end."
-        llm_response = json.dumps({
-            "action": "update_plan",
-            "updated_plan": UPDATED_PLAN,
-            "explanation": explanation,
-        })
+        llm_response = json.dumps(
+            {
+                "action": "update_plan",
+                "updated_plan": UPDATED_PLAN,
+                "explanation": explanation,
+            }
+        )
 
-        with patch(
-            "mc.infrastructure.providers.factory.create_provider"
-        ) as mock_create_provider:
+        with patch("mc.infrastructure.providers.factory.create_provider") as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
             mock_create_provider.return_value = (mock_provider, "test-model")
@@ -206,26 +244,36 @@ class TestHandlePlanNegotiation:
         assert isinstance(updated_plan_dict, dict)
         assert len(updated_plan_dict["steps"]) == 2
 
-        # Lead agent chat message MUST be posted with the explanation
-        bridge.post_lead_agent_message.assert_called_once_with(
+        # Lead agent chat message MUST be posted with the explanation,
+        # followed by a fresh plan review request for the new version.
+        assert bridge.post_lead_agent_message.call_count == 2
+        first_call = bridge.post_lead_agent_message.call_args_list[0]
+        second_call = bridge.post_lead_agent_message.call_args_list[1]
+        assert first_call.args == (
             "task_abc",
             explanation,
             "lead_agent_chat",
         )
+        assert second_call.args[0] == "task_abc"
+        assert second_call.args[2] == "lead_agent_plan"
+        assert second_call.kwargs["plan_review"] == {
+            "kind": "request",
+            "plan_generated_at": updated_plan_dict["generatedAt"],
+        }
 
     # --- AC10: handler posts clarification without updating plan when action=clarify
 
     def test_handler_does_not_update_plan_on_clarify(self):
         """When LLM responds with action=clarify, update_execution_plan is NOT called."""
         bridge = _make_bridge()
-        llm_response = json.dumps({
-            "action": "clarify",
-            "message": "Which agent should handle the new step?",
-        })
+        llm_response = json.dumps(
+            {
+                "action": "clarify",
+                "message": "Which agent should handle the new step?",
+            }
+        )
 
-        with patch(
-            "mc.infrastructure.providers.factory.create_provider"
-        ) as mock_create_provider:
+        with patch("mc.infrastructure.providers.factory.create_provider") as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
             mock_create_provider.return_value = (mock_provider, "test-model")
@@ -257,12 +305,13 @@ class TestHandlePlanNegotiation:
         async def _timeout_wait_for(coro, timeout):
             raise asyncio.TimeoutError
 
-        with patch(
-            "mc.contexts.planning.negotiation.asyncio.wait_for",
-            new=AsyncMock(side_effect=_timeout_wait_for),
-        ), patch(
-            "mc.infrastructure.providers.factory.create_provider"
-        ) as mock_create_provider:
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.wait_for",
+                new=AsyncMock(side_effect=_timeout_wait_for),
+            ),
+            patch("mc.infrastructure.providers.factory.create_provider") as mock_create_provider,
+        ):
             mock_provider = MagicMock()
             mock_create_provider.return_value = (mock_provider, "test-model")
 
@@ -287,15 +336,15 @@ class TestHandlePlanNegotiation:
     def test_handler_falls_back_when_updated_plan_missing(self):
         """When action=update_plan but updated_plan is missing, fallback to clarify."""
         bridge = _make_bridge()
-        llm_response = json.dumps({
-            "action": "update_plan",
-            # No "updated_plan" key
-            "explanation": "I updated the plan",
-        })
+        llm_response = json.dumps(
+            {
+                "action": "update_plan",
+                # No "updated_plan" key
+                "explanation": "I updated the plan",
+            }
+        )
 
-        with patch(
-            "mc.infrastructure.providers.factory.create_provider"
-        ) as mock_create_provider:
+        with patch("mc.infrastructure.providers.factory.create_provider") as mock_create_provider:
             mock_provider = MagicMock()
             mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
             mock_create_provider.return_value = (mock_provider, "test-model")
@@ -311,6 +360,94 @@ class TestHandlePlanNegotiation:
 
         bridge.update_execution_plan.assert_not_called()
         bridge.post_lead_agent_message.assert_called_once()
+
+
+class TestCreateInitialPlanFromMessage:
+    """Tests for bootstrapping the first plan from manual-review conversation."""
+
+    def _run(self, coro):
+        return asyncio.run(coro)
+
+    def test_creates_initial_plan_for_manual_review_task(self):
+        bridge = MagicMock()
+        bridge.list_agents = MagicMock(
+            return_value=[
+                {
+                    "name": "nanobot",
+                    "display_name": "Nanobot",
+                    "role": "generalist",
+                    "skills": ["general"],
+                    "enabled": True,
+                    "is_system": True,
+                }
+            ]
+        )
+        bridge.get_board_by_id = MagicMock(return_value=None)
+        bridge.update_execution_plan = MagicMock()
+        bridge.update_task_status = MagicMock()
+        bridge.create_activity = MagicMock()
+        bridge.post_lead_agent_message = MagicMock()
+
+        task_data = {
+            "id": "task-manual",
+            "title": "Merge task",
+            "description": "Merge two threads and keep the best ideas.",
+            "status": "review",
+            "is_manual": True,
+            "files": [],
+        }
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Outline the merged approach",
+                    description="Synthesize the merged task into a clear execution plan.",
+                    assigned_agent="nanobot",
+                    blocked_by=[],
+                    parallel_group=1,
+                    order=1,
+                )
+            ]
+        )
+
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch("mc.contexts.planning.negotiation.TaskPlanner") as planner_cls,
+        ):
+            planner = planner_cls.return_value
+            planner.plan_task = AsyncMock(return_value=plan)
+
+            self._run(
+                create_initial_plan_from_message(
+                    bridge=bridge,
+                    task_id="task-manual",
+                    user_message="Please create the first execution plan from this merge.",
+                    task_data=task_data,
+                )
+            )
+
+        planner.plan_task.assert_awaited_once()
+        planner_call = planner.plan_task.await_args
+        assert planner_call.args[0] == "Merge task"
+        assert "Please create the first execution plan" in planner_call.args[1]
+        bridge.update_execution_plan.assert_called_once_with("task-manual", plan.to_dict())
+        bridge.update_task_status.assert_called_once()
+        status_call = bridge.update_task_status.call_args
+        assert status_call.args[0] == "task-manual"
+        assert status_call.args[1] == "review"
+        assert status_call.args[3].startswith("Initial plan ready for review")
+        assert status_call.args[4] is True
+        bridge.post_lead_agent_message.assert_called_once()
+        post_call = bridge.post_lead_agent_message.call_args
+        assert post_call.args[0] == "task-manual"
+        assert post_call.args[2] == "lead_agent_plan"
+        assert post_call.kwargs["plan_review"] == {
+            "kind": "request",
+            "plan_generated_at": plan.generated_at,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -380,10 +517,12 @@ class TestHandlePlanNegotiationExecutionContext:
             )
 
         # System prompt or user prompt should mention step statuses
-        all_prompt_content = " ".join(
-            m.get("content", "") for m in captured_messages
+        all_prompt_content = " ".join(m.get("content", "") for m in captured_messages)
+        assert (
+            "running" in all_prompt_content.lower()
+            or "locked" in all_prompt_content.lower()
+            or "cannot" in all_prompt_content.lower()
         )
-        assert "running" in all_prompt_content.lower() or "locked" in all_prompt_content.lower() or "cannot" in all_prompt_content.lower()
 
     # 6.2: enforcement layer blocks update_plan for locked steps even when LLM ignores prompt
 
@@ -397,24 +536,26 @@ class TestHandlePlanNegotiationExecutionContext:
         """
         bridge = self._make_bridge_with_steps(steps=RUNNING_STEPS)
         # LLM ignores the system prompt and returns update_plan with the running step
-        llm_response = json.dumps({
-            "action": "update_plan",
-            "updated_plan": {
-                "steps": [
-                    {
-                        "tempId": "step_1",
-                        # Same title as RUNNING_STEPS[0] which is "running" status
-                        "title": "Extract data",
-                        "description": "Modified description",
-                        "assignedAgent": "financial-agent",
-                        "blockedBy": [],
-                        "parallelGroup": 1,
-                        "order": 1,
-                    }
-                ]
-            },
-            "explanation": "I changed step 1.",
-        })
+        llm_response = json.dumps(
+            {
+                "action": "update_plan",
+                "updated_plan": {
+                    "steps": [
+                        {
+                            "tempId": "step_1",
+                            # Same title as RUNNING_STEPS[0] which is "running" status
+                            "title": "Extract data",
+                            "description": "Modified description",
+                            "assignedAgent": "financial-agent",
+                            "blockedBy": [],
+                            "parallelGroup": 1,
+                            "order": 1,
+                        }
+                    ]
+                },
+                "explanation": "I changed step 1.",
+            }
+        )
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
 
@@ -446,23 +587,25 @@ class TestHandlePlanNegotiationExecutionContext:
         """When LLM returns update_plan for a planned step only, the update is applied."""
         bridge = self._make_bridge_with_steps(steps=RUNNING_STEPS)
         # RUNNING_STEPS[1] has title "Write summary" and status "planned" — modifiable
-        llm_response = json.dumps({
-            "action": "update_plan",
-            "updated_plan": {
-                "steps": [
-                    {
-                        "tempId": "step_2",
-                        "title": "Write summary",
-                        "description": "Updated summary description",
-                        "assignedAgent": "nanobot",
-                        "blockedBy": [],
-                        "parallelGroup": 2,
-                        "order": 2,
-                    }
-                ]
-            },
-            "explanation": "I updated the summary step.",
-        })
+        llm_response = json.dumps(
+            {
+                "action": "update_plan",
+                "updated_plan": {
+                    "steps": [
+                        {
+                            "tempId": "step_2",
+                            "title": "Write summary",
+                            "description": "Updated summary description",
+                            "assignedAgent": "nanobot",
+                            "blockedBy": [],
+                            "parallelGroup": 2,
+                            "order": 2,
+                        }
+                    ]
+                },
+                "explanation": "I updated the summary step.",
+            }
+        )
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
 
@@ -527,13 +670,16 @@ class TestHandlePlanNegotiationExecutionContext:
         # The loop should process the user_message without stopping for in_progress
         # We verify by checking that query was called (status check happened) and
         # that the loop didn't stop before the first message was processed.
-        with patch(
-            "mc.contexts.planning.negotiation.asyncio.to_thread",
-            new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
-        ), patch(
-            "mc.contexts.planning.negotiation.handle_plan_negotiation",
-            new=AsyncMock(return_value=None),
-        ) as mock_handle:
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
             try:
                 _asyncio.run(
                     start_plan_negotiation_loop(bridge, "task_inprogress", poll_interval=0.01)
@@ -547,6 +693,175 @@ class TestHandlePlanNegotiationExecutionContext:
         call_args = mock_handle.call_args
         # Verify that task_status="in_progress" was passed as a keyword argument
         assert call_args[1]["task_status"] == "in_progress"
+
+    def test_loop_continues_for_paused_review_task_with_plan(self):
+        """Paused review tasks with an execution plan should still route plan chat."""
+        import asyncio as _asyncio
+
+        task_data = {
+            "status": "review",
+            "awaiting_kickoff": False,
+            "execution_plan": SAMPLE_PLAN,
+        }
+
+        user_message = {
+            "_id": "msg_paused",
+            "author_type": "user",
+            "content": "Please revise the plan before resuming",
+        }
+
+        call_count = 0
+
+        async def _fake_queue_get():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [user_message]
+            raise _asyncio.CancelledError
+
+        bridge = MagicMock()
+        bridge.query = MagicMock(return_value=task_data)
+        bridge.get_steps_by_task = MagicMock(return_value=[])
+        bridge.post_lead_agent_message = MagicMock()
+        bridge.update_execution_plan = MagicMock()
+
+        mock_queue = MagicMock()
+        mock_queue.get = AsyncMock(side_effect=_fake_queue_get)
+        bridge.async_subscribe = MagicMock(return_value=mock_queue)
+
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
+            try:
+                _asyncio.run(start_plan_negotiation_loop(bridge, "task_paused", poll_interval=0.01))
+            except _asyncio.CancelledError:
+                pass
+
+        mock_handle.assert_called_once()
+        call_args = mock_handle.call_args
+        assert call_args[1]["task_status"] == "review"
+
+    def test_loop_bootstraps_first_plan_for_manual_review_without_execution_plan(self):
+        """Manual review tasks without a plan should route the first user message into planning."""
+        import asyncio as _asyncio
+
+        task_data = {
+            "status": "review",
+            "awaiting_kickoff": False,
+            "is_manual": True,
+            "title": "Manual review task",
+            "description": "Needs an initial plan",
+        }
+
+        user_message = {
+            "_id": "msg_first_plan",
+            "author_type": "user",
+            "content": "Create the initial execution plan, then I will review it.",
+        }
+
+        async def _fake_queue_get():
+            return [user_message]
+
+        bridge = MagicMock()
+        bridge.query = MagicMock(side_effect=[task_data, {"status": "done"}])
+        bridge.post_lead_agent_message = MagicMock()
+        bridge.update_execution_plan = MagicMock()
+        mock_queue = MagicMock()
+        mock_queue.get = AsyncMock(side_effect=[[user_message], _asyncio.CancelledError()])
+        bridge.async_subscribe = MagicMock(return_value=mock_queue)
+
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.create_initial_plan_from_message",
+                new=AsyncMock(return_value=None),
+            ) as mock_initial_plan,
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
+            try:
+                _asyncio.run(
+                    start_plan_negotiation_loop(
+                        bridge,
+                        "task_manual_review",
+                        poll_interval=0.01,
+                    )
+                )
+            except _asyncio.CancelledError:
+                pass
+
+        mock_initial_plan.assert_called_once()
+        bootstrap_call = mock_initial_plan.call_args
+        assert bootstrap_call.args[1] == "task_manual_review"
+        assert bootstrap_call.args[2] == user_message["content"]
+        assert bootstrap_call.kwargs["task_data"]["is_manual"] is True
+        mock_handle.assert_not_called()
+
+    def test_loop_backfills_missing_plan_review_request_for_existing_review_plan(self):
+        """Review tasks with an execution plan but no lead-agent request should self-repair."""
+        import asyncio as _asyncio
+
+        task_data = {
+            "status": "review",
+            "awaiting_kickoff": False,
+            "is_manual": True,
+            "execution_plan": SAMPLE_PLAN,
+        }
+        system_message = {
+            "_id": "msg_system",
+            "author_type": "system",
+            "content": "Existing thread history",
+        }
+
+        bridge = MagicMock()
+        bridge.query = MagicMock(side_effect=[task_data, {"status": "done"}])
+        bridge.post_lead_agent_message = MagicMock()
+        bridge.update_execution_plan = MagicMock()
+        mock_queue = MagicMock()
+        mock_queue.get = AsyncMock(side_effect=[[system_message], _asyncio.CancelledError()])
+        bridge.async_subscribe = MagicMock(return_value=mock_queue)
+
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            try:
+                _asyncio.run(
+                    start_plan_negotiation_loop(
+                        bridge,
+                        "task_missing_request",
+                        poll_interval=0.01,
+                    )
+                )
+            except _asyncio.CancelledError:
+                pass
+
+        bridge.post_lead_agent_message.assert_called_once()
+        post_call = bridge.post_lead_agent_message.call_args
+        assert post_call.args[0] == "task_missing_request"
+        assert post_call.args[2] == "lead_agent_plan"
+        assert post_call.kwargs["plan_review"] == {
+            "kind": "request",
+            "plan_generated_at": SAMPLE_PLAN["generatedAt"],
+        }
 
     def test_loop_stops_for_non_negotiable_status(self):
         """start_plan_negotiation_loop stops when task is in a non-negotiable status."""
@@ -570,16 +885,17 @@ class TestHandlePlanNegotiationExecutionContext:
         mock_queue.get = AsyncMock(side_effect=_fake_queue_get)
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
-        with patch(
-            "mc.contexts.planning.negotiation.asyncio.to_thread",
-            new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
-        ), patch(
-            "mc.contexts.planning.negotiation.handle_plan_negotiation",
-            new=AsyncMock(return_value=None),
-        ) as mock_handle:
-            _asyncio.run(
-                start_plan_negotiation_loop(bridge, "task_done", poll_interval=0.01)
-            )
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
+            _asyncio.run(start_plan_negotiation_loop(bridge, "task_done", poll_interval=0.01))
 
         # Loop stops immediately without processing messages
         mock_handle.assert_not_called()
@@ -608,10 +924,55 @@ class TestHandlePlanNegotiationExecutionContext:
             "mc.contexts.planning.negotiation.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
         ):
-            _asyncio.run(
-                start_plan_negotiation_loop(bridge, "task_sub", poll_interval=0.01)
-            )
+            _asyncio.run(start_plan_negotiation_loop(bridge, "task_sub", poll_interval=0.01))
 
         bridge.async_subscribe.assert_called_once()
         call_args = bridge.async_subscribe.call_args[0]
         assert call_args[0] == "messages:listByTask"
+
+    def test_loop_skips_plan_review_decision_messages(self):
+        """Approval decisions should stay as history and not re-enter negotiation."""
+        import asyncio as _asyncio
+
+        task_data = {
+            "status": "review",
+            "awaiting_kickoff": True,
+            "execution_plan": SAMPLE_PLAN,
+        }
+        approval_message = {
+            "_id": "msg_approval",
+            "author_type": "user",
+            "content": "Approved plan.",
+            "plan_review": {
+                "kind": "decision",
+                "plan_generated_at": SAMPLE_PLAN["generatedAt"],
+                "decision": "approved",
+            },
+        }
+
+        async def _fake_queue_get():
+            return [approval_message]
+
+        bridge = MagicMock()
+        bridge.query = MagicMock(side_effect=[task_data, task_data, None])
+        bridge.get_steps_by_task = MagicMock(return_value=[])
+        mock_queue = MagicMock()
+        mock_queue.get = AsyncMock(side_effect=[[approval_message], _asyncio.CancelledError()])
+        bridge.async_subscribe = MagicMock(return_value=mock_queue)
+
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
+            try:
+                _asyncio.run(start_plan_negotiation_loop(bridge, "task_review", poll_interval=0.01))
+            except _asyncio.CancelledError:
+                pass
+
+        mock_handle.assert_not_called()

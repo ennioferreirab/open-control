@@ -2,6 +2,8 @@
 
 Extracted from mc/gateway.py _run_plan_negotiation_manager (Story 17.2, AC #3).
 Subscribes to tasks in review/in_progress and spawns per-task negotiation loops.
+Pre-kickoff review tasks are negotiable, and paused review tasks remain
+negotiable while they still have an execution plan to refine.
 """
 
 from __future__ import annotations
@@ -18,12 +20,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _has_execution_plan(task_data: dict[str, Any]) -> bool:
+    """Return True when task_data carries a non-empty execution plan."""
+    plan = task_data.get("execution_plan") or task_data.get("executionPlan")
+    return bool(isinstance(plan, dict) and plan.get("steps"))
+
+
+def _is_manual_review_without_plan(task_data: dict[str, Any]) -> bool:
+    """Return True when a manual review task is waiting for its first plan."""
+    return (
+        task_data.get("status", "") == "review"
+        and bool(task_data.get("is_manual") or task_data.get("isManual"))
+        and not bool(task_data.get("awaiting_kickoff") or task_data.get("awaitingKickoff"))
+        and not _has_execution_plan(task_data)
+    )
+
+
 class PlanNegotiationSupervisor:
     """Manages per-task plan negotiation loops.
 
-    Subscribes to tasks in both "review" (awaitingKickoff) and "in_progress"
-    statuses. For each task that enters a negotiable state, spawns a
-    start_plan_negotiation_loop coroutine. Prevents duplicate loops.
+    Subscribes to tasks in both review and in_progress statuses. For each task
+    that enters a negotiable state, spawns a start_plan_negotiation_loop
+    coroutine. Prevents duplicate loops.
 
     Constructor dependencies:
         bridge: ConvexBridge instance for Convex communication.
@@ -96,16 +114,21 @@ class PlanNegotiationSupervisor:
 
             task_status = task_data.get("status", "")
             awaiting_kickoff = task_data.get("awaiting_kickoff", False)
+            has_execution_plan = _has_execution_plan(task_data)
 
             if task_status == "in_progress" or (
-                task_status == "review" and awaiting_kickoff
+                task_status == "review"
+                and (
+                    awaiting_kickoff
+                    or has_execution_plan
+                    or _is_manual_review_without_plan(task_data)
+                )
             ):
                 # Skip cron-requeued tasks
                 if task_id in self._cron_requeued_ids:
                     self._cron_requeued_ids.discard(task_id)
                     logger.info(
-                        "[plan_negotiation] Skipping plan negotiation for task %s "
-                        "(cron requeue)",
+                        "[plan_negotiation] Skipping plan negotiation for task %s (cron requeue)",
                         task_id,
                     )
                     continue
@@ -140,9 +163,7 @@ class PlanNegotiationSupervisor:
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    logger.warning(
-                        "[plan_negotiation] Error reading queue: %s", exc
-                    )
+                    logger.warning("[plan_negotiation] Error reading queue: %s", exc)
 
         reader_tasks = [
             asyncio.create_task(_drain_queue(review_queue)),

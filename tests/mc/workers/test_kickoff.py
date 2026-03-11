@@ -241,6 +241,92 @@ class TestKickoffWorkerResume:
         assert len(scheduled_coroutines) == 1
 
     @pytest.mark.asyncio
+    async def test_materializes_incremental_steps_before_resume_dispatch(self) -> None:
+        bridge = _make_bridge()
+        bridge.get_steps_by_task.side_effect = [
+            [
+                {
+                    "id": "step-1",
+                    "title": "Do something",
+                    "order": 1,
+                    "status": StepStatus.COMPLETED,
+                    "blocked_by": [],
+                }
+            ],
+            [
+                {
+                    "id": "step-1",
+                    "title": "Do something",
+                    "order": 1,
+                    "status": StepStatus.COMPLETED,
+                    "blocked_by": [],
+                },
+                {
+                    "id": "step-2",
+                    "title": "New follow-up",
+                    "order": 2,
+                    "status": StepStatus.PLANNED,
+                    "blocked_by": ["step-1"],
+                },
+            ],
+        ]
+        bridge.create_step.return_value = "step-2"
+        bridge.check_and_unblock_dependents.return_value = ["step-2"]
+        materializer = _make_materializer()
+        dispatcher = _make_dispatcher()
+        worker = KickoffResumeWorker(_make_ctx(bridge), materializer, dispatcher)
+
+        scheduled_coroutines: list[object] = []
+
+        def _capture_create_task(coro):
+            scheduled_coroutines.append(coro)
+            coro.close()
+            return MagicMock()
+
+        task_data = {
+            "id": "task-1",
+            "title": "Resumed Incremental",
+            "execution_plan": {
+                "steps": [
+                    {
+                        "tempId": "step_1",
+                        "title": "Do something",
+                        "description": "Existing work",
+                        "assignedAgent": "nanobot",
+                        "blockedBy": [],
+                        "parallelGroup": 1,
+                        "order": 1,
+                    },
+                    {
+                        "tempId": "step_2",
+                        "title": "New follow-up",
+                        "description": "Continue after the first step",
+                        "assignedAgent": "nanobot",
+                        "blockedBy": ["step_1"],
+                        "parallelGroup": 2,
+                        "order": 2,
+                    },
+                ],
+                "generatedAt": "2024-01-01T00:00:00Z",
+                "generatedBy": "lead-agent",
+            },
+        }
+
+        with (
+            patch("mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.workers.kickoff.asyncio.create_task",
+                side_effect=_capture_create_task,
+            ),
+        ):
+            await worker.process_batch([task_data])
+
+        materializer.materialize.assert_not_called()
+        bridge.create_step.assert_called_once()
+        bridge.check_and_unblock_dependents.assert_called_once_with("step-1")
+        assert len(scheduled_coroutines) == 1
+
+    @pytest.mark.asyncio
     async def test_no_dispatchable_steps_logs_without_error(self) -> None:
         bridge = _make_bridge()
         bridge.get_steps_by_task.return_value = [

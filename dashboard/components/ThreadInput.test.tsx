@@ -1,3 +1,4 @@
+import * as React from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { ThreadInput } from "./ThreadInput";
@@ -114,17 +115,26 @@ vi.mock("@/components/ui/select", () => ({
   }: React.PropsWithChildren<{
     onValueChange?: (value: string) => void;
     value?: string;
-  }>) => {
-    void value;
-    void onValueChange;
-    return <div data-testid="agent-select">{children}</div>;
-  },
-  SelectTrigger: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-  SelectContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  }>) => (
+    <div data-testid="agent-select">
+      <select
+        data-testid="agent-select-control"
+        value={value ?? ""}
+        onChange={(event) => onValueChange?.(event.target.value)}
+      >
+        <option value="" disabled>
+          Select agent
+        </option>
+        {children}
+      </select>
+    </div>
+  ),
+  SelectTrigger: () => null,
+  SelectContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
   SelectItem: ({ children, value }: React.PropsWithChildren<{ value: string }>) => (
     <option value={value}>{children}</option>
   ),
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
+  SelectValue: () => null,
 }));
 
 vi.mock("lucide-react", () => ({
@@ -243,29 +253,63 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     expect(screen.getByText(/Task is in trash/)).toBeInTheDocument();
   });
 
-  it("uses postUserPlanMessage for plan-chat mode, not postMentionMessage (AC 5)", async () => {
-    const planChatTask = {
+  it("allows delegation from review tasks that were previously plan-chat", async () => {
+    const reviewTask = {
       ...baseTask,
       status: "review" as const,
       awaitingKickoff: true,
     };
-    render(<ThreadInput task={planChatTask} />);
+    render(<ThreadInput task={reviewTask} />);
+
+    expect(screen.getByTestId("agent-select")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("agent-select-control"), {
+      target: { value: "reviewer" },
+    });
 
     const textarea = screen.getByTestId("thread-textarea");
-    fireEvent.change(textarea, { target: { value: "@coder update the plan" } });
+    fireEvent.change(textarea, { target: { value: "handoff this review" } });
 
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     await waitFor(() => {
+      const sendMock = getMutationMock(api.messages.sendThreadMessage);
       const planMock = getMutationMock(api.messages.postUserPlanMessage);
-      const mentionMock = getMutationMock(api.messages.postMentionMessage);
-      expect(planMock).toHaveBeenCalledWith(
+      expect(sendMock).toHaveBeenCalledWith(
         expect.objectContaining({
           taskId: "task1",
-          content: "@coder update the plan",
+          content: "handoff this review",
+          agentName: "reviewer",
         }),
       );
-      expect(mentionMock).not.toHaveBeenCalled();
+      expect(planMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("routes mentions from review tasks to postMentionMessage", async () => {
+    const reviewTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+    };
+
+    render(<ThreadInput task={reviewTask} />);
+
+    const textarea = screen.getByTestId("thread-textarea");
+    fireEvent.change(textarea, { target: { value: "@reviewer please handle this review" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      const mentionMock = getMutationMock(api.messages.postMentionMessage);
+      const planMock = getMutationMock(api.messages.postUserPlanMessage);
+      expect(mentionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task1",
+          content: "@reviewer please handle this review",
+          mentionedAgent: "reviewer",
+        }),
+      );
+      expect(planMock).not.toHaveBeenCalled();
     });
   });
 
@@ -287,6 +331,123 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
         }),
       );
       expect(mentionMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("renders agent selection for human tasks in progress", () => {
+    const humanTask = {
+      ...baseTask,
+      status: "in_progress" as const,
+      assignedAgent: "human",
+    };
+
+    render(<ThreadInput task={humanTask} />);
+
+    expect(screen.getByTestId("agent-select")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Send a message to the agent...")).toBeInTheDocument();
+  });
+
+  it("routes plain messages from human in-progress tasks to sendThreadMessage", async () => {
+    const humanTask = {
+      ...baseTask,
+      status: "in_progress" as const,
+      assignedAgent: "human",
+    };
+
+    render(<ThreadInput task={humanTask} />);
+
+    fireEvent.change(screen.getByTestId("agent-select-control"), {
+      target: { value: "reviewer" },
+    });
+    fireEvent.change(screen.getByTestId("thread-textarea"), {
+      target: { value: "please take this over" },
+    });
+    fireEvent.keyDown(screen.getByTestId("thread-textarea"), { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      const sendMock = getMutationMock(api.messages.sendThreadMessage);
+      const planMock = getMutationMock(api.messages.postUserPlanMessage);
+      expect(sendMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task1",
+          content: "please take this over",
+          agentName: "reviewer",
+        }),
+      );
+      expect(planMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("routes mentions from human in-progress tasks to postMentionMessage", async () => {
+    const humanTask = {
+      ...baseTask,
+      status: "in_progress" as const,
+      assignedAgent: "human",
+    };
+
+    render(<ThreadInput task={humanTask} />);
+
+    fireEvent.change(screen.getByTestId("thread-textarea"), {
+      target: { value: "@reviewer please take this over" },
+    });
+    fireEvent.keyDown(screen.getByTestId("thread-textarea"), { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      const mentionMock = getMutationMock(api.messages.postMentionMessage);
+      const planMock = getMutationMock(api.messages.postUserPlanMessage);
+      expect(mentionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task1",
+          content: "@reviewer please take this over",
+          mentionedAgent: "reviewer",
+        }),
+      );
+      expect(planMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("keeps non-human in-progress tasks in reply mode without agent selection", () => {
+    const inProgressTask = {
+      ...baseTask,
+      status: "in_progress" as const,
+      assignedAgent: "coder",
+    };
+
+    render(<ThreadInput task={inProgressTask} />);
+
+    expect(screen.queryByTestId("agent-select")).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Reply to the thread...")).toBeInTheDocument();
+  });
+
+  it("uses direct lead-agent chat mode without agent selection or mention routing", async () => {
+    const reviewTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+    };
+
+    render(<ThreadInput task={reviewTask} mode="lead-agent" />);
+
+    expect(screen.queryByTestId("agent-select")).not.toBeInTheDocument();
+    expect(screen.getByText("Lead Agent")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("thread-textarea"), {
+      target: { value: "@reviewer please update the plan" },
+    });
+    fireEvent.keyDown(screen.getByTestId("thread-textarea"), { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      const planMock = getMutationMock(api.messages.postUserPlanMessage);
+      const mentionMock = getMutationMock(api.messages.postMentionMessage);
+      const sendMock = getMutationMock(api.messages.sendThreadMessage);
+      expect(planMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task1",
+          content: "@reviewer please update the plan",
+        }),
+      );
+      expect(mentionMock).not.toHaveBeenCalled();
+      expect(sendMock).not.toHaveBeenCalled();
     });
   });
 });

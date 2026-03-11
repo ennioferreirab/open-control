@@ -161,6 +161,17 @@ export default defineSchema({
         }),
       ),
     ),
+    planReview: v.optional(
+      v.object({
+        kind: v.union(
+          v.literal("request"),
+          v.literal("feedback"),
+          v.literal("decision"),
+        ),
+        planGeneratedAt: v.string(),
+        decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
+      }),
+    ),
     timestamp: v.string(),
   })
     .index("by_taskId", ["taskId"])

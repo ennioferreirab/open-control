@@ -9,14 +9,6 @@ import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 
 const BLOCKED_STATUSES = ["retrying"];
 
-function readBooleanField(value: unknown, field: string): boolean {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  return (value as Record<string, unknown>)[field] === true;
-}
-
 export interface ThreadInputController {
   canSend: boolean;
   closeMentionAutocomplete: () => void;
@@ -38,9 +30,12 @@ export interface ThreadInputController {
   handleTextFocus: () => void;
   inputMode: "agent" | "comment";
   isBlocked: boolean;
+  isHumanDelegationThread: boolean;
+  isLeadAgentMode: boolean;
   isDragOver: boolean;
   isInProgress: boolean;
   isPlanChatMode: boolean;
+  isReplyOnlyThread: boolean;
   isRestoring: boolean;
   isSubmitting: boolean;
   isUploading: boolean;
@@ -56,19 +51,22 @@ export interface ThreadInputController {
 }
 
 interface UseThreadInputControllerArgs {
+  mode?: "default" | "lead-agent";
   task: Doc<"tasks">;
   onMessageSent?: () => void;
 }
 
 export function useThreadInputController({
+  mode = "default",
   task,
   onMessageSent,
 }: UseThreadInputControllerArgs): ThreadInputController {
+  const initialSelectedAgent = task.assignedAgent === "human" ? "" : (task.assignedAgent ?? "");
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [error, setError] = useState("");
-  const [selectedAgent, setSelectedAgent] = useState(task.assignedAgent ?? "");
+  const [selectedAgent, setSelectedAgent] = useState(initialSelectedAgent);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionStartIndex, setMentionStartIndex] = useState(0);
   const [inputMode, setInputMode] = useState<"agent" | "comment">("agent");
@@ -113,19 +111,26 @@ export function useThreadInputController({
   useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
 
   useEffect(() => {
-    if (task.assignedAgent && !isSubmitting) {
-      setSelectedAgent(task.assignedAgent);
+    if (!isSubmitting) {
+      setSelectedAgent(task.assignedAgent === "human" ? "" : (task.assignedAgent ?? ""));
     }
   }, [task.assignedAgent, isSubmitting]);
 
-  const awaitingKickoff = readBooleanField(task, "awaitingKickoff");
-  const isPlanChatMode = task.status === "review" && awaitingKickoff;
-  const isInProgress =
-    task.status === "in_progress" || (task.status === "review" && !awaitingKickoff);
+  const isLeadAgentMode = mode === "lead-agent";
+  const isPlanChatMode = isLeadAgentMode;
+  const isInProgress = task.status === "in_progress";
+  const isHumanDelegationThread = task.assignedAgent === "human";
+  const isReplyOnlyThread = isInProgress && !isHumanDelegationThread;
   const isBlocked = BLOCKED_STATUSES.includes(task.status);
   const filteredAgents = useSelectableAgents(board?.enabledAgents);
 
   const { hasMention, firstMentionedAgentName } = useMemo(() => {
+    if (isLeadAgentMode) {
+      return {
+        firstMentionedAgentName: undefined as string | undefined,
+        hasMention: false,
+      };
+    }
     const matches = content.match(/@(\w[\w-]*)/g);
     if (!matches || !filteredAgents) {
       return {
@@ -145,13 +150,19 @@ export function useThreadInputController({
       firstMentionedAgentName: undefined as string | undefined,
       hasMention: false,
     };
-  }, [content, filteredAgents]);
+  }, [content, filteredAgents, isLeadAgentMode]);
 
   const canSend =
     (content.trim().length > 0 || pendingFiles.length > 0) &&
     !isSubmitting &&
     !isUploading &&
-    (inputMode === "comment" || isPlanChatMode || isInProgress || !!selectedAgent || hasMention);
+    (
+      inputMode === "comment"
+      || isPlanChatMode
+      || isReplyOnlyThread
+      || !!selectedAgent
+      || hasMention
+    );
 
   const handleTextChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = event.target.value;
@@ -216,7 +227,7 @@ export function useThreadInputController({
     if (
       inputMode !== "comment" &&
       !isPlanChatMode &&
-      !isInProgress &&
+      !isReplyOnlyThread &&
       !hasMention &&
       !agentForSubmit
     ) {
@@ -246,7 +257,7 @@ export function useThreadInputController({
           fileAttachments,
           taskId: task._id,
         });
-      } else if (isPlanChatMode || isInProgress) {
+      } else if (isPlanChatMode || isReplyOnlyThread) {
         await postPlanMessage({
           content: messageContent,
           fileAttachments,
@@ -282,8 +293,9 @@ export function useThreadInputController({
     firstMentionedAgentName,
     hasMention,
     inputMode,
-    isInProgress,
+    isLeadAgentMode,
     isPlanChatMode,
+    isReplyOnlyThread,
     onMessageSent,
     pendingFiles.length,
     postComment,
@@ -438,9 +450,12 @@ export function useThreadInputController({
     handleTextFocus,
     inputMode,
     isBlocked,
+    isHumanDelegationThread,
+    isLeadAgentMode,
     isDragOver,
     isInProgress,
     isPlanChatMode,
+    isReplyOnlyThread,
     isRestoring,
     isSubmitting,
     isUploading,

@@ -84,6 +84,16 @@ class TestTaskRepository:
         args = client.mutation.call_args[0][1]
         assert args["execution_plan"] == plan
 
+    def test_get_task(self):
+        client = _make_client_mock()
+        client.query.return_value = {"_id": "task-1", "title": "Example"}
+        repo = TaskRepository(client)
+
+        result = repo.get_task("task-1")
+
+        assert result == {"_id": "task-1", "title": "Example"}
+        client.query.assert_called_once_with("tasks:getById", {"task_id": "task-1"})
+
     @patch("mc.bridge.repositories.tasks.os.makedirs")
     def test_create_task_directory(self, mock_makedirs):
         client = _make_client_mock()

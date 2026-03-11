@@ -40,9 +40,7 @@ class TestSpawnLoopIfNeeded:
     """Test _spawn_loop_if_needed — spawns negotiation loops for tasks."""
 
     @pytest.mark.asyncio
-    async def test_spawns_loop_for_new_task(
-        self, supervisor: PlanNegotiationSupervisor
-    ) -> None:
+    async def test_spawns_loop_for_new_task(self, supervisor: PlanNegotiationSupervisor) -> None:
         """Spawns a negotiation loop for a task not yet tracked."""
         with patch(
             "mc.services.plan_negotiation.start_plan_negotiation_loop",
@@ -52,9 +50,7 @@ class TestSpawnLoopIfNeeded:
             assert "task-1" in supervisor._active_negotiation_ids
 
     @pytest.mark.asyncio
-    async def test_does_not_duplicate_loop(
-        self, supervisor: PlanNegotiationSupervisor
-    ) -> None:
+    async def test_does_not_duplicate_loop(self, supervisor: PlanNegotiationSupervisor) -> None:
         """Does not spawn a second loop for a task already tracked."""
         supervisor._active_negotiation_ids.add("task-1")
 
@@ -84,9 +80,45 @@ class TestProcessBatch:
             mock_spawn.assert_called_once_with("task-1")
 
     @pytest.mark.asyncio
-    async def test_spawns_for_in_progress(
+    async def test_spawns_for_paused_review_with_execution_plan(
         self, supervisor: PlanNegotiationSupervisor
     ) -> None:
+        """Paused review tasks with a saved plan stay negotiable in execution-plan chat."""
+        batch = [
+            {
+                "id": "task-paused",
+                "status": "review",
+                "awaiting_kickoff": False,
+                "execution_plan": {"steps": [{"title": "Resume with edits"}]},
+            },
+        ]
+        with patch.object(
+            supervisor, "_spawn_loop_if_needed", new_callable=AsyncMock
+        ) as mock_spawn:
+            await supervisor.process_batch(batch)
+            mock_spawn.assert_called_once_with("task-paused")
+
+    @pytest.mark.asyncio
+    async def test_spawns_for_manual_review_without_execution_plan(
+        self, supervisor: PlanNegotiationSupervisor
+    ) -> None:
+        """Manual review tasks without a plan stay negotiable for first-plan creation."""
+        batch = [
+            {
+                "id": "task-manual-review",
+                "status": "review",
+                "awaiting_kickoff": False,
+                "is_manual": True,
+            },
+        ]
+        with patch.object(
+            supervisor, "_spawn_loop_if_needed", new_callable=AsyncMock
+        ) as mock_spawn:
+            await supervisor.process_batch(batch)
+            mock_spawn.assert_called_once_with("task-manual-review")
+
+    @pytest.mark.asyncio
+    async def test_spawns_for_in_progress(self, supervisor: PlanNegotiationSupervisor) -> None:
         """Spawns for tasks in 'in_progress'."""
         batch = [
             {"id": "task-2", "status": "in_progress"},
@@ -98,9 +130,7 @@ class TestProcessBatch:
             mock_spawn.assert_called_once_with("task-2")
 
     @pytest.mark.asyncio
-    async def test_skips_non_negotiable_tasks(
-        self, supervisor: PlanNegotiationSupervisor
-    ) -> None:
+    async def test_skips_non_negotiable_tasks(self, supervisor: PlanNegotiationSupervisor) -> None:
         """Skips tasks in non-negotiable statuses."""
         batch = [
             {"id": "task-3", "status": "done"},
@@ -113,9 +143,7 @@ class TestProcessBatch:
             mock_spawn.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_skips_cron_requeued_tasks(
-        self, supervisor: PlanNegotiationSupervisor
-    ) -> None:
+    async def test_skips_cron_requeued_tasks(self, supervisor: PlanNegotiationSupervisor) -> None:
         """Cron-requeued tasks are skipped and removed from the set."""
         supervisor._cron_requeued_ids.add("task-5")
         batch = [
@@ -144,8 +172,6 @@ class TestProcessBatch:
 class TestMarkCronRequeued:
     """Test the cron_requeued_ids management."""
 
-    def test_mark_and_check_cron_requeued(
-        self, supervisor: PlanNegotiationSupervisor
-    ) -> None:
+    def test_mark_and_check_cron_requeued(self, supervisor: PlanNegotiationSupervisor) -> None:
         supervisor.mark_cron_requeued("task-99")
         assert "task-99" in supervisor._cron_requeued_ids

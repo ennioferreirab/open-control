@@ -173,6 +173,39 @@ class TestPlanningWorkerProcessTask:
         create_mock.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_supervised_mode_posts_plan_review_request(self) -> None:
+        bridge = _make_bridge()
+        bridge.list_agents.return_value = []
+        materializer = _make_materializer()
+        dispatcher = _make_dispatcher()
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
+        task = _make_task(task_id="task-review", title="Review this plan")
+        task["supervision_mode"] = "supervised"
+        plan = _make_plan()
+
+        with (
+            patch(
+                "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+            ),
+            patch("mc.workers.planning.asyncio.create_task") as create_mock,
+            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+        ):
+            planner = planner_cls.return_value
+            planner.plan_task = AsyncMock(return_value=plan)
+            await worker.process_task(task)
+
+        create_mock.assert_not_called()
+        bridge.post_lead_agent_message.assert_called_once()
+        call_args = bridge.post_lead_agent_message.call_args
+        assert call_args.args[0] == "task-review"
+        assert call_args.args[2] == "lead_agent_plan"
+        assert "Approve" in call_args.args[1]
+        assert call_args.kwargs["plan_review"] == {
+            "kind": "request",
+            "plan_generated_at": plan.generated_at,
+        }
+
+    @pytest.mark.asyncio
     async def test_failure_marks_task_failed(self) -> None:
         bridge = _make_bridge()
         bridge.list_agents.return_value = []

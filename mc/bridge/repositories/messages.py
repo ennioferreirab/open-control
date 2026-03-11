@@ -110,6 +110,7 @@ class MessageRepository:
         task_id: str,
         content: str,
         msg_type: str,
+        plan_review: dict[str, Any] | None = None,
     ) -> Any:
         """Post a Lead Agent plan or chat message to the unified task thread.
 
@@ -126,6 +127,8 @@ class MessageRepository:
             "content": content,
             "type": msg_type,
         }
+        if plan_review is not None:
+            args["plan_review"] = plan_review
         result = self._client.mutation("messages:postLeadAgentMessage", args)
         self._log_state_transition(
             "message",

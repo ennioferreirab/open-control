@@ -89,6 +89,21 @@ class KickoffResumeWorker:
         title = task_data.get("title", task_id)
 
         if steps:
+            created_step_ids = await asyncio.to_thread(
+                self._materialize_incremental_steps,
+                task_id,
+                task_data,
+                steps,
+            )
+            if created_step_ids:
+                logger.info(
+                    "[kickoff] Task '%s': materialized %d incremental step(s) on resume",
+                    title,
+                    len(created_step_ids),
+                )
+                steps = await asyncio.to_thread(
+                    self._bridge.get_steps_by_task, task_id
+                )
             # Task has materialized steps -- this is a resumed task (Task 8.2).
             await self._handle_resume(task_id, title, steps)
             return
@@ -196,3 +211,84 @@ class KickoffResumeWorker:
                     task_id,
                     exc_info=True,
                 )
+
+    def _materialize_incremental_steps(
+        self,
+        task_id: str,
+        task_data: dict[str, Any],
+        steps: list[dict[str, Any]],
+    ) -> list[str]:
+        """Materialize any newly-added plan steps on top of existing step state."""
+        raw_plan = task_data.get("execution_plan")
+        if not raw_plan:
+            return []
+
+        plan = ExecutionPlan.from_dict(raw_plan)
+        if not plan.steps:
+            return []
+
+        used_step_ids: set[str] = set()
+        existing_by_order: dict[int, list[dict[str, Any]]] = {}
+        for step in steps:
+            order = step.get("order")
+            if isinstance(order, int):
+                existing_by_order.setdefault(order, []).append(step)
+
+        temp_id_to_real_id: dict[str, str] = {}
+        completed_step_ids = {
+            str(step.get("id"))
+            for step in steps
+            if step.get("status") == StepStatus.COMPLETED and step.get("id")
+        }
+
+        for plan_step in plan.steps:
+            if plan_step.temp_id == "__merge_alias__":
+                continue
+            candidates = [
+                step
+                for step in existing_by_order.get(plan_step.order, [])
+                if step.get("id") and str(step.get("id")) not in used_step_ids
+            ]
+            matched_step = next(
+                (step for step in candidates if step.get("title") == plan_step.title),
+                candidates[0] if len(candidates) == 1 else None,
+            )
+            if matched_step and matched_step.get("id"):
+                step_id = str(matched_step["id"])
+                temp_id_to_real_id[plan_step.temp_id] = step_id
+                used_step_ids.add(step_id)
+
+        created_step_ids: list[str] = []
+        for plan_step in plan.steps:
+            if plan_step.temp_id == "__merge_alias__" or plan_step.temp_id in temp_id_to_real_id:
+                continue
+
+            blocked_by_ids: list[str] = []
+            for dependency in plan_step.blocked_by:
+                dependency_id = temp_id_to_real_id.get(dependency)
+                if dependency_id is None:
+                    raise RuntimeError(
+                        f"Cannot materialize incremental step '{plan_step.temp_id}' "
+                        f"because dependency '{dependency}' is missing from existing steps."
+                    )
+                blocked_by_ids.append(dependency_id)
+
+            step_id = self._bridge.create_step(
+                {
+                    "task_id": task_id,
+                    "title": plan_step.title,
+                    "description": plan_step.description,
+                    "assigned_agent": plan_step.assigned_agent,
+                    "blocked_by": blocked_by_ids,
+                    "parallel_group": plan_step.parallel_group,
+                    "order": plan_step.order,
+                }
+            )
+            temp_id_to_real_id[plan_step.temp_id] = step_id
+            created_step_ids.append(step_id)
+
+            if blocked_by_ids and all(dep in completed_step_ids for dep in blocked_by_ids):
+                for dependency_id in blocked_by_ids:
+                    self._bridge.check_and_unblock_dependents(dependency_id)
+
+        return created_step_ids

@@ -243,6 +243,46 @@ describe("ExecutionPlanTab", () => {
     expect(screen.getByText("1/3 steps completed")).toBeInTheDocument();
   });
 
+  it("renders the execution plan view switcher when provided", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", status: "completed" })],
+      createdAt: "2026-01-01",
+    };
+    const onViewModeChange = vi.fn();
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        viewMode="both"
+        onViewModeChange={onViewModeChange}
+      />,
+    );
+
+    expect(screen.getByTestId("execution-plan-view-switcher")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("execution-plan-view-conversation"));
+    expect(onViewModeChange).toHaveBeenCalledWith("conversation");
+  });
+
+  it("renders a clean button next to the view switcher when provided", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", status: "completed" })],
+      createdAt: "2026-01-01",
+    };
+    const onClearPlan = vi.fn();
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        viewMode="both"
+        onViewModeChange={vi.fn()}
+        onClearPlan={onClearPlan}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("execution-plan-clear-button"));
+    expect(onClearPlan).toHaveBeenCalledOnce();
+  });
+
   it("renders React Flow canvas in read-only mode", () => {
     const plan = {
       steps: [makeStep({ stepId: "s1", title: "First", description: "Step one" })],
@@ -250,6 +290,17 @@ describe("ExecutionPlanTab", () => {
     };
     render(<ExecutionPlanTab executionPlan={plan} />);
     expect(screen.getByTestId("react-flow-readonly")).toBeInTheDocument();
+  });
+
+  it("hides the canvas body when view mode is conversation", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", title: "First", description: "Step one" })],
+      createdAt: "2026-01-01",
+    };
+    render(<ExecutionPlanTab executionPlan={plan} viewMode="conversation" />);
+
+    expect(screen.queryByTestId("react-flow-readonly")).not.toBeInTheDocument();
+    expect(screen.getByText("0/1 steps completed")).toBeInTheDocument();
   });
 
   it("renders inline edit controls when isEditMode=true and plan is available", () => {
@@ -997,24 +1048,14 @@ describe("ExecutionPlanTab", () => {
       const mergeAliasPlan = {
         steps: [
           {
-            tempId: "step_merge",
-            stepId: "step_merge",
-            title: "Merge task A with task B",
-            description: "Merged context from task A and task B.",
-            assignedAgent: "nanobot",
-            blockedBy: [] as string[],
-            parallelGroup: 0,
-            order: 1,
-          },
-          {
             tempId: "step_2",
             stepId: "step_2",
             title: "Continue",
             description: "Continue work",
             assignedAgent: "agent-a",
-            blockedBy: ["step_merge"] as string[],
+            blockedBy: [] as string[],
             parallelGroup: 1,
-            order: 2,
+            order: 1,
           },
         ],
         generatedAt: "2026-01-01T00:00:00Z",
@@ -1028,6 +1069,10 @@ describe("ExecutionPlanTab", () => {
           taskId="task-abc"
           taskStatus="review"
           onLocalPlanChange={vi.fn()}
+          mergeAlias={{
+            title: "Merge task A with task B",
+            description: "Merged context from task A and task B.",
+          }}
         />,
       );
 

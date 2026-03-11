@@ -1,18 +1,11 @@
 """Unit tests for ProcessManager."""
 
 import asyncio
-import signal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.cli.process_manager import (
-    SHUTDOWN_TIMEOUT_SECONDS,
-    STARTUP_TIMEOUT_SECONDS,
-    ManagedProcess,
-    ProcessConfig,
-    ProcessManager,
-)
+from mc.cli.process_manager import ProcessManager
 
 
 def _make_mock_process(pid: int = 12345, returncode=None):
@@ -49,12 +42,11 @@ def project_root(tmp_path):
 
 @pytest.mark.asyncio
 async def test_startup_order(dashboard_dir, project_root):
-    """Processes start in correct order: dashboard (npm), gateway (python mc.runtime.gateway), nanobot."""
+    """Processes start in correct order: convex, dashboard, gateway, nanobot."""
     spawn_order = []
 
     async def mock_create_subprocess(*args, **kwargs):
-        cmd = args[0] if args else kwargs.get("program", "")
-        spawn_order.append(cmd)
+        spawn_order.append(tuple(args))
         return _make_mock_process()
 
     with patch(
@@ -64,10 +56,13 @@ async def test_startup_order(dashboard_dir, project_root):
         pm = ProcessManager(dashboard_dir, project_root)
         await pm.start()
 
-        assert len(spawn_order) == 3
-        assert spawn_order[0] == "npm"        # Dashboard first
-        assert "python" in spawn_order[1]     # Gateway (mc.runtime.gateway) second
-        assert "python" in spawn_order[2]     # Nanobot gateway third
+        assert len(spawn_order) == 4
+        assert spawn_order[0][:3] == ("npm", "run", "dev:backend")
+        assert spawn_order[1][:3] == ("npm", "run", "dev:frontend")
+        assert "python" in spawn_order[2][0]
+        assert spawn_order[2][1:] == ("-m", "mc.runtime.gateway")
+        assert "python" in spawn_order[3][0]
+        assert spawn_order[3][1:] == ("-m", "nanobot", "gateway")
 
         await pm.stop()
 
@@ -78,33 +73,36 @@ async def test_process_configs(dashboard_dir, project_root):
     pm = ProcessManager(dashboard_dir, project_root)
     configs = pm._get_process_configs()
 
-    assert len(configs) == 3
+    assert len(configs) == 4
 
-    assert configs[0].label == "dashboard"
+    assert configs[0].label == "convex"
     assert configs[0].command == "npm"
-    assert configs[0].args == ["run", "dev"]
+    assert configs[0].args == ["run", "dev:backend"]
     assert configs[0].cwd == dashboard_dir
 
-    assert configs[1].label == "gateway"
-    assert configs[1].args == ["-m", "mc.runtime.gateway"]
-    assert configs[1].cwd == project_root
+    assert configs[1].label == "dashboard"
+    assert configs[1].command == "npm"
+    assert configs[1].args == ["run", "dev:frontend"]
+    assert configs[1].cwd == dashboard_dir
 
-    assert configs[2].label == "nanobot"
-    assert configs[2].args == ["-m", "nanobot", "gateway"]
+    assert configs[2].label == "gateway"
+    assert configs[2].args == ["-m", "mc.runtime.gateway"]
     assert configs[2].cwd == project_root
+
+    assert configs[3].label == "nanobot"
+    assert configs[3].args == ["-m", "nanobot", "gateway"]
+    assert configs[3].cwd == project_root
 
 
 @pytest.mark.asyncio
 async def test_shutdown_reverse_order(dashboard_dir, project_root):
     """Processes are terminated in reverse startup order."""
     terminate_order = []
-    pids = iter([100, 200, 300])
+    pids = iter([100, 200, 300, 400])
 
     async def mock_create_subprocess(*args, **kwargs):
         pid = next(pids)
         proc = _make_mock_process(pid=pid)
-
-        original_terminate = proc.terminate
 
         def tracked_terminate():
             terminate_order.append(pid)
@@ -121,8 +119,8 @@ async def test_shutdown_reverse_order(dashboard_dir, project_root):
         await pm.start()
         await pm.stop()
 
-    # Reverse of startup: nanobot (300), gateway (200), dashboard (100)
-    assert terminate_order == [300, 200, 100]
+    # Reverse of startup: nanobot (400), gateway (300), dashboard (200), convex (100)
+    assert terminate_order == [400, 300, 200, 100]
 
 
 @pytest.mark.asyncio
@@ -155,18 +153,19 @@ async def test_force_kill_after_timeout(dashboard_dir, project_root):
         proc.kill = MagicMock(side_effect=track_kill)
         return proc
 
-    with patch(
-        "mc.cli.process_manager.asyncio.create_subprocess_exec",
-        side_effect=mock_create_subprocess,
-    ), patch(
-        "mc.cli.process_manager.SHUTDOWN_TIMEOUT_SECONDS", 0.3
+    with (
+        patch(
+            "mc.cli.process_manager.asyncio.create_subprocess_exec",
+            side_effect=mock_create_subprocess,
+        ),
+        patch("mc.cli.process_manager.SHUTDOWN_TIMEOUT_SECONDS", 0.3),
     ):
         pm = ProcessManager(dashboard_dir, project_root)
         await pm.start()
         results = await pm.stop()
 
-    # All 3 processes should have been force-killed
-    assert len(killed) == 3
+    # All 4 processes should have been force-killed
+    assert len(killed) == 4
     assert all(v == "killed" for v in results.values())
 
 
@@ -192,8 +191,8 @@ async def test_crash_callback(dashboard_dir, project_root):
         pm = ProcessManager(dashboard_dir, project_root, on_crash=on_crash)
         await pm.start()
 
-        # Simulate the second process (gateway) crashing — it is critical
-        procs[1].returncode = 1
+        # Simulate the third process (gateway) crashing — it is critical
+        procs[2].returncode = 1
 
         # Give the monitor loop time to detect the crash
         await asyncio.sleep(1.5)
@@ -213,11 +212,12 @@ async def test_startup_timeout(dashboard_dir, project_root):
         await asyncio.sleep(999)
         return _make_mock_process()
 
-    with patch(
-        "mc.cli.process_manager.asyncio.create_subprocess_exec",
-        side_effect=slow_create_subprocess,
-    ), patch(
-        "mc.cli.process_manager.STARTUP_TIMEOUT_SECONDS", 0.2
+    with (
+        patch(
+            "mc.cli.process_manager.asyncio.create_subprocess_exec",
+            side_effect=slow_create_subprocess,
+        ),
+        patch("mc.cli.process_manager.STARTUP_TIMEOUT_SECONDS", 0.2),
     ):
         pm = ProcessManager(dashboard_dir, project_root)
         with pytest.raises(RuntimeError, match="Startup failed"):
@@ -234,11 +234,9 @@ async def test_output_forwarding(dashboard_dir, project_root, capsys):
         call_count += 1
         proc = _make_mock_process()
         if call_count == 1:
-            # First process (dashboard) gets custom output
+            # First process (convex) gets custom output
             lines = iter([b"hello world\n", b"second line\n", b""])
-            proc.stdout.readline = AsyncMock(
-                side_effect=lambda: next(lines, b"")
-            )
+            proc.stdout.readline = AsyncMock(side_effect=lambda: next(lines, b""))
         # Other processes use default (returns b"" immediately)
         return proc
 
@@ -255,8 +253,8 @@ async def test_output_forwarding(dashboard_dir, project_root, capsys):
         # Check that stderr output includes process label prefix
         # _forward_output uses print(..., file=sys.stderr) to pipe child output
         captured = capsys.readouterr()
-        assert "[dashboard] hello world" in captured.err
-        assert "[dashboard] second line" in captured.err
+        assert "[convex] hello world" in captured.err
+        assert "[convex] second line" in captured.err
 
         await pm.stop()
 
@@ -264,6 +262,7 @@ async def test_output_forwarding(dashboard_dir, project_root, capsys):
 @pytest.mark.asyncio
 async def test_is_running_property(dashboard_dir, project_root):
     """is_running reflects whether all processes are alive."""
+
     async def mock_create_subprocess(*args, **kwargs):
         return _make_mock_process()
 
@@ -284,6 +283,7 @@ async def test_is_running_property(dashboard_dir, project_root):
 @pytest.mark.asyncio
 async def test_double_start_raises(dashboard_dir, project_root):
     """Starting an already-running ProcessManager raises RuntimeError."""
+
     async def mock_create_subprocess(*args, **kwargs):
         return _make_mock_process()
 
@@ -303,6 +303,7 @@ async def test_double_start_raises(dashboard_dir, project_root):
 @pytest.mark.asyncio
 async def test_immediate_exit_aborts_startup(dashboard_dir, project_root):
     """If a process exits immediately, startup is aborted."""
+
     async def mock_create_subprocess(*args, **kwargs):
         proc = _make_mock_process()
         proc.returncode = 1  # Already exited

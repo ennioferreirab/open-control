@@ -12,6 +12,10 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from mc.contexts.planning.planner import TaskPlanner
+from mc.contexts.planning.review_messages import (
+    build_plan_review_message,
+    build_plan_review_metadata,
+)
 from mc.types import (
     LEAD_AGENT_NAME,
     NANOBOT_AGENT_NAME,
@@ -268,6 +272,13 @@ class PlanningWorker:
                 "[planning] Task '%s' transitioned to review (awaitingKickoff); "
                 "awaiting user kick-off.",
                 title,
+            )
+            await asyncio.to_thread(
+                self._bridge.post_lead_agent_message,
+                task_id,
+                build_plan_review_message(plan),
+                "lead_agent_plan",
+                plan_review=build_plan_review_metadata(plan),
             )
             return
 

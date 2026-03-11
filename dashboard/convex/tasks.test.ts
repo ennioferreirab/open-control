@@ -6,6 +6,7 @@ import {
   addMergeSource,
   approve,
   approveAndKickOff,
+  clearExecutionPlan,
   create,
   createMergedTask,
   kickOff,
@@ -68,6 +69,14 @@ function getPauseTaskHandler() {
 function getResumeTaskHandler() {
   return (
     resumeTask as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
+}
+
+function getClearExecutionPlanHandler() {
+  return (
+    clearExecutionPlan as unknown as {
       _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
     }
   )._handler;
@@ -1045,6 +1054,94 @@ describe("tasks.resumeTask", () => {
   });
 });
 
+describe("tasks.clearExecutionPlan", () => {
+  it("clears the manual plan and soft-deletes materialized steps", async () => {
+    const handler = getClearExecutionPlanHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "message-1");
+    const get = vi.fn(async () => ({
+      _id: "task-1",
+      status: "review",
+      title: "Manual Task",
+      isManual: true,
+      executionPlan: { steps: [{ tempId: "step_1", title: "Do work" }] },
+    }));
+    const collect = vi.fn(async () => [
+      { _id: "step-a", status: "completed" },
+      { _id: "step-b", status: "planned" },
+    ]);
+    const withIndex = vi.fn(() => ({ collect }));
+    const query = vi.fn(() => ({ withIndex }));
+
+    const taskId = await handler(
+      { db: { get, patch, insert, query } },
+      { taskId: "task-1" },
+    );
+
+    expect(taskId).toBe("task-1");
+    expect(patch).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({ executionPlan: undefined }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "step-a",
+      expect.objectContaining({ status: "deleted" }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "step-b",
+      expect.objectContaining({ status: "deleted" }),
+    );
+    expect(insert).toHaveBeenCalledWith(
+      "messages",
+      expect.objectContaining({
+        taskId: "task-1",
+        content: expect.stringContaining("Execution plan cleared"),
+      }),
+    );
+  });
+
+  it("rejects clearing a non-manual task", async () => {
+    const handler = getClearExecutionPlanHandler();
+    const get = vi.fn(async () => ({
+      _id: "task-1",
+      status: "review",
+      title: "Agent Task",
+      isManual: false,
+    }));
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "message-1");
+    const query = vi.fn();
+
+    await expect(
+      handler({ db: { get, patch, insert, query } }, { taskId: "task-1" }),
+    ).rejects.toThrow(/Only manual tasks can clear an execution plan/);
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("moves an in-progress manual task back to review when cleaning the plan", async () => {
+    const handler = getClearExecutionPlanHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "message-1");
+    const get = vi.fn(async () => ({
+      _id: "task-1",
+      status: "in_progress",
+      title: "Running Manual Task",
+      isManual: true,
+      executionPlan: { steps: [{ tempId: "step_1", title: "Do work" }] },
+    }));
+    const collect = vi.fn(async () => []);
+    const withIndex = vi.fn(() => ({ collect }));
+    const query = vi.fn(() => ({ withIndex }));
+
+    await handler({ db: { get, patch, insert, query } }, { taskId: "task-1" });
+
+    expect(patch).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({ status: "review", executionPlan: undefined }),
+    );
+  });
+});
+
 describe("tasks.retry", () => {
   it("retries a crashed task with materialized steps by resetting the current plan", async () => {
     const handler = getRetryHandler();
@@ -1265,6 +1362,32 @@ describe("tasks.manualMove", () => {
 });
 
 describe("tasks.updateStatus", () => {
+  it("allows review to review when only awaitingKickoff changes", async () => {
+    const handler = getUpdateStatusHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async () => ({
+      _id: "task-review",
+      status: "review",
+      awaitingKickoff: undefined,
+      title: "Plan review task",
+    }));
+
+    await handler(
+      { db: { get, patch, insert } },
+      { taskId: "task-review", status: "review", awaitingKickoff: true },
+    );
+
+    expect(patch).toHaveBeenCalledWith(
+      "task-review",
+      expect.objectContaining({
+        status: "review",
+        awaitingKickoff: true,
+      }),
+    );
+    expect(insert).not.toHaveBeenCalled();
+  });
+
   it("cascades done to merged source tasks when an automatic merge task completes", async () => {
     const handler = getUpdateStatusHandler();
     const patch = vi.fn(async () => undefined);
@@ -1316,6 +1439,44 @@ describe("tasks.updateStatus", () => {
 });
 
 describe("tasks.approveAndKickOff", () => {
+  it("writes an approval decision message tied to the active plan version", async () => {
+    const handler = getApproveAndKickOffHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
+      if (table === "messages") return "message-1";
+      if (table === "activities") return "activity-1";
+      return undefined;
+    });
+    const get = vi.fn(async () => ({
+      _id: "task-1",
+      status: "review",
+      awaitingKickoff: true,
+      title: "Reviewed task",
+      executionPlan: {
+        generatedAt: "2026-03-10T10:00:00Z",
+        generatedBy: "lead-agent",
+        steps: [{ tempId: "step_1" }],
+      },
+    }));
+
+    await handler({ db: { get, patch, insert } }, { taskId: "task-1" });
+
+    expect(insert).toHaveBeenCalledWith(
+      "messages",
+      expect.objectContaining({
+        taskId: "task-1",
+        authorName: "User",
+        authorType: "user",
+        messageType: "approval",
+        planReview: {
+          kind: "decision",
+          planGeneratedAt: "2026-03-10T10:00:00Z",
+          decision: "approved",
+        },
+      }),
+    );
+  });
+
   it("accepts manual tasks in review for kick-off", async () => {
     const handler = getApproveAndKickOffHandler();
     const patch = vi.fn(async () => undefined);

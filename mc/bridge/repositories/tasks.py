@@ -93,6 +93,10 @@ class TaskRepository:
         )
         return result
 
+    def get_task(self, task_id: str) -> dict[str, Any] | None:
+        """Fetch a single task by id."""
+        return self._client.query("tasks:getById", {"task_id": task_id})
+
     def create_task_directory(self, task_id: str) -> None:
         """Create the filesystem directory structure for a task.
 
