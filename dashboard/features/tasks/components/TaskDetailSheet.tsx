@@ -261,16 +261,37 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     return () => observer.disconnect();
   }, []);
 
+  const jumpToBottom = useCallback(() => {
+    const scrollTarget = threadEndRef.current;
+    if (typeof scrollTarget?.scrollIntoView === "function") {
+      scrollTarget.scrollIntoView();
+    }
+  }, []);
+
   // Auto-scroll only when at bottom and new messages arrive
   const scrollToBottom = useCallback(() => {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
   useEffect(() => {
-    if (isAtBottom && messageCount > 0) {
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const scrollTarget = threadEndRef.current;
+    if (
+      isAtBottom &&
+      messageCount > 0 &&
+      typeof scrollTarget?.scrollIntoView === "function"
+    ) {
+      scrollTarget.scrollIntoView({ behavior: "smooth" });
     }
   }, [messageCount, isAtBottom]);
+
+  useEffect(() => {
+    if (activeTab === "thread" && messageCount > 0) {
+      const frameId = requestAnimationFrame(() => {
+        jumpToBottom();
+      });
+      return () => cancelAnimationFrame(frameId);
+    }
+  }, [activeTab, jumpToBottom, messageCount]);
 
   // Reset inline-edit state whenever a different task opens
   useEffect(() => {

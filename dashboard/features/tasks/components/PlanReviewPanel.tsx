@@ -48,6 +48,7 @@ export function PlanReviewPanel({
   const [rejectError, setRejectError] = useState("");
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
   const previousTimelineCountRef = useRef(0);
+  const hasInitializedScrollRef = useRef(false);
 
   const currentPlanGeneratedAt =
     typeof task.executionPlan?.generatedAt === "string" ? task.executionPlan.generatedAt : undefined;
@@ -76,6 +77,14 @@ export function PlanReviewPanel({
 
   useEffect(() => {
     const scrollTarget = timelineEndRef.current;
+    if (!hasInitializedScrollRef.current) {
+      hasInitializedScrollRef.current = true;
+      previousTimelineCountRef.current = timelineMessages.length;
+      if (timelineMessages.length > 0 && typeof scrollTarget?.scrollIntoView === "function") {
+        scrollTarget.scrollIntoView();
+      }
+      return;
+    }
     if (
       timelineMessages.length > previousTimelineCountRef.current &&
       typeof scrollTarget?.scrollIntoView === "function"

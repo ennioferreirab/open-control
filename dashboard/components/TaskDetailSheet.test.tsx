@@ -287,6 +287,37 @@ describe("TaskDetailSheet", () => {
     expect(screen.getByText("Starting work on feature X")).toBeInTheDocument();
   });
 
+  it("jumps to the bottom when returning to the thread tab", async () => {
+    const user = userEvent.setup();
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    oneRenderPass(baseTask, [baseMessage]);
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    scrollIntoView.mockClear();
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+    await user.click(screen.getByRole("tab", { name: /^Thread$/i }));
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith();
+    });
+
+    if (originalScrollIntoView === undefined) {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    } else {
+      Object.defineProperty(Element.prototype, "scrollIntoView", {
+        configurable: true,
+        value: originalScrollIntoView,
+      });
+    }
+  });
+
   it("shows merge lock banner and hides thread input for source tasks merged into task C", () => {
     const mergedSourceTask = {
       ...baseTask,

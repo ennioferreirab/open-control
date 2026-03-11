@@ -64,7 +64,36 @@ describe("PlanReviewPanel", () => {
     vi.restoreAllMocks();
   });
 
+  it("jumps to the bottom when the lead agent conversation opens", () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    render(
+      <PlanReviewPanel
+        isPrimaryActionPending={false}
+        messages={[firstConversationMessage]}
+        task={baseTask}
+      />,
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith();
+
+    if (originalScrollIntoView === undefined) {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    } else {
+      Object.defineProperty(Element.prototype, "scrollIntoView", {
+        configurable: true,
+        value: originalScrollIntoView,
+      });
+    }
+  });
+
   it("scrolls to the newest lead agent conversation message when a new message is added", async () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
     const scrollIntoView = vi.fn();
     Object.defineProperty(Element.prototype, "scrollIntoView", {
       configurable: true,
@@ -92,5 +121,14 @@ describe("PlanReviewPanel", () => {
     await waitFor(() => {
       expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth" });
     });
+
+    if (originalScrollIntoView === undefined) {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    } else {
+      Object.defineProperty(Element.prototype, "scrollIntoView", {
+        configurable: true,
+        value: originalScrollIntoView,
+      });
+    }
   });
 });
