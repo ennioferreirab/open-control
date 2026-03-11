@@ -1045,56 +1045,58 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                           data-testid="merged-source-threads-sticky"
                           className="sticky top-0 z-10 border-b border-border bg-background px-6 py-4"
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                              Merged threads
-                            </p>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => setIsMergedSourceGroupCollapsed((current) => !current)}
-                            >
-                              {isMergedSourceGroupCollapsed ? "Expand" : "Collapse"}
-                            </Button>
-                          </div>
-                          {!isMergedSourceGroupCollapsed && (
-                            <div className="mt-2 flex flex-col gap-2">
-                              {(mergeSourceThreads ?? []).map((sourceThread) => (
-                                <details
-                                  key={sourceThread.taskId}
-                                  className="rounded-md border border-border bg-muted/20"
-                                >
-                                  <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-foreground">
-                                    Thread {sourceThread.label}
-                                  </summary>
-                                  <div className="flex flex-col gap-2 px-3 pb-3">
-                                    {sourceThread.messages.length === 0 ? (
-                                      <p className="text-xs text-muted-foreground">
-                                        No messages in source thread.
-                                      </p>
-                                    ) : (
-                                      sourceThread.messages.map((msg) => (
-                                        <ThreadMessage
-                                          key={msg._id}
-                                          message={msg}
-                                          steps={undefined}
-                                          onArtifactClick={handleOpenArtifact}
-                                          taskIdOverride={sourceThread.taskId}
-                                        />
-                                      ))
-                                    )}
-                                  </div>
-                                </details>
-                              ))}
+                          <div className="mx-auto w-full min-w-0 max-w-5xl">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                Merged threads
+                              </p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setIsMergedSourceGroupCollapsed((current) => !current)}
+                              >
+                                {isMergedSourceGroupCollapsed ? "Expand" : "Collapse"}
+                              </Button>
                             </div>
-                          )}
+                            {!isMergedSourceGroupCollapsed && (
+                              <div className="mt-2 flex min-w-0 flex-col gap-2">
+                                {(mergeSourceThreads ?? []).map((sourceThread) => (
+                                  <details
+                                    key={sourceThread.taskId}
+                                    className="min-w-0 rounded-md border border-border bg-muted/20"
+                                  >
+                                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-foreground">
+                                      Thread {sourceThread.label}
+                                    </summary>
+                                    <div className="flex min-w-0 flex-col gap-2 px-3 pb-3">
+                                      {sourceThread.messages.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          No messages in source thread.
+                                        </p>
+                                      ) : (
+                                        sourceThread.messages.map((msg) => (
+                                          <ThreadMessage
+                                            key={msg._id}
+                                            message={msg}
+                                            steps={undefined}
+                                            onArtifactClick={handleOpenArtifact}
+                                            taskIdOverride={sourceThread.taskId}
+                                          />
+                                        ))
+                                      )}
+                                    </div>
+                                  </details>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                       <div
                         data-testid="thread-live-messages"
-                        className="flex flex-col gap-2 px-6 py-4"
+                        className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-2 px-6 py-4"
                       >
                         {messages.length === 0 && (
                           <p className="py-8 text-center text-sm text-muted-foreground">
@@ -1104,8 +1106,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                         {messages.map((msg) => (
                           <motion.div
                             key={msg._id}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
                             transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.2 }}
                           >
                             <ThreadMessage

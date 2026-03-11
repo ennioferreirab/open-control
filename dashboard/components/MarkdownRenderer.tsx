@@ -26,7 +26,7 @@ function CodeBlock({ code, language = "text" }: CodeBlockProps) {
   };
 
   return (
-    <div className="my-3 first:mt-0 last:mb-0 rounded-md overflow-hidden border border-border">
+    <div className="my-3 first:mt-0 last:mb-0 w-full min-w-0 max-w-full overflow-hidden rounded-md border border-border">
       <div className="flex items-center justify-between px-3 py-1.5 bg-muted text-xs">
         <span className="text-muted-foreground uppercase font-medium tracking-wide text-[10px]">
           {language}
@@ -75,7 +75,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
   const processed = useMemo(() => content || "", [content]);
 
   return (
-    <div className={`text-sm leading-relaxed break-words overflow-hidden ${className}`}>
+    <div
+      className={`w-full min-w-0 max-w-full overflow-x-hidden text-sm leading-relaxed break-words select-text ${className}`}
+    >
       <Markdown
         remarkPlugins={[remarkGfm]}
         components={{
