@@ -1097,18 +1097,23 @@ describe("TaskDetailSheet", () => {
   });
 
   it("calls pauseTask mutation when Pause is clicked (AC 2)", async () => {
+    const user = userEvent.setup();
     oneRenderPass(baseTask);
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByTestId("pause-button"));
+    await user.click(screen.getByTestId("pause-button"));
 
     await vi.waitFor(() => {
       expect(mockMutationFn).toHaveBeenCalledWith({ taskId: "task1" });
     });
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("pause-button")).not.toBeDisabled();
+    });
   });
 
   it("calls resumeTask mutation when Resume is clicked (AC 5)", async () => {
+    const user = userEvent.setup();
     const pausedTask = {
       ...baseTask,
       status: "review" as const,
@@ -1117,10 +1122,13 @@ describe("TaskDetailSheet", () => {
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
-    fireEvent.click(screen.getByTestId("resume-button"));
+    await user.click(screen.getByTestId("resume-button"));
 
     await vi.waitFor(() => {
       expect(mockMutationFn).toHaveBeenCalledWith(expect.objectContaining({ taskId: "task1" }));
+    });
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("resume-button")).not.toBeDisabled();
     });
   });
 
@@ -1155,6 +1163,7 @@ describe("TaskDetailSheet", () => {
   // --- Story 7.1: Kick-off calls approveAndKickOff with executionPlan (AC: 2) ---
 
   it("calls approveAndKickOff with executionPlan when Kick-off button is clicked", async () => {
+    const user = userEvent.setup();
     const executionPlan = {
       steps: [
         {
@@ -1183,10 +1192,13 @@ describe("TaskDetailSheet", () => {
 
     const kickOffBtn = screen.getByTestId("kick-off-button");
     expect(kickOffBtn).toBeInTheDocument();
-    kickOffBtn.click();
+    await user.click(kickOffBtn);
 
     await vi.waitFor(() => {
       expect(mockMutationFn).toHaveBeenCalledWith(expect.objectContaining({ taskId: "task1" }));
+    });
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("kick-off-button")).not.toBeDisabled();
     });
   });
 });
