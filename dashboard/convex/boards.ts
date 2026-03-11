@@ -288,7 +288,7 @@ export const getBoardView = query({
     );
 
     const taskSummaries = filteredTasks.map((task) => {
-      const steps = stepsByTaskId.get(task._id) ?? [];
+      const steps = (stepsByTaskId.get(task._id) ?? []).filter((step) => step.status !== "deleted");
       const uiFlags = computeUiFlags(task, steps);
       const allowedActions = computeAllowedActions(task, uiFlags);
       return {

@@ -125,6 +125,17 @@ vi.mock("@/components/ui/dialog", () => ({
       {children}
     </h2>
   ),
+  DialogDescription: ({
+    children,
+    className,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <p data-testid="dialog-description" className={className}>
+      {children}
+    </p>
+  ),
 }));
 
 // Mock Badge
@@ -238,6 +249,15 @@ describe("DocumentViewerModal", () => {
       <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
     );
     expect(screen.getByTestId("badge")).toHaveTextContent("TXT");
+  });
+
+  it("renders a dialog description for accessibility", () => {
+    render(
+      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
+    );
+    expect(screen.getByTestId("dialog-description")).toHaveTextContent(
+      "Preview and download readme.txt"
+    );
   });
 
   it("shows formatted file size in header", () => {

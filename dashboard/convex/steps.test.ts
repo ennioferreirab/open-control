@@ -290,6 +290,105 @@ describe("acceptHumanStep", () => {
   });
 });
 
+describe("updateStatus", () => {
+  function getHandler() {
+    return (
+      updateStatus as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
+      }
+    )._handler;
+  }
+
+  it("moves the parent task to done when the last active agent step completes", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+    const inserted: Array<{ table: string; value: Record<string, unknown> }> = [];
+
+    const task = {
+      _id: "task-1",
+      title: "Agent task",
+      status: "in_progress",
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Finalize report",
+            description: "Publish report",
+            assignedAgent: "nanobot",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 4,
+            status: "running",
+          },
+        ],
+      },
+    };
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Finalize report",
+      description: "Publish report",
+      status: "running",
+      assignedAgent: "nanobot",
+      order: 4,
+    };
+
+    const deletedHistoricalStep = {
+      _id: "step-old",
+      taskId: "task-1",
+      title: "Old attempt",
+      status: "deleted",
+      assignedAgent: "nanobot",
+      order: 1,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async (table: string, value: Record<string, unknown>) => {
+          inserted.push({ table, value });
+          return `${table}-1`;
+        },
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [step, deletedHistoricalStep],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { stepId: "step-1", status: "completed" });
+
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "completed",
+    });
+    expect(patchedById["task-1"]).toMatchObject({
+      status: "done",
+    });
+    expect(
+      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
+    ).toMatchObject({
+      status: "completed",
+    });
+    expect(
+      inserted.some(
+        ({ table, value }) =>
+          table === "activities" &&
+          value.eventType === "task_completed" &&
+          String(value.description).includes("All 1 steps completed"),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("manualMoveStep", () => {
   function getHandler() {
     return (
@@ -642,6 +741,78 @@ describe("manualMoveStep", () => {
       (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
     ).toMatchObject({
       status: "waiting_human",
+    });
+  });
+
+  it("ignores deleted steps when deciding that the parent task is done", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const task = {
+      _id: "task-1",
+      title: "Mixed historical steps",
+      status: "in_progress",
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Current step",
+            description: "Finish the current work",
+            assignedAgent: "human",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+            status: "running",
+          },
+        ],
+      },
+    };
+
+    const currentStep = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Current step",
+      description: "Finish the current work",
+      status: "running",
+      assignedAgent: "human",
+      order: 1,
+      startedAt: "2026-03-10T00:00:00Z",
+    };
+    const deletedHistoricalStep = {
+      _id: "step-deleted",
+      taskId: "task-1",
+      title: "Old deleted step",
+      description: "No longer relevant",
+      status: "deleted",
+      assignedAgent: "nanobot",
+      order: 99,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return currentStep;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [currentStep, deletedHistoricalStep],
+          }),
+        }),
+      },
+    };
+
+    await expect(handler(ctx, { stepId: "step-1", newStatus: "completed" })).resolves.toBe(
+      "task-1",
+    );
+
+    expect(patchedById["task-1"]).toMatchObject({
+      status: "done",
     });
   });
 });

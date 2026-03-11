@@ -58,10 +58,11 @@ function deriveHumanParentTaskStatus(
     status?: string;
   }>,
 ): "done" | "crashed" | "in_progress" {
-  if (steps.length > 0 && steps.every((step) => step.status === "completed")) {
+  const activeSteps = steps.filter((step) => step.status !== "deleted");
+  if (activeSteps.length > 0 && activeSteps.every((step) => step.status === "completed")) {
     return "done";
   }
-  if (steps.some((step) => step.status === "crashed")) {
+  if (activeSteps.some((step) => step.status === "crashed")) {
     return "crashed";
   }
   return "in_progress";
@@ -83,6 +84,83 @@ async function cascadeMergedSourceTasksToDone(
       updatedAt: timestamp,
     });
   }
+}
+
+async function reconcileParentTaskAfterStepChange(
+  ctx: MutationCtx,
+  args: {
+    task: {
+      _id: Id<"tasks">;
+      status: string;
+      title?: string;
+      executionPlan?: unknown;
+      isMergeTask?: boolean;
+      mergeSourceTaskIds?: Id<"tasks">[];
+    };
+    step: {
+      _id: Id<"steps">;
+      taskId: Id<"tasks">;
+      title?: string;
+      description?: string;
+      assignedAgent: string;
+      order?: number;
+      status?: string;
+    };
+    nextStepStatus: StepStatus;
+    currentTaskSteps: StepWithDependencies[];
+    timestamp: string;
+  },
+): Promise<void> {
+  const { task, step, nextStepStatus, currentTaskSteps, timestamp } = args;
+  const syncedExecutionPlan = syncExecutionPlanStepStatus(task.executionPlan, step, nextStepStatus);
+  const nextTaskStatus = deriveHumanParentTaskStatus(currentTaskSteps);
+  const taskPatch: Record<string, unknown> = {};
+
+  if (syncedExecutionPlan !== task.executionPlan) {
+    taskPatch.executionPlan = syncedExecutionPlan;
+  }
+  if (task.status !== nextTaskStatus) {
+    taskPatch.status = nextTaskStatus;
+  }
+
+  if (Object.keys(taskPatch).length === 0) {
+    return;
+  }
+
+  taskPatch.updatedAt = timestamp;
+  await ctx.db.patch(step.taskId, taskPatch);
+
+  if (task.status === nextTaskStatus) {
+    return;
+  }
+
+  if (nextTaskStatus === "done") {
+    await cascadeMergedSourceTasksToDone(
+      ctx,
+      task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+      timestamp,
+    );
+  }
+
+  const taskEventType =
+    nextTaskStatus === "done"
+      ? "task_completed"
+      : nextTaskStatus === "crashed"
+        ? "task_crashed"
+        : "task_started";
+  const taskDescription =
+    nextTaskStatus === "done"
+      ? `All ${currentTaskSteps.filter((taskStep) => taskStep.status !== "deleted").length} steps completed`
+      : nextTaskStatus === "crashed"
+        ? "One or more steps crashed"
+        : "Step state changed; task returned to in_progress";
+
+  await logActivity(ctx, {
+    taskId: step.taskId,
+    eventType: taskEventType,
+    description: taskDescription,
+    timestamp,
+  });
 }
 
 // Re-export pure functions for testability and backward compatibility
@@ -286,6 +364,37 @@ export const updateStatus = internalMutation({
       assignedAgent: step.assignedAgent,
       timestamp,
     });
+
+    const task = await ctx.db.get(step.taskId);
+    if (!task) {
+      throw new ConvexError("Parent task not found");
+    }
+
+    const allTaskSteps = await ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
+      .collect();
+    const currentTaskSteps: StepWithDependencies[] = allTaskSteps.map((taskStep) =>
+      taskStep._id === args.stepId
+        ? {
+            _id: taskStep._id,
+            status: args.status as StepStatus,
+            blockedBy: taskStep.blockedBy,
+          }
+        : {
+            _id: taskStep._id,
+            status: taskStep.status as StepStatus,
+            blockedBy: taskStep.blockedBy,
+          },
+    );
+
+    await reconcileParentTaskAfterStepChange(ctx, {
+      task,
+      step,
+      nextStepStatus: args.status as StepStatus,
+      currentTaskSteps,
+      timestamp,
+    });
   },
 });
 
@@ -451,41 +560,13 @@ export const manualMoveStep = mutation({
       }
     }
 
-    const nextTaskStatus = deriveHumanParentTaskStatus(currentTaskSteps);
-    if (task.status !== nextTaskStatus) {
-      await ctx.db.patch(step.taskId, {
-        status: nextTaskStatus,
-        updatedAt: timestamp,
-      });
-
-      if (nextTaskStatus === "done") {
-        await cascadeMergedSourceTasksToDone(
-          ctx,
-          task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
-          timestamp,
-        );
-      }
-
-      const taskEventType =
-        nextTaskStatus === "done"
-          ? "task_completed"
-          : nextTaskStatus === "crashed"
-            ? "task_crashed"
-            : "task_started";
-      const taskDescription =
-        nextTaskStatus === "done"
-          ? `All ${currentTaskSteps.length} steps completed`
-          : nextTaskStatus === "crashed"
-            ? "One or more human steps crashed"
-            : "Human step state changed; task returned to in_progress";
-
-      await logActivity(ctx, {
-        taskId: step.taskId,
-        eventType: taskEventType,
-        description: taskDescription,
-        timestamp,
-      });
-    }
+    await reconcileParentTaskAfterStepChange(ctx, {
+      task,
+      step,
+      nextStepStatus: args.newStatus as StepStatus,
+      currentTaskSteps,
+      timestamp,
+    });
 
     return step.taskId;
   },

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Download, Minus, Plus, X } from "lucide-react";
@@ -146,6 +152,9 @@ export function DocumentViewerModal({ taskId, file, onClose }: Props) {
         <DialogHeader className="flex flex-row items-center justify-between px-6 py-4 border-b shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <DialogTitle className="text-base font-medium truncate">{file?.name}</DialogTitle>
+            <DialogDescription className="sr-only">
+              {file ? `Preview and download ${file.name}` : "Preview the selected file"}
+            </DialogDescription>
             {file && <Badge variant="secondary" className="text-xs flex-shrink-0">{getExt(file.name).toUpperCase()}</Badge>}
             {file && <span className="text-xs text-muted-foreground flex-shrink-0">{formatSize(file.size)}</span>}
           </div>

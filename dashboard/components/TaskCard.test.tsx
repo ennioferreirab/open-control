@@ -117,6 +117,28 @@ describe("TaskCard", () => {
     expect(card.className).toContain("border-l-red-500");
   });
 
+  it("prefers materialized step progress when provided", () => {
+    render(
+      <TaskCard
+        task={{
+          ...baseTask,
+          status: "in_progress",
+          executionPlan: {
+            steps: [
+              { status: "planned" },
+              { status: "planned" },
+              { status: "planned" },
+              { status: "planned" },
+            ],
+          },
+        }}
+        progress={{ completedSteps: 4, totalSteps: 4 }}
+      />,
+    );
+
+    expect(screen.getByText("4/4 steps")).toBeInTheDocument();
+  });
+
   // --- Story 5.1: Review indicator ---
 
   it("does not show review indicator for autonomous tasks", () => {

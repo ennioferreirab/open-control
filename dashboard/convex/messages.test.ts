@@ -275,4 +275,38 @@ describe("messages.postUserPlanMessage", () => {
     expect(msgInsert?.value.planReview).toBeUndefined();
     expect(msgInsert?.value.leadAgentConversation).toBe(true);
   });
+
+  it("reopens a done task with an execution plan back to review before storing the message", async () => {
+    const handler = getPlanHandler();
+    const { ctx, inserts, mocks } = makeCtx({
+      _id: "task-1",
+      status: "done",
+      title: "Completed plan task",
+      executionPlan: {
+        generatedAt: "2026-03-11T10:00:00Z",
+        generatedBy: "lead-agent",
+        steps: [{ tempId: "step_1" }],
+      },
+    });
+
+    const result = await handler(ctx, {
+      taskId: "task-1",
+      content: "Let's iterate on the completed plan with five more variations.",
+    });
+
+    expect(result).toBe("msg-id-123");
+    expect(mocks.patch).toHaveBeenCalledWith("task-1", {
+      status: "review",
+      awaitingKickoff: undefined,
+      updatedAt: expect.any(String),
+    });
+
+    const msgInsert = inserts.find((entry) => entry.table === "messages");
+    expect(msgInsert?.value.leadAgentConversation).toBe(true);
+    expect(msgInsert?.value.planReview).toEqual({
+      kind: "feedback",
+      planGeneratedAt: "2026-03-11T10:00:00Z",
+      decision: undefined,
+    });
+  });
 });

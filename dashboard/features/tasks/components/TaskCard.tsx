@@ -28,14 +28,20 @@ type TaskProgressStep = {
   status?: string;
 };
 
+type TaskCardProgress = {
+  completedSteps: number;
+  totalSteps: number;
+};
+
 interface TaskCardProps {
   task: Doc<"tasks">;
   onClick?: () => void;
   tagColorMap?: Record<string, string>;
   layoutIdPrefix?: string;
+  progress?: TaskCardProgress;
 }
 
-export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix }: TaskCardProps) {
+export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress }: TaskCardProps) {
   const shouldReduceMotion = useReducedMotion();
   const approveMutation = useMutation(api.tasks.approve);
   const softDeleteMutation = useMutation(api.tasks.softDelete);
@@ -51,8 +57,9 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix }: TaskCar
   const isManual = task.isManual === true;
   const executionPlan = task.executionPlan as { steps?: TaskProgressStep[] } | undefined;
   const steps = Array.isArray(executionPlan?.steps) ? executionPlan.steps : [];
-  const totalSteps = steps.length;
-  const completedSteps = steps.filter((step) => step.status === "completed").length;
+  const totalSteps = progress?.totalSteps ?? steps.length;
+  const completedSteps =
+    progress?.completedSteps ?? steps.filter((step) => step.status === "completed").length;
   const progressPercent = totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0;
   const showProgress =
     totalSteps > 1 && (task.status === "in_progress" || task.status === "retrying");

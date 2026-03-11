@@ -25,6 +25,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from mc.contexts.planning.parser import parse_plan_payload
 from mc.contexts.planning.planner import TaskPlanner
 from mc.contexts.planning.review_messages import (
     build_plan_review_message,
@@ -340,7 +341,7 @@ async def handle_plan_negotiation(
 
                 # Validate and normalize the plan via ExecutionPlan dataclass
                 try:
-                    new_plan = ExecutionPlan.from_dict(updated_plan_dict)
+                    new_plan = parse_plan_payload(updated_plan_dict)
                     # Re-serialize to ensure consistent camelCase keys
                     normalized_dict = new_plan.to_dict()
                 except Exception as parse_exc:

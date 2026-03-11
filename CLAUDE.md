@@ -58,6 +58,12 @@ Merge each worktree branch back into main. Resolve conflicts from parallel devel
 - Use `uv` as the package manager (not pip)
 - Run tests with `uv run pytest`
 
+## Browser Debugging and Validation
+
+- ALWAYS use `playwright-cli` for browser debug and UI validation.
+- Use it to reproduce bugs, navigate the MC UI, inspect real state, take snapshots, and validate fixes end-to-end.
+- Do NOT use `playwright-mcp` unless the user explicitly asks for it.
+
 ## Project Structure
 
 - `mc/` — Mission Control Python backend (multi-agent orchestration)

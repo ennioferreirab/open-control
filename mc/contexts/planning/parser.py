@@ -272,33 +272,44 @@ def _normalize_plan_dependencies_and_groups(steps: list[ExecutionPlanStep]) -> N
             break
 
 
-def _parse_plan_response(raw: str) -> ExecutionPlan:
-    """Parse LLM response into ExecutionPlan, tolerating common LLM JSON wrappers."""
-    text = raw.strip()
-    if not text:
-        raise ValueError("LLM response was empty")
+def _require_step_fields(raw_steps: list[object]) -> None:
+    """Reject partially-formed steps instead of silently defaulting corrupted plans."""
+    required_aliases = {
+        "tempId": ("tempId", "temp_id", "stepId", "step_id"),
+        "title": ("title",),
+        "description": ("description",),
+        "assignedAgent": ("assignedAgent", "assigned_agent"),
+        "blockedBy": ("blockedBy", "blocked_by", "dependsOn", "depends_on"),
+        "parallelGroup": ("parallelGroup", "parallel_group"),
+        "order": ("order",),
+    }
 
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = [line for line in lines if not line.strip().startswith("```")]
-        text = "\n".join(lines)
+    for index, step in enumerate(raw_steps, start=1):
+        if not isinstance(step, dict):
+            raise ValueError(f"Plan step {index} is not a JSON object")
 
-    if not text.startswith("{"):
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
-            text = match.group(0)
+        missing_fields = [
+            canonical
+            for canonical, aliases in required_aliases.items()
+            if not any(alias in step for alias in aliases)
+        ]
+        if missing_fields:
+            missing = ", ".join(missing_fields)
+            raise ValueError(
+                f"Plan step {index} is missing required fields: {missing}"
+            )
 
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        data = json_repair.loads(text)
 
-    data = _normalize_plan_payload(data)
-    if "steps" not in data or not data["steps"]:
+def parse_plan_payload(data: object) -> ExecutionPlan:
+    """Validate a structured plan payload and convert it into an ExecutionPlan."""
+    normalized = _normalize_plan_payload(data)
+    raw_steps = normalized.get("steps")
+    if not isinstance(raw_steps, list) or not raw_steps:
         raise ValueError("LLM response missing 'steps' key or empty steps")
+    _require_step_fields(raw_steps)
 
     steps: list[ExecutionPlanStep] = []
-    for index, s in enumerate(data["steps"], start=1):
+    for index, s in enumerate(raw_steps, start=1):
         temp_id = (
             s.get("temp_id")
             or s.get("tempId")
@@ -336,6 +347,30 @@ def _parse_plan_response(raw: str) -> ExecutionPlan:
     _normalize_plan_dependencies_and_groups(steps)
 
     return ExecutionPlan(steps=steps)
+
+
+def _parse_plan_response(raw: str) -> ExecutionPlan:
+    """Parse LLM response into ExecutionPlan, tolerating common LLM JSON wrappers."""
+    text = raw.strip()
+    if not text:
+        raise ValueError("LLM response was empty")
+
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = [line for line in lines if not line.strip().startswith("```")]
+        text = "\n".join(lines)
+
+    if not text.startswith("{"):
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            text = match.group(0)
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        data = json_repair.loads(text)
+
+    return parse_plan_payload(data)
 
 
 def _normalize_plan_payload(data: object) -> dict[str, object]:

@@ -32,6 +32,7 @@ interface KanbanColumnProps {
   clearDisabled?: boolean;
   onViewAll?: () => void;
   tagColorMap?: Record<string, string>;
+  taskProgressById?: Map<Id<"tasks">, { completedSteps: number; totalSteps: number }>;
 }
 
 export function KanbanColumn({
@@ -48,6 +49,7 @@ export function KanbanColumn({
   clearDisabled,
   onViewAll,
   tagColorMap,
+  taskProgressById,
 }: KanbanColumnProps) {
   const prevCountRef = useRef(hitlCount);
   const [isPulsing, setIsPulsing] = useState(false);
@@ -290,6 +292,7 @@ export function KanbanColumn({
                                 onClick={onTaskClick ? () => onTaskClick(task._id) : undefined}
                                 tagColorMap={tagColorMap}
                                 layoutIdPrefix={group.tag}
+                                progress={taskProgressById?.get(task._id)}
                               />
                             ))}
                           </div>
@@ -304,6 +307,7 @@ export function KanbanColumn({
                     task={task}
                     onClick={onTaskClick ? () => onTaskClick(task._id) : undefined}
                     tagColorMap={tagColorMap}
+                    progress={taskProgressById?.get(task._id)}
                   />
                 ))}
           </div>

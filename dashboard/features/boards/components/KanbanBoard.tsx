@@ -44,6 +44,15 @@ export function KanbanBoard({ onTaskClick, search }: KanbanBoardProps) {
 
   const showNoSearchResults = filters.isSearchActive && (boardView.tasks?.length ?? 0) === 0;
   const doneTaskCount = columns.find((c) => c.status === "done")?.tasks.length ?? 0;
+  const taskProgressById = new Map(
+    (boardView.taskSummaries ?? []).map((summary) => [
+      summary.task._id,
+      {
+        completedSteps: summary.completedStepCount,
+        totalSteps: summary.stepCount,
+      },
+    ]),
+  );
 
   return (
     <LayoutGroup>
@@ -87,6 +96,7 @@ export function KanbanBoard({ onTaskClick, search }: KanbanBoardProps) {
                 onTaskClick={onTaskClick}
                 hitlCount={col.status === "review" ? boardView.hitlCount : undefined}
                 tagColorMap={boardView.tagColorMap}
+                taskProgressById={taskProgressById}
                 {...(col.status === "done"
                   ? {
                       onClear: () => boardView.clearAllDone(),

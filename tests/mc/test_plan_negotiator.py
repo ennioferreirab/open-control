@@ -361,6 +361,44 @@ class TestHandlePlanNegotiation:
         bridge.update_execution_plan.assert_not_called()
         bridge.post_lead_agent_message.assert_called_once()
 
+    def test_handler_rejects_partial_updated_plan_payload(self):
+        """Malformed updated_plan payloads must not be persisted."""
+        bridge = _make_bridge()
+        llm_response = json.dumps(
+            {
+                "action": "update_plan",
+                "updated_plan": {
+                    "steps": [
+                        UPDATED_PLAN["steps"][0],
+                        {
+                            "tempId": "step_2",
+                            "title": "Create concept 3 logo",
+                            "description": "Truncated step payload",
+                        },
+                    ],
+                },
+                "explanation": "Added the requested logo step.",
+            }
+        )
+
+        with patch("mc.infrastructure.providers.factory.create_provider") as mock_create_provider:
+            mock_provider = MagicMock()
+            mock_provider.chat = AsyncMock(return_value=_FakeLLMResponse(llm_response))
+            mock_create_provider.return_value = (mock_provider, "test-model")
+
+            self._run(
+                handle_plan_negotiation(
+                    bridge,
+                    task_id="task_partial",
+                    user_message="Add the third logo concept.",
+                    current_plan=SAMPLE_PLAN,
+                )
+            )
+
+        bridge.update_execution_plan.assert_not_called()
+        bridge.post_lead_agent_message.assert_called_once()
+        assert "plan has not been changed" in bridge.post_lead_agent_message.call_args.args[1]
+
 
 class TestCreateInitialPlanFromMessage:
     """Tests for bootstrapping the first plan from manual-review conversation."""

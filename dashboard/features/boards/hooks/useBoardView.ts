@@ -10,6 +10,11 @@ import { BoardFilters } from "@/hooks/useBoardFilters";
 type BoardViewReadModel = {
   tasks: Doc<"tasks">[];
   allSteps: Doc<"steps">[];
+  taskSummaries: Array<{
+    task: Doc<"tasks">;
+    stepCount: number;
+    completedStepCount: number;
+  }>;
   favorites: Doc<"tasks">[];
   deletedTasks: Doc<"tasks">[];
   deletedCount: number;
@@ -20,6 +25,7 @@ type BoardViewReadModel = {
 export interface BoardViewData {
   tasks: Doc<"tasks">[] | undefined;
   allSteps: Doc<"steps">[] | undefined;
+  taskSummaries: BoardViewReadModel["taskSummaries"];
   favorites: Doc<"tasks">[];
   hitlCount: number;
   deletedTasks: Doc<"tasks">[] | undefined;
@@ -49,6 +55,7 @@ export function useBoardView(filters: BoardFilters): BoardViewData {
     () => ({
       tasks,
       allSteps,
+      taskSummaries: boardView?.taskSummaries ?? [],
       favorites: boardView?.favorites ?? [],
       hitlCount: boardView?.hitlCount ?? 0,
       deletedTasks: boardView?.deletedTasks,

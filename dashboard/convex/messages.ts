@@ -238,13 +238,14 @@ export const postLeadAgentMessage = internalMutation({
 });
 
 /**
- * Post a user plan-chat message to the thread of an in_progress or review task.
+ * Post a user plan-chat message to the thread of an in_progress/review task,
+ * or reopen a completed task with an execution plan back to review.
  *
  * Unlike sendThreadMessage this mutation does NOT transition the task status or
  * clear the executionPlan. It is used when the user wants to ask the Lead Agent
  * to modify the plan while execution is underway (Story 7.3, AC 1-2).
  *
- * Allowed task statuses: "in_progress", "review".
+ * Allowed task statuses: "in_progress", "review", and "done" when a plan exists.
  */
 export const postUserPlanMessage = mutation({
   args: {
@@ -259,9 +260,17 @@ export const postUserPlanMessage = mutation({
       throw new ConvexError("Task not found");
     }
     assertTaskThreadWritable(task);
+    const hasExecutionPlan =
+      typeof task.executionPlan === "object" &&
+      task.executionPlan !== null &&
+      Array.isArray((task.executionPlan as { steps?: unknown[] }).steps) &&
+      (task.executionPlan as { steps?: unknown[] }).steps!.length > 0;
     const allowedStatuses = task.isManual
       ? ["inbox", "in_progress", "review"]
       : ["in_progress", "review"];
+    if (hasExecutionPlan) {
+      allowedStatuses.push("done");
+    }
     if (!allowedStatuses.includes(task.status)) {
       throw new ConvexError(
         `postUserPlanMessage is only allowed when task is ${allowedStatuses.join(" or ")} (current: ${task.status})`
@@ -269,6 +278,15 @@ export const postUserPlanMessage = mutation({
     }
 
     const timestamp = new Date().toISOString();
+
+    if (task.status === "done") {
+      await ctx.db.patch(args.taskId, {
+        status: "review",
+        awaitingKickoff: undefined,
+        updatedAt: timestamp,
+      });
+    }
+
     const planGeneratedAt =
       typeof task.executionPlan === "object" &&
       task.executionPlan !== null &&
