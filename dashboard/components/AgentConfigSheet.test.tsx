@@ -151,6 +151,29 @@ vi.mock("@/components/ui/switch", () => ({
 }));
 
 describe("AgentConfigSheet", () => {
+  async function renderLoadedSheet(overrides?: {
+    agentName?: string | null;
+    onClose?: () => void;
+  }) {
+    render(
+      <AgentConfigSheet
+        agentName={overrides?.agentName ?? "test-agent"}
+        onClose={overrides?.onClose ?? vi.fn()}
+      />,
+    );
+
+    if (!overrides || overrides.agentName !== null) {
+      await screen.findByDisplayValue("Developer");
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith("/api/agents/test-agent/memory/MEMORY.md");
+        expect(fetch).toHaveBeenCalledWith("/api/agents/test-agent/memory/HISTORY.md");
+      });
+      await waitFor(() => {
+        expect(screen.queryAllByText("Loading...")).toHaveLength(0);
+      });
+    }
+  }
+
   beforeEach(() => {
     mockQueryResult = mockAgent;
     hookOverrides = {};
@@ -172,8 +195,8 @@ describe("AgentConfigSheet", () => {
     void container;
   });
 
-  it("renders form fields when agent is loaded", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("renders form fields when agent is loaded", async () => {
+    await renderLoadedSheet();
 
     expect(screen.getByTestId("sheet")).toBeInTheDocument();
     // Name field should be read-only (disabled)
@@ -181,28 +204,28 @@ describe("AgentConfigSheet", () => {
     expect(nameInput).toBeDisabled();
   });
 
-  it("displays agent displayName and role in form", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("displays agent displayName and role in form", async () => {
+    await renderLoadedSheet();
 
     expect(screen.getByDisplayValue("Test Agent")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Developer")).toBeInTheDocument();
   });
 
-  it("displays agent prompt in textarea", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("displays agent prompt in textarea", async () => {
+    await renderLoadedSheet();
 
     expect(screen.getByDisplayValue("You are a developer.")).toBeInTheDocument();
   });
 
-  it("shows Save button disabled when no changes", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("shows Save button disabled when no changes", async () => {
+    await renderLoadedSheet();
 
     const saveButton = screen.getByText("Save");
     expect(saveButton).toBeDisabled();
   });
 
-  it("enables Save button when form is dirty", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("enables Save button when form is dirty", async () => {
+    await renderLoadedSheet();
 
     const roleInput = screen.getByDisplayValue("Developer");
     fireEvent.change(roleInput, { target: { value: "Senior Developer" } });
@@ -211,8 +234,8 @@ describe("AgentConfigSheet", () => {
     expect(saveButton).not.toBeDisabled();
   });
 
-  it("shows validation error for empty role on blur", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("shows validation error for empty role on blur", async () => {
+    await renderLoadedSheet();
 
     const roleInput = screen.getByDisplayValue("Developer");
     fireEvent.change(roleInput, { target: { value: "" } });
@@ -221,8 +244,8 @@ describe("AgentConfigSheet", () => {
     expect(screen.getByText("Agent role cannot be empty.")).toBeInTheDocument();
   });
 
-  it("shows validation error for empty prompt on blur", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("shows validation error for empty prompt on blur", async () => {
+    await renderLoadedSheet();
 
     const promptInput = screen.getByDisplayValue("You are a developer.");
     fireEvent.change(promptInput, { target: { value: "" } });
@@ -232,7 +255,7 @@ describe("AgentConfigSheet", () => {
   });
 
   it("calls updateConfig mutation on save", async () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     const roleInput = screen.getByDisplayValue("Developer");
     fireEvent.change(roleInput, { target: { value: "Senior Developer" } });
@@ -251,7 +274,7 @@ describe("AgentConfigSheet", () => {
   });
 
   it("shows success checkmark after save", async () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     const roleInput = screen.getByDisplayValue("Developer");
     fireEvent.change(roleInput, { target: { value: "Senior Developer" } });
@@ -267,7 +290,7 @@ describe("AgentConfigSheet", () => {
   it("shows error banner when save fails", async () => {
     mockUpdateConfig.mockRejectedValue(new Error("Network error"));
 
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     const roleInput = screen.getByDisplayValue("Developer");
     fireEvent.change(roleInput, { target: { value: "Senior Developer" } });
@@ -280,8 +303,8 @@ describe("AgentConfigSheet", () => {
     });
   });
 
-  it("renders SkillsSelector with agent skills", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("renders SkillsSelector with agent skills", async () => {
+    await renderLoadedSheet();
 
     const selector = screen.getByTestId("skills-selector");
     expect(selector.getAttribute("data-selected")).toBe("github,memory");
@@ -289,17 +312,17 @@ describe("AgentConfigSheet", () => {
 
   // --- Enable/disable toggle tests ---
 
-  it("renders Active label and checked switch when agent is enabled", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("renders Active label and checked switch when agent is enabled", async () => {
+    await renderLoadedSheet();
 
     expect(screen.getByText("Active")).toBeInTheDocument();
     const toggle = screen.getByTestId("enabled-switch");
     expect(toggle.getAttribute("data-state")).toBe("checked");
   });
 
-  it("renders Deactivated label and unchecked switch when agent is disabled", () => {
+  it("renders Deactivated label and unchecked switch when agent is disabled", async () => {
     mockQueryResult = { ...mockAgent, enabled: false };
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     const deactivatedTexts = screen.getAllByText("Deactivated");
     // Should appear in both header status and toggle label
@@ -308,8 +331,8 @@ describe("AgentConfigSheet", () => {
     expect(toggle.getAttribute("data-state")).toBe("unchecked");
   });
 
-  it("does not call setEnabled immediately when toggle is clicked", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("does not call setEnabled immediately when toggle is clicked", async () => {
+    await renderLoadedSheet();
 
     const toggle = screen.getByTestId("enabled-switch");
     fireEvent.click(toggle);
@@ -318,8 +341,8 @@ describe("AgentConfigSheet", () => {
     expect(mockSetEnabled).not.toHaveBeenCalled();
   });
 
-  it("enables Save button when toggle is changed (form becomes dirty)", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("enables Save button when toggle is changed (form becomes dirty)", async () => {
+    await renderLoadedSheet();
 
     const saveButton = screen.getByText("Save");
     expect(saveButton).toBeDisabled();
@@ -331,7 +354,7 @@ describe("AgentConfigSheet", () => {
   });
 
   it("calls setEnabled on Save when enabled state changed", async () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     const toggle = screen.getByTestId("enabled-switch");
     fireEvent.click(toggle);
@@ -349,7 +372,7 @@ describe("AgentConfigSheet", () => {
 
   it("calls setEnabled with true on Save when re-enabling a disabled agent", async () => {
     mockQueryResult = { ...mockAgent, enabled: false };
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     const toggle = screen.getByTestId("enabled-switch");
     fireEvent.click(toggle);
@@ -365,15 +388,15 @@ describe("AgentConfigSheet", () => {
     });
   });
 
-  it("shows info text when agent is disabled", () => {
+  it("shows info text when agent is disabled", async () => {
     mockQueryResult = { ...mockAgent, enabled: false };
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     expect(screen.getByText("This agent will not receive new tasks")).toBeInTheDocument();
   });
 
-  it("shows info text when toggle is switched to disabled (before save)", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("shows info text when toggle is switched to disabled (before save)", async () => {
+    await renderLoadedSheet();
 
     expect(screen.queryByText("This agent will not receive new tasks")).not.toBeInTheDocument();
 
@@ -383,15 +406,15 @@ describe("AgentConfigSheet", () => {
     expect(screen.getByText("This agent will not receive new tasks")).toBeInTheDocument();
   });
 
-  it("does not show info text when agent is enabled", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("does not show info text when agent is enabled", async () => {
+    await renderLoadedSheet();
 
     expect(screen.queryByText("This agent will not receive new tasks")).not.toBeInTheDocument();
   });
 
-  it("shows Deactivated status in header when disabled", () => {
+  it("shows Deactivated status in header when disabled", async () => {
     mockQueryResult = { ...mockAgent, enabled: false };
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     // Header should show "Deactivated" instead of runtime status
     const statusTexts = screen.getAllByText("Deactivated");
@@ -401,7 +424,7 @@ describe("AgentConfigSheet", () => {
   // --- Memory/History section tests ---
 
   it("shows 'No memory yet.' placeholder when fetch returns 404", async () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     await waitFor(() => {
       expect(screen.getByText("No memory yet.")).toBeInTheDocument();
@@ -409,15 +432,15 @@ describe("AgentConfigSheet", () => {
   });
 
   it("shows 'No history yet.' placeholder when fetch returns 404", async () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     await waitFor(() => {
       expect(screen.getByText("No history yet.")).toBeInTheDocument();
     });
   });
 
-  it("fetches memory and history when agentName is set", () => {
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+  it("fetches memory and history when agentName is set", async () => {
+    await renderLoadedSheet();
 
     expect(fetch).toHaveBeenCalledWith("/api/agents/test-agent/memory/MEMORY.md");
     expect(fetch).toHaveBeenCalledWith("/api/agents/test-agent/memory/HISTORY.md");
@@ -435,7 +458,7 @@ describe("AgentConfigSheet", () => {
       ),
     );
 
-    render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
+    await renderLoadedSheet();
 
     await waitFor(() => {
       expect(screen.getByText("Agent Memory Content")).toBeInTheDocument();
