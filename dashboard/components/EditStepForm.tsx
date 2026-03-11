@@ -14,14 +14,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 import { HUMAN_AGENT_NAME } from "@/lib/constants";
+import { getStatusMeta } from "./FlowStepNode";
+import type { ExistingStep } from "./AddStepForm";
 import type { Id } from "../convex/_generated/dataModel";
 
 export interface EditStepData {
   title: string;
   description: string;
   assignedAgent: string;
+  blockedByIds: string[];
 }
 
 interface EditStepFormProps {
@@ -31,21 +37,33 @@ interface EditStepFormProps {
     description: string;
     assignedAgent: string;
     status: string;
+    blockedByIds: string[];
   };
+  existingSteps: ExistingStep[];
   boardId?: Id<"boards">;
   onSave: (data: EditStepData) => void;
   onDelete?: (stepId: string) => void;
   onCancel: () => void;
 }
 
-export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: EditStepFormProps) {
+export function EditStepForm({
+  step,
+  existingSteps,
+  boardId,
+  onSave,
+  onDelete,
+  onCancel,
+}: EditStepFormProps) {
   const [title, setTitle] = useState(step.title);
   const [description, setDescription] = useState(step.description);
   const [assignedAgent, setAssignedAgent] = useState(step.assignedAgent);
+  const [blockedByIds, setBlockedByIds] = useState<string[]>(step.blockedByIds);
+  const [blockerPopoverOpen, setBlockerPopoverOpen] = useState(false);
 
   const board = useBoardById(boardId);
   const agents = useSelectableAgents(board?.enabledAgents);
   const selectableAgents = (agents ?? []).filter((a) => a.name !== "lead-agent");
+  const selectableBlockers = existingSteps.filter((candidate) => candidate.id !== step.stepId);
 
   const isLocked = step.status !== "planned" && step.status !== "blocked";
 
@@ -55,7 +73,16 @@ export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: Edit
   const hasChanges =
     title !== step.title ||
     description !== step.description ||
-    assignedAgent !== step.assignedAgent;
+    assignedAgent !== step.assignedAgent ||
+    blockedByIds.length !== step.blockedByIds.length ||
+    blockedByIds.some((id) => !step.blockedByIds.includes(id));
+
+  const toggleBlocker = (stepId: string) => {
+    if (isLocked) return;
+    setBlockedByIds((prev) =>
+      prev.includes(stepId) ? prev.filter((id) => id !== stepId) : [...prev, stepId],
+    );
+  };
 
   const handleSubmit = () => {
     if (!isValid || !hasChanges) return;
@@ -63,6 +90,7 @@ export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: Edit
       title: title.trim(),
       description: description.trim(),
       assignedAgent,
+      blockedByIds,
     });
   };
 
@@ -130,6 +158,58 @@ export function EditStepForm({ step, boardId, onSave, onDelete, onCancel }: Edit
           </SelectContent>
         </Select>
       </div>
+
+      {selectableBlockers.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="text-xs">Depends</Label>
+          <Popover open={blockerPopoverOpen} onOpenChange={setBlockerPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start text-sm h-8"
+                data-testid="edit-step-blocked-by-trigger"
+                disabled={isLocked}
+              >
+                {blockedByIds.length === 0
+                  ? "Select dependencies..."
+                  : `${blockedByIds.length} step${blockedByIds.length > 1 ? "s" : ""} selected`}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-72 p-2"
+              align="start"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {selectableBlockers.map((candidate) => {
+                  const meta = getStatusMeta(candidate.status);
+                  return (
+                    <label
+                      key={candidate.id}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm"
+                    >
+                      <Checkbox
+                        checked={blockedByIds.includes(candidate.id)}
+                        onCheckedChange={() => toggleBlocker(candidate.id)}
+                        data-testid={`edit-blocker-checkbox-${candidate.id}`}
+                        disabled={isLocked}
+                      />
+                      <span className="flex-1 truncate">{candidate.title}</span>
+                      <Badge
+                        variant="secondary"
+                        className={`text-[9px] px-1.5 py-0 ${meta.badgeClass}`}
+                      >
+                        {meta.badgeText}
+                      </Badge>
+                    </label>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 pt-1">
         {!isLocked && (

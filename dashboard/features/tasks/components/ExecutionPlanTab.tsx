@@ -313,12 +313,15 @@ export function ExecutionPlanTab({
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editStepError, setEditStepError] = useState<string | null>(null);
   const editFormRef = useRef<HTMLDivElement>(null);
+  const shouldOverlayLiveSteps = taskStatus !== "review" && taskStatus !== "inbox" && !isEditMode;
 
   const steps = useMemo(() => {
     if (!executionPlan?.steps || executionPlan.steps.length === 0) return [];
     const normalizedPlan = normalizePlanSteps(executionPlan.steps);
-    return mergeStepsWithLiveData(normalizedPlan, liveSteps);
-  }, [executionPlan, liveSteps]);
+    return shouldOverlayLiveSteps
+      ? mergeStepsWithLiveData(normalizedPlan, liveSteps)
+      : normalizedPlan;
+  }, [executionPlan, liveSteps, shouldOverlayLiveSteps]);
   const resolvedMergeAlias = mergeAlias;
   const displaySteps = useMemo(
     () => injectVisualMergeAlias(steps, resolvedMergeAlias, taskStatus),
@@ -613,8 +616,8 @@ export function ExecutionPlanTab({
 
   // Build existingSteps for the blocked-by selector
   const existingStepsForForm: ExistingStep[] = useMemo(() => {
-    // Prefer live steps if available (in_progress/done mode)
-    if (liveSteps && liveSteps.length > 0) {
+    // Prefer live step ids only when the canvas is actually operating in live mode.
+    if (shouldOverlayLiveSteps && liveSteps && liveSteps.length > 0) {
       return liveSteps.map((ls) => ({
         id: ls._id,
         title: ls.title,
@@ -627,7 +630,7 @@ export function ExecutionPlanTab({
       title: s.title ?? s.description.slice(0, 50),
       status: s.status,
     }));
-  }, [liveSteps, steps]);
+  }, [liveSteps, shouldOverlayLiveSteps, steps]);
 
   const handleAddStep = useCallback(
     async (data: AddStepData) => {
@@ -710,15 +713,20 @@ export function ExecutionPlanTab({
     if (!editingStepId) return null;
     const found = steps.find((s) => s.stepId === editingStepId);
     if (!found) return null;
+    const liveBlockedByIds =
+      shouldOverlayLiveSteps && found.liveId
+        ? liveSteps?.find((liveStep) => liveStep._id === found.liveId)?.blockedBy?.map(String)
+        : undefined;
     return {
-      stepId: found.stepId,
+      stepId: shouldOverlayLiveSteps ? (found.liveId ?? found.stepId) : found.stepId,
       liveId: found.liveId,
       title: found.title ?? "",
       description: found.description,
       assignedAgent: found.assignedAgent ?? "",
       status: found.status,
+      blockedByIds: liveBlockedByIds ?? found.dependencies,
     };
-  }, [editingStepId, steps]);
+  }, [editingStepId, liveSteps, shouldOverlayLiveSteps, steps]);
 
   const handleEditStep = useCallback(
     async (data: EditStepData) => {
@@ -733,6 +741,7 @@ export function ExecutionPlanTab({
             title: data.title,
             description: data.description,
             assignedAgent: data.assignedAgent,
+            blockedBy: data.blockedByIds,
           };
         });
         const updatedPlan: ExecutionPlan = {
@@ -752,6 +761,7 @@ export function ExecutionPlanTab({
             title: data.title,
             description: data.description,
             assignedAgent: data.assignedAgent,
+            blockedByStepIds: data.blockedByIds.map((id) => id as Id<"steps">),
           });
           setEditStepError(null);
           setEditingStepId(null);
@@ -890,6 +900,7 @@ export function ExecutionPlanTab({
           <EditStepForm
             key={editingStepId}
             step={editingStep}
+            existingSteps={existingStepsForForm}
             boardId={boardId}
             onSave={handleEditStep}
             onDelete={handleDeleteStep}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
@@ -46,6 +46,8 @@ export function PlanReviewPanel({
   const [rejectFeedback, setRejectFeedback] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectError, setRejectError] = useState("");
+  const timelineEndRef = useRef<HTMLDivElement | null>(null);
+  const previousTimelineCountRef = useRef(0);
 
   const currentPlanGeneratedAt =
     typeof task.executionPlan?.generatedAt === "string" ? task.executionPlan.generatedAt : undefined;
@@ -71,6 +73,17 @@ export function PlanReviewPanel({
 
     return null;
   }, [currentPlanGeneratedAt, onPrimaryAction, task.status, timelineMessages]);
+
+  useEffect(() => {
+    const scrollTarget = timelineEndRef.current;
+    if (
+      timelineMessages.length > previousTimelineCountRef.current &&
+      typeof scrollTarget?.scrollIntoView === "function"
+    ) {
+      scrollTarget.scrollIntoView({ behavior: "smooth" });
+    }
+    previousTimelineCountRef.current = timelineMessages.length;
+  }, [timelineMessages.length]);
 
   const handleReject = async () => {
     const content = rejectFeedback.trim();
@@ -192,6 +205,7 @@ export function PlanReviewPanel({
                 </div>
               );
             })}
+            <div ref={timelineEndRef} />
           </div>
         )}
       </ScrollArea>

@@ -66,6 +66,7 @@ vi.mock("./AddStepForm", () => ({
 vi.mock("@xyflow/react", () => ({
   ReactFlow: ({
     nodes,
+    onNodeClick,
   }: {
     nodes: {
       id: string;
@@ -81,6 +82,7 @@ vi.mock("@xyflow/react", () => ({
         hasParallelSiblings?: boolean;
       };
     }[];
+    onNodeClick?: (event: React.MouseEvent, node: { id: string }) => void;
     [key: string]: unknown;
   }) => (
     <div data-testid="react-flow-readonly">
@@ -97,6 +99,7 @@ vi.mock("@xyflow/react", () => ({
                   : ""
               }
               data-edit-mode={n.data.isEditMode ? "true" : "false"}
+              onClick={(event) => onNodeClick?.(event, n)}
             >
               {n.data.step?.title || n.data.step?.title === "" ? n.data.step.title : "Untitled"}
             </div>
@@ -401,6 +404,47 @@ describe("ExecutionPlanTab", () => {
     );
     const node = screen.getByTestId("flow-node-s1");
     expect(node.getAttribute("data-status")).toBe("running");
+  });
+
+  it("uses the server review plan instead of stale live steps while in review", () => {
+    const reviewPlan = {
+      steps: [
+        makeStep({
+          stepId: "new-step-1",
+          tempId: "step_1",
+          title: "Gerar logotipo institucional",
+          description: "Novo plano do lead agent",
+          assignedAgent: "image-creator-agent",
+          status: "planned",
+          order: 1,
+        }),
+      ],
+      generatedAt: "2026-03-11T04:26:15Z",
+      createdAt: "2026-03-11",
+    };
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={reviewPlan}
+        taskStatus="review"
+        liveSteps={[
+          {
+            _id: "live-old-1",
+            title: "Merge task A with B",
+            description: "Plano antigo materializado",
+            assignedAgent: "nanobot",
+            status: "completed",
+            parallelGroup: 0,
+            order: 1,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("flow-node-new-step-1")).toHaveTextContent(
+      "Gerar logotipo institucional",
+    );
+    expect(screen.queryByText("Merge task A with B")).not.toBeInTheDocument();
   });
 
   it("preserves distinct assigned agents for parallel live steps sharing the same order", () => {
@@ -733,6 +777,38 @@ describe("ExecutionPlanTab", () => {
 
       expect(screen.getByTestId("flow-node-step_1")).toHaveAttribute("data-edit-mode", "false");
       expect(screen.queryByTestId("flow-node-add-sequential-step_1")).not.toBeInTheDocument();
+    });
+
+    it("pre-fills Depends when editing an existing review step", () => {
+      const onLocalPlanChange = vi.fn();
+      render(
+        <ExecutionPlanTab
+          executionPlan={reviewPlan}
+          taskId="task-abc"
+          taskStatus="review"
+          onLocalPlanChange={onLocalPlanChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId("flow-node-step_2"));
+
+      expect(screen.getByTestId("edit-step-form")).toBeInTheDocument();
+      const trigger = screen.getByTestId("edit-step-blocked-by-trigger");
+      expect(trigger).toHaveTextContent("1 step selected");
+
+      fireEvent.click(trigger);
+      expect(screen.getByTestId("edit-blocker-checkbox-step_1")).toHaveAttribute(
+        "data-state",
+        "checked",
+      );
+
+      fireEvent.click(screen.getByTestId("edit-blocker-checkbox-step_1"));
+      fireEvent.click(screen.getByTestId("edit-step-save"));
+
+      expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
+      const updatedPlan = onLocalPlanChange.mock.calls[0][0];
+      const updatedStep = updatedPlan.steps.find((step: { tempId: string }) => step.tempId === "step_2");
+      expect(updatedStep.blockedBy).toEqual([]);
     });
 
     it("clicking sequential button inserts step immediately via onLocalPlanChange", () => {
