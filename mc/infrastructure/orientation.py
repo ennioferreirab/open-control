@@ -9,33 +9,31 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def load_orientation(agent_name: str) -> str | None:
-    """Load and interpolate global orientation for non-lead agents.
-
-    Reads ~/.nanobot/mc/agent-orientation.md, interpolates {agent_roster}
-    and {host_timezone} placeholders, and returns the result.
-
-    Returns None if:
-    - agent is lead-agent
-    - orientation file doesn't exist or is empty
-    """
-    from mc.types import is_lead_agent
-
-    if is_lead_agent(agent_name):
+def _read_saved_orientation(bridge: Any | None) -> str | None:
+    """Read the saved global orientation prompt from Convex settings."""
+    if bridge is None:
         return None
 
-    orientation_path = Path.home() / ".nanobot" / "mc" / "agent-orientation.md"
-    if not orientation_path.exists():
+    try:
+        saved = bridge.query("settings:get", {"key": "global_orientation_prompt"})
+    except Exception:
+        logger.warning("[orientation] Failed to fetch saved global orientation", exc_info=True)
         return None
 
-    orientation = orientation_path.read_text(encoding="utf-8").strip()
-    if not orientation:
+    if not isinstance(saved, str):
         return None
 
+    saved = saved.strip()
+    return saved or None
+
+
+def _interpolate_orientation(orientation: str) -> str:
+    """Interpolate dynamic placeholders in the orientation text."""
     # Interpolate {agent_roster} placeholder if present
     if "{agent_roster}" in orientation:
         from mc.infrastructure.orientation_helpers import build_agent_roster
@@ -49,5 +47,34 @@ def load_orientation(agent_name: str) -> str | None:
         iana_tz = get_iana_timezone() or "UTC"
         orientation = orientation.replace("{host_timezone}", iana_tz)
 
+    return orientation
+
+
+def load_orientation(agent_name: str, bridge: Any | None = None) -> str | None:
+    """Load and interpolate global orientation for eligible MC agents.
+
+    Precedence:
+    1. Saved ``global_orientation_prompt`` from Convex settings, if non-empty
+    2. ~/.nanobot/mc/agent-orientation.md fallback file
+
+    Returns None if:
+    - agent is lead-agent or nanobot
+    - orientation file doesn't exist or is empty
+    """
+    from mc.types import NANOBOT_AGENT_NAME, is_lead_agent
+
+    if is_lead_agent(agent_name) or agent_name == NANOBOT_AGENT_NAME:
+        return None
+
+    orientation = _read_saved_orientation(bridge)
+    if orientation is None:
+        orientation_path = Path.home() / ".nanobot" / "mc" / "agent-orientation.md"
+        if not orientation_path.exists():
+            return None
+        orientation = orientation_path.read_text(encoding="utf-8").strip()
+        if not orientation:
+            return None
+
+    orientation = _interpolate_orientation(orientation)
     logger.info("[orientation] Global orientation loaded for agent '%s'", agent_name)
     return orientation

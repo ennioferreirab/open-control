@@ -105,6 +105,12 @@ class TestInjectOrientation:
         result = inject_orientation("test-agent", None)
         assert result == "Global rules"
 
+    @patch("mc.infrastructure.orientation.load_orientation")
+    def test_bridge_is_forwarded_to_orientation_loader(self, mock_load: MagicMock) -> None:
+        bridge = MagicMock()
+        inject_orientation("test-agent", "my prompt", bridge=bridge)
+        mock_load.assert_called_once_with("test-agent", bridge=bridge)
+
 
 class TestResolveTier:
     """Tests for resolve_tier."""

@@ -204,7 +204,7 @@ class ClaudeCodeRunnerStrategy:
         # Prepare workspace
         ws_mgr = CCWorkspaceManager()
 
-        orientation = load_orientation(request.agent_name)
+        orientation = load_orientation(request.agent_name, bridge=self._bridge)
         ws_ctx = ws_mgr.prepare(
             request.agent_name,
             agent_data,

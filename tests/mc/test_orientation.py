@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,6 +14,11 @@ class TestLoadOrientation:
     def test_returns_none_for_lead_agent(self) -> None:
         """Lead-agent should never receive orientation."""
         result = load_orientation("lead-agent")
+        assert result is None
+
+    def test_returns_none_for_nanobot(self) -> None:
+        """nanobot should never receive orientation."""
+        result = load_orientation("nanobot")
         assert result is None
 
     def test_returns_none_when_file_missing(self, tmp_path: Path) -> None:
@@ -45,6 +50,38 @@ class TestLoadOrientation:
             mock_path_cls.home.return_value = tmp_path
             result = load_orientation("test-agent")
         assert result == "You are a helpful agent."
+
+    def test_saved_setting_overrides_file(self, tmp_path: Path) -> None:
+        """A saved global_orientation_prompt should take precedence over the file."""
+        mc_dir = tmp_path / ".nanobot" / "mc"
+        mc_dir.mkdir(parents=True)
+        (mc_dir / "agent-orientation.md").write_text("File orientation", encoding="utf-8")
+        bridge = MagicMock()
+        bridge.query.return_value = "Saved orientation"
+
+        with patch("mc.infrastructure.orientation.Path") as mock_path_cls:
+            mock_path_cls.home.return_value = tmp_path
+            result = load_orientation("test-agent", bridge=bridge)
+
+        assert result == "Saved orientation"
+        bridge.query.assert_called_once_with(
+            "settings:get",
+            {"key": "global_orientation_prompt"},
+        )
+
+    def test_blank_setting_falls_back_to_file(self, tmp_path: Path) -> None:
+        """Blank saved setting should still use the local fallback file."""
+        mc_dir = tmp_path / ".nanobot" / "mc"
+        mc_dir.mkdir(parents=True)
+        (mc_dir / "agent-orientation.md").write_text("Fallback file orientation", encoding="utf-8")
+        bridge = MagicMock()
+        bridge.query.return_value = "   "
+
+        with patch("mc.infrastructure.orientation.Path") as mock_path_cls:
+            mock_path_cls.home.return_value = tmp_path
+            result = load_orientation("test-agent", bridge=bridge)
+
+        assert result == "Fallback file orientation"
 
     def test_interpolates_agent_roster(self, tmp_path: Path) -> None:
         """The {agent_roster} placeholder is interpolated."""

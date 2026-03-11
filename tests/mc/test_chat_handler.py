@@ -113,6 +113,53 @@ class TestProcessChatMessage:
         assert call_args[1] == "Agent response here"
 
     @pytest.mark.asyncio
+    async def test_non_cc_chat_injects_global_orientation_before_agent_prompt(self, tmp_path):
+        """Chat should compose global orientation and agent prompt like task execution does."""
+        from mc.contexts.conversation.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(content="Hello with orientation")
+
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "test-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("name: test-agent")
+
+        captured_requests: list[ExecutionRequest] = []
+
+        async def capture_run(req: ExecutionRequest) -> ExecutionResult:
+            captured_requests.append(req)
+            return ExecutionResult(success=True, output="ok")
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(side_effect=capture_run)
+
+        with (
+            patch(
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
+                return_value=MagicMock(
+                    prompt="Agent prompt", model=None, skills=[],
+                    display_name=None,
+                ),
+            ),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
+            patch(
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
+            patch(
+                "mc.contexts.conversation.chat_handler.inject_orientation",
+                return_value="Global rules\n\n---\n\nAgent prompt",
+            ) as inject_mock,
+        ):
+            await handler._process_chat_message(msg)
+
+        assert len(captured_requests) == 1
+        assert captured_requests[0].agent_prompt == "Global rules\n\n---\n\nAgent prompt"
+        inject_mock.assert_called_once_with("test-agent", "Agent prompt", bridge=bridge)
+
+    @pytest.mark.asyncio
     async def test_skips_message_without_id(self):
         """Messages without an id are skipped silently."""
         from mc.contexts.conversation.chat_handler import ChatHandler

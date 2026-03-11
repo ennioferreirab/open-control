@@ -224,7 +224,7 @@ async def handle_mention(
 
     # Inject global orientation for non-lead agents
     from mc.infrastructure.orientation import load_orientation
-    orientation = load_orientation(agent_name)
+    orientation = load_orientation(agent_name, bridge=bridge)
     if orientation:
         agent_prompt = f"{orientation}\n\n---\n\n{agent_prompt}" if agent_prompt else orientation
 

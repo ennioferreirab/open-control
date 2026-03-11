@@ -36,6 +36,7 @@ from mc.application.execution.request import (
     ExecutionResult,
     RunnerType,
 )
+from mc.application.execution.roster_builder import inject_orientation
 from mc.application.execution.runtime import relocate_invalid_memory_files
 
 if TYPE_CHECKING:
@@ -241,6 +242,12 @@ class ChatHandler:
                     agent_model = result.model
                     agent_skills = result.skills
                     agent_display_name = result.display_name or agent_name
+
+            agent_prompt = inject_orientation(agent_name, agent_prompt, bridge=self._bridge)
+
+            from mc.types import NANOBOT_AGENT_NAME
+            if agent_name == NANOBOT_AGENT_NAME:
+                agent_prompt = None
 
             # Resolve tier references
             from mc.types import is_cc_model, is_tier_reference
