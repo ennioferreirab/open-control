@@ -6,6 +6,47 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { ExecutionPlan } from "@/lib/types";
 
+type ActivityEventType =
+  | "task_created"
+  | "task_planning"
+  | "task_failed"
+  | "task_assigned"
+  | "task_started"
+  | "task_completed"
+  | "task_crashed"
+  | "task_retrying"
+  | "task_reassigned"
+  | "review_requested"
+  | "review_feedback"
+  | "review_approved"
+  | "hitl_requested"
+  | "hitl_approved"
+  | "hitl_denied"
+  | "agent_connected"
+  | "agent_disconnected"
+  | "agent_crashed"
+  | "system_error"
+  | "task_deleted"
+  | "task_restored"
+  | "agent_config_updated"
+  | "agent_activated"
+  | "agent_deactivated"
+  | "bulk_clear_done"
+  | "file_attached"
+  | "agent_output"
+  | "board_created"
+  | "board_updated"
+  | "board_deleted"
+  | "task_dispatch_started"
+  | "step_dispatched"
+  | "step_started"
+  | "step_completed"
+  | "step_created"
+  | "step_status_changed"
+  | "step_unblocked"
+  | "thread_message_sent"
+  | "step_retrying";
+
 export interface TaskDetailActionsResult {
   // Approve (HITL)
   approve: (taskId: Id<"tasks">) => Promise<void>;
@@ -46,7 +87,7 @@ export interface TaskDetailActionsResult {
   removeTaskFile: (taskId: Id<"tasks">, subfolder: string, filename: string) => Promise<void>;
   createActivity: (
     taskId: Id<"tasks">,
-    eventType: string,
+    eventType: ActivityEventType,
     description: string,
     timestamp: string,
   ) => Promise<void>;
@@ -241,18 +282,19 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
   );
 
   const createActivity = useCallback(
-    async (taskId: Id<"tasks">, eventType: string, description: string, timestamp: string) => {
+    async (
+      taskId: Id<"tasks">,
+      eventType: ActivityEventType,
+      description: string,
+      timestamp: string,
+    ) => {
       await createActivityMutation({ taskId, eventType, description, timestamp });
     },
     [createActivityMutation],
   );
 
   const createMergedTask = useCallback(
-    async (
-      primaryTaskId: Id<"tasks">,
-      secondaryTaskId: Id<"tasks">,
-      mode: "plan" | "manual",
-    ) => {
+    async (primaryTaskId: Id<"tasks">, secondaryTaskId: Id<"tasks">, mode: "plan" | "manual") => {
       setIsCreatingMergeTask(true);
       setCreateMergeTaskError("");
       try {

@@ -72,10 +72,7 @@ describe("StepCard", () => {
 
   it("renders blocked indicator when status is blocked", () => {
     render(
-      <StepCard
-        step={{ ...baseStep, status: "blocked" }}
-        parentTaskTitle="Q4 Forecast Task"
-      />
+      <StepCard step={{ ...baseStep, status: "blocked" }} parentTaskTitle="Q4 Forecast Task" />,
     );
 
     expect(screen.getByText("Blocked")).toBeInTheDocument();
@@ -83,10 +80,7 @@ describe("StepCard", () => {
 
   it("renders crashed indicator when status is crashed", () => {
     render(
-      <StepCard
-        step={{ ...baseStep, status: "crashed" }}
-        parentTaskTitle="Q4 Forecast Task"
-      />
+      <StepCard step={{ ...baseStep, status: "crashed" }} parentTaskTitle="Q4 Forecast Task" />,
     );
 
     expect(screen.getByText("Crashed")).toBeInTheDocument();
@@ -94,13 +88,7 @@ describe("StepCard", () => {
 
   it("calls onClick when clicked", () => {
     const onClick = vi.fn();
-    render(
-      <StepCard
-        step={baseStep}
-        parentTaskTitle="Q4 Forecast Task"
-        onClick={onClick}
-      />
-    );
+    render(<StepCard step={baseStep} parentTaskTitle="Q4 Forecast Task" onClick={onClick} />);
 
     fireEvent.click(screen.getByRole("article"));
     expect(onClick).toHaveBeenCalledTimes(1);
@@ -108,13 +96,7 @@ describe("StepCard", () => {
 
   it("calls onClick when Enter or Space is pressed", () => {
     const onClick = vi.fn();
-    render(
-      <StepCard
-        step={baseStep}
-        parentTaskTitle="Q4 Forecast Task"
-        onClick={onClick}
-      />
-    );
+    render(<StepCard step={baseStep} parentTaskTitle="Q4 Forecast Task" onClick={onClick} />);
 
     const card = screen.getByRole("article");
     fireEvent.keyDown(card, { key: "Enter" });
@@ -128,7 +110,7 @@ describe("StepCard", () => {
     expect(
       screen.getByRole("article", {
         name: "Step: Analyze financial data - running - assigned to financial-agent",
-      })
+      }),
     ).toBeInTheDocument();
   });
 
@@ -139,7 +121,7 @@ describe("StepCard", () => {
       <StepCard
         step={{ ...baseStep, attachedFiles: ["report.pdf", "data.csv"] }}
         parentTaskTitle="Q4 Forecast Task"
-      />
+      />,
     );
     expect(screen.getByText("2")).toBeInTheDocument();
   });
@@ -150,23 +132,33 @@ describe("StepCard", () => {
     const card = screen.getByRole("article");
     const fileSpans = card.querySelectorAll("span.inline-flex");
     const fileIndicator = Array.from(fileSpans).find(
-      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? "")
+      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? ""),
     );
     expect(fileIndicator).toBeUndefined();
   });
 
   it("does not show file indicator when attachedFiles is empty array", () => {
     render(
-      <StepCard
-        step={{ ...baseStep, attachedFiles: [] }}
-        parentTaskTitle="Q4 Forecast Task"
-      />
+      <StepCard step={{ ...baseStep, attachedFiles: [] }} parentTaskTitle="Q4 Forecast Task" />,
     );
     const card = screen.getByRole("article");
     const fileSpans = card.querySelectorAll("span.inline-flex");
     const fileIndicator = Array.from(fileSpans).find(
-      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? "")
+      (span) => span.querySelector("svg") && /^\d+$/.test(span.textContent?.trim() ?? ""),
     );
     expect(fileIndicator).toBeUndefined();
+  });
+
+  it("does not render action buttons for assigned human steps", () => {
+    render(
+      <StepCard
+        step={{ ...baseStep, assignedAgent: "human", status: "assigned" }}
+        parentTaskTitle="Q4 Forecast Task"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Complete" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
   });
 });

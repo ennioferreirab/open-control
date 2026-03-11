@@ -1,4 +1,6 @@
 import { internalMutation, mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 
 import {
@@ -24,6 +26,8 @@ export function isValidTransition(currentStatus: string, newStatus: string): boo
 }
 
 const MERGE_BLOCKED_SOURCE_STATUSES = new Set(["in_progress", "retrying", "deleted"]);
+type TaskStatus = Doc<"tasks">["status"];
+
 function defaultMergeSourceLabel(index: number): string {
   let value = index;
   let label = "";
@@ -62,6 +66,52 @@ function assertMergeableSourceTask(
   }
   if (task.mergedIntoTaskId) {
     throw new ConvexError(`Source task ${label} is already merged into another task`);
+  }
+}
+
+async function cascadeMergeSourceTasksToDone(
+  ctx: Pick<MutationCtx, "db">,
+  task: { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+  now: string,
+): Promise<void> {
+  if (task.isMergeTask !== true || !Array.isArray(task.mergeSourceTaskIds)) return;
+
+  for (const sourceTaskId of task.mergeSourceTaskIds) {
+    const sourceTask = await ctx.db.get(sourceTaskId);
+    if (!sourceTask || sourceTask.mergedIntoTaskId !== task._id) continue;
+    await ctx.db.patch(sourceTaskId, {
+      status: "done",
+      updatedAt: now,
+    });
+  }
+}
+
+async function restoreMergeSourceTasks(
+  ctx: Pick<MutationCtx, "db">,
+  task: { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+  now: string,
+): Promise<void> {
+  if (task.isMergeTask !== true || !Array.isArray(task.mergeSourceTaskIds)) return;
+
+  for (const sourceTaskId of task.mergeSourceTaskIds) {
+    const sourceTask = await ctx.db.get(sourceTaskId);
+    if (!sourceTask || sourceTask.mergedIntoTaskId !== task._id) continue;
+    const restoredStatus: TaskStatus =
+      typeof sourceTask.mergePreviousStatus === "string"
+        ? (sourceTask.mergePreviousStatus as TaskStatus)
+        : sourceTask.status;
+
+    await ctx.db.patch(sourceTaskId, {
+      status: restoredStatus,
+      mergedIntoTaskId: undefined,
+      mergeLockedAt: undefined,
+      mergePreviousStatus: undefined,
+      tags:
+        sourceTask.isMergeTask === true
+          ? dedupeTags(sourceTask.tags as string[] | undefined, ["merged"])
+          : removeTag(sourceTask.tags as string[] | undefined, "merged"),
+      updatedAt: now,
+    });
   }
 }
 
@@ -399,6 +449,7 @@ export const createMergedTask = mutation({
     for (const sourceTask of [primaryTask, secondaryTask]) {
       await ctx.db.patch(sourceTask._id as typeof args.primaryTaskId, {
         mergedIntoTaskId: mergedTaskId,
+        mergePreviousStatus: sourceTask.status,
         mergeLockedAt: now,
         tags: dedupeTags(sourceTask.tags as string[] | undefined, ["merged"]),
         updatedAt: now,
@@ -854,6 +905,11 @@ export const approve = mutation({
 
     // Transition to done
     await ctx.db.patch(args.taskId, { status: "done", updatedAt: now });
+    await cascadeMergeSourceTasksToDone(
+      ctx,
+      task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+      now,
+    );
 
     // Mark all execution plan steps as completed
     await markPlanStepsCompleted(ctx, args.taskId, task);
@@ -912,6 +968,14 @@ export const manualMove = mutation({
       updatedAt: now,
     });
 
+    if (args.newStatus === "done") {
+      await cascadeMergeSourceTasksToDone(
+        ctx,
+        task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+        now,
+      );
+    }
+
     await logActivity(ctx, {
       taskId: args.taskId,
       eventType: "manual_task_status_changed",
@@ -959,6 +1023,11 @@ export const updateStatus = internalMutation({
 
     // When task reaches "done", mark all execution plan steps as completed
     if (newStatus === "done") {
+      await cascadeMergeSourceTasksToDone(
+        ctx,
+        task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+        now,
+      );
       await markPlanStepsCompleted(ctx, args.taskId, task);
     }
 
@@ -1114,21 +1183,11 @@ export const softDelete = mutation({
 
     const now = new Date().toISOString();
 
-    if (task.isMergeTask && task.mergeSourceTaskIds?.length) {
-      for (const sourceTaskId of task.mergeSourceTaskIds) {
-        const sourceTask = await ctx.db.get(sourceTaskId);
-        if (!sourceTask || sourceTask.mergedIntoTaskId !== args.taskId) continue;
-        await ctx.db.patch(sourceTaskId, {
-          mergedIntoTaskId: undefined,
-          mergeLockedAt: undefined,
-          tags:
-            sourceTask.isMergeTask === true
-              ? dedupeTags(sourceTask.tags as string[] | undefined, ["merged"])
-              : removeTag(sourceTask.tags as string[] | undefined, "merged"),
-          updatedAt: now,
-        });
-      }
-    }
+    await restoreMergeSourceTasks(
+      ctx,
+      task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+      now,
+    );
 
     await ctx.db.patch(args.taskId, {
       status: "deleted",
@@ -1339,6 +1398,7 @@ export const restore = mutation({
         if (!sourceTask || sourceTask.status === "deleted") continue;
         await ctx.db.patch(sourceTaskId, {
           mergedIntoTaskId: args.taskId,
+          mergePreviousStatus: sourceTask.status,
           mergeLockedAt: now,
           tags: dedupeTags(sourceTask.tags as string[] | undefined, ["merged"]),
           updatedAt: now,

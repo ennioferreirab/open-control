@@ -7,6 +7,7 @@ import {
   findBlockedStepsReadyToUnblock,
   isValidStepTransition,
   isValidStepStatus,
+  manualMoveStep,
   retryStep,
   resolveBlockedByIds,
   resolveInitialStepStatus,
@@ -43,7 +44,7 @@ describe("findBlockedStepsReadyToUnblock", () => {
     ];
 
     const ready = findBlockedStepsReadyToUnblock(
-      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0]
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
     );
 
     expect(ready).toEqual(["s3", "s4"]);
@@ -58,7 +59,7 @@ describe("findBlockedStepsReadyToUnblock", () => {
     ];
 
     const ready = findBlockedStepsReadyToUnblock(
-      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0]
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
     );
 
     expect(ready).toEqual([]);
@@ -72,7 +73,7 @@ describe("findBlockedStepsReadyToUnblock", () => {
     ];
 
     const ready = findBlockedStepsReadyToUnblock(
-      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0]
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
     );
 
     expect(ready).toEqual([]);
@@ -89,14 +90,12 @@ describe("resolveInitialStepStatus", () => {
   });
 
   it("throws when blockedBy is non-empty and status is not blocked", () => {
-    expect(() => resolveInitialStepStatus("assigned", 1)).toThrow(
-      /must use status 'blocked'/
-    );
+    expect(() => resolveInitialStepStatus("assigned", 1)).toThrow(/must use status 'blocked'/);
   });
 
   it("throws when status is blocked but there are no dependencies", () => {
     expect(() => resolveInitialStepStatus("blocked", 0)).toThrow(
-      /requires at least one dependency/
+      /requires at least one dependency/,
     );
   });
 });
@@ -148,7 +147,7 @@ describe("resolveBlockedByIds", () => {
 
   it("throws when a dependency temp ID is unknown", () => {
     expect(() => resolveBlockedByIds(["missing"], {} as any)).toThrow(
-      /Unknown blockedByTempId dependency/
+      /Unknown blockedByTempId dependency/,
     );
   });
 });
@@ -156,9 +155,11 @@ describe("resolveBlockedByIds", () => {
 // Story 7.2: acceptHumanStep mutation tests
 describe("acceptHumanStep", () => {
   function getHandler() {
-    return (acceptHumanStep as unknown as {
-      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
-    })._handler;
+    return (
+      acceptHumanStep as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+      }
+    )._handler;
   }
 
   function makeCtx(stepOverrides: Record<string, unknown> = {}) {
@@ -215,12 +216,10 @@ describe("acceptHumanStep", () => {
 
     await handler(ctx, { stepId: "step-1" });
 
-    const acceptedActivity = insertedActivities.find(
-      (a) => {
-        const desc = (a as Record<string, unknown>).description as string;
-        return desc.includes("Human accepted step");
-      }
-    );
+    const acceptedActivity = insertedActivities.find((a) => {
+      const desc = (a as Record<string, unknown>).description as string;
+      return desc.includes("Human accepted step");
+    });
     expect(acceptedActivity).toBeDefined();
     expect((acceptedActivity as Record<string, unknown>).description).toContain("Review documents");
   });
@@ -244,18 +243,14 @@ describe("acceptHumanStep", () => {
       },
     };
 
-    await expect(handler(ctx, { stepId: "nonexistent" })).rejects.toThrow(
-      /Step not found/
-    );
+    await expect(handler(ctx, { stepId: "nonexistent" })).rejects.toThrow(/Step not found/);
   });
 
   it("throws ConvexError when step is not in waiting_human status", async () => {
     const handler = getHandler();
     const { ctx } = makeCtx({ status: "running" });
 
-    await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(
-      /not in waiting_human status/
-    );
+    await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(/not in waiting_human status/);
   });
 
   it("does NOT unblock dependents on accept (deferred to manual completion)", async () => {
@@ -295,11 +290,369 @@ describe("acceptHumanStep", () => {
   });
 });
 
+describe("manualMoveStep", () => {
+  function getHandler() {
+    return (
+      manualMoveStep as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+      }
+    )._handler;
+  }
+
+  it("allows completing a human step directly from assigned", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+    const ctx = {
+      db: {
+        get: async () => ({
+          _id: "step-1",
+          taskId: "task-1",
+          title: "Human review",
+          status: "assigned",
+          assignedAgent: "human",
+          order: 1,
+        }),
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [
+              {
+                _id: "step-1",
+                taskId: "task-1",
+                title: "Human review",
+                status: "assigned",
+                assignedAgent: "human",
+                order: 1,
+              },
+            ],
+          }),
+        }),
+      },
+    };
+
+    await expect(handler(ctx, { stepId: "step-1", newStatus: "completed" })).resolves.toBe(
+      "task-1",
+    );
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "completed",
+    });
+  });
+
+  it("moves the parent task to done and syncs execution plan when the last human step completes", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+    const inserted: Array<{ table: string; value: Record<string, unknown> }> = [];
+
+    const task = {
+      _id: "task-1",
+      title: "Human approval task",
+      status: "in_progress",
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Review output",
+            description: "Check result",
+            assignedAgent: "human",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+            status: "running",
+          },
+        ],
+      },
+    };
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Review output",
+      status: "running",
+      assignedAgent: "human",
+      order: 1,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async (table: string, value: Record<string, unknown>) => {
+          inserted.push({ table, value });
+          return `${table}-1`;
+        },
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [step],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { stepId: "step-1", newStatus: "completed" });
+
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "completed",
+    });
+    expect(patchedById["task-1"]).toMatchObject({
+      status: "done",
+    });
+    expect(
+      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
+    ).toMatchObject({
+      status: "completed",
+    });
+    expect(
+      inserted.some(
+        ({ table, value }) =>
+          table === "activities" &&
+          value.eventType === "task_completed" &&
+          String(value.description).includes("All 1 steps completed"),
+      ),
+    ).toBe(true);
+  });
+
+  it("cascades done to merged source tasks when the last human step completes a merge task", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const task = {
+      _id: "task-merge",
+      title: "Merged human approval task",
+      status: "in_progress",
+      isMergeTask: true,
+      mergeSourceTaskIds: ["task-a", "task-b"],
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Review output",
+            description: "Check result",
+            assignedAgent: "human",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+            status: "running",
+          },
+        ],
+      },
+    };
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-merge",
+      title: "Review output",
+      status: "running",
+      assignedAgent: "human",
+      order: 1,
+    };
+
+    const sourceTaskA = {
+      _id: "task-a",
+      title: "Task A",
+      status: "review",
+      mergedIntoTaskId: "task-merge",
+      mergePreviousStatus: "review",
+    };
+
+    const sourceTaskB = {
+      _id: "task-b",
+      title: "Task B",
+      status: "assigned",
+      mergedIntoTaskId: "task-merge",
+      mergePreviousStatus: "assigned",
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-merge") return task;
+          if (id === "task-a") return sourceTaskA;
+          if (id === "task-b") return sourceTaskB;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [step],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { stepId: "step-1", newStatus: "completed" });
+
+    expect(patchedById["task-merge"]).toMatchObject({
+      status: "done",
+    });
+    expect(patchedById["task-a"]).toMatchObject({
+      status: "done",
+    });
+    expect(patchedById["task-b"]).toMatchObject({
+      status: "done",
+    });
+  });
+
+  it("allows moving a human step from running back to assigned and reopens the parent task", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const task = {
+      _id: "task-1",
+      title: "Human approval task",
+      status: "done",
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Review output",
+            description: "Check result",
+            assignedAgent: "human",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+            status: "completed",
+          },
+        ],
+      },
+    };
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Review output",
+      description: "Check result",
+      status: "running",
+      assignedAgent: "human",
+      order: 1,
+      startedAt: "2026-03-10T00:00:00Z",
+      completedAt: "2026-03-10T00:10:00Z",
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [step],
+          }),
+        }),
+      },
+    };
+
+    await expect(handler(ctx, { stepId: "step-1", newStatus: "assigned" })).resolves.toBe("task-1");
+
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "assigned",
+      completedAt: undefined,
+    });
+    expect(patchedById["task-1"]).toMatchObject({
+      status: "in_progress",
+    });
+    expect(
+      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
+    ).toMatchObject({
+      status: "assigned",
+    });
+  });
+
+  it("keeps the parent task in_progress when a human step moves to waiting_human", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const task = {
+      _id: "task-1",
+      title: "Human approval task",
+      status: "in_progress",
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Review output",
+            description: "Check result",
+            assignedAgent: "human",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+            status: "running",
+          },
+        ],
+      },
+    };
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Review output",
+      description: "Check result",
+      status: "running",
+      assignedAgent: "human",
+      order: 1,
+      startedAt: "2026-03-10T00:00:00Z",
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [step],
+          }),
+        }),
+      },
+    };
+
+    await expect(handler(ctx, { stepId: "step-1", newStatus: "waiting_human" })).resolves.toBe(
+      "task-1",
+    );
+
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "waiting_human",
+    });
+    expect(patchedById["task-1"]?.status).not.toBe("review");
+    expect(
+      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
+    ).toMatchObject({
+      status: "waiting_human",
+    });
+  });
+});
+
 describe("batchCreate", () => {
   function getHandler() {
-    return (batchCreate as unknown as {
-      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string[]>;
-    })._handler;
+    return (
+      batchCreate as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string[]>;
+      }
+    )._handler;
   }
 
   it("creates steps and patches blockedBy dependencies atomically", async () => {
@@ -387,16 +740,18 @@ describe("batchCreate", () => {
             order: 1,
           },
         ],
-      })
+      }),
     ).rejects.toThrow(/unknown dependency/i);
   });
 });
 
 describe("updateStatus", () => {
   function getHandler() {
-    return (updateStatus as unknown as {
-      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
-    })._handler;
+    return (
+      updateStatus as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
+      }
+    )._handler;
   }
 
   it("ignores late-arriving status updates for soft-deleted steps", async () => {
@@ -428,9 +783,11 @@ describe("updateStatus", () => {
 
 describe("retryStep", () => {
   function getHandler() {
-    return (retryStep as unknown as {
-      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
-    })._handler;
+    return (
+      retryStep as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+      }
+    )._handler;
   }
 
   it("retries a crashed step and moves parent task to retrying", async () => {
@@ -494,9 +851,8 @@ describe("retryStep", () => {
     });
     expect(
       inserted.some(
-        ({ table, value }) =>
-          table === "activities" && value.eventType === "step_retrying"
-      )
+        ({ table, value }) => table === "activities" && value.eventType === "step_retrying",
+      ),
     ).toBe(true);
   });
 
@@ -516,17 +872,17 @@ describe("retryStep", () => {
       },
     };
 
-    await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(
-      /not in crashed status/
-    );
+    await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(/not in crashed status/);
   });
 });
 
 describe("deleteStep", () => {
   function getHandler() {
-    return (deleteStep as unknown as {
-      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
-    })._handler;
+    return (
+      deleteStep as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
+      }
+    )._handler;
   }
 
   it("soft-deletes a step in running status and preserves sibling blockers", async () => {
@@ -598,8 +954,8 @@ describe("deleteStep", () => {
         ({ table, value }) =>
           table === "activities" &&
           value.eventType === "step_status_changed" &&
-          String(value.description).includes("deleted")
-      )
+          String(value.description).includes("deleted"),
+      ),
     ).toBe(true);
   });
 });

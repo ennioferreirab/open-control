@@ -41,16 +41,22 @@ export interface ColumnData {
 export function stepStatusToColumnStatus(
   stepStatus: Doc<"steps">["status"],
   taskStatus?: Doc<"tasks">["status"],
+  assignedAgent?: Doc<"steps">["assignedAgent"],
 ): ColumnStatus | null {
   switch (stepStatus) {
     case "assigned":
     case "blocked":
-      // When the parent task is already in_progress, waiting steps belong in
-      // the "In Progress" column -- not "Assigned" (which is for tasks not yet started).
+      // Human steps stay in Assigned until a person explicitly moves them forward.
+      if (assignedAgent === "human" && stepStatus === "assigned") {
+        return "assigned";
+      }
+      // Non-human work follows task progress and surfaces in In Progress once execution has begun.
       return taskStatus === "in_progress" ? "in_progress" : "assigned";
     case "running":
     case "crashed":
       return "in_progress";
+    case "waiting_human":
+      return "review";
     case "completed":
     case "deleted":
       // Done tasks already skip all steps (line 248-252 of original), so this only
@@ -86,14 +92,19 @@ export function useBoardColumns(
     );
     const taskStatusMap = new Map(tasks.map((task) => [task._id, task.status] as const));
 
-    // Group steps by taskId, skipping done/review tasks and completed steps
+    // Group steps by taskId, skipping done tasks and most review tasks.
+    // waiting_human is a special case: keep rendering it as a step group in
+    // Review so older/stale task states do not hide the Accept action.
     const stepsByTaskId = new Map<Id<"tasks">, Doc<"steps">[]>();
     for (const step of boardSteps) {
       const taskStatus = taskStatusMap.get(step.taskId);
-      if (taskStatus === "done" || taskStatus === "review") {
+      if (taskStatus === "done") {
         continue;
       }
-      const mappedColumn = stepStatusToColumnStatus(step.status, taskStatus);
+      if (taskStatus === "review" && step.status !== "waiting_human") {
+        continue;
+      }
+      const mappedColumn = stepStatusToColumnStatus(step.status, taskStatus, step.assignedAgent);
       if (!mappedColumn) {
         continue;
       }
@@ -107,7 +118,10 @@ export function useBoardColumns(
     // (not as step groups in In Progress), even if they have running steps
     // -- e.g. when ask_user pauses execution for user input.
     const regularTasks = tasks.filter(
-      (task) => !tasksWithRenderableSteps.has(task._id) || task.status === "review",
+      (task) =>
+        !tasksWithRenderableSteps.has(task._id) ||
+        (task.status === "review" &&
+          !(stepsByTaskId.get(task._id) ?? []).some((step) => step.status === "waiting_human")),
     );
 
     return COLUMNS.map((col) => {
@@ -158,7 +172,11 @@ export function useBoardColumns(
         .map(([taskId, taskSteps]) => {
           const taskStatus = taskStatusMap.get(taskId);
           const steps = taskSteps
-            .filter((step) => stepStatusToColumnStatus(step.status, taskStatus) === col.status)
+            .filter(
+              (step) =>
+                stepStatusToColumnStatus(step.status, taskStatus, step.assignedAgent) ===
+                col.status,
+            )
             .sort((a, b) => a.order - b.order);
           return {
             taskId,

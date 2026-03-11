@@ -1,9 +1,11 @@
 import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 
 import {
+  type StepWithDependencies,
   type StepStatus,
   isValidStepStatus,
   isValidStepTransition,
@@ -14,6 +16,74 @@ import {
   logStepStatusChange,
 } from "./lib/stepLifecycle";
 import { logActivity } from "./lib/workflowHelpers";
+
+function syncExecutionPlanStepStatus(
+  executionPlan: unknown,
+  step: {
+    title?: string;
+    description?: string;
+    order?: number;
+  },
+  newStatus: string,
+): unknown {
+  const plan = executionPlan as { steps?: Array<Record<string, unknown>> } | undefined;
+  if (!plan?.steps?.length) {
+    return executionPlan;
+  }
+
+  let updated = false;
+  const steps = plan.steps.map((planStep) => {
+    const sameOrder = Number(planStep.order) === Number(step.order);
+    const sameTitle = String(planStep.title ?? "") === String(step.title ?? "");
+    const sameDescription =
+      step.description == null ||
+      String(planStep.description ?? "") === String(step.description ?? "");
+
+    if (!sameOrder || !sameTitle || !sameDescription) {
+      return planStep;
+    }
+
+    updated = true;
+    return {
+      ...planStep,
+      status: newStatus,
+    };
+  });
+
+  return updated ? { ...plan, steps } : executionPlan;
+}
+
+function deriveHumanParentTaskStatus(
+  steps: Array<{
+    status?: string;
+  }>,
+): "done" | "crashed" | "in_progress" {
+  if (steps.length > 0 && steps.every((step) => step.status === "completed")) {
+    return "done";
+  }
+  if (steps.some((step) => step.status === "crashed")) {
+    return "crashed";
+  }
+  return "in_progress";
+}
+
+async function cascadeMergedSourceTasksToDone(
+  ctx: Pick<MutationCtx, "db">,
+  task: { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+  timestamp: string,
+): Promise<void> {
+  if (task.isMergeTask !== true || !Array.isArray(task.mergeSourceTaskIds)) return;
+
+  for (const sourceTaskId of task.mergeSourceTaskIds) {
+    const sourceTask = await ctx.db.get(sourceTaskId);
+    if (!sourceTask || sourceTask.mergedIntoTaskId !== task._id) continue;
+
+    await ctx.db.patch(sourceTaskId, {
+      status: "done",
+      updatedAt: timestamp,
+    });
+  }
+}
 
 // Re-export pure functions for testability and backward compatibility
 export {
@@ -61,9 +131,7 @@ export const create = internalMutation({
         throw new ConvexError(`Dependency step not found: ${dependencyId}`);
       }
       if (dependencyStep.taskId !== args.taskId) {
-        throw new ConvexError(
-          "All blockedBy dependency steps must belong to the same task"
-        );
+        throw new ConvexError("All blockedBy dependency steps must belong to the same task");
       }
     }
 
@@ -99,15 +167,17 @@ export const create = internalMutation({
 export const batchCreate = internalMutation({
   args: {
     taskId: v.id("tasks"),
-    steps: v.array(v.object({
-      tempId: v.string(),
-      title: v.string(),
-      description: v.string(),
-      assignedAgent: v.string(),
-      blockedByTempIds: v.array(v.string()),
-      parallelGroup: v.number(),
-      order: v.number(),
-    })),
+    steps: v.array(
+      v.object({
+        tempId: v.string(),
+        title: v.string(),
+        description: v.string(),
+        assignedAgent: v.string(),
+        blockedByTempIds: v.array(v.string()),
+        parallelGroup: v.number(),
+        order: v.number(),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -123,10 +193,7 @@ export const batchCreate = internalMutation({
 
     // Phase 1: create all step documents to obtain real Convex IDs.
     for (const step of args.steps) {
-      const status = resolveInitialStepStatus(
-        undefined,
-        step.blockedByTempIds.length
-      );
+      const status = resolveInitialStepStatus(undefined, step.blockedByTempIds.length);
 
       const stepId = await ctx.db.insert("steps", {
         taskId: args.taskId,
@@ -157,10 +224,7 @@ export const batchCreate = internalMutation({
         continue;
       }
       const stepId = tempIdToRealId[step.tempId];
-      const blockedBy = resolveBlockedByIds(
-        step.blockedByTempIds,
-        tempIdToRealId
-      );
+      const blockedBy = resolveBlockedByIds(step.blockedByTempIds, tempIdToRealId);
       await ctx.db.patch(stepId, { blockedBy });
     }
 
@@ -192,9 +256,7 @@ export const updateStatus = internalMutation({
       return;
     }
     if (!isValidStepTransition(step.status, args.status)) {
-      throw new ConvexError(
-        `Invalid step transition: ${step.status} -> ${args.status}`
-      );
+      throw new ConvexError(`Invalid step transition: ${step.status} -> ${args.status}`);
     }
 
     const timestamp = new Date().toISOString();
@@ -237,9 +299,7 @@ export const acceptHumanStep = mutation({
       throw new ConvexError("Step not found");
     }
     if (step.status !== "waiting_human") {
-      throw new ConvexError(
-        `Step is not in waiting_human status (current: ${step.status})`
-      );
+      throw new ConvexError(`Step is not in waiting_human status (current: ${step.status})`);
     }
 
     const timestamp = new Date().toISOString();
@@ -289,38 +349,48 @@ export const manualMoveStep = mutation({
     if (step.assignedAgent !== "human") {
       throw new ConvexError("Only human-assigned steps can be manually moved");
     }
-    // Restrict to transitions that make sense for human-driven steps
-    const allowedHumanTransitions: Record<string, string[]> = {
-      assigned: ["running", "waiting_human"],
-      waiting_human: ["running", "completed", "crashed"],
-      running: ["completed", "crashed"],
-    };
-    const allowed = allowedHumanTransitions[step.status];
-    if (!allowed) {
-      throw new ConvexError(
-        `Human step in '${step.status}' status cannot be manually moved`
-      );
+    if (!isValidStepStatus(args.newStatus)) {
+      throw new ConvexError(`Invalid step status: ${args.newStatus}`);
     }
     if (step.status === args.newStatus) {
       return step.taskId;
-    }
-    if (!allowed.includes(args.newStatus)) {
-      throw new ConvexError(
-        `Invalid human step transition: ${step.status} -> ${args.newStatus}`
-      );
     }
 
     const timestamp = new Date().toISOString();
     const patch: Record<string, unknown> = { status: args.newStatus };
 
-    if (args.newStatus === "running" && !step.startedAt) {
-      patch.startedAt = timestamp;
+    if (args.newStatus === "running") {
+      patch.startedAt = step.startedAt ?? timestamp;
+    } else if (args.newStatus === "assigned" || args.newStatus === "waiting_human") {
+      patch.startedAt = undefined;
     }
     if (args.newStatus === "completed") {
       patch.completedAt = timestamp;
+    } else {
+      patch.completedAt = undefined;
+    }
+    if (args.newStatus !== "crashed") {
+      patch.errorMessage = undefined;
     }
 
     await ctx.db.patch(args.stepId, patch);
+
+    const task = await ctx.db.get(step.taskId);
+    if (!task) {
+      throw new ConvexError("Parent task not found");
+    }
+
+    const syncedExecutionPlan = syncExecutionPlanStepStatus(
+      task.executionPlan,
+      step,
+      args.newStatus,
+    );
+    if (syncedExecutionPlan !== task.executionPlan) {
+      await ctx.db.patch(step.taskId, {
+        executionPlan: syncedExecutionPlan,
+        updatedAt: timestamp,
+      });
+    }
 
     await logStepStatusChange(ctx, {
       taskId: step.taskId,
@@ -331,17 +401,27 @@ export const manualMoveStep = mutation({
       timestamp,
     });
 
-    // When completing, unblock dependent steps so the orchestrator picks them up.
-    if (args.newStatus === "completed") {
-      const allTaskSteps = await ctx.db
-        .query("steps")
-        .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
-        .collect();
+    const allTaskSteps = await ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
+      .collect();
+    const currentTaskSteps: StepWithDependencies[] = allTaskSteps.map((taskStep) =>
+      taskStep._id === args.stepId
+        ? {
+            _id: taskStep._id,
+            status: args.newStatus as StepStatus,
+            blockedBy: taskStep.blockedBy,
+          }
+        : {
+            _id: taskStep._id,
+            status: taskStep.status as StepStatus,
+            blockedBy: taskStep.blockedBy,
+          },
+    );
 
-      const unblockedIds = findBlockedStepsReadyToUnblock(allTaskSteps);
-      const stepsById = new Map(
-        allTaskSteps.map((s) => [s._id, s] as const)
-      );
+    if (args.newStatus === "completed") {
+      const unblockedIds = findBlockedStepsReadyToUnblock(currentTaskSteps);
+      const stepsById = new Map(allTaskSteps.map((s) => [s._id, s] as const));
 
       for (const unblockedStepId of unblockedIds) {
         const blockedStep = stepsById.get(unblockedStepId);
@@ -371,6 +451,42 @@ export const manualMoveStep = mutation({
       }
     }
 
+    const nextTaskStatus = deriveHumanParentTaskStatus(currentTaskSteps);
+    if (task.status !== nextTaskStatus) {
+      await ctx.db.patch(step.taskId, {
+        status: nextTaskStatus,
+        updatedAt: timestamp,
+      });
+
+      if (nextTaskStatus === "done") {
+        await cascadeMergedSourceTasksToDone(
+          ctx,
+          task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
+          timestamp,
+        );
+      }
+
+      const taskEventType =
+        nextTaskStatus === "done"
+          ? "task_completed"
+          : nextTaskStatus === "crashed"
+            ? "task_crashed"
+            : "task_started";
+      const taskDescription =
+        nextTaskStatus === "done"
+          ? `All ${currentTaskSteps.length} steps completed`
+          : nextTaskStatus === "crashed"
+            ? "One or more human steps crashed"
+            : "Human step state changed; task returned to in_progress";
+
+      await logActivity(ctx, {
+        taskId: step.taskId,
+        eventType: taskEventType,
+        description: taskDescription,
+        timestamp,
+      });
+    }
+
     return step.taskId;
   },
 });
@@ -385,9 +501,7 @@ export const retryStep = mutation({
       throw new ConvexError("Step not found");
     }
     if (step.status !== "crashed") {
-      throw new ConvexError(
-        `Step is not in crashed status (current: ${step.status})`
-      );
+      throw new ConvexError(`Step is not in crashed status (current: ${step.status})`);
     }
 
     const task = await ctx.db.get(step.taskId);
@@ -475,7 +589,7 @@ export const addStep = mutation({
     // (review uses local plan state, not this mutation)
     if (task.status !== "in_progress" && task.status !== "done") {
       throw new ConvexError(
-        `addStep is only allowed for tasks in 'in_progress' or 'done' status (current: ${task.status})`
+        `addStep is only allowed for tasks in 'in_progress' or 'done' status (current: ${task.status})`,
       );
     }
 
@@ -488,9 +602,7 @@ export const addStep = mutation({
         throw new ConvexError(`Dependency step not found: ${depId}`);
       }
       if (depStep.taskId !== args.taskId) {
-        throw new ConvexError(
-          "All blockedBy dependency steps must belong to the same task"
-        );
+        throw new ConvexError("All blockedBy dependency steps must belong to the same task");
       }
     }
 
@@ -501,28 +613,17 @@ export const addStep = mutation({
       .collect();
 
     // Compute order: max(existing orders) + 1
-    const maxOrder = existingSteps.reduce(
-      (max, s) => Math.max(max, s.order),
-      0
-    );
+    const maxOrder = existingSteps.reduce((max, s) => Math.max(max, s.order), 0);
     const order = maxOrder + 1;
 
     // Compute parallelGroup based on blockers
     let parallelGroup: number;
     if (blockedByIds.length > 0) {
-      const blockerSteps = existingSteps.filter((s) =>
-        blockedByIds.includes(s._id)
-      );
-      const maxBlockerGroup = blockerSteps.reduce(
-        (max, s) => Math.max(max, s.parallelGroup),
-        0
-      );
+      const blockerSteps = existingSteps.filter((s) => blockedByIds.includes(s._id));
+      const maxBlockerGroup = blockerSteps.reduce((max, s) => Math.max(max, s.parallelGroup), 0);
       parallelGroup = maxBlockerGroup + 1;
     } else {
-      const maxGroup = existingSteps.reduce(
-        (max, s) => Math.max(max, s.parallelGroup),
-        0
-      );
+      const maxGroup = existingSteps.reduce((max, s) => Math.max(max, s.parallelGroup), 0);
       parallelGroup = maxGroup + 1;
     }
 
@@ -532,12 +633,8 @@ export const addStep = mutation({
       status = "planned";
     } else {
       // Check if all blockers are completed
-      const blockerSteps = existingSteps.filter((s) =>
-        blockedByIds.includes(s._id)
-      );
-      const allBlockersCompleted = blockerSteps.every(
-        (s) => s.status === "completed"
-      );
+      const blockerSteps = existingSteps.filter((s) => blockedByIds.includes(s._id));
+      const allBlockersCompleted = blockerSteps.every((s) => s.status === "completed");
       status = allBlockersCompleted ? "planned" : "blocked";
     }
 
@@ -557,9 +654,10 @@ export const addStep = mutation({
     });
 
     // Append to tasks.executionPlan.steps (keep plan JSON in sync)
-    const plan = (task.executionPlan as {
-      steps?: Array<Record<string, unknown>>;
-    }) ?? {};
+    const plan =
+      (task.executionPlan as {
+        steps?: Array<Record<string, unknown>>;
+      }) ?? {};
     const planSteps = Array.isArray(plan.steps) ? [...plan.steps] : [];
 
     // Generate tempId following step_N pattern
@@ -567,9 +665,8 @@ export const addStep = mutation({
       .map((s) => String(s.tempId ?? ""))
       .filter((id) => /^step_\d+$/.test(id))
       .map((id) => parseInt(id.replace("step_", ""), 10));
-    const maxTempIdNum = existingTempIds.length > 0
-      ? Math.max(...existingTempIds)
-      : existingSteps.length;
+    const maxTempIdNum =
+      existingTempIds.length > 0 ? Math.max(...existingTempIds) : existingSteps.length;
     const tempId = `step_${maxTempIdNum + 1}`;
 
     // Build blockedBy tempId references for the plan JSON
@@ -582,9 +679,7 @@ export const addStep = mutation({
     // Also try matching existing steps by their _id to find tempIds
     for (const es of existingSteps) {
       const planEntry = planSteps.find(
-        (ps) =>
-          String(ps.stepId) === String(es._id) ||
-          ps.title === es.title
+        (ps) => String(ps.stepId) === String(es._id) || ps.title === es.title,
       );
       if (planEntry?.tempId) {
         stepIdToTempId.set(String(es._id), String(planEntry.tempId));
@@ -640,7 +735,7 @@ export const updateStep = mutation({
     // Only planned/blocked steps can be edited
     if (step.status !== "planned" && step.status !== "blocked") {
       throw new ConvexError(
-        `Cannot edit step in '${step.status}' status. Only planned or blocked steps can be modified.`
+        `Cannot edit step in '${step.status}' status. Only planned or blocked steps can be modified.`,
       );
     }
 
@@ -672,13 +767,10 @@ export const updateStep = mutation({
           throw new ConvexError(`Dependency step not found: ${depId}`);
         }
         if (depStep.taskId !== step.taskId) {
-          throw new ConvexError(
-            "All blockedBy dependency steps must belong to the same task"
-          );
+          throw new ConvexError("All blockedBy dependency steps must belong to the same task");
         }
       }
-      patch.blockedBy =
-        args.blockedByStepIds.length > 0 ? args.blockedByStepIds : undefined;
+      patch.blockedBy = args.blockedByStepIds.length > 0 ? args.blockedByStepIds : undefined;
 
       // Re-resolve status based on new blockers
       if (args.blockedByStepIds.length === 0) {
@@ -688,9 +780,7 @@ export const updateStep = mutation({
           .query("steps")
           .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
           .collect();
-        const blockerSteps = existingSteps.filter((s) =>
-          args.blockedByStepIds!.includes(s._id)
-        );
+        const blockerSteps = existingSteps.filter((s) => args.blockedByStepIds!.includes(s._id));
         const allDone = blockerSteps.every((s) => s.status === "completed");
         patch.status = allDone ? "planned" : "blocked";
       }
@@ -701,21 +791,18 @@ export const updateStep = mutation({
     // Also update the executionPlan JSON on the task
     const task = await ctx.db.get(step.taskId);
     if (task) {
-      const plan = (task.executionPlan as {
-        steps?: Array<Record<string, unknown>>;
-      }) ?? {};
+      const plan =
+        (task.executionPlan as {
+          steps?: Array<Record<string, unknown>>;
+        }) ?? {};
       if (Array.isArray(plan.steps)) {
         const updatedPlanSteps = plan.steps.map((ps) => {
-          const match =
-            String(ps.stepId) === String(args.stepId) ||
-            ps.title === step.title;
+          const match = String(ps.stepId) === String(args.stepId) || ps.title === step.title;
           if (!match) return ps;
           const updated = { ...ps };
           if (args.title !== undefined) updated.title = args.title;
-          if (args.description !== undefined)
-            updated.description = args.description;
-          if (args.assignedAgent !== undefined)
-            updated.assignedAgent = args.assignedAgent;
+          if (args.description !== undefined) updated.description = args.description;
+          if (args.assignedAgent !== undefined) updated.assignedAgent = args.assignedAgent;
           return updated;
         });
         await ctx.db.patch(step.taskId, {
@@ -784,9 +871,7 @@ export const checkAndUnblockDependents = internalMutation({
     }
 
     const timestamp = new Date().toISOString();
-    const stepsById = new Map(
-      allTaskSteps.map((step) => [step._id, step] as const)
-    );
+    const stepsById = new Map(allTaskSteps.map((step) => [step._id, step] as const));
 
     for (const stepId of unblockedIds) {
       const blockedStep = stepsById.get(stepId);

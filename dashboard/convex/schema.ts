@@ -7,10 +7,14 @@ export default defineSchema({
     displayName: v.string(),
     description: v.optional(v.string()),
     enabledAgents: v.array(v.string()),
-    agentMemoryModes: v.optional(v.array(v.object({
-      agentName: v.string(),
-      mode: v.union(v.literal("clean"), v.literal("with_history")),
-    }))),
+    agentMemoryModes: v.optional(
+      v.array(
+        v.object({
+          agentName: v.string(),
+          mode: v.union(v.literal("clean"), v.literal("with_history")),
+        }),
+      ),
+    ),
     isDefault: v.optional(v.boolean()),
     createdAt: v.string(),
     updatedAt: v.string(),
@@ -36,19 +40,13 @@ export default defineSchema({
       v.literal("deleted"),
     ),
     assignedAgent: v.optional(v.string()),
-    trustLevel: v.union(
-      v.literal("autonomous"),
-      v.literal("human_approved"),
-    ),
+    trustLevel: v.union(v.literal("autonomous"), v.literal("human_approved")),
     reviewers: v.optional(v.array(v.string())),
     tags: v.optional(v.array(v.string())),
     taskTimeout: v.optional(v.number()),
     interAgentTimeout: v.optional(v.number()),
     executionPlan: v.optional(v.any()),
-    supervisionMode: v.optional(v.union(
-      v.literal("autonomous"),
-      v.literal("supervised"),
-    )),
+    supervisionMode: v.optional(v.union(v.literal("autonomous"), v.literal("supervised"))),
     stalledAt: v.optional(v.string()),
     isManual: v.optional(v.boolean()),
     isFavorite: v.optional(v.boolean()),
@@ -63,14 +61,19 @@ export default defineSchema({
     mergeSourceTaskIds: v.optional(v.array(v.id("tasks"))),
     mergeSourceLabels: v.optional(v.array(v.string())),
     mergedIntoTaskId: v.optional(v.id("tasks")),
+    mergePreviousStatus: v.optional(v.string()),
     mergeLockedAt: v.optional(v.string()),
-    files: v.optional(v.array(v.object({
-      name: v.string(),
-      type: v.string(),
-      size: v.number(),
-      subfolder: v.string(),
-      uploadedAt: v.string(),
-    }))),
+    files: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          type: v.string(),
+          size: v.number(),
+          subfolder: v.string(),
+          uploadedAt: v.string(),
+        }),
+      ),
+    ),
     createdAt: v.string(),
     updatedAt: v.string(),
   })
@@ -117,11 +120,7 @@ export default defineSchema({
     taskId: v.id("tasks"),
     stepId: v.optional(v.id("steps")),
     authorName: v.string(),
-    authorType: v.union(
-      v.literal("agent"),
-      v.literal("user"),
-      v.literal("system"),
-    ),
+    authorType: v.union(v.literal("agent"), v.literal("user"), v.literal("system")),
     content: v.string(),
     messageType: v.union(
       v.literal("work"),
@@ -132,31 +131,38 @@ export default defineSchema({
       v.literal("user_message"),
       v.literal("comment"),
     ),
-    type: v.optional(v.union(
-      v.literal("step_completion"),
-      v.literal("user_message"),
-      v.literal("system_error"),
-      v.literal("lead_agent_plan"),
-      v.literal("lead_agent_chat"),
-      v.literal("comment"),
-    )),
-    artifacts: v.optional(v.array(v.object({
-      path: v.string(),
-      action: v.union(
-        v.literal("created"),
-        v.literal("modified"),
-        v.literal("deleted"),
+    type: v.optional(
+      v.union(
+        v.literal("step_completion"),
+        v.literal("user_message"),
+        v.literal("system_error"),
+        v.literal("lead_agent_plan"),
+        v.literal("lead_agent_chat"),
+        v.literal("comment"),
       ),
-      description: v.optional(v.string()),
-      diff: v.optional(v.string()),
-    }))),
-    fileAttachments: v.optional(v.array(v.object({
-      name: v.string(),
-      type: v.string(),
-      size: v.number(),
-    }))),
+    ),
+    artifacts: v.optional(
+      v.array(
+        v.object({
+          path: v.string(),
+          action: v.union(v.literal("created"), v.literal("modified"), v.literal("deleted")),
+          description: v.optional(v.string()),
+          diff: v.optional(v.string()),
+        }),
+      ),
+    ),
+    fileAttachments: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          type: v.string(),
+          size: v.number(),
+        }),
+      ),
+    ),
     timestamp: v.string(),
-  }).index("by_taskId", ["taskId"])
+  })
+    .index("by_taskId", ["taskId"])
     .index("by_authorType_timestamp", ["authorType", "timestamp"]),
 
   agents: defineTable({
@@ -166,20 +172,18 @@ export default defineSchema({
     prompt: v.optional(v.string()),
     soul: v.optional(v.string()),
     skills: v.array(v.string()),
-    status: v.union(
-      v.literal("active"),
-      v.literal("idle"),
-      v.literal("crashed"),
-    ),
+    status: v.union(v.literal("active"), v.literal("idle"), v.literal("crashed")),
     enabled: v.optional(v.boolean()),
     isSystem: v.optional(v.boolean()),
     model: v.optional(v.string()),
     reasoningLevel: v.optional(v.string()),
-    claudeCodeOpts: v.optional(v.object({
-      permissionMode: v.optional(v.string()),
-      maxBudgetUsd: v.optional(v.number()),
-      maxTurns: v.optional(v.number()),
-    })),
+    claudeCodeOpts: v.optional(
+      v.object({
+        permissionMode: v.optional(v.string()),
+        maxBudgetUsd: v.optional(v.number()),
+        maxTurns: v.optional(v.number()),
+      }),
+    ),
     variables: v.optional(v.array(v.object({ name: v.string(), value: v.string() }))),
     lastActiveAt: v.optional(v.string()),
     deletedAt: v.optional(v.string()),
@@ -286,7 +290,8 @@ export default defineSchema({
     attributeId: v.id("tagAttributes"),
     value: v.string(),
     updatedAt: v.string(),
-  }).index("by_taskId", ["taskId"])
+  })
+    .index("by_taskId", ["taskId"])
     .index("by_taskId_tagName", ["taskId", "tagName"])
     .index("by_attributeId", ["attributeId"])
     .index("by_tagName", ["tagName"]),
@@ -301,11 +306,7 @@ export default defineSchema({
     output: v.string(),
     updatedAt: v.string(),
     pendingInput: v.optional(v.string()),
-    status: v.optional(v.union(
-      v.literal("idle"),
-      v.literal("processing"),
-      v.literal("error"),
-    )),
+    status: v.optional(v.union(v.literal("idle"), v.literal("processing"), v.literal("error"))),
     agentName: v.optional(v.string()),
     sleepMode: v.optional(v.boolean()),
     wakeSignal: v.optional(v.boolean()),

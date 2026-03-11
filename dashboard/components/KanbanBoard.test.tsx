@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import { KanbanBoard } from "./KanbanBoard";
 import { Doc, Id } from "../convex/_generated/dataModel";
 import { BoardFilters } from "@/hooks/useBoardFilters";
@@ -191,6 +191,7 @@ function buildColumns(tasks: Doc<"tasks">[], steps: Doc<"steps">[] = []): Column
       ...col,
       tasks: columnTasks,
       stepGroups,
+      tagGroups: [],
       totalCount: columnTasks.length + stepGroups.reduce((c, g) => c + g.steps.length, 0),
     };
   });
@@ -352,6 +353,10 @@ describe("KanbanBoard", () => {
     mockBoardView = defaultBoardView({ tasks, allSteps: steps });
     mockColumns = buildColumns(tasks, steps);
     render(<KanbanBoard />);
+
+    for (const toggle of screen.getAllByRole("button", { name: /Expand Task With Steps/ })) {
+      fireEvent.click(toggle);
+    }
 
     expect(screen.getByText("Step One")).toBeInTheDocument();
     expect(screen.getByText("Step Two")).toBeInTheDocument();

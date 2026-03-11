@@ -2,9 +2,10 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { AgentConfigSheet } from "./AgentConfigSheet";
 import type { AgentConfigSheetData } from "@/hooks/useAgentConfigSheetData";
+import type { Doc } from "@/convex/_generated/dataModel";
 
 // Mock agent data
-const mockAgent = {
+const mockAgent: Doc<"agents"> = {
   _id: "agent1" as never,
   _creationTime: 1000,
   name: "test-agent",
@@ -51,7 +52,13 @@ vi.mock("@/hooks/useAgentConfigSheetData", () => ({
 
 // Mock SkillsSelector to keep tests focused
 vi.mock("@/components/SkillsSelector", () => ({
-  SkillsSelector: ({ selected, onChange }: { selected: string[]; onChange: (s: string[]) => void }) => (
+  SkillsSelector: ({
+    selected,
+    onChange,
+  }: {
+    selected: string[];
+    onChange: (s: string[]) => void;
+  }) => (
     <div data-testid="skills-selector" data-selected={selected.join(",")}>
       <button onClick={() => onChange([...selected, "new-skill"])}>Add Skill</button>
     </div>
@@ -108,7 +115,10 @@ vi.mock("@/components/ui/textarea", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, ...props }: React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>) => (
+  Button: ({
+    children,
+    ...props
+  }: React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>) => (
     <button {...props}>{children}</button>
   ),
 }));
@@ -118,7 +128,15 @@ vi.mock("@/components/ui/separator", () => ({
 }));
 
 vi.mock("@/components/ui/switch", () => ({
-  Switch: ({ id, checked, onCheckedChange }: { id?: string; checked?: boolean; onCheckedChange?: (v: boolean) => void }) => (
+  Switch: ({
+    id,
+    checked,
+    onCheckedChange,
+  }: {
+    id?: string;
+    checked?: boolean;
+    onCheckedChange?: (v: boolean) => void;
+  }) => (
     <button
       data-testid="enabled-switch"
       data-state={checked ? "checked" : "unchecked"}
@@ -149,9 +167,7 @@ describe("AgentConfigSheet", () => {
   });
 
   it("renders nothing when agentName is null", () => {
-    const { container } = render(
-      <AgentConfigSheet agentName={null} onClose={vi.fn()} />
-    );
+    const { container } = render(<AgentConfigSheet agentName={null} onClose={vi.fn()} />);
     expect(screen.queryByTestId("sheet")).not.toBeInTheDocument();
     void container;
   });
@@ -229,7 +245,7 @@ describe("AgentConfigSheet", () => {
         expect.objectContaining({
           name: "test-agent",
           role: "Senior Developer",
-        })
+        }),
       );
     });
   });
@@ -403,22 +419,21 @@ describe("AgentConfigSheet", () => {
   it("fetches memory and history when agentName is set", () => {
     render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
 
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/agents/test-agent/memory/MEMORY.md"
-    );
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/agents/test-agent/memory/HISTORY.md"
-    );
+    expect(fetch).toHaveBeenCalledWith("/api/agents/test-agent/memory/MEMORY.md");
+    expect(fetch).toHaveBeenCalledWith("/api/agents/test-agent/memory/HISTORY.md");
   });
 
   it("shows memory content and Edit button when fetch succeeds", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) =>
-      Promise.resolve(
-        url.includes("MEMORY.md")
-          ? { ok: true, text: () => Promise.resolve("Agent Memory Content") }
-          : { ok: false, status: 404 }
-      )
-    ));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url.includes("MEMORY.md")
+            ? { ok: true, text: () => Promise.resolve("Agent Memory Content") }
+            : { ok: false, status: 404 },
+        ),
+      ),
+    );
 
     render(<AgentConfigSheet agentName="test-agent" onClose={vi.fn()} />);
 

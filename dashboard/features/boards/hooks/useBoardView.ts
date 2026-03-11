@@ -41,21 +41,24 @@ export function useBoardView(filters: BoardFilters): BoardViewData {
     attributeFilters: filters.hasAttributeFilters ? filters.search.attributeFilters : undefined,
   }) as BoardViewReadModel | null | undefined;
 
-  const isLoading =
-    boardView === undefined || boardView.tasks === undefined || boardView.allSteps === undefined;
+  const tasks = boardView?.tasks;
+  const allSteps = boardView?.allSteps;
+  const isLoading = boardView === undefined || tasks === undefined || allSteps === undefined;
 
   return useMemo(
     () => ({
-      tasks: boardView?.tasks,
-      allSteps: boardView?.allSteps,
+      tasks,
+      allSteps,
       favorites: boardView?.favorites ?? [],
       hitlCount: boardView?.hitlCount ?? 0,
       deletedTasks: boardView?.deletedTasks,
       deletedCount: boardView?.deletedCount ?? 0,
       tagColorMap: boardView?.tagColorMap ?? {},
-      clearAllDone: () => clearAllDone(),
+      clearAllDone: async () => {
+        await clearAllDone();
+      },
       isLoading,
     }),
-    [boardView, clearAllDone, isLoading],
+    [allSteps, boardView, clearAllDone, isLoading, tasks],
   );
 }

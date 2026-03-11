@@ -3,6 +3,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import userEvent from "@testing-library/user-event";
 import { TaskDetailSheet } from "./TaskDetailSheet";
 import { ThreadMessage } from "./ThreadMessage";
+import type { Doc } from "@/convex/_generated/dataModel";
 
 // Mock convex/react
 const mockUseQuery = vi.fn();
@@ -77,7 +78,9 @@ vi.mock("./ExecutionPlanTab", () => ({
   ),
 }));
 
-const baseTask = {
+type TaskDoc = Doc<"tasks">;
+
+const baseTask: TaskDoc = {
   _id: "task1" as never,
   _creationTime: 1000,
   title: "Implement feature X",
@@ -101,7 +104,7 @@ const baseMessage = {
   timestamp: "2026-01-01T12:00:00Z",
 };
 
-function buildDetailView(task: typeof baseTask, messages: unknown[] = []) {
+function buildDetailView(task: TaskDoc, messages: unknown[] = []) {
   return {
     task,
     board: null,
@@ -120,7 +123,8 @@ function buildDetailView(task: typeof baseTask, messages: unknown[] = []) {
       isAwaitingKickoff: task.status === "review" && (task as any).awaitingKickoff === true,
       isPaused: task.status === "review" && (task as any).awaitingKickoff !== true,
       isManual: false,
-      isPlanEditable: task.status === "review" || task.status === "planning" || task.status === "ready",
+      isPlanEditable:
+        task.status === "review" || task.status === "planning" || task.status === "ready",
     },
     allowedActions: {
       approve: task.status === "review",
@@ -142,33 +146,46 @@ describe("TaskDetailSheet", () => {
     mockMutationFn.mockClear();
   });
 
-  function setupQueryMock(task: typeof baseTask, messages: unknown[] = []) {
+  function setupQueryMock(task: TaskDoc, messages: unknown[] = []) {
     mockUseQuery.mockImplementation((_query: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
-      if (typeof args === "object" && args !== null && "taskId" in (args as Record<string, unknown>)) {
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
         return buildDetailView(task, messages);
       }
       return [];
     });
   }
 
-  function oneRenderPass(task: typeof baseTask, messages: unknown[] = []) {
+  function oneRenderPass(task: TaskDoc, messages: unknown[] = []) {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
-      if (typeof args === "object" && args !== null && "taskId" in (args as Record<string, unknown>)) {
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
         return buildDetailView(task, messages);
       }
       return [];
     });
   }
 
-  function stableQueryMock(task: typeof baseTask, messages: unknown[] = []) {
+  function stableQueryMock(task: TaskDoc, messages: unknown[] = []) {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
-      if (typeof args === "object" && args !== null && !("taskId" in (args as Record<string, unknown>))) return [];
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        !("taskId" in (args as Record<string, unknown>))
+      )
+        return [];
       return buildDetailView(task, messages);
     });
   }
@@ -182,9 +199,7 @@ describe("TaskDetailSheet", () => {
     });
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByText("Implement feature X")).toBeInTheDocument();
     expect(screen.getByText("in progress")).toBeInTheDocument();
@@ -193,9 +208,7 @@ describe("TaskDetailSheet", () => {
   it("renders assigned agent name", () => {
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByText("agent-alpha")).toBeInTheDocument();
   });
@@ -203,9 +216,7 @@ describe("TaskDetailSheet", () => {
   it("shows empty thread placeholder when no messages", () => {
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(
       screen.getByText("No messages yet. Agent activity will appear here."),
@@ -215,13 +226,9 @@ describe("TaskDetailSheet", () => {
   it("renders messages in the thread tab", () => {
     oneRenderPass(baseTask, [baseMessage]);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
-    expect(
-      screen.getByText("Starting work on feature X"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Starting work on feature X")).toBeInTheDocument();
   });
 
   it("shows merge lock banner and hides thread input for source tasks merged into task C", () => {
@@ -234,7 +241,11 @@ describe("TaskDetailSheet", () => {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
-      if (typeof args === "object" && args !== null && "taskId" in (args as Record<string, unknown>)) {
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
         return {
           ...buildDetailView(mergedSourceTask),
           mergedIntoTask: {
@@ -266,7 +277,11 @@ describe("TaskDetailSheet", () => {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
-      if (typeof args === "object" && args !== null && "taskId" in (args as Record<string, unknown>)) {
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
         return {
           ...buildDetailView(mergeTask, [baseMessage]),
           mergeSources: [
@@ -373,7 +388,11 @@ describe("TaskDetailSheet", () => {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
-      if (typeof args === "object" && args !== null && "taskId" in (args as Record<string, unknown>)) {
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
         return {
           ...buildDetailView(manualMergeTask),
           mergeSources: [
@@ -429,7 +448,11 @@ describe("TaskDetailSheet", () => {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
-      if (typeof args === "object" && args !== null && "taskId" in (args as Record<string, unknown>)) {
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
         return {
           ...buildDetailView(manualMergeTask),
           mergeSources: [
@@ -499,7 +522,11 @@ describe("TaskDetailSheet", () => {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
-      if (typeof args === "object" && args !== null && "taskId" in (args as Record<string, unknown>)) {
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
         return buildDetailView(baseTask);
       }
       return [
@@ -516,7 +543,9 @@ describe("TaskDetailSheet", () => {
     await userEvent.click(screen.getByRole("tab", { name: /Config/i }));
     await userEvent.click(screen.getByText("Merge target"));
 
-    await userEvent.click(screen.getByRole("button", { name: /Generate Plan Then Send To Review/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Generate Plan Then Send To Review/i }),
+    );
     expect(mutate).toHaveBeenCalledWith({
       primaryTaskId: "task1",
       secondaryTaskId: "task-merge-target",
@@ -527,9 +556,7 @@ describe("TaskDetailSheet", () => {
   it("does not render sheet content when taskId is null", () => {
     render(<TaskDetailSheet taskId={null} onClose={() => {}} />);
 
-    expect(
-      screen.queryByText("Implement feature X"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Implement feature X")).not.toBeInTheDocument();
   });
 
   // --- Story 6.1: Approve button in sheet header ---
@@ -542,9 +569,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(reviewTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
   });
@@ -557,9 +582,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(reviewTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
   });
@@ -573,25 +596,17 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(crashedTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
-    expect(
-      screen.getByRole("button", { name: "Retry from Beginning" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry from Beginning" })).toBeInTheDocument();
   });
 
   it("does not show Retry from Beginning button for non-crashed tasks", () => {
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
-    expect(
-      screen.queryByRole("button", { name: "Retry from Beginning" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry from Beginning" })).not.toBeInTheDocument();
   });
 
   it("calls retry mutation when Retry from Beginning is clicked", () => {
@@ -601,9 +616,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(crashedTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Retry from Beginning" }));
     expect(mockMutationFn).toHaveBeenCalledWith({ taskId: "task1" });
@@ -620,9 +633,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(reviewingTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByTestId("kick-off-button")).toBeInTheDocument();
   });
@@ -630,9 +641,7 @@ describe("TaskDetailSheet", () => {
   it("does NOT show Kick-off button when task status is in_progress", () => {
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
   });
@@ -641,9 +650,7 @@ describe("TaskDetailSheet", () => {
     const planningTask = { ...baseTask, status: "planning" as const };
     oneRenderPass(planningTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
   });
@@ -656,9 +663,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(reviewTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
   });
@@ -671,9 +676,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(reviewingTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByTestId("reviewing-plan-banner")).toBeInTheDocument();
   });
@@ -684,16 +687,32 @@ describe("TaskDetailSheet", () => {
     const taskWithFiles = {
       ...baseTask,
       files: [
-        { name: "report.pdf", type: "application/pdf", size: 867328, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
-        { name: "output.ts", type: "text/plain", size: 1024, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
-        { name: "chart.png", type: "image/png", size: 204800, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+        {
+          name: "report.pdf",
+          type: "application/pdf",
+          size: 867328,
+          subfolder: "attachments",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          name: "output.ts",
+          type: "text/plain",
+          size: 1024,
+          subfolder: "output",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          name: "chart.png",
+          type: "image/png",
+          size: 204800,
+          subfolder: "attachments",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
       ],
     };
     oneRenderPass(taskWithFiles);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByRole("tab", { name: "Files (3)" })).toBeInTheDocument();
   });
@@ -705,9 +724,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(taskNoFiles);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByRole("tab", { name: "Files" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /Files \(/ })).not.toBeInTheDocument();
@@ -721,9 +738,7 @@ describe("TaskDetailSheet", () => {
     };
     stableQueryMock(taskNoFiles);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     await user.click(screen.getByRole("tab", { name: "Files" }));
 
@@ -740,15 +755,25 @@ describe("TaskDetailSheet", () => {
     const taskWithFiles = {
       ...baseTask,
       files: [
-        { name: "notes.pdf", type: "application/pdf", size: 102400, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
-        { name: "result.py", type: "text/plain", size: 2048, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
+        {
+          name: "notes.pdf",
+          type: "application/pdf",
+          size: 102400,
+          subfolder: "attachments",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          name: "result.py",
+          type: "text/plain",
+          size: 2048,
+          subfolder: "output",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
       ],
     };
     stableQueryMock(taskWithFiles);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     await user.click(screen.getByRole("tab", { name: "Files (2)" }));
 
@@ -765,17 +790,39 @@ describe("TaskDetailSheet", () => {
     const taskWithFiles = {
       ...baseTask,
       files: [
-        { name: "document.pdf", type: "application/pdf", size: 512000, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
-        { name: "screenshot.png", type: "image/png", size: 204800, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
-        { name: "script.ts", type: "text/plain", size: 1024, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
-        { name: "Makefile", type: "text/plain", size: 512, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
+        {
+          name: "document.pdf",
+          type: "application/pdf",
+          size: 512000,
+          subfolder: "attachments",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          name: "screenshot.png",
+          type: "image/png",
+          size: 204800,
+          subfolder: "attachments",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          name: "script.ts",
+          type: "text/plain",
+          size: 1024,
+          subfolder: "output",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          name: "Makefile",
+          type: "text/plain",
+          size: 512,
+          subfolder: "output",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
       ],
     };
     stableQueryMock(taskWithFiles);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     await user.click(screen.getByRole("tab", { name: "Files (4)" }));
 
@@ -815,7 +862,9 @@ describe("TaskDetailSheet", () => {
     stableQueryMock(taskNoFiles);
 
     let resolveFetch!: (value: Response) => void;
-    const hangingFetch = new Promise<Response>((resolve) => { resolveFetch = resolve; });
+    const hangingFetch = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(hangingFetch));
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
@@ -861,7 +910,9 @@ describe("TaskDetailSheet", () => {
     await waitFor(() => {
       expect(screen.getByTestId("upload-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("upload-error")).toHaveTextContent("Upload failed. Please try again.");
+    expect(screen.getByTestId("upload-error")).toHaveTextContent(
+      "Upload failed. Please try again.",
+    );
 
     vi.unstubAllGlobals();
   });
@@ -872,13 +923,19 @@ describe("TaskDetailSheet", () => {
     stableQueryMock(taskNoFiles);
 
     const returnedFiles = [
-      { name: "doc.pdf", type: "application/pdf", size: 1024, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+      {
+        name: "doc.pdf",
+        type: "application/pdf",
+        size: 1024,
+        subfolder: "attachments",
+        uploadedAt: "2026-01-01T00:00:00Z",
+      },
     ];
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ files: returnedFiles }), { status: 200 }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ files: returnedFiles }), { status: 200 })),
     );
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
@@ -912,7 +969,13 @@ describe("TaskDetailSheet", () => {
     const taskOutputOnly = {
       ...baseTask,
       files: [
-        { name: "result.py", type: "text/plain", size: 2048, subfolder: "output", uploadedAt: "2026-01-01T00:00:00Z" },
+        {
+          name: "result.py",
+          type: "text/plain",
+          size: 2048,
+          subfolder: "output",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
       ],
     };
     stableQueryMock(taskOutputOnly);
@@ -931,7 +994,13 @@ describe("TaskDetailSheet", () => {
     const taskWithAttachment = {
       ...baseTask,
       files: [
-        { name: "notes.pdf", type: "application/pdf", size: 10240, subfolder: "attachments", uploadedAt: "2026-01-01T00:00:00Z" },
+        {
+          name: "notes.pdf",
+          type: "application/pdf",
+          size: 10240,
+          subfolder: "attachments",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
       ],
     };
     stableQueryMock(taskWithAttachment);
@@ -967,9 +1036,7 @@ describe("TaskDetailSheet", () => {
   it("shows Pause button for in_progress task (AC 1)", () => {
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByTestId("pause-button")).toBeInTheDocument();
     expect(screen.getByTestId("pause-button")).toHaveTextContent("Pause");
@@ -983,9 +1050,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(reviewingTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.queryByTestId("pause-button")).not.toBeInTheDocument();
   });
@@ -994,9 +1059,7 @@ describe("TaskDetailSheet", () => {
     const doneTask = { ...baseTask, status: "done" as const };
     oneRenderPass(doneTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.queryByTestId("pause-button")).not.toBeInTheDocument();
   });
@@ -1008,9 +1071,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(pausedTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByTestId("resume-button")).toBeInTheDocument();
     expect(screen.getByTestId("resume-button")).toHaveTextContent("Resume");
@@ -1021,9 +1082,7 @@ describe("TaskDetailSheet", () => {
   it("does NOT show Resume button for in_progress task (AC 4)", () => {
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.queryByTestId("resume-button")).not.toBeInTheDocument();
   });
@@ -1032,9 +1091,7 @@ describe("TaskDetailSheet", () => {
     const doneTask = { ...baseTask, status: "done" as const };
     oneRenderPass(doneTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.queryByTestId("resume-button")).not.toBeInTheDocument();
   });
@@ -1042,9 +1099,7 @@ describe("TaskDetailSheet", () => {
   it("calls pauseTask mutation when Pause is clicked (AC 2)", async () => {
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     fireEvent.click(screen.getByTestId("pause-button"));
 
@@ -1060,16 +1115,12 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(pausedTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     fireEvent.click(screen.getByTestId("resume-button"));
 
     await vi.waitFor(() => {
-      expect(mockMutationFn).toHaveBeenCalledWith(
-        expect.objectContaining({ taskId: "task1" })
-      );
+      expect(mockMutationFn).toHaveBeenCalledWith(expect.objectContaining({ taskId: "task1" }));
     });
   });
 
@@ -1083,9 +1134,7 @@ describe("TaskDetailSheet", () => {
     };
     oneRenderPass(reviewingTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     const planTab = screen.getByTestId("execution-plan-tab");
     expect(planTab).toBeInTheDocument();
@@ -1095,9 +1144,7 @@ describe("TaskDetailSheet", () => {
   it("does not auto-switch to plan tab for non-awaitingKickoff tasks (thread tab is active by default)", () => {
     oneRenderPass(baseTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(
       screen.getByText("No messages yet. Agent activity will appear here."),
@@ -1132,18 +1179,14 @@ describe("TaskDetailSheet", () => {
     mockMutationFn.mockResolvedValue(undefined);
     oneRenderPass(reviewingTask);
 
-    render(
-      <TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />,
-    );
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     const kickOffBtn = screen.getByTestId("kick-off-button");
     expect(kickOffBtn).toBeInTheDocument();
     kickOffBtn.click();
 
     await vi.waitFor(() => {
-      expect(mockMutationFn).toHaveBeenCalledWith(
-        expect.objectContaining({ taskId: "task1" })
-      );
+      expect(mockMutationFn).toHaveBeenCalledWith(expect.objectContaining({ taskId: "task1" }));
     });
   });
 });
@@ -1181,9 +1224,7 @@ describe("ThreadMessage", () => {
     const { container } = render(<ThreadMessage message={sysMsg} />);
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.className).toContain("bg-muted");
-    expect(screen.getByText("Task status changed").className).toContain(
-      "italic",
-    );
+    expect(screen.getByText("Task status changed").className).toContain("italic");
   });
 
   it("renders review_feedback message with amber-50 background", () => {
@@ -1222,9 +1263,7 @@ describe("ThreadMessage", () => {
   it("renders author name and content", () => {
     render(<ThreadMessage message={baseMessage} />);
     expect(screen.getByText("agent-alpha")).toBeInTheDocument();
-    expect(
-      screen.getByText("Starting work on feature X"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Starting work on feature X")).toBeInTheDocument();
   });
 
   // --- Story 2.7: Structured type field support ---

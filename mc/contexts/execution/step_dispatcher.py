@@ -330,19 +330,28 @@ class StepDispatcher:
             task_id,
             agent_name,
         )
-        if agent_name != "human":
-            await asyncio.to_thread(
-                self._bridge.update_step_status,
-                step_id,
-                StepStatus.RUNNING,
+        if agent_name == "human":
+            # Human agents NEVER spawn a process and NEVER change status.
+            # The step stays "assigned" until a human explicitly acts on it
+            # via the dashboard (acceptHumanStep / manualMoveStep).
+            logger.info(
+                "[dispatcher] Step '%s' assigned to human — leaving as assigned, skipping dispatch",
+                step_title,
             )
-            await asyncio.to_thread(
-                self._bridge.create_activity,
-                ActivityEventType.STEP_STARTED,
-                f"Agent {agent_name} started step: {step_title}",
-                task_id,
-                agent_name,
-            )
+            return []
+
+        await asyncio.to_thread(
+            self._bridge.update_step_status,
+            step_id,
+            StepStatus.RUNNING,
+        )
+        await asyncio.to_thread(
+            self._bridge.create_activity,
+            ActivityEventType.STEP_STARTED,
+            f"Agent {agent_name} started step: {step_title}",
+            task_id,
+            agent_name,
+        )
 
         try:
             # ── Unified context pipeline (Story 16.1) ─────────────────────

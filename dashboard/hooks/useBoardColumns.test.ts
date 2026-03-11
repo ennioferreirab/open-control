@@ -1,10 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
-import {
-  useBoardColumns,
-  stepStatusToColumnStatus,
-  ColumnData,
-} from "./useBoardColumns";
+import { useBoardColumns, stepStatusToColumnStatus, ColumnData } from "./useBoardColumns";
 import { Doc, Id } from "../convex/_generated/dataModel";
 
 type Task = Doc<"tasks">;
@@ -46,9 +42,11 @@ describe("stepStatusToColumnStatus", () => {
   });
 
   it("maps assigned steps to in_progress when parent task is in_progress", () => {
-    expect(stepStatusToColumnStatus("assigned", "in_progress")).toBe(
-      "in_progress"
-    );
+    expect(stepStatusToColumnStatus("assigned", "in_progress")).toBe("in_progress");
+  });
+
+  it("maps human assigned steps to assigned even when parent task is in_progress", () => {
+    expect(stepStatusToColumnStatus("assigned", "in_progress", "human")).toBe("assigned");
   });
 
   it("maps blocked steps to assigned column by default", () => {
@@ -56,9 +54,7 @@ describe("stepStatusToColumnStatus", () => {
   });
 
   it("maps blocked steps to in_progress when parent task is in_progress", () => {
-    expect(stepStatusToColumnStatus("blocked", "in_progress")).toBe(
-      "in_progress"
-    );
+    expect(stepStatusToColumnStatus("blocked", "in_progress")).toBe("in_progress");
   });
 
   it("maps running steps to in_progress", () => {
@@ -75,6 +71,14 @@ describe("stepStatusToColumnStatus", () => {
 
   it("maps planned steps to null", () => {
     expect(stepStatusToColumnStatus("planned")).toBeNull();
+  });
+
+  it("maps waiting_human steps to review column", () => {
+    expect(stepStatusToColumnStatus("waiting_human")).toBe("review");
+  });
+
+  it("maps waiting_human steps to review regardless of parent task status", () => {
+    expect(stepStatusToColumnStatus("waiting_human", "in_progress")).toBe("review");
   });
 });
 
@@ -161,9 +165,7 @@ describe("useBoardColumns", () => {
   });
 
   it("creates step groups for tasks with renderable steps", () => {
-    const tasks = [
-      makeTask({ _id: "task_1", status: "assigned" }),
-    ];
+    const tasks = [makeTask({ _id: "task_1", status: "assigned" })];
     const steps = [
       makeStep({ taskId: "task_1", status: "assigned", order: 1 }),
       makeStep({ taskId: "task_1", status: "running", order: 2 }),
@@ -184,9 +186,7 @@ describe("useBoardColumns", () => {
 
   it("skips steps for done tasks", () => {
     const tasks = [makeTask({ _id: "task_1", status: "done" })];
-    const steps = [
-      makeStep({ taskId: "task_1", status: "running", order: 1 }),
-    ];
+    const steps = [makeStep({ taskId: "task_1", status: "running", order: 1 })];
     const { result } = renderHook(() => useBoardColumns(tasks, steps));
     const columns = result.current!;
 
@@ -200,9 +200,7 @@ describe("useBoardColumns", () => {
 
   it("keeps review tasks as regular cards even with running steps", () => {
     const tasks = [makeTask({ _id: "task_1", status: "review" })];
-    const steps = [
-      makeStep({ taskId: "task_1", status: "running", order: 1 }),
-    ];
+    const steps = [makeStep({ taskId: "task_1", status: "running", order: 1 })];
     const { result } = renderHook(() => useBoardColumns(tasks, steps));
     const columns = result.current!;
 
@@ -213,6 +211,65 @@ describe("useBoardColumns", () => {
     for (const col of columns) {
       expect(col.stepGroups).toHaveLength(0);
     }
+  });
+
+  it("places waiting_human steps in the Review column as a step group", () => {
+    const tasks = [makeTask({ _id: "task_1", status: "in_progress" })];
+    const steps = [makeStep({ taskId: "task_1", status: "waiting_human", order: 1 })];
+    const { result } = renderHook(() => useBoardColumns(tasks, steps));
+    const columns = result.current!;
+
+    // The waiting_human step must appear in the Review column as a step group
+    const reviewCol = columns[3]; // Review
+    expect(reviewCol.stepGroups).toHaveLength(1);
+    expect(reviewCol.stepGroups[0].steps).toHaveLength(1);
+    expect(reviewCol.stepGroups[0].steps[0].status).toBe("waiting_human");
+
+    // Task with renderable steps should NOT appear as a regular card
+    const inProgressCol = columns[2]; // In Progress
+    expect(inProgressCol.tasks).toHaveLength(0);
+  });
+
+  it("keeps waiting_human step groups visible in Review even when the parent task is already review", () => {
+    const tasks = [makeTask({ _id: "task_1", status: "review" })];
+    const steps = [
+      makeStep({
+        taskId: "task_1",
+        status: "waiting_human",
+        assignedAgent: "human",
+        order: 1,
+      }),
+    ];
+    const { result } = renderHook(() => useBoardColumns(tasks, steps));
+    const columns = result.current!;
+
+    const reviewCol = columns[3];
+    expect(reviewCol.stepGroups).toHaveLength(1);
+    expect(reviewCol.stepGroups[0].steps).toHaveLength(1);
+    expect(reviewCol.stepGroups[0].steps[0].status).toBe("waiting_human");
+  });
+
+  it("places human assigned steps in the Assigned column even when the task is in_progress", () => {
+    const tasks = [makeTask({ _id: "task_1", status: "in_progress" })];
+    const steps = [
+      makeStep({
+        taskId: "task_1",
+        status: "assigned",
+        assignedAgent: "human",
+        order: 1,
+      }),
+    ];
+    const { result } = renderHook(() => useBoardColumns(tasks, steps));
+    const columns = result.current!;
+
+    const assignedCol = columns[1];
+    expect(assignedCol.stepGroups).toHaveLength(1);
+    expect(assignedCol.stepGroups[0].steps).toHaveLength(1);
+    expect(assignedCol.stepGroups[0].steps[0].assignedAgent).toBe("human");
+
+    const inProgressCol = columns[2];
+    expect(inProgressCol.stepGroups).toHaveLength(0);
+    expect(inProgressCol.tasks).toHaveLength(0);
   });
 
   it("computes totalCount as tasks + step group step counts", () => {
@@ -233,9 +290,7 @@ describe("useBoardColumns", () => {
 
   it("filters out steps for tasks not in the visible set", () => {
     const tasks = [makeTask({ _id: "task_1", status: "inbox" })];
-    const steps = [
-      makeStep({ taskId: "task_other" as Id<"tasks">, status: "running" }),
-    ];
+    const steps = [makeStep({ taskId: "task_other" as Id<"tasks">, status: "running" })];
     const { result } = renderHook(() => useBoardColumns(tasks, steps));
     for (const col of result.current!) {
       expect(col.stepGroups).toHaveLength(0);
@@ -282,11 +337,7 @@ describe("useBoardColumns", () => {
       const { result } = renderHook(() => useBoardColumns(tasks, []));
       const inboxCol = result.current![0];
 
-      expect(inboxCol.tagGroups.map((g) => g.tag)).toEqual([
-        "alpha",
-        "zebra",
-        "__untagged__",
-      ]);
+      expect(inboxCol.tagGroups.map((g) => g.tag)).toEqual(["alpha", "zebra", "__untagged__"]);
     });
 
     it("groups multi-tag tasks by their exact tag set (no duplication)", () => {

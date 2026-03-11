@@ -8,10 +8,12 @@ import {
   create,
   createMergedTask,
   kickOff,
+  manualMove,
   pauseTask,
   resumeTask,
   retry,
   softDelete,
+  updateStatus,
 } from "./tasks";
 
 type InsertCall = {
@@ -88,6 +90,22 @@ function getCreateMergedTaskHandler() {
   return (
     createMergedTask as unknown as {
       _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
+}
+
+function getManualMoveHandler() {
+  return (
+    manualMove as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
+    }
+  )._handler;
+}
+
+function getUpdateStatusHandler() {
+  return (
+    updateStatus as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
     }
   )._handler;
 }
@@ -211,6 +229,7 @@ describe("tasks.createMergedTask", () => {
       "task-a",
       expect.objectContaining({
         mergedIntoTaskId: "task-c",
+        mergePreviousStatus: "done",
         mergeLockedAt: expect.any(String),
         tags: ["alpha", "merged"],
       }),
@@ -220,6 +239,7 @@ describe("tasks.createMergedTask", () => {
       "task-b",
       expect.objectContaining({
         mergedIntoTaskId: "task-c",
+        mergePreviousStatus: "done",
         mergeLockedAt: expect.any(String),
         tags: ["beta", "merged"],
       }),
@@ -275,6 +295,7 @@ describe("tasks.createMergedTask", () => {
       "task-a",
       expect.objectContaining({
         mergedIntoTaskId: "task-c",
+        mergePreviousStatus: "done",
         tags: ["merged"],
       }),
     );
@@ -283,6 +304,7 @@ describe("tasks.createMergedTask", () => {
       "task-b",
       expect.objectContaining({
         mergedIntoTaskId: "task-c",
+        mergePreviousStatus: "done",
         tags: ["merged"],
       }),
     );
@@ -364,6 +386,75 @@ describe("tasks.createMergedTask", () => {
 });
 
 describe("tasks.softDelete", () => {
+  it("restores merged source tasks to their pre-merge status when deleting a merge task", async () => {
+    const handler = getSoftDeleteHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async (id: string) => {
+      if (id === "merge-task") {
+        return {
+          _id: "merge-task",
+          title: "Merge: A + B",
+          status: "done",
+          isMergeTask: true,
+          mergeSourceTaskIds: ["task-a", "task-b"],
+          mergeSourceLabels: ["A", "B"],
+        };
+      }
+      if (id === "task-a") {
+        return {
+          _id: "task-a",
+          title: "Task A",
+          status: "done",
+          tags: ["alpha", "merged"],
+          mergedIntoTaskId: "merge-task",
+          mergePreviousStatus: "review",
+          isMergeTask: false,
+        };
+      }
+      if (id === "task-b") {
+        return {
+          _id: "task-b",
+          title: "Task B",
+          status: "done",
+          tags: ["beta", "merged"],
+          mergedIntoTaskId: "merge-task",
+          mergePreviousStatus: "assigned",
+          isMergeTask: false,
+        };
+      }
+      return null;
+    });
+    const query = vi.fn((table: string) => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn(async () => (table === "steps" ? [] : [])),
+      })),
+    }));
+
+    await handler({ db: { get, patch, insert, query } }, { taskId: "merge-task" });
+
+    expect(patch).toHaveBeenCalledWith(
+      "task-a",
+      expect.objectContaining({
+        status: "review",
+        mergedIntoTaskId: undefined,
+        mergeLockedAt: undefined,
+        mergePreviousStatus: undefined,
+        tags: ["alpha"],
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "task-b",
+      expect.objectContaining({
+        status: "assigned",
+        mergedIntoTaskId: undefined,
+        mergeLockedAt: undefined,
+        mergePreviousStatus: undefined,
+        tags: ["beta"],
+      }),
+    );
+  });
+
   it("removes merged tag from direct non-merge source tasks when deleting a merge task", async () => {
     const handler = getSoftDeleteHandler();
     const patch = vi.fn(async () => undefined);
@@ -386,6 +477,7 @@ describe("tasks.softDelete", () => {
           status: "done",
           tags: ["alpha", "merged"],
           mergedIntoTaskId: "merge-task",
+          mergePreviousStatus: "done",
           isMergeTask: false,
         };
       }
@@ -412,16 +504,20 @@ describe("tasks.softDelete", () => {
     expect(patch).toHaveBeenCalledWith(
       "task-a",
       expect.objectContaining({
+        status: "done",
         mergedIntoTaskId: undefined,
         mergeLockedAt: undefined,
+        mergePreviousStatus: undefined,
         tags: ["alpha"],
       }),
     );
     expect(patch).toHaveBeenCalledWith(
       "task-c",
       expect.objectContaining({
+        status: "review",
         mergedIntoTaskId: undefined,
         mergeLockedAt: undefined,
+        mergePreviousStatus: undefined,
         tags: ["merged"],
       }),
     );
@@ -786,6 +882,109 @@ describe("tasks.approve", () => {
       /Cannot approve a manual task/,
     );
     expect(patch).not.toHaveBeenCalled();
+  });
+});
+
+describe("tasks.manualMove", () => {
+  it("cascades done to merged source tasks when a manual merge task is completed", async () => {
+    const handler = getManualMoveHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async (id: string) => {
+      if (id === "merge-task") {
+        return {
+          _id: "merge-task",
+          status: "review",
+          isManual: true,
+          isMergeTask: true,
+          mergeSourceTaskIds: ["task-a", "task-b"],
+          title: "Manual merged task",
+        };
+      }
+      if (id === "task-a") {
+        return {
+          _id: "task-a",
+          status: "review",
+          mergedIntoTaskId: "merge-task",
+          mergePreviousStatus: "review",
+        };
+      }
+      if (id === "task-b") {
+        return {
+          _id: "task-b",
+          status: "assigned",
+          mergedIntoTaskId: "merge-task",
+          mergePreviousStatus: "assigned",
+        };
+      }
+      return null;
+    });
+
+    await handler({ db: { get, patch, insert } }, { taskId: "merge-task", newStatus: "done" });
+
+    expect(patch).toHaveBeenCalledWith(
+      "task-a",
+      expect.objectContaining({
+        status: "done",
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "task-b",
+      expect.objectContaining({
+        status: "done",
+      }),
+    );
+  });
+});
+
+describe("tasks.updateStatus", () => {
+  it("cascades done to merged source tasks when an automatic merge task completes", async () => {
+    const handler = getUpdateStatusHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async (id: string) => {
+      if (id === "merge-task") {
+        return {
+          _id: "merge-task",
+          status: "in_progress",
+          isMergeTask: true,
+          mergeSourceTaskIds: ["task-a", "task-b"],
+          title: "Auto merged task",
+        };
+      }
+      if (id === "task-a") {
+        return {
+          _id: "task-a",
+          status: "review",
+          mergedIntoTaskId: "merge-task",
+          mergePreviousStatus: "review",
+        };
+      }
+      if (id === "task-b") {
+        return {
+          _id: "task-b",
+          status: "assigned",
+          mergedIntoTaskId: "merge-task",
+          mergePreviousStatus: "assigned",
+        };
+      }
+      return null;
+    });
+
+    await handler({ db: { get, patch, insert } }, { taskId: "merge-task", status: "done" });
+
+    expect(patch).toHaveBeenCalledWith(
+      "task-a",
+      expect.objectContaining({
+        status: "done",
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "task-b",
+      expect.objectContaining({
+        status: "done",
+      }),
+    );
   });
 });
 

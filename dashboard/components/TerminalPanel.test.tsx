@@ -20,7 +20,11 @@ const baseSession = {
 function mockTerminalQueries(session: typeof baseSession) {
   mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
     if (args === "skip") return undefined;
-    if (typeof args === "object" && args !== null && "sessionId" in (args as Record<string, unknown>)) {
+    if (
+      typeof args === "object" &&
+      args !== null &&
+      "sessionId" in (args as Record<string, unknown>)
+    ) {
       return session;
     }
     if (typeof args === "object" && args !== null && "name" in (args as Record<string, unknown>)) {
@@ -30,7 +34,10 @@ function mockTerminalQueries(session: typeof baseSession) {
   });
 }
 
-function setScrollMetrics(element: HTMLDivElement, metrics: { clientHeight: number; scrollHeight: number }) {
+function setScrollMetrics(
+  element: HTMLElement,
+  metrics: { clientHeight: number; scrollHeight: number },
+) {
   Object.defineProperty(element, "clientHeight", {
     configurable: true,
     value: metrics.clientHeight,

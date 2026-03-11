@@ -1,9 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import type { GatewaySleepRuntime } from "@/lib/gatewaySleepRuntime";
 
-const mockUseGatewaySleepRuntime = vi.fn(() => null);
-const mockUseGatewaySleepCountdown = vi.fn(() => null);
+const mockUseGatewaySleepRuntime = vi.fn<() => GatewaySleepRuntime | null | undefined>(() => null);
+const mockUseGatewaySleepCountdown = vi.fn<(runtime?: GatewaySleepRuntime | null) => string | null>(
+  () => null,
+);
 const mockGatewaySleepMutation = vi.fn().mockResolvedValue(undefined);
+
+function makeRuntime(overrides: Partial<GatewaySleepRuntime>): GatewaySleepRuntime {
+  return {
+    mode: "active",
+    pollIntervalSeconds: 5,
+    manualRequested: false,
+    reason: "startup",
+    lastTransitionAt: "2026-03-11T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 // Mock heavy child components to avoid loading entire dependency tree
 vi.mock("@/components/AgentSidebar", () => ({
@@ -36,9 +50,12 @@ vi.mock("@/components/KanbanBoard", () => ({
 }));
 
 vi.mock("@/components/TaskDetailSheet", () => ({
-  TaskDetailSheet: ({ taskId, onClose }: { taskId: string | null; onClose: () => void }) => (
-    taskId ? <div data-testid="task-detail-sheet" onClick={onClose}>Detail</div> : null
-  ),
+  TaskDetailSheet: ({ taskId, onClose }: { taskId: string | null; onClose: () => void }) =>
+    taskId ? (
+      <div data-testid="task-detail-sheet" onClick={onClose}>
+        Detail
+      </div>
+    ) : null,
 }));
 
 vi.mock("@/components/SettingsPanel", () => ({
@@ -81,7 +98,9 @@ vi.mock("convex/react", async () => {
 
 // Mock ShadCN sidebar
 vi.mock("@/components/ui/sidebar", () => ({
-  SidebarProvider: ({ children }: React.PropsWithChildren) => <div data-testid="sidebar-provider">{children}</div>,
+  SidebarProvider: ({ children }: React.PropsWithChildren) => (
+    <div data-testid="sidebar-provider">{children}</div>
+  ),
   SidebarInset: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   SidebarTrigger: () => <button>Toggle Sidebar</button>,
 }));
@@ -112,8 +131,7 @@ function createMatchMedia(width: number) {
       onchange: null,
       addListener: vi.fn(),
       removeListener: vi.fn(),
-      addEventListener: (_: string, cb: (e: MediaQueryListEvent) => void) =>
-        listeners.push(cb),
+      addEventListener: (_: string, cb: (e: MediaQueryListEvent) => void) => listeners.push(cb),
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     } as unknown as MediaQueryList;
@@ -173,7 +191,7 @@ describe("DashboardLayout", () => {
     render(<DashboardLayout />);
     expect(screen.getByTestId("kanban-board")).toBeInTheDocument();
     expect(
-      screen.getByText("No tasks yet. Type above to create your first task.")
+      screen.getByText("No tasks yet. Type above to create your first task."),
     ).toBeInTheDocument();
   });
 
@@ -208,12 +226,14 @@ describe("DashboardLayout", () => {
 
   it("renders sleeping gateway badge and wake button when runtime reports sleep", () => {
     window.matchMedia = createMatchMedia(1280);
-    mockUseGatewaySleepRuntime.mockReturnValue({
-      mode: "sleep",
-      pollIntervalSeconds: 300,
-      manualRequested: true,
-      reason: "manual",
-    });
+    mockUseGatewaySleepRuntime.mockReturnValue(
+      makeRuntime({
+        mode: "sleep",
+        pollIntervalSeconds: 300,
+        manualRequested: true,
+        reason: "manual",
+      }),
+    );
 
     render(<DashboardLayout />);
 
@@ -223,12 +243,14 @@ describe("DashboardLayout", () => {
 
   it("renders active gateway badge and sleep button when runtime reports active", () => {
     window.matchMedia = createMatchMedia(1280);
-    mockUseGatewaySleepRuntime.mockReturnValue({
-      mode: "active",
-      pollIntervalSeconds: 5,
-      manualRequested: false,
-      reason: "startup",
-    });
+    mockUseGatewaySleepRuntime.mockReturnValue(
+      makeRuntime({
+        mode: "active",
+        pollIntervalSeconds: 5,
+        manualRequested: false,
+        reason: "startup",
+      }),
+    );
 
     render(<DashboardLayout />);
 
@@ -238,12 +260,14 @@ describe("DashboardLayout", () => {
 
   it("requests manual wake from the header button", () => {
     window.matchMedia = createMatchMedia(1280);
-    mockUseGatewaySleepRuntime.mockReturnValue({
-      mode: "sleep",
-      pollIntervalSeconds: 300,
-      manualRequested: true,
-      reason: "manual",
-    });
+    mockUseGatewaySleepRuntime.mockReturnValue(
+      makeRuntime({
+        mode: "sleep",
+        pollIntervalSeconds: 300,
+        manualRequested: true,
+        reason: "manual",
+      }),
+    );
 
     render(<DashboardLayout />);
 
@@ -254,12 +278,14 @@ describe("DashboardLayout", () => {
 
   it("shows countdown in sleep mode badge", () => {
     window.matchMedia = createMatchMedia(1280);
-    mockUseGatewaySleepRuntime.mockReturnValue({
-      mode: "sleep",
-      pollIntervalSeconds: 300,
-      manualRequested: false,
-      reason: "idle",
-    });
+    mockUseGatewaySleepRuntime.mockReturnValue(
+      makeRuntime({
+        mode: "sleep",
+        pollIntervalSeconds: 300,
+        manualRequested: false,
+        reason: "idle",
+      }),
+    );
     mockUseGatewaySleepCountdown.mockReturnValue("4:32");
 
     render(<DashboardLayout />);
@@ -269,12 +295,14 @@ describe("DashboardLayout", () => {
 
   it("shows countdown in active mode badge", () => {
     window.matchMedia = createMatchMedia(1280);
-    mockUseGatewaySleepRuntime.mockReturnValue({
-      mode: "active",
-      pollIntervalSeconds: 5,
-      manualRequested: false,
-      reason: "work_found",
-    });
+    mockUseGatewaySleepRuntime.mockReturnValue(
+      makeRuntime({
+        mode: "active",
+        pollIntervalSeconds: 5,
+        manualRequested: false,
+        reason: "work_found",
+      }),
+    );
     mockUseGatewaySleepCountdown.mockReturnValue("3:15");
 
     render(<DashboardLayout />);
@@ -284,12 +312,14 @@ describe("DashboardLayout", () => {
 
   it("falls back to pollIntervalSeconds when countdown is null", () => {
     window.matchMedia = createMatchMedia(1280);
-    mockUseGatewaySleepRuntime.mockReturnValue({
-      mode: "active",
-      pollIntervalSeconds: 5,
-      manualRequested: true,
-      reason: "manual",
-    });
+    mockUseGatewaySleepRuntime.mockReturnValue(
+      makeRuntime({
+        mode: "active",
+        pollIntervalSeconds: 5,
+        manualRequested: true,
+        reason: "manual",
+      }),
+    );
     mockUseGatewaySleepCountdown.mockReturnValue(null);
 
     render(<DashboardLayout />);

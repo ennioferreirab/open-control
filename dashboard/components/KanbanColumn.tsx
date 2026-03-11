@@ -56,6 +56,7 @@ export function KanbanColumn({
   const [openStepGroups, setOpenStepGroups] = useState<Set<string>>(new Set());
   const [openTagGroups, setOpenTagGroups] = useState<Set<string>>(new Set());
   const { moveStep, moveTask } = useKanbanColumnInteractions();
+  type StepColumnStatus = Parameters<typeof moveStep>[1];
 
   const toggleStepGroup = (taskId: string) => {
     setOpenStepGroups((prev) => {
@@ -120,13 +121,19 @@ export function KanbanColumn({
         // Check for step drops first (human step kanban drag)
         const stepId = e.dataTransfer.getData("application/step-id");
         if (stepId) {
-          const stepStatusMap: Record<string, string> = {
+          const stepStatusMap: Record<
+            "assigned" | "in_progress" | "review" | "done",
+            StepColumnStatus
+          > = {
             assigned: "assigned",
             in_progress: "running",
             review: "waiting_human",
             done: "completed",
           };
-          const targetStepStatus = stepStatusMap[status];
+          const targetStepStatus =
+            status in stepStatusMap
+              ? stepStatusMap[status as keyof typeof stepStatusMap]
+              : undefined;
           if (targetStepStatus) {
             try {
               await moveStep(stepId as Id<"steps">, targetStepStatus);
@@ -241,7 +248,9 @@ export function KanbanColumn({
                           step={step}
                           parentTaskTitle={group.taskTitle}
                           onClick={onTaskClick ? () => onTaskClick(step.taskId) : undefined}
-                          onNavigateToTask={onTaskClick ? () => onTaskClick(step.taskId) : undefined}
+                          onNavigateToTask={
+                            onTaskClick ? () => onTaskClick(step.taskId) : undefined
+                          }
                         />
                       ))}
                     </div>

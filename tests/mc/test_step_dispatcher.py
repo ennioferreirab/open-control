@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -57,9 +56,7 @@ def _make_stateful_bridge(
         )
         return [dict(step) for step in sorted_steps]
 
-    def _update_step_status(
-        step_id: str, status: str, error_message: str | None = None
-    ) -> None:
+    def _update_step_status(step_id: str, status: str, error_message: str | None = None) -> None:
         state[step_id]["status"] = status
         if error_message is not None:
             state[step_id]["error_message"] = error_message
@@ -161,6 +158,7 @@ def _patch_context_builder(bridge_or_query_return=None):
     The mock builds a realistic ExecutionRequest from the step dict
     passed to it, so the rest of the dispatcher logic works correctly.
     """
+
     async def _mock_build_step_context(self, task_id, step):
         return _make_step_execution_request(step)
 
@@ -200,6 +198,7 @@ def _patch_context_builder_with_files(query_return):
 
     Uses the task data from query_return to build file manifest into the request.
     """
+
     async def _mock_build_step_context(self, task_id, step):
         req = _make_step_execution_request(step)
         # Inject file data from the query_return
@@ -209,6 +208,7 @@ def _patch_context_builder_with_files(query_return):
                 build_file_context,
                 build_file_manifest,
             )
+
             req.files = raw_files
             req.file_manifest = build_file_manifest(raw_files)
             req.task_data = query_return
@@ -241,9 +241,7 @@ class TestStepDispatcher:
         from mc.application.execution.request import ExecutionResult, RunnerType
 
         engine = MagicMock()
-        engine.run = AsyncMock(
-            return_value=ExecutionResult(success=True, output="cc step output")
-        )
+        engine.run = AsyncMock(return_value=ExecutionResult(success=True, output="cc step output"))
         snap_patch, collect_patch = _patch_executor_helpers()
 
         with (
@@ -314,37 +312,41 @@ class TestStepDispatcher:
         )
 
     @pytest.mark.asyncio
-    async def test_dispatch_human_step_waits_for_human_and_does_not_complete_task(self) -> None:
+    async def test_dispatch_human_step_stays_assigned_and_does_not_complete_task(self) -> None:
+        """Human steps must NEVER spawn a process, change status, or auto-complete.
+
+        The dispatcher must leave the step in 'assigned' status and return
+        immediately — no status transition, no context building, no runner execution.
+        """
         bridge, state = _make_stateful_bridge(
             [_step("step-human-1", "Approve output", assigned_agent="human", order=1)]
         )
         dispatcher = StepDispatcher(bridge)
 
-        from mc.application.execution.request import ExecutionResult
+        run_agent_mock = AsyncMock()
 
-        snap_patch, collect_patch = _patch_executor_helpers()
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
-            _patch_context_builder(),
             patch(
                 "mc.contexts.execution.step_dispatcher._run_step_agent",
-                new=AsyncMock(
-                    return_value=ExecutionResult(
-                        success=True,
-                        output="Waiting for human action.",
-                        transition_status="waiting_human",
-                    )
-                ),
+                new=run_agent_mock,
             ),
-            snap_patch,
-            collect_patch,
         ):
             await dispatcher.dispatch_steps("task-1", ["step-human-1"])
 
-        assert state["step-human-1"]["status"] == StepStatus.WAITING_HUMAN
+        # Step must remain in 'assigned' — the dispatcher must NOT change its status
+        assert state["step-human-1"]["status"] == StepStatus.ASSIGNED
+        # The agent runner must NEVER be called for human steps
+        run_agent_mock.assert_not_called()
+        # No step completion posted
         bridge.post_step_completion.assert_not_called()
+        # Task must NOT transition to done
         assert not any(
             call.args[1] == TaskStatus.DONE for call in bridge.update_task_status.call_args_list
+        )
+        # Task must NOT transition to review (human step is not completed)
+        assert not any(
+            call.args[1] == TaskStatus.REVIEW for call in bridge.update_task_status.call_args_list
         )
 
     @pytest.mark.asyncio
@@ -544,10 +546,10 @@ class TestStepDispatcher:
         # post_step_completion should be called instead of send_message for the success path
         bridge.post_step_completion.assert_called_once()
         call_args = bridge.post_step_completion.call_args
-        assert call_args[0][0] == "task-1"        # task_id
-        assert call_args[0][1] == "step-1"        # step_id
-        assert call_args[0][2] == "nanobot" # agent_name
-        assert call_args[0][3] == "Report written." # content
+        assert call_args[0][0] == "task-1"  # task_id
+        assert call_args[0][1] == "step-1"  # step_id
+        assert call_args[0][2] == "nanobot"  # agent_name
+        assert call_args[0][3] == "Report written."  # content
 
     @pytest.mark.asyncio
     async def test_step_completion_passes_artifacts(self) -> None:
@@ -555,7 +557,9 @@ class TestStepDispatcher:
         bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
         dispatcher = StepDispatcher(bridge)
 
-        fake_artifacts = [{"path": "output/report.pdf", "action": "created", "description": "PDF, 10 KB"}]
+        fake_artifacts = [
+            {"path": "output/report.pdf", "action": "created", "description": "PDF, 10 KB"}
+        ]
 
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
@@ -659,7 +663,10 @@ class TestTaskFileManifestInjection:
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_with_files(query_data),
-            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                side_effect=_capture_run_agent,
+            ),
             snap_patch,
             collect_patch,
         ):
@@ -671,8 +678,8 @@ class TestTaskFileManifestInjection:
         assert "report.pdf" in desc
         assert "notes.md" in desc
         assert "attachments" in desc
-        assert "847 KB" in desc          # 867328 // 1024 = 847
-        assert "12 KB" in desc           # 12288 // 1024 = 12
+        assert "847 KB" in desc  # 867328 // 1024 = 847
+        assert "12 KB" in desc  # 12288 // 1024 = 12
         assert "Review the file manifest" in desc
 
     @pytest.mark.asyncio
@@ -692,7 +699,10 @@ class TestTaskFileManifestInjection:
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                side_effect=_capture_run_agent,
+            ),
             snap_patch,
             collect_patch,
         ):
@@ -720,7 +730,10 @@ class TestTaskFileManifestInjection:
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                side_effect=_capture_run_agent,
+            ),
             snap_patch,
             collect_patch,
         ):
@@ -775,7 +788,10 @@ class TestTaskFileManifestInjection:
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_with_files(query_data),
-            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                side_effect=_capture_run_agent,
+            ),
             snap_patch,
             collect_patch,
         ):
@@ -783,9 +799,9 @@ class TestTaskFileManifestInjection:
 
         assert len(captured_description) == 1
         desc = captured_description[0]
-        assert "0 KB" in desc       # 512 // 1024 = 0
-        assert "1.0 MB" in desc     # 1048576 / (1024*1024) = 1.0
-        assert "2.5 MB" in desc     # 2621440 / (1024*1024) = 2.5
+        assert "0 KB" in desc  # 512 // 1024 = 0
+        assert "1.0 MB" in desc  # 1048576 / (1024*1024) = 1.0
+        assert "2.5 MB" in desc  # 2621440 / (1024*1024) = 2.5
 
     @pytest.mark.asyncio
     async def test_manifest_single_file_correct_count(self) -> None:
@@ -817,7 +833,10 @@ class TestTaskFileManifestInjection:
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_with_files(query_data),
-            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                side_effect=_capture_run_agent,
+            ),
             snap_patch,
             collect_patch,
         ):
@@ -856,9 +875,9 @@ class TestStepOutputFileSync:
         # sync_task_output_files must be called once with (task_id, task_data_dict, agent_name)
         bridge.sync_task_output_files.assert_called_once()
         call_args = bridge.sync_task_output_files.call_args
-        assert call_args[0][0] == "task-1"           # task_id
-        assert isinstance(call_args[0][1], dict)     # task_data is a dict
-        assert call_args[0][2] == "nanobot"    # agent_name
+        assert call_args[0][0] == "task-1"  # task_id
+        assert isinstance(call_args[0][1], dict)  # task_data is a dict
+        assert call_args[0][2] == "nanobot"  # agent_name
 
         # Step must still be completed
         assert state["step-1"]["status"] == StepStatus.COMPLETED
@@ -1062,9 +1081,13 @@ class TestSupervisedModeSkipsDispatch:
         plan = ExecutionPlan(
             steps=[
                 ExecutionPlanStep(
-                    temp_id="s1", title="Step", description="d",
-                    assigned_agent="nanobot", blocked_by=[],
-                    parallel_group=1, order=1,
+                    temp_id="s1",
+                    title="Step",
+                    description="d",
+                    assigned_agent="nanobot",
+                    blocked_by=[],
+                    parallel_group=1,
+                    order=1,
                 )
             ]
         )
@@ -1112,14 +1135,18 @@ class TestPausedTaskDispatch:
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_should_not_run),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_should_not_run
+            ),
             snap_patch,
             collect_patch,
         ):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         # The step agent must NOT have been called — dispatch was skipped
-        assert not run_agent_called, "Step agent was called despite task being paused (review status)"
+        assert not run_agent_called, (
+            "Step agent was called despite task being paused (review status)"
+        )
         # Step must remain in 'assigned' status (not completed or crashed)
         assert state["step-1"]["status"] == StepStatus.ASSIGNED
         # Task must NOT be marked done
@@ -1171,7 +1198,10 @@ class TestTaskLevelFileSummaryInDelegationContext:
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder_with_files(query_data),
-            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                side_effect=_capture_run_agent,
+            ),
             snap_patch,
             collect_patch,
         ):
@@ -1210,7 +1240,10 @@ class TestTaskLevelFileSummaryInDelegationContext:
         with (
             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
             _patch_context_builder(),
-            patch("mc.contexts.execution.step_dispatcher._run_step_agent", side_effect=_capture_run_agent),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                side_effect=_capture_run_agent,
+            ),
             snap_patch,
             collect_patch,
         ):
