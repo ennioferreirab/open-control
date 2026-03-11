@@ -617,7 +617,119 @@ describe("TaskDetailSheet", () => {
 
     expect(screen.getByText("Thread A")).toBeInTheDocument();
     expect(screen.getByText("Thread B")).toBeInTheDocument();
-    expect(screen.getByText("No messages yet. Agent activity will appear here.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No messages yet. Agent activity will appear here."),
+    ).toBeInTheDocument();
+  });
+
+  it("pins merged source thread sections above the live thread messages", () => {
+    const mergeTask = {
+      ...baseTask,
+      _id: "task-c" as never,
+      title: "Merged Task C",
+      status: "review" as const,
+      isMergeTask: true,
+      files: [],
+    };
+
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (args === undefined) return [];
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return {
+          ...buildDetailView(mergeTask, [baseMessage]),
+          mergeSourceThreads: [
+            {
+              taskId: "task-a",
+              taskTitle: "Task A",
+              label: "A",
+              messages: [
+                {
+                  ...baseMessage,
+                  _id: "msg-a1",
+                  taskId: "task-a",
+                  content: "Source thread A message",
+                },
+              ],
+            },
+          ],
+        };
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task-c" as never} onClose={() => {}} />);
+
+    const stickyHeader = screen.getByTestId("merged-source-threads-sticky");
+    const liveMessages = screen.getByTestId("thread-live-messages");
+
+    expect(stickyHeader).toHaveClass("sticky");
+    expect(stickyHeader).toHaveTextContent("Thread A");
+    expect(liveMessages).toHaveTextContent("Starting work on feature X");
+    expect(
+      stickyHeader.compareDocumentPosition(liveMessages) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+  });
+
+  it("collapses and expands the merged source thread group from the sticky header", async () => {
+    const user = userEvent.setup();
+    const mergeTask = {
+      ...baseTask,
+      _id: "task-c" as never,
+      title: "Merged Task C",
+      status: "review" as const,
+      isMergeTask: true,
+      files: [],
+    };
+
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (args === undefined) return [];
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return {
+          ...buildDetailView(mergeTask, [baseMessage]),
+          mergeSourceThreads: [
+            {
+              taskId: "task-a",
+              taskTitle: "Task A",
+              label: "A",
+              messages: [
+                {
+                  ...baseMessage,
+                  _id: "msg-a1",
+                  taskId: "task-a",
+                  content: "Source thread A message",
+                },
+              ],
+            },
+          ],
+        };
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task-c" as never} onClose={() => {}} />);
+
+    expect(screen.getByText("Thread A")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Collapse" }));
+
+    expect(screen.getByTestId("merged-source-threads-sticky")).toHaveTextContent("Merged threads");
+    expect(screen.queryByText("Thread A")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Expand" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Expand" }));
+
+    expect(screen.getByText("Thread A")).toBeInTheDocument();
   });
 
   it("shows an editable visual merge step for manual merged tasks in review", async () => {

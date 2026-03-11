@@ -218,6 +218,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [editDescriptionValue, setEditDescriptionValue] = useState("");
   const [mergeQuery, setMergeQuery] = useState("");
   const [selectedMergeTaskId, setSelectedMergeTaskId] = useState<Id<"tasks"> | "">("");
+  const [isMergedSourceGroupCollapsed, setIsMergedSourceGroupCollapsed] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -271,6 +272,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     setDeleteTaskError("");
     setMergeQuery("");
     setSelectedMergeTaskId("");
+    setIsMergedSourceGroupCollapsed(false);
   }, [taskId]);
 
   const handleSaveTitle = async () => {
@@ -965,64 +967,96 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 value="thread"
                 className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
               >
-                <ScrollArea className="flex-1 px-6 py-4">
+                <ScrollArea className="flex-1">
                   {messages === undefined ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">
+                    <p className="px-6 py-8 text-center text-sm text-muted-foreground">
                       Loading messages...
                     </p>
                   ) : messages.length === 0 && !hasSourceThreads ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">
+                    <p className="px-6 py-8 text-center text-sm text-muted-foreground">
                       No messages yet. Agent activity will appear here.
                     </p>
                   ) : (
-                    <div className="flex flex-col gap-2">
-                      {messages.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-8">
-                          No messages yet. Agent activity will appear here.
-                        </p>
-                      )}
-                      {messages.map((msg) => (
-                        <motion.div
-                          key={msg._id}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.2 }}
+                    <>
+                      {hasSourceThreads && (
+                        <div
+                          data-testid="merged-source-threads-sticky"
+                          className="sticky top-0 z-10 border-b border-border bg-background px-6 py-4"
                         >
-                          <ThreadMessage
-                            message={msg}
-                            steps={liveSteps ?? undefined}
-                            onArtifactClick={handleOpenArtifact}
-                          />
-                        </motion.div>
-                      ))}
-                      {(mergeSourceThreads ?? []).map((sourceThread) => (
-                        <details
-                          key={sourceThread.taskId}
-                          className="rounded-md border border-border bg-muted/20"
-                        >
-                          <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-foreground">
-                            Thread {sourceThread.label}
-                          </summary>
-                          <div className="flex flex-col gap-2 px-3 pb-3">
-                            {sourceThread.messages.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">
-                                No messages in source thread.
-                              </p>
-                            ) : (
-                              sourceThread.messages.map((msg) => (
-                                <ThreadMessage
-                                  key={msg._id}
-                                  message={msg}
-                                  steps={undefined}
-                                  onArtifactClick={handleOpenArtifact}
-                                />
-                              ))
-                            )}
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Merged threads
+                            </p>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() =>
+                                setIsMergedSourceGroupCollapsed((current) => !current)
+                              }
+                            >
+                              {isMergedSourceGroupCollapsed ? "Expand" : "Collapse"}
+                            </Button>
                           </div>
-                        </details>
-                      ))}
-                      <div ref={threadEndRef} />
-                    </div>
+                          {!isMergedSourceGroupCollapsed && (
+                            <div className="mt-2 flex flex-col gap-2">
+                              {(mergeSourceThreads ?? []).map((sourceThread) => (
+                                <details
+                                  key={sourceThread.taskId}
+                                  className="rounded-md border border-border bg-muted/20"
+                                >
+                                  <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-foreground">
+                                    Thread {sourceThread.label}
+                                  </summary>
+                                  <div className="flex flex-col gap-2 px-3 pb-3">
+                                    {sourceThread.messages.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground">
+                                        No messages in source thread.
+                                      </p>
+                                    ) : (
+                                      sourceThread.messages.map((msg) => (
+                                        <ThreadMessage
+                                          key={msg._id}
+                                          message={msg}
+                                          steps={undefined}
+                                          onArtifactClick={handleOpenArtifact}
+                                        />
+                                      ))
+                                    )}
+                                  </div>
+                                </details>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div
+                        data-testid="thread-live-messages"
+                        className="flex flex-col gap-2 px-6 py-4"
+                      >
+                        {messages.length === 0 && (
+                          <p className="py-8 text-center text-sm text-muted-foreground">
+                            No messages yet. Agent activity will appear here.
+                          </p>
+                        )}
+                        {messages.map((msg) => (
+                          <motion.div
+                            key={msg._id}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.2 }}
+                          >
+                            <ThreadMessage
+                              message={msg}
+                              steps={liveSteps ?? undefined}
+                              onArtifactClick={handleOpenArtifact}
+                            />
+                          </motion.div>
+                        ))}
+                        <div ref={threadEndRef} />
+                      </div>
+                    </>
                   )}
                 </ScrollArea>
                 {task && !isMergeLockedSource && (
