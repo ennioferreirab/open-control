@@ -2,12 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { TerminalPanel } from "./TerminalPanel";
 
-const mockUseQuery = vi.fn();
-const mockMutation = vi.fn().mockResolvedValue(undefined);
+const mockSend = vi.fn().mockResolvedValue(undefined);
+const mockWake = vi.fn().mockResolvedValue(undefined);
+const mockRename = vi.fn().mockResolvedValue(undefined);
 
-vi.mock("convex/react", () => ({
-  useQuery: (...args: unknown[]) => mockUseQuery(...args),
-  useMutation: () => mockMutation,
+vi.mock("@/features/terminal/hooks/useTerminalPanelState", () => ({
+  useTerminalPanelState: (sessionId: string, agentName?: string) => ({
+    session: mockSession,
+    displayName: agentName || sessionId,
+    send: mockSend,
+    wake: mockWake,
+    rename: mockRename,
+  }),
 }));
 
 const baseSession = {
@@ -16,22 +22,10 @@ const baseSession = {
   sleepMode: false,
   output: "line 1",
 };
+let mockSession: typeof baseSession | null | undefined = undefined;
 
 function mockTerminalQueries(session: typeof baseSession) {
-  mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
-    if (args === "skip") return undefined;
-    if (
-      typeof args === "object" &&
-      args !== null &&
-      "sessionId" in (args as Record<string, unknown>)
-    ) {
-      return session;
-    }
-    if (typeof args === "object" && args !== null && "name" in (args as Record<string, unknown>)) {
-      return null;
-    }
-    return undefined;
-  });
+  mockSession = session;
 }
 
 function setScrollMetrics(
@@ -51,8 +45,10 @@ function setScrollMetrics(
 describe("TerminalPanel", () => {
   afterEach(() => {
     cleanup();
-    mockUseQuery.mockReset();
-    mockMutation.mockClear();
+    mockSession = undefined;
+    mockSend.mockClear();
+    mockWake.mockClear();
+    mockRename.mockClear();
   });
 
   it("auto-scrolls the terminal output when already at the bottom", async () => {

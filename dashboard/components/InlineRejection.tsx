@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import * as motion from "motion/react-client";
+import { useInlineRejectionActions } from "@/features/tasks/hooks/useInlineRejectionActions";
 
 interface InlineRejectionProps {
   taskId: Id<"tasks">;
@@ -17,9 +16,7 @@ export function InlineRejection({ taskId, onClose }: InlineRejectionProps) {
   const [feedback, setFeedback] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const denyMutation = useMutation(api.tasks.deny);
-  const returnMutation = useMutation(api.tasks.returnToLeadAgent);
+  const { deny, returnToLeadAgent } = useInlineRejectionActions(taskId, onClose);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -29,8 +26,7 @@ export function InlineRejection({ taskId, onClose }: InlineRejectionProps) {
     if (!feedback.trim()) return;
     setIsSubmitting(true);
     try {
-      await denyMutation({ taskId, feedback: feedback.trim() });
-      onClose();
+      await deny(feedback.trim());
     } finally {
       setIsSubmitting(false);
     }
@@ -40,8 +36,7 @@ export function InlineRejection({ taskId, onClose }: InlineRejectionProps) {
     if (!feedback.trim()) return;
     setIsSubmitting(true);
     try {
-      await returnMutation({ taskId, feedback: feedback.trim() });
-      onClose();
+      await returnToLeadAgent(feedback.trim());
     } finally {
       setIsSubmitting(false);
     }

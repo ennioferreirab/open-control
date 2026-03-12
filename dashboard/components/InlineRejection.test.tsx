@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { InlineRejection } from "./InlineRejection";
 
 // Track mutation calls
@@ -18,22 +18,11 @@ vi.mock("motion/react-client", () => ({
   },
 }));
 
-// Mock Convex
-vi.mock("convex/react", () => ({
-  useMutation: (ref: { name?: string }) => {
-    if (ref?.name?.includes?.("deny") || String(ref) === "deny") return mockDeny;
-    return mockReturn;
-  },
-}));
-
-// Mock the Convex API references
-vi.mock("../convex/_generated/api", () => ({
-  api: {
-    tasks: {
-      deny: { name: "deny" },
-      returnToLeadAgent: { name: "returnToLeadAgent" },
-    },
-  },
+vi.mock("@/features/tasks/hooks/useInlineRejectionActions", () => ({
+  useInlineRejectionActions: () => ({
+    deny: mockDeny,
+    returnToLeadAgent: mockReturn,
+  }),
 }));
 
 const baseProps = {
@@ -79,9 +68,8 @@ describe("InlineRejection", () => {
     const textarea = screen.getByPlaceholderText("Explain what needs to change...");
     fireEvent.change(textarea, { target: { value: "Fix the colors" } });
     fireEvent.click(screen.getByText("Submit"));
-    expect(mockDeny).toHaveBeenCalledWith({
-      taskId: "task1",
-      feedback: "Fix the colors",
+    await waitFor(() => {
+      expect(mockDeny).toHaveBeenCalledWith("Fix the colors");
     });
   });
 
@@ -91,9 +79,8 @@ describe("InlineRejection", () => {
     const textarea = screen.getByPlaceholderText("Explain what needs to change...");
     fireEvent.change(textarea, { target: { value: "Needs re-routing" } });
     fireEvent.click(screen.getByText("Return to Lead Agent"));
-    expect(mockReturn).toHaveBeenCalledWith({
-      taskId: "task1",
-      feedback: "Needs re-routing",
+    await waitFor(() => {
+      expect(mockReturn).toHaveBeenCalledWith("Needs re-routing");
     });
   });
 

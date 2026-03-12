@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { useChatMessages } from "@/hooks/useChatMessages";
 
 function relativeTime(timestamp: string): string {
   const diff = Date.now() - new Date(timestamp).getTime();
@@ -22,7 +21,7 @@ interface ChatMessagesProps {
 }
 
 export function ChatMessages({ agentName }: ChatMessagesProps) {
-  const messages = useQuery(api.chats.listByAgent, { agentName });
+  const messages = useChatMessages(agentName);
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);

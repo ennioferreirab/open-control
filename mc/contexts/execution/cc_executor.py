@@ -13,6 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mc.application.execution.completion_status import resolve_completion_status
 from mc.application.execution.background_tasks import (
     create_background_task,
     get_background_tasks,
@@ -51,15 +52,6 @@ def _human_size(bytes_count: int) -> str:
     if bytes_count < 1024 * 1024:
         return f"{bytes_count // 1024} KB"
     return f"{bytes_count / (1024 * 1024):.1f} MB"
-
-
-def _resolve_completion_status(task_data: dict[str, Any] | None) -> TaskStatus:
-    """Cron-triggered runs should finish directly in done."""
-    if not isinstance(task_data, dict):
-        return TaskStatus.REVIEW
-    if task_data.get("active_cron_job_id") or task_data.get("activeCronJobId"):
-        return TaskStatus.DONE
-    return TaskStatus.REVIEW
 
 
 class CCExecutorMixin:
@@ -540,7 +532,7 @@ class CCExecutorMixin:
         if result.session_id:
             await self._store_cc_session(agent_name, task_id, result.session_id)
 
-        final_status = _resolve_completion_status(task_data)
+        final_status = resolve_completion_status(task_data)
         await asyncio.to_thread(
             self._bridge.update_task_status,
             task_id,

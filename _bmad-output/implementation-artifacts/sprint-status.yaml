@@ -187,3 +187,13 @@ development_status:
   epic-24: done
   24-1-extract-final-runtime-seams-from-gateway-and-retire-convergence-worktree: done
   epic-24-retrospective: optional
+
+  # Epic 26: Optional Hotspot Follow-Up
+  # Finishes the highest-value optional cleanup left after Epic 25:
+  # shrink the remaining dashboard/backend god files and reduce avoidable
+  # shared Convex coupling in the dashboard.
+  epic-26: done
+  26-1-split-dashboard-convex-task-hotspot: done
+  26-2-reduce-dashboard-shared-convex-coupling: done
+  26-3-reduce-backend-executor-and-bridge-hotspots: done
+  epic-26-retrospective: optional

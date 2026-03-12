@@ -38,14 +38,8 @@ const mockSkills = [
 
 let mockQueryResult: typeof mockSkills | undefined = mockSkills;
 
-vi.mock("convex/react", () => ({
-  useQuery: () => mockQueryResult,
-}));
-
-vi.mock("../convex/_generated/api", () => ({
-  api: {
-    skills: { list: "skills:list" },
-  },
+vi.mock("@/features/agents/hooks/useSkillsSelectorData", () => ({
+  useSkillsSelectorData: () => mockQueryResult,
 }));
 
 // Mock ShadCN components
