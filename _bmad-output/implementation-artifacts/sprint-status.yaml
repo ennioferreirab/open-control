@@ -170,3 +170,13 @@ development_status:
   22-3-delete-dashboard-legacy-wrappers-and-root-feature-hooks: ready-for-dev
   22-4-split-hotspots-and-add-versioned-functional-regression: ready-for-dev
   epic-22-retrospective: optional
+
+  # Epic 23: Selective Convergence Integration
+  # Pulls only the useful, simplifying pieces still stranded in the old
+  # architecture-convergence worktree, without reintroducing its regressions.
+  epic-23: done
+  23-1-extract-task-detail-tabs-and-shrink-task-detail-sheet: done
+  23-2-finish-dashboard-shell-feature-ownership-for-agents-activity-and-terminal: done
+  23-3-decouple-board-and-thread-shell-state-from-root-components: done
+  23-4-trim-backend-runtime-compat-seams-left-from-convergence: done
+  epic-23-retrospective: optional
