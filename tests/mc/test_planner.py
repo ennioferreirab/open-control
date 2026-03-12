@@ -1009,7 +1009,7 @@ class TestOrchestratorPlannerIntegration:
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
-            await orch._process_planning_task(task_data)
+            await orch._planning_worker.process_task(task_data)
 
             mock_planner_instance.plan_task.assert_called_once()
 
@@ -1043,7 +1043,7 @@ class TestOrchestratorPlannerIntegration:
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
-            await orch._process_planning_task(task_data)
+            await orch._planning_worker.process_task(task_data)
 
             call_kwargs = mock_planner_instance.plan_task.call_args
             assert call_kwargs.kwargs.get("explicit_agent") == "code-agent" or \
@@ -1078,7 +1078,7 @@ class TestOrchestratorPlannerIntegration:
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
-            await orch._process_planning_task(task_data)
+            await orch._planning_worker.process_task(task_data)
 
         # Plan should be stored
         mock_bridge.update_execution_plan.assert_called()
@@ -1103,7 +1103,7 @@ class TestOrchestratorPlannerIntegration:
 
         with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
              patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
-            await orch._process_planning_task(task_data)
+            await orch._planning_worker.process_task(task_data)
 
             MockPlanner.assert_not_called()
         mock_bridge.update_task_status.assert_not_called()

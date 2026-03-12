@@ -266,22 +266,6 @@ class TaskOrchestrator:
                 continue
             await self._kickoff_worker.process_batch(tasks)
 
-    # -- Delegation wrappers (preserve public API) -------------------------
-
-    async def _process_inbox_task(self, task_data: dict[str, Any]) -> None:
-        """Delegate to InboxWorker (backward compat for tests)."""
-        await self._inbox_worker.process_task(task_data)
-
-    async def _process_planning_task(self, task_data: dict[str, Any]) -> None:
-        """Delegate to PlanningWorker (backward compat for tests)."""
-        await self._planning_worker.process_task(task_data)
-
-    async def _handle_review_transition(
-        self, task_id: str, task: dict[str, Any]
-    ) -> None:
-        """Delegate to ReviewWorker (backward compat for tests)."""
-        await self._review_worker.handle_review_transition(task_id, task)
-
     async def send_agent_message(
         self,
         task_id: str,

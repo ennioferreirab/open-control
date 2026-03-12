@@ -53,7 +53,7 @@ async def test_auto_title_updates_title_and_continues():
     ):
         orchestrator = TaskOrchestrator(bridge)
         task = _make_task(auto_title=True, description="Poemas curtos revelam a forca...")
-        await orchestrator._process_inbox_task(task)
+        await orchestrator._inbox_worker.process_task(task)
 
     # updateTitle mutation must have been called with the generated title
     bridge.mutation.assert_called_once_with(
@@ -79,7 +79,7 @@ async def test_auto_title_skipped_when_llm_returns_none():
     ):
         orchestrator = TaskOrchestrator(bridge)
         task = _make_task(auto_title=True, description="Poemas curtos revelam a forca...")
-        await orchestrator._process_inbox_task(task)
+        await orchestrator._inbox_worker.process_task(task)
 
     # updateTitle must NOT have been called
     bridge.mutation.assert_not_called()
@@ -102,7 +102,7 @@ async def test_auto_title_not_called_when_flag_false():
     ):
         orchestrator = TaskOrchestrator(bridge)
         task = _make_task(auto_title=False, description="Poemas curtos revelam a forca...")
-        await orchestrator._process_inbox_task(task)
+        await orchestrator._inbox_worker.process_task(task)
 
     mock_gen.assert_not_called()
     bridge.mutation.assert_not_called()
@@ -126,7 +126,7 @@ async def test_auto_title_not_called_when_no_description():
         orchestrator = TaskOrchestrator(bridge)
         task = _make_task(auto_title=True, description=None)
         task["description"] = None
-        await orchestrator._process_inbox_task(task)
+        await orchestrator._inbox_worker.process_task(task)
 
     mock_gen.assert_not_called()
     bridge.mutation.assert_not_called()

@@ -1134,7 +1134,7 @@ class TestSupervisedModeSkipsDispatch:
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
-            await orchestrator._process_planning_task(task)
+            await orchestrator._planning_worker.process_task(task)
 
         # Supervised mode should NOT trigger dispatch or materialization
         bridge.batch_create_steps.assert_not_called()

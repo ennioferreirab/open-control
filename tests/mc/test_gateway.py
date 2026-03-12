@@ -759,7 +759,7 @@ class TestOrchestratorNoDuplicateActivity:
         }
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            await orch._process_inbox_task(task_data)
+            await orch._inbox_worker.process_task(task_data)
 
         # update_task_status called once for routing (Convex handles the activity)
         mock_bridge.update_task_status.assert_called_once()
@@ -792,7 +792,7 @@ class TestOrchestratorNoDuplicateActivity:
         }
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            await orch._process_inbox_task(task_data)
+            await orch._inbox_worker.process_task(task_data)
 
         mock_bridge.update_task_status.assert_called_once()
         # create_activity must NOT contain task_assigned (no duplicate status events)
@@ -822,7 +822,7 @@ class TestOrchestratorNoDuplicateActivity:
         }
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            await orch._process_inbox_task(task_data)
+            await orch._inbox_worker.process_task(task_data)
 
         mock_bridge.update_task_status.assert_called_once()
         # create_activity must NOT contain task_assigned (no duplicate status events)
@@ -849,7 +849,7 @@ class TestOrchestratorNoDuplicateActivity:
         }
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            await orch._handle_review_transition("task_review_1", task_data)
+            await orch._review_worker.handle_review_transition("task_review_1", task_data)
 
         # Should create review_requested (standalone event, no status change)
         mock_bridge.create_activity.assert_called_once()
@@ -874,7 +874,7 @@ class TestOrchestratorNoDuplicateActivity:
         }
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            await orch._handle_review_transition("task_auto_1", task_data)
+            await orch._review_worker.handle_review_transition("task_auto_1", task_data)
 
         mock_bridge.update_task_status.assert_not_called()
         mock_bridge.create_activity.assert_not_called()

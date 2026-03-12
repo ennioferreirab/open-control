@@ -36,7 +36,7 @@ class TestOrchestratorSkipsManualTasks:
             return fn(*args, **kwargs)
 
         with patch("asyncio.to_thread", side_effect=passthrough):
-            await orch._process_inbox_task(task_data)
+            await orch._inbox_worker.process_task(task_data)
 
         # Should NOT call update_task_status (no routing)
         mock_bridge.update_task_status.assert_not_called()
@@ -63,7 +63,7 @@ class TestOrchestratorSkipsManualTasks:
             return fn(*args, **kwargs)
 
         with patch("asyncio.to_thread", side_effect=passthrough):
-            await orch._process_inbox_task(task_data)
+            await orch._inbox_worker.process_task(task_data)
 
         # Should call update_task_status (lead agent fallback)
         mock_bridge.update_task_status.assert_called_once()

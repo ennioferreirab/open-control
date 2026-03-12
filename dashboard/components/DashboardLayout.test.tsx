@@ -20,11 +20,11 @@ function makeRuntime(overrides: Partial<GatewaySleepRuntime>): GatewaySleepRunti
 }
 
 // Mock heavy child components to avoid loading entire dependency tree
-vi.mock("@/components/AgentSidebar", () => ({
+vi.mock("@/features/agents/components/AgentSidebar", () => ({
   AgentSidebar: () => <div data-testid="agent-sidebar">Agents</div>,
 }));
 
-vi.mock("@/components/ActivityFeedPanel", () => ({
+vi.mock("@/features/activity/components/ActivityFeedPanel", () => ({
   ActivityFeedPanel: () => (
     <div data-testid="activity-feed-panel">
       <span>Activity Feed</span>
@@ -62,6 +62,10 @@ vi.mock("@/features/settings/components/SettingsPanel", () => ({
   SettingsPanel: () => <div data-testid="settings-panel">Settings</div>,
 }));
 
+vi.mock("@/features/terminal/components/TerminalBoard", () => ({
+  TerminalBoard: () => <div data-testid="terminal-board">Terminal Board</div>,
+}));
+
 vi.mock("@/components/BoardContext", () => ({
   BoardProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
   useBoard: () => ({ openTerminals: [] }),
@@ -88,13 +92,9 @@ vi.mock("@/hooks/useGatewaySleepRuntime", () => ({
   useGatewaySleepCountdown: () => mockUseGatewaySleepCountdown(),
 }));
 
-vi.mock("convex/react", async () => {
-  const actual = await vi.importActual<typeof import("convex/react")>("convex/react");
-  return {
-    ...actual,
-    useMutation: () => mockGatewaySleepMutation,
-  };
-});
+vi.mock("@/features/settings/hooks/useGatewaySleepModeRequest", () => ({
+  useGatewaySleepModeRequest: () => mockGatewaySleepMutation,
+}));
 
 // Mock ShadCN sidebar
 vi.mock("@/components/ui/sidebar", () => ({
