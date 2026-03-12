@@ -308,6 +308,7 @@ describe("Architecture: story 22.4 hotspot seams exist", () => {
       "convex/lib/taskDetailView.ts",
       "convex/lib/taskFiles.ts",
       "convex/lib/taskArchive.ts",
+      "convex/lib/taskReview.ts",
       "convex/lib/taskStatus.ts",
     ];
 
@@ -460,6 +461,10 @@ describe("Architecture: Feature components must use hooks, not direct Convex imp
     "SearchBar.tsx",
     "StepCard.tsx",
     "AgentSidebarItem.tsx",
+    "SkillsSelector.tsx",
+    "InlineRejection.tsx",
+    "ChatMessages.tsx",
+    "TerminalPanel.tsx",
   ];
 
   for (const componentName of featureComponents) {
@@ -537,6 +542,9 @@ describe("Architecture: Component tests must mock hooks, not convex/react direct
     "SearchBar.test.tsx",
     "StepCard.test.tsx",
     "AgentSidebarItem.test.tsx",
+    "SkillsSelector.test.tsx",
+    "InlineRejection.test.tsx",
+    "TerminalPanel.test.tsx",
   ];
 
   for (const testFile of targetTestFiles) {

@@ -38,6 +38,14 @@ import {
   resumeTaskExecution,
 } from "./lib/taskStatus";
 import { logActivity } from "./lib/workflowHelpers";
+import {
+  approveTask,
+  denyTaskReview,
+  moveManualTask,
+  retryTask,
+  returnTaskToLeadAgent,
+  updateTaskStatusInternal,
+} from "./lib/taskReview";
 
 // ---------------------------------------------------------------------------
 // Re-export for backward compatibility (messages.ts imports isValidTransition)
@@ -750,91 +758,7 @@ export const retry = mutation({
     taskId: v.id("tasks"),
   },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new ConvexError("Task not found");
-
-    const steps = await ctx.db
-      .query("steps")
-      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-      .collect();
-    const hasCrashedStep = steps.some((step) => step.status === "crashed");
-    const canRetryTask = task.status === "crashed" || task.status === "failed" || hasCrashedStep;
-    if (!canRetryTask) {
-      throw new ConvexError(`Task is not retryable (current: ${task.status})`);
-    }
-
-    const now = new Date().toISOString();
-    const hasExecutionPlan = Boolean(task.executionPlan?.steps?.length);
-    const hasMaterializedSteps = steps.length > 0;
-
-    if (hasExecutionPlan || hasMaterializedSteps) {
-      await ctx.db.patch(args.taskId, {
-        status: "retrying",
-        stalledAt: undefined,
-        updatedAt: now,
-      });
-
-      for (const step of steps) {
-        if (step.status === "deleted") {
-          continue;
-        }
-        const nextStatus = (step.blockedBy?.length ?? 0) > 0 ? "blocked" : "assigned";
-        await ctx.db.patch(step._id, {
-          status: nextStatus,
-          errorMessage: undefined,
-          startedAt: undefined,
-          completedAt: undefined,
-        });
-      }
-
-      await ctx.db.insert("activities", {
-        taskId: args.taskId,
-        eventType: "task_retrying",
-        description: `Manual retry initiated by user for "${task.title}"`,
-        timestamp: now,
-      });
-
-      await ctx.db.insert("messages", {
-        taskId: args.taskId,
-        authorName: "System",
-        authorType: "system",
-        content: "Manual retry initiated. Reusing the current execution plan.",
-        messageType: "system_event",
-        timestamp: now,
-      });
-
-      await ctx.db.patch(args.taskId, {
-        status: "in_progress",
-        stalledAt: undefined,
-        updatedAt: now,
-      });
-      return;
-    }
-
-    // Legacy fallback: re-queue through inbox/planning when no plan exists.
-    await ctx.db.patch(args.taskId, {
-      status: "inbox",
-      assignedAgent: undefined,
-      stalledAt: undefined,
-      updatedAt: now,
-    });
-
-    // Activity event
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      eventType: "task_retrying",
-      description: `Manual retry initiated by user for "${task.title}"`,
-      timestamp: now,
-    });
-
-    await ctx.db.insert("messages", {
-      taskId: args.taskId,
-      authorName: "System",
-      authorType: "system",
-      content: "Manual retry initiated. Task re-queued for processing.",
-      messageType: "system_event",
-      timestamp: now,
-    });
+    await retryTask(ctx, args.taskId);
   },
 });
 
@@ -848,46 +772,7 @@ export const approve = mutation({
     userName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new ConvexError("Task not found");
-    if (task.status !== "review") {
-      throw new ConvexError(`Task is not in review state (current: ${task.status})`);
-    }
-    if (task.isManual === true) {
-      throw new ConvexError("Cannot approve a manual task. Use Start to begin execution.");
-    }
-
-    const now = new Date().toISOString();
-    const userName = args.userName || "User";
-
-    // Transition to done
-    await ctx.db.patch(args.taskId, { status: "done", updatedAt: now });
-    await cascadeMergeSourceTasksToDone(
-      ctx,
-      task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
-      now,
-    );
-
-    // Mark all execution plan steps as completed
-    await markPlanStepsCompleted(ctx, args.taskId, task);
-
-    // Activity event
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      eventType: task.trustLevel === "human_approved" ? "hitl_approved" : "review_approved",
-      description: `User approved "${task.title}"`,
-      timestamp: now,
-    });
-
-    // Thread message
-    await ctx.db.insert("messages", {
-      taskId: args.taskId,
-      authorName: userName,
-      authorType: "user",
-      content: `Approved by ${userName}`,
-      messageType: "approval",
-      timestamp: now,
-    });
+    await approveTask(ctx, args.taskId, args.userName);
   },
 });
 
@@ -909,36 +794,7 @@ export const manualMove = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new ConvexError("Task not found");
-    if (task.isManual !== true) {
-      throw new ConvexError("Only manual tasks can be moved via drag-and-drop");
-    }
-
-    const oldStatus = task.status;
-    if (oldStatus === args.newStatus) return;
-
-    const now = new Date().toISOString();
-
-    await ctx.db.patch(args.taskId, {
-      status: args.newStatus,
-      updatedAt: now,
-    });
-
-    if (args.newStatus === "done") {
-      await cascadeMergeSourceTasksToDone(
-        ctx,
-        task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
-        now,
-      );
-    }
-
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      eventType: "manual_task_status_changed",
-      description: `Manual task moved from ${oldStatus} to ${args.newStatus}`,
-      timestamp: now,
-    });
+    await moveManualTask(ctx, args.taskId, args.newStatus);
   },
 });
 
@@ -950,65 +806,7 @@ export const updateStatus = internalMutation({
     awaitingKickoff: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) {
-      throw new ConvexError("Task not found");
-    }
-
-    const currentStatus = task.status;
-    const newStatus = args.status;
-    const currentAwaitingKickoff = task.awaitingKickoff === true;
-    const nextAwaitingKickoff = args.awaitingKickoff === true;
-    const isReviewKickoffToggle =
-      currentStatus === "review" &&
-      newStatus === "review" &&
-      args.awaitingKickoff !== undefined &&
-      currentAwaitingKickoff !== nextAwaitingKickoff;
-
-    // Validate transition using lifecycle module
-    if (!isReviewKickoffToggle && !isValidTaskTransition(currentStatus, newStatus)) {
-      throw new ConvexError(`Cannot transition from '${currentStatus}' to '${newStatus}'`);
-    }
-
-    const now = new Date().toISOString();
-
-    // Build patch -- only update specified fields (never use replace)
-    const patch: Record<string, unknown> = {
-      status: newStatus,
-      updatedAt: now,
-    };
-    if (newStatus === "assigned" && args.agentName) {
-      patch.assignedAgent = args.agentName;
-    }
-    if (args.awaitingKickoff !== undefined) {
-      patch.awaitingKickoff = args.awaitingKickoff || undefined;
-    }
-    if (["done", "review", "crashed", "failed", "deleted"].includes(newStatus)) {
-      patch.activeCronJobId = undefined;
-    }
-    await ctx.db.patch(args.taskId, patch);
-
-    // When task reaches "done", mark all execution plan steps as completed
-    if (newStatus === "done") {
-      await cascadeMergeSourceTasksToDone(
-        ctx,
-        task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
-        now,
-      );
-      await markPlanStepsCompleted(ctx, args.taskId, task);
-    }
-
-    // Write activity event via lifecycle helper
-    if (!isReviewKickoffToggle) {
-      await logTaskStatusChange(ctx, {
-        taskId: args.taskId,
-        fromStatus: currentStatus,
-        toStatus: newStatus,
-        agentName: args.agentName,
-        taskTitle: task.title,
-        timestamp: now,
-      });
-    }
+    await updateTaskStatusInternal(ctx, args);
   },
 });
 
@@ -1023,40 +821,7 @@ export const deny = mutation({
     userName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new ConvexError("Task not found");
-    if (task.status !== "review") {
-      throw new ConvexError(`Task is not in review state (current: ${task.status})`);
-    }
-    if (task.trustLevel !== "human_approved") {
-      throw new ConvexError("Task does not require human approval");
-    }
-
-    const now = new Date().toISOString();
-    const userName = args.userName || "User";
-    const feedbackPreview =
-      args.feedback.length > 100 ? args.feedback.slice(0, 100) + "..." : args.feedback;
-
-    // Task stays in "review" -- only update timestamp
-    await ctx.db.patch(args.taskId, { updatedAt: now });
-
-    // Activity event
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      eventType: "hitl_denied",
-      description: `User denied "${task.title}": ${feedbackPreview}`,
-      timestamp: now,
-    });
-
-    // Denial message in thread
-    await ctx.db.insert("messages", {
-      taskId: args.taskId,
-      authorName: userName,
-      authorType: "user",
-      content: args.feedback,
-      messageType: "denial",
-      timestamp: now,
-    });
+    await denyTaskReview(ctx, args.taskId, args.feedback, args.userName);
   },
 });
 
@@ -1071,52 +836,7 @@ export const returnToLeadAgent = mutation({
     userName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new ConvexError("Task not found");
-    if (task.status !== "review") {
-      throw new ConvexError(`Task is not in review state (current: ${task.status})`);
-    }
-    if (task.trustLevel !== "human_approved") {
-      throw new ConvexError("Task does not require human approval");
-    }
-
-    const now = new Date().toISOString();
-    const userName = args.userName || "User";
-
-    // Reset to inbox, clear assigned agent
-    await ctx.db.patch(args.taskId, {
-      status: "inbox",
-      assignedAgent: undefined,
-      updatedAt: now,
-    });
-
-    // User denial message
-    await ctx.db.insert("messages", {
-      taskId: args.taskId,
-      authorName: userName,
-      authorType: "user",
-      content: args.feedback,
-      messageType: "denial",
-      timestamp: now,
-    });
-
-    // System message about re-routing
-    await ctx.db.insert("messages", {
-      taskId: args.taskId,
-      authorName: "System",
-      authorType: "system",
-      content: "Task returned to Lead Agent for re-routing",
-      messageType: "system_event",
-      timestamp: now,
-    });
-
-    // Activity event
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      eventType: "task_retrying",
-      description: `Task returned to Lead Agent: "${task.title}"`,
-      timestamp: now,
-    });
+    await returnTaskToLeadAgent(ctx, args.taskId, args.feedback, args.userName);
   },
 });
 

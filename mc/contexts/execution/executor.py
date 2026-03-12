@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from mc.application.execution.completion_status import resolve_completion_status
 from mc.contexts.execution.agent_runner import (  # noqa: F401
     AgentRunResult,
     _coerce_agent_run_result,
@@ -24,6 +24,7 @@ from mc.contexts.execution.agent_runner import (  # noqa: F401
     _run_agent_on_task,
 )
 from mc.contexts.execution.cc_executor import CCExecutorMixin
+from mc.contexts.execution.completion_reporting import append_task_completion_heartbeat
 from mc.contexts.execution.crash_recovery import AgentGateway
 from mc.contexts.execution.message_builder import build_task_message  # noqa: F401
 from mc.contexts.execution.output_artifacts import (  # noqa: F401
@@ -83,15 +84,6 @@ def build_executor_agent_roster() -> str:
 def _provider_error_action(exc: Exception) -> str:
     """Extract a user-facing action string from a provider error."""
     return _provider_error_action_impl(exc)
-
-
-def _resolve_completion_status(task_data: dict[str, Any] | None) -> TaskStatus:
-    """Cron-triggered runs should finish directly in done."""
-    if not isinstance(task_data, dict):
-        return TaskStatus.REVIEW
-    if task_data.get("active_cron_job_id") or task_data.get("activeCronJobId"):
-        return TaskStatus.DONE
-    return TaskStatus.REVIEW
 
 
 def _build_thread_context(messages: list[dict[str, Any]], max_messages: int = 20) -> str:
@@ -771,7 +763,7 @@ class TaskExecutor(CCExecutorMixin):
                         cron_parent_task_id,
                     )
 
-            final_status = _resolve_completion_status(task_data)
+            final_status = resolve_completion_status(task_data)
 
             # Activity event (task_completed) is written by the Convex
             # tasks:updateStatus mutation — no duplicate create_activity here.
@@ -791,27 +783,14 @@ class TaskExecutor(CCExecutorMixin):
                 title, agent_name, final_status,
             )
 
-            # Write completion to global HEARTBEAT.md for the main agent (Owl) to pick up
             try:
-                from filelock import FileLock
-                result_snippet = (result or "Task completed.").strip()
-                if len(result_snippet) > 1000:
-                    result_snippet = result_snippet[:1000] + "\n...(truncated)..."
-
-                heartbeat_content = (
-                    f"\n## Mission Control Update\n\n"
-                    f"The task **'{title}'** (ID: `{task_id}`) assigned to **{agent_name}** "
-                    f"has finished with status: `{final_status}`.\n\n"
-                    f"### Agent's Result:\n```\n{result_snippet}\n```\n\n"
-                    f"Please summarize this naturally and notify the user that the task is complete.\n"
+                append_task_completion_heartbeat(
+                    title=title,
+                    task_id=task_id,
+                    agent_name=agent_name,
+                    final_status=final_status,
+                    result=result,
                 )
-
-                heartbeat_file = Path.home() / ".nanobot" / "workspace" / "HEARTBEAT.md"
-                lock = FileLock(str(heartbeat_file) + ".lock", timeout=10)
-                with lock:
-                    with open(heartbeat_file, "a", encoding="utf-8") as f:
-                        f.write(heartbeat_content)
-
                 logger.info("[executor] Written task '%s' completion to global HEARTBEAT.md", title)
             except Exception as hb_exc:
                 logger.warning("[executor] Failed to write to HEARTBEAT.md for task '%s': %s", title, hb_exc)

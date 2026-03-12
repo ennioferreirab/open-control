@@ -13,6 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mc.application.execution.completion_status import resolve_completion_status
 from mc.types import (
     NANOBOT_AGENT_NAME,
     ActivityEventType,
@@ -49,15 +50,6 @@ def _coerce_step_run_result(value: Any) -> tuple[str, bool, str | None]:
     )
     error_message = getattr(value, "error_message", None)
     return content, is_error, error_message
-
-
-def _resolve_completion_status(task_data: dict[str, Any] | None) -> TaskStatus:
-    """Cron-triggered runs should finish directly in done."""
-    if not isinstance(task_data, dict):
-        return TaskStatus.REVIEW
-    if task_data.get("active_cron_job_id") or task_data.get("activeCronJobId"):
-        return TaskStatus.DONE
-    return TaskStatus.REVIEW
 
 
 def _maybe_inject_orientation(
@@ -250,7 +242,7 @@ class StepDispatcher:
                     "tasks:getById",
                     {"task_id": task_id},
                 )
-                final_status = _resolve_completion_status(task_data)
+                final_status = resolve_completion_status(task_data)
                 await asyncio.to_thread(
                     self._bridge.update_task_status,
                     task_id,
