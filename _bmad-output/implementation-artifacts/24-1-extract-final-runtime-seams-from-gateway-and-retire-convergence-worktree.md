@@ -63,9 +63,9 @@ so that the old `architecture-convergence` worktree can be retired without losin
   - [x] 3.2 Run focused runtime tests and backend architecture/reorganization tests
   - [x] 3.3 Run `/code-review`
 
-- [ ] **Task 4: Retire the old worktree** (AC: #5)
+- [x] **Task 4: Retire the old worktree** (AC: #5)
   - [x] 4.1 Confirm no other worthwhile source delta remains in `architecture-convergence`
-  - [ ] 4.2 Remove the `architecture-convergence` worktree
+  - [x] 4.2 Remove the `architecture-convergence` worktree
   - [x] 4.3 Record verification evidence and residual risks
 
 ## Dev Notes
@@ -106,7 +106,7 @@ GPT-5 Codex
 - Extracted the remaining worthwhile runtime seams from `mc/runtime/gateway.py` into `mc/runtime/polling_settings.py`, `mc/runtime/cron_delivery.py`, and `mc/runtime/task_requeue.py`.
 - Tightened backend architecture guardrails so `gateway.py` can no longer keep these helpers inline.
 - Confirmed the old `architecture-convergence` worktree no longer holds any clearly worthwhile source delta beyond this rescued runtime split.
-- Pending final step: delete the old `architecture-convergence` worktree after integration.
+- Deleted the old `architecture-convergence` worktree after integrating the rescued runtime split into `main`.
 
 ### File List
 
