@@ -22,6 +22,10 @@ FOUNDATION_FILES = {
 
 HOTSPOT_SPLIT_FILES = {
     "mc/contexts/execution/agent_runner.py": MC_ROOT / "contexts" / "execution" / "agent_runner.py",
+    "mc/contexts/execution/completion_reporting.py": MC_ROOT
+    / "contexts"
+    / "execution"
+    / "completion_reporting.py",
     "mc/contexts/execution/message_builder.py": MC_ROOT
     / "contexts"
     / "execution"
@@ -40,6 +44,12 @@ HOTSPOT_SPLIT_FILES = {
     "mc/runtime/polling_settings.py": MC_ROOT / "runtime" / "polling_settings.py",
     "mc/runtime/cron_delivery.py": MC_ROOT / "runtime" / "cron_delivery.py",
     "mc/runtime/task_requeue.py": MC_ROOT / "runtime" / "task_requeue.py",
+    "mc/application/execution/completion_status.py": MC_ROOT
+    / "application"
+    / "execution"
+    / "completion_status.py",
+    "mc/bridge/adapter.py": MC_ROOT / "bridge" / "adapter.py",
+    "mc/bridge/facade_mixins.py": MC_ROOT / "bridge" / "facade_mixins.py",
 }
 
 PROTECTED_DIRECTORIES = [
@@ -254,6 +264,33 @@ def test_execution_executor_does_not_keep_output_artifact_helpers_inline() -> No
         assert forbidden not in source, f"mc/contexts/execution/executor.py still defines {forbidden}"
 
 
+def test_execution_modules_use_canonical_completion_status_helper() -> None:
+    files = [
+        MC_ROOT / "contexts" / "execution" / "executor.py",
+        MC_ROOT / "contexts" / "execution" / "cc_executor.py",
+        MC_ROOT / "contexts" / "execution" / "step_dispatcher.py",
+    ]
+
+    for filepath in files:
+        source = filepath.read_text(encoding="utf-8")
+        assert "def _resolve_completion_status(" not in source, (
+            f"{filepath.relative_to(MC_ROOT.parent)} still defines _resolve_completion_status"
+        )
+
+
+def test_execution_executor_does_not_keep_completion_reporting_inline() -> None:
+    filepath = MC_ROOT / "contexts" / "execution" / "executor.py"
+    source = filepath.read_text(encoding="utf-8")
+
+    forbidden_fragments = [
+        "heartbeat_content = (",
+        "FileLock(",
+    ]
+
+    for forbidden in forbidden_fragments:
+        assert forbidden not in source, f"mc/contexts/execution/executor.py still contains {forbidden}"
+
+
 def test_bridge_toplevel_only_imports_types() -> None:
     filepath = MC_ROOT / "bridge" / "__init__.py"
     imports = _get_toplevel_imports(filepath)
@@ -266,6 +303,12 @@ def test_bridge_toplevel_only_imports_types() -> None:
         and not module.startswith("mc.types.")
     ]
     assert mc_imports == [], mc_imports
+
+
+def test_bridge_does_not_keep_adapter_inline() -> None:
+    filepath = MC_ROOT / "bridge" / "__init__.py"
+    source = filepath.read_text(encoding="utf-8")
+    assert "class _BridgeClientAdapter" not in source
 
 
 @pytest.mark.parametrize("filepath", RUNTIME_FACING_MODULES)

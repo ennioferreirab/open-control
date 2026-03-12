@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { Pencil } from "lucide-react";
+import { useTerminalPanelState } from "@/features/terminal/hooks/useTerminalPanelState";
 
 interface TerminalPanelProps {
   sessionId: string;
@@ -15,16 +14,7 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
   const outputContainerRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
-
-  const session = useQuery(api.terminalSessions.get, { sessionId });
-  const sendInput = useMutation(api.terminalSessions.sendInput);
-  const wakeTerminal = useMutation(api.terminalSessions.wake);
-
-  const agentDoc = useQuery(
-    api.agents.getByName,
-    agentName ? { name: agentName } : "skip"
-  );
-  const updateConfig = useMutation(api.agents.updateConfig);
+  const { session, displayName, send, wake, rename } = useTerminalPanelState(sessionId, agentName);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -60,15 +50,13 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
     const trimmed = input.trim();
     if (!trimmed) return;
     setError(null);
-    sendInput({ sessionId, input: trimmed }).catch((e) => {
+    send(trimmed).catch((e) => {
       setError(e instanceof Error ? e.message : "Failed to send input");
     });
     setInput("");
   };
 
   const isProcessing = session?.status === "processing";
-
-  const displayName = agentDoc?.displayName || agentName || sessionId;
 
   const startEditing = () => {
     setEditValue(displayName);
@@ -80,7 +68,7 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
   const commitEdit = () => {
     const trimmed = editValue.trim();
     if (trimmed && trimmed !== displayName && agentName) {
-      updateConfig({ name: agentName, displayName: trimmed }).catch(() => {});
+      rename(trimmed).catch(() => {});
     }
     setIsEditing(false);
   };
@@ -125,7 +113,7 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
         {isSleeping && (
           <button
             type="button"
-            onClick={() => wakeTerminal({ sessionId }).catch(() => {})}
+            onClick={() => wake().catch(() => {})}
             className="rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:bg-zinc-600 active:bg-zinc-500"
           >
             Wake
@@ -206,7 +194,7 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
             key={key}
             type="button"
             onClick={() => {
-              sendInput({ sessionId, input: `!!keys:${key}` }).catch(() => {});
+              send(`!!keys:${key}`).catch(() => {});
             }}
             className="rounded bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600"
           >

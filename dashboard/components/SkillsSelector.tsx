@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useSkillsSelectorData } from "@/features/agents/hooks/useSkillsSelectorData";
 
 interface SkillsSelectorProps {
   selected: string[];
@@ -15,7 +14,7 @@ interface SkillsSelectorProps {
 }
 
 export function SkillsSelector({ selected, onChange }: SkillsSelectorProps) {
-  const skills = useQuery(api.skills.list);
+  const skills = useSkillsSelectorData();
   const [search, setSearch] = useState("");
 
   const filteredSkills = useMemo(() => {
