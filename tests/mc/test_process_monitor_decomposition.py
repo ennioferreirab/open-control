@@ -2,7 +2,7 @@
 
 Ensures that all functions previously in mc/process_monitor.py are accessible
 from their canonical modules (mc.infrastructure.config, mc.infrastructure.agent_bootstrap,
-mc.contexts.execution.crash_recovery, mc.services.plan_negotiation) and via mc.runtime.gateway re-exports.
+mc.contexts.execution.crash_recovery, mc.contexts.planning.supervisor) and via mc.runtime.gateway re-exports.
 """
 
 from __future__ import annotations
@@ -111,10 +111,10 @@ class TestCrashHandlerAccessible:
 
 
 class TestPlanNegotiationAccessible:
-    """Plan negotiation manager extracted to mc.services.plan_negotiation."""
+    """Plan negotiation manager extracted to mc.contexts.planning.supervisor."""
 
     def test_plan_negotiation_supervisor_importable(self) -> None:
-        from mc.services.plan_negotiation import PlanNegotiationSupervisor
+        from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
         assert PlanNegotiationSupervisor is not None
 
 
@@ -192,8 +192,8 @@ class TestDeadCodeRemoved:
 
 
 class TestAgentSyncService:
-    """AC2 supplement: AgentSyncService accessible from mc.services.agent_sync."""
+    """AC2 supplement: AgentSyncService accessible from mc.contexts.agents.sync."""
 
     def test_agent_sync_service_importable(self) -> None:
-        from mc.services.agent_sync import AgentSyncService
+        from mc.contexts.agents.sync import AgentSyncService
         assert AgentSyncService is not None

@@ -1,8 +1,4 @@
-"""Inbox worker — handles new task processing, auto-title, and initial routing.
-
-Extracted from mc.orchestrator per Story 17.1 (AC1).
-Updated to accept RuntimeContext per Story 20.3.
-"""
+"""Inbox worker — handles new task processing, auto-title, and initial routing."""
 
 from __future__ import annotations
 
@@ -27,18 +23,14 @@ class InboxWorker:
         self._known_inbox_ids: set[str] = set()
 
     async def process_batch(self, tasks: list[dict[str, Any]]) -> None:
-        """Process a batch of inbox tasks from a subscription update.
-
-        Deduplicates by task ID and prunes stale IDs that left inbox.
-        """
-        current_ids = {t.get("id") for t in tasks if t.get("id")}
+        """Process a batch of inbox tasks from a subscription update."""
+        current_ids = {task.get("id") for task in tasks if task.get("id")}
         self._known_inbox_ids &= current_ids
 
         for task_data in tasks:
             task_id = task_data.get("id")
             if not task_id or task_id in self._known_inbox_ids:
                 continue
-            # Skip manual tasks -- stay in inbox, user manages them
             if task_data.get("is_manual"):
                 self._known_inbox_ids.add(task_id)
                 continue
@@ -55,8 +47,6 @@ class InboxWorker:
     async def process_task(self, task_data: dict[str, Any]) -> None:
         """Handle an inbox task: generate auto-title then transition to planning or assigned."""
         task_id = task_data.get("id")
-
-        # Skip manual tasks -- stay in inbox, user manages them via dashboard
         if task_data.get("is_manual"):
             logger.info("[inbox] Skipping manual inbox task %s", task_id)
             return
@@ -74,7 +64,6 @@ class InboxWorker:
             list(task_data.keys()),
         )
 
-        # Auto-title: generate a concise title from description if requested
         if auto_title and description:
             generated_title = await generate_title_via_low_agent(
                 self._bridge, description
@@ -93,8 +82,7 @@ class InboxWorker:
                 )
             else:
                 logger.warning(
-                    "[inbox] Auto-title generation returned None for task %s; "
-                    "keeping placeholder title",
+                    "[inbox] Auto-title generation returned None for task %s; keeping placeholder title",
                     task_id,
                 )
                 try:
@@ -105,14 +93,13 @@ class InboxWorker:
                         task_id,
                     )
                 except Exception:
-                    pass  # best-effort
+                    pass
         elif auto_title and not description:
             logger.warning(
                 "[inbox] auto_title=True but no description for task %s",
                 task_id,
             )
 
-        # Transition: if already assigned, go to "assigned"; otherwise "planning"
         next_status = "assigned" if assigned_agent else "planning"
         await asyncio.to_thread(
             self._bridge.update_task_status,

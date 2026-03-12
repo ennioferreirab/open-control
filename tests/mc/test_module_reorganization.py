@@ -70,11 +70,6 @@ def test_context_packages_reexport_public_api() -> None:
     from mc.runtime.gateway import main as runtime_main
     from mc.runtime.gateway import run_gateway as runtime_run_gateway
     from mc.runtime.orchestrator import TaskOrchestrator as RuntimeTaskOrchestrator
-    from mc.services.agent_sync import AgentSyncService
-    from mc.services.conversation import ConversationService as ServiceConversation
-    from mc.services.conversation_intent import (
-        ConversationIntent as ServiceConversationIntent,
-    )
 
     assert TaskOrchestrator is RuntimeTaskOrchestrator
     assert main is runtime_main
@@ -92,35 +87,7 @@ def test_context_packages_reexport_public_api() -> None:
     assert ConversationService is ContextConversationService
     assert ConversationIntent is ContextConversationIntent
     assert ReviewHandler is ContextReviewHandler
-    assert AgentSyncService is ContextAgentSyncService
-    assert ServiceConversation is ContextConversationService
-    assert ServiceConversationIntent is ContextConversationIntent
-
-
-def test_runtime_workers_package_reexports_existing_workers() -> None:
-    from mc.runtime.workers import (
-        InboxWorker,
-        KickoffResumeWorker,
-        PlanningWorker,
-        ReviewWorker,
-    )
-    from mc.workers import (
-        InboxWorker as LegacyInboxWorker,
-    )
-    from mc.workers import (
-        KickoffResumeWorker as LegacyKickoffResumeWorker,
-    )
-    from mc.workers import (
-        PlanningWorker as LegacyPlanningWorker,
-    )
-    from mc.workers import (
-        ReviewWorker as LegacyReviewWorker,
-    )
-
-    assert InboxWorker is LegacyInboxWorker
-    assert PlanningWorker is LegacyPlanningWorker
-    assert ReviewWorker is LegacyReviewWorker
-    assert KickoffResumeWorker is LegacyKickoffResumeWorker
+    assert ContextAgentSyncService is not None
 
 
 @pytest.mark.parametrize(
@@ -136,7 +103,11 @@ def test_runtime_workers_package_reexports_existing_workers() -> None:
         "mc.cc_step_runner",
         "mc.step_dispatcher",
         "mc.chat_handler",
+        "mc.ask_user",
+        "mc.mentions",
         "mc.review_handler",
+        "mc.services",
+        "mc.workers",
     ],
 )
 def test_removed_root_facades_are_not_importable(module_name: str) -> None:

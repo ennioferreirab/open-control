@@ -39,7 +39,7 @@ SAMPLE_PLAN: dict = {
 def _mock_known_agents():
     """Patch _known_agent_names so mentions resolve without disk access."""
     with patch(
-        "mc.mentions.handler._known_agent_names",
+        "mc.contexts.conversation.mentions.handler._known_agent_names",
         return_value={"researcher", "alice", "bob"},
     ):
         yield
@@ -344,7 +344,7 @@ class TestNoDoubleProcessing:
         mock_handle_negotiation.assert_not_called()
 
         # --- MentionWatcher side: should process ---
-        from mc.mentions.watcher import MentionWatcher
+        from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
         watcher_bridge = MagicMock()
         in_progress_task = {
@@ -371,11 +371,11 @@ class TestNoDoubleProcessing:
         )
 
         with patch(
-            "mc.mentions.watcher.asyncio.to_thread",
+            "mc.contexts.conversation.mentions.watcher.asyncio.to_thread",
             new=_to_thread_mock,
         ):
             with patch(
-                "mc.mentions.handler.handle_all_mentions",
+                "mc.contexts.conversation.mentions.handler.handle_all_mentions",
                 new=AsyncMock(return_value=True),
             ) as mock_handle_mention:
                 self._run(watcher._poll_all_tasks())

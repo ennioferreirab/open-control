@@ -1128,9 +1128,9 @@ class TestSupervisedModeSkipsDispatch:
         )
 
         with (
-            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.workers.planning.asyncio.create_task") as mock_create_task,
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.planning.asyncio.create_task") as mock_create_task,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)

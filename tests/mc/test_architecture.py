@@ -26,8 +26,6 @@ PROTECTED_DIRECTORIES = [
     "domain",
     "infrastructure",
     "memory",
-    "services",
-    "workers",
 ]
 
 CANONICAL_DIRECTORIES = [
@@ -37,24 +35,25 @@ CANONICAL_DIRECTORIES = [
     "domain",
     "infrastructure",
     "memory",
-    "mentions",
     "runtime",
-    "services",
-    "workers",
 ]
 
 REMOVED_ROOT_MODULES = {
+    "ask_user",
     "cc_executor",
     "cc_step_runner",
     "chat_handler",
     "executor",
     "gateway",
+    "mentions",
     "orchestrator",
     "plan_materializer",
     "plan_negotiator",
     "planner",
     "review_handler",
+    "services",
     "step_dispatcher",
+    "workers",
 }
 
 RUNTIME_FACING_MODULES = [
@@ -265,6 +264,19 @@ def test_task_status_canonical_in_types() -> None:
 def test_root_python_modules_are_minimal() -> None:
     root_modules = sorted(path.stem for path in MC_ROOT.glob("*.py") if path.is_file())
     assert root_modules == ["__init__", "types"], root_modules
+
+
+@pytest.mark.parametrize(
+    "directory",
+    [
+        "ask_user",
+        "mentions",
+        "services",
+        "workers",
+    ],
+)
+def test_removed_compatibility_directories_do_not_exist(directory: str) -> None:
+    assert not (MC_ROOT / directory).exists(), f"mc/{directory} should be deleted"
 
 
 def test_runtime_orchestrator_has_no_toplevel_gateway_import() -> None:

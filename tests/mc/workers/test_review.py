@@ -15,7 +15,7 @@ from mc.types import (
     TaskStatus,
     TrustLevel,
 )
-from mc.workers.review import ReviewWorker
+from mc.runtime.workers.review import ReviewWorker
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -55,7 +55,7 @@ class TestHandleReviewTransition:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
         bridge.update_task_status.assert_not_called()
@@ -72,7 +72,7 @@ class TestHandleReviewTransition:
             "awaiting_kickoff": True,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
         bridge.update_task_status.assert_not_called()
@@ -91,7 +91,7 @@ class TestHandleReviewTransition:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
         bridge.update_task_status.assert_not_called()
@@ -114,7 +114,7 @@ class TestHandleReviewTransition:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
         bridge.update_task_status.assert_not_called()
@@ -134,7 +134,7 @@ class TestHandleReviewTransition:
             "is_manual": True,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
         bridge.update_task_status.assert_not_called()
@@ -152,7 +152,7 @@ class TestHandleReviewTransition:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
         bridge.send_message.assert_called_once()
@@ -175,7 +175,7 @@ class TestHandleReviewTransition:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
         bridge.create_activity.assert_called_once()
@@ -190,7 +190,7 @@ class TestSendAgentMessage:
         bridge.send_message.return_value = "msg-id"
         worker = ReviewWorker(_make_ctx(bridge))
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             result = await worker.send_agent_message(
                 "task-1", "nanobot", "Hello"
             )
@@ -207,7 +207,7 @@ class TestHandleReviewFeedback:
         bridge = _make_bridge()
         worker = ReviewWorker(_make_ctx(bridge))
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_feedback(
                 "task-1", "reviewer-bot", "Needs changes"
             )
@@ -232,7 +232,7 @@ class TestHandleReviewApproval:
         }
         worker = ReviewWorker(_make_ctx(bridge))
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_approval("task-1", "reviewer-bot")
 
         bridge.update_task_status.assert_called_once_with(
@@ -248,7 +248,7 @@ class TestHandleReviewApproval:
         }
         worker = ReviewWorker(_make_ctx(bridge))
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_approval("task-1", "reviewer-bot")
 
         bridge.update_task_status.assert_not_called()
@@ -287,7 +287,7 @@ class TestReviewWorkerProcessBatch:
             },
         ]
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_batch(tasks)
 
         assert bridge.update_task_status.call_count == 0
@@ -306,7 +306,7 @@ class TestReviewWorkerProcessBatch:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_batch([task])
             assert bridge.update_task_status.call_count == 0
 

@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.services.conversation import ConversationService
-from mc.services.conversation_intent import ConversationIntent
+from mc.contexts.conversation.service import ConversationService
+from mc.contexts.conversation.intent import ConversationIntent
 
 
 # All agent names used across tests
@@ -20,7 +20,7 @@ _ALL_TEST_AGENTS = {"researcher", "alice", "bob", "nanobot"}
 def _mock_known_agent_names():
     """Patch _known_agent_names so tests do not depend on ~/.nanobot/agents/."""
     with patch(
-        "mc.mentions.handler._known_agent_names",
+        "mc.contexts.conversation.mentions.handler._known_agent_names",
         return_value=_ALL_TEST_AGENTS,
     ):
         yield
@@ -126,7 +126,7 @@ class TestContextAssembly:
             {"author_name": "User", "author_type": "user", "content": "hello"},
         ])
         with patch(
-            "mc.services.conversation.build_thread_context",
+            "mc.contexts.conversation.service.build_thread_context",
             return_value="[Thread History]\nUser [user]: hello",
         ) as mock_btc:
             ctx = await service.build_context(task_id="task-1")
@@ -159,7 +159,7 @@ class TestMentionBehavior:
             "title": "Test Task",
         }
         with patch(
-            "mc.services.conversation.handle_all_mentions",
+            "mc.contexts.conversation.service.handle_all_mentions",
             new_callable=AsyncMock,
             return_value=True,
         ):
@@ -181,7 +181,7 @@ class TestMentionBehavior:
             "title": "Test Task",
         }
         with patch(
-            "mc.services.conversation.handle_all_mentions",
+            "mc.contexts.conversation.service.handle_all_mentions",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_mentions:
@@ -208,7 +208,7 @@ class TestMentionBehavior:
             "title": "Done Task",
         }
         with patch(
-            "mc.services.conversation.handle_all_mentions",
+            "mc.contexts.conversation.service.handle_all_mentions",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_mentions:
@@ -306,7 +306,7 @@ class TestPlanChatRouting:
             "title": "Plan Task",
         }
         with patch(
-            "mc.services.conversation.handle_plan_negotiation",
+            "mc.contexts.conversation.service.handle_plan_negotiation",
             new_callable=AsyncMock,
         ) as mock_plan:
             await service.handle_message(
@@ -415,5 +415,5 @@ class TestEdgeCases:
             content="@researcher help",
             task_data=task_data,
         )
-        from mc.services.conversation_intent import ResolveResult
+        from mc.contexts.conversation.intent import ResolveResult
         assert isinstance(result, ResolveResult)

@@ -1,10 +1,4 @@
-"""PlanNegotiationSupervisor — manages per-task plan negotiation loops.
-
-Extracted from mc/gateway.py _run_plan_negotiation_manager (Story 17.2, AC #3).
-Subscribes to tasks in review/in_progress and spawns per-task negotiation loops.
-Pre-kickoff review tasks are negotiable, and paused review tasks remain
-negotiable while they still have an execution plan to refine.
-"""
+"""Plan-negotiation supervisor for the planning context."""
 
 from __future__ import annotations
 
@@ -37,16 +31,7 @@ def _is_manual_review_without_plan(task_data: dict[str, Any]) -> bool:
 
 
 class PlanNegotiationSupervisor:
-    """Manages per-task plan negotiation loops.
-
-    Subscribes to tasks in both review and in_progress statuses. For each task
-    that enters a negotiable state, spawns a start_plan_negotiation_loop
-    coroutine. Prevents duplicate loops.
-
-    Constructor dependencies:
-        bridge: ConvexBridge instance for Convex communication.
-        ask_user_registry: Optional AskUserRegistry for routing ask_user replies.
-    """
+    """Manage per-task plan negotiation loops."""
 
     def __init__(
         self,
@@ -99,11 +84,7 @@ class PlanNegotiationSupervisor:
         asyncio.create_task(_run_and_cleanup())
 
     async def process_batch(self, tasks_batch: object) -> None:
-        """Process a batch of tasks from a subscription queue.
-
-        Spawns negotiation loops for tasks that are in a negotiable state.
-        Skips cron-requeued tasks.
-        """
+        """Process a batch of tasks from a subscription queue."""
         if not tasks_batch or isinstance(tasks_batch, dict):
             return
 
@@ -124,7 +105,6 @@ class PlanNegotiationSupervisor:
                     or _is_manual_review_without_plan(task_data)
                 )
             ):
-                # Skip cron-requeued tasks
                 if task_id in self._cron_requeued_ids:
                     self._cron_requeued_ids.discard(task_id)
                     logger.info(
@@ -135,11 +115,7 @@ class PlanNegotiationSupervisor:
                 await self._spawn_loop_if_needed(task_id)
 
     async def run(self) -> None:
-        """Run the plan negotiation manager loop.
-
-        Subscribes to review and in_progress task lists and processes batches.
-        Runs until cancelled.
-        """
+        """Run the plan negotiation manager loop."""
         logger.info("[plan_negotiation] Plan negotiation supervisor started")
 
         review_queue = self._bridge.async_subscribe(
@@ -172,5 +148,5 @@ class PlanNegotiationSupervisor:
         try:
             await asyncio.gather(*reader_tasks)
         finally:
-            for t in reader_tasks:
-                t.cancel()
+            for task in reader_tasks:
+                task.cancel()

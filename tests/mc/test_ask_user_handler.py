@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mc.ask_user.handler import AskUserHandler
+from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
 
 async def _wait_for_pending_request(handler: AskUserHandler, *, timeout: float = 1.0) -> str:

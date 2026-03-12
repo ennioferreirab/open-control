@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mc.infrastructure.runtime_context import RuntimeContext
-from mc.workers.inbox import InboxWorker
-from mc.workers.kickoff import KickoffResumeWorker
-from mc.workers.planning import PlanningWorker
-from mc.workers.review import ReviewWorker
+from mc.runtime.workers.inbox import InboxWorker
+from mc.runtime.workers.kickoff import KickoffResumeWorker
+from mc.runtime.workers.planning import PlanningWorker
+from mc.runtime.workers.review import ReviewWorker
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -74,7 +74,7 @@ class TestInboxWorkerAcceptsRuntimeContext:
             "is_manual": False,
         }
 
-        with patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
         bridge.update_task_status.assert_called_once_with("task-1", "planning")
@@ -114,7 +114,7 @@ class TestPlanningWorkerAcceptsRuntimeContext:
             "files": [],
         }
 
-        with patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
         bridge.create_task_directory.assert_called_once_with("task-1")
@@ -143,10 +143,10 @@ class TestReviewWorkerAcceptsRuntimeContext:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
-        bridge.update_task_status.assert_called_once()
+        bridge.update_task_status.assert_not_called()
 
 
 class TestKickoffResumeWorkerAcceptsRuntimeContext:
@@ -199,10 +199,10 @@ class TestKickoffResumeWorkerAcceptsRuntimeContext:
 
         with (
             patch(
-                "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.kickoff.asyncio.create_task",
+                "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
         ):

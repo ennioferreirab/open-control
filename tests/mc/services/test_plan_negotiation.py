@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.services.plan_negotiation import PlanNegotiationSupervisor
+from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ class TestSpawnLoopIfNeeded:
     async def test_spawns_loop_for_new_task(self, supervisor: PlanNegotiationSupervisor) -> None:
         """Spawns a negotiation loop for a task not yet tracked."""
         with patch(
-            "mc.services.plan_negotiation.start_plan_negotiation_loop",
+            "mc.contexts.planning.supervisor.start_plan_negotiation_loop",
             new_callable=AsyncMock,
         ):
             await supervisor._spawn_loop_if_needed("task-1")
@@ -55,7 +55,7 @@ class TestSpawnLoopIfNeeded:
         supervisor._active_negotiation_ids.add("task-1")
 
         with patch(
-            "mc.services.plan_negotiation.start_plan_negotiation_loop",
+            "mc.contexts.planning.supervisor.start_plan_negotiation_loop",
             new_callable=AsyncMock,
         ):
             await supervisor._spawn_loop_if_needed("task-1")

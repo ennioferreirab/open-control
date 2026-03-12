@@ -113,7 +113,7 @@ def test_chat_handler_uses_module_defaults() -> None:
 
 
 def test_mention_watcher_accepts_poll_kwarg() -> None:
-    from mc.mentions.watcher import MentionWatcher
+    from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
     bridge = MagicMock()
     watcher = MentionWatcher(bridge, poll_interval_seconds=30)
@@ -121,7 +121,7 @@ def test_mention_watcher_accepts_poll_kwarg() -> None:
 
 
 def test_mention_watcher_uses_module_default() -> None:
-    from mc.mentions.watcher import POLL_INTERVAL_SECONDS, MentionWatcher
+    from mc.contexts.conversation.mentions.watcher import POLL_INTERVAL_SECONDS, MentionWatcher
 
     bridge = MagicMock()
     watcher = MentionWatcher(bridge)

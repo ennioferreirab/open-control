@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mc.services.crash_recovery import MAX_AUTO_RETRIES, CrashRecoveryService
+from mc.contexts.execution.crash_recovery import MAX_AUTO_RETRIES, CrashRecoveryService
 
 
 @pytest.fixture

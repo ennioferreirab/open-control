@@ -215,7 +215,7 @@ class ClaudeCodeRunnerStrategy:
             memory_mode=memory_mode,
         )
 
-        from mc.ask_user.handler import AskUserHandler
+        from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
         ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(

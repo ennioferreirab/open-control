@@ -46,7 +46,7 @@ async def test_auto_title_updates_title_and_continues():
 
     with (
         patch(
-            "mc.workers.inbox.generate_title_via_low_agent",
+            "mc.runtime.workers.inbox.generate_title_via_low_agent",
             new=AsyncMock(return_value="A Forca dos Poemas Curtos"),
         ),
         patch("asyncio.to_thread", side_effect=passthrough),
@@ -72,7 +72,7 @@ async def test_auto_title_skipped_when_llm_returns_none():
 
     with (
         patch(
-            "mc.workers.inbox.generate_title_via_low_agent",
+            "mc.runtime.workers.inbox.generate_title_via_low_agent",
             new=AsyncMock(return_value=None),
         ),
         patch("asyncio.to_thread", side_effect=passthrough),
@@ -95,7 +95,7 @@ async def test_auto_title_not_called_when_flag_false():
 
     with (
         patch(
-            "mc.workers.inbox.generate_title_via_low_agent",
+            "mc.runtime.workers.inbox.generate_title_via_low_agent",
             new=AsyncMock(return_value="Should Not Be Called"),
         ) as mock_gen,
         patch("asyncio.to_thread", side_effect=passthrough),
@@ -118,7 +118,7 @@ async def test_auto_title_not_called_when_no_description():
 
     with (
         patch(
-            "mc.workers.inbox.generate_title_via_low_agent",
+            "mc.runtime.workers.inbox.generate_title_via_low_agent",
             new=AsyncMock(return_value="Should Not Be Called"),
         ) as mock_gen,
         patch("asyncio.to_thread", side_effect=passthrough),

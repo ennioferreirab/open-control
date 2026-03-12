@@ -1,9 +1,4 @@
-"""Kickoff/resume worker — handles task kickoff and resume flows.
-
-Extracted from mc.orchestrator per Story 17.1 (AC4).
-Delegates to PlanMaterializer and StepDispatcher for actual execution.
-Updated to accept RuntimeContext per Story 20.3.
-"""
+"""Kickoff/resume worker — handles task kickoff and resume flows."""
 
 from __future__ import annotations
 
@@ -11,23 +6,17 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mc.types import (
-    ActivityEventType,
-    ExecutionPlan,
-    StepStatus,
-    TaskStatus,
-)
+from mc.types import ActivityEventType, ExecutionPlan, StepStatus, TaskStatus
 
 if TYPE_CHECKING:
-    from mc.infrastructure.runtime_context import RuntimeContext
     from mc.contexts.execution.step_dispatcher import StepDispatcher
     from mc.contexts.planning.materializer import PlanMaterializer
+    from mc.infrastructure.runtime_context import RuntimeContext
 
 logger = logging.getLogger(__name__)
 
 
 def _coerce_order(value: Any) -> int | None:
-    """Best-effort coercion for step order values coming from Convex."""
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -35,7 +24,6 @@ def _coerce_order(value: Any) -> int | None:
 
 
 def _normalize_title(value: Any) -> str:
-    """Normalize step titles for matching existing materialized steps."""
     return str(value or "").strip()
 
 
@@ -54,24 +42,11 @@ class KickoffResumeWorker:
         self._bridge = ctx.bridge
         self._plan_materializer = plan_materializer
         self._step_dispatcher = step_dispatcher
-        # Shared with planning worker to avoid double-dispatch on the first
-        # in_progress observation after autonomous planning.
-        self._known_kickoff_ids = (
-            known_kickoff_ids if known_kickoff_ids is not None else set()
-        )
+        self._known_kickoff_ids = known_kickoff_ids if known_kickoff_ids is not None else set()
         self._processed_signatures: dict[str, str] = {}
 
     async def process_batch(self, tasks: list[dict[str, Any]]) -> None:
-        """Process a batch of in_progress tasks from a subscription update.
-
-        Handles two cases:
-        1. New kick-off (approveAndKickOff): task has a plan but NO materialized
-           steps -> materialize and dispatch.
-        2. Resume (resumeTask): task has existing steps in assigned/blocked status
-           (already materialized) -> dispatch_steps to continue execution.
-        """
-        # Prune state for tasks that are no longer in_progress so re-entries are handled.
-        current_ids = {t.get("id") for t in tasks if t.get("id")}
+        current_ids = {task.get("id") for task in tasks if task.get("id")}
         self._known_kickoff_ids &= current_ids
         self._processed_signatures = {
             task_id: signature
@@ -94,39 +69,25 @@ class KickoffResumeWorker:
                 continue
             self._processed_signatures[task_id] = signature
 
-            # Only process tasks with an execution plan
             if not task_data.get("execution_plan"):
                 continue
 
             try:
                 await self._process_task(task_id, task_data)
             except Exception:
-                logger.error(
-                    "[kickoff] Error processing task %s",
-                    task_id,
-                    exc_info=True,
-                )
+                logger.error("[kickoff] Error processing task %s", task_id, exc_info=True)
 
     @staticmethod
     def _task_signature(task_data: dict[str, Any]) -> str:
-        """Build a version signature so fast review/in_progress flips are reprocessed."""
         updated_at = task_data.get("updated_at") or task_data.get("updatedAt") or ""
         execution_plan = task_data.get("execution_plan") or {}
         generated_at = ""
         if isinstance(execution_plan, dict):
-            generated_at = str(
-                execution_plan.get("generated_at") or execution_plan.get("generatedAt") or ""
-            )
+            generated_at = str(execution_plan.get("generated_at") or execution_plan.get("generatedAt") or "")
         return f"{updated_at}|{generated_at}"
 
-    async def _process_task(
-        self, task_id: str, task_data: dict[str, Any]
-    ) -> None:
-        """Handle a single in_progress task for kickoff or resume."""
-        steps = await asyncio.to_thread(
-            self._bridge.get_steps_by_task, task_id
-        )
-
+    async def _process_task(self, task_id: str, task_data: dict[str, Any]) -> None:
+        steps = await asyncio.to_thread(self._bridge.get_steps_by_task, task_id)
         title = task_data.get("title", task_id)
 
         if steps:
@@ -142,20 +103,13 @@ class KickoffResumeWorker:
                     title,
                     len(created_step_ids),
                 )
-                steps = await asyncio.to_thread(
-                    self._bridge.get_steps_by_task, task_id
-                )
-            # Task has materialized steps -- this is a resumed task (Task 8.2).
+                steps = await asyncio.to_thread(self._bridge.get_steps_by_task, task_id)
             await self._handle_resume(task_id, title, steps)
             return
 
-        # No steps -- this is a kicked-off task, materialize the plan.
         await self._handle_kickoff(task_id, title, task_data)
 
-    async def _handle_resume(
-        self, task_id: str, title: str, steps: list[dict[str, Any]]
-    ) -> None:
-        """Resume a task by dispatching assigned or unblocked-pending steps."""
+    async def _handle_resume(self, task_id: str, title: str, steps: list[dict[str, Any]]) -> None:
         completed_step_ids = {
             str(step.get("id"))
             for step in steps
@@ -170,38 +124,25 @@ class KickoffResumeWorker:
             if status == StepStatus.ASSIGNED:
                 dispatchable_step_ids.append(step_id_str)
             elif status == StepStatus.PLANNED:
-                # Dispatch if all blockers are already completed
                 blocked_by = step.get("blocked_by") or []
-                if all(str(b) in completed_step_ids for b in blocked_by):
+                if all(str(blocker) in completed_step_ids for blocker in blocked_by):
                     dispatchable_step_ids.append(step_id_str)
 
         if dispatchable_step_ids:
             logger.info(
-                "[kickoff] Detected resumed task '%s'; dispatching %d step(s) "
-                "(assigned + unblocked pending)",
+                "[kickoff] Detected resumed task '%s'; dispatching %d step(s) (assigned + unblocked pending)",
                 title,
                 len(dispatchable_step_ids),
             )
-            asyncio.create_task(
-                self._step_dispatcher.dispatch_steps(
-                    task_id, dispatchable_step_ids
-                )
-            )
+            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, dispatchable_step_ids))
         else:
             logger.info(
-                "[kickoff] Resumed task '%s' has no dispatchable steps "
-                "(may still have running steps)",
+                "[kickoff] Resumed task '%s' has no dispatchable steps (may still have running steps)",
                 title,
             )
 
-    async def _handle_kickoff(
-        self, task_id: str, title: str, task_data: dict[str, Any]
-    ) -> None:
-        """Materialize and dispatch steps for a kicked-off task."""
-        logger.info(
-            "[kickoff] Detected kicked-off task '%s'; materializing...",
-            title,
-        )
+    async def _handle_kickoff(self, task_id: str, title: str, task_data: dict[str, Any]) -> None:
+        logger.info("[kickoff] Detected kicked-off task '%s'; materializing...", title)
         try:
             plan = ExecutionPlan.from_dict(task_data["execution_plan"])
             created_step_ids = await asyncio.to_thread(
@@ -210,11 +151,7 @@ class KickoffResumeWorker:
                 plan,
                 skip_kickoff=True,
             )
-            asyncio.create_task(
-                self._step_dispatcher.dispatch_steps(
-                    task_id, created_step_ids
-                )
-            )
+            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
             logger.info(
                 "[kickoff] Task '%s': materialized %d steps after kick-off",
                 title,
@@ -226,29 +163,23 @@ class KickoffResumeWorker:
                 task_id,
                 exc_info=True,
             )
-            # The materializer's _mark_task_failed() tries FAILED, which
-            # will silently fail since in_progress -> failed is invalid. We
-            # transition to CRASHED instead (a universal target from any state).
             try:
                 await asyncio.to_thread(
                     self._bridge.update_task_status,
                     task_id,
                     TaskStatus.CRASHED,
                     None,
-                    f"Materialization failed after kick-off: "
-                    f"{type(exc).__name__}: {exc}",
+                    f"Materialization failed after kick-off: {type(exc).__name__}: {exc}",
                 )
                 await asyncio.to_thread(
                     self._bridge.create_activity,
                     ActivityEventType.SYSTEM_ERROR,
-                    f"Materialization failed for '{title}': "
-                    f"{type(exc).__name__}: {exc}",
+                    f"Materialization failed for '{title}': {type(exc).__name__}: {exc}",
                     task_id,
                 )
             except Exception:
                 logger.error(
-                    "[kickoff] Failed to mark task %s as crashed after "
-                    "materialization failure",
+                    "[kickoff] Failed to mark task %s as crashed after materialization failure",
                     task_id,
                     exc_info=True,
                 )

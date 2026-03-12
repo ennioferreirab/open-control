@@ -256,7 +256,7 @@ class CCExecutorMixin:
             return
 
         # 2. Start IPC server
-        from mc.ask_user.handler import AskUserHandler
+        from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
         ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
@@ -668,7 +668,7 @@ class CCExecutorMixin:
             logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
             return None
 
-        from mc.ask_user.handler import AskUserHandler
+        from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
         ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)

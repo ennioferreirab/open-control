@@ -312,7 +312,7 @@ class TaskPlanner:
         from nanobot.config.loader import load_config
 
         from mc.infrastructure.orientation import load_orientation
-        from mc.ask_user.handler import AskUserHandler
+        from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
         cc_opts = ClaudeCodeOpts()
         cc_opts.max_turns = CC_PLANNING_MAX_TURNS

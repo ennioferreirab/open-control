@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.services.conversation import ConversationService
-from mc.services.conversation_intent import ConversationIntent
+from mc.contexts.conversation.service import ConversationService
+from mc.contexts.conversation.intent import ConversationIntent
 
 # All agent names used across tests
 _ALL_TEST_AGENTS = {"researcher", "alice", "bob", "nanobot"}
@@ -29,7 +29,7 @@ _ALL_TEST_AGENTS = {"researcher", "alice", "bob", "nanobot"}
 def _mock_known_agent_names():
     """Patch _known_agent_names so tests do not depend on ~/.nanobot/agents/."""
     with patch(
-        "mc.mentions.handler._known_agent_names",
+        "mc.contexts.conversation.mentions.handler._known_agent_names",
         return_value=_ALL_TEST_AGENTS,
     ):
         yield
@@ -86,7 +86,7 @@ class TestGatewayCreatesConversationService:
         self, bridge: MagicMock, conversation_service: ConversationService
     ) -> None:
         """MentionWatcher can be constructed with a conversation_service parameter."""
-        from mc.mentions.watcher import MentionWatcher
+        from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
         watcher = MentionWatcher(
             bridge, conversation_service=conversation_service
@@ -97,7 +97,7 @@ class TestGatewayCreatesConversationService:
         self, bridge: MagicMock
     ) -> None:
         """MentionWatcher still works without conversation_service (backward compat)."""
-        from mc.mentions.watcher import MentionWatcher
+        from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
         watcher = MentionWatcher(bridge)
         assert watcher._conversation_service is None
@@ -108,7 +108,7 @@ class TestGatewayCreatesConversationService:
         conversation_service: ConversationService,
     ) -> None:
         """AskUserReplyWatcher can be constructed with a conversation_service."""
-        from mc.ask_user.watcher import AskUserReplyWatcher
+        from mc.contexts.conversation.ask_user.watcher import AskUserReplyWatcher
 
         watcher = AskUserReplyWatcher(
             bridge, ask_user_registry, conversation_service=conversation_service
@@ -119,7 +119,7 @@ class TestGatewayCreatesConversationService:
         self, bridge: MagicMock, ask_user_registry: MagicMock
     ) -> None:
         """AskUserReplyWatcher still works without conversation_service."""
-        from mc.ask_user.watcher import AskUserReplyWatcher
+        from mc.contexts.conversation.ask_user.watcher import AskUserReplyWatcher
 
         watcher = AskUserReplyWatcher(bridge, ask_user_registry)
         assert watcher._conversation_service is None
@@ -229,7 +229,7 @@ class TestSharedContextAssembly:
             {"author_name": "User", "author_type": "user", "content": "hello"},
         ])
         with patch(
-            "mc.services.conversation.build_thread_context",
+            "mc.contexts.conversation.service.build_thread_context",
             return_value="[Thread History]\nUser [user]: hello",
         ) as mock_btc:
             ctx = await conversation_service.build_context(task_id="task-1")
@@ -279,7 +279,7 @@ class TestBehaviorPreservation:
             "title": "Test Task",
         }
         with patch(
-            "mc.services.conversation.handle_all_mentions",
+            "mc.contexts.conversation.service.handle_all_mentions",
             new_callable=AsyncMock,
             return_value=True,
         ):
@@ -302,7 +302,7 @@ class TestBehaviorPreservation:
             "title": "Plan Task",
         }
         with patch(
-            "mc.services.conversation.handle_plan_negotiation",
+            "mc.contexts.conversation.service.handle_plan_negotiation",
             new_callable=AsyncMock,
         ) as mock_plan:
             await conversation_service.handle_message(
@@ -385,7 +385,7 @@ class TestEndToEndFlow:
             "title": "Done Task",
         }
         with patch(
-            "mc.services.conversation.handle_all_mentions",
+            "mc.contexts.conversation.service.handle_all_mentions",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_handle:
@@ -414,7 +414,7 @@ class TestEndToEndFlow:
             "title": "Plan Task",
         }
         with patch(
-            "mc.services.conversation.handle_plan_negotiation",
+            "mc.contexts.conversation.service.handle_plan_negotiation",
             new_callable=AsyncMock,
         ) as mock_plan:
             result = await conversation_service.handle_message(
@@ -455,7 +455,7 @@ class TestEndToEndFlow:
 
         # Mention
         with patch(
-            "mc.services.conversation.handle_all_mentions",
+            "mc.contexts.conversation.service.handle_all_mentions",
             new_callable=AsyncMock,
             return_value=True,
         ):
@@ -492,7 +492,7 @@ class TestMentionWatcherWithConversationService:
         handle_all_mentions directly."""
         import asyncio
 
-        from mc.mentions.watcher import MentionWatcher
+        from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
         watcher = MentionWatcher(
             bridge, conversation_service=conversation_service
@@ -513,7 +513,7 @@ class TestMentionWatcherWithConversationService:
 
         # Patch ConversationService.handle_message to verify routing
         with patch(
-            "mc.services.conversation.handle_all_mentions",
+            "mc.contexts.conversation.service.handle_all_mentions",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_handle:
@@ -533,7 +533,7 @@ class TestMentionWatcherWithConversationService:
         handle_all_mentions directly (backward compat)."""
         import asyncio
 
-        from mc.mentions.watcher import MentionWatcher
+        from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
         watcher = MentionWatcher(bridge)
 
@@ -551,7 +551,7 @@ class TestMentionWatcherWithConversationService:
         })
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_handle:

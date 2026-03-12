@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import mc.mentions.handler as handler_module
-from mc.mentions.handler import handle_mention
+import mc.contexts.conversation.mentions.handler as handler_module
+from mc.contexts.conversation.mentions.handler import handle_mention
 
 
 @pytest.fixture
@@ -72,7 +72,7 @@ def _mock_agent_env():
     """Mock all external dependencies used inside handle_mention.
 
     Since handle_mention uses local imports for config and validation,
-    we must patch the source modules, not mc.mentions.handler attributes.
+    we must patch the source modules, not mc.contexts.conversation.mentions.handler attributes.
     """
     mock_config = _make_mock_config()
 
@@ -87,7 +87,7 @@ def _mock_agent_env():
 
     with (
         patch(
-            "mc.mentions.handler._known_agent_names",
+            "mc.contexts.conversation.mentions.handler._known_agent_names",
             return_value={"researcher"},
         ),
         patch("mc.infrastructure.config.AGENTS_DIR", mock_agents_dir),
@@ -189,7 +189,7 @@ class TestHandleMentionThreadContext:
                 captured_args["max_messages"] = max_messages
                 return "[Thread History]\nUser: test message"
 
-        with patch("mc.mentions.handler.ThreadContextBuilder", CapturingBuilder):
+        with patch("mc.contexts.conversation.mentions.handler.ThreadContextBuilder", CapturingBuilder):
             await run_mention()
 
         assert captured_args["max_messages"] == 20

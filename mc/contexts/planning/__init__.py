@@ -14,6 +14,10 @@ _EXPORTS = {
         "mc.contexts.planning.materializer",
         "PlanMaterializer",
     ),
+    "PlanNegotiationSupervisor": (
+        "mc.contexts.planning.supervisor",
+        "PlanNegotiationSupervisor",
+    ),
     "STANDARD_TOOLS": ("mc.contexts.planning.planner", "STANDARD_TOOLS"),
     "SYSTEM_PROMPT": ("mc.contexts.planning.planner", "SYSTEM_PROMPT"),
     "TaskPlanner": ("mc.contexts.planning.planner", "TaskPlanner"),
