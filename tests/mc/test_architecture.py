@@ -30,6 +30,10 @@ HOTSPOT_SPLIT_FILES = {
     / "contexts"
     / "execution"
     / "provider_errors.py",
+    "mc/contexts/execution/output_artifacts.py": MC_ROOT
+    / "contexts"
+    / "execution"
+    / "output_artifacts.py",
     "mc/cli/lifecycle.py": MC_ROOT / "cli" / "lifecycle.py",
     "mc/cli/tasks.py": MC_ROOT / "cli" / "tasks.py",
     "mc/cli/schema_docs.py": MC_ROOT / "cli" / "schema_docs.py",
@@ -233,6 +237,21 @@ def test_execution_executor_does_not_import_runtime_gateway() -> None:
         if module == "mc.runtime.gateway" or module.startswith("mc.runtime.gateway.")
     ]
     assert gateway_imports == [], gateway_imports
+
+
+def test_execution_executor_does_not_keep_output_artifact_helpers_inline() -> None:
+    filepath = MC_ROOT / "contexts" / "execution" / "executor.py"
+    source = filepath.read_text(encoding="utf-8")
+
+    forbidden_defs = [
+        "def _human_size(",
+        "def _snapshot_output_dir(",
+        "def _collect_output_artifacts(",
+        "def _relocate_invalid_memory_files(",
+    ]
+
+    for forbidden in forbidden_defs:
+        assert forbidden not in source, f"mc/contexts/execution/executor.py still defines {forbidden}"
 
 
 def test_bridge_toplevel_only_imports_types() -> None:

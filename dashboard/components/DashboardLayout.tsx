@@ -24,7 +24,7 @@ import { SettingsPanel } from "@/features/settings/components/SettingsPanel";
 import { TagsPanel } from "@/features/settings/components/TagsPanel";
 import { Settings, Tag, Clock, PanelRightOpen } from "lucide-react";
 import { BoardProvider, useBoard } from "@/components/BoardContext";
-import { BoardSelector } from "@/components/BoardSelector";
+import { BoardSelector } from "@/features/boards/components/BoardSelector";
 import { BoardSettingsSheet } from "@/features/boards/components/BoardSettingsSheet";
 import { CronJobsModal } from "@/components/CronJobsModal";
 import { SearchBar } from "@/features/search/components/SearchBar";

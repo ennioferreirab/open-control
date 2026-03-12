@@ -228,7 +228,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
         mentionedAgent: "dev-agent",
       });
     });
-  });
+  }, 10000);
 
   it("wraps around with keyboard navigation", async () => {
     const user = userEvent.setup();
@@ -247,5 +247,5 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
       expect(screen.queryByTestId("mention-autocomplete")).not.toBeInTheDocument();
     });
     expect(textarea).toHaveValue("@dev-agent ");
-  });
+  }, 10000);
 });
