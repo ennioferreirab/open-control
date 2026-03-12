@@ -5,6 +5,13 @@ import { v, ConvexError } from "convex/values";
 import { taskFileMetadataValidator, taskFilesValidator } from "./schema";
 import { buildTaskDetailView } from "./lib/taskDetailView";
 import {
+  clearAllDoneTasks,
+  listDeletedTasks,
+  listDoneTaskHistory,
+  restoreDeletedTask,
+  softDeleteTask,
+} from "./lib/taskArchive";
+import {
   appendTaskFiles,
   removeAttachmentTaskFile,
   replaceTaskOutputFiles,
@@ -14,7 +21,6 @@ import {
   logTaskCreated,
   logTaskStatusChange,
   markPlanStepsCompleted,
-  getRestoreTarget,
 } from "./lib/taskLifecycle";
 import {
   assertExistingMergeTask,
@@ -25,7 +31,6 @@ import {
   dedupeTags,
   hasLineageOverlap,
   restoreDetachedMergeSource,
-  restoreMergeSourceTasks,
 } from "./lib/taskMerge";
 import {
   approveKickOffTask,
@@ -231,10 +236,7 @@ export const listByStatus = query({
 export const listDeleted = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
-      .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "deleted"))
-      .collect();
+    return await listDeletedTasks(ctx);
   },
 });
 
@@ -245,21 +247,7 @@ export const listDeleted = query({
 export const listDoneHistory = query({
   args: {},
   handler: async (ctx) => {
-    const doneTasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "done"))
-      .collect();
-
-    const deletedTasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "deleted"))
-      .collect();
-
-    const clearedDone = deletedTasks.filter((t) => t.previousStatus === "done");
-
-    const all = [...doneTasks, ...clearedDone];
-    all.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    return all;
+    return await listDoneTaskHistory(ctx);
   },
 });
 
@@ -1156,57 +1144,7 @@ export const softDelete = mutation({
     taskId: v.id("tasks"),
   },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new ConvexError("Task not found");
-    if (task.status === "deleted") {
-      throw new ConvexError("Task is already deleted");
-    }
-
-    const now = new Date().toISOString();
-
-    await restoreMergeSourceTasks(
-      ctx,
-      task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
-      now,
-    );
-
-    await ctx.db.patch(args.taskId, {
-      status: "deleted",
-      previousStatus: task.status,
-      deletedAt: now,
-      updatedAt: now,
-    });
-
-    // Cascade-delete all steps belonging to this task
-    const steps = await ctx.db
-      .query("steps")
-      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-      .collect();
-    for (const step of steps) {
-      if (step.status !== "deleted") {
-        await ctx.db.patch(step._id, {
-          status: "deleted",
-          deletedAt: now,
-        });
-      }
-    }
-
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      agentName: task.assignedAgent,
-      eventType: "task_deleted",
-      description: `Task deleted: "${task.title}"`,
-      timestamp: now,
-    });
-
-    await ctx.db.insert("messages", {
-      taskId: args.taskId,
-      authorName: "System",
-      authorType: "system",
-      content: "Task moved to trash",
-      messageType: "system_event",
-      timestamp: now,
-    });
+    await softDeleteTask(ctx, args.taskId);
   },
 });
 
@@ -1216,45 +1154,7 @@ export const softDelete = mutation({
 export const clearAllDone = mutation({
   args: {},
   handler: async (ctx) => {
-    const doneTasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "done"))
-      .collect();
-
-    if (doneTasks.length === 0) return 0;
-
-    const now = new Date().toISOString();
-
-    for (const task of doneTasks) {
-      await ctx.db.patch(task._id, {
-        status: "deleted",
-        previousStatus: "done",
-        deletedAt: now,
-        updatedAt: now,
-      });
-
-      // Cascade-delete all steps belonging to this task
-      const steps = await ctx.db
-        .query("steps")
-        .withIndex("by_taskId", (q) => q.eq("taskId", task._id))
-        .collect();
-      for (const step of steps) {
-        if (step.status !== "deleted") {
-          await ctx.db.patch(step._id, {
-            status: "deleted",
-            deletedAt: now,
-          });
-        }
-      }
-    }
-
-    await logActivity(ctx, {
-      eventType: "bulk_clear_done",
-      description: `Cleared ${doneTasks.length} completed task${doneTasks.length === 1 ? "" : "s"}`,
-      timestamp: now,
-    });
-
-    return doneTasks.length;
+    return await clearAllDoneTasks(ctx);
   },
 });
 
@@ -1311,84 +1211,7 @@ export const restore = mutation({
     mode: v.union(v.literal("previous"), v.literal("beginning")),
   },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new ConvexError("Task not found");
-    if (task.status !== "deleted") {
-      throw new ConvexError("Task is not deleted");
-    }
-
-    const now = new Date().toISOString();
-    const prevStatus = task.previousStatus ?? "inbox";
-
-    let targetStatus: string;
-    let systemMessage: string;
-
-    if (args.mode === "beginning") {
-      targetStatus = "inbox";
-      systemMessage = "Task restored to inbox for re-assignment.";
-    } else {
-      targetStatus = getRestoreTarget(prevStatus);
-      systemMessage = task.assignedAgent
-        ? `Task restored. Resuming from ${targetStatus} — agent ${task.assignedAgent} will redo the ${prevStatus} step.`
-        : `Task restored to ${targetStatus}.`;
-    }
-
-    const patch: Record<string, unknown> = {
-      status: targetStatus,
-      previousStatus: undefined,
-      deletedAt: undefined,
-      stalledAt: undefined,
-      updatedAt: now,
-    };
-    if (args.mode === "beginning") {
-      patch.assignedAgent = undefined;
-    }
-    await ctx.db.patch(args.taskId, patch);
-
-    if (task.isMergeTask && task.mergeSourceTaskIds?.length) {
-      for (const sourceTaskId of task.mergeSourceTaskIds) {
-        const sourceTask = await ctx.db.get(sourceTaskId);
-        if (!sourceTask || sourceTask.status === "deleted") continue;
-        await ctx.db.patch(sourceTaskId, {
-          mergedIntoTaskId: args.taskId,
-          mergePreviousStatus: sourceTask.status,
-          mergeLockedAt: now,
-          tags: dedupeTags(sourceTask.tags as string[] | undefined, ["merged"]),
-          updatedAt: now,
-        });
-      }
-    }
-
-    // Restore cascade-deleted steps back to "planned" so the orchestrator can re-dispatch
-    const steps = await ctx.db
-      .query("steps")
-      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-      .collect();
-    for (const step of steps) {
-      if (step.status === "deleted" && step.deletedAt === task.deletedAt) {
-        await ctx.db.patch(step._id, {
-          status: "planned",
-          deletedAt: undefined,
-        });
-      }
-    }
-
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      agentName: task.assignedAgent,
-      eventType: "task_restored",
-      description: `Task restored to ${targetStatus}: "${task.title}"`,
-      timestamp: now,
-    });
-
-    await ctx.db.insert("messages", {
-      taskId: args.taskId,
-      authorName: "System",
-      authorType: "system",
-      content: systemMessage,
-      messageType: "system_event",
-      timestamp: now,
-    });
+    await restoreDeletedTask(ctx, args.taskId, args.mode);
   },
 });
 
