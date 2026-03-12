@@ -28,6 +28,12 @@ export type DetailFileRef = NonNullable<Doc<"tasks">["files"]>[number] & {
   sourceLabel?: string;
 };
 
+export type MergeCandidateRef = {
+  _id: Id<"tasks">;
+  title: string;
+  description?: string;
+};
+
 type TaskDetailReadModel = {
   task: Doc<"tasks">;
   board: Doc<"boards"> | null;
@@ -72,6 +78,7 @@ export interface TaskDetailViewData {
   directMergeSources: MergeSourceRef[] | undefined;
   mergeSources: MergeSourceRef[] | undefined;
   mergeSourceThreads: MergeSourceThread[] | undefined;
+  mergeCandidates: MergeCandidateRef[] | undefined;
   displayFiles: DetailFileRef[];
   isTaskLoaded: boolean;
   colors: { border: string; bg: string; text: string } | null;
@@ -83,13 +90,35 @@ export interface TaskDetailViewData {
   isPaused: boolean;
 }
 
-export function useTaskDetailView(taskId: Id<"tasks"> | null): TaskDetailViewData {
+interface TaskDetailViewOptions {
+  mergeQuery?: string;
+}
+
+export function useTaskDetailView(
+  taskId: Id<"tasks"> | null,
+  options?: TaskDetailViewOptions,
+): TaskDetailViewData {
   const detailView = useQuery(api.tasks.getDetailView, taskId ? { taskId } : "skip") as
     | TaskDetailReadModel
     | null
     | undefined;
 
   const task = detailView?.task ?? null;
+  const mergeCandidates = useQuery(
+    api.tasks.searchMergeCandidates,
+    task
+      ? task.isMergeTask
+        ? {
+            query: options?.mergeQuery ?? "",
+            excludeTaskId: task._id,
+            targetTaskId: task._id,
+          }
+        : {
+            query: options?.mergeQuery ?? "",
+            excludeTaskId: task._id,
+          }
+      : "skip",
+  ) as MergeCandidateRef[] | undefined;
   const messages = detailView?.messages;
   const liveSteps = detailView?.steps;
   const tagsList = detailView?.tagCatalog;
@@ -129,6 +158,7 @@ export function useTaskDetailView(taskId: Id<"tasks"> | null): TaskDetailViewDat
     directMergeSources,
     mergeSources,
     mergeSourceThreads,
+    mergeCandidates,
     displayFiles,
     isTaskLoaded,
     colors,

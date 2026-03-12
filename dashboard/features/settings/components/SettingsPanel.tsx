@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Pencil } from "lucide-react";
 import { PromptEditModal } from "@/components/PromptEditModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ModelTierSettings } from "@/components/ModelTierSettings";
+import { ModelTierSettings } from "@/features/settings/components/ModelTierSettings";
 import { useSettingsPanelState } from "@/features/settings/hooks/useSettingsPanelState";
 import { POLLING_FIELDS } from "@/features/settings/polling-fields";
 

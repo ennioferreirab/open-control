@@ -33,15 +33,15 @@ vi.mock("@/components/ActivityFeedPanel", () => ({
   ),
 }));
 
-vi.mock("@/components/TaskInput", () => ({
+vi.mock("@/features/tasks/components/TaskInput", () => ({
   TaskInput: () => <div data-testid="task-input">Task Input</div>,
 }));
 
-vi.mock("@/components/SearchBar", () => ({
+vi.mock("@/features/search/components/SearchBar", () => ({
   SearchBar: () => <div data-testid="search-bar">Search Bar</div>,
 }));
 
-vi.mock("@/components/KanbanBoard", () => ({
+vi.mock("@/features/boards/components/KanbanBoard", () => ({
   KanbanBoard: ({ onTaskClick }: { onTaskClick?: (id: string) => void }) => (
     <div data-testid="kanban-board" onClick={() => onTaskClick?.("task1")}>
       No tasks yet. Type above to create your first task.
@@ -49,7 +49,7 @@ vi.mock("@/components/KanbanBoard", () => ({
   ),
 }));
 
-vi.mock("@/components/TaskDetailSheet", () => ({
+vi.mock("@/features/tasks/components/TaskDetailSheet", () => ({
   TaskDetailSheet: ({ taskId, onClose }: { taskId: string | null; onClose: () => void }) =>
     taskId ? (
       <div data-testid="task-detail-sheet" onClick={onClose}>
@@ -58,7 +58,7 @@ vi.mock("@/components/TaskDetailSheet", () => ({
     ) : null,
 }));
 
-vi.mock("@/components/SettingsPanel", () => ({
+vi.mock("@/features/settings/components/SettingsPanel", () => ({
   SettingsPanel: () => <div data-testid="settings-panel">Settings</div>,
 }));
 
@@ -75,7 +75,7 @@ vi.mock("@/components/BoardSelector", () => ({
   ),
 }));
 
-vi.mock("@/components/BoardSettingsSheet", () => ({
+vi.mock("@/features/boards/components/BoardSettingsSheet", () => ({
   BoardSettingsSheet: () => null,
 }));
 

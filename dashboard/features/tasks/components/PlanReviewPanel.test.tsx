@@ -6,14 +6,15 @@ import { PlanReviewPanel } from "./PlanReviewPanel";
 const mockUseMutation = vi.fn(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock("convex/react", () => ({
+  useQuery: vi.fn(() => undefined),
   useMutation: () => mockUseMutation(),
 }));
 
-vi.mock("@/components/ThreadInput", () => ({
+vi.mock("@/features/thread/components/ThreadInput", () => ({
   ThreadInput: () => <div data-testid="thread-input" />,
 }));
 
-vi.mock("@/components/ThreadMessage", () => ({
+vi.mock("@/features/thread/components/ThreadMessage", () => ({
   ThreadMessage: ({ message }: { message: Doc<"messages"> }) => (
     <div data-testid={`message-${String(message._id)}`}>{message.content}</div>
   ),

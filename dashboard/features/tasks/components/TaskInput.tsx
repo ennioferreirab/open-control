@@ -16,7 +16,7 @@ import { Bot, Paperclip, User, X, Eye, Zap } from "lucide-react";
 import { TAG_COLORS } from "@/lib/constants";
 import { useBoard } from "@/components/BoardContext";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
-import { useTaskInputData } from "@/hooks/useTaskInputData";
+import { useTaskInputData } from "@/features/tasks/hooks/useTaskInputData";
 
 const formatSize = (bytes: number) =>
   bytes < 1024 * 1024

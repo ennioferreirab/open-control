@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useTaskDetailActions } from "./useTaskDetailActions";
+import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 
 // Mock convex/react
 const mockMutationFns: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -22,6 +22,7 @@ vi.mock("../convex/_generated/api", () => ({
       pauseTask: "tasks:pauseTask",
       resumeTask: "tasks:resumeTask",
       retry: "tasks:retry",
+      softDelete: "tasks:softDelete",
       createMergedTask: "tasks:createMergedTask",
       addMergeSource: "tasks:addMergeSource",
       removeMergeSource: "tasks:removeMergeSource",
@@ -32,6 +33,9 @@ vi.mock("../convex/_generated/api", () => ({
       updateDescription: "tasks:updateDescription",
       addTaskFiles: "tasks:addTaskFiles",
       removeTaskFile: "tasks:removeTaskFile",
+    },
+    messages: {
+      postUserPlanMessage: "messages:postUserPlanMessage",
     },
     activities: { create: "activities:create" },
     tagAttributeValues: { removeByTaskAndTag: "tagAttributeValues:removeByTaskAndTag" },

@@ -29,7 +29,7 @@ vi.mock("../../convex/_generated/api", () => ({
   },
 }));
 
-import { useAgentSidebarItemState } from "../useAgentSidebarItemState";
+import { useAgentSidebarItemState } from "@/features/agents/hooks/useAgentSidebarItemState";
 
 describe("useAgentSidebarItemState", () => {
   it("returns terminal sessions when enabled is true", () => {

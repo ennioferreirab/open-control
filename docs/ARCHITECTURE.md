@@ -721,6 +721,31 @@ Examples:
 This folder should contain clearly shared modules, not feature-specific owners
 that merely happen to be reused once.
 
+Notably, feature entry-point aliases such as root-level `TaskDetailSheet`,
+`TaskInput`, `TaskCard`, `SearchBar`, `TagsPanel`, `AgentConfigSheet`, and
+similar wrappers should not live here. Those owners now import directly from
+`dashboard/features/*`.
+
+### `dashboard/hooks`
+
+`dashboard/hooks` is a curated shared-hook layer, not a mirror of the feature
+tree.
+
+Keep hooks here only when they are genuinely cross-feature or app-shell scoped.
+
+Examples:
+
+- `useBoardColumns`
+- `useBoardFilters`
+- `useSelectableAgents`
+- `useGatewaySleepRuntime`
+- `useThreadComposer`
+- `useDocumentFetch`
+
+Do not reintroduce deleted feature hook aliases such as `useTaskDetailView`,
+`useTaskInputData`, `useBoardView`, or `useThreadInputController` at the root.
+Those belong under their owning feature.
+
 ### `dashboard/components/ui`
 
 This directory contains reusable UI primitives and wrappers.

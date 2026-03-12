@@ -48,46 +48,41 @@ type ActivityEventType =
   | "step_retrying";
 
 export interface TaskDetailActionsResult {
-  // Approve (HITL)
   approve: (taskId: Id<"tasks">) => Promise<void>;
-  // Kick-off (supervised plan approval)
   kickOff: (taskId: Id<"tasks">, plan: ExecutionPlan | undefined) => Promise<void>;
   isKickingOff: boolean;
   kickOffError: string;
-  // Pause
   pause: (taskId: Id<"tasks">) => Promise<void>;
   isPausing: boolean;
   pauseError: string;
-  // Resume
   resume: (taskId: Id<"tasks">, plan: ExecutionPlan | undefined) => Promise<void>;
   isResuming: boolean;
   resumeError: string;
-  // Save plan (inbox)
   savePlan: (taskId: Id<"tasks">, plan: ExecutionPlan) => Promise<void>;
   isSavingPlan: boolean;
   savePlanError: string;
   clearExecutionPlan: (taskId: Id<"tasks">) => Promise<void>;
   isClearingPlan: boolean;
   clearPlanError: string;
-  // Start inbox task
   startInbox: (taskId: Id<"tasks">, plan: ExecutionPlan | undefined) => Promise<void>;
   isStartingInbox: boolean;
   startInboxError: string;
-  // Retry (crashed)
   retry: (taskId: Id<"tasks">) => Promise<void>;
-  // Tags
   updateTags: (taskId: Id<"tasks">, tags: string[]) => void;
   updateTagsError: string;
   removeTagAttrValues: (taskId: Id<"tasks">, tagName: string) => void;
-  // Title / Description
   updateTitle: (taskId: Id<"tasks">, title: string) => Promise<void>;
   updateDescription: (taskId: Id<"tasks">, description: string | undefined) => Promise<void>;
-  // Files
   addTaskFiles: (
     taskId: Id<"tasks">,
     files: { name: string; type: string; size: number; subfolder: string; uploadedAt: string }[],
   ) => Promise<void>;
   removeTaskFile: (taskId: Id<"tasks">, subfolder: string, filename: string) => Promise<void>;
+  deleteTask: (taskId: Id<"tasks">) => Promise<void>;
+  isDeletingTask: boolean;
+  deleteTaskError: string;
+  resetDeleteTaskState: () => void;
+  submitPlanReviewFeedback: (taskId: Id<"tasks">, content: string) => Promise<void>;
   createActivity: (
     taskId: Id<"tasks">,
     eventType: ActivityEventType,
@@ -109,10 +104,6 @@ export interface TaskDetailActionsResult {
   removeMergeSourceError: string;
 }
 
-/**
- * Wraps all task-mutation calls used by TaskDetailSheet into a single hook.
- * Encapsulates loading/error state for async actions (kickOff, pause, resume).
- */
 export function useTaskDetailActions(): TaskDetailActionsResult {
   const approveMutation = useMutation(api.tasks.approve);
   const kickOffMutation = useMutation(api.tasks.approveAndKickOff);
@@ -127,6 +118,8 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
   const updateDescriptionMutation = useMutation(api.tasks.updateDescription);
   const addTaskFilesMutation = useMutation(api.tasks.addTaskFiles);
   const removeTaskFileMutation = useMutation(api.tasks.removeTaskFile);
+  const softDeleteTaskMutation = useMutation(api.tasks.softDelete);
+  const postPlanMessageMutation = useMutation(api.messages.postUserPlanMessage);
   const createActivityMutation = useMutation(api.activities.create);
   const removeTagAttrValuesMutation = useMutation(api.tagAttributeValues.removeByTaskAndTag);
   const createMergedTaskMutation = useMutation(api.tasks.createMergedTask);
@@ -146,6 +139,8 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
   const [updateTagsError, setUpdateTagsError] = useState("");
   const [isStartingInbox, setIsStartingInbox] = useState(false);
   const [startInboxError, setStartInboxError] = useState("");
+  const [isDeletingTask, setIsDeletingTask] = useState(false);
+  const [deleteTaskError, setDeleteTaskError] = useState("");
   const [isCreatingMergeTask, setIsCreatingMergeTask] = useState(false);
   const [createMergeTaskError, setCreateMergeTaskError] = useState("");
   const [isAddingMergeSource, setIsAddingMergeSource] = useState(false);
@@ -316,6 +311,39 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
     [removeTaskFileMutation],
   );
 
+  const deleteTask = useCallback(
+    async (taskId: Id<"tasks">) => {
+      setIsDeletingTask(true);
+      setDeleteTaskError("");
+      try {
+        await softDeleteTaskMutation({ taskId });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setDeleteTaskError(`Delete failed: ${message}`);
+        throw err;
+      } finally {
+        setIsDeletingTask(false);
+      }
+    },
+    [softDeleteTaskMutation],
+  );
+
+  const resetDeleteTaskState = useCallback(() => {
+    setIsDeletingTask(false);
+    setDeleteTaskError("");
+  }, []);
+
+  const submitPlanReviewFeedback = useCallback(
+    async (taskId: Id<"tasks">, content: string) => {
+      await postPlanMessageMutation({
+        taskId,
+        content,
+        planReviewAction: "rejected",
+      });
+    },
+    [postPlanMessageMutation],
+  );
+
   const createActivity = useCallback(
     async (
       taskId: Id<"tasks">,
@@ -407,6 +435,11 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
     updateDescription,
     addTaskFiles,
     removeTaskFile,
+    deleteTask,
+    isDeletingTask,
+    deleteTaskError,
+    resetDeleteTaskState,
+    submitPlanReviewFeedback,
     createActivity,
     createMergedTask,
     isCreatingMergeTask,

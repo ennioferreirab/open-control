@@ -31,7 +31,7 @@ vi.mock("../../convex/_generated/api", () => ({
   },
 }));
 
-import { useTaskInputData } from "../useTaskInputData";
+import { useTaskInputData } from "@/features/tasks/hooks/useTaskInputData";
 
 describe("useTaskInputData", () => {
   beforeEach(() => {

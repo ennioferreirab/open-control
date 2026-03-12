@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { useTaskDetailView } from "./useTaskDetailView";
+import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 
 // Mock convex/react
 const mockUseQuery = vi.fn();

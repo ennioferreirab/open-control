@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, Fragment } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import * as motion from "motion/react-client";
 import { useReducedMotion } from "motion/react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -34,18 +32,18 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { ThreadMessage } from "@/components/ThreadMessage";
-import { ExecutionPlanTab, type ExecutionPlanViewMode } from "@/components/ExecutionPlanTab";
+import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
+import { ExecutionPlanTab, type ExecutionPlanViewMode } from "@/features/tasks/components/ExecutionPlanTab";
 import { TAG_COLORS } from "@/lib/constants";
 import { InlineRejection } from "@/components/InlineRejection";
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
-import { ThreadInput } from "@/components/ThreadInput";
+import { ThreadInput } from "@/features/thread/components/ThreadInput";
 import { TagAttributeEditor } from "@/components/TagAttributeEditor";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useTaskDetailView } from "@/hooks/useTaskDetailView";
-import { useTaskDetailActions } from "@/hooks/useTaskDetailActions";
-import { usePlanEditorState } from "@/hooks/usePlanEditorState";
+import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
+import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
+import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
 import type { ExecutionPlan } from "@/lib/types";
 
 const formatSize = (bytes: number) =>
@@ -110,8 +108,9 @@ interface TaskDetailSheetProps {
 }
 
 export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheetProps) {
+  const [mergeQuery, setMergeQuery] = useState("");
   // --- Feature hooks ---
-  const view = useTaskDetailView(taskId);
+  const view = useTaskDetailView(taskId, { mergeQuery });
   const actions = useTaskDetailActions();
   const planState = usePlanEditorState(view.taskExecutionPlan, view.isAwaitingKickoff);
 
@@ -126,6 +125,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     directMergeSources,
     mergeSources,
     mergeSourceThreads,
+    mergeCandidates,
     displayFiles,
     isTaskLoaded,
     colors,
@@ -163,6 +163,11 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     updateDescription,
     addTaskFiles,
     removeTaskFile,
+    deleteTask,
+    isDeletingTask,
+    deleteTaskError,
+    resetDeleteTaskState,
+    submitPlanReviewFeedback,
     createActivity,
     createMergedTask,
     isCreatingMergeTask,
@@ -177,23 +182,16 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
 
   const { activePlan, localPlan, setLocalPlan, activeTab, setActiveTab } = planState;
   const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("both");
-
-  const softDeleteMutation = useMutation(api.tasks.softDelete);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteTaskError, setDeleteTaskError] = useState("");
 
   const handleDeleteTask = async () => {
     if (!task || !isTaskLoaded) return;
-    setIsDeleting(true);
-    setDeleteTaskError("");
     try {
-      await softDeleteMutation({ taskId: task._id });
+      await deleteTask(task._id);
       setShowDeleteConfirm(false);
       onClose();
-    } catch (err) {
-      setDeleteTaskError(err instanceof Error ? err.message : "Failed to delete task");
-      setIsDeleting(false);
+    } catch {
+      // The action hook owns mutation-level error state.
     }
   };
 
@@ -217,7 +215,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [editTitleValue, setEditTitleValue] = useState("");
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editDescriptionValue, setEditDescriptionValue] = useState("");
-  const [mergeQuery, setMergeQuery] = useState("");
   const [selectedMergeTaskId, setSelectedMergeTaskId] = useState<Id<"tasks"> | "">("");
   const [isMergedSourceGroupCollapsed, setIsMergedSourceGroupCollapsed] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
@@ -225,14 +222,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [isAtBottom, setIsAtBottom] = useState(true);
   const messageCount = messages?.length ?? 0;
   const isMergeLockedSource = Boolean(task?.mergedIntoTaskId);
-  const mergeCandidates = useQuery(
-    api.tasks.searchMergeCandidates,
-    task
-      ? task.isMergeTask
-        ? { query: mergeQuery, excludeTaskId: task._id, targetTaskId: task._id }
-        : { query: mergeQuery, excludeTaskId: task._id }
-      : "skip",
-  );
   const mergeAlias = task?.isMergeTask ? buildMergeAliasDisplay(directMergeSources) : undefined;
   const planForDisplay = activePlan ?? taskExecutionPlan ?? null;
   const hasMaterializedLiveSteps = Boolean(
@@ -298,11 +287,11 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     setIsEditingTitle(false);
     setIsEditingDescription(false);
     setShowDeleteConfirm(false);
-    setDeleteTaskError("");
+    resetDeleteTaskState();
     setMergeQuery("");
     setSelectedMergeTaskId("");
     setIsMergedSourceGroupCollapsed(false);
-  }, [taskId]);
+  }, [resetDeleteTaskState, taskId]);
 
   const handleSaveTitle = async () => {
     if (!task || !isTaskLoaded) return;
@@ -875,9 +864,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       size="sm"
                       className="h-6 px-2 text-xs"
                       onClick={handleDeleteTask}
-                      disabled={isDeleting}
+                      disabled={isDeletingTask}
                     >
-                      {isDeleting ? (
+                      {isDeletingTask ? (
                         <>
                           <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                           Deleting...
@@ -891,7 +880,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       size="sm"
                       className="h-6 px-2 text-xs"
                       onClick={() => setShowDeleteConfirm(false)}
-                      disabled={isDeleting}
+                      disabled={isDeletingTask}
                     >
                       Cancel
                     </Button>
@@ -1172,6 +1161,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       liveSteps={liveSteps ?? undefined}
                       messages={messages}
                       onPrimaryAction={planPanelPrimaryAction?.onClick}
+                      onRejectPlan={(content) =>
+                        task ? submitPlanReviewFeedback(task._id, content) : Promise.resolve()
+                      }
                       task={task}
                     />
                   )}

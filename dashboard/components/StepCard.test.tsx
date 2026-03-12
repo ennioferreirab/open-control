@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { StepCard } from "./StepCard";
+import { StepCard } from "@/features/tasks/components/StepCard";
 import type { StepCardActionsData } from "@/hooks/useStepCardActions";
 
 const mockDeleteStep = vi.fn();

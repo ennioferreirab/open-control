@@ -27,7 +27,7 @@ vi.mock("../../convex/_generated/api", () => ({
   },
 }));
 
-import { useSearchBarFilters } from "../useSearchBarFilters";
+import { useSearchBarFilters } from "@/features/search/hooks/useSearchBarFilters";
 
 describe("useSearchBarFilters", () => {
   it("returns tags and allAttributes from queries", () => {

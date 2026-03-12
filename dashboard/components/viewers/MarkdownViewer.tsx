@@ -119,7 +119,7 @@ export function MarkdownViewer({ content, taskId, sourceFile }: MarkdownViewerPr
                   );
                 },
                 img({ src, alt }) {
-                  const resolvedSrc = resolveTaskUrl(src);
+                  const resolvedSrc = typeof src === "string" ? resolveTaskUrl(src) : undefined;
                   return (
                     <img
                       src={resolvedSrc}

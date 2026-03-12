@@ -1,7 +1,7 @@
 import * as React from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { ThreadInput } from "./ThreadInput";
+import { ThreadInput } from "@/features/thread/components/ThreadInput";
 import { api } from "../convex/_generated/api";
 import { getFunctionName } from "convex/server";
 

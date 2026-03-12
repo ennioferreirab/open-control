@@ -16,7 +16,7 @@ vi.mock("@/components/MarkdownRenderer", () => ({
   },
 }));
 
-import { ThreadMessage } from "./ThreadMessage";
+import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
 
 afterEach(() => {
   cleanup();

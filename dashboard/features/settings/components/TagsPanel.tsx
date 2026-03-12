@@ -8,7 +8,7 @@ import { X, Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ConvexError } from "convex/values";
 import { TAG_COLORS } from "@/lib/constants";
-import { useTagsPanelData } from "@/hooks/useTagsPanelData";
+import { useTagsPanelData } from "@/features/settings/hooks/useTagsPanelData";
 
 const COLOR_KEYS = Object.keys(TAG_COLORS) as Array<keyof typeof TAG_COLORS>;
 

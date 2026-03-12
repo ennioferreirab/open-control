@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
-import { SettingsPanel } from "./SettingsPanel";
+import { SettingsPanel } from "@/features/settings/components/SettingsPanel";
 
 vi.mock("@/components/ui/select", async () => import("../tests/mocks/select-mock"));
 

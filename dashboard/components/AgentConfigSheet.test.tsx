@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { AgentConfigSheet } from "./AgentConfigSheet";
-import type { AgentConfigSheetData } from "@/hooks/useAgentConfigSheetData";
+import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
+import type { AgentConfigSheetData } from "@/features/agents/hooks/useAgentConfigSheetData";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 // Mock agent data
@@ -37,7 +37,7 @@ const defaultHookData: AgentConfigSheetData = {
   },
 };
 
-vi.mock("@/hooks/useAgentConfigSheetData", () => ({
+vi.mock("@/features/agents/hooks/useAgentConfigSheetData", () => ({
   useAgentConfigSheetData: (agentName: string | null) => {
     if (!agentName) {
       return { ...defaultHookData, agent: undefined, ...hookOverrides };

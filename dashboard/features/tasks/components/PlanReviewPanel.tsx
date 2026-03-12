@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { ThreadInput } from "@/components/ThreadInput";
-import { ThreadMessage } from "@/components/ThreadMessage";
+import { ThreadInput } from "@/features/thread/components/ThreadInput";
+import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +15,7 @@ type PlanReviewPanelProps = {
   isPrimaryActionPending: boolean;
   liveSteps?: Doc<"steps">[];
   onPrimaryAction?: () => Promise<void>;
+  onRejectPlan?: (content: string) => Promise<void>;
   task: Doc<"tasks">;
   messages: Doc<"messages">[];
 };
@@ -38,10 +37,10 @@ export function PlanReviewPanel({
   isPrimaryActionPending,
   liveSteps,
   onPrimaryAction,
+  onRejectPlan,
   task,
   messages,
 }: PlanReviewPanelProps) {
-  const postPlanMessage = useMutation(api.messages.postUserPlanMessage);
   const [rejectingMessageId, setRejectingMessageId] = useState<string | null>(null);
   const [rejectFeedback, setRejectFeedback] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
@@ -101,11 +100,7 @@ export function PlanReviewPanel({
     setIsRejecting(true);
     setRejectError("");
     try {
-      await postPlanMessage({
-        taskId: task._id,
-        content,
-        planReviewAction: "rejected",
-      });
+      await onRejectPlan?.(content);
       setRejectFeedback("");
       setRejectingMessageId(null);
     } catch (error) {

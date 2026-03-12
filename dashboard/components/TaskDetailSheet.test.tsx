@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { TaskDetailSheet } from "./TaskDetailSheet";
-import { ThreadMessage } from "./ThreadMessage";
+import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
+import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 // Mock convex/react
@@ -39,7 +39,7 @@ vi.mock("./DocumentViewerModal", () => ({
 }));
 
 // Mock ExecutionPlanTab to prevent it from calling useQuery internally
-vi.mock("./ExecutionPlanTab", () => ({
+vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
   ExecutionPlanTab: ({
     executionPlan,
     isEditMode,

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
-import { ExecutionPlanTab } from "./ExecutionPlanTab";
+import { ExecutionPlanTab } from "@/features/tasks/components/ExecutionPlanTab";
 
 // Mock PlanEditor so we can test without React Flow and Convex dependencies
 vi.mock("./PlanEditor", () => ({

@@ -3,8 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConvexError } from "convex/values";
 
-import { TagsPanel } from "../../components/TagsPanel";
-import type { TagsPanelData } from "@/hooks/useTagsPanelData";
+import { TagsPanel } from "../../features/settings/components/TagsPanel";
+import type { TagsPanelData } from "@/features/settings/hooks/useTagsPanelData";
 
 const mockCreateTag = vi.fn();
 const mockRemoveTag = vi.fn();
@@ -24,7 +24,7 @@ const defaultHookData: TagsPanelData = {
   updateTagAttributeIds: mockUpdateTagAttributeIds,
 };
 
-vi.mock("@/hooks/useTagsPanelData", () => ({
+vi.mock("@/features/settings/hooks/useTagsPanelData", () => ({
   useTagsPanelData: () => ({ ...defaultHookData, ...hookOverrides }),
 }));
 

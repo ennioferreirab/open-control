@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useThreadInputController } from "@/hooks/useThreadInputController";
+import { useThreadInputController } from "@/features/thread/hooks/useThreadInputController";
 
 interface ThreadInputProps {
   mode?: "default" | "lead-agent";
