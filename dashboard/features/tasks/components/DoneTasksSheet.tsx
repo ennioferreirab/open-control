@@ -1,18 +1,11 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+import { CheckCircle2, Trash2, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CheckCircle2, Trash2, Undo2 } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useDoneTasksSheetData } from "@/features/tasks/hooks/useDoneTasksSheetData";
 
 interface DoneTasksSheetProps {
   open: boolean;
@@ -29,17 +22,12 @@ function formatDate(isoString: string): string {
 }
 
 export function DoneTasksSheet({ open, onClose }: DoneTasksSheetProps) {
-  const doneHistory = useQuery(api.tasks.listDoneHistory);
-  const restoreMutation = useMutation(api.tasks.restore);
-  const softDeleteMutation = useMutation(api.tasks.softDelete);
+  const { doneHistory, restoreTask, softDeleteTask } = useDoneTasksSheetData();
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent
-        side="right"
-        className="w-[480px] sm:w-[480px] sm:max-w-none flex flex-col p-0"
-      >
-        <SheetHeader className="px-6 pt-6 pb-4">
+    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <SheetContent side="right" className="flex w-[480px] flex-col p-0 sm:w-[480px] sm:max-w-none">
+        <SheetHeader className="px-6 pb-4 pt-6">
           <SheetTitle className="flex items-center gap-2 text-lg font-semibold">
             <CheckCircle2 className="h-5 w-5" />
             Done Tasks
@@ -49,36 +37,27 @@ export function DoneTasksSheet({ open, onClose }: DoneTasksSheetProps) {
               </Badge>
             )}
           </SheetTitle>
-          <SheetDescription>
-            All tasks that have been completed, including cleared tasks.
-          </SheetDescription>
+          <SheetDescription>All tasks that have been completed, including cleared tasks.</SheetDescription>
         </SheetHeader>
 
         <ScrollArea className="flex-1">
           <div className="px-6 pb-6">
             {doneHistory === undefined ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Loading...
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
             ) : doneHistory.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No completed tasks yet
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground">No completed tasks yet</p>
             ) : (
               <div className="flex flex-col gap-3 pr-3">
                 {doneHistory.map((task) => {
                   const isCleared = task.status === "deleted";
 
                   return (
-                    <div
-                      key={task._id}
-                      className="rounded-lg border border-border p-3 space-y-2"
-                    >
+                    <div key={task._id} className="space-y-2 rounded-lg border border-border p-3">
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className="flex-1 min-w-0 text-sm font-medium text-foreground break-words">
+                        <h4 className="min-w-0 flex-1 break-words text-sm font-medium text-foreground">
                           {task.title}
                         </h4>
-                        <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
+                        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                           {formatDate(task.updatedAt)}
                         </span>
                       </div>
@@ -86,50 +65,41 @@ export function DoneTasksSheet({ open, onClose }: DoneTasksSheetProps) {
                         {isCleared ? (
                           <Badge
                             variant="outline"
-                            className="text-xs bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-0"
+                            className="border-0 bg-gray-100 text-xs text-gray-500 dark:bg-gray-900 dark:text-gray-400"
                           >
                             Cleared
                           </Badge>
                         ) : (
                           <Badge
                             variant="outline"
-                            className="text-xs bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border-0"
+                            className="border-0 bg-green-100 text-xs text-green-700 dark:bg-green-950 dark:text-green-300"
                           >
                             On board
                           </Badge>
                         )}
-                        {task.assignedAgent && (
-                          <span className="text-xs text-muted-foreground">
-                            {task.assignedAgent}
-                          </span>
-                        )}
+                        {task.assignedAgent && <span className="text-xs text-muted-foreground">{task.assignedAgent}</span>}
                       </div>
                       <div className="flex gap-2">
                         {isCleared ? (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-xs h-7 px-2"
+                            className="h-7 px-2 text-xs"
                             title="Restore to done on board"
-                            onClick={() =>
-                              restoreMutation({
-                                taskId: task._id,
-                                mode: "previous",
-                              })
-                            }
+                            onClick={() => void restoreTask(task._id)}
                           >
-                            <Undo2 className="h-3.5 w-3.5 mr-1" />
+                            <Undo2 className="mr-1 h-3.5 w-3.5" />
                             Restore
                           </Button>
                         ) : (
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-xs h-7 px-2 text-muted-foreground hover:text-red-500"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-red-500"
                             title="Delete task"
-                            onClick={() => softDeleteMutation({ taskId: task._id })}
+                            onClick={() => void softDeleteTask(task._id)}
                           >
-                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
                             Delete
                           </Button>
                         )}

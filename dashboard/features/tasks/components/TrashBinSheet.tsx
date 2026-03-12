@@ -1,19 +1,12 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+import { RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Undo2, RotateCcw } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { STATUS_COLORS, type TaskStatus } from "@/lib/constants";
+import { useTrashBinSheetData } from "@/features/tasks/hooks/useTrashBinSheetData";
 
 interface TrashBinSheetProps {
   open: boolean;
@@ -42,13 +35,12 @@ const RESTORE_TARGET_MAP: Record<string, string> = {
 };
 
 export function TrashBinSheet({ open, onClose }: TrashBinSheetProps) {
-  const deletedTasks = useQuery(api.tasks.listDeleted);
-  const restoreMutation = useMutation(api.tasks.restore);
+  const { deletedTasks, restoreTask } = useTrashBinSheetData();
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-[480px] sm:w-[480px] flex flex-col p-0">
-        <SheetHeader className="px-6 pt-6 pb-4">
+    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <SheetContent side="right" className="flex w-[480px] flex-col p-0 sm:w-[480px]">
+        <SheetHeader className="px-6 pb-4 pt-6">
           <SheetTitle className="flex items-center gap-2 text-lg font-semibold">
             <Trash2 className="h-5 w-5" />
             Trash
@@ -65,13 +57,9 @@ export function TrashBinSheet({ open, onClose }: TrashBinSheetProps) {
 
         <ScrollArea className="flex-1 px-6 pb-6">
           {deletedTasks === undefined ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Loading...
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
           ) : deletedTasks.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Trash is empty
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">Trash is empty</p>
           ) : (
             <div className="flex flex-col gap-3">
               {deletedTasks.map((task) => {
@@ -80,16 +68,11 @@ export function TrashBinSheet({ open, onClose }: TrashBinSheetProps) {
                 const restoreTarget = RESTORE_TARGET_MAP[prevStatus] ?? "inbox";
 
                 return (
-                  <div
-                    key={task._id}
-                    className="rounded-lg border border-border p-3 space-y-2"
-                  >
+                  <div key={task._id} className="space-y-2 rounded-lg border border-border p-3">
                     <div className="flex items-start justify-between gap-2">
-                      <h4 className="text-sm font-medium text-foreground">
-                        {task.title}
-                      </h4>
+                      <h4 className="text-sm font-medium text-foreground">{task.title}</h4>
                       {task.deletedAt && (
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        <span className="whitespace-nowrap text-xs text-muted-foreground">
                           {formatRelativeTime(task.deletedAt)}
                         </span>
                       )}
@@ -97,39 +80,31 @@ export function TrashBinSheet({ open, onClose }: TrashBinSheetProps) {
                     <div className="flex items-center gap-2">
                       <Badge
                         variant="outline"
-                        className={`text-xs ${prevColors.bg} ${prevColors.text} border-0`}
+                        className={`border-0 text-xs ${prevColors.bg} ${prevColors.text}`}
                       >
                         was: {prevStatus.replaceAll("_", " ")}
                       </Badge>
-                      {task.assignedAgent && (
-                        <span className="text-xs text-muted-foreground">
-                          {task.assignedAgent}
-                        </span>
-                      )}
+                      {task.assignedAgent && <span className="text-xs text-muted-foreground">{task.assignedAgent}</span>}
                     </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-xs h-7 px-2"
+                        className="h-7 px-2 text-xs"
                         title={`Restore to ${restoreTarget}, agent will redo ${prevStatus} step`}
-                        onClick={() =>
-                          restoreMutation({ taskId: task._id, mode: "previous" })
-                        }
+                        onClick={() => void restoreTask(task._id, "previous")}
                       >
-                        <Undo2 className="h-3.5 w-3.5 mr-1" />
+                        <Undo2 className="mr-1 h-3.5 w-3.5" />
                         Restore
                       </Button>
                       <Button
                         size="sm"
                         variant="secondary"
-                        className="text-xs h-7 px-2"
+                        className="h-7 px-2 text-xs"
                         title="Send back to inbox"
-                        onClick={() =>
-                          restoreMutation({ taskId: task._id, mode: "beginning" })
-                        }
+                        onClick={() => void restoreTask(task._id, "beginning")}
                       >
-                        <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                        <RotateCcw className="mr-1 h-3.5 w-3.5" />
                         Restart
                       </Button>
                     </div>

@@ -56,9 +56,13 @@ function listFeatureFiles(featureName: string, subdir: "components" | "hooks"): 
 const FEATURE_COMPONENT_DIRECT_CONVEX_IMPORT_EXCEPTIONS = new Set<string>();
 
 const LEGACY_ROOT_COMPONENT_WRAPPERS = [
+  "components/ActivityFeedPanel.tsx",
   "components/AgentConfigSheet.tsx",
+  "components/AgentSidebar.tsx",
   "components/AgentSidebarItem.tsx",
   "components/BoardSettingsSheet.tsx",
+  "components/BoardSelector.tsx",
+  "components/DoneTasksSheet.tsx",
   "components/ExecutionPlanTab.tsx",
   "components/KanbanBoard.tsx",
   "components/ModelTierSettings.tsx",
@@ -69,8 +73,10 @@ const LEGACY_ROOT_COMPONENT_WRAPPERS = [
   "components/TaskCard.tsx",
   "components/TaskDetailSheet.tsx",
   "components/TaskInput.tsx",
+  "components/TerminalBoard.tsx",
   "components/ThreadInput.tsx",
   "components/ThreadMessage.tsx",
+  "components/TrashBinSheet.tsx",
 ] as const;
 
 const LEGACY_ROOT_HOOK_WRAPPERS = [
@@ -147,14 +153,18 @@ describe("Architecture: feature shell exists for staged modularization", () => {
       "features/tasks/components/TaskDetailThreadTab.tsx",
       "features/tasks/components/TaskDetailConfigTab.tsx",
       "features/tasks/components/TaskDetailFilesTab.tsx",
+      "features/tasks/components/DoneTasksSheet.tsx",
       "features/tasks/components/TaskInput.tsx",
+      "features/tasks/components/TrashBinSheet.tsx",
       "features/tasks/components/ExecutionPlanTab.tsx",
       "features/tasks/components/TaskCard.tsx",
       "features/tasks/components/StepCard.tsx",
+      "features/tasks/hooks/useDoneTasksSheetData.ts",
       "features/tasks/hooks/useTaskDetailView.ts",
       "features/tasks/hooks/useTaskDetailActions.ts",
       "features/tasks/hooks/useTaskInputData.ts",
       "features/tasks/hooks/usePlanEditorState.ts",
+      "features/tasks/hooks/useTrashBinSheetData.ts",
     ];
 
     for (const relativePath of requiredFiles) {
@@ -168,7 +178,9 @@ describe("Architecture: feature shell exists for staged modularization", () => {
   it("boards and search feature entry points exist in the feature-owned structure", () => {
     const requiredFiles = [
       "features/boards/components/KanbanBoard.tsx",
+      "features/boards/components/BoardSelector.tsx",
       "features/boards/components/BoardSettingsSheet.tsx",
+      "features/boards/hooks/useBoardSelectorData.ts",
       "features/boards/hooks/useBoardView.ts",
       "features/search/components/SearchBar.tsx",
       "features/search/hooks/useSearchBarFilters.ts",
@@ -255,6 +267,7 @@ describe("Architecture: root wrapper cleanup stays converged", () => {
     expect(content).toContain(`from "@/features/activity/components/ActivityFeedPanel"`);
     expect(content).toContain(`from "@/features/tasks/components/TaskInput"`);
     expect(content).toContain(`from "@/features/boards/components/KanbanBoard"`);
+    expect(content).toContain(`from "@/features/boards/components/BoardSelector"`);
     expect(content).toContain(`from "@/features/terminal/components/TerminalBoard"`);
     expect(content).toContain(`from "@/features/tasks/components/TaskDetailSheet"`);
     expect(content).toContain(`from "@/features/settings/components/SettingsPanel"`);
@@ -265,7 +278,19 @@ describe("Architecture: root wrapper cleanup stays converged", () => {
     expect(content).not.toContain(`from "@/components/AgentSidebar"`);
     expect(content).not.toContain(`from "@/components/ActivityFeedPanel"`);
     expect(content).not.toContain(`from "@/components/TerminalBoard"`);
+    expect(content).not.toContain(`from "@/components/BoardSelector"`);
     expect(content).not.toContain(`from "convex/react"`);
+  });
+
+  it("KanbanBoard imports canonical task board-sheet entry points directly", () => {
+    const content = readFileIfExists(
+      path.join(DASHBOARD_ROOT, "features", "boards", "components", "KanbanBoard.tsx"),
+    );
+    expect(content).not.toBeNull();
+    expect(content).toContain(`from "@/features/tasks/components/TrashBinSheet"`);
+    expect(content).toContain(`from "@/features/tasks/components/DoneTasksSheet"`);
+    expect(content).not.toContain(`from "@/components/TrashBinSheet"`);
+    expect(content).not.toContain(`from "@/components/DoneTasksSheet"`);
   });
 
   it("BoardContext consumes board provider data via a feature hook", () => {
@@ -282,6 +307,7 @@ describe("Architecture: story 22.4 hotspot seams exist", () => {
       "convex/lib/taskMerge.ts",
       "convex/lib/taskDetailView.ts",
       "convex/lib/taskFiles.ts",
+      "convex/lib/taskArchive.ts",
       "convex/lib/taskStatus.ts",
     ];
 
@@ -309,6 +335,7 @@ describe("Architecture: task detail remains decomposed by tab ownership", () => 
     expect(content).toContain(`from "@/features/tasks/components/TaskDetailThreadTab"`);
     expect(content).toContain(`from "@/features/tasks/components/TaskDetailConfigTab"`);
     expect(content).toContain(`from "@/features/tasks/components/TaskDetailFilesTab"`);
+    expect(content).toContain(`from "@/features/tasks/components/TaskDetailHeader"`);
   });
 });
 

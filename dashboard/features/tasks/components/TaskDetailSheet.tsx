@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, Fragment } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useReducedMotion } from "motion/react";
 import { Id } from "@/convex/_generated/dataModel";
 import {
@@ -11,28 +11,17 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-  Loader2,
-  Pause,
-  Pencil,
-  Play,
-  Trash2,
-} from "lucide-react";
 import {
   ExecutionPlanTab,
   type ExecutionPlanViewMode,
 } from "@/features/tasks/components/ExecutionPlanTab";
-import { TAG_COLORS } from "@/lib/constants";
 import { TaskDetailThreadTab } from "@/features/tasks/components/TaskDetailThreadTab";
 import { TaskDetailConfigTab } from "@/features/tasks/components/TaskDetailConfigTab";
 import { TaskDetailFilesTab } from "@/features/tasks/components/TaskDetailFilesTab";
-import { InlineRejection } from "@/components/InlineRejection";
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
+import { TaskDetailHeader } from "@/features/tasks/components/TaskDetailHeader";
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
@@ -524,446 +513,79 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
       <SheetContent side="right" className="w-[90vw] sm:w-[50vw] sm:max-w-none flex flex-col p-0">
         {isTaskLoaded ? (
           <>
-            <SheetHeader className="px-6 pt-6 pb-4">
-              <SheetTitle className="text-lg font-semibold pr-6">
-                {isEditingTitle ? (
-                  <Input
-                    value={editTitleValue}
-                    onChange={(e) => setEditTitleValue(e.target.value)}
-                    onBlur={handleSaveTitle}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleSaveTitle();
-                      }
-                      if (e.key === "Escape") {
-                        setIsEditingTitle(false);
-                      }
-                    }}
-                    className="text-base font-semibold h-7 py-0 border-0 border-b rounded-none focus-visible:ring-0 px-0"
-                    autoFocus
-                  />
-                ) : (
-                  <div className="flex items-start gap-1.5 group/title">
-                    <span className="flex-1">{task!.title}</span>
-                    {!isMergeLockedSource && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditTitleValue(task!.title);
-                          setIsEditingTitle(true);
-                        }}
-                        className="opacity-0 group-hover/title:opacity-100 transition-opacity mt-0.5 flex-shrink-0 p-0.5 rounded hover:bg-accent"
-                        aria-label="Edit title"
-                      >
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </SheetTitle>
-              <SheetDescription asChild>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className={`text-xs ${colors?.bg} ${colors?.text} border-0`}
-                  >
-                    {task!.status.replaceAll("_", " ")}
-                  </Badge>
-                  {task!.assignedAgent && (
-                    <span className="text-xs text-muted-foreground">{task!.assignedAgent}</span>
-                  )}
-                  {(task!.tags ?? []).map((tag) => {
-                    const colorKey = tagColorMap[tag];
-                    const color = colorKey ? TAG_COLORS[colorKey] : null;
-                    const chipClass = `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs max-w-[200px] ${
-                      color ? `${color.bg} ${color.text}` : "bg-muted text-muted-foreground"
-                    }`;
-                    const renderDot = () =>
-                      color ? (
-                        <span className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`} />
-                      ) : null;
-                    const attrs = tagAttrValues?.filter((v) => v.tagName === tag && v.value) ?? [];
-                    if (attrs.length === 0) {
-                      return (
-                        <span key={tag} className={chipClass} title={tag}>
-                          {renderDot()}
-                          <span className="truncate">{tag}</span>
-                        </span>
-                      );
+            <TaskDetailHeader
+              task={task!}
+              taskId={task!._id}
+              colors={colors}
+              taskStatus={taskStatus}
+              isAwaitingKickoff={isAwaitingKickoff}
+              isPaused={isPaused}
+              isMergeLockedSource={isMergeLockedSource}
+              mergedIntoTask={mergedIntoTask}
+              tagColorMap={tagColorMap}
+              tagAttributesList={tagAttributesList}
+              tagAttrValues={tagAttrValues}
+              localPlanExists={Boolean(localPlan)}
+              taskExecutionPlanExists={Boolean(taskExecutionPlan)}
+              showRejection={showRejection}
+              showDeleteConfirm={showDeleteConfirm}
+              deleteTaskError={deleteTaskError}
+              isDeletingTask={isDeletingTask}
+              kickOffError={kickOffError}
+              clearPlanError={clearPlanError}
+              pauseError={pauseError}
+              resumeError={resumeError}
+              savePlanError={savePlanError}
+              startInboxError={startInboxError}
+              isSavingPlan={isSavingPlan}
+              isStartingInbox={isStartingInbox}
+              isPausing={isPausing}
+              isResuming={isResuming}
+              isKickingOff={isKickingOff}
+              isEditingTitle={isEditingTitle}
+              editTitleValue={editTitleValue}
+              isEditingDescription={isEditingDescription}
+              editDescriptionValue={editDescriptionValue}
+              manualPlanPrimaryAction={
+                manualPlanPrimaryAction
+                  ? {
+                      ...manualPlanPrimaryAction,
+                      isPending: hasMaterializedLiveSteps ? isResuming : isKickingOff,
                     }
-                    return (
-                      <Fragment key={tag}>
-                        {attrs.map((attr) => {
-                          const attrDef = tagAttributesList?.find(
-                            (a) => a._id === attr.attributeId,
-                          );
-                          if (!attrDef) return null;
-                          const label = `${tag}:${attrDef.name}=${attr.value}`;
-                          return (
-                            <span
-                              key={`${tag}-${attr.attributeId}`}
-                              className={chipClass}
-                              title={label}
-                            >
-                              {renderDot()}
-                              <span className="truncate">{label}</span>
-                            </span>
-                          );
-                        })}
-                      </Fragment>
-                    );
-                  })}
-                  {task!.status === "review" && !task!.isManual && !isAwaitingKickoff && (
-                    <>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="bg-green-500 hover:bg-green-600 text-white text-xs h-7 px-2"
-                        onClick={() => {
-                          approve(task!._id);
-                          onClose();
-                        }}
-                      >
-                        Approve
-                      </Button>
-                      {task!.trustLevel === "human_approved" && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="text-xs h-7 px-2"
-                          onClick={() => setShowRejection((prev) => !prev)}
-                        >
-                          Deny
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  {task!.status === "crashed" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-amber-500 text-amber-700 hover:bg-amber-50 text-xs"
-                      onClick={async () => {
-                        await retry(task!._id);
-                        onClose();
-                      }}
-                    >
-                      Retry from Beginning
-                    </Button>
-                  )}
-                  {task!.status === "in_progress" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-orange-400 text-orange-700 hover:bg-orange-50 text-xs h-7 px-2"
-                      onClick={handlePause}
-                      disabled={isPausing}
-                      data-testid="pause-button"
-                    >
-                      {isPausing ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                          Pausing...
-                        </>
-                      ) : (
-                        <>
-                          <Pause className="h-3.5 w-3.5 mr-1" />
-                          Pause
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  {isPaused && !hasManualMergePlanReady && (
-                    <>
-                      <Badge
-                        variant="outline"
-                        className="text-xs bg-orange-50 text-orange-700 border-orange-200"
-                        data-testid="paused-badge"
-                      >
-                        Paused
-                      </Badge>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                        onClick={handleResume}
-                        disabled={isResuming}
-                        data-testid="resume-button"
-                      >
-                        {isResuming ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                            Resuming...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="h-3.5 w-3.5 mr-1" />
-                            Resume
-                          </>
-                        )}
-                      </Button>
-                    </>
-                  )}
-                  {isAwaitingKickoff && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs bg-amber-50 text-amber-700 border-amber-200"
-                    >
-                      Awaiting Kick-off
-                    </Badge>
-                  )}
-                  {taskStatus === "inbox" && (
-                    <>
-                      {localPlan && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7 px-2"
-                          onClick={handleSavePlan}
-                          disabled={isSavingPlan}
-                          data-testid="save-plan-button"
-                        >
-                          {isSavingPlan ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            "Save Plan"
-                          )}
-                        </Button>
-                      )}
-                      {(localPlan || taskExecutionPlan) && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                          onClick={handleStartInbox}
-                          disabled={isStartingInbox}
-                          data-testid="start-inbox-button"
-                        >
-                          {isStartingInbox ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                              Starting...
-                            </>
-                          ) : (
-                            <>
-                              <Play className="h-3.5 w-3.5 mr-1" />
-                              Start
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  {taskStatus === "review" && task?.isManual && localPlan && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-7 px-2"
-                      onClick={handleSavePlan}
-                      disabled={isSavingPlan}
-                      data-testid="save-plan-button"
-                    >
-                      {isSavingPlan ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        "Save Plan"
-                      )}
-                    </Button>
-                  )}
-                  {manualPlanPrimaryAction && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                      onClick={manualPlanPrimaryAction.onClick}
-                      disabled={hasMaterializedLiveSteps ? isResuming : isKickingOff}
-                      data-testid={manualPlanPrimaryAction.testId}
-                    >
-                      {(hasMaterializedLiveSteps ? isResuming : isKickingOff) ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                          {manualPlanPrimaryAction.pendingLabel}
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-3.5 w-3.5 mr-1" />
-                          {manualPlanPrimaryAction.label}
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  {task!.status !== "deleted" && !isMergeLockedSource && (
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="ml-auto flex-shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
-                      aria-label="Delete task"
-                      title="Delete task"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </SheetDescription>
-              {showRejection && taskId && (
-                <div className="pt-2">
-                  <InlineRejection taskId={taskId} onClose={() => setShowRejection(false)} />
-                </div>
-              )}
-              {showDeleteConfirm && (
-                <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-950">
-                  <p className="text-xs text-red-800 dark:text-red-200 mb-2">
-                    Delete this task and all its steps?
-                  </p>
-                  {deleteTaskError && (
-                    <p className="text-xs text-red-600 dark:text-red-400 mb-2">{deleteTaskError}</p>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-6 px-2 text-xs"
-                      onClick={handleDeleteTask}
-                      disabled={isDeletingTask}
-                    >
-                      {isDeletingTask ? (
-                        <>
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        "Yes, delete"
-                      )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-xs"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      disabled={isDeletingTask}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {isAwaitingKickoff && (
-                <div
-                  className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"
-                  data-testid="reviewing-plan-banner"
-                >
-                  This task is awaiting your approval. Review the execution plan and respond in the
-                  Lead Agent panel below.
-                </div>
-              )}
-              {kickOffError && (
-                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-                  {kickOffError}
-                </div>
-              )}
-              {clearPlanError && (
-                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-                  {clearPlanError}
-                </div>
-              )}
-              {pauseError && (
-                <div
-                  className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800"
-                  data-testid="pause-error"
-                >
-                  {pauseError}
-                </div>
-              )}
-              {resumeError && (
-                <div
-                  className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800"
-                  data-testid="resume-error"
-                >
-                  {resumeError}
-                </div>
-              )}
-              {savePlanError && (
-                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-                  {savePlanError}
-                </div>
-              )}
-              {startInboxError && (
-                <div className="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-                  {startInboxError}
-                </div>
-              )}
-              {isMergeLockedSource && mergedIntoTask && (
-                <div className="mt-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                  Merged into{" "}
-                  <button
-                    type="button"
-                    className="font-medium underline underline-offset-2"
-                    onClick={() => onTaskOpen?.(mergedIntoTask._id)}
-                  >
-                    {mergedIntoTask.title}
-                  </button>
-                  . Continue the thread and edits there.
-                </div>
-              )}
-
-              {/* Description — always visible in header, editable with pencil icon */}
-              <div className="mt-3 group/desc">
-                {isEditingDescription ? (
-                  <textarea
-                    value={editDescriptionValue}
-                    onChange={(e) => setEditDescriptionValue(e.target.value)}
-                    onBlur={handleSaveDescription}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setIsEditingDescription(false);
-                      }
-                    }}
-                    className="w-full text-sm text-foreground resize-none rounded-md border border-input bg-background px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring min-h-[60px]"
-                    placeholder="Describe this task..."
-                    autoFocus
-                    rows={3}
-                  />
-                ) : (
-                  <div className="flex items-start gap-1.5">
-                    {task!.description ? (
-                      <p className="text-sm text-muted-foreground flex-1 whitespace-pre-wrap">
-                        {task!.description}
-                      </p>
-                    ) : (
-                      <p
-                        className="text-sm text-muted-foreground/50 italic flex-1 cursor-text"
-                        onClick={() => {
-                          setEditDescriptionValue("");
-                          setIsEditingDescription(true);
-                        }}
-                      >
-                        Add description...
-                      </p>
-                    )}
-                    {!isMergeLockedSource && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditDescriptionValue(task!.description ?? "");
-                          setIsEditingDescription(true);
-                        }}
-                        className="opacity-0 group-hover/desc:opacity-100 transition-opacity mt-0.5 flex-shrink-0 p-0.5 rounded hover:bg-accent"
-                        aria-label="Edit description"
-                      >
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </SheetHeader>
+                  : null
+              }
+              onApprove={() => {
+                approve(task!._id);
+                onClose();
+              }}
+              onRetry={async () => {
+                await retry(task!._id);
+                onClose();
+              }}
+              onPause={handlePause}
+              onResume={handleResume}
+              onSavePlan={handleSavePlan}
+              onStartInbox={handleStartInbox}
+              onDeleteTask={handleDeleteTask}
+              onOpenMergedTask={(mergedTaskId) => onTaskOpen?.(mergedTaskId)}
+              onToggleRejection={() => setShowRejection((current) => !current)}
+              onDeleteConfirmOpen={() => setShowDeleteConfirm(true)}
+              onDeleteConfirmClose={() => setShowDeleteConfirm(false)}
+              onStartEditingTitle={() => {
+                setEditTitleValue(task!.title);
+                setIsEditingTitle(true);
+              }}
+              onTitleValueChange={setEditTitleValue}
+              onSaveTitle={handleSaveTitle}
+              onCancelEditingTitle={() => setIsEditingTitle(false)}
+              onStartEditingDescription={() => {
+                setEditDescriptionValue(task!.description ?? "");
+                setIsEditingDescription(true);
+              }}
+              onDescriptionValueChange={setEditDescriptionValue}
+              onSaveDescription={handleSaveDescription}
+              onCancelEditingDescription={() => setIsEditingDescription(false)}
+            />
 
             <Separator />
 

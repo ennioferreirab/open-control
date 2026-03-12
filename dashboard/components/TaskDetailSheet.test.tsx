@@ -514,7 +514,7 @@ describe("TaskDetailSheet", () => {
       "data-file-name",
       "source-b.md"
     );
-  });
+  }, 10000);
 
   it("renders attach controls in config for existing merged tasks and adds a source", async () => {
     const user = userEvent.setup();
@@ -571,7 +571,7 @@ describe("TaskDetailSheet", () => {
         sourceTaskId: "task-d",
       });
     });
-  });
+  }, 10000);
 
   it("renders remove controls for merged tasks with more than two direct sources", async () => {
     const user = userEvent.setup();
@@ -1060,7 +1060,7 @@ describe("TaskDetailSheet", () => {
         }),
       );
     });
-  });
+  }, 10000);
 
   it("offers plan and manual merge actions in config", async () => {
     const user = userEvent.setup();

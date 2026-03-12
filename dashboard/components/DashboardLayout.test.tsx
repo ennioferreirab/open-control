@@ -71,7 +71,7 @@ vi.mock("@/components/BoardContext", () => ({
   useBoard: () => ({ openTerminals: [] }),
 }));
 
-vi.mock("@/components/BoardSelector", () => ({
+vi.mock("@/features/boards/components/BoardSelector", () => ({
   BoardSelector: ({ onOpenSettings }: { onOpenSettings?: () => void }) => (
     <button data-testid="board-selector" onClick={() => onOpenSettings?.()}>
       Board Selector
