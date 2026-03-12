@@ -1,19 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "convex/react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { Id } from "../convex/_generated/dataModel";
-import { api } from "../convex/_generated/api";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { AgentSidebar } from "@/components/AgentSidebar";
-import { ActivityFeedPanel } from "@/components/ActivityFeedPanel";
+import { AgentSidebar } from "@/features/agents/components/AgentSidebar";
+import { ActivityFeedPanel } from "@/features/activity/components/ActivityFeedPanel";
 import { TaskInput } from "@/features/tasks/components/TaskInput";
 import { KanbanBoard } from "@/features/boards/components/KanbanBoard";
-import { TerminalBoard } from "@/components/TerminalBoard";
+import { TerminalBoard } from "@/features/terminal/components/TerminalBoard";
 import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
 import {
   Sheet,
@@ -35,19 +33,29 @@ import {
   useGatewaySleepRuntime,
   useGatewaySleepCountdown,
 } from "@/hooks/useGatewaySleepRuntime";
+import { useGatewaySleepModeRequest } from "@/features/settings/hooks/useGatewaySleepModeRequest";
 
 function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const mediaQueryList = window.matchMedia(query);
+      mediaQueryList.addEventListener("change", onStoreChange);
+      return () => mediaQueryList.removeEventListener("change", onStoreChange);
+    },
+    [query],
+  );
 
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
-    setMatches(mql.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [query]);
+  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query]);
 
-  return matches;
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
+
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 }
 
 function DashboardContent({ isXl }: { isXl: boolean }) {
@@ -63,7 +71,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
   const { openTerminals, closeAllTerminals } = useBoard();
   const gatewaySleepRuntime = useGatewaySleepRuntime();
   const gatewaySleepCountdown = useGatewaySleepCountdown(gatewaySleepRuntime);
-  const requestGatewaySleepMode = useMutation(api.settings.requestGatewaySleepMode);
+  const requestGatewaySleepMode = useGatewaySleepModeRequest();
   const gatewaySleepLabel =
     gatewaySleepRuntime == null
       ? "Gateway unavailable"
@@ -208,14 +216,10 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
 
 export function DashboardLayout() {
   const isXl = useMediaQuery("(min-width: 1280px)");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const isHydrated = useHydrated();
 
   // Prevent flash of wrong layout during hydration
-  if (!mounted) {
+  if (!isHydrated) {
     return null;
   }
 

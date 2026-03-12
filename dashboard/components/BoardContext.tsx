@@ -8,9 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
+import { useBoardProviderData } from "@/features/boards/hooks/useBoardProviderData";
 
 const LOCAL_STORAGE_KEY = "nanobot-active-board";
 
@@ -49,8 +48,7 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
   const [openTerminals, setOpenTerminals] = useState<TerminalEntry[]>([]);
 
   const mountedRef = useRef(false);
-  const boards = useQuery(api.boards.list);
-  const defaultBoard = useQuery(api.boards.getDefault);
+  const { boards, defaultBoard } = useBoardProviderData();
 
   useEffect(() => {
     mountedRef.current = true;

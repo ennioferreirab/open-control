@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import type {
+  MentionNavigation,
+  MentionTextareaElement,
+} from "@/features/thread/lib/mentionNavigation";
 
 export interface MentionAgent {
   name: string;
@@ -26,8 +30,13 @@ export function AgentMentionAutocomplete({
   anchorRef,
   inline = false,
 }: AgentMentionAutocompleteProps) {
-  const [focusedIndex, setFocusedIndex] = useState(0);
+  const [focusState, setFocusState] = useState({ index: 0, query });
   const listRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{
+    isAbove: boolean;
+    left: number;
+    top: number;
+  } | null>(null);
 
   const filtered = agents.filter((a) => {
     const q = query.toLowerCase();
@@ -37,10 +46,7 @@ export function AgentMentionAutocomplete({
     );
   });
 
-  // Reset focused index when query changes
-  useEffect(() => {
-    setFocusedIndex(0);
-  }, [query]);
+  const focusedIndex = focusState.query === query ? focusState.index : 0;
 
   // Scroll focused item into view
   useEffect(() => {
@@ -52,13 +58,19 @@ export function AgentMentionAutocomplete({
 
   const navigateDown = useCallback(() => {
     if (filtered.length === 0) return;
-    setFocusedIndex((prev) => (prev + 1) % filtered.length);
-  }, [filtered.length]);
+    setFocusState((prev) => ({
+      index: ((prev.query === query ? prev.index : 0) + 1) % filtered.length,
+      query,
+    }));
+  }, [filtered.length, query]);
 
   const navigateUp = useCallback(() => {
     if (filtered.length === 0) return;
-    setFocusedIndex((prev) => (prev - 1 + filtered.length) % filtered.length);
-  }, [filtered.length]);
+    setFocusState((prev) => ({
+      index: ((prev.query === query ? prev.index : 0) - 1 + filtered.length) % filtered.length,
+      query,
+    }));
+  }, [filtered.length, query]);
 
   const selectFocused = useCallback((): boolean => {
     if (filtered.length > 0 && focusedIndex < filtered.length) {
@@ -71,17 +83,23 @@ export function AgentMentionAutocomplete({
   // Expose navigation methods via a stable ref on the DOM element
   // ThreadInput reads these via anchorRef.current.__mentionNav
   useEffect(() => {
-    const el = anchorRef.current;
+    const el = anchorRef.current as MentionTextareaElement | null;
     if (!el) return;
-    (el as any).__mentionNav = { navigateDown, navigateUp, selectFocused, close: onClose };
+
+    const mentionNavigation: MentionNavigation = {
+      close: onClose,
+      navigateDown,
+      navigateUp,
+      selectFocused,
+    };
+
+    el.__mentionNav = mentionNavigation;
     return () => {
-      if (el) (el as any).__mentionNav = undefined;
+      el.__mentionNav = undefined;
     };
   }, [anchorRef, navigateDown, navigateUp, selectFocused, onClose]);
 
   // Compute position relative to the textarea (portal mode only)
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
-
   useEffect(() => {
     if (inline) return;
     const el = anchorRef.current;
@@ -91,9 +109,9 @@ export function AgentMentionAutocomplete({
     const dropdownHeight = 200;
 
     if (spaceAbove > dropdownHeight) {
-      setPosition({ top: rect.top - 4, left: rect.left });
+      setPosition({ isAbove: true, top: rect.top - 4, left: rect.left });
     } else {
-      setPosition({ top: rect.bottom + 4, left: rect.left });
+      setPosition({ isAbove: false, top: rect.bottom + 4, left: rect.left });
     }
   }, [anchorRef, query, inline]);
 
@@ -111,7 +129,7 @@ export function AgentMentionAutocomplete({
           e.preventDefault();
           onSelect(agent.name);
         }}
-        onMouseEnter={() => setFocusedIndex(i)}
+        onMouseEnter={() => setFocusState({ index: i, query })}
       >
         <span>{agent.displayName || agent.name}</span>
         {agent.role && (
@@ -136,13 +154,16 @@ export function AgentMentionAutocomplete({
 
   // Portal mode: fixed positioning
   if (!position) return null;
-  const isAbove = position.top < (anchorRef.current?.getBoundingClientRect().top ?? 0);
 
   const dropdown = (
     <div
       data-testid="mention-autocomplete"
       className="fixed bg-popover text-popover-foreground border border-border rounded-md shadow-md z-[100] w-[240px] max-h-[200px] overflow-y-auto animate-in fade-in-0 zoom-in-95"
-      style={{ top: position.top, left: position.left, ...(isAbove ? { transform: "translateY(-100%)" } : {}) }}
+      style={{
+        top: position.top,
+        left: position.left,
+        ...(position.isAbove ? { transform: "translateY(-100%)" } : {}),
+      }}
       ref={listRef}
     >
       {listContent}

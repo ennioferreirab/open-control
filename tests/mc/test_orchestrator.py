@@ -133,7 +133,7 @@ class TestProcessPlanningTask:
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
-            await orchestrator._process_planning_task(task)
+            await orchestrator._planning_worker.process_task(task)
 
         bridge.create_task_directory.assert_called_once_with("task-1")
         bridge.update_execution_plan.assert_called_once_with(
@@ -186,7 +186,7 @@ class TestProcessPlanningTask:
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
-            await orchestrator._process_planning_task(task)
+            await orchestrator._planning_worker.process_task(task)
 
         bridge.update_execution_plan.assert_called_once_with(
             "task-supervised", plan.to_dict()
@@ -211,7 +211,7 @@ class TestProcessPlanningTask:
             planner.plan_task = AsyncMock(
                 side_effect=RuntimeError("planner exploded")
             )
-            await orchestrator._process_planning_task(task)
+            await orchestrator._planning_worker.process_task(task)
 
         bridge.update_execution_plan.assert_not_called()
         bridge.update_task_status.assert_called_once()
@@ -292,7 +292,7 @@ class TestProcessPlanningTask:
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(side_effect=_capture_plan_task)
-            await orchestrator._process_planning_task(task)
+            await orchestrator._planning_worker.process_task(task)
 
         # Verify planner.plan_task was called with the task's files
         planner.plan_task.assert_called_once()
@@ -357,7 +357,7 @@ class TestProcessPlanningTask:
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
-            await orchestrator._process_planning_task(task)
+            await orchestrator._planning_worker.process_task(task)
 
         call_kwargs = planner.plan_task.call_args[1]
         assert call_kwargs["reasoning_level"] == "low"
@@ -393,7 +393,7 @@ class TestHandleReviewTransitionPausedTask:
         }
 
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
-            await orchestrator._handle_review_transition("task-1", paused_task)
+            await orchestrator._review_worker.handle_review_transition("task-1", paused_task)
 
         # Task must NOT be auto-completed to done
         bridge.update_task_status.assert_not_called()
@@ -416,7 +416,7 @@ class TestHandleReviewTransitionPausedTask:
         }
 
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
-            await orchestrator._handle_review_transition("task-1", review_task)
+            await orchestrator._review_worker.handle_review_transition("task-1", review_task)
 
         # Task now stays in review until an explicit approval event arrives.
         bridge.update_task_status.assert_not_called()

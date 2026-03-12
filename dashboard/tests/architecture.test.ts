@@ -144,6 +144,9 @@ describe("Architecture: feature shell exists for staged modularization", () => {
   it("tasks feature entry points exist in the feature-owned structure", () => {
     const requiredFiles = [
       "features/tasks/components/TaskDetailSheet.tsx",
+      "features/tasks/components/TaskDetailThreadTab.tsx",
+      "features/tasks/components/TaskDetailConfigTab.tsx",
+      "features/tasks/components/TaskDetailFilesTab.tsx",
       "features/tasks/components/TaskInput.tsx",
       "features/tasks/components/ExecutionPlanTab.tsx",
       "features/tasks/components/TaskCard.tsx",
@@ -151,6 +154,7 @@ describe("Architecture: feature shell exists for staged modularization", () => {
       "features/tasks/hooks/useTaskDetailView.ts",
       "features/tasks/hooks/useTaskDetailActions.ts",
       "features/tasks/hooks/useTaskInputData.ts",
+      "features/tasks/hooks/usePlanEditorState.ts",
     ];
 
     for (const relativePath of requiredFiles) {
@@ -180,13 +184,16 @@ describe("Architecture: feature shell exists for staged modularization", () => {
 
   it("agents and settings feature entry points exist in the feature-owned structure", () => {
     const requiredFiles = [
+      "features/agents/components/AgentSidebar.tsx",
       "features/agents/components/AgentConfigSheet.tsx",
       "features/agents/components/AgentSidebarItem.tsx",
       "features/agents/hooks/useAgentConfigSheetData.ts",
+      "features/agents/hooks/useAgentSidebarData.ts",
       "features/agents/hooks/useAgentSidebarItemState.ts",
       "features/settings/components/SettingsPanel.tsx",
       "features/settings/components/ModelTierSettings.tsx",
       "features/settings/components/TagsPanel.tsx",
+      "features/settings/hooks/useGatewaySleepModeRequest.ts",
       "features/settings/hooks/useTagsPanelData.ts",
     ];
 
@@ -202,9 +209,15 @@ describe("Architecture: feature shell exists for staged modularization", () => {
     const requiredFiles = [
       "features/thread/components/ThreadInput.tsx",
       "features/thread/components/ThreadMessage.tsx",
+      "features/thread/lib/mentionNavigation.ts",
       "features/activity/components/ActivityFeed.tsx",
+      "features/activity/components/ActivityFeedPanel.tsx",
       "features/activity/hooks/useActivityFeed.ts",
+      "features/activity/hooks/useActivityFeedPanelState.ts",
       "features/thread/hooks/useThreadInputController.ts",
+      "features/terminal/components/TerminalBoard.tsx",
+      "features/terminal/hooks/useTerminalBoard.ts",
+      "features/boards/hooks/useBoardProviderData.ts",
     ];
 
     for (const relativePath of requiredFiles) {
@@ -238,13 +251,28 @@ describe("Architecture: root wrapper cleanup stays converged", () => {
   it("DashboardLayout imports canonical feature entry points directly", () => {
     const content = readFileIfExists(path.join(DASHBOARD_ROOT, "components", "DashboardLayout.tsx"));
     expect(content).not.toBeNull();
+    expect(content).toContain(`from "@/features/agents/components/AgentSidebar"`);
+    expect(content).toContain(`from "@/features/activity/components/ActivityFeedPanel"`);
     expect(content).toContain(`from "@/features/tasks/components/TaskInput"`);
     expect(content).toContain(`from "@/features/boards/components/KanbanBoard"`);
+    expect(content).toContain(`from "@/features/terminal/components/TerminalBoard"`);
     expect(content).toContain(`from "@/features/tasks/components/TaskDetailSheet"`);
     expect(content).toContain(`from "@/features/settings/components/SettingsPanel"`);
     expect(content).toContain(`from "@/features/settings/components/TagsPanel"`);
     expect(content).toContain(`from "@/features/boards/components/BoardSettingsSheet"`);
     expect(content).toContain(`from "@/features/search/components/SearchBar"`);
+    expect(content).toContain(`from "@/features/settings/hooks/useGatewaySleepModeRequest"`);
+    expect(content).not.toContain(`from "@/components/AgentSidebar"`);
+    expect(content).not.toContain(`from "@/components/ActivityFeedPanel"`);
+    expect(content).not.toContain(`from "@/components/TerminalBoard"`);
+    expect(content).not.toContain(`from "convex/react"`);
+  });
+
+  it("BoardContext consumes board provider data via a feature hook", () => {
+    const content = readFileIfExists(path.join(DASHBOARD_ROOT, "components", "BoardContext.tsx"));
+    expect(content).not.toBeNull();
+    expect(content).toContain(`from "@/features/boards/hooks/useBoardProviderData"`);
+    expect(content).not.toContain(`from "convex/react"`);
   });
 });
 
@@ -263,6 +291,35 @@ describe("Architecture: story 22.4 hotspot seams exist", () => {
         `${relativePath} should exist as an internal owner extracted from convex/tasks.ts`,
       ).toBe(true);
     }
+  });
+});
+
+describe("Architecture: task detail remains decomposed by tab ownership", () => {
+  it("TaskDetailSheet delegates heavy tabs to extracted task-detail subcomponents", () => {
+    const taskDetailSheetPath = path.join(
+      DASHBOARD_ROOT,
+      "features",
+      "tasks",
+      "components",
+      "TaskDetailSheet.tsx",
+    );
+    const content = readFileIfExists(taskDetailSheetPath);
+    expect(content).not.toBeNull();
+
+    expect(content).toContain(`from "@/features/tasks/components/TaskDetailThreadTab"`);
+    expect(content).toContain(`from "@/features/tasks/components/TaskDetailConfigTab"`);
+    expect(content).toContain(`from "@/features/tasks/components/TaskDetailFilesTab"`);
+  });
+});
+
+describe("Architecture: thread mention navigation uses a typed local contract", () => {
+  it("AgentMentionAutocomplete depends on the feature-local mention navigation types", () => {
+    const content = readFileIfExists(
+      path.join(DASHBOARD_ROOT, "components", "AgentMentionAutocomplete.tsx"),
+    );
+    expect(content).not.toBeNull();
+    expect(content).toContain(`from "@/features/thread/lib/mentionNavigation"`);
+    expect(content).not.toContain(`as any).__mentionNav`);
   });
 });
 

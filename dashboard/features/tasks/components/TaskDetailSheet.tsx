@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, Fragment } from "react";
-import * as motion from "motion/react-client";
 import { useReducedMotion } from "motion/react";
 import { Id } from "@/convex/_generated/dataModel";
 import {
@@ -15,64 +14,29 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  File,
-  FileCode,
-  FileText,
-  Image,
   Loader2,
-  Paperclip,
   Pause,
   Pencil,
   Play,
-  Plus,
   Trash2,
-  X,
 } from "lucide-react";
-import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
 import {
   ExecutionPlanTab,
   type ExecutionPlanViewMode,
 } from "@/features/tasks/components/ExecutionPlanTab";
 import { TAG_COLORS } from "@/lib/constants";
+import { TaskDetailThreadTab } from "@/features/tasks/components/TaskDetailThreadTab";
+import { TaskDetailConfigTab } from "@/features/tasks/components/TaskDetailConfigTab";
+import { TaskDetailFilesTab } from "@/features/tasks/components/TaskDetailFilesTab";
 import { InlineRejection } from "@/components/InlineRejection";
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
-import { ThreadInput } from "@/features/thread/components/ThreadInput";
-import { TagAttributeEditor } from "@/components/TagAttributeEditor";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
 import type { ExecutionPlan } from "@/lib/types";
-
-const formatSize = (bytes: number) =>
-  bytes < 1024 * 1024
-    ? `${(bytes / 1024).toFixed(0)} KB`
-    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-
-const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
-const CODE_EXTS = new Set([".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".sh"]);
-function FileIcon({ name }: { name: string }) {
-  const dotIdx = name.lastIndexOf(".");
-  const ext = dotIdx > 0 ? name.slice(dotIdx).toLowerCase() : "";
-  if (ext === ".pdf")
-    return (
-      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="PDF file" />
-    );
-  if (IMAGE_EXTS.has(ext))
-    return (
-      <Image className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Image file" />
-    );
-  if (CODE_EXTS.has(ext))
-    return (
-      <FileCode className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Code file" />
-    );
-  return <File className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Generic file" />;
-}
 
 function buildMergeAliasDisplay(
   mergeSources:
@@ -1017,107 +981,22 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent
-                value="thread"
-                className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
-              >
-                <ScrollArea className="flex-1">
-                  {messages === undefined ? (
-                    <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      Loading messages...
-                    </p>
-                  ) : messages.length === 0 && !hasSourceThreads ? (
-                    <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      No messages yet. Agent activity will appear here.
-                    </p>
-                  ) : (
-                    <>
-                      {hasSourceThreads && (
-                        <div
-                          data-testid="merged-source-threads-sticky"
-                          className="sticky top-0 z-10 border-b border-border bg-background px-6 py-4"
-                        >
-                          <div className="mx-auto w-full min-w-0 max-w-5xl">
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                Merged threads
-                              </p>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => setIsMergedSourceGroupCollapsed((current) => !current)}
-                              >
-                                {isMergedSourceGroupCollapsed ? "Expand" : "Collapse"}
-                              </Button>
-                            </div>
-                            {!isMergedSourceGroupCollapsed && (
-                              <div className="mt-2 flex min-w-0 flex-col gap-2">
-                                {(mergeSourceThreads ?? []).map((sourceThread) => (
-                                  <details
-                                    key={sourceThread.taskId}
-                                    className="min-w-0 rounded-md border border-border bg-muted/20"
-                                  >
-                                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-foreground">
-                                      Thread {sourceThread.label}
-                                    </summary>
-                                    <div className="flex min-w-0 flex-col gap-2 px-3 pb-3">
-                                      {sourceThread.messages.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground">
-                                          No messages in source thread.
-                                        </p>
-                                      ) : (
-                                        sourceThread.messages.map((msg) => (
-                                          <ThreadMessage
-                                            key={msg._id}
-                                            message={msg}
-                                            steps={undefined}
-                                            onArtifactClick={handleOpenArtifact}
-                                            taskIdOverride={sourceThread.taskId}
-                                          />
-                                        ))
-                                      )}
-                                    </div>
-                                  </details>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      <div
-                        data-testid="thread-live-messages"
-                        className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-2 px-6 py-4"
-                      >
-                        {messages.length === 0 && (
-                          <p className="py-8 text-center text-sm text-muted-foreground">
-                            No messages yet. Agent activity will appear here.
-                          </p>
-                        )}
-                        {messages.map((msg) => (
-                          <motion.div
-                            key={msg._id}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.2 }}
-                          >
-                            <ThreadMessage
-                              message={msg}
-                              steps={liveSteps ?? undefined}
-                              onArtifactClick={handleOpenArtifact}
-                            />
-                          </motion.div>
-                        ))}
-                        <div ref={threadEndRef} />
-                      </div>
-                    </>
-                  )}
-                </ScrollArea>
-                {task && !isMergeLockedSource && (
-                  <ThreadInput task={task} onMessageSent={scrollToBottom} />
-                )}
-              </TabsContent>
+              <TaskDetailThreadTab
+                messages={messages}
+                hasSourceThreads={hasSourceThreads}
+                mergeSourceThreads={mergeSourceThreads}
+                isMergedSourceGroupCollapsed={isMergedSourceGroupCollapsed}
+                onToggleMergedSourceGroup={() =>
+                  setIsMergedSourceGroupCollapsed((current) => !current)
+                }
+                handleOpenArtifact={handleOpenArtifact}
+                liveSteps={liveSteps}
+                threadEndRef={threadEndRef}
+                shouldReduceMotion={shouldReduceMotion}
+                task={task}
+                isMergeLockedSource={isMergeLockedSource}
+                onMessageSent={scrollToBottom}
+              />
 
               <TabsContent
                 value="plan"
@@ -1171,550 +1050,56 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 </div>
               </TabsContent>
 
-              <TabsContent
-                value="config"
-                className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
-              >
-                <ScrollArea className="flex-1 px-6 py-4">
-                  <div className="space-y-4">
-                    {task?.isMergeTask ? (
-                      <div className="space-y-4 rounded-md border border-border p-3">
-                        <div>
-                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            Merge Sources
-                          </h4>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Manage direct source tasks for this merged task. Source labels are
-                            recalculated automatically after changes.
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          {(directMergeSources ?? []).map((source) => (
-                            <div
-                              key={source.taskId}
-                              className="flex items-center gap-2 text-sm text-foreground"
-                            >
-                              <span className="flex-1 min-w-0">
-                                {source.label}: {source.taskTitle}
-                              </span>
-                              <button
-                                type="button"
-                                className="text-xs text-sky-700 underline underline-offset-2"
-                                onClick={() => onTaskOpen?.(source.taskId)}
-                                aria-label={`Open merge source ${source.label}`}
-                              >
-                                link
-                              </button>
-                              {canRemoveDirectSources && (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => void handleRemoveMergeSource(source.taskId)}
-                                  disabled={isRemovingMergeSource}
-                                  aria-label={`Remove merge source ${source.label}`}
-                                  className="h-7 px-2 text-destructive hover:text-destructive"
-                                >
-                                  {isRemovingMergeSource ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <X className="h-3.5 w-3.5" />
-                                  )}
-                                </Button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        {!canRemoveDirectSources && (
-                          <p className="text-xs text-muted-foreground">
-                            Merged tasks must keep at least 2 direct sources.
-                          </p>
-                        )}
-                        {removeMergeSourceError && (
-                          <p className="text-xs text-red-500">{removeMergeSourceError}</p>
-                        )}
-
-                        <Separator />
-
-                        <div className="space-y-2">
-                          <div>
-                            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                              Attach Another Task
-                            </h4>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Add another eligible task as a direct source of this merge.
-                            </p>
-                          </div>
-                          <Input
-                            value={mergeQuery}
-                            onChange={(event) => setMergeQuery(event.target.value)}
-                            placeholder="Search task to attach..."
-                            disabled={isAddingMergeSource}
-                          />
-                          <div className="max-h-40 overflow-auto rounded-md border border-border">
-                            {(mergeCandidates ?? []).length === 0 ? (
-                              <p className="px-3 py-2 text-xs text-muted-foreground">
-                                No tasks available to attach.
-                              </p>
-                            ) : (
-                              (mergeCandidates ?? []).map((candidate) => (
-                                <button
-                                  key={candidate._id}
-                                  type="button"
-                                  onClick={() => setSelectedMergeTaskId(candidate._id)}
-                                  className={`flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-muted/50 ${
-                                    selectedMergeTaskId === candidate._id ? "bg-muted" : ""
-                                  }`}
-                                  disabled={isAddingMergeSource}
-                                >
-                                  <span>{candidate.title}</span>
-                                  {candidate.description && (
-                                    <span className="text-xs text-muted-foreground">
-                                      {candidate.description}
-                                    </span>
-                                  )}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => void handleAddMergeSource()}
-                              disabled={!selectedMergeTaskId || isAddingMergeSource}
-                            >
-                              {isAddingMergeSource ? (
-                                <>
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  Attaching...
-                                </>
-                              ) : (
-                                <>
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Attach Task
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                          {addMergeSourceError && (
-                            <p className="text-xs text-red-500">{addMergeSourceError}</p>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 rounded-md border border-border p-3">
-                        <div>
-                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            Merge With Another Task
-                          </h4>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Create a new task C from this task and another source task. Then choose
-                            whether C should enter review with a generated plan or stay manual in
-                            review.
-                          </p>
-                        </div>
-                        <Input
-                          value={mergeQuery}
-                          onChange={(event) => setMergeQuery(event.target.value)}
-                          placeholder="Search task to merge..."
-                          disabled={isMergeLockedSource}
-                        />
-                        <div className="max-h-40 overflow-auto rounded-md border border-border">
-                          {(mergeCandidates ?? []).length === 0 ? (
-                            <p className="px-3 py-2 text-xs text-muted-foreground">
-                              No merge candidates found.
-                            </p>
-                          ) : (
-                            (mergeCandidates ?? []).map((candidate) => (
-                              <button
-                                key={candidate._id}
-                                type="button"
-                                onClick={() => setSelectedMergeTaskId(candidate._id)}
-                                className={`flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-muted/50 ${
-                                  selectedMergeTaskId === candidate._id ? "bg-muted" : ""
-                                }`}
-                                disabled={isMergeLockedSource}
-                              >
-                                <span>{candidate.title}</span>
-                                {candidate.description && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {candidate.description}
-                                  </span>
-                                )}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => void handleCreateMergeTask("plan")}
-                            disabled={
-                              !selectedMergeTaskId || isCreatingMergeTask || isMergeLockedSource
-                            }
-                          >
-                            {isCreatingMergeTask
-                              ? "Creating..."
-                              : "Generate Plan Then Send To Review"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void handleCreateMergeTask("manual")}
-                            disabled={
-                              !selectedMergeTaskId || isCreatingMergeTask || isMergeLockedSource
-                            }
-                          >
-                            {isCreatingMergeTask ? "Creating..." : "Create Manual Review Task"}
-                          </Button>
-                        </div>
-                        {createMergeTaskError && (
-                          <p className="text-xs text-red-500">{createMergeTaskError}</p>
-                        )}
-                      </div>
-                    )}
-                    <div>
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Trust Level
-                      </h4>
-                      <p className="text-sm text-foreground mt-1">
-                        {task!.trustLevel.replaceAll("_", " ")}
-                      </p>
-                    </div>
-                    {task!.reviewers && task!.reviewers.length > 0 && (
-                      <div>
-                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          Reviewers
-                        </h4>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {task!.reviewers.map((reviewer) => (
-                            <Badge key={reviewer} variant="secondary" className="text-xs">
-                              {reviewer}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {task!.taskTimeout != null && (
-                      <div>
-                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          Task Timeout
-                        </h4>
-                        <p className="text-sm text-foreground mt-1">{task!.taskTimeout}s</p>
-                      </div>
-                    )}
-                    {task!.interAgentTimeout != null && (
-                      <div>
-                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          Inter-Agent Timeout
-                        </h4>
-                        <p className="text-sm text-foreground mt-1">{task!.interAgentTimeout}s</p>
-                      </div>
-                    )}
-                    <div>
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Tags
-                      </h4>
-                      <div className="flex flex-wrap items-center gap-1 mt-1">
-                        {(task!.tags ?? []).map((tag) => {
-                          const colorKey = tagColorMap[tag];
-                          const color = colorKey ? TAG_COLORS[colorKey] : null;
-                          return (
-                            <span
-                              key={tag}
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
-                                color
-                                  ? `${color.bg} ${color.text}`
-                                  : "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              {color && (
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`}
-                                />
-                              )}
-                              {tag}
-                              {!isMergeLockedSource && (
-                                <button
-                                  onClick={() => handleRemoveTag(tag)}
-                                  className="ml-0.5 rounded-full hover:bg-black/10 p-0.5 transition-colors"
-                                  aria-label={`Remove tag ${tag}`}
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              )}
-                            </span>
-                          );
-                        })}
-                        {!isMergeLockedSource && (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                className="inline-flex items-center justify-center h-6 w-6 rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
-                                aria-label="Add tag"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-48 p-2" align="start">
-                              {tagsList === undefined ? (
-                                <p className="text-xs text-muted-foreground p-2">Loading...</p>
-                              ) : tagsList.length === 0 ? (
-                                <p className="text-xs text-muted-foreground p-2">
-                                  No tags defined. Open the Tags panel to create some.
-                                </p>
-                              ) : (
-                                <div className="flex flex-col gap-0.5">
-                                  {tagsList.map((catalogTag) => {
-                                    const isAssigned = (task!.tags ?? []).includes(catalogTag.name);
-                                    const color = TAG_COLORS[catalogTag.color];
-                                    return (
-                                      <button
-                                        key={catalogTag._id}
-                                        className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs text-left transition-colors ${
-                                          isAssigned
-                                            ? "opacity-50 cursor-default"
-                                            : "hover:bg-muted cursor-pointer"
-                                        }`}
-                                        onClick={() => !isAssigned && handleAddTag(catalogTag.name)}
-                                        disabled={isAssigned}
-                                      >
-                                        {color && (
-                                          <span
-                                            className={`w-2 h-2 rounded-full ${color.dot} flex-shrink-0`}
-                                          />
-                                        )}
-                                        <span className="flex-1">{catalogTag.name}</span>
-                                        {isAssigned && (
-                                          <span className="text-muted-foreground text-[10px]">
-                                            Added
-                                          </span>
-                                        )}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </PopoverContent>
-                          </Popover>
-                        )}
-                      </div>
-
-                      {/* Tag Attributes (expandable per tag) */}
-                      {tagAttributesList &&
-                        tagAttributesList.length > 0 &&
-                        (task!.tags ?? []).length > 0 && (
-                          <div className="mt-3 space-y-1">
-                            {(task!.tags ?? []).map((tag) => {
-                              const isExpanded = expandedTags.has(tag);
-                              const toggleExpand = () => {
-                                setExpandedTags((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(tag)) next.delete(tag);
-                                  else next.add(tag);
-                                  return next;
-                                });
-                              };
-                              const colorKey = tagColorMap[tag];
-                              const color = colorKey ? TAG_COLORS[colorKey] : null;
-
-                              return (
-                                <div
-                                  key={`attrs-${tag}`}
-                                  className="rounded-md border border-border"
-                                >
-                                  <button
-                                    onClick={toggleExpand}
-                                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors rounded-md"
-                                  >
-                                    {isExpanded ? (
-                                      <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                    ) : (
-                                      <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                    )}
-                                    {color && (
-                                      <span
-                                        className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`}
-                                      />
-                                    )}
-                                    <span className="font-medium">{tag}</span>
-                                    <span className="text-muted-foreground">attributes</span>
-                                  </button>
-                                  {isExpanded && (
-                                    <div className="px-3 pb-2 space-y-1.5">
-                                      {tagAttributesList.map((attr) => {
-                                        const val = tagAttrValues?.find(
-                                          (v) => v.tagName === tag && v.attributeId === attr._id,
-                                        );
-                                        return (
-                                          <TagAttributeEditor
-                                            key={`${tag}-${attr._id}`}
-                                            taskId={task!._id}
-                                            tagName={tag}
-                                            attribute={attr}
-                                            currentValue={val?.value ?? ""}
-                                          />
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                    </div>
-                  </div>
-                </ScrollArea>
-              </TabsContent>
-              <TabsContent
-                value="files"
-                className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
-              >
-                <ScrollArea className="flex-1 px-6 py-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <input
-                      type="file"
-                      multiple
-                      ref={attachInputRef}
-                      onChange={handleAttachFiles}
-                      className="hidden"
-                    />
-                    {!isMergeLockedSource && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => attachInputRef.current?.click()}
-                        disabled={isUploading}
-                        data-testid="attach-file-button"
-                      >
-                        <Paperclip className="h-3.5 w-3.5 mr-1.5" />
-                        {isUploading ? "Uploading..." : "Attach File"}
-                      </Button>
-                    )}
-                    {uploadError && (
-                      <p className="text-xs text-red-500" data-testid="upload-error">
-                        {uploadError}
-                      </p>
-                    )}
-                  </div>
-                  {deleteError && (
-                    <p className="text-xs text-red-500 mb-3" data-testid="delete-error">
-                      {deleteError}
-                    </p>
-                  )}
-
-                  {(() => {
-                    const allFiles = displayFiles;
-                    const attachments = allFiles.filter((f) => f.subfolder === "attachments");
-                    const outputs = allFiles.filter((f) => f.subfolder === "output");
-
-                    if (allFiles.length === 0) {
-                      return (
-                        <p
-                          className="text-sm text-muted-foreground py-8 text-center"
-                          data-testid="files-empty-placeholder"
-                        >
-                          No files yet. Attach files or wait for agent output.
-                        </p>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-6">
-                        {/* ATTACHMENTS */}
-                        <div>
-                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                            Attachments
-                          </h4>
-                          {attachments.length === 0 ? (
-                            <p className="text-sm text-muted-foreground py-2">
-                              No attachments yet.
-                            </p>
-                          ) : (
-                            <div className="flex flex-col gap-1">
-                              {attachments.map((file) => {
-                                const key = getDisplayFileKey(file);
-                                const isDeleting = deletingFiles.has(key);
-                                return (
-                                  <div
-                                    key={key}
-                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 animate-in fade-in duration-300 group transition-opacity ${isDeleting ? "opacity-40 pointer-events-none" : ""}`}
-                                    onClick={() => setViewerFile(file)}
-                                  >
-                                    <FileIcon name={file.name} />
-                                    <span className="flex-1 min-w-0 text-sm truncate">
-                                      {file.name}
-                                    </span>
-                                    {file.sourceLabel && (
-                                      <Badge variant="secondary" className="text-[10px]">
-                                        {file.sourceLabel}
-                                      </Badge>
-                                    )}
-                                    <span className="text-xs text-muted-foreground flex-shrink-0">
-                                      {formatSize(file.size)}
-                                    </span>
-                                    {!file.sourceTaskId && !isMergeLockedSource && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteFile(file);
-                                        }}
-                                        disabled={isDeleting}
-                                        className={`flex-shrink-0 transition-opacity text-muted-foreground hover:text-destructive ${isDeleting ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                                        aria-label="Delete attachment"
-                                      >
-                                        {isDeleting ? (
-                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        ) : (
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        )}
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* OUTPUTS */}
-                        <div>
-                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                            Outputs
-                          </h4>
-                          {outputs.length === 0 ? (
-                            <p className="text-sm text-muted-foreground py-2">No outputs yet.</p>
-                          ) : (
-                            <div className="flex flex-col gap-1">
-                              {outputs.map((file) => (
-                                <div
-                                  key={getDisplayFileKey(file)}
-                                  className="flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 animate-in fade-in duration-300"
-                                  onClick={() => setViewerFile(file)}
-                                >
-                                  <FileIcon name={file.name} />
-                                  <span className="flex-1 min-w-0 text-sm truncate">
-                                    {file.name}
-                                  </span>
-                                  {file.sourceLabel && (
-                                    <Badge variant="secondary" className="text-[10px]">
-                                      {file.sourceLabel}
-                                    </Badge>
-                                  )}
-                                  <span className="text-xs text-muted-foreground flex-shrink-0">
-                                    {formatSize(file.size)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </ScrollArea>
-              </TabsContent>
+              {task && (
+                <TaskDetailConfigTab
+                  task={task}
+                  directMergeSources={directMergeSources}
+                  canRemoveDirectSources={canRemoveDirectSources}
+                  removeMergeSourceError={removeMergeSourceError}
+                  onTaskOpen={onTaskOpen}
+                  onRemoveMergeSource={handleRemoveMergeSource}
+                  isRemovingMergeSource={isRemovingMergeSource}
+                  mergeQuery={mergeQuery}
+                  onMergeQueryChange={setMergeQuery}
+                  isAddingMergeSource={isAddingMergeSource}
+                  mergeCandidates={mergeCandidates}
+                  selectedMergeTaskId={selectedMergeTaskId}
+                  onSelectedMergeTaskIdChange={setSelectedMergeTaskId}
+                  onAddMergeSource={handleAddMergeSource}
+                  addMergeSourceError={addMergeSourceError}
+                  isMergeLockedSource={isMergeLockedSource}
+                  onCreateMergeTask={handleCreateMergeTask}
+                  isCreatingMergeTask={isCreatingMergeTask}
+                  createMergeTaskError={createMergeTaskError}
+                  tagColorMap={tagColorMap}
+                  tagsList={tagsList}
+                  onAddTag={handleAddTag}
+                  onRemoveTag={handleRemoveTag}
+                  tagAttributesList={tagAttributesList}
+                  tagAttrValues={tagAttrValues}
+                  expandedTags={expandedTags}
+                  onToggleTagExpansion={(tag) => {
+                    setExpandedTags((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(tag)) next.delete(tag);
+                      else next.add(tag);
+                      return next;
+                    });
+                  }}
+                />
+              )}
+              <TaskDetailFilesTab
+                displayFiles={displayFiles}
+                attachInputRef={attachInputRef}
+                onAttachFiles={handleAttachFiles}
+                isMergeLockedSource={isMergeLockedSource}
+                isUploading={isUploading}
+                uploadError={uploadError}
+                deleteError={deleteError}
+                deletingFiles={deletingFiles}
+                onOpenFile={setViewerFile}
+                onDeleteFile={handleDeleteFile}
+              />
             </Tabs>
           </>
         ) : taskId ? (

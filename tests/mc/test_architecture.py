@@ -190,6 +190,20 @@ def test_runtime_gateway_has_no_toplevel_execution_cycle_imports() -> None:
     assert forbidden == [], forbidden
 
 
+def test_runtime_orchestrator_does_not_keep_transitional_worker_wrappers() -> None:
+    filepath = MC_ROOT / "runtime" / "orchestrator.py"
+    source = filepath.read_text(encoding="utf-8")
+
+    forbidden_defs = [
+        "async def _process_inbox_task",
+        "async def _process_planning_task",
+        "async def _handle_review_transition",
+    ]
+
+    for forbidden in forbidden_defs:
+        assert forbidden not in source, f"mc/runtime/orchestrator.py still defines {forbidden}"
+
+
 def test_execution_executor_does_not_import_runtime_gateway() -> None:
     filepath = MC_ROOT / "contexts" / "execution" / "executor.py"
     imports = _get_all_imports(filepath)
