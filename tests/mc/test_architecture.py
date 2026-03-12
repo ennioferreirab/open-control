@@ -33,6 +33,9 @@ HOTSPOT_SPLIT_FILES = {
     "mc/cli/lifecycle.py": MC_ROOT / "cli" / "lifecycle.py",
     "mc/cli/tasks.py": MC_ROOT / "cli" / "tasks.py",
     "mc/cli/schema_docs.py": MC_ROOT / "cli" / "schema_docs.py",
+    "mc/runtime/polling_settings.py": MC_ROOT / "runtime" / "polling_settings.py",
+    "mc/runtime/cron_delivery.py": MC_ROOT / "runtime" / "cron_delivery.py",
+    "mc/runtime/task_requeue.py": MC_ROOT / "runtime" / "task_requeue.py",
 }
 
 PROTECTED_DIRECTORIES = [
@@ -202,6 +205,23 @@ def test_runtime_orchestrator_does_not_keep_transitional_worker_wrappers() -> No
 
     for forbidden in forbidden_defs:
         assert forbidden not in source, f"mc/runtime/orchestrator.py still defines {forbidden}"
+
+
+def test_runtime_gateway_does_not_keep_extracted_runtime_helpers_inline() -> None:
+    filepath = MC_ROOT / "runtime" / "gateway.py"
+    source = filepath.read_text(encoding="utf-8")
+
+    forbidden_defs = [
+        "POLLING_DEFAULTS",
+        "POLLING_BOUNDS",
+        "def _read_polling_settings(",
+        "async def _send_telegram_direct(",
+        "async def _requeue_cron_task(",
+        "async def on_cron_job(",
+    ]
+
+    for forbidden in forbidden_defs:
+        assert forbidden not in source, f"mc/runtime/gateway.py still defines {forbidden}"
 
 
 def test_execution_executor_does_not_import_runtime_gateway() -> None:

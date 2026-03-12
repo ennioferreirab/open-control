@@ -54,7 +54,10 @@ from mc.infrastructure.config import (  # noqa: F401
     _resolve_convex_url,
     filter_agent_fields,
 )
+from mc.runtime.cron_delivery import build_on_task_completed_callback
 from mc.runtime.orchestrator import TaskOrchestrator
+from mc.runtime.polling_settings import _read_polling_settings
+from mc.runtime.task_requeue import on_cron_job
 from mc.runtime.timeout_checker import TimeoutChecker
 
 if TYPE_CHECKING:
@@ -62,65 +65,6 @@ if TYPE_CHECKING:
     from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Polling settings — read from Convex at startup with sane defaults
-# ---------------------------------------------------------------------------
-
-POLLING_DEFAULTS: dict[str, int] = {
-    "gateway_active_poll_seconds": 5,
-    "gateway_sleep_poll_seconds": 300,
-    "gateway_auto_sleep_seconds": 300,
-    "chat_active_poll_seconds": 5,
-    "chat_sleep_poll_seconds": 60,
-    "mention_poll_seconds": 10,
-    "timeout_check_seconds": 60,
-}
-
-POLLING_BOUNDS: dict[str, tuple[int, int]] = {
-    "gateway_active_poll_seconds": (1, 60),
-    "gateway_sleep_poll_seconds": (10, 3600),
-    "gateway_auto_sleep_seconds": (30, 3600),
-    "chat_active_poll_seconds": (1, 60),
-    "chat_sleep_poll_seconds": (5, 600),
-    "mention_poll_seconds": (1, 120),
-    "timeout_check_seconds": (10, 600),
-}
-
-
-def _read_polling_settings(bridge: "ConvexBridge") -> dict[str, int]:
-    """Read polling/sleep settings from Convex, falling back to defaults.
-
-    Uses a single ``settings:list`` query instead of per-key lookups.
-    Values are clamped to POLLING_BOUNDS to prevent misconfiguration.
-
-    Note: fetches the full settings table (~25 rows). If the table grows
-    significantly, consider a ``settings:getMultiple`` batch query.
-
-    IMPORTANT: Keep POLLING_DEFAULTS and POLLING_BOUNDS in sync with
-    dashboard/features/settings/polling-fields.ts (single source of truth
-    for the UI; Python applies the same bounds server-side).
-    """
-    store: dict[str, str] = {}
-    try:
-        all_settings = bridge.query("settings:list") or []
-        for s in all_settings:
-            store[s["key"]] = s["value"]
-    except Exception:
-        logger.warning("[gateway] Could not fetch settings — using polling defaults")
-        return dict(POLLING_DEFAULTS)
-
-    result: dict[str, int] = {}
-    for key, default in POLLING_DEFAULTS.items():
-        lo, hi = POLLING_BOUNDS[key]
-        try:
-            raw = store.get(key)
-            val = int(raw) if raw else default
-        except (ValueError, TypeError):
-            val = default
-        result[key] = max(lo, min(hi, val))
-    return result
-
 
 # ---------------------------------------------------------------------------
 # Plan negotiation manager
@@ -164,8 +108,6 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     """
     from nanobot.config.loader import load_config
     from nanobot.cron.service import CronService
-    from nanobot.cron.types import CronJob
-
     from mc.contexts.execution.executor import TaskExecutor
 
     logger.info("[gateway] Agent Gateway started")
@@ -179,196 +121,21 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
 
     # Lightweight delivery: dict tracks pending cron deliveries, callback sends after completion
     pending_deliveries: dict[str, tuple[str, str]] = {}  # task_id → (channel, to)
-
-    async def _send_telegram_direct(chat_id: str, content: str) -> None:
-        """Send message to Telegram without polling — direct Bot API call."""
-        from nanobot.channels.telegram import _markdown_to_telegram_html, _split_message
-        from telegram import Bot
-
-        if not chat_id.lstrip("-").isdigit():
-            logger.error(
-                "[gateway] Telegram delivery aborted — chat_id %r is not a numeric ID. "
-                "The cron job was likely created with deliver_to set to an MC agent name "
-                "instead of a Telegram chat ID. Update or recreate the cron job with the "
-                "correct numeric chat_id (e.g. '986097959').",
-                chat_id,
-            )
-            return
-        token = config.channels.telegram.token
-        if not token:
-            logger.warning("[gateway] No Telegram token — skipping delivery")
-            return
-        bot = Bot(token=token)
-        html = _markdown_to_telegram_html(content)
-        for chunk in _split_message(html):
-            await bot.send_message(chat_id=int(chat_id), text=chunk, parse_mode="HTML")
-
-    async def on_task_completed(task_id: str, result: str) -> None:
-        """Callback invoked by executor after agent completes — delivers result if pending."""
-        delivery = pending_deliveries.pop(task_id, None)
-        if not delivery:
-            return
-        if not result.strip():
-            logger.info(
-                "[gateway] Skipping delivery for task %s — empty result (task may have failed)",
-                task_id,
-            )
-            return
-        channel, to = delivery
-        try:
-            if channel == "telegram":
-                await _send_telegram_direct(to, result)
-                logger.info(
-                    "[gateway] Delivered cron result for task %s → telegram:%s",
-                    task_id,
-                    to,
-                )
-            else:
-                logger.warning("[gateway] Delivery to '%s' not supported", channel)
-        except Exception:
-            logger.exception("[gateway] Failed to deliver result for task %s", task_id)
+    on_task_completed = build_on_task_completed_callback(config, pending_deliveries)
 
     # Cron service — when a job fires, create a task in Convex (enters normal MC flow)
     cron_store_path = Path.home() / ".nanobot" / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
 
-    async def _requeue_cron_task(
-        b: "ConvexBridge",
-        cron_job_id: str,
-        task_id: str,
-        message: str,
-        agent: str | None = None,
-    ) -> str | None:
-        """Re-queue an existing task for cron execution.
-
-        Injects the cron trigger message into the task's thread so the agent
-        sees it as a new user turn, then resets status to 'assigned' so the
-        executor picks it up again. Skips if the task is already active.
-
-        Returns the task id that will run, or None if the task was skipped.
-        """
-        from mc.types import (
-            AuthorType,
-            MessageType,
-            is_lead_agent,
+    async def _handle_cron_job(job: Any) -> str | None:
+        return await on_cron_job(
+            bridge,
+            job,
+            pending_deliveries=pending_deliveries,
+            plan_negotiation_supervisor=_plan_negotiation_supervisor,
         )
 
-        try:
-            task = await asyncio.to_thread(b.query, "tasks:getById", {"task_id": task_id})
-        except Exception:
-            logger.warning(
-                "[gateway] Could not fetch cron origin task %s — creating new task instead",
-                task_id,
-            )
-            create_args: dict = {"title": message}
-            if agent:
-                create_args["assigned_agent"] = agent
-            create_args["active_cron_job_id"] = cron_job_id
-            return await asyncio.to_thread(b.mutation, "tasks:create", create_args)
-
-        if not task:
-            logger.warning(
-                "[gateway] Cron origin task %s not found — creating new task",
-                task_id,
-            )
-            create_args = {"title": message}
-            if agent:
-                create_args["assigned_agent"] = agent
-            create_args["active_cron_job_id"] = cron_job_id
-            return await asyncio.to_thread(b.mutation, "tasks:create", create_args)
-
-        current_status = task.get("status", "")
-        if current_status in ("in_progress", "assigned", "deleted"):
-            logger.info(
-                "[gateway] Cron origin task %s is '%s' — skipping re-queue",
-                task_id,
-                current_status,
-            )
-            return None
-
-        agent_name = agent or task.get("assigned_agent") or NANOBOT_AGENT_NAME
-        if is_lead_agent(agent_name):
-            logger.warning(
-                "[gateway] Cron task %s had lead-agent assignment; using %s "
-                "(pure orchestrator invariant)",
-                task_id,
-                NANOBOT_AGENT_NAME,
-            )
-            agent_name = NANOBOT_AGENT_NAME
-
-        # Inject cron trigger as a new user message so it appears in the thread
-        await asyncio.to_thread(
-            b.send_message,
-            task_id,
-            "Cron",
-            AuthorType.USER,
-            f"\U0001f514 Cron triggered: {message}",
-            MessageType.USER_MESSAGE,
-        )
-
-        # Reset task to 'assigned' — the executor will pick it up and run the agent
-        await asyncio.to_thread(
-            b.mutation,
-            "tasks:markActiveCronJob",
-            {"task_id": task_id, "cron_job_id": cron_job_id},
-        )
-
-        await asyncio.to_thread(
-            b.update_task_status,
-            task_id,
-            "assigned",
-            agent_name,
-            f"Cron re-queued task to {agent_name}",
-        )
-        if _plan_negotiation_supervisor is not None:
-            _plan_negotiation_supervisor.mark_cron_requeued(task_id)
-        logger.info("[gateway] Cron re-queued task %s → assigned to %s", task_id, agent_name)
-        return task_id
-
-    async def on_cron_job(job: CronJob) -> str | None:
-        """Re-queue the originating task (if linked) or create a new task when a cron job fires."""
-        logger.info("[gateway] Cron job '%s' fired", job.name)
-        task_id_for_delivery: str | None = None
-        try:
-            if job.payload.task_id:
-                task_id_for_delivery = await _requeue_cron_task(
-                    bridge,
-                    job.id,
-                    job.payload.task_id,
-                    job.payload.message,
-                    agent=job.payload.agent,
-                )
-            else:
-                # No linked task — create a new task (classic cron behavior)
-                create_args: dict = {"title": job.payload.message}
-                if job.payload.agent:
-                    create_args["assigned_agent"] = job.payload.agent
-                create_args["active_cron_job_id"] = job.id
-                new_id = await asyncio.to_thread(
-                    bridge.mutation,
-                    "tasks:create",
-                    create_args,
-                )
-                task_id_for_delivery = new_id
-        except Exception:
-            logger.exception("[gateway] Failed to handle cron job '%s'", job.name)
-
-        # Register pending delivery (executor will call on_task_completed after agent finishes)
-        if (
-            task_id_for_delivery
-            and job.payload.deliver
-            and job.payload.channel
-            and job.payload.to
-            and job.payload.channel != "mc"
-        ):
-            pending_deliveries[task_id_for_delivery] = (
-                job.payload.channel,
-                job.payload.to,
-            )
-
-        return task_id_for_delivery
-
-    cron.on_job = on_cron_job
+    cron.on_job = _handle_cron_job
     await cron.start()
     cron_status = cron.status()
     if cron_status["jobs"] > 0:

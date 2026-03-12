@@ -180,3 +180,10 @@ development_status:
   23-3-decouple-board-and-thread-shell-state-from-root-components: done
   23-4-trim-backend-runtime-compat-seams-left-from-convergence: done
   epic-23-retrospective: optional
+
+  # Epic 24: Final Gateway Salvage from architecture-convergence
+  # Rescues only the remaining useful runtime split from the old
+  # architecture-convergence worktree, then deletes that worktree.
+  epic-24: done
+  24-1-extract-final-runtime-seams-from-gateway-and-retire-convergence-worktree: done
+  epic-24-retrospective: optional

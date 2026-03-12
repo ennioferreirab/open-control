@@ -4,7 +4,7 @@
  * Single source of truth for key names, defaults, labels, and bounds.
  * Used by useSettingsPanelState (defaults) and SettingsPanel (UI fields).
  *
- * IMPORTANT: Keep in sync with mc/runtime/gateway.py POLLING_DEFAULTS and
+ * IMPORTANT: Keep in sync with mc/runtime/polling_settings.py POLLING_DEFAULTS and
  * POLLING_BOUNDS — the Python side reads these at gateway startup and
  * applies the same bounds server-side.
  */

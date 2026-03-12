@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from mc.runtime.gateway import POLLING_BOUNDS, POLLING_DEFAULTS, _read_polling_settings
+from mc.runtime.polling_settings import POLLING_BOUNDS, POLLING_DEFAULTS, _read_polling_settings
 
 
 def _make_bridge(overrides: dict[str, str] | None = None) -> MagicMock:
