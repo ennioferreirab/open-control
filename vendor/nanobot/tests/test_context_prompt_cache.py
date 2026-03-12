@@ -64,3 +64,15 @@ def test_runtime_context_is_separate_untrusted_user_message(tmp_path) -> None:
 
     assert messages[-1]["role"] == "user"
     assert messages[-1]["content"] == "Return exactly: OK"
+
+
+def test_system_prompt_includes_markdown_image_guidance(tmp_path) -> None:
+    """Global prompt should instruct agents to embed task images inline in Markdown."""
+    workspace = _make_workspace(tmp_path)
+    builder = ContextBuilder(workspace)
+
+    prompt = builder.build_system_prompt()
+
+    assert "When a Markdown report references images generated for the task" in prompt
+    assert "[![alt text](./image.png)](./image.png)" in prompt
+    assert "only reference image files that actually exist" in prompt

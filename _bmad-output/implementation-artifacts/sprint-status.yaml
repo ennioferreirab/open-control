@@ -146,3 +146,27 @@ development_status:
   20-4-semantic-hook-apis-and-test-decoupling: review
   20-5-decompose-process-monitor: review
   epic-20-retrospective: optional
+
+  # Epic 21: Architecture Convergence Migration
+  # Eliminates legacy ownership layers and compatibility wrappers so the
+  # documented backend/frontend architecture becomes the only architecture.
+  epic-21: in-progress
+  21-1-freeze-architecture-migration-baseline: ready-for-dev
+  21-2-make-conversation-own-ask-user-and-mentions: ready-for-dev
+  21-3-absorb-services-and-workers-into-canonical-owners: ready-for-dev
+  21-4-split-backend-runtime-and-execution-hotspots: ready-for-dev
+  21-5-migrate-dashboard-tasks-boards-and-thread-ownership: ready-for-dev
+  21-6-finish-dashboard-feature-ownership-migration: ready-for-dev
+  21-7-remove-final-compatibility-layers-and-run-full-regression: ready-for-dev
+  epic-21-retrospective: optional
+
+  # Epic 22: Architecture Cleanup and Decoupling in Root Repository
+  # Finishes the useful decoupling work still missing in the integrated root:
+  # removes backend compatibility roots, closes dashboard Convex boundaries,
+  # deletes ambiguous dashboard wrappers/hooks, and adds durable browser regression.
+  epic-22: in-progress
+  22-1-remove-backend-legacy-compatibility-packages: ready-for-dev
+  22-2-close-dashboard-feature-convex-boundaries: ready-for-dev
+  22-3-delete-dashboard-legacy-wrappers-and-root-feature-hooks: ready-for-dev
+  22-4-split-hotspots-and-add-versioned-functional-regression: ready-for-dev
+  epic-22-retrospective: optional
