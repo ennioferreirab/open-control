@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { POLLING_DEFAULTS } from "@/features/settings/polling-fields";
@@ -20,6 +20,7 @@ export interface SettingsPanelState {
   defaultEmbeddingModel: string;
   embeddingEnabled: boolean;
   embeddingInputValue: string;
+  globalOrientationPromptValue: string;
   getValue: (key: string) => string;
   handleEmbeddingInputChange: (value: string) => void;
   handleEmbeddingToggle: (checked: boolean) => Promise<void>;
@@ -32,6 +33,7 @@ export function useSettingsPanelState(): SettingsPanelState {
   const setSetting = useMutation(api.settings.set);
   const [savedFields, setSavedFields] = useState<Record<string, boolean>>({});
   const [embeddingDraft, setEmbeddingDraft] = useState<string | null>(null);
+  const [globalOrientationDefault, setGlobalOrientationDefault] = useState("");
 
   const settingsMap = useMemo(() => {
     const nextMap: Record<string, string> = {};
@@ -42,10 +44,43 @@ export function useSettingsPanelState(): SettingsPanelState {
   }, [allSettings]);
 
   const getValue = useCallback((key: string) => settingsMap[key] ?? DEFAULTS[key], [settingsMap]);
+  const hasSavedGlobalOrientation = useMemo(
+    () => Object.prototype.hasOwnProperty.call(settingsMap, "global_orientation_prompt"),
+    [settingsMap],
+  );
+  const globalOrientationPromptValue = hasSavedGlobalOrientation
+    ? (settingsMap["global_orientation_prompt"] ?? "")
+    : globalOrientationDefault;
 
   const embeddingModelValue = getValue("memory_embedding_model") ?? "";
   const embeddingEnabled = embeddingModelValue.trim().length > 0;
   const embeddingInputValue = embeddingDraft ?? (embeddingModelValue || DEFAULT_EMBEDDING_MODEL);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFallback() {
+      try {
+        const response = await fetch("/api/settings/global-orientation-default");
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as { prompt?: string };
+        if (!cancelled) {
+          setGlobalOrientationDefault(payload.prompt?.trim() ?? "");
+        }
+      } catch {
+        if (!cancelled) {
+          setGlobalOrientationDefault("");
+        }
+      }
+    }
+
+    void loadFallback();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const autoTitleHasLowTier = useMemo(() => {
     const tiersRaw = settingsMap["model_tiers"];
@@ -92,6 +127,7 @@ export function useSettingsPanelState(): SettingsPanelState {
     defaultEmbeddingModel: DEFAULT_EMBEDDING_MODEL,
     embeddingEnabled,
     embeddingInputValue,
+    globalOrientationPromptValue,
     getValue,
     handleEmbeddingInputChange,
     handleEmbeddingToggle,

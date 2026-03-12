@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { TaskCard } from "./TaskCard";
+import { TaskCard } from "@/features/tasks/components/TaskCard";
 
 // Mock motion/react-client to render plain divs
 vi.mock("motion/react-client", () => ({

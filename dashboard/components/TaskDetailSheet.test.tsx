@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { TaskDetailSheet } from "./TaskDetailSheet";
-import { ThreadMessage } from "./ThreadMessage";
+import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
+import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 // Mock convex/react
@@ -39,7 +39,7 @@ vi.mock("./DocumentViewerModal", () => ({
 }));
 
 // Mock ExecutionPlanTab to prevent it from calling useQuery internally
-vi.mock("./ExecutionPlanTab", () => ({
+vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
   ExecutionPlanTab: ({
     executionPlan,
     isEditMode,
@@ -448,7 +448,7 @@ describe("TaskDetailSheet", () => {
     expect(screen.getByText("source-b.md")).toBeInTheDocument();
     expect(screen.getAllByText("A").length).toBeGreaterThan(0);
     expect(screen.getAllByText("B").length).toBeGreaterThan(0);
-  });
+  }, 10000);
 
   it("opens merged source artifacts using the source thread task id", async () => {
     const user = userEvent.setup();
@@ -1063,6 +1063,7 @@ describe("TaskDetailSheet", () => {
   });
 
   it("offers plan and manual merge actions in config", async () => {
+    const user = userEvent.setup();
     const mutate = vi.fn().mockResolvedValue("task-c");
     mockMutationFn.mockImplementation(mutate);
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
@@ -1086,16 +1087,17 @@ describe("TaskDetailSheet", () => {
 
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
-    await userEvent.click(screen.getByRole("tab", { name: /Config/i }));
-    await userEvent.click(screen.getByText("Merge target"));
+    await user.click(screen.getByRole("tab", { name: /Config/i }));
+    expect(screen.getByPlaceholderText("Search task to merge...")).toBeInTheDocument();
+    await user.click(screen.getByText("Merge target"));
+    await user.click(screen.getByRole("button", { name: /Generate Plan Then Send To Review/i }));
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /Generate Plan Then Send To Review/i }),
-    );
-    expect(mutate).toHaveBeenCalledWith({
-      primaryTaskId: "task1",
-      secondaryTaskId: "task-merge-target",
-      mode: "plan",
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith({
+        primaryTaskId: "task1",
+        secondaryTaskId: "task-merge-target",
+        mode: "plan",
+      });
     });
   });
 

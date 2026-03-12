@@ -147,3 +147,8 @@ class AgentGateway:
     def get_retry_count(self, task_id: str) -> int:
         """Return current retry count for a task."""
         return self._retry_counts.get(task_id, 0)
+
+
+CrashRecoveryService = AgentGateway
+
+__all__ = ["AgentGateway", "CrashRecoveryService", "MAX_AUTO_RETRIES"]

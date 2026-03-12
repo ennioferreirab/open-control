@@ -55,6 +55,12 @@ def _make_workspace(tmp_path: Path) -> WorkspaceContext:
     )
 
 
+def _write_nanobot_config(home: Path, data: dict) -> None:
+    config_path = home / ".nanobot" / "config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+
+
 class _FakeDefaults:
     """Minimal stand-in for ClaudeCodeConfig."""
     default_model = "claude-sonnet-4-6"
@@ -710,6 +716,41 @@ class TestExecuteTask:
         cmd = list(call_args)
         idx = cmd.index("--resume")
         assert cmd[idx + 1] == "sess-resume"
+
+    @pytest.mark.asyncio
+    async def test_execute_task_passes_resolved_secret_env_to_subprocess(
+        self, tmp_path, monkeypatch
+    ):
+        """Subprocess env includes API keys resolved from env/config."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("OPENAI_API_KEY", "openai-from-env")
+        _write_nanobot_config(
+            tmp_path,
+            {
+                "providers": {
+                    "anthropic": {"apiKey": "anthropic-from-config"},
+                    "openai": {"apiKey": "openai-from-config"},
+                },
+                "tools": {
+                    "web": {
+                        "search": {"apiKey": "brave-from-config"},
+                    }
+                },
+            },
+        )
+        proc = self._make_mock_proc([])
+
+        provider = ClaudeCodeProvider()
+        agent = _make_agent()
+        ctx = _make_workspace(tmp_path)
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
+            await provider.execute_task("x", agent, "task-env", ctx)
+
+        env = mock_exec.call_args.kwargs["env"]
+        assert env["ANTHROPIC_API_KEY"] == "anthropic-from-config"
+        assert env["OPENAI_API_KEY"] == "openai-from-env"
+        assert env["BRAVE_API_KEY"] == "brave-from-config"
 
     @pytest.mark.asyncio
     async def test_cancellation_kills_process(self, tmp_path):

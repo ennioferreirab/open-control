@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { usePlanEditorState } from "./usePlanEditorState";
+import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
 import type { ExecutionPlan } from "@/lib/types";
 
 const makePlan = (generatedAt = "2026-01-01T00:00:00Z"): ExecutionPlan => ({

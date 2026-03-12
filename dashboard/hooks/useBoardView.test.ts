@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
-import { useBoardView } from "./useBoardView";
+import { useBoardView } from "@/features/boards/hooks/useBoardView";
 import { BoardFilters } from "./useBoardFilters";
 
 let mockQueryValues: Record<string, unknown> = {};

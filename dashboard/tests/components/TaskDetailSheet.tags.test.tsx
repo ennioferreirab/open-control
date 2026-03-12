@@ -14,16 +14,21 @@ vi.mock("../../convex/_generated/api", () => ({
   api: {
     tasks: {
       getDetailView: "tasks:getDetailView",
+      searchMergeCandidates: "tasks:searchMergeCandidates",
       approve: "tasks:approve",
       approveAndKickOff: "tasks:approveAndKickOff",
       pauseTask: "tasks:pauseTask",
       resumeTask: "tasks:resumeTask",
       retry: "tasks:retry",
+      softDelete: "tasks:softDelete",
       updateTags: "tasks:updateTags",
       updateTitle: "tasks:updateTitle",
       updateDescription: "tasks:updateDescription",
       addTaskFiles: "tasks:addTaskFiles",
       removeTaskFile: "tasks:removeTaskFile",
+    },
+    messages: {
+      postUserPlanMessage: "messages:postUserPlanMessage",
     },
     activities: { create: "activities:create" },
     tagAttributeValues: {
@@ -33,10 +38,10 @@ vi.mock("../../convex/_generated/api", () => ({
 }));
 
 // Mock child components that are not relevant to tag editing
-vi.mock("../../components/ThreadMessage", () => ({
+vi.mock("../../features/thread/components/ThreadMessage", () => ({
   ThreadMessage: () => null,
 }));
-vi.mock("../../components/ExecutionPlanTab", () => ({
+vi.mock("../../features/tasks/components/ExecutionPlanTab", () => ({
   ExecutionPlanTab: () => null,
 }));
 vi.mock("../../components/InlineRejection", () => ({
@@ -45,7 +50,7 @@ vi.mock("../../components/InlineRejection", () => ({
 vi.mock("../../components/DocumentViewerModal", () => ({
   DocumentViewerModal: () => null,
 }));
-vi.mock("../../components/ThreadInput", () => ({
+vi.mock("../../features/thread/components/ThreadInput", () => ({
   ThreadInput: () => null,
 }));
 
@@ -122,7 +127,7 @@ vi.mock("@/components/ui/separator", () => ({
 }));
 
 import { useQuery, useMutation } from "convex/react";
-import { TaskDetailSheet } from "../../components/TaskDetailSheet";
+import { TaskDetailSheet } from "../../features/tasks/components/TaskDetailSheet";
 
 const mockUseQuery = useQuery as ReturnType<typeof vi.fn>;
 const mockUseMutation = useMutation as ReturnType<typeof vi.fn>;
@@ -190,7 +195,7 @@ function makeDetailView(
 
 describe("TaskDetailSheet — tag editing (Story 9-3)", () => {
   const mockUpdateTags = vi.fn();
-  const noop = vi.fn();
+  const noop = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
     vi.clearAllMocks();

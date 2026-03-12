@@ -1,9 +1,14 @@
 import { internalMutation, mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 
 import { taskFileMetadataValidator, taskFilesValidator } from "./schema";
+import { buildTaskDetailView } from "./lib/taskDetailView";
+import {
+  appendTaskFiles,
+  removeAttachmentTaskFile,
+  replaceTaskOutputFiles,
+} from "./lib/taskFiles";
 import {
   isValidTaskTransition,
   logTaskCreated,
@@ -11,8 +16,23 @@ import {
   markPlanStepsCompleted,
   getRestoreTarget,
 } from "./lib/taskLifecycle";
+import {
+  assertExistingMergeTask,
+  assertMergeableSourceTask,
+  buildContiguousMergeSourceLabels,
+  cascadeMergeSourceTasksToDone,
+  collectMergeLineageTaskIds,
+  dedupeTags,
+  hasLineageOverlap,
+  restoreDetachedMergeSource,
+  restoreMergeSourceTasks,
+} from "./lib/taskMerge";
+import {
+  approveKickOffTask,
+  pauseTaskExecution,
+  resumeTaskExecution,
+} from "./lib/taskStatus";
 import { logActivity } from "./lib/workflowHelpers";
-import { computeUiFlags, computeAllowedActions } from "./lib/readModels";
 
 // ---------------------------------------------------------------------------
 // Re-export for backward compatibility (messages.ts imports isValidTransition)
@@ -24,239 +44,6 @@ import { computeUiFlags, computeAllowedActions } from "./lib/readModels";
  */
 export function isValidTransition(currentStatus: string, newStatus: string): boolean {
   return isValidTaskTransition(currentStatus, newStatus);
-}
-
-const MERGE_BLOCKED_SOURCE_STATUSES = new Set(["in_progress", "retrying", "deleted"]);
-type TaskStatus = Doc<"tasks">["status"];
-
-function defaultMergeSourceLabel(index: number): string {
-  let value = index;
-  let label = "";
-  do {
-    label = String.fromCharCode(65 + (value % 26)) + label;
-    value = Math.floor(value / 26) - 1;
-  } while (value >= 0);
-  return label;
-}
-
-function getMergeSourceLabel(labels: string[] | undefined, index: number): string {
-  return labels?.[index] ?? defaultMergeSourceLabel(index);
-}
-
-function buildContiguousMergeSourceLabels(sourceTaskIds: Array<Id<"tasks"> | string>): string[] {
-  return sourceTaskIds.map((_, index) => defaultMergeSourceLabel(index));
-}
-
-function dedupeTags(...tagSets: Array<string[] | undefined>): string[] | undefined {
-  const merged = Array.from(new Set(tagSets.flatMap((tags) => tags ?? [])));
-  return merged.length > 0 ? merged : undefined;
-}
-
-function removeTag(tags: string[] | undefined, tagName: string): string[] | undefined {
-  const next = (tags ?? []).filter((tag) => tag !== tagName);
-  return next.length > 0 ? next : undefined;
-}
-
-function assertMergeableSourceTask(
-  task: Record<string, unknown> | null,
-  label: string,
-): asserts task is Record<string, unknown> {
-  if (!task) {
-    throw new ConvexError(`Source task ${label} not found`);
-  }
-  if (MERGE_BLOCKED_SOURCE_STATUSES.has(String(task.status))) {
-    throw new ConvexError(
-      `Source task ${label} cannot be merged from status ${String(task.status)}`,
-    );
-  }
-  if (task.mergedIntoTaskId) {
-    throw new ConvexError(`Source task ${label} is already merged into another task`);
-  }
-}
-
-function assertExistingMergeTask(
-  task: Doc<"tasks"> | null,
-  label: string,
-): asserts task is Doc<"tasks"> & { isMergeTask: true; mergeSourceTaskIds: Id<"tasks">[] } {
-  if (!task) {
-    throw new ConvexError(`${label} not found`);
-  }
-  if (task.isMergeTask !== true || !Array.isArray(task.mergeSourceTaskIds)) {
-    throw new ConvexError(`${label} is not an existing merge task`);
-  }
-  if (task.mergedIntoTaskId) {
-    throw new ConvexError(`${label} is already merged into another task`);
-  }
-}
-
-async function collectMergeLineageTaskIds(
-  ctx: { db: { get: (id: Id<"tasks">) => Promise<Doc<"tasks"> | null> } },
-  sourceTaskIds: Id<"tasks">[] | string[] | undefined,
-  seen = new Set<string>(),
-): Promise<Set<string>> {
-  if (!Array.isArray(sourceTaskIds) || sourceTaskIds.length === 0) return seen;
-
-  for (const sourceTaskId of sourceTaskIds) {
-    const normalizedId = String(sourceTaskId);
-    if (seen.has(normalizedId)) continue;
-    seen.add(normalizedId);
-
-    const sourceTask = await ctx.db.get(sourceTaskId as Id<"tasks">);
-    if (
-      sourceTask?.isMergeTask === true &&
-      Array.isArray(sourceTask.mergeSourceTaskIds) &&
-      sourceTask.mergeSourceTaskIds.length > 0
-    ) {
-      await collectMergeLineageTaskIds(ctx, sourceTask.mergeSourceTaskIds as Id<"tasks">[], seen);
-    }
-  }
-
-  return seen;
-}
-
-function hasLineageOverlap(sourceIds: Set<string>, targetIds: Set<string>): boolean {
-  for (const sourceId of sourceIds) {
-    if (targetIds.has(sourceId)) return true;
-  }
-  return false;
-}
-
-async function restoreDetachedMergeSource(
-  ctx: Pick<MutationCtx, "db">,
-  mergeTaskId: Id<"tasks">,
-  sourceTaskId: Id<"tasks">,
-  now: string,
-): Promise<void> {
-  const sourceTask = await ctx.db.get(sourceTaskId);
-  if (!sourceTask || sourceTask.mergedIntoTaskId !== mergeTaskId) return;
-
-  const restoredStatus: TaskStatus =
-    typeof sourceTask.mergePreviousStatus === "string"
-      ? (sourceTask.mergePreviousStatus as TaskStatus)
-      : sourceTask.status;
-
-  await ctx.db.patch(sourceTaskId, {
-    status: restoredStatus,
-    mergedIntoTaskId: undefined,
-    mergeLockedAt: undefined,
-    mergePreviousStatus: undefined,
-    tags:
-      sourceTask.isMergeTask === true
-        ? dedupeTags(sourceTask.tags as string[] | undefined, ["merged"])
-        : removeTag(sourceTask.tags as string[] | undefined, "merged"),
-    updatedAt: now,
-  });
-}
-
-async function cascadeMergeSourceTasksToDone(
-  ctx: Pick<MutationCtx, "db">,
-  task: { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
-  now: string,
-): Promise<void> {
-  if (task.isMergeTask !== true || !Array.isArray(task.mergeSourceTaskIds)) return;
-
-  for (const sourceTaskId of task.mergeSourceTaskIds) {
-    const sourceTask = await ctx.db.get(sourceTaskId);
-    if (!sourceTask || sourceTask.mergedIntoTaskId !== task._id) continue;
-    await ctx.db.patch(sourceTaskId, {
-      status: "done",
-      updatedAt: now,
-    });
-  }
-}
-
-async function restoreMergeSourceTasks(
-  ctx: Pick<MutationCtx, "db">,
-  task: { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
-  now: string,
-): Promise<void> {
-  if (task.isMergeTask !== true || !Array.isArray(task.mergeSourceTaskIds)) return;
-
-  for (const sourceTaskId of task.mergeSourceTaskIds) {
-    const sourceTask = await ctx.db.get(sourceTaskId);
-    if (!sourceTask || sourceTask.mergedIntoTaskId !== task._id) continue;
-    const restoredStatus: TaskStatus =
-      typeof sourceTask.mergePreviousStatus === "string"
-        ? (sourceTask.mergePreviousStatus as TaskStatus)
-        : sourceTask.status;
-
-    await ctx.db.patch(sourceTaskId, {
-      status: restoredStatus,
-      mergedIntoTaskId: undefined,
-      mergeLockedAt: undefined,
-      mergePreviousStatus: undefined,
-      tags:
-        sourceTask.isMergeTask === true
-          ? dedupeTags(sourceTask.tags as string[] | undefined, ["merged"])
-          : removeTag(sourceTask.tags as string[] | undefined, "merged"),
-      updatedAt: now,
-    });
-  }
-}
-
-async function resolveMergeSourceTree(
-  ctx: any,
-  sourceTaskIds: string[] | undefined,
-  sourceLabels: string[] | undefined,
-  seen = new Set<string>(),
-  parentLabel?: string,
-): Promise<
-  Array<{
-    taskId: string;
-    taskTitle: string;
-    label: string;
-    task: any;
-    messages: any[];
-  }>
-> {
-  if (!Array.isArray(sourceTaskIds) || sourceTaskIds.length === 0) return [];
-
-  const resolved: Array<{
-    taskId: string;
-    taskTitle: string;
-    label: string;
-    task: any;
-    messages: any[];
-  }> = [];
-
-  for (const [index, sourceTaskId] of sourceTaskIds.entries()) {
-    if (seen.has(sourceTaskId)) continue;
-
-    const sourceTask = await ctx.db.get(sourceTaskId);
-    if (!sourceTask) continue;
-
-    seen.add(sourceTaskId);
-    const sourceMessages = await ctx.db
-      .query("messages")
-      .withIndex("by_taskId", (q: { eq: (field: string, value: string) => unknown }) =>
-        q.eq("taskId", sourceTaskId),
-      )
-      .collect();
-    const ownLabel = getMergeSourceLabel(sourceLabels, index);
-    const label = parentLabel ? `${parentLabel}.${ownLabel}` : ownLabel;
-
-    resolved.push({
-      taskId: sourceTaskId,
-      taskTitle: sourceTask.title,
-      label,
-      task: sourceTask,
-      messages: sourceMessages,
-    });
-
-    if (sourceTask.isMergeTask === true && Array.isArray(sourceTask.mergeSourceTaskIds)) {
-      resolved.push(
-        ...(await resolveMergeSourceTree(
-          ctx,
-          sourceTask.mergeSourceTaskIds as string[],
-          sourceTask.mergeSourceLabels as string[] | undefined,
-          seen,
-          label,
-        )),
-      );
-    }
-  }
-
-  return resolved;
 }
 
 export const create = mutation({
@@ -922,25 +709,7 @@ export const pauseTask = mutation({
     if (!task) {
       throw new ConvexError("Task not found");
     }
-    if (task.status !== "in_progress") {
-      throw new ConvexError(`Cannot pause task in status '${task.status}'. Expected: in_progress`);
-    }
-
-    const now = new Date().toISOString();
-
-    await ctx.db.patch(args.taskId, {
-      status: "review",
-      updatedAt: now,
-    });
-
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      eventType: "review_requested",
-      description: "User paused task execution",
-      timestamp: now,
-    });
-
-    return args.taskId;
+    return await pauseTaskExecution(ctx, args.taskId, task);
   },
 });
 
@@ -960,34 +729,7 @@ export const resumeTask = mutation({
     if (!task) {
       throw new ConvexError("Task not found");
     }
-    if (task.status !== "review") {
-      throw new ConvexError(`Cannot resume task in status '${task.status}'. Expected: review`);
-    }
-    if ((task as any).awaitingKickoff === true) {
-      throw new ConvexError(
-        "Cannot use resumeTask on a pre-kickoff task. Use approveAndKickOff instead.",
-      );
-    }
-
-    const now = new Date().toISOString();
-    const patch: Record<string, unknown> = {
-      status: "in_progress",
-      awaitingKickoff: undefined, // safety clear
-      updatedAt: now,
-    };
-    if (args.executionPlan !== undefined) {
-      patch.executionPlan = args.executionPlan;
-    }
-    await ctx.db.patch(args.taskId, patch);
-
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      eventType: "task_started",
-      description: "User resumed task execution",
-      timestamp: now,
-    });
-
-    return args.taskId;
+    return await resumeTaskExecution(ctx, args.taskId, task, args.executionPlan);
   },
 });
 
@@ -1006,61 +748,7 @@ export const approveAndKickOff = mutation({
     if (!task) {
       throw new ConvexError("Task not found");
     }
-    if (task.status !== "review") {
-      throw new ConvexError(`Cannot kick off task in status '${task.status}'. Expected: review`);
-    }
-    if (task.awaitingKickoff !== true && task.isManual !== true) {
-      throw new ConvexError("Cannot kick off task: requires awaitingKickoff or isManual");
-    }
-
-    const now = new Date().toISOString();
-    const plan = args.executionPlan ?? task.executionPlan;
-    const planGeneratedAt =
-      typeof plan === "object" &&
-      plan !== null &&
-      "generatedAt" in plan &&
-      typeof plan.generatedAt === "string"
-        ? plan.generatedAt
-        : undefined;
-
-    // Save updated plan if provided (user made edits); clear awaitingKickoff
-    const patch: Record<string, unknown> = {
-      status: "in_progress",
-      awaitingKickoff: undefined,
-      updatedAt: now,
-    };
-    if (args.executionPlan !== undefined) {
-      patch.executionPlan = args.executionPlan;
-    }
-    await ctx.db.patch(args.taskId, patch);
-
-    if (planGeneratedAt) {
-      await ctx.db.insert("messages", {
-        taskId: args.taskId,
-        authorName: "User",
-        authorType: "user",
-        content: "Approved the execution plan and started the task.",
-        messageType: "approval",
-        planReview: {
-          kind: "decision",
-          planGeneratedAt,
-          decision: "approved",
-        },
-        timestamp: now,
-      });
-    }
-
-    // Count steps from the plan for the activity event
-    const stepCount = plan?.steps?.length ?? 0;
-
-    await logActivity(ctx, {
-      taskId: args.taskId,
-      eventType: "task_started",
-      description: `User approved plan and kicked off task (${stepCount} step${stepCount === 1 ? "" : "s"})`,
-      timestamp: now,
-    });
-
-    return args.taskId;
+    return await approveKickOffTask(ctx, args.taskId, task, args.executionPlan);
   },
 });
 
@@ -1580,10 +1268,7 @@ export const updateTaskOutputFiles = internalMutation({
     outputFiles: v.array(taskFileMetadataValidator),
   },
   handler: async (ctx, { taskId, outputFiles }) => {
-    const task = await ctx.db.get(taskId);
-    if (!task) return;
-    const attachments = (task.files ?? []).filter((f) => f.subfolder === "attachments");
-    await ctx.db.patch(taskId, { files: [...attachments, ...outputFiles] });
+    await replaceTaskOutputFiles(ctx, taskId, outputFiles);
   },
 });
 
@@ -1596,10 +1281,7 @@ export const addTaskFiles = mutation({
     files: v.array(taskFileMetadataValidator),
   },
   handler: async (ctx, { taskId, files }) => {
-    const task = await ctx.db.get(taskId);
-    if (!task) throw new ConvexError(`Task ${taskId} not found`);
-    const existing = task.files ?? [];
-    await ctx.db.patch(taskId, { files: [...existing, ...files] });
+    await appendTaskFiles(ctx, taskId, files);
   },
 });
 
@@ -1614,13 +1296,7 @@ export const removeTaskFile = mutation({
     filename: v.string(),
   },
   handler: async (ctx, { taskId, subfolder, filename }) => {
-    if (subfolder !== "attachments") return;
-    const task = await ctx.db.get(taskId);
-    if (!task) return;
-    const updated = (task.files ?? []).filter(
-      (f) => !(f.name === filename && f.subfolder === subfolder),
-    );
-    await ctx.db.patch(taskId, { files: updated });
+    await removeAttachmentTaskFile(ctx, taskId, subfolder, filename);
   },
 });
 
@@ -1761,94 +1437,6 @@ export const updateDescription = mutation({
 export const getDetailView = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) return null;
-
-    // Batch-load related data in parallel
-    const [board, messages, steps, tagCatalog, tagAttributes, tagAttributeValues, mergedIntoTask] =
-      await Promise.all([
-        task.boardId ? ctx.db.get(task.boardId) : Promise.resolve(null),
-        ctx.db
-          .query("messages")
-          .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-          .collect(),
-        ctx.db
-          .query("steps")
-          .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-          .collect(),
-        ctx.db.query("taskTags").collect(),
-        ctx.db.query("tagAttributes").collect(),
-        ctx.db
-          .query("tagAttributeValues")
-          .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-          .collect(),
-        task.mergedIntoTaskId ? ctx.db.get(task.mergedIntoTaskId) : Promise.resolve(null),
-      ]);
-
-    const directMergeSources = Array.isArray(task.mergeSourceTaskIds)
-      ? (
-          await Promise.all(
-            task.mergeSourceTaskIds.map(async (sourceTaskId, index) => {
-              const sourceTask = await ctx.db.get(sourceTaskId);
-              if (!sourceTask) return null;
-              return {
-                taskId: sourceTaskId,
-                taskTitle: sourceTask.title,
-                label: getMergeSourceLabel(task.mergeSourceLabels as string[] | undefined, index),
-              };
-            }),
-          )
-        ).filter((source): source is { taskId: Id<"tasks">; taskTitle: string; label: string } =>
-          source !== null,
-        )
-      : [];
-    const resolvedMergeSources = await resolveMergeSourceTree(
-      ctx,
-      task.mergeSourceTaskIds as string[] | undefined,
-      task.mergeSourceLabels as string[] | undefined,
-    );
-    const mergeSourceFiles = resolvedMergeSources.flatMap((source) =>
-      (source.task.files ?? []).map((file: any) => ({
-        ...file,
-        sourceTaskId: source.taskId,
-        sourceTaskTitle: source.taskTitle,
-        sourceLabel: source.label,
-      })),
-    );
-
-    // Sort steps by order for display
-    const sortedSteps = steps.sort((a, b) => a.order - b.order);
-
-    // Compute UI flags and allowed actions
-    const uiFlags = computeUiFlags(task, steps);
-    const allowedActions = computeAllowedActions(task, uiFlags);
-
-    return {
-      task,
-      board,
-      messages,
-      steps: sortedSteps,
-      files: task.files ?? [],
-      mergedIntoTask,
-      directMergeSources,
-      mergeSources: resolvedMergeSources.map((source) => ({
-        taskId: source.taskId,
-        taskTitle: source.taskTitle,
-        label: source.label,
-      })),
-      mergeSourceThreads: resolvedMergeSources.map((source) => ({
-        taskId: source.taskId,
-        taskTitle: source.taskTitle,
-        label: source.label,
-        messages: source.messages,
-      })),
-      mergeSourceFiles,
-      tags: task.tags ?? [],
-      tagCatalog,
-      tagAttributes,
-      tagAttributeValues,
-      uiFlags,
-      allowedActions,
-    };
+    return await buildTaskDetailView(ctx, args.taskId);
   },
 });

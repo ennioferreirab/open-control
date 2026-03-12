@@ -9,7 +9,7 @@ import { TrashBinSheet } from "@/components/TrashBinSheet";
 import { DoneTasksSheet } from "@/components/DoneTasksSheet";
 import { CompactFavoriteCard } from "@/components/CompactFavoriteCard";
 import { useBoardFilters } from "@/hooks/useBoardFilters";
-import { useBoardView } from "@/hooks/useBoardView";
+import { useBoardView } from "@/features/boards/hooks/useBoardView";
 import { useBoardColumns } from "@/hooks/useBoardColumns";
 import { ParsedSearch } from "@/lib/searchParser";
 

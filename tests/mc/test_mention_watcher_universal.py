@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.mentions.watcher import MentionWatcher
+from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
 
 def _make_bridge(
@@ -59,7 +59,7 @@ def _make_user_message(msg_id: str, content: str, task_id: str = "task-1") -> di
 def _mock_known_agents():
     """Patch _known_agent_names so mentions resolve without disk access."""
     with patch(
-        "mc.mentions.handler._known_agent_names",
+        "mc.contexts.conversation.mentions.handler._known_agent_names",
         return_value={"researcher", "alice", "bob"},
     ):
         yield
@@ -69,7 +69,7 @@ def _mock_known_agents():
 def _mock_to_thread():
     """Patch asyncio.to_thread to run synchronously (no real threading in tests)."""
     with patch(
-        "mc.mentions.watcher.asyncio.to_thread",
+        "mc.contexts.conversation.mentions.watcher.asyncio.to_thread",
         new=AsyncMock(
             side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
         ),
@@ -96,7 +96,7 @@ class TestMentionWatcherUniversalCoverage:
         watcher = MentionWatcher(bridge)
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ) as mock_handle:
             self._run(watcher._poll_all_tasks())
@@ -119,7 +119,7 @@ class TestMentionWatcherUniversalCoverage:
         watcher = MentionWatcher(bridge)
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ) as mock_handle:
             self._run(watcher._poll_all_tasks())
@@ -145,7 +145,7 @@ class TestMentionWatcherUniversalCoverage:
         watcher = MentionWatcher(bridge)
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ) as mock_handle:
             self._run(watcher._poll_all_tasks())
@@ -165,13 +165,13 @@ class TestMentionWatcherUniversalCoverage:
         watcher = MentionWatcher(bridge)
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ):
             self._run(watcher._poll_all_tasks())
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ) as mock_handle:
             self._run(watcher._poll_all_tasks())
@@ -187,7 +187,7 @@ class TestMentionWatcherUniversalCoverage:
         watcher = MentionWatcher(bridge)
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ):
             self._run(watcher._poll_all_tasks())
@@ -203,7 +203,7 @@ class TestMentionWatcherUniversalCoverage:
         watcher = MentionWatcher(bridge)
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ) as mock_handle:
             self._run(watcher._poll_all_tasks())
@@ -232,7 +232,7 @@ class TestMentionWatcherUniversalCoverage:
         watcher = MentionWatcher(bridge)
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ):
             self._run(watcher._poll_all_tasks())
@@ -240,7 +240,7 @@ class TestMentionWatcherUniversalCoverage:
         assert "msg_a1" in watcher._seen_message_ids
 
         with patch(
-            "mc.mentions.handler.handle_all_mentions",
+            "mc.contexts.conversation.mentions.handler.handle_all_mentions",
             new=AsyncMock(return_value=True),
         ) as mock_handle:
             self._run(watcher._poll_all_tasks())
@@ -252,7 +252,7 @@ class TestMentionWatcherUniversalCoverage:
         import inspect
         import re
 
-        from mc.mentions.handler import handle_mention
+        from mc.contexts.conversation.mentions.handler import handle_mention
 
         source = inspect.getsource(handle_mention)
         pattern = re.compile(

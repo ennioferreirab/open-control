@@ -17,7 +17,9 @@
     "lint:file": "eslint --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:architecture": "vitest run tests/architecture.test.ts"
+    "test:architecture": "vitest run tests/architecture.test.ts",
+    "test:e2e": "playwright test e2e/dashboard-smoke.spec.ts",
+    "test:e2e:headed": "playwright test e2e/dashboard-smoke.spec.ts --headed"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
@@ -59,6 +61,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

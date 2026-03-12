@@ -50,6 +50,11 @@ const x = 1;
 \`inline code\`
 `;
 
+const OUTPUT_SOURCE_FILE = {
+  name: "reports/daily/summary.md",
+  subfolder: "output",
+};
+
 describe("MarkdownViewer", () => {
   afterEach(() => {
     cleanup();
@@ -89,6 +94,59 @@ describe("MarkdownViewer", () => {
     expect(link).toHaveAttribute("href", "https://example.com");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("resolves relative image sources against the current task markdown file", () => {
+    render(
+      <MarkdownViewer
+        {...({
+          content: "![Chart](./images/chart.png)",
+          taskId: "task_1",
+          sourceFile: OUTPUT_SOURCE_FILE,
+        } as any)}
+      />
+    );
+
+    const image = screen.getByRole("img", { name: "Chart" });
+    expect(image).toHaveAttribute(
+      "src",
+      "/api/tasks/task_1/files/output/reports%2Fdaily%2Fimages%2Fchart.png"
+    );
+  });
+
+  it("resolves relative links against the current markdown directory", () => {
+    render(
+      <MarkdownViewer
+        {...({
+          content: "[Open artifact](../artifact.html)",
+          taskId: "task_1",
+          sourceFile: OUTPUT_SOURCE_FILE,
+        } as any)}
+      />
+    );
+
+    const link = screen.getByRole("link", { name: "Open artifact" });
+    expect(link).toHaveAttribute(
+      "href",
+      "/api/tasks/task_1/files/output/reports%2Fartifact.html"
+    );
+  });
+
+  it("keeps absolute URLs unchanged when rendering links", () => {
+    render(
+      <MarkdownViewer
+        {...({
+          content: "[External](https://example.com/manual)",
+          taskId: "task_1",
+          sourceFile: OUTPUT_SOURCE_FILE,
+        } as any)}
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "External" })).toHaveAttribute(
+      "href",
+      "https://example.com/manual"
+    );
   });
 
   it("renders a table with table, thead, th, and td elements", () => {

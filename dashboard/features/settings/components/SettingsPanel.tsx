@@ -11,9 +11,11 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Check, Pencil } from "lucide-react";
+import { PromptEditModal } from "@/components/PromptEditModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ModelTierSettings } from "@/components/ModelTierSettings";
+import { ModelTierSettings } from "@/features/settings/components/ModelTierSettings";
 import { useSettingsPanelState } from "@/features/settings/hooks/useSettingsPanelState";
 import { POLLING_FIELDS } from "@/features/settings/polling-fields";
 
@@ -105,12 +107,48 @@ function SettingNumberField({
   );
 }
 
+function SettingTextareaField({
+  ariaLabel,
+  settingKey,
+  value,
+  onSave,
+  helperText,
+}: {
+  ariaLabel: string;
+  settingKey: string;
+  value: string;
+  onSave: (key: string, value: string) => void;
+  helperText?: string;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        aria-label={ariaLabel}
+        id={settingKey}
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => onSave(settingKey, localValue)}
+        className="min-h-40 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      {helperText ? <p className="text-xs text-muted-foreground">{helperText}</p> : null}
+    </div>
+  );
+}
+
 export function SettingsPanel() {
+  const [showGlobalOrientationModal, setShowGlobalOrientationModal] = useState(false);
   const {
     autoTitleHasLowTier,
     defaultEmbeddingModel,
     embeddingEnabled,
     embeddingInputValue,
+    globalOrientationPromptValue,
     getValue,
     handleEmbeddingInputChange,
     handleEmbeddingToggle,
@@ -149,6 +187,37 @@ export function SettingsPanel() {
         onSave={handleSave}
         saved={!!savedFields["inter_agent_timeout_minutes"]}
       />
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Global Orientation Prompt</span>
+            {savedFields["global_orientation_prompt"] && (
+              <Check className="h-4 w-4 text-green-500 transition-opacity" />
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Edit global orientation prompt"
+            className="h-6 px-2 text-xs gap-1"
+            onClick={() => setShowGlobalOrientationModal(true)}
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </Button>
+        </div>
+
+        <SettingTextareaField
+          ariaLabel="Global Orientation Prompt"
+          settingKey="global_orientation_prompt"
+          value={globalOrientationPromptValue}
+          onSave={(key, value) => {
+            void handleSave(key, value);
+          }}
+          helperText="Applied to agent tasks, steps, and chat when saved. While empty, MC falls back to the local default orientation file."
+        />
+      </div>
 
       <div className="space-y-1">
         <div className="flex items-center gap-2">
@@ -316,6 +385,18 @@ export function SettingsPanel() {
           />
         ))}
       </div>
+
+      <PromptEditModal
+        open={showGlobalOrientationModal}
+        onClose={() => setShowGlobalOrientationModal(false)}
+        onSave={(prompt) => {
+          void handleSave("global_orientation_prompt", prompt);
+        }}
+        initialPrompt={globalOrientationPromptValue}
+        initialVariables={[]}
+        title="Edit Global Orientation Prompt"
+        showVariables={false}
+      />
     </div>
   );
 }

@@ -59,7 +59,7 @@ from mc.runtime.timeout_checker import TimeoutChecker
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
-    from mc.services.plan_negotiation import PlanNegotiationSupervisor
+    from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ async def _run_plan_negotiation_manager(
 
     Thin wrapper that delegates to PlanNegotiationSupervisor (Story 17.2).
     """
-    from mc.services.plan_negotiation import PlanNegotiationSupervisor
+    from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
 
     global _plan_negotiation_supervisor
     _plan_negotiation_supervisor = PlanNegotiationSupervisor(

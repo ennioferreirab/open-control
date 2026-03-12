@@ -14,7 +14,7 @@ from mc.types import (
     ExecutionPlanStep,
     TaskStatus,
 )
-from mc.workers.planning import PlanningWorker
+from mc.runtime.workers.planning import PlanningWorker
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -118,13 +118,13 @@ class TestPlanningWorkerProcessTask:
 
         with (
             patch(
-                "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.planning.asyncio.create_task",
+                "mc.runtime.workers.planning.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -159,10 +159,10 @@ class TestPlanningWorkerProcessTask:
 
         with (
             patch(
-                "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread
             ),
-            patch("mc.workers.planning.asyncio.create_task") as create_mock,
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.asyncio.create_task") as create_mock,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -185,10 +185,10 @@ class TestPlanningWorkerProcessTask:
 
         with (
             patch(
-                "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread
             ),
-            patch("mc.workers.planning.asyncio.create_task") as create_mock,
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.asyncio.create_task") as create_mock,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -216,9 +216,9 @@ class TestPlanningWorkerProcessTask:
 
         with (
             patch(
-                "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread
             ),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(
@@ -249,7 +249,7 @@ class TestPlanningWorkerProcessTask:
         task["is_manual"] = True
 
         with patch(
-            "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+            "mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread
         ):
             await worker.process_task(task)
 
@@ -286,13 +286,13 @@ class TestPlanningWorkerProcessTask:
 
         with (
             patch(
-                "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.planning.asyncio.create_task",
+                "mc.runtime.workers.planning.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -322,13 +322,13 @@ class TestPlanningWorkerProcessBatch:
 
         with (
             patch(
-                "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.planning.asyncio.create_task",
+                "mc.runtime.workers.planning.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -352,13 +352,13 @@ class TestPlanningWorkerProcessBatch:
 
         with (
             patch(
-                "mc.workers.planning.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.planning.asyncio.create_task",
+                "mc.runtime.workers.planning.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)

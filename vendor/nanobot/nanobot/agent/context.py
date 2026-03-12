@@ -82,6 +82,8 @@ Your workspace is at: {workspace_path}
 - If a tool call fails, analyze the error before retrying with a different approach.
 - Ask for clarification when the request is ambiguous.
 - Use search_memory tool to recall past decisions and events from history.
+- When a Markdown report references images generated for the task, embed them inline instead of listing bare paths.
+- Use relative paths from the Markdown file, prefer `[![alt text](./image.png)](./image.png)`, and only reference image files that actually exist.
 
 Reply directly with text for conversations. Only use the 'message' tool to send to a specific chat channel."""
 

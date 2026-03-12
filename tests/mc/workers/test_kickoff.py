@@ -13,7 +13,7 @@ from mc.types import (
     StepStatus,
     TaskStatus,
 )
-from mc.workers.kickoff import KickoffResumeWorker
+from mc.runtime.workers.kickoff import KickoffResumeWorker
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -91,10 +91,10 @@ class TestKickoffWorkerKickoff:
 
         with (
             patch(
-                "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.kickoff.asyncio.create_task",
+                "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
         ):
@@ -122,7 +122,7 @@ class TestKickoffWorkerKickoff:
         }
 
         with patch(
-            "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+            "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
         ):
             await worker.process_batch([task_data])
 
@@ -147,7 +147,7 @@ class TestKickoffWorkerKickoff:
         }
 
         with patch(
-            "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+            "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
         ):
             await worker.process_batch([task_data])
 
@@ -184,10 +184,10 @@ class TestKickoffWorkerResume:
 
         with (
             patch(
-                "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.kickoff.asyncio.create_task",
+                "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
         ):
@@ -228,10 +228,10 @@ class TestKickoffWorkerResume:
 
         with (
             patch(
-                "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.kickoff.asyncio.create_task",
+                "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
         ):
@@ -313,9 +313,9 @@ class TestKickoffWorkerResume:
         }
 
         with (
-            patch("mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "mc.workers.kickoff.asyncio.create_task",
+                "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
         ):
@@ -344,9 +344,9 @@ class TestKickoffWorkerResume:
 
         with (
             patch(
-                "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
             ),
-            patch("mc.workers.kickoff.asyncio.create_task") as create_mock,
+            patch("mc.runtime.workers.kickoff.asyncio.create_task") as create_mock,
         ):
             await worker.process_batch([task_data])
 
@@ -377,10 +377,10 @@ class TestKickoffWorkerProcessBatch:
 
         with (
             patch(
-                "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.kickoff.asyncio.create_task",
+                "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
         ):
@@ -409,10 +409,10 @@ class TestKickoffWorkerProcessBatch:
 
         with (
             patch(
-                "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
             ),
             patch(
-                "mc.workers.kickoff.asyncio.create_task",
+                "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
         ):
@@ -442,7 +442,7 @@ class TestKickoffWorkerProcessBatch:
         }
 
         with patch(
-            "mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
+            "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
         ):
             await worker.process_batch([task])
 
@@ -478,9 +478,9 @@ class TestKickoffWorkerProcessBatch:
         }
 
         with (
-            patch("mc.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "mc.workers.kickoff.asyncio.create_task",
+                "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
         ):

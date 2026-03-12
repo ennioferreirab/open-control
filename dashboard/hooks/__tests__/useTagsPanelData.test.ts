@@ -43,7 +43,7 @@ vi.mock("../../convex/_generated/api", () => ({
   },
 }));
 
-import { useTagsPanelData } from "../useTagsPanelData";
+import { useTagsPanelData } from "@/features/settings/hooks/useTagsPanelData";
 
 describe("useTagsPanelData", () => {
   beforeEach(() => {

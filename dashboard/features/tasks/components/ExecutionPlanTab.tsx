@@ -4,8 +4,6 @@ import { useMemo, useState, useCallback, useRef } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { ReactFlow, Background, Controls, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { FlowStepNode, normalizeStatus, type FlowStepNodeData } from "@/components/FlowStepNode";
 import { StartNode, EndNode } from "@/components/StartEndNode";
@@ -20,6 +18,7 @@ import {
   insertMergeStep,
   getMergeableSiblingIds,
 } from "@/lib/planUtils";
+import { useExecutionPlanActions } from "@/features/tasks/hooks/useExecutionPlanActions";
 
 const nodeTypes = { flowStep: FlowStepNode, start: StartNode, end: EndNode };
 
@@ -298,12 +297,14 @@ export function ExecutionPlanTab({
   onClearPlan,
   isClearingPlan = false,
 }: ExecutionPlanTabProps) {
-  const acceptHumanStepMutation = useMutation(api.steps.acceptHumanStep);
-  const retryStepMutation = useMutation(api.steps.retryStep);
-  const manualMoveStepMutation = useMutation(api.steps.manualMoveStep);
-  const addStepMutation = useMutation(api.steps.addStep);
-  const updateStepMutation = useMutation(api.steps.updateStep);
-  const deleteStepMutation = useMutation(api.steps.deleteStep);
+  const {
+    acceptHumanStep,
+    retryStep,
+    manualMoveStep,
+    addStep,
+    updateStep,
+    deleteStep,
+  } = useExecutionPlanActions();
   const [acceptingStepId, setAcceptingStepId] = useState<string | null>(null);
   const [acceptErrors, setAcceptErrors] = useState<Record<string, string>>({});
   const [retryingStepId, setRetryingStepId] = useState<string | null>(null);
@@ -335,7 +336,7 @@ export function ExecutionPlanTab({
       setRetryingStepId(stepId);
       setRetryErrors((prev) => ({ ...prev, [stepId]: "" }));
       try {
-        await retryStepMutation({ stepId: realStepId as Id<"steps"> });
+        await retryStep(realStepId as Id<"steps">);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to retry step";
         setRetryErrors((prev) => ({ ...prev, [stepId]: message }));
@@ -343,7 +344,7 @@ export function ExecutionPlanTab({
         setRetryingStepId(null);
       }
     },
-    [retryStepMutation, steps],
+    [retryStep, steps],
   );
 
   const handleAccept = useCallback(
@@ -357,13 +358,10 @@ export function ExecutionPlanTab({
       try {
         if (stepStatus === "running") {
           // Human step already accepted — complete it
-          await manualMoveStepMutation({
-            stepId: realStepId as Id<"steps">,
-            newStatus: "completed",
-          });
+          await manualMoveStep(realStepId as Id<"steps">, "completed");
         } else {
           // waiting_human → accept (transitions to running)
-          await acceptHumanStepMutation({ stepId: realStepId as Id<"steps"> });
+          await acceptHumanStep(realStepId as Id<"steps">);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to accept step";
@@ -372,7 +370,7 @@ export function ExecutionPlanTab({
         setAcceptingStepId(null);
       }
     },
-    [acceptHumanStepMutation, manualMoveStepMutation, steps],
+    [acceptHumanStep, manualMoveStep, steps],
   );
 
   const completedCount = steps.filter(
@@ -461,7 +459,7 @@ export function ExecutionPlanTab({
         const foundStep = steps.find((s) => s.stepId === stepId);
         const realStepId = foundStep?.liveId ?? stepId;
         try {
-          await deleteStepMutation({ stepId: realStepId as Id<"steps"> });
+          await deleteStep(realStepId as Id<"steps">);
           setEditingStepId(null);
           setEditStepError(null);
         } catch (err) {
@@ -470,7 +468,7 @@ export function ExecutionPlanTab({
         }
       }
     },
-    [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange, steps, deleteStepMutation],
+    [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange, steps, deleteStep],
   );
 
   // Editable plan steps for canvas operations
@@ -690,7 +688,7 @@ export function ExecutionPlanTab({
             data.blockedByIds.length > 0
               ? data.blockedByIds.map((id) => id as Id<"steps">)
               : undefined;
-          await addStepMutation({
+          await addStep({
             taskId: taskId as Id<"tasks">,
             title: data.title,
             description: data.description,
@@ -705,7 +703,7 @@ export function ExecutionPlanTab({
         }
       }
     },
-    [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange, taskId, addStepMutation],
+    [isReviewMode, isLiveMode, executionPlan, onLocalPlanChange, taskId, addStep],
   );
 
   // Find the step data for the currently editing step
@@ -756,7 +754,7 @@ export function ExecutionPlanTab({
         // Live mode: use the real Convex step _id
         const realStepId = editingStep?.liveId ?? editingStepId;
         try {
-          await updateStepMutation({
+          await updateStep({
             stepId: realStepId as Id<"steps">,
             title: data.title,
             description: data.description,
@@ -778,7 +776,7 @@ export function ExecutionPlanTab({
       onLocalPlanChange,
       editingStepId,
       editingStep,
-      updateStepMutation,
+      updateStep,
     ],
   );
 

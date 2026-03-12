@@ -119,7 +119,7 @@ class ConversationIntentResolver:
             )
 
         # 2. @mention always takes priority
-        from mc.mentions.handler import extract_mentions
+        from mc.contexts.conversation.mentions.handler import extract_mentions
 
         mentions = extract_mentions(content)
         if mentions:

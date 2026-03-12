@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
-import { KanbanBoard } from "./KanbanBoard";
+import { KanbanBoard } from "@/features/boards/components/KanbanBoard";
 import { Doc, Id } from "../convex/_generated/dataModel";
 import { BoardFilters } from "@/hooks/useBoardFilters";
-import { BoardViewData } from "@/hooks/useBoardView";
+import { BoardViewData } from "@/features/boards/hooks/useBoardView";
 import { ColumnData } from "@/hooks/useBoardColumns";
 
 // --- Mock state ---
@@ -15,7 +15,7 @@ vi.mock("@/hooks/useBoardFilters", () => ({
   useBoardFilters: () => mockFilters,
 }));
 
-vi.mock("@/hooks/useBoardView", () => ({
+vi.mock("@/features/boards/hooks/useBoardView", () => ({
   useBoardView: () => mockBoardView,
 }));
 
@@ -106,6 +106,7 @@ function defaultBoardView(overrides: Partial<BoardViewData> = {}): BoardViewData
   return {
     tasks: [],
     allSteps: [],
+    taskSummaries: [],
     favorites: [],
     hitlCount: 0,
     deletedTasks: [],

@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/sidebar";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { ActivityFeedPanel } from "@/components/ActivityFeedPanel";
-import { TaskInput } from "@/components/TaskInput";
-import { KanbanBoard } from "@/components/KanbanBoard";
+import { TaskInput } from "@/features/tasks/components/TaskInput";
+import { KanbanBoard } from "@/features/boards/components/KanbanBoard";
 import { TerminalBoard } from "@/components/TerminalBoard";
-import { TaskDetailSheet } from "@/components/TaskDetailSheet";
+import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
 import {
   Sheet,
   SheetContent,
@@ -22,14 +22,14 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { SettingsPanel } from "@/components/SettingsPanel";
-import { TagsPanel } from "@/components/TagsPanel";
+import { SettingsPanel } from "@/features/settings/components/SettingsPanel";
+import { TagsPanel } from "@/features/settings/components/TagsPanel";
 import { Settings, Tag, Clock, PanelRightOpen } from "lucide-react";
 import { BoardProvider, useBoard } from "@/components/BoardContext";
 import { BoardSelector } from "@/components/BoardSelector";
-import { BoardSettingsSheet } from "@/components/BoardSettingsSheet";
+import { BoardSettingsSheet } from "@/features/boards/components/BoardSettingsSheet";
 import { CronJobsModal } from "@/components/CronJobsModal";
-import { SearchBar } from "@/components/SearchBar";
+import { SearchBar } from "@/features/search/components/SearchBar";
 import { parseSearch } from "@/lib/searchParser";
 import {
   useGatewaySleepRuntime,

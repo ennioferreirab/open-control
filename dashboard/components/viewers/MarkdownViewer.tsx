@@ -6,18 +6,85 @@ import SyntaxHighlighter from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
 
-export function MarkdownViewer({ content }: { content: string }) {
+interface MarkdownSourceFile {
+  name: string;
+  subfolder: string;
+}
+
+interface MarkdownViewerProps {
+  content: string;
+  taskId?: string;
+  sourceFile?: MarkdownSourceFile;
+}
+
+function isRelativeMarkdownPath(value: string): boolean {
+  if (!value || value.startsWith("#") || value.startsWith("/") || value.startsWith("//")) {
+    return false;
+  }
+
+  return !/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
+}
+
+function splitMarkdownPath(value: string): { pathname: string; suffix: string } {
+  const suffixIndex = value.search(/[?#]/);
+  if (suffixIndex === -1) {
+    return { pathname: value, suffix: "" };
+  }
+
+  return {
+    pathname: value.slice(0, suffixIndex),
+    suffix: value.slice(suffixIndex),
+  };
+}
+
+function normalizeTaskPath(sourceName: string, relativePath: string): string | null {
+  const resolved = sourceName.split("/").filter(Boolean);
+  resolved.pop();
+
+  for (const segment of relativePath.split("/")) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      if (resolved.length === 0) {
+        return null;
+      }
+      resolved.pop();
+      continue;
+    }
+    resolved.push(segment);
+  }
+
+  return resolved.join("/");
+}
+
+function buildTaskFileUrl(taskId: string | undefined, sourceFile: MarkdownSourceFile | undefined, value: string | undefined): string | undefined {
+  if (!value || !taskId || !sourceFile || !isRelativeMarkdownPath(value)) {
+    return value;
+  }
+
+  const { pathname, suffix } = splitMarkdownPath(value);
+  const normalizedPath = normalizeTaskPath(sourceFile.name, pathname);
+  if (!normalizedPath) {
+    return undefined;
+  }
+
+  return `/api/tasks/${taskId}/files/${sourceFile.subfolder}/${encodeURIComponent(normalizedPath)}${suffix}`;
+}
+
+export function MarkdownViewer({ content, taskId, sourceFile }: MarkdownViewerProps) {
   const [mode, setMode] = useState<"rendered" | "raw">("rendered");
+  const resolveTaskUrl = (value: string | undefined) => buildTaskFileUrl(taskId, sourceFile, value);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-w-0 max-w-full flex-col">
       <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
         <Button variant={mode === "rendered" ? "secondary" : "ghost"} size="sm" onClick={() => setMode("rendered")}>Rendered</Button>
         <Button variant={mode === "raw" ? "secondary" : "ghost"} size="sm" onClick={() => setMode("raw")}>Raw</Button>
       </div>
-      <div className="flex-1 overflow-auto p-6">
+      <div className="min-h-0 flex-1 overflow-auto p-6">
         {mode === "rendered" ? (
-          <div className="text-sm leading-relaxed">
+          <div className="w-full min-w-0 max-w-full select-text text-sm leading-relaxed">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -39,15 +106,26 @@ export function MarkdownViewer({ content }: { content: string }) {
                   return <>{children}</>;
                 },
                 a({ href, children }) {
+                  const resolvedHref = resolveTaskUrl(href);
                   return (
                     <a
-                      href={href}
+                      href={resolvedHref}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-500 hover:underline"
                     >
                       {children}
                     </a>
+                  );
+                },
+                img({ src, alt }) {
+                  const resolvedSrc = typeof src === "string" ? resolveTaskUrl(src) : undefined;
+                  return (
+                    <img
+                      src={resolvedSrc}
+                      alt={alt ?? ""}
+                      className="max-w-full h-auto rounded-md border border-border my-3"
+                    />
                   );
                 },
                 p({ children }) {
@@ -126,7 +204,7 @@ export function MarkdownViewer({ content }: { content: string }) {
             </ReactMarkdown>
           </div>
         ) : (
-          <pre className="font-mono text-sm whitespace-pre-wrap break-all">{content}</pre>
+          <pre className="select-text font-mono text-sm whitespace-pre-wrap break-all">{content}</pre>
         )}
       </div>
     </div>

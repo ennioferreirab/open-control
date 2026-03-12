@@ -39,8 +39,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { SkillsSelector } from "@/components/SkillsSelector";
 import { PromptEditModal, type PromptVariable } from "@/components/PromptEditModal";
 import { AgentTextViewerModal } from "@/components/AgentTextViewerModal";
-import { getAvatarColor, getInitials } from "@/components/AgentSidebarItem";
-import { useAgentConfigSheetData } from "@/hooks/useAgentConfigSheetData";
+import { getAvatarColor, getInitials } from "@/features/agents/components/AgentSidebarItem";
+import { useAgentConfigSheetData } from "@/features/agents/hooks/useAgentConfigSheetData";
 import type { AgentStatus } from "@/lib/constants";
 import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
 

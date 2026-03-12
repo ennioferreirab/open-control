@@ -10,6 +10,10 @@ _EXPORTS = {
         "mc.contexts.execution.cc_executor",
         "CCExecutorMixin",
     ),
+    "CrashRecoveryService": (
+        "mc.contexts.execution.crash_recovery",
+        "CrashRecoveryService",
+    ),
     "StepDispatcher": (
         "mc.contexts.execution.step_dispatcher",
         "StepDispatcher",

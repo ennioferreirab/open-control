@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { useTaskDetailView } from "./useTaskDetailView";
+import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 
 // Mock convex/react
 const mockUseQuery = vi.fn();
@@ -11,7 +11,10 @@ vi.mock("convex/react", () => ({
 
 vi.mock("../convex/_generated/api", () => ({
   api: {
-    tasks: { getDetailView: "tasks:getDetailView" },
+    tasks: {
+      getDetailView: "tasks:getDetailView",
+      searchMergeCandidates: "tasks:searchMergeCandidates",
+    },
   },
 }));
 
@@ -246,5 +249,53 @@ describe("useTaskDetailView", () => {
     const { result } = renderHook(() => useTaskDetailView("task1" as any));
     expect(result.current.taskExecutionPlan).toBeDefined();
     expect(result.current.taskExecutionPlan!.steps).toHaveLength(1);
+  });
+
+  it("queries merge candidates through the feature read model options", () => {
+    mockUseQuery.mockImplementation((name: string, args: unknown) => {
+      if (name === "tasks:getDetailView") {
+        return {
+          task: {
+            ...baseTask,
+            isMergeTask: true,
+          },
+          messages: [],
+          steps: [],
+          tagCatalog: [],
+          tagAttributes: [],
+          tagAttributeValues: [],
+          uiFlags: {
+            isAwaitingKickoff: false,
+            isPaused: false,
+            isManual: false,
+            isPlanEditable: false,
+          },
+          allowedActions: {
+            approve: false,
+            kickoff: false,
+            pause: true,
+            resume: false,
+            retry: false,
+            savePlan: false,
+            startInbox: false,
+            sendMessage: true,
+          },
+        };
+      }
+
+      if (name === "tasks:searchMergeCandidates") {
+        expect(args).toEqual({
+          query: "alpha",
+          excludeTaskId: "task1",
+          targetTaskId: "task1",
+        });
+        return [];
+      }
+
+      return undefined;
+    });
+
+    renderHook(() => useTaskDetailView("task1" as any, { mergeQuery: "alpha" }));
+    expect(mockUseQuery).toHaveBeenCalledTimes(2);
   });
 });

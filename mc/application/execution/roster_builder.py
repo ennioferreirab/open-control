@@ -123,7 +123,7 @@ def sync_agent_from_convex(
 
 
 def inject_orientation(
-    agent_name: str, agent_prompt: str | None
+    agent_name: str, agent_prompt: str | None, bridge: Any | None = None
 ) -> str | None:
     """Prepend global orientation for non-lead agents.
 
@@ -132,7 +132,7 @@ def inject_orientation(
     """
     from mc.infrastructure.orientation import load_orientation
 
-    orientation = load_orientation(agent_name)
+    orientation = load_orientation(agent_name, bridge=bridge)
     if not orientation:
         return agent_prompt
 

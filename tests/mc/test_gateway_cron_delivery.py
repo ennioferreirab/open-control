@@ -104,7 +104,7 @@ async def _run_gateway_and_capture(captured: dict) -> None:
          patch("mc.contexts.execution.executor.TaskExecutor", mock_exec_cls), \
          patch("mc.contexts.conversation.chat_handler.ChatHandler", return_value=mock_chat_instance), \
          patch("nanobot.config.loader.load_config"), \
-         patch("mc.mentions.watcher.MentionWatcher", return_value=mock_mention_instance), \
+         patch("mc.contexts.conversation.mentions.watcher.MentionWatcher", return_value=mock_mention_instance), \
          patch("nanobot.cron.service.CronService", mock_cron_cls), \
          patch("mc.runtime.gateway._run_plan_negotiation_manager", new=AsyncMock()):
         try:

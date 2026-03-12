@@ -3,7 +3,7 @@
 import { Doc } from "@/convex/_generated/dataModel";
 import { useSidebar } from "@/components/ui/sidebar";
 import { SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
-import { useAgentSidebarItemState } from "@/hooks/useAgentSidebarItemState";
+import { useAgentSidebarItemState } from "@/features/agents/hooks/useAgentSidebarItemState";
 import { RotateCcw, Trash2, Terminal } from "lucide-react";
 import type { AgentStatus } from "@/lib/constants";
 import { useBoard } from "@/components/BoardContext";

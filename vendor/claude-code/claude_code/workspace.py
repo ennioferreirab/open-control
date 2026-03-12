@@ -444,7 +444,7 @@ class CCWorkspaceManager:
 
             target = self._find_skill(workspace, skill_name)
             if target is None:
-                logger.debug("Skill '%s' not found in any search location — skipping", skill_name)
+                logger.warning("Skill '%s' not found in any search location — skipping", skill_name)
                 continue
 
             if _loader and not _loader.is_skill_available(skill_name):
@@ -493,7 +493,10 @@ class CCWorkspaceManager:
         board_name: str | None = None,
     ) -> None:
         """Write .mcp.json that configures the nanobot MCP server subprocess."""
+        from mc.infrastructure.secrets import resolve_secret_env
+
         env: dict[str, str] = {
+            **resolve_secret_env(),
             "MC_SOCKET_PATH": socket_path,
             "AGENT_NAME": agent_name,
             "TASK_ID": task_id,

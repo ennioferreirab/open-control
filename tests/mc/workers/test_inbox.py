@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mc.infrastructure.runtime_context import RuntimeContext
-from mc.workers.inbox import InboxWorker
+from mc.runtime.workers.inbox import InboxWorker
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -46,7 +46,7 @@ class TestInboxWorkerProcessTask:
             "is_manual": False,
         }
 
-        with patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
         bridge.update_task_status.assert_called_once_with("task-1", "planning")
@@ -64,7 +64,7 @@ class TestInboxWorkerProcessTask:
             "is_manual": False,
         }
 
-        with patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
         bridge.update_task_status.assert_called_once_with("task-2", "assigned")
@@ -80,7 +80,7 @@ class TestInboxWorkerProcessTask:
             "is_manual": True,
         }
 
-        with patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
         bridge.update_task_status.assert_not_called()
@@ -100,9 +100,9 @@ class TestInboxWorkerProcessTask:
         }
 
         with (
-            patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "mc.workers.inbox.generate_title_via_low_agent",
+                "mc.runtime.workers.inbox.generate_title_via_low_agent",
                 new=AsyncMock(return_value="Widget Builder"),
             ),
         ):
@@ -129,9 +129,9 @@ class TestInboxWorkerProcessTask:
         }
 
         with (
-            patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "mc.workers.inbox.generate_title_via_low_agent",
+                "mc.runtime.workers.inbox.generate_title_via_low_agent",
                 new=AsyncMock(return_value=None),
             ),
         ):
@@ -166,7 +166,7 @@ class TestInboxWorkerProcessBatch:
             },
         ]
 
-        with patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_batch(tasks)
 
         # Only one call (deduplication)
@@ -185,7 +185,7 @@ class TestInboxWorkerProcessBatch:
             "is_manual": False,
         }
 
-        with patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             # First batch
             await worker.process_batch([task])
             assert bridge.update_task_status.call_count == 1
@@ -227,7 +227,7 @@ class TestInboxWorkerProcessBatch:
             },
         ]
 
-        with patch("mc.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_batch(tasks)
 
         assert call_count == 2

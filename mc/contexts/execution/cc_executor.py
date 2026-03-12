@@ -244,7 +244,7 @@ class CCExecutorMixin:
                 agent_name,
                 agent_data,
                 task_id,
-                orientation=load_orientation(agent_name),
+                orientation=load_orientation(agent_name, bridge=self._bridge),
                 task_prompt=title,
                 board_name=_cc_board_name,
                 memory_mode=_cc_memory_mode,
@@ -256,7 +256,7 @@ class CCExecutorMixin:
             return
 
         # 2. Start IPC server
-        from mc.ask_user.handler import AskUserHandler
+        from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
         ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)
@@ -659,7 +659,7 @@ class CCExecutorMixin:
                 agent_name,
                 agent_data,
                 task_id,
-                orientation=load_orientation(agent_name),
+                orientation=load_orientation(agent_name, bridge=self._bridge),
                 task_prompt=user_message,
                 board_name=_tr_board_name,
                 memory_mode=_tr_memory_mode,
@@ -668,7 +668,7 @@ class CCExecutorMixin:
             logger.error("[executor] CC thread reply: workspace prep failed: %s", exc)
             return None
 
-        from mc.ask_user.handler import AskUserHandler
+        from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
         ask_handler = AskUserHandler()
         ipc_server = MCSocketServer(self._bridge, None, cron_service=self._cron_service)

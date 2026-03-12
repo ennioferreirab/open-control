@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
-import { SearchBar } from "./SearchBar";
-import type { SearchBarFiltersData } from "@/hooks/useSearchBarFilters";
+import { SearchBar } from "@/features/search/components/SearchBar";
+import type { SearchBarFiltersData } from "@/features/search/hooks/useSearchBarFilters";
 
 const defaultHookData: SearchBarFiltersData = {
   tags: [],
@@ -11,7 +11,7 @@ const defaultHookData: SearchBarFiltersData = {
   tagsWithAttrs: [],
 };
 
-vi.mock("@/hooks/useSearchBarFilters", () => ({
+vi.mock("@/features/search/hooks/useSearchBarFilters", () => ({
   useSearchBarFilters: () => defaultHookData,
 }));
 

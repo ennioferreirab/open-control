@@ -759,7 +759,10 @@ async def start_plan_negotiation_loop(
             # Skip @mention messages — the MentionWatcher handles all
             # @mentions across every task status, so the PlanNegotiator
             # must not also process them (avoids double-processing).
-            from mc.mentions.handler import handle_all_mentions, is_mention_message
+            from mc.contexts.conversation.mentions.handler import (
+                handle_all_mentions,
+                is_mention_message,
+            )
 
             if is_mention_message(content):
                 logger.debug(

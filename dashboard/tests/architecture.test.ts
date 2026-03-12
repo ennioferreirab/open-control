@@ -53,10 +53,69 @@ function listFeatureFiles(featureName: string, subdir: "components" | "hooks"): 
     .map((f: string) => path.join(dir, f));
 }
 
-const FEATURE_COMPONENT_DIRECT_CONVEX_IMPORT_EXCEPTIONS = new Set([
-  "features/tasks/components/ExecutionPlanTab.tsx",
-  "features/tasks/components/TaskCard.tsx",
-]);
+const FEATURE_COMPONENT_DIRECT_CONVEX_IMPORT_EXCEPTIONS = new Set<string>();
+
+const LEGACY_ROOT_COMPONENT_WRAPPERS = [
+  "components/AgentConfigSheet.tsx",
+  "components/AgentSidebarItem.tsx",
+  "components/BoardSettingsSheet.tsx",
+  "components/ExecutionPlanTab.tsx",
+  "components/KanbanBoard.tsx",
+  "components/ModelTierSettings.tsx",
+  "components/SearchBar.tsx",
+  "components/SettingsPanel.tsx",
+  "components/StepCard.tsx",
+  "components/TagsPanel.tsx",
+  "components/TaskCard.tsx",
+  "components/TaskDetailSheet.tsx",
+  "components/TaskInput.tsx",
+  "components/ThreadInput.tsx",
+  "components/ThreadMessage.tsx",
+] as const;
+
+const LEGACY_ROOT_HOOK_WRAPPERS = [
+  "hooks/useAgentConfigSheetData.ts",
+  "hooks/useAgentSidebarItemState.ts",
+  "hooks/useBoardView.ts",
+  "hooks/usePlanEditorState.ts",
+  "hooks/useSearchBarFilters.ts",
+  "hooks/useTagsPanelData.ts",
+  "hooks/useTaskDetailActions.ts",
+  "hooks/useTaskDetailView.ts",
+  "hooks/useTaskInputData.ts",
+  "hooks/useThreadInputController.ts",
+] as const;
+
+const LEGACY_ROOT_COMPONENT_ALIAS_IMPORTS = [
+  "@/components/AgentConfigSheet",
+  "@/components/AgentSidebarItem",
+  "@/components/BoardSettingsSheet",
+  "@/components/ExecutionPlanTab",
+  "@/components/KanbanBoard",
+  "@/components/ModelTierSettings",
+  "@/components/SearchBar",
+  "@/components/SettingsPanel",
+  "@/components/StepCard",
+  "@/components/TagsPanel",
+  "@/components/TaskCard",
+  "@/components/TaskDetailSheet",
+  "@/components/TaskInput",
+  "@/components/ThreadInput",
+  "@/components/ThreadMessage",
+] as const;
+
+const LEGACY_ROOT_HOOK_ALIAS_IMPORTS = [
+  "@/hooks/useAgentConfigSheetData",
+  "@/hooks/useAgentSidebarItemState",
+  "@/hooks/useBoardView",
+  "@/hooks/usePlanEditorState",
+  "@/hooks/useSearchBarFilters",
+  "@/hooks/useTagsPanelData",
+  "@/hooks/useTaskDetailActions",
+  "@/hooks/useTaskDetailView",
+  "@/hooks/useTaskInputData",
+  "@/hooks/useThreadInputController",
+] as const;
 
 describe("Architecture: feature shell exists for staged modularization", () => {
   it("dashboard/features/ README and first-wave feature directories exist", () => {
@@ -157,6 +216,56 @@ describe("Architecture: feature shell exists for staged modularization", () => {
   });
 });
 
+describe("Architecture: root wrapper cleanup stays converged", () => {
+  it("legacy root component wrappers are deleted once feature ownership is canonical", () => {
+    for (const relativePath of LEGACY_ROOT_COMPONENT_WRAPPERS) {
+      expect(
+        fs.existsSync(path.join(DASHBOARD_ROOT, relativePath)),
+        `${relativePath} should be deleted once the root wrapper cleanup lands`,
+      ).toBe(false);
+    }
+  });
+
+  it("legacy root hook wrappers are deleted once feature hooks become canonical", () => {
+    for (const relativePath of LEGACY_ROOT_HOOK_WRAPPERS) {
+      expect(
+        fs.existsSync(path.join(DASHBOARD_ROOT, relativePath)),
+        `${relativePath} should be deleted once the root hook cleanup lands`,
+      ).toBe(false);
+    }
+  });
+
+  it("DashboardLayout imports canonical feature entry points directly", () => {
+    const content = readFileIfExists(path.join(DASHBOARD_ROOT, "components", "DashboardLayout.tsx"));
+    expect(content).not.toBeNull();
+    expect(content).toContain(`from "@/features/tasks/components/TaskInput"`);
+    expect(content).toContain(`from "@/features/boards/components/KanbanBoard"`);
+    expect(content).toContain(`from "@/features/tasks/components/TaskDetailSheet"`);
+    expect(content).toContain(`from "@/features/settings/components/SettingsPanel"`);
+    expect(content).toContain(`from "@/features/settings/components/TagsPanel"`);
+    expect(content).toContain(`from "@/features/boards/components/BoardSettingsSheet"`);
+    expect(content).toContain(`from "@/features/search/components/SearchBar"`);
+  });
+});
+
+describe("Architecture: story 22.4 hotspot seams exist", () => {
+  it("dashboard/convex/lib contains split task hotspot owners", () => {
+    const requiredFiles = [
+      "convex/lib/taskMerge.ts",
+      "convex/lib/taskDetailView.ts",
+      "convex/lib/taskFiles.ts",
+      "convex/lib/taskStatus.ts",
+    ];
+
+    for (const relativePath of requiredFiles) {
+      expect(
+        fs.existsSync(path.join(DASHBOARD_ROOT, relativePath)),
+        `${relativePath} should exist as an internal owner extracted from convex/tasks.ts`,
+      ).toBe(true);
+    }
+  });
+});
+
 describe("Architecture: feature modules keep local boundaries", () => {
   const featureDirs = [
     "tasks",
@@ -198,6 +307,29 @@ describe("Architecture: feature modules keep local boundaries", () => {
           componentImports,
           `${path.relative(DASHBOARD_ROOT, filePath)} must not import feature UI components`,
         ).toEqual([]);
+      }
+    });
+
+    it(`features/${featureDir} should not import legacy root aliases for feature-owned modules`, () => {
+      for (const subdir of ["components", "hooks"] as const) {
+        for (const filePath of listFeatureFiles(featureDir, subdir)) {
+          const content = readFileIfExists(filePath);
+          if (!content) continue;
+
+          for (const importPath of LEGACY_ROOT_COMPONENT_ALIAS_IMPORTS) {
+            expect(
+              content.includes(importPath),
+              `${path.relative(DASHBOARD_ROOT, filePath)} must not import ${importPath}`,
+            ).toBe(false);
+          }
+
+          for (const importPath of LEGACY_ROOT_HOOK_ALIAS_IMPORTS) {
+            expect(
+              content.includes(importPath),
+              `${path.relative(DASHBOARD_ROOT, filePath)} must not import ${importPath}`,
+            ).toBe(false);
+          }
+        }
       }
     });
   }

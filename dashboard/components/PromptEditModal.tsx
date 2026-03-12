@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -82,6 +83,9 @@ interface PromptEditModalProps {
   onSave: (prompt: string, variables: PromptVariable[]) => void;
   initialPrompt: string;
   initialVariables: PromptVariable[];
+  title?: string;
+  showVariables?: boolean;
+  description?: string;
 }
 
 function detectVariables(prompt: string, existing: PromptVariable[]): PromptVariable[] {
@@ -108,6 +112,9 @@ export function PromptEditModal({
   onSave,
   initialPrompt,
   initialVariables,
+  title = "Edit Prompt",
+  showVariables = true,
+  description = "Edit prompt content and save changes.",
 }: PromptEditModalProps) {
   const [localPrompt, setLocalPrompt] = useState(initialPrompt);
   const [localVariables, setLocalVariables] = useState<PromptVariable[]>(initialVariables);
@@ -143,7 +150,8 @@ export function PromptEditModal({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl w-full flex flex-col p-0 gap-0 [&>button]:hidden">
         <DialogHeader className="px-6 pt-6 pb-4">
-          <DialogTitle>Edit Prompt</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">{description}</DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 px-6 pb-4 space-y-4 overflow-y-auto">
@@ -152,56 +160,58 @@ export function PromptEditModal({
             onChange={handlePromptChange}
           />
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-medium">Variables</p>
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Info className="h-3.5 w-3.5" />
-                {"Supports {{variable}} interpolation"}
-              </span>
-            </div>
-            <div className="border rounded-md overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/50 border-b">
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-1/2">
-                      Variable
-                    </th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-1/2">
-                      Value
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {localVariables.length > 0 ? (
-                    localVariables.map((v, i) => (
-                      <tr key={v.name} className={i > 0 ? "border-t" : ""}>
-                        <td className="px-3 py-2">
-                          <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
-                            {`{{${v.name}}}`}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            value={v.value}
-                            onChange={(e) => handleValueChange(v.name, e.target.value)}
-                            placeholder={`Value for ${v.name}`}
-                            className="h-7 text-sm"
-                          />
+          {showVariables ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">Variables</p>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Info className="h-3.5 w-3.5" />
+                  {"Supports {{variable}} interpolation"}
+                </span>
+              </div>
+              <div className="border rounded-md overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 border-b">
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-1/2">
+                        Variable
+                      </th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-1/2">
+                        Value
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {localVariables.length > 0 ? (
+                      localVariables.map((v, i) => (
+                        <tr key={v.name} className={i > 0 ? "border-t" : ""}>
+                          <td className="px-3 py-2">
+                            <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                              {`{{${v.name}}}`}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              value={v.value}
+                              onChange={(e) => handleValueChange(v.name, e.target.value)}
+                              placeholder={`Value for ${v.name}`}
+                              className="h-7 text-sm"
+                            />
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={2} className="px-3 py-3 text-center text-xs text-muted-foreground">
+                          {"Type {{name}} in the prompt to create variables"}
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={2} className="px-3 py-3 text-center text-xs text-muted-foreground">
-                        {"Type {{name}} in the prompt to create variables"}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
 
         <DialogFooter className="px-6 py-4 border-t gap-2">

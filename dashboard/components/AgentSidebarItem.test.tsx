@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { AgentSidebarItem, getInitials, getAvatarColor } from "./AgentSidebarItem";
-import type { AgentSidebarItemStateData } from "@/hooks/useAgentSidebarItemState";
+import {
+  AgentSidebarItem,
+  getInitials,
+  getAvatarColor,
+} from "@/features/agents/components/AgentSidebarItem";
+import type { AgentSidebarItemStateData } from "@/features/agents/hooks/useAgentSidebarItemState";
 
 const defaultHookData: AgentSidebarItemStateData = {
   terminalSessions: [],
 };
 
-vi.mock("@/hooks/useAgentSidebarItemState", () => ({
+vi.mock("@/features/agents/hooks/useAgentSidebarItemState", () => ({
   useAgentSidebarItemState: () => defaultHookData,
 }));
 

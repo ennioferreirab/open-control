@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useTaskDetailActions } from "./useTaskDetailActions";
+import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 
 // Mock convex/react
 const mockMutationFns: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -25,6 +25,7 @@ vi.mock("../convex/_generated/api", () => ({
       createMergedTask: "tasks:createMergedTask",
       addMergeSource: "tasks:addMergeSource",
       removeMergeSource: "tasks:removeMergeSource",
+      softDelete: "tasks:softDelete",
       saveExecutionPlan: "tasks:saveExecutionPlan",
       startInboxTask: "tasks:startInboxTask",
       updateTags: "tasks:updateTags",
@@ -33,6 +34,7 @@ vi.mock("../convex/_generated/api", () => ({
       addTaskFiles: "tasks:addTaskFiles",
       removeTaskFile: "tasks:removeTaskFile",
     },
+    messages: { postUserPlanMessage: "messages:postUserPlanMessage" },
     activities: { create: "activities:create" },
     tagAttributeValues: { removeByTaskAndTag: "tagAttributeValues:removeByTaskAndTag" },
   },
@@ -56,6 +58,8 @@ describe("useTaskDetailActions", () => {
     expect(typeof result.current.updateDescription).toBe("function");
     expect(typeof result.current.addTaskFiles).toBe("function");
     expect(typeof result.current.removeTaskFile).toBe("function");
+    expect(typeof result.current.deleteTask).toBe("function");
+    expect(typeof result.current.submitPlanReviewFeedback).toBe("function");
     expect(typeof result.current.createActivity).toBe("function");
     expect(typeof result.current.createMergedTask).toBe("function");
     expect(typeof result.current.addMergeSource).toBe("function");
@@ -70,6 +74,8 @@ describe("useTaskDetailActions", () => {
     expect(result.current.pauseError).toBe("");
     expect(result.current.isResuming).toBe(false);
     expect(result.current.resumeError).toBe("");
+    expect(result.current.isDeletingTask).toBe(false);
+    expect(result.current.deleteTaskError).toBe("");
     expect(result.current.isAddingMergeSource).toBe(false);
     expect(result.current.addMergeSourceError).toBe("");
     expect(result.current.isRemovingMergeSource).toBe(false);
@@ -248,6 +254,34 @@ describe("useTaskDetailActions", () => {
     expect(mockMutationFns["tasks:updateDescription"]).toHaveBeenCalledWith({
       taskId: "task1",
       description: "New desc",
+    });
+  });
+
+  it("calls deleteTask mutation and resets delete state", async () => {
+    const { result } = renderHook(() => useTaskDetailActions());
+    await act(async () => {
+      await result.current.deleteTask("task1" as any);
+    });
+    expect(mockMutationFns["tasks:softDelete"]).toHaveBeenCalledWith({
+      taskId: "task1",
+    });
+    expect(result.current.isDeletingTask).toBe(false);
+
+    act(() => {
+      result.current.resetDeleteTaskState();
+    });
+    expect(result.current.deleteTaskError).toBe("");
+  });
+
+  it("sends rejected plan feedback through postUserPlanMessage", async () => {
+    const { result } = renderHook(() => useTaskDetailActions());
+    await act(async () => {
+      await result.current.submitPlanReviewFeedback("task1" as any, "Please revise");
+    });
+    expect(mockMutationFns["messages:postUserPlanMessage"]).toHaveBeenCalledWith({
+      taskId: "task1",
+      content: "Please revise",
+      planReviewAction: "rejected",
     });
   });
 });

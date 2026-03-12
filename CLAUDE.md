@@ -103,7 +103,15 @@ Merge each worktree branch back into main. Resolve conflicts from parallel devel
 
 ### Worktree Preview
 
-**Always start worktrees with `uv run nanobot mc start`** — never use `npm run dev` or `npm run dev:frontend` alone. The MC gateway (Python) is required for task execution: it materializes steps, dispatches agents, and manages the full lifecycle. Without it, tasks transition to `in_progress` but nothing executes.
+**Always start worktrees from the worktree root with `uv run nanobot mc start`.**
+
+- Do **not** boot the app with `cd dashboard && npm run dev`.
+- Do **not** boot the app with `cd dashboard && npm run dev:frontend`.
+- Do **not** validate task execution against a frontend-only dev server.
+
+Those commands only bring up Next.js. They bypass the MC gateway (Python), so task execution, step materialization, dispatch, review, and lifecycle transitions are incomplete or misleading. A frontend-only boot is not a valid verification environment for this repository.
+
+The only accepted preview path for feature work is the full MC stack started from the worktree root:
 
 1. Copy `.env.local` into the worktree's dashboard (it is gitignored and not present by default):
    ```bash
@@ -114,8 +122,10 @@ Merge each worktree branch back into main. Resolve conflicts from parallel devel
    cd .worktrees/codex/<branch>
    PORT=3001 uv run nanobot mc start
    ```
-3. Open `http://localhost:3001`. This runs both the Python gateway and the Next.js frontend together, exercising the full runtime.
+3. Open `http://localhost:3001`. This starts the Python gateway and the Next.js frontend together, which is the only supported way to exercise the real runtime.
 4. Kill the process when done (`Ctrl-C` or `lsof -ti:3001 | xargs kill`).
+
+If someone suggests "just run the dashboard" for validation, treat that as insufficient unless the task is explicitly limited to static UI work with no Mission Control runtime dependency.
 
 ### Upstream Sync
 

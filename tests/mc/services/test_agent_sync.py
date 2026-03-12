@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mc.services.agent_sync import AgentSyncService
+from mc.contexts.agents.sync import AgentSyncService
 
 
 @pytest.fixture
@@ -70,10 +70,10 @@ class TestAgentSyncServiceInit:
 class TestSyncAgentRegistry:
     """Test the sync_agent_registry method — happy path and edge cases."""
 
-    @patch("mc.services.agent_sync._write_back_convex_agents")
-    @patch("mc.services.agent_sync.validate_agent_file")
-    @patch("mc.services.agent_sync.ensure_low_agent")
-    @patch("mc.services.agent_sync.ensure_nanobot_agent")
+    @patch("mc.contexts.agents.sync._write_back_convex_agents")
+    @patch("mc.contexts.agents.sync.validate_agent_file")
+    @patch("mc.contexts.agents.sync.ensure_low_agent")
+    @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
     def test_syncs_valid_agents(
         self,
         mock_ensure_nanobot: MagicMock,
@@ -102,11 +102,11 @@ class TestSyncAgentRegistry:
         assert errors == {}
         bridge.sync_agent.assert_called_once()
 
-    @patch("mc.services.agent_sync._config_default_model", return_value="anthropic/default")
-    @patch("mc.services.agent_sync._write_back_convex_agents")
-    @patch("mc.services.agent_sync.validate_agent_file")
-    @patch("mc.services.agent_sync.ensure_low_agent")
-    @patch("mc.services.agent_sync.ensure_nanobot_agent")
+    @patch("mc.contexts.agents.sync._config_default_model", return_value="anthropic/default")
+    @patch("mc.contexts.agents.sync._write_back_convex_agents")
+    @patch("mc.contexts.agents.sync.validate_agent_file")
+    @patch("mc.contexts.agents.sync.ensure_low_agent")
+    @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
     def test_reports_validation_errors(
         self,
         mock_ensure_nanobot: MagicMock,
@@ -125,11 +125,11 @@ class TestSyncAgentRegistry:
         assert len(synced) == 0
         assert "bad-agent" in errors
 
-    @patch("mc.services.agent_sync._config_default_model", return_value="anthropic/default")
-    @patch("mc.services.agent_sync._write_back_convex_agents")
-    @patch("mc.services.agent_sync.validate_agent_file")
-    @patch("mc.services.agent_sync.ensure_low_agent")
-    @patch("mc.services.agent_sync.ensure_nanobot_agent")
+    @patch("mc.contexts.agents.sync._config_default_model", return_value="anthropic/default")
+    @patch("mc.contexts.agents.sync._write_back_convex_agents")
+    @patch("mc.contexts.agents.sync.validate_agent_file")
+    @patch("mc.contexts.agents.sync.ensure_low_agent")
+    @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
     def test_deactivates_removed_agents(
         self,
         mock_ensure_nanobot: MagicMock,
@@ -202,7 +202,7 @@ class TestCleanupDeletedAgents:
 class TestSyncModelTiers:
     """Test sync_model_tiers — model tier sync logic."""
 
-    @patch("mc.services.agent_sync.list_available_models", return_value=[
+    @patch("mc.contexts.agents.sync.list_available_models", return_value=[
         "anthropic/claude-opus-4-5",
         "anthropic/claude-sonnet-4-5",
         "anthropic/claude-haiku-4-5",
@@ -218,7 +218,7 @@ class TestSyncModelTiers:
         # Should set connected_models and model_tiers
         assert bridge.mutation.call_count == 2
 
-    @patch("mc.services.agent_sync.list_available_models", return_value=[
+    @patch("mc.contexts.agents.sync.list_available_models", return_value=[
         "anthropic/claude-sonnet-4-5",
     ])
     def test_migrates_stale_tier_values(
@@ -261,7 +261,7 @@ class TestSyncEmbeddingModel:
 class TestSyncSkills:
     """Test sync_skills delegation."""
 
-    @patch("mc.services.agent_sync.sync_skills_impl")
+    @patch("mc.contexts.agents.sync.sync_skills_impl")
     def test_delegates_to_sync_skills_impl(
         self, mock_sync: MagicMock, service: AgentSyncService, bridge: MagicMock
     ) -> None:

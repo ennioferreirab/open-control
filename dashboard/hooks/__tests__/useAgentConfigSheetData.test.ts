@@ -50,7 +50,7 @@ vi.mock("../../convex/_generated/api", () => ({
   },
 }));
 
-import { useAgentConfigSheetData } from "../useAgentConfigSheetData";
+import { useAgentConfigSheetData } from "@/features/agents/hooks/useAgentConfigSheetData";
 
 describe("useAgentConfigSheetData", () => {
   beforeEach(() => {

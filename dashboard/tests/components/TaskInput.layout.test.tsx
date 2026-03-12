@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { TaskInput } from "../../components/TaskInput";
-import type { TaskInputData } from "@/hooks/useTaskInputData";
+import { TaskInput } from "../../features/tasks/components/TaskInput";
+import type { TaskInputData } from "@/features/tasks/hooks/useTaskInputData";
 
 // Mock the feature hook instead of convex/react
 const mockCreateTask = vi.fn();
@@ -16,7 +16,7 @@ const defaultHookData: TaskInputData = {
   isAutoTitle: false,
 };
 
-vi.mock("@/hooks/useTaskInputData", () => ({
+vi.mock("@/features/tasks/hooks/useTaskInputData", () => ({
   useTaskInputData: () => defaultHookData,
 }));
 

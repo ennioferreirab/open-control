@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mc.services.conversation_intent import (
+from mc.contexts.conversation.intent import (
     ConversationIntent,
     ConversationIntentResolver,
 )
@@ -20,7 +20,7 @@ _ALL_TEST_AGENTS = {"researcher", "alice", "bob", "nanobot"}
 def _mock_known_agent_names():
     """Patch _known_agent_names so tests do not depend on ~/.nanobot/agents/."""
     with patch(
-        "mc.mentions.handler._known_agent_names",
+        "mc.contexts.conversation.mentions.handler._known_agent_names",
         return_value=_ALL_TEST_AGENTS,
     ):
         yield

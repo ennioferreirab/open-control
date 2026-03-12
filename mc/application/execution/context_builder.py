@@ -283,7 +283,7 @@ class ContextBuilder:
             )
 
         # 9. Inject orientation
-        agent_prompt = inject_orientation(agent_name, agent_prompt)
+        agent_prompt = inject_orientation(agent_name, agent_prompt, bridge=self._bridge)
 
         # System agents (nanobot) use SOUL.md -- skip prompt injection
         if agent_name == NANOBOT_AGENT_NAME:
@@ -388,7 +388,7 @@ class ContextBuilder:
             req.model = agent_model
 
         # 5. Inject orientation
-        agent_prompt = inject_orientation(agent_name, agent_prompt)
+        agent_prompt = inject_orientation(agent_name, agent_prompt, bridge=self._bridge)
         if agent_name == NANOBOT_AGENT_NAME:
             agent_prompt = None
 

@@ -35,6 +35,12 @@ def _make_agent(
     )
 
 
+def _write_nanobot_config(home: Path, data: dict) -> None:
+    config_path = home / ".nanobot" / "config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # WorkspaceContext structure
 # ---------------------------------------------------------------------------
@@ -357,6 +363,39 @@ class TestMcpConfigGeneration:
         assert env["MC_SOCKET_PATH"] == "/tmp/mc-my-agent-task-abc.sock"
         assert env["AGENT_NAME"] == "my-agent"
         assert env["TASK_ID"] == "task-abc"
+
+    def test_mcp_json_includes_resolved_secret_env_vars(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("BRAVE_API_KEY", raising=False)
+        _write_nanobot_config(
+            tmp_path,
+            {
+                "providers": {
+                    "anthropic": {"apiKey": "anthropic-from-config"},
+                    "openai": {"apiKey": "openai-from-config"},
+                },
+                "tools": {
+                    "web": {
+                        "search": {"apiKey": "brave-from-config"},
+                    }
+                },
+            },
+        )
+
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        ctx = manager.prepare("my-agent", agent, "task-abc")
+
+        data = json.loads(ctx.mcp_config.read_text())
+        env = data["mcpServers"]["nanobot"]["env"]
+
+        assert env["ANTHROPIC_API_KEY"] == "anthropic-from-config"
+        assert env["OPENAI_API_KEY"] == "openai-from-config"
+        assert env["BRAVE_API_KEY"] == "brave-from-config"
 
     def test_mcp_json_valid_json(self, tmp_path: Path) -> None:
         manager = CCWorkspaceManager(workspace_root=tmp_path)

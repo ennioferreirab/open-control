@@ -45,8 +45,23 @@ vi.mock("react-syntax-highlighter/dist/esm/styles/prism", () => ({
 
 // Mock viewer sub-components
 vi.mock("@/components/viewers/MarkdownViewer", () => ({
-  MarkdownViewer: ({ content }: { content: string }) => (
-    <div data-testid="markdown-viewer">{content}</div>
+  MarkdownViewer: ({
+    content,
+    taskId,
+    sourceFile,
+  }: {
+    content: string;
+    taskId?: string;
+    sourceFile?: { name: string; subfolder: string };
+  }) => (
+    <div
+      data-testid="markdown-viewer"
+      data-task-id={taskId}
+      data-source-name={sourceFile?.name}
+      data-source-subfolder={sourceFile?.subfolder}
+    >
+      {content}
+    </div>
   ),
 }));
 
@@ -445,6 +460,26 @@ describe("DocumentViewerModal", () => {
       />
     );
     expect(document.querySelector("pre")).not.toBeNull();
+  });
+
+  it("passes task markdown source context into MarkdownViewer", () => {
+    mockUseDocumentFetch.mockReturnValue({
+      ...defaultFetchResult,
+      content: "![Chart](./chart.png)",
+    });
+
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={{ ...baseFile, name: "reports/summary.md", subfolder: "output" }}
+        onClose={vi.fn()}
+      />
+    );
+
+    const viewer = screen.getByTestId("markdown-viewer");
+    expect(viewer).toHaveAttribute("data-task-id", "task_1");
+    expect(viewer).toHaveAttribute("data-source-name", "reports/summary.md");
+    expect(viewer).toHaveAttribute("data-source-subfolder", "output");
   });
 
   it("renders .yaml as text viewer", () => {

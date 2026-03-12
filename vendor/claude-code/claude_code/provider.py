@@ -73,12 +73,14 @@ class ClaudeCodeProvider:
         """
         cmd = self._build_command(prompt, agent_config, workspace_ctx, session_id)
         logger.debug("ClaudeCodeProvider: spawning %s (task=%s)", cmd[0], task_id)
+        from mc.infrastructure.secrets import build_subprocess_env
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(workspace_ctx.cwd),
+            env=build_subprocess_env(),
             limit=_STREAM_READER_LIMIT,
         )
 

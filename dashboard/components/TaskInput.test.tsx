@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { TaskInput } from "./TaskInput";
-import type { TaskInputData } from "@/hooks/useTaskInputData";
+import { TaskInput } from "@/features/tasks/components/TaskInput";
+import type { TaskInputData } from "@/features/tasks/hooks/useTaskInputData";
 
 // Mock the feature hook instead of convex/react
 const mockCreateTask = vi.fn();
@@ -18,7 +18,7 @@ const defaultHookData: TaskInputData = {
 
 let hookOverrides: Partial<TaskInputData> = {};
 
-vi.mock("@/hooks/useTaskInputData", () => ({
+vi.mock("@/features/tasks/hooks/useTaskInputData", () => ({
   useTaskInputData: () => ({ ...defaultHookData, ...hookOverrides }),
 }));
 

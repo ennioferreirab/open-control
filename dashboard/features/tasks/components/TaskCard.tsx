@@ -3,8 +3,6 @@
 import { useState } from "react";
 import * as motion from "motion/react-client";
 import { useReducedMotion } from "motion/react";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +21,7 @@ import {
 import { Doc } from "@/convex/_generated/dataModel";
 import { STATUS_COLORS, TAG_COLORS, type TaskStatus } from "@/lib/constants";
 import { InlineRejection } from "@/components/InlineRejection";
+import { useTaskCardActions } from "@/features/tasks/hooks/useTaskCardActions";
 
 type TaskProgressStep = {
   status?: string;
@@ -43,9 +42,7 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress }: TaskCardProps) {
   const shouldReduceMotion = useReducedMotion();
-  const approveMutation = useMutation(api.tasks.approve);
-  const softDeleteMutation = useMutation(api.tasks.softDelete);
-  const toggleFavoriteMutation = useMutation(api.tasks.toggleFavorite);
+  const { approveTask, softDeleteTask, toggleFavoriteTask } = useTaskCardActions();
   const [showRejection, setShowRejection] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -112,7 +109,7 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress 
                 }`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  toggleFavoriteMutation({ taskId: task._id });
+                  void toggleFavoriteTask(task._id);
                 }}
               />
               {isManual && <User className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -249,7 +246,7 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress 
                     className="h-7 bg-green-500 px-2 text-xs text-white hover:bg-green-600"
                     onClick={(e) => {
                       e.stopPropagation();
-                      approveMutation({ taskId: task._id });
+                      void approveTask(task._id);
                     }}
                   >
                     Approve
@@ -300,7 +297,7 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress 
                     className="h-6 px-2 text-xs"
                     onClick={async (e) => {
                       e.stopPropagation();
-                      await softDeleteMutation({ taskId: task._id });
+                      await softDeleteTask(task._id);
                     }}
                   >
                     Yes

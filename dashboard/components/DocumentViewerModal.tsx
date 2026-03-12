@@ -127,7 +127,13 @@ export function DocumentViewerModal({ taskId, file, onClose }: Props) {
     }
 
     if (viewerType === "markdown") {
-      return <MarkdownViewer content={content ?? ""} />;
+      return (
+        <MarkdownViewer
+          content={content ?? ""}
+          taskId={taskId}
+          sourceFile={file ? { name: file.name, subfolder: file.subfolder } : undefined}
+        />
+      );
     }
 
     if (viewerType === "html") {

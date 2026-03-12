@@ -59,6 +59,15 @@ def _make_executor(bridge: MagicMock | None = None) -> TaskExecutor:
     return TaskExecutor(bridge)
 
 
+def _make_ipc_server_mock() -> MagicMock:
+    """Return an IPC server mock that matches MCSocketServer's sync/async contract."""
+    ipc_server = MagicMock()
+    ipc_server.set_ask_user_handler = MagicMock(return_value=None)
+    ipc_server.start = AsyncMock(return_value=None)
+    ipc_server.stop = AsyncMock(return_value=None)
+    return ipc_server
+
+
 def _cc_agent(backend: str = "claude-code") -> AgentData:
     return AgentData(
         name="my-cc-agent",
@@ -273,7 +282,7 @@ class TestExecuteCCTaskHappyPath:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         mock_provider.execute_task = AsyncMock(return_value=result)
 
@@ -313,7 +322,7 @@ class TestExecuteCCTaskHappyPath:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         captured: list[str] = []
 
@@ -345,7 +354,7 @@ class TestExecuteCCTaskHappyPath:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         captured: list[str] = []
 
@@ -407,7 +416,7 @@ class TestExecuteCCTaskFailures:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = _ws_ctx()
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_ipc.start.side_effect = OSError("address in use")
 
         with (
@@ -432,7 +441,7 @@ class TestExecuteCCTaskFailures:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         mock_provider.execute_task = AsyncMock(side_effect=RuntimeError("subprocess died"))
 
@@ -462,7 +471,7 @@ class TestExecuteCCTaskFailures:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         mock_provider.execute_task = AsyncMock(return_value=error_result)
 
@@ -497,7 +506,7 @@ class TestIPCServerCleanup:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         mock_provider.execute_task = AsyncMock(return_value=_cc_result())
 
@@ -521,7 +530,7 @@ class TestIPCServerCleanup:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         mock_provider.execute_task = AsyncMock(side_effect=RuntimeError("boom"))
 
@@ -555,7 +564,7 @@ class TestStreamCallback:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
 
         # Capture the on_stream callback and call it during execute_task
         captured_callback: list = []
@@ -604,7 +613,7 @@ class TestStreamCallback:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
 
         async def execute_task_with_tool_use(**kwargs):
             cb = kwargs.get("on_stream")
@@ -653,7 +662,7 @@ class TestCostTracking:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         mock_provider.execute_task = AsyncMock(return_value=result)
 
@@ -789,7 +798,7 @@ class TestOnTaskCompletedCallback:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         mock_provider.execute_task = AsyncMock(return_value=result)
 
@@ -822,7 +831,7 @@ class TestOnTaskCompletedCallback:
         mock_ws_mgr = MagicMock()
         mock_ws_mgr.prepare.return_value = ws_ctx
 
-        mock_ipc = AsyncMock()
+        mock_ipc = _make_ipc_server_mock()
         mock_provider = MagicMock()
         mock_provider.execute_task = AsyncMock(return_value=error_result)
 
@@ -1056,7 +1065,7 @@ class TestCCBoardScopedWorkspace:
         ws_mock = MagicMock()
         ws_mock.prepare.return_value = _ws_ctx()
 
-        ipc_mock = AsyncMock()
+        ipc_mock = _make_ipc_server_mock()
 
         provider_mock = MagicMock()
         provider_mock.execute_task = AsyncMock(return_value=_cc_result())

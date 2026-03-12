@@ -5,7 +5,7 @@ import { Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useSearchBarFilters } from "@/hooks/useSearchBarFilters";
+import { useSearchBarFilters } from "@/features/search/hooks/useSearchBarFilters";
 import { TAG_COLORS } from "@/lib/constants";
 import { parseSearch } from "@/lib/searchParser";
 import { cn } from "@/lib/utils";

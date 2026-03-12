@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, Fragment } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import * as motion from "motion/react-client";
 import { useReducedMotion } from "motion/react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -34,18 +32,21 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { ThreadMessage } from "@/components/ThreadMessage";
-import { ExecutionPlanTab, type ExecutionPlanViewMode } from "@/components/ExecutionPlanTab";
+import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
+import {
+  ExecutionPlanTab,
+  type ExecutionPlanViewMode,
+} from "@/features/tasks/components/ExecutionPlanTab";
 import { TAG_COLORS } from "@/lib/constants";
 import { InlineRejection } from "@/components/InlineRejection";
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
-import { ThreadInput } from "@/components/ThreadInput";
+import { ThreadInput } from "@/features/thread/components/ThreadInput";
 import { TagAttributeEditor } from "@/components/TagAttributeEditor";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useTaskDetailView } from "@/hooks/useTaskDetailView";
-import { useTaskDetailActions } from "@/hooks/useTaskDetailActions";
-import { usePlanEditorState } from "@/hooks/usePlanEditorState";
+import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
+import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
+import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
 import type { ExecutionPlan } from "@/lib/types";
 
 const formatSize = (bytes: number) =>
@@ -110,8 +111,9 @@ interface TaskDetailSheetProps {
 }
 
 export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheetProps) {
+  const [mergeQuery, setMergeQuery] = useState("");
   // --- Feature hooks ---
-  const view = useTaskDetailView(taskId);
+  const view = useTaskDetailView(taskId, { mergeQuery });
   const actions = useTaskDetailActions();
   const planState = usePlanEditorState(view.taskExecutionPlan, view.isAwaitingKickoff);
 
@@ -126,6 +128,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     directMergeSources,
     mergeSources,
     mergeSourceThreads,
+    mergeCandidates,
     displayFiles,
     isTaskLoaded,
     colors,
@@ -163,6 +166,11 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     updateDescription,
     addTaskFiles,
     removeTaskFile,
+    deleteTask,
+    isDeletingTask,
+    deleteTaskError,
+    resetDeleteTaskState,
+    submitPlanReviewFeedback,
     createActivity,
     createMergedTask,
     isCreatingMergeTask,
@@ -177,23 +185,16 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
 
   const { activePlan, localPlan, setLocalPlan, activeTab, setActiveTab } = planState;
   const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("both");
-
-  const softDeleteMutation = useMutation(api.tasks.softDelete);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteTaskError, setDeleteTaskError] = useState("");
 
   const handleDeleteTask = async () => {
     if (!task || !isTaskLoaded) return;
-    setIsDeleting(true);
-    setDeleteTaskError("");
     try {
-      await softDeleteMutation({ taskId: task._id });
+      await deleteTask(task._id);
       setShowDeleteConfirm(false);
       onClose();
-    } catch (err) {
-      setDeleteTaskError(err instanceof Error ? err.message : "Failed to delete task");
-      setIsDeleting(false);
+    } catch {
+      // error state is owned by the action hook
     }
   };
 
@@ -217,7 +218,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [editTitleValue, setEditTitleValue] = useState("");
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editDescriptionValue, setEditDescriptionValue] = useState("");
-  const [mergeQuery, setMergeQuery] = useState("");
   const [selectedMergeTaskId, setSelectedMergeTaskId] = useState<Id<"tasks"> | "">("");
   const [isMergedSourceGroupCollapsed, setIsMergedSourceGroupCollapsed] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
@@ -225,14 +225,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [isAtBottom, setIsAtBottom] = useState(true);
   const messageCount = messages?.length ?? 0;
   const isMergeLockedSource = Boolean(task?.mergedIntoTaskId);
-  const mergeCandidates = useQuery(
-    api.tasks.searchMergeCandidates,
-    task
-      ? task.isMergeTask
-        ? { query: mergeQuery, excludeTaskId: task._id, targetTaskId: task._id }
-        : { query: mergeQuery, excludeTaskId: task._id }
-      : "skip",
-  );
   const mergeAlias = task?.isMergeTask ? buildMergeAliasDisplay(directMergeSources) : undefined;
   const planForDisplay = activePlan ?? taskExecutionPlan ?? null;
   const hasMaterializedLiveSteps = Boolean(
@@ -298,11 +290,11 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     setIsEditingTitle(false);
     setIsEditingDescription(false);
     setShowDeleteConfirm(false);
-    setDeleteTaskError("");
+    resetDeleteTaskState();
     setMergeQuery("");
     setSelectedMergeTaskId("");
     setIsMergedSourceGroupCollapsed(false);
-  }, [taskId]);
+  }, [resetDeleteTaskState, taskId]);
 
   const handleSaveTitle = async () => {
     if (!task || !isTaskLoaded) return;
@@ -875,9 +867,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       size="sm"
                       className="h-6 px-2 text-xs"
                       onClick={handleDeleteTask}
-                      disabled={isDeleting}
+                      disabled={isDeletingTask}
                     >
-                      {isDeleting ? (
+                      {isDeletingTask ? (
                         <>
                           <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                           Deleting...
@@ -891,7 +883,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       size="sm"
                       className="h-6 px-2 text-xs"
                       onClick={() => setShowDeleteConfirm(false)}
-                      disabled={isDeleting}
+                      disabled={isDeletingTask}
                     >
                       Cancel
                     </Button>
@@ -1045,56 +1037,58 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                           data-testid="merged-source-threads-sticky"
                           className="sticky top-0 z-10 border-b border-border bg-background px-6 py-4"
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                              Merged threads
-                            </p>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => setIsMergedSourceGroupCollapsed((current) => !current)}
-                            >
-                              {isMergedSourceGroupCollapsed ? "Expand" : "Collapse"}
-                            </Button>
-                          </div>
-                          {!isMergedSourceGroupCollapsed && (
-                            <div className="mt-2 flex flex-col gap-2">
-                              {(mergeSourceThreads ?? []).map((sourceThread) => (
-                                <details
-                                  key={sourceThread.taskId}
-                                  className="rounded-md border border-border bg-muted/20"
-                                >
-                                  <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-foreground">
-                                    Thread {sourceThread.label}
-                                  </summary>
-                                  <div className="flex flex-col gap-2 px-3 pb-3">
-                                    {sourceThread.messages.length === 0 ? (
-                                      <p className="text-xs text-muted-foreground">
-                                        No messages in source thread.
-                                      </p>
-                                    ) : (
-                                      sourceThread.messages.map((msg) => (
-                                        <ThreadMessage
-                                          key={msg._id}
-                                          message={msg}
-                                          steps={undefined}
-                                          onArtifactClick={handleOpenArtifact}
-                                          taskIdOverride={sourceThread.taskId}
-                                        />
-                                      ))
-                                    )}
-                                  </div>
-                                </details>
-                              ))}
+                          <div className="mx-auto w-full min-w-0 max-w-5xl">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                Merged threads
+                              </p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setIsMergedSourceGroupCollapsed((current) => !current)}
+                              >
+                                {isMergedSourceGroupCollapsed ? "Expand" : "Collapse"}
+                              </Button>
                             </div>
-                          )}
+                            {!isMergedSourceGroupCollapsed && (
+                              <div className="mt-2 flex min-w-0 flex-col gap-2">
+                                {(mergeSourceThreads ?? []).map((sourceThread) => (
+                                  <details
+                                    key={sourceThread.taskId}
+                                    className="min-w-0 rounded-md border border-border bg-muted/20"
+                                  >
+                                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-foreground">
+                                      Thread {sourceThread.label}
+                                    </summary>
+                                    <div className="flex min-w-0 flex-col gap-2 px-3 pb-3">
+                                      {sourceThread.messages.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          No messages in source thread.
+                                        </p>
+                                      ) : (
+                                        sourceThread.messages.map((msg) => (
+                                          <ThreadMessage
+                                            key={msg._id}
+                                            message={msg}
+                                            steps={undefined}
+                                            onArtifactClick={handleOpenArtifact}
+                                            taskIdOverride={sourceThread.taskId}
+                                          />
+                                        ))
+                                      )}
+                                    </div>
+                                  </details>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                       <div
                         data-testid="thread-live-messages"
-                        className="flex flex-col gap-2 px-6 py-4"
+                        className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-2 px-6 py-4"
                       >
                         {messages.length === 0 && (
                           <p className="py-8 text-center text-sm text-muted-foreground">
@@ -1104,8 +1098,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                         {messages.map((msg) => (
                           <motion.div
                             key={msg._id}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
                             transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.2 }}
                           >
                             <ThreadMessage
@@ -1170,6 +1164,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       liveSteps={liveSteps ?? undefined}
                       messages={messages}
                       onPrimaryAction={planPanelPrimaryAction?.onClick}
+                      onRejectPlan={(content) => submitPlanReviewFeedback(task._id, content)}
                       task={task}
                     />
                   )}

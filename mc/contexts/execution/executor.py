@@ -14,13 +14,23 @@ from __future__ import annotations
 import asyncio
 import logging
 import shutil
-from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from mc.contexts.execution.agent_runner import (  # noqa: F401
+    AgentRunResult,
+    _coerce_agent_run_result,
+    _make_provider,
+    _run_agent_on_task,
+)
 from mc.contexts.execution.cc_executor import CCExecutorMixin
 from mc.contexts.execution.crash_recovery import AgentGateway
+from mc.contexts.execution.message_builder import build_task_message  # noqa: F401
+from mc.contexts.execution.provider_errors import (  # noqa: F401
+    PROVIDER_ERRORS,
+    _provider_error_action as _provider_error_action_impl,
+)
 from mc.contexts.planning.planner import TaskPlanner
 from mc.types import (
     ActivityEventType,
@@ -44,52 +54,7 @@ logger = logging.getLogger(__name__)
 # Strong references to fire-and-forget background tasks to prevent GC cancellation.
 # See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
 _background_tasks: set[asyncio.Task[None]] = set()
-
-
-@dataclass(slots=True)
-class AgentRunResult:
-    content: str
-    is_error: bool = False
-    error_message: str | None = None
-
-
-def _coerce_agent_run_result(value: Any) -> AgentRunResult:
-    """Normalize old string results and structured loop results to one shape."""
-    if isinstance(value, AgentRunResult):
-        return value
-    if isinstance(value, str):
-        return AgentRunResult(content=value)
-    content = getattr(value, "content", "") or ""
-    is_error = bool(getattr(value, "is_error", False))
-    error_message = getattr(value, "error_message", None)
-    return AgentRunResult(
-        content=content,
-        is_error=is_error,
-        error_message=error_message,
-    )
-
-
-def _collect_provider_error_types() -> tuple[type[Exception], ...]:
-    """Collect provider-specific exception types for targeted catching.
-
-    Returns a tuple of exception classes that represent provider/OAuth
-    errors (as opposed to agent runtime errors). These are caught
-    separately in _execute_task so they get surfaced with actionable
-    instructions instead of being buried in generic crash handling.
-    """
-    from mc.infrastructure.providers.factory import ProviderError
-
-    types: list[type[Exception]] = [ProviderError]
-    try:
-        from nanobot.providers.anthropic_oauth import AnthropicOAuthExpired
-
-        types.append(AnthropicOAuthExpired)
-    except ImportError:
-        pass
-    return tuple(types)
-
-
-_PROVIDER_ERRORS = _collect_provider_error_types()
+_PROVIDER_ERRORS = PROVIDER_ERRORS
 
 
 def _get_iana_timezone() -> str | None:
@@ -111,20 +76,8 @@ def build_executor_agent_roster() -> str:
 
 
 def _provider_error_action(exc: Exception) -> str:
-    """Extract a user-facing action string from a provider error.
-
-    For ProviderError the action is explicit. For AnthropicOAuthExpired
-    the message itself contains the command. Falls back to a generic hint.
-    """
-    from mc.infrastructure.providers.factory import ProviderError
-
-    if isinstance(exc, ProviderError) and exc.action:
-        return exc.action
-    # AnthropicOAuthExpired messages include "Run: nanobot provider login ..."
-    msg = str(exc)
-    if "Run:" in msg:
-        return msg[msg.index("Run:") :]
-    return "Check provider configuration in ~/.nanobot/config.json"
+    """Extract a user-facing action string from a provider error."""
+    return _provider_error_action_impl(exc)
 
 
 def _resolve_completion_status(task_data: dict[str, Any] | None) -> TaskStatus:
@@ -134,185 +87,6 @@ def _resolve_completion_status(task_data: dict[str, Any] | None) -> TaskStatus:
     if task_data.get("active_cron_job_id") or task_data.get("activeCronJobId"):
         return TaskStatus.DONE
     return TaskStatus.REVIEW
-
-
-def _make_provider(model: str | None = None):
-    """Create the LLM provider from the user's nanobot config.
-
-    Delegates to the shared provider_factory.create_provider() to avoid
-    duplication with nanobot/cli/commands.py.
-    """
-    from mc.infrastructure.providers.factory import create_provider
-
-    return create_provider(model)
-
-
-def build_task_message(title: str, description: str | None) -> str:
-    """Build the task message sent to the agent.
-
-    When a description exists, uses structured XML tags so the agent
-    can distinguish title from description. Otherwise, plain title
-    for backward compatibility.
-    """
-    if description and description.strip():
-        return f"<title>{title}</title>\n<description>{description}</description>"
-    return title
-
-
-async def _run_agent_on_task(
-    agent_name: str,
-    agent_prompt: str | None,
-    agent_model: str | None,
-    reasoning_level: str | None = None,
-    task_title: str = "",
-    task_description: str | None = None,
-    agent_skills: list[str] | None = None,
-    board_name: str | None = None,
-    memory_workspace: Path | None = None,
-    cron_service: Any | None = None,
-    task_id: str | None = None,
-    bridge: "ConvexBridge | None" = None,
-    ask_user_registry: Any | None = None,
-) -> tuple[str, str, "AgentLoop"]:
-    """Run the nanobot agent loop on a task and return the result.
-
-    Uses AgentLoop.process_direct() with the agent's system prompt and model.
-    The task title + description become the message input.
-    When board_name is provided, uses board-scoped session key and memory_workspace.
-    """
-    if is_lead_agent(agent_name):
-        raise LeadAgentExecutionError(
-            "INVARIANT VIOLATION: Lead Agent must never be passed to "
-            "_run_agent_on_task(). Execution structurally blocked."
-        )
-
-    from nanobot.agent.loop import AgentLoop
-    from nanobot.bus.queue import MessageBus
-
-    workspace = Path.home() / ".nanobot" / "agents" / agent_name
-    workspace.mkdir(parents=True, exist_ok=True)
-
-    # Global workspace skills (installed via ClawHub or manually)
-    global_skills_dir = Path.home() / ".nanobot" / "workspace" / "skills"
-
-    # Build the message from task title + description (structured format)
-    message = build_task_message(task_title, task_description)
-
-    # Prefix with agent system prompt if available (ContextBuilder reads
-    # bootstrap files from workspace, but the YAML prompt isn't a bootstrap
-    # file — so we include it in the message content).
-    if agent_prompt:
-        message = f"[System instructions]\n{agent_prompt}\n\n[Task]\n{message}"
-
-    logger.info(
-        "[_run_agent_on_task] Agent '%s': workspace=%s, memory_workspace=%s",
-        agent_name, workspace, memory_workspace,
-    )
-    logger.info(
-        "[_run_agent_on_task] Agent '%s': final message len=%d, first 500 chars:\n%s",
-        agent_name, len(message), repr(message[:500]),
-    )
-
-    # Board-scoped session key format (AC6); include task_id for per-task isolation
-    if board_name:
-        session_key = f"mc:board:{board_name}:task:{agent_name}:{task_id}" if task_id else f"mc:board:{board_name}:task:{agent_name}"
-    else:
-        session_key = f"mc:task:{agent_name}:{task_id}" if task_id else f"mc:task:{agent_name}"
-    logger.info(
-        "[_run_agent_on_task] Agent '%s': session_key='%s', board_name=%s",
-        agent_name, session_key, board_name,
-    )
-
-    # Create provider from user config (respects OAuth, API keys, etc.)
-    provider, resolved_model = _make_provider(agent_model)
-
-    bus = MessageBus()
-    loop = AgentLoop(
-        bus=bus,
-        provider=provider,
-        workspace=workspace,
-        model=resolved_model,
-        reasoning_level=reasoning_level,
-        allowed_skills=agent_skills,
-        global_skills_dir=global_skills_dir,
-        memory_workspace=memory_workspace,
-        cron_service=cron_service,
-        agent_name=agent_name,
-        mc_consolidation_system_prompt=(
-            "You are a memory consolidation agent processing MC task history. "
-            "User messages may contain <title>...</title> and <description>...</description> XML tags identifying the task. "
-            "Descriptions may include: file manifests (input files attached to the task), "
-            "[Task Tag Attributes] (tags and their attribute key=value pairs), "
-            "and ## Thread Context (prior human messages in the task thread). "
-            "When writing history_entry, use this format for each task: "
-            "'[YYYY-MM-DD HH:MM] Task \"<title>\": <summary>. "
-            "Tags: <tag>(<attr=val>, ...). "
-            "Files read: <paths>. Files written: <paths>.' "
-            "Omit any field that has no data. "
-            "Call the save_memory tool with your consolidation."
-        ),
-    )
-
-    # Agents running MC steps should execute tasks directly, not re-delegate.
-    # Remove delegate_task to prevent circular delegation loops.
-    loop.tools.unregister("delegate_task")
-
-    # Inject Telegram default chat_id into CronTool so agents running in MC
-    # context can schedule cron jobs that deliver to Telegram without needing
-    # to know the numeric chat_id explicitly.
-    if cron_tool := loop.tools.get("cron"):
-        from nanobot.agent.tools.cron import CronTool as _CronTool
-        if isinstance(cron_tool, _CronTool):
-            from nanobot.config.loader import load_config as _load_config
-            _cfg = _load_config()
-            _tg_ids = [x for x in _cfg.channels.telegram.allow_from if x.lstrip("-").isdigit()]
-            if _tg_ids:
-                cron_tool.set_telegram_default(_tg_ids[0])
-
-    # Set MC context on ask_agent tool for inter-agent conversations (Story 10.3)
-    if ask_tool := loop.tools.get("ask_agent"):
-        from nanobot.agent.tools.ask_agent import AskAgentTool
-        if isinstance(ask_tool, AskAgentTool):
-            ask_tool.set_context(
-                caller_agent=agent_name,
-                task_id=task_id,
-                depth=0,
-                bridge=bridge,
-            )
-
-    # Set MC context on ask_user tool for interactive user questions
-    _ask_user_cleanup: tuple[Any | None, str | None] | None = None
-    if ask_user_tool := loop.tools.get("ask_user"):
-        from nanobot.agent.tools.ask_user import AskUserTool
-        if isinstance(ask_user_tool, AskUserTool):
-            from mc.ask_user.handler import AskUserHandler
-
-            handler = AskUserHandler()
-            if ask_user_registry and task_id:
-                ask_user_registry.register(task_id, handler)
-            ask_user_tool.set_context(
-                agent_name=agent_name,
-                task_id=task_id,
-                bridge=bridge,
-                handler=handler,
-            )
-            _ask_user_cleanup = (ask_user_registry, task_id)
-
-    try:
-        result = await loop.process_direct(
-            content=message,
-            session_key=session_key,
-            channel="mc",
-            chat_id=agent_name,
-            task_id=task_id,
-        )
-    finally:
-        if _ask_user_cleanup is not None:
-            reg, tid = _ask_user_cleanup
-            if reg and tid:
-                reg.unregister(tid)
-
-    return result, session_key, loop
 
 
 def _human_size(b: int) -> str:

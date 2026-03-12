@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AlertTriangle, CheckCircle2, XCircle, MessageCircle } from "lucide-react";
 import { Doc } from "@/convex/_generated/dataModel";
@@ -13,6 +14,72 @@ interface ThreadMessageProps {
   steps?: Doc<"steps">[];
   onArtifactClick?: (artifactPath: string, sourceTaskId?: Doc<"messages">["taskId"]) => void;
   taskIdOverride?: Doc<"messages">["taskId"];
+}
+
+function resolveStepTitle(message: Doc<"messages">, steps?: Doc<"steps">[]): string | undefined {
+  if (!message.stepId || !steps) return undefined;
+  return steps.find((step) => step._id === message.stepId)?.title;
+}
+
+function areArtifactsEqual(
+  previous: Doc<"messages">["artifacts"],
+  next: Doc<"messages">["artifacts"],
+): boolean {
+  if (previous === next) return true;
+  if ((previous?.length ?? 0) !== (next?.length ?? 0)) return false;
+
+  return (previous ?? []).every((artifact, index) => {
+    const candidate = next?.[index];
+    return (
+      candidate?.path === artifact.path
+      && candidate?.action === artifact.action
+      && candidate?.description === artifact.description
+    );
+  });
+}
+
+function areFileAttachmentsEqual(
+  previous: Doc<"messages">["fileAttachments"],
+  next: Doc<"messages">["fileAttachments"],
+): boolean {
+  if (previous === next) return true;
+  if ((previous?.length ?? 0) !== (next?.length ?? 0)) return false;
+
+  return (previous ?? []).every((attachment, index) => {
+    const candidate = next?.[index];
+    return (
+      candidate?.name === attachment.name
+      && candidate?.size === attachment.size
+    );
+  });
+}
+
+function areMessagesRenderEquivalent(previous: Doc<"messages">, next: Doc<"messages">): boolean {
+  return (
+    previous._id === next._id
+    && previous.authorName === next.authorName
+    && previous.authorType === next.authorType
+    && previous.content === next.content
+    && previous.messageType === next.messageType
+    && previous.type === next.type
+    && previous.timestamp === next.timestamp
+    && previous.taskId === next.taskId
+    && previous.stepId === next.stepId
+    && areArtifactsEqual(previous.artifacts, next.artifacts)
+    && areFileAttachmentsEqual(previous.fileAttachments, next.fileAttachments)
+  );
+}
+
+function areThreadMessagePropsEqual(
+  previous: ThreadMessageProps,
+  next: ThreadMessageProps,
+): boolean {
+  return (
+    previous.onArtifactClick === next.onArtifactClick
+    && previous.taskIdOverride === next.taskIdOverride
+    && areMessagesRenderEquivalent(previous.message, next.message)
+    && resolveStepTitle(previous.message, previous.steps) === resolveStepTitle(next.message, next.steps)
+  );
 }
 
 function getInitials(name: string): string {
@@ -63,7 +130,7 @@ function getMessageStyles(message: Doc<"messages">): MessageStyles {
   return getLegacyMessageStyles(message.messageType, message.authorType);
 }
 
-export function ThreadMessage({
+function ThreadMessageComponent({
   message,
   steps,
   onArtifactClick,
@@ -86,15 +153,14 @@ export function ThreadMessage({
   const isDenial = message.messageType === "denial";
 
   // Resolve step title for step_completion messages (Option A: passed from parent)
-  const stepTitle =
-    message.stepId && steps ? steps.find((s) => s._id === message.stepId)?.title : undefined;
+  const stepTitle = resolveStepTitle(message, steps);
 
   return (
-    <div className={`flex gap-2 p-2 rounded-md ${styles.bg}`}>
+    <div className={`flex w-full min-w-0 max-w-full gap-2 rounded-md p-2 ${styles.bg}`}>
       <Avatar className="h-6 w-6 shrink-0">
         <AvatarFallback className="text-xs">{getInitials(message.authorName)}</AvatarFallback>
       </Avatar>
-      <div className="flex-1 min-w-0 overflow-hidden">
+      <div className="flex-1 min-w-0 max-w-full overflow-hidden">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium text-foreground flex items-center gap-1">
             {isComment && <MessageCircle className="h-3 w-3 text-slate-500 shrink-0" />}
@@ -153,3 +219,6 @@ export function ThreadMessage({
     </div>
   );
 }
+
+export const ThreadMessage = memo(ThreadMessageComponent, areThreadMessagePropsEqual);
+ThreadMessage.displayName = "ThreadMessage";

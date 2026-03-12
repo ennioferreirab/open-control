@@ -30,8 +30,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { AgentSidebarItem } from "@/components/AgentSidebarItem";
-import { AgentConfigSheet } from "@/components/AgentConfigSheet";
+import { AgentSidebarItem } from "@/features/agents/components/AgentSidebarItem";
+import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
 import { CreateAgentSheet } from "@/components/CreateAgentSheet";
 import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
 
