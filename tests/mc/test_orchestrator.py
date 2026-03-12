@@ -124,12 +124,12 @@ class TestProcessPlanningTask:
             return MagicMock()
 
         with (
-            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "mc.workers.planning.asyncio.create_task",
+                "mc.runtime.workers.planning.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -180,9 +180,9 @@ class TestProcessPlanningTask:
         )
 
         with (
-            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.workers.planning.asyncio.create_task") as create_task_mock,
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.planning.asyncio.create_task") as create_task_mock,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(return_value=plan)
@@ -204,8 +204,8 @@ class TestProcessPlanningTask:
         task = _make_task(task_id="task-fail", title="Failing plan")
 
         with (
-            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(
@@ -283,12 +283,12 @@ class TestProcessPlanningTask:
             return MagicMock()
 
         with (
-            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "mc.workers.planning.asyncio.create_task",
+                "mc.runtime.workers.planning.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
             planner.plan_task = AsyncMock(side_effect=_capture_plan_task)
@@ -340,12 +340,12 @@ class TestProcessPlanningTask:
             return MagicMock()
 
         with (
-            patch("mc.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
             patch(
-                "mc.workers.planning.asyncio.create_task",
+                "mc.runtime.workers.planning.asyncio.create_task",
                 side_effect=_capture_create_task,
             ),
-            patch("mc.workers.planning.TaskPlanner") as planner_cls,
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
             patch(
                 "mc.infrastructure.providers.tier_resolver.TierResolver.resolve_model",
                 return_value="cc/claude-sonnet-4-6",
@@ -392,16 +392,17 @@ class TestHandleReviewTransitionPausedTask:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await orchestrator._handle_review_transition("task-1", paused_task)
 
         # Task must NOT be auto-completed to done
         bridge.update_task_status.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_review_task_without_steps_is_auto_completed(self) -> None:
-        """Autonomous review now waits for explicit approval even without reviewers."""
+    async def test_review_task_without_steps_waits_for_explicit_approval(self) -> None:
+        """Autonomous review without reviewers now stays in review until explicit approval."""
         bridge = _make_bridge()
+        # No materialized steps -- this is a normal review completion
         bridge.get_steps_by_task.return_value = []
         orchestrator = TaskOrchestrator(bridge)
 
@@ -414,9 +415,10 @@ class TestHandleReviewTransitionPausedTask:
             "awaiting_kickoff": None,
         }
 
-        with patch("mc.workers.review.asyncio.to_thread", new=_sync_to_thread):
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await orchestrator._handle_review_transition("task-1", review_task)
 
+        # Task now stays in review until an explicit approval event arrives.
         bridge.update_task_status.assert_not_called()
 
 

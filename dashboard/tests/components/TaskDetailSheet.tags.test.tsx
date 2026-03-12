@@ -31,7 +31,6 @@ vi.mock("../../convex/_generated/api", () => ({
       postUserPlanMessage: "messages:postUserPlanMessage",
     },
     activities: { create: "activities:create" },
-    messages: { postUserPlanMessage: "messages:postUserPlanMessage" },
     tagAttributeValues: {
       removeByTaskAndTag: "tagAttributeValues:removeByTaskAndTag",
     },

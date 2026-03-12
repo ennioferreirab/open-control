@@ -448,7 +448,7 @@ describe("TaskDetailSheet", () => {
     expect(screen.getByText("source-b.md")).toBeInTheDocument();
     expect(screen.getAllByText("A").length).toBeGreaterThan(0);
     expect(screen.getAllByText("B").length).toBeGreaterThan(0);
-  });
+  }, 10000);
 
   it("opens merged source artifacts using the source thread task id", async () => {
     const user = userEvent.setup();

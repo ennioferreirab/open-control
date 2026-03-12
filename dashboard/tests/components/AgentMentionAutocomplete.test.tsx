@@ -22,7 +22,7 @@ vi.mock("../../convex/_generated/api", () => ({
 }));
 
 import { useQuery, useMutation } from "convex/react";
-import { ThreadInput } from "../../components/ThreadInput";
+import { ThreadInput } from "../../features/thread/components/ThreadInput";
 
 const mockUseQuery = useQuery as ReturnType<typeof vi.fn>;
 const mockUseMutation = useMutation as ReturnType<typeof vi.fn>;

@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
 
 import pytest
-from mc.types import TaskStatus
 
 
 # ---------------------------------------------------------------------------
@@ -137,12 +136,12 @@ class TestRunGateway:
              patch("mc.contexts.execution.executor.TaskExecutor") as MockExec, \
              patch("mc.contexts.conversation.chat_handler.ChatHandler") as MockCH, \
              patch("mc.contexts.conversation.ask_user.watcher.AskUserReplyWatcher") as MockAUW, \
-             patch("mc.services.plan_negotiation.PlanNegotiationSupervisor") as MockPNS, \
+             patch("mc.contexts.planning.supervisor.PlanNegotiationSupervisor") as MockPNS, \
              patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls), \
              patch("nanobot.config.loader.load_config"), \
              patch("nanobot.bus.queue.MessageBus"), \
              patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel), \
-             patch("mc.mentions.watcher.MentionWatcher") as MockMW:
+             patch("mc.contexts.conversation.mentions.watcher.MentionWatcher") as MockMW:
             mock_orch_instance = MockOrch.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
@@ -422,11 +421,11 @@ class TestExecutionLoop:
 # ---------------------------------------------------------------------------
 
 class TestTaskExecution:
-    """Test task execution writes results and transitions to review."""
+    """Test task execution writes results and transitions to done/review."""
 
     @pytest.mark.asyncio
-    async def test_default_task_completion_transitions_to_review(self):
-        """Non-cron execution should complete to review by default."""
+    async def test_autonomous_task_transitions_to_review(self):
+        """Default task execution should complete to 'review'."""
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
@@ -445,7 +444,7 @@ class TestTaskExecution:
             )
 
         mock_bridge.update_task_status.assert_any_call(
-            "task_001", TaskStatus.REVIEW, "test-agent", unittest_any_string()
+            "task_001", "review", "test-agent", unittest_any_string()
         )
 
     @pytest.mark.asyncio
@@ -858,9 +857,8 @@ class TestOrchestratorNoDuplicateActivity:
         assert args[0][0] == "review_requested"
 
     @pytest.mark.asyncio
-    async def test_auto_complete_review_no_create_activity(self):
-        """Autonomous task with no reviewers transitions directly to done
-        via update_task_status — should NOT call create_activity."""
+    async def test_autonomous_review_waits_for_explicit_approval(self):
+        """Autonomous review with no reviewers stays in review and creates no activity."""
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
@@ -876,7 +874,7 @@ class TestOrchestratorNoDuplicateActivity:
         }
 
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            await orch._review_worker.handle_review_transition("task_auto_1", task_data)
+            await orch._handle_review_transition("task_auto_1", task_data)
 
         mock_bridge.update_task_status.assert_not_called()
         mock_bridge.create_activity.assert_not_called()

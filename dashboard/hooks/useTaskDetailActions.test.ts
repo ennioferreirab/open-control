@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useTaskDetailActions } from "./useTaskDetailActions";
+import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 
 // Mock convex/react
 const mockMutationFns: Record<string, ReturnType<typeof vi.fn>> = {};

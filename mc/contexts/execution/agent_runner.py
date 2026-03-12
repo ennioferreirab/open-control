@@ -175,7 +175,7 @@ async def _run_agent_on_task(
         from nanobot.agent.tools.ask_user import AskUserTool
 
         if isinstance(ask_user_tool, AskUserTool):
-            from mc.ask_user.handler import AskUserHandler
+            from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
             handler = AskUserHandler()
             if ask_user_registry and task_id:

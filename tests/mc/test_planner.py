@@ -76,7 +76,7 @@ def _multi_step_plan_json() -> dict:
             },
             {
                 "tempId": "step_2",
-                "title": "Document API",
+                "title": "Document endpoint",
                 "description": "Write API documentation",
                 "assignedAgent": "docs-agent",
                 "blockedBy": ["step_1"],
@@ -336,10 +336,13 @@ class TestTaskPlannerNanobotFallback:
         plan_json = {
             "steps": [
                 {
-                    "step_id": "step_1",
+                    "tempId": "step_1",
+                    "title": "Handle obscure task",
                     "description": "Do something obscure",
-                    "assigned_agent": "nanobot",
-                    "depends_on": [],
+                    "assignedAgent": "nanobot",
+                    "blockedBy": [],
+                    "parallelGroup": 1,
+                    "order": 1,
                 }
             ]
         }
@@ -365,10 +368,13 @@ class TestTaskPlannerNanobotFallback:
         plan_json = {
             "steps": [
                 {
-                    "step_id": "step_1",
+                    "tempId": "step_1",
+                    "title": "Handle obscure task",
                     "description": "Do something obscure",
-                    "assigned_agent": "lead-agent",
-                    "depends_on": [],
+                    "assignedAgent": "lead-agent",
+                    "blockedBy": [],
+                    "parallelGroup": 1,
+                    "order": 1,
                 }
             ]
         }
@@ -403,7 +409,7 @@ class TestAgentNameValidation:
             "steps": [
                 {
                     "tempId": "step_1",
-                    "title": "Do something",
+                    "title": "Handle test task",
                     "description": "Do something",
                     "assignedAgent": "nonexistent-agent",
                     "blockedBy": [],
@@ -448,18 +454,18 @@ class TestAgentNameValidation:
 
 
 class TestAgentNameNoneHandling:
-    """Test that None/missing assigned_agent defaults to nanobot (H1 fix)."""
+    """Test that None assignedAgent defaults to nanobot after parsing."""
 
     @pytest.mark.asyncio
     async def test_none_assigned_agent_defaults_to_nanobot(self):
-        """When LLM omits assigned_agent, it should default to nanobot."""
+        """When LLM returns assignedAgent=null, it should default to nanobot."""
         from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
             "steps": [
                 {
                     "tempId": "step_1",
-                    "title": "Do something",
+                    "title": "Handle test task",
                     "description": "Do something",
                     "assignedAgent": None,
                     "blockedBy": [],
@@ -939,10 +945,13 @@ class TestMalformedJSONFallback:
         {
           "steps": [
             {
-              "step_id": "step_1",
+              "tempId": "step_1",
+              "title": "Write utility function",
               "description": "Write the Python utility function",
-              "assigned_agent": "code-agent",
-              "depends_on": [],
+              "assignedAgent": "code-agent",
+              "blockedBy": [],
+              "parallelGroup": 1,
+              "order": 1,
             }
           ]
         }
@@ -995,8 +1004,8 @@ class TestOrchestratorPlannerIntegration:
             "description": "Write some Python",
         }
 
-        with patch("mc.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
+             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1029,8 +1038,8 @@ class TestOrchestratorPlannerIntegration:
             "assigned_agent": "code-agent",
         }
 
-        with patch("mc.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
+             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1064,8 +1073,8 @@ class TestOrchestratorPlannerIntegration:
             "description": None,
         }
 
-        with patch("mc.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
+             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1092,8 +1101,8 @@ class TestOrchestratorPlannerIntegration:
             "is_manual": True,
         }
 
-        with patch("mc.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
+             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
             await orch._process_planning_task(task_data)
 
             MockPlanner.assert_not_called()
@@ -1185,10 +1194,13 @@ class TestRemoteTerminalExclusion:
 
         plan_json = {
             "steps": [{
-                "step_id": "step_1",
+                "tempId": "step_1",
+                "title": "Research task",
                 "description": "Research something",
-                "assigned_agent": "Macbook",
-                "depends_on": [],
+                "assignedAgent": "Macbook",
+                "blockedBy": [],
+                "parallelGroup": 1,
+                "order": 1,
             }]
         }
         mock_provider = MagicMock()
