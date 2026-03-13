@@ -197,3 +197,15 @@ development_status:
   26-2-reduce-dashboard-shared-convex-coupling: done
   26-3-reduce-backend-executor-and-bridge-hotspots: done
   epic-26-retrospective: optional
+
+  # Epic 27: Interactive Agent TUI Sessions
+  # Adds a provider-agnostic interactive TUI runtime for native CLI terminals
+  # inside Mission Control, starting with Claude Code in Chat and extending to
+  # Codex on the same infrastructure without mixing with headless execution.
+  epic-27: in-progress
+  27-1-build-interactive-session-runtime-foundation: ready-for-dev
+  27-2-add-claude-code-interactive-session-adapter: ready-for-dev
+  27-3-embed-interactive-tui-tab-in-chat-panel: ready-for-dev
+  27-4-generalize-interactive-adapter-contract-and-add-codex-adapter: ready-for-dev
+  27-5-harden-interactive-session-observability-security-and-reuse: ready-for-dev
+  epic-27-retrospective: optional
