@@ -45,6 +45,7 @@ class CodexSupervisionRelay:
         self._step_id = step_id
         self._agent_name = agent_name
         self._sink = sink
+        self._final_outputs_by_turn: dict[str, str] = {}
 
     def process_message(self, message: dict[str, Any]) -> dict[str, object] | None:
         method = _text(message.get("method"))
@@ -68,23 +69,43 @@ class CodexSupervisionRelay:
             turn_id = _text(turn.get("id"))
             summary = _text(turn.get("summary"))
             kind = "turn_started" if method == "turn/started" else "turn_completed"
+            final_output = None
+            if method == "turn/completed" and turn_id is not None:
+                final_output = self._final_outputs_by_turn.get(turn_id)
             return self._event(
                 kind=kind,
                 turn_id=turn_id,
                 summary=summary,
+                final_output=final_output,
                 metadata={"thread_id": _text(params.get("threadId"))},
             )
 
         if method in {"item/started", "item/completed"}:
             item = params.get("item") if isinstance(params.get("item"), dict) else {}
             kind = "item_started" if method == "item/started" else "item_completed"
+            item_type = _text(item.get("type"))
+            message_phase = _text(item.get("phase"))
+            final_output = None
+            if (
+                method == "item/completed"
+                and item_type == "agentMessage"
+                and _text(item.get("text")) is not None
+            ):
+                item_text = _text(item.get("text"))
+                if item_text is not None and message_phase == "final_answer":
+                    turn_id = _text(params.get("turnId"))
+                    if turn_id is not None:
+                        self._final_outputs_by_turn[turn_id] = item_text
+                    final_output = item_text
             return self._event(
                 kind=kind,
                 turn_id=_text(params.get("turnId")),
                 item_id=_text(item.get("id")),
+                final_output=final_output,
                 metadata={
                     "thread_id": _text(params.get("threadId")),
-                    "item_type": _text(item.get("type")),
+                    "item_type": item_type,
+                    "message_phase": message_phase,
                 },
             )
 
@@ -138,6 +159,7 @@ class CodexSupervisionRelay:
         turn_id: str | None = None,
         item_id: str | None = None,
         summary: str | None = None,
+        final_output: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> InteractiveSupervisionEvent:
         return InteractiveSupervisionEvent(
@@ -149,6 +171,7 @@ class CodexSupervisionRelay:
             turn_id=turn_id,
             item_id=item_id,
             summary=summary,
+            final_output=final_output,
             metadata=_drop_none(metadata or {}),
             agent_name=self._agent_name,
         )

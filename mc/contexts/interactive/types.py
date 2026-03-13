@@ -20,6 +20,7 @@ class InteractiveLaunchSpec:
     command: list[str]
     capabilities: list[str]
     environment: dict[str, str] | None = None
+    bootstrap_input: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ class InteractiveProviderAdapter(Protocol):
         task_prompt: str | None = None,
         board_name: str | None = None,
         memory_mode: str = "clean",
+        memory_workspace: Path | None = None,
         resume_session_id: str | None = None,
     ) -> InteractiveLaunchSpec:
         """Prepare launch metadata for a provider-backed interactive session."""
@@ -62,3 +64,12 @@ class InteractiveSupervisionSink(Protocol):
 
     def handle_event(self, event: InteractiveSupervisionEvent) -> dict[str, object]:
         """Consume a provider-agnostic lifecycle event."""
+
+    def record_final_result(
+        self,
+        *,
+        session_id: str,
+        content: str,
+        source: str,
+    ) -> dict[str, object]:
+        """Persist a canonical final result for a running interactive session."""

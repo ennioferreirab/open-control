@@ -137,6 +137,7 @@ vi.mock("@/features/interactive/components/InteractiveTerminalPanel", () => ({
 }));
 
 type TaskDoc = Doc<"tasks">;
+type StepDoc = Doc<"steps">;
 
 const baseTask: TaskDoc = {
   _id: "task1" as never,
@@ -162,7 +163,7 @@ const baseMessage = {
   timestamp: "2026-01-01T12:00:00Z",
 };
 
-function buildDetailView(task: TaskDoc, messages: unknown[] = []) {
+function buildDetailView(task: TaskDoc, messages: unknown[] = [], steps: StepDoc[] = []) {
   const awaitingKickoff =
     typeof (task as Partial<{ awaitingKickoff: boolean }>).awaitingKickoff === "boolean"
       ? (task as Partial<{ awaitingKickoff: boolean }>).awaitingKickoff === true
@@ -171,7 +172,7 @@ function buildDetailView(task: TaskDoc, messages: unknown[] = []) {
     task,
     board: null,
     messages,
-    steps: [],
+    steps,
     files: [],
     mergedIntoTask: null,
     directMergeSources: [],
@@ -210,7 +211,7 @@ describe("TaskDetailSheet", () => {
     mockDocumentViewerModal.mockReset();
   });
 
-  function oneRenderPass(task: TaskDoc, messages: unknown[] = []) {
+  function oneRenderPass(task: TaskDoc, messages: unknown[] = [], steps: StepDoc[] = []) {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
@@ -219,13 +220,13 @@ describe("TaskDetailSheet", () => {
         args !== null &&
         "taskId" in (args as Record<string, unknown>)
       ) {
-        return buildDetailView(task, messages);
+        return buildDetailView(task, messages, steps);
       }
       return [];
     });
   }
 
-  function stableQueryMock(task: TaskDoc, messages: unknown[] = []) {
+  function stableQueryMock(task: TaskDoc, messages: unknown[] = [], steps: StepDoc[] = []) {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (args === undefined) return [];
@@ -235,7 +236,7 @@ describe("TaskDetailSheet", () => {
         !("taskId" in (args as Record<string, unknown>))
       )
         return [];
-      return buildDetailView(task, messages);
+      return buildDetailView(task, messages, steps);
     });
   }
 
@@ -264,6 +265,19 @@ describe("TaskDetailSheet", () => {
 
   it("shows live controls for running interactive step sessions and opens the live tab", async () => {
     const user = userEvent.setup();
+    const activeStep: StepDoc = {
+      _id: "step1" as never,
+      _creationTime: 1,
+      taskId: "task1" as never,
+      title: "Active interactive step",
+      description: "Execute on the correct provider",
+      assignedAgent: "agent-alpha",
+      status: "running",
+      parallelGroup: 1,
+      order: 1,
+      createdAt: "2026-03-13T09:00:00.000Z",
+      startedAt: "2026-03-13T09:02:00.000Z",
+    };
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
       if (args === "skip") return undefined;
       if (
@@ -271,7 +285,26 @@ describe("TaskDetailSheet", () => {
         args !== null &&
         "taskId" in (args as Record<string, unknown>)
       ) {
-        return buildDetailView(baseTask, [baseMessage]);
+        return buildDetailView(baseTask, [baseMessage], [activeStep]);
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "name" in (args as Record<string, unknown>)
+      ) {
+        return {
+          _id: "agent-doc",
+          _creationTime: 1,
+          name: "agent-alpha",
+          displayName: "Agent Alpha",
+          role: "Engineer",
+          prompt: "",
+          soul: "",
+          skills: [],
+          status: "active",
+          model: "cc/claude-sonnet-4-6",
+          interactiveProvider: "claude-code",
+        };
       }
       if (
         typeof args === "object" &&
@@ -297,6 +330,24 @@ describe("TaskDetailSheet", () => {
             stepId: "step1",
             supervisionState: "running",
           },
+          {
+            _id: "session-doc-2",
+            _creationTime: 2,
+            sessionId: "interactive_session:codex:wrong-step",
+            agentName: "agent-beta",
+            provider: "codex",
+            scopeKind: "task",
+            scopeId: "task1",
+            surface: "step",
+            tmuxSession: "mc-int-999",
+            status: "detached",
+            capabilities: ["tui"],
+            createdAt: "2026-03-13T09:05:00.000Z",
+            updatedAt: "2026-03-13T09:30:00.000Z",
+            taskId: "task1",
+            stepId: "step2",
+            supervisionState: "running",
+          },
         ];
       }
       return [];
@@ -305,12 +356,18 @@ describe("TaskDetailSheet", () => {
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByTestId("live-session-badge")).toHaveTextContent("Live • Running");
+    expect(screen.getByTestId("live-session-identity")).toHaveTextContent(
+      "@agent-alpha · claude-code",
+    );
     expect(screen.getByTestId("live-button")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Live" })).toBeInTheDocument();
 
     await user.click(screen.getByTestId("live-button"));
 
     expect(screen.getByTestId("interactive-terminal")).toBeInTheDocument();
+    expect(screen.getByTestId("interactive-terminal")).toHaveTextContent(
+      "live:agent-alpha:claude-code",
+    );
   });
 
   it("shows empty thread placeholder when no messages", () => {

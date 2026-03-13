@@ -198,6 +198,47 @@ def test_codex_supervision_relay_maps_approval_and_user_input_requests() -> None
     ]
 
 
+def test_codex_supervision_relay_captures_final_answer_from_completed_agent_message() -> None:
+    sink = MagicMock()
+    relay = CodexSupervisionRelay(
+        session_id="interactive_session:codex",
+        task_id="task-123",
+        step_id="step-456",
+        agent_name="codex-pair",
+        sink=sink,
+    )
+
+    relay.process_message(
+        {
+            "method": "item/completed",
+            "params": {
+                "threadId": "thread-1",
+                "turnId": "turn-9",
+                "item": {
+                    "id": "item-answer",
+                    "type": "agentMessage",
+                    "phase": "final_answer",
+                    "text": "Implemented the fix and verified the focused tests pass.",
+                },
+            },
+        }
+    )
+    relay.process_message(
+        {
+            "method": "turn/completed",
+            "params": {
+                "threadId": "thread-1",
+                "turn": {"id": "turn-9", "status": "completed"},
+            },
+        }
+    )
+
+    final_event = sink.handle_event.call_args_list[-1].args[0]
+    assert final_event.kind == "turn_completed"
+    assert final_event.turn_id == "turn-9"
+    assert final_event.final_output == "Implemented the fix and verified the focused tests pass."
+
+
 def test_codex_supervision_relay_rejects_server_errors() -> None:
     relay = CodexSupervisionRelay(
         session_id="interactive_session:codex",

@@ -37,12 +37,16 @@ class TmuxSessionManager:
         if command:
             cmd.extend(command)
 
+        base_env = dict(os.environ)
+        if env:
+            base_env.update(env)
+
         result = self._run(
             cmd,
             capture_output=True,
             text=True,
             check=False,
-            env=build_interactive_terminal_env(base_env=env or os.environ),
+            env=build_interactive_terminal_env(base_env=base_env),
         )
         if result.returncode != 0:
             raise RuntimeError(
@@ -69,6 +73,15 @@ class TmuxSessionManager:
     def terminate_session(self, session_name: str) -> bool:
         result = self._run(
             ["tmux", "kill-session", "-t", session_name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result.returncode == 0
+
+    def send_keys(self, session_name: str, text: str) -> bool:
+        result = self._run(
+            ["tmux", "send-keys", "-t", session_name, "-l", text, "Enter"],
             capture_output=True,
             text=True,
             check=False,

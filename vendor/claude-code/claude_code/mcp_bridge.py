@@ -46,6 +46,10 @@ def _get_memory_workspace() -> str | None:
     return os.environ.get("MEMORY_WORKSPACE") or None
 
 
+def _get_interactive_session_id() -> str | None:
+    return os.environ.get("MC_INTERACTIVE_SESSION_ID") or None
+
+
 def _resolve_memory_workspace():
     """Resolve the memory workspace path for search_memory, board-aware."""
     from pathlib import Path
@@ -189,6 +193,24 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": ["content"],
+            },
+        ),
+        Tool(
+            name="record_final_result",
+            description=(
+                "Record the canonical final result for a backend-owned Mission Control step. "
+                "Use exactly once when the step is complete, before ending the turn."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Final answer text to post to the task thread on completion.",
+                    }
+                },
+                "required": ["content"],
+                "additionalProperties": False,
             },
         ),
         Tool(
@@ -352,6 +374,29 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 )
             ]
         return [TextContent(type="text", text=result.get("status", "Message sent"))]
+
+    elif name == "record_final_result":
+        try:
+            result = await ipc.request(
+                "record_final_result",
+                {
+                    "content": arguments["content"],
+                    "session_id": _get_interactive_session_id(),
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                    "source": "claude-mcp",
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=result.get("status", "Final result recorded"))]
 
     elif name == "delegate_task":
         try:

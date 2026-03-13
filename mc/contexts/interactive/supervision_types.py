@@ -37,6 +37,7 @@ class InteractiveSupervisionEvent:
     item_id: str | None = None
     status: str | None = None
     summary: str | None = None
+    final_output: str | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     occurred_at: str | None = None

@@ -41,6 +41,7 @@ def _launch_spec() -> InteractiveLaunchSpec:
         command=["claude", "--mcp-config", "/tmp/workspace/.mcp.json"],
         capabilities=["tui", "autocomplete"],
         environment={"FOO": "bar"},
+        bootstrap_input="Investigate failing test",
     )
 
 
@@ -75,6 +76,10 @@ async def test_create_or_attach_prepares_launch_and_registers_new_session() -> N
         cwd="/tmp/workspace",
         command=["claude", "--mcp-config", "/tmp/workspace/.mcp.json"],
         env={"FOO": "bar"},
+    )
+    tmux.send_keys.assert_called_once_with(
+        identity.tmux_session_name,
+        "Investigate failing test",
     )
     registry.register.assert_called_once_with(
         identity,

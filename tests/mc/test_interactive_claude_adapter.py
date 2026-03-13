@@ -82,6 +82,8 @@ async def test_prepare_launch_reuses_cc_workspace_bootstrap_without_headless_fla
         task_prompt="Investigate failing test",
         board_name="product",
         memory_mode="clean",
+        memory_workspace=None,
+        interactive_session_id="interactive_session:claude-code:claude-pair:chat:chat-123:chat",
     )
     socket_server.start.assert_awaited_once_with("/tmp/mc-claude.sock")
     assert launch.cwd == Path("/tmp/claude-workspace")
@@ -98,6 +100,34 @@ async def test_prepare_launch_reuses_cc_workspace_bootstrap_without_headless_fla
     assert "autocomplete" in launch.capabilities
     assert "interactive-prompts" in launch.capabilities
     assert launch.environment is None
+    assert launch.bootstrap_input == "Investigate failing test"
+
+
+@pytest.mark.asyncio
+async def test_prepare_launch_passes_explicit_memory_workspace_to_cc_workspace_bootstrap() -> None:
+    workspace_manager = MagicMock()
+    workspace_manager.prepare.return_value = _workspace()
+    socket_server = MagicMock()
+    socket_server.start = AsyncMock()
+    adapter = ClaudeCodeInteractiveAdapter(
+        bridge=MagicMock(),
+        workspace_manager=workspace_manager,
+        socket_server_factory=MagicMock(return_value=socket_server),
+        cli_path="claude",
+        which=MagicMock(return_value="/usr/local/bin/claude"),
+    )
+
+    await adapter.prepare_launch(
+        identity=_identity(),
+        agent=_agent(),
+        task_id="task-123",
+        task_prompt="Investigate failing test",
+        memory_workspace=Path("/tmp/board-memory"),
+    )
+
+    assert workspace_manager.prepare.call_args.kwargs["memory_workspace"] == Path(
+        "/tmp/board-memory"
+    )
 
 
 @pytest.mark.asyncio

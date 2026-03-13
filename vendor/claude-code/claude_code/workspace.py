@@ -40,6 +40,7 @@ Use these tools via the `mcp__mc__` prefix:
 
 - **mcp__mc__ask_user** — Ask the human user a question or a short structured questionnaire and wait for their reply.
 - **mcp__mc__send_message** — Send a message to another agent or to the task thread.
+- **mcp__mc__record_final_result** — Record the canonical final result for a backend-owned step so Mission Control can post the completion message.
 - **mcp__mc__delegate_task** — Delegate a subtask to a specialist agent.
 - **mcp__mc__ask_agent** — Ask a specific agent a question and get a reply.
 - **mcp__mc__report_progress** — Report task progress back to Mission Control.
@@ -66,6 +67,17 @@ Structured questionnaire rules:
 - Prefer concise headers/ids so the final reply is easy to parse
 
 > **IMPORTANT**: Use `mcp__mc__ask_user` for both single questions and structured questions arrays.
+"""
+
+_STEP_EXECUTION_RESULT_GUIDE = """\
+## Step Completion Rule
+
+This session is running a backend-owned Mission Control step.
+
+- When the step is complete, call `mcp__mc__record_final_result` exactly once with the final answer text you want posted to the task thread.
+- Do this before ending the turn.
+- Do not use `mcp__mc__send_message` as a substitute for the final step result.
+- Keep using normal replies and tools while you are still working; only record the final result when the step is truly complete.
 """
 
 _DEFAULT_CONVENTIONS = """\
@@ -104,6 +116,7 @@ class CCWorkspaceManager:
         task_prompt: str | None = None,
         board_name: str | None = None,
         memory_mode: str = "clean",
+        memory_workspace: Path | None = None,
         interactive_session_id: str | None = None,
     ) -> WorkspaceContext:
         """Set up the workspace directory for an agent and return its context.
@@ -132,6 +145,8 @@ class CCWorkspaceManager:
         if not agent_name or "/" in agent_name or agent_name.startswith("."):
             raise ValueError(f"Invalid agent name: {agent_name!r}")
 
+        explicit_memory_workspace = memory_workspace
+
         if board_name:
             from mc.infrastructure.boards import resolve_board_workspace
 
@@ -139,7 +154,12 @@ class CCWorkspaceManager:
             from mc.artifacts import resolve_board_artifacts_workspace
 
             artifacts_workspace = resolve_board_artifacts_workspace(board_name, root=self._root)
-            if memory_mode == "clean":
+            if explicit_memory_workspace is not None:
+                memory_workspace = explicit_memory_workspace
+                memory_workspace.mkdir(parents=True, exist_ok=True)
+                (memory_workspace / "memory").mkdir(exist_ok=True)
+                (memory_workspace / "sessions").mkdir(exist_ok=True)
+            elif memory_mode == "clean":
                 memory_workspace = workspace
             else:
                 memory_workspace = self._root / "agents" / agent_name
@@ -155,7 +175,13 @@ class CCWorkspaceManager:
             workspace.mkdir(parents=True, exist_ok=True)
             (workspace / "memory").mkdir(exist_ok=True)
             (workspace / "sessions").mkdir(exist_ok=True)
-            memory_workspace = workspace
+            if explicit_memory_workspace is not None:
+                memory_workspace = explicit_memory_workspace
+                memory_workspace.mkdir(parents=True, exist_ok=True)
+                (memory_workspace / "memory").mkdir(exist_ok=True)
+                (memory_workspace / "sessions").mkdir(exist_ok=True)
+            else:
+                memory_workspace = workspace
             artifacts_workspace = None
 
         # Skills must be mapped BEFORE generating CLAUDE.md so the skills
@@ -185,6 +211,7 @@ class CCWorkspaceManager:
             socket_path,
             board_name=board_name,
             memory_workspace=memory_workspace,
+            interactive_session_id=interactive_session_id,
         )
         self._generate_hook_settings(
             workspace,
@@ -282,6 +309,9 @@ class CCWorkspaceManager:
 
         # 8. MCP tools guide
         parts.append(_MCP_TOOLS_GUIDE)
+
+        if task_prompt:
+            parts.append(_STEP_EXECUTION_RESULT_GUIDE)
 
         # 8.5. Always-on skills
         always_content = self._build_always_skills_content(workspace)
@@ -569,6 +599,7 @@ class CCWorkspaceManager:
         *,
         board_name: str | None = None,
         memory_workspace: Path | None = None,
+        interactive_session_id: str | None = None,
     ) -> None:
         """Write .mcp.json that configures the nanobot MCP server subprocess."""
         from mc.infrastructure.secrets import resolve_secret_env
@@ -582,6 +613,8 @@ class CCWorkspaceManager:
             # not reconstruct a parallel path from board metadata.
             "MEMORY_WORKSPACE": str(memory_workspace or workspace),
         }
+        if interactive_session_id:
+            env["MC_INTERACTIVE_SESSION_ID"] = interactive_session_id
         if board_name:
             env["BOARD_NAME"] = board_name
         config: dict = {

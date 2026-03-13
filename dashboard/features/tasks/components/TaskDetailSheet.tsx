@@ -544,6 +544,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               isPausing={isPausing}
               isResuming={isResuming}
               liveSessionLabel={liveSession.stateLabel}
+              liveSessionIdentity={liveSession.identityLabel}
               isEditingTitle={isEditingTitle}
               editTitleValue={editTitleValue}
               isEditingDescription={isEditingDescription}
@@ -689,6 +690,15 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       scopeId={task._id}
                       surface="step"
                       taskId={task._id}
+                      liveSessionId={liveSession.session.sessionId}
+                      activeStepId={liveSession.activeStep?._id}
+                      controlMode={
+                        (
+                          liveSession.session as typeof liveSession.session & {
+                            controlMode?: "agent" | "human";
+                          }
+                        ).controlMode ?? "agent"
+                      }
                     />
                   </div>
                 </TabsContent>

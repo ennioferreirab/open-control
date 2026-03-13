@@ -56,6 +56,7 @@ class MCSocketServer:
         # Register default handlers
         self.register("ask_user", self._handle_ask_user)
         self.register("send_message", self._handle_send_message)
+        self.register("record_final_result", self._handle_record_final_result)
         self.register("delegate_task", self._handle_delegate_task)
         self.register("ask_agent", self._handle_ask_agent)
         self.register("report_progress", self._handle_report_progress)
@@ -234,6 +235,28 @@ class MCSocketServer:
             return {"error": "No MC connection available to deliver message."}
 
         return {"status": "Message sent"}
+
+    async def _handle_record_final_result(
+        self,
+        content: str,
+        session_id: str | None = None,
+        source: str = "claude-mcp",
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        del agent_name, task_id
+        if not content.strip():
+            return {"error": "Final result content must not be empty."}
+        if self._interactive_supervisor is None:
+            return {"error": "Interactive supervision is not available."}
+        if not session_id:
+            return {"error": "Interactive session id is required to record the final result."}
+        self._interactive_supervisor.record_final_result(
+            session_id=session_id,
+            content=content.strip(),
+            source=source,
+        )
+        return {"status": "Final result recorded"}
 
     async def _handle_delegate_task(
         self,

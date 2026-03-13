@@ -74,6 +74,7 @@ async def run_nanobot_task(
     task_id: str | None = None,
     bridge: Any | None = None,
     ask_user_registry: Any | None = None,
+    on_progress: Any | None = None,
 ) -> tuple[Any, str, Any]:
     """Delegate nanobot execution through the legacy helper during cutover."""
     from mc.contexts.execution.executor import _run_agent_on_task
@@ -92,4 +93,5 @@ async def run_nanobot_task(
         task_id=task_id,
         bridge=bridge,
         ask_user_registry=ask_user_registry,
+        on_progress=on_progress,
     )

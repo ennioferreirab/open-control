@@ -58,6 +58,7 @@ def normalize_provider_event(
         item_id=_string_value(raw_event, "item_id", "itemId"),
         status=_string_value(raw_event, "status"),
         summary=_string_value(raw_event, "summary", "message"),
+        final_output=_string_value(raw_event, "final_output", "finalResult", "final_result"),
         error=_string_value(raw_event, "error", "errorMessage"),
         metadata=metadata,
         occurred_at=_string_value(raw_event, "occurred_at", "occurredAt", "timestamp"),

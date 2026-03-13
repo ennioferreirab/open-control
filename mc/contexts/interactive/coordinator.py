@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 from mc.contexts.interactive.errors import (
@@ -47,6 +48,7 @@ class InteractiveSessionCoordinator:
         task_prompt: str | None = None,
         board_name: str | None = None,
         memory_mode: str = "clean",
+        memory_workspace: Path | None = None,
         resume_session_id: str | None = None,
     ) -> dict[str, Any]:
         existing = self._registry.get(identity.session_key)
@@ -71,6 +73,7 @@ class InteractiveSessionCoordinator:
             task_prompt=task_prompt,
             board_name=board_name,
             memory_mode=memory_mode,
+            memory_workspace=memory_workspace,
             resume_session_id=resume_session_id,
         )
 
@@ -81,6 +84,8 @@ class InteractiveSessionCoordinator:
                 command=launch.command,
                 env=launch.environment,
             )
+            if launch.bootstrap_input:
+                self._tmux.send_keys(identity.tmux_session_name, launch.bootstrap_input)
         except Exception as exc:
             await adapter.stop_session(identity.session_key)
             raise InteractiveSessionStartupError(

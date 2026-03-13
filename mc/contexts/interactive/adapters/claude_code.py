@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 from typing import Any, Callable
 
 from claude_code.ipc_server import MCSocketServer
@@ -68,6 +69,7 @@ class ClaudeCodeInteractiveAdapter:
         task_prompt: str | None = None,
         board_name: str | None = None,
         memory_mode: str = "clean",
+        memory_workspace: Path | None = None,
         resume_session_id: str | None = None,
     ) -> InteractiveLaunchSpec:
         await self.healthcheck(agent=agent)
@@ -81,6 +83,7 @@ class ClaudeCodeInteractiveAdapter:
                 task_prompt=task_prompt,
                 board_name=board_name,
                 memory_mode=memory_mode,
+                memory_workspace=memory_workspace,
                 interactive_session_id=identity.session_key,
             )
         except Exception as exc:
@@ -101,6 +104,7 @@ class ClaudeCodeInteractiveAdapter:
             cwd=workspace_ctx.cwd,
             command=self._build_command(agent, workspace_ctx, resume_session_id=resume_session_id),
             capabilities=list(self.capabilities),
+            bootstrap_input=_normalize_bootstrap_input(task_prompt),
         )
 
     async def stop_session(self, session_key: str) -> None:
@@ -142,3 +146,10 @@ class ClaudeCodeInteractiveAdapter:
             cmd.extend(["--resume", resume_session_id])
 
         return cmd
+
+
+def _normalize_bootstrap_input(task_prompt: str | None) -> str | None:
+    if not task_prompt:
+        return None
+    text = task_prompt.strip()
+    return text or None

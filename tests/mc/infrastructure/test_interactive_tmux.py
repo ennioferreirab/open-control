@@ -145,3 +145,18 @@ def test_terminate_session_is_best_effort() -> None:
         text=True,
         check=False,
     )
+
+
+def test_send_keys_writes_bootstrap_input_into_existing_session() -> None:
+    runner = MagicMock(return_value=_completed(["tmux", "send-keys", "-t", "mc-int-123"]))
+    manager = TmuxSessionManager(run=runner)
+
+    sent = manager.send_keys("mc-int-123", "Investigate failing test")
+
+    assert sent is True
+    runner.assert_called_once_with(
+        ["tmux", "send-keys", "-t", "mc-int-123", "-l", "Investigate failing test", "Enter"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )

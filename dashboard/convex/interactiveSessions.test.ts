@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { get, listSessions, upsert } from "./interactiveSessions";
+import {
+  get,
+  listSessions,
+  markManualStepDone,
+  requestHumanTakeover,
+  resumeAgentControl,
+  upsert,
+} from "./interactiveSessions";
 
 type InteractiveSessionDoc = {
   _id?: string;
@@ -27,6 +34,29 @@ type InteractiveSessionDoc = {
   lastEventAt?: string;
   lastError?: string;
   summary?: string;
+  finalResult?: string;
+  finalResultSource?: string;
+  finalResultAt?: string;
+  controlMode?: string;
+  manualTakeoverAt?: string;
+  manualCompletionRequestedAt?: string;
+};
+
+const takeoverSessionBase: InteractiveSessionDoc = {
+  sessionId: "session-123",
+  agentName: "claude-pair",
+  provider: "claude-code",
+  scopeKind: "task",
+  scopeId: "task-123",
+  surface: "step",
+  tmuxSession: "mc-int-123",
+  status: "attached",
+  capabilities: ["tui"],
+  createdAt: "2026-03-13T10:00:00.000Z",
+  updatedAt: "2026-03-13T10:00:00.000Z",
+  taskId: "task-123",
+  stepId: "step-123",
+  supervisionState: "running",
 };
 
 function makeUpsertCtx(existing?: InteractiveSessionDoc) {
@@ -108,6 +138,96 @@ function getListHandler() {
   )._handler;
 }
 
+function getRequestHumanTakeoverHandler() {
+  return (
+    requestHumanTakeover as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+    }
+  )._handler;
+}
+
+function getResumeAgentControlHandler() {
+  return (
+    resumeAgentControl as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+    }
+  )._handler;
+}
+
+function getMarkManualStepDoneHandler() {
+  return (
+    markManualStepDone as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+    }
+  )._handler;
+}
+
+function makeTakeoverCtx({
+  session,
+  taskStatus = "in_progress",
+  stepStatus = "running",
+}: {
+  session: InteractiveSessionDoc;
+  taskStatus?: string;
+  stepStatus?: string;
+}) {
+  const sessionDoc = { _id: "interactive-doc-1", ...session };
+  const taskDoc = {
+    _id: session.taskId ?? "task-123",
+    status: taskStatus,
+    title: "Task title",
+    updatedAt: "2026-03-13T11:00:00.000Z",
+  };
+  const stepDoc = {
+    _id: session.stepId ?? "step-123",
+    taskId: session.taskId ?? "task-123",
+    title: "Step title",
+    assignedAgent: session.agentName,
+    status: stepStatus,
+  };
+  const patches: Array<{ id: string; patch: Record<string, unknown> }> = [];
+  const inserts: Array<{ table: string; value: Record<string, unknown> }> = [];
+
+  return {
+    ctx: {
+      db: {
+        get: vi.fn(async (id: string) => {
+          if (id === taskDoc._id) {
+            return taskDoc;
+          }
+          if (id === stepDoc._id) {
+            return stepDoc;
+          }
+          return null;
+        }),
+        query: vi.fn((table: string) => {
+          expect(table).toBe("interactiveSessions");
+          return {
+            withIndex: vi.fn((indexName: string) => {
+              expect(indexName).toBe("by_sessionId");
+              return {
+                first: vi.fn(async () => sessionDoc),
+              };
+            }),
+          };
+        }),
+        patch: vi.fn(async (id: string, patch: Record<string, unknown>) => {
+          patches.push({ id, patch });
+        }),
+        insert: vi.fn(async (table: string, value: Record<string, unknown>) => {
+          inserts.push({ table, value });
+          return "new-doc-id";
+        }),
+      },
+    },
+    sessionDoc,
+    taskDoc,
+    stepDoc,
+    patches,
+    inserts,
+  };
+}
+
 describe("interactiveSessions.upsert", () => {
   it("creates metadata in a dedicated interactiveSessions table", async () => {
     const handler = getUpsertHandler();
@@ -183,6 +303,9 @@ describe("interactiveSessions.upsert", () => {
       lastEventKind: "turn_started",
       lastEventAt: "2026-03-12T22:01:00.000Z",
       supervisionState: "running",
+      finalResult: "Implemented the requested step.",
+      finalResultSource: "codex-app-server",
+      finalResultAt: "2026-03-13T01:12:00.000Z",
     });
 
     expect(inserts).toHaveLength(0);
@@ -199,6 +322,9 @@ describe("interactiveSessions.upsert", () => {
         lastEventKind: "turn_started",
         lastEventAt: "2026-03-12T22:01:00.000Z",
         supervisionState: "running",
+        finalResult: "Implemented the requested step.",
+        finalResultSource: "codex-app-server",
+        finalResultAt: "2026-03-13T01:12:00.000Z",
       },
     });
     expect(patches[0].patch).not.toHaveProperty("output");
@@ -249,5 +375,155 @@ describe("interactiveSessions queries", () => {
     const result = await handler(ctx, { agentName: "claude-pair" });
 
     expect(result).toEqual(sessions);
+  });
+});
+
+describe("interactiveSessions takeover controls", () => {
+  it("puts the active live session into human takeover and moves task/step to review", async () => {
+    const handler = getRequestHumanTakeoverHandler();
+    const { ctx, patches } = makeTakeoverCtx({
+      session: {
+        ...takeoverSessionBase,
+        sessionId: "session-123",
+        taskId: "task-123",
+        stepId: "step-123",
+        status: "attached",
+      },
+    });
+
+    await handler(ctx, {
+      sessionId: "session-123",
+      taskId: "task-123",
+      stepId: "step-123",
+      agentName: "claude-pair",
+      provider: "claude-code",
+    });
+
+    expect(patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "interactive-doc-1",
+          patch: expect.objectContaining({
+            controlMode: "human",
+          }),
+        }),
+        expect.objectContaining({
+          id: "task-123",
+          patch: expect.objectContaining({
+            status: "review",
+          }),
+        }),
+        expect.objectContaining({
+          id: "step-123",
+          patch: expect.objectContaining({
+            status: "review",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("returns the live session to agent control and moves task/step back to running", async () => {
+    const handler = getResumeAgentControlHandler();
+    const { ctx, patches } = makeTakeoverCtx({
+      session: {
+        ...takeoverSessionBase,
+        sessionId: "session-123",
+        taskId: "task-123",
+        stepId: "step-123",
+        status: "attached",
+        controlMode: "human",
+      },
+      taskStatus: "review",
+      stepStatus: "review",
+    });
+
+    await handler(ctx, {
+      sessionId: "session-123",
+      taskId: "task-123",
+      stepId: "step-123",
+      agentName: "claude-pair",
+      provider: "claude-code",
+    });
+
+    expect(patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "interactive-doc-1",
+          patch: expect.objectContaining({
+            controlMode: "agent",
+          }),
+        }),
+        expect.objectContaining({
+          id: "task-123",
+          patch: expect.objectContaining({
+            status: "in_progress",
+          }),
+        }),
+        expect.objectContaining({
+          id: "step-123",
+          patch: expect.objectContaining({
+            status: "running",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("marks only the active step done manually and records a canonical human result", async () => {
+    const handler = getMarkManualStepDoneHandler();
+    const { ctx, patches, inserts } = makeTakeoverCtx({
+      session: {
+        ...takeoverSessionBase,
+        sessionId: "session-123",
+        taskId: "task-123",
+        stepId: "step-123",
+        status: "attached",
+        controlMode: "human",
+      },
+      taskStatus: "review",
+      stepStatus: "review",
+    });
+
+    await handler(ctx, {
+      sessionId: "session-123",
+      taskId: "task-123",
+      stepId: "step-123",
+      agentName: "claude-pair",
+      provider: "claude-code",
+      content: "Human operator completed the step manually from Live.",
+    });
+
+    expect(patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "interactive-doc-1",
+          patch: expect.objectContaining({
+            finalResult: "Human operator completed the step manually from Live.",
+            finalResultSource: "human-takeover",
+            manualCompletionRequestedAt: expect.any(String),
+          }),
+        }),
+      ]),
+    );
+    expect(inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "messages",
+          value: expect.objectContaining({
+            taskId: "task-123",
+            stepId: "step-123",
+            authorName: "Human operator",
+          }),
+        }),
+        expect.objectContaining({
+          table: "activities",
+          value: expect.objectContaining({
+            taskId: "task-123",
+            eventType: "step_completed",
+          }),
+        }),
+      ]),
+    );
   });
 });

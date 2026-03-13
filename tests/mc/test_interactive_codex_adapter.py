@@ -59,6 +59,8 @@ async def test_prepare_launch_builds_codex_command_in_agent_workspace(tmp_path: 
         "gpt-5.4",
     ]
     assert "autocomplete" in launch.capabilities
+    assert launch.environment == {"MEMORY_WORKSPACE": str(tmp_path / "codex-pair")}
+    assert launch.bootstrap_input is None
 
 
 @pytest.mark.asyncio
@@ -76,6 +78,29 @@ async def test_prepare_launch_accepts_plain_codex_models_without_rewriting(tmp_p
     )
 
     assert launch.command[-1] == "gpt-5.4"
+
+
+@pytest.mark.asyncio
+async def test_prepare_launch_bootstraps_codex_with_orientation_task_prompt_and_memory_workspace(
+    tmp_path: Path,
+) -> None:
+    adapter = CodexInteractiveAdapter(
+        cli_path="codex",
+        which=MagicMock(return_value="/opt/homebrew/bin/codex"),
+        agents_dir=tmp_path,
+    )
+
+    launch = await adapter.prepare_launch(
+        identity=_identity(),
+        agent=_agent(),
+        task_id="task-123",
+        orientation="Global orientation",
+        task_prompt="Investigate failing test",
+        memory_workspace=tmp_path / "board-memory",
+    )
+
+    assert launch.environment == {"MEMORY_WORKSPACE": str(tmp_path / "board-memory")}
+    assert launch.bootstrap_input == "Global orientation\n\nInvestigate failing test"
 
 
 @pytest.mark.asyncio

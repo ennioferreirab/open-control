@@ -35,6 +35,12 @@ def test_resolve_step_runner_type_prefers_interactive_runtime_for_supported_agen
     assert runner_type == RunnerType.INTERACTIVE_TUI
 
 
+def test_resolve_step_runner_type_supports_mc_interactive_provider() -> None:
+    runner_type = resolve_step_runner_type(_request(provider="mc"))
+
+    assert runner_type == RunnerType.INTERACTIVE_TUI
+
+
 def test_resolve_step_runner_type_keeps_noninteractive_agents_on_nanobot() -> None:
     runner_type = resolve_step_runner_type(_request(provider=None, backend="nanobot"))
 

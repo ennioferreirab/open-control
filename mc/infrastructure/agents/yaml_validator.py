@@ -69,7 +69,7 @@ class AgentConfig(BaseModel):
     def validate_interactive_provider(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        valid = {"claude-code", "codex"}
+        valid = {"claude-code", "codex", "mc"}
         if v not in valid:
             raise ValueError(
                 f"Invalid interactive_provider '{v}'. Valid options: {', '.join(sorted(valid))}"

@@ -10,6 +10,9 @@ const mockDispose = vi.fn();
 const mockFit = vi.fn();
 const mockOnDataDispose = vi.fn();
 const terminalOnDataHandlers: Array<(data: string) => void> = [];
+const mockRequestTakeover = vi.fn();
+const mockResumeAgent = vi.fn();
+const mockMarkDone = vi.fn();
 
 let socketInstance: FakeWebSocket | null = null;
 
@@ -62,6 +65,17 @@ vi.mock("@xterm/addon-fit", () => ({
   },
 }));
 
+vi.mock("@/features/interactive/hooks/useInteractiveTakeoverControls", () => ({
+  useInteractiveTakeoverControls: () => ({
+    requestTakeover: mockRequestTakeover,
+    resumeAgent: mockResumeAgent,
+    markDone: mockMarkDone,
+    isRequestingTakeover: false,
+    isResumingAgent: false,
+    isMarkingDone: false,
+  }),
+}));
+
 describe("InteractiveTerminalPanel", () => {
   beforeEach(() => {
     socketInstance = null;
@@ -72,6 +86,9 @@ describe("InteractiveTerminalPanel", () => {
     mockDispose.mockClear();
     mockFit.mockClear();
     mockOnDataDispose.mockClear();
+    mockRequestTakeover.mockClear();
+    mockResumeAgent.mockClear();
+    mockMarkDone.mockClear();
 
     Object.defineProperty(window, "WebSocket", {
       configurable: true,
@@ -207,5 +224,49 @@ describe("InteractiveTerminalPanel", () => {
 
     expect(socketInstance).toBe(secondSocket);
     vi.useRealTimers();
+  });
+
+  it("does not forward terminal input until human takeover is active", async () => {
+    render(<InteractiveTerminalPanel agentName="claude-pair" provider="claude-code" />);
+
+    await waitFor(() => expect(socketInstance).not.toBeNull());
+
+    await act(async () => {
+      socketInstance?.onopen?.();
+      terminalOnDataHandlers[0]?.("ls");
+    });
+
+    expect(socketInstance?.sent).toEqual([]);
+  });
+
+  it("requests takeover for the exact live execution session and unlocks done controls", async () => {
+    render(
+      <InteractiveTerminalPanel
+        agentName="claude-pair"
+        provider="claude-code"
+        scopeKind="task"
+        scopeId="task-123"
+        surface="step"
+        taskId="task-123"
+        liveSessionId="interactive_session:claude"
+        activeStepId={"step-123" as never}
+      />,
+    );
+
+    await waitFor(() => expect(socketInstance).not.toBeNull());
+
+    const takeoverButton = await screen.findByRole("button", { name: "Take over" });
+
+    await act(async () => {
+      takeoverButton.click();
+    });
+
+    expect(mockRequestTakeover).toHaveBeenCalledWith({
+      sessionId: "interactive_session:claude",
+      taskId: "task-123",
+      stepId: "step-123",
+      agentName: "claude-pair",
+      provider: "claude-code",
+    });
   });
 });

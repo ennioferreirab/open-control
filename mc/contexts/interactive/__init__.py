@@ -3,6 +3,7 @@
 from mc.contexts.interactive.adapters import (
     ClaudeCodeInteractiveAdapter,
     CodexInteractiveAdapter,
+    NanobotInteractiveAdapter,
 )
 from mc.contexts.interactive.coordinator import InteractiveSessionCoordinator
 from mc.contexts.interactive.errors import (
@@ -32,6 +33,7 @@ from mc.contexts.interactive.types import (
 __all__ = [
     "ClaudeCodeInteractiveAdapter",
     "CodexInteractiveAdapter",
+    "NanobotInteractiveAdapter",
     "InteractiveSessionIdentity",
     "InteractiveSessionCoordinator",
     "InteractiveSessionAttachError",

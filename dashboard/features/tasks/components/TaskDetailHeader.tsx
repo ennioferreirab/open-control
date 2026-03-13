@@ -50,6 +50,7 @@ interface TaskDetailHeaderProps {
   isPausing: boolean;
   isResuming: boolean;
   liveSessionLabel: string | null;
+  liveSessionIdentity: string | null;
   isEditingTitle: boolean;
   editTitleValue: string;
   isEditingDescription: boolean;
@@ -130,6 +131,7 @@ export function TaskDetailHeader({
   isPausing,
   isResuming,
   liveSessionLabel,
+  liveSessionIdentity,
   isEditingTitle,
   editTitleValue,
   isEditingDescription,
@@ -274,6 +276,11 @@ export function TaskDetailHeader({
               >
                 {liveSessionLabel}
               </Badge>
+              {liveSessionIdentity && (
+                <span className="text-xs text-muted-foreground" data-testid="live-session-identity">
+                  {liveSessionIdentity}
+                </span>
+              )}
               {onOpenLive && (
                 <Button
                   variant="outline"

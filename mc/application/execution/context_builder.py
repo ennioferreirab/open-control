@@ -229,9 +229,12 @@ class ContextBuilder:
         board_source = fresh_task if isinstance(fresh_task, dict) else (task_data or {})
         board_id = board_source.get("board_id")
         if board_id:
-            board_name, memory_workspace = await self._resolve_board(board_id, agent_name)
+            board_name, memory_workspace, memory_mode = await self._resolve_board(
+                board_id, agent_name
+            )
             req.board_name = board_name
             req.memory_workspace = memory_workspace
+            req.memory_mode = memory_mode
 
         memory_dir = str(req.memory_workspace / "memory") if req.memory_workspace else None
         artifacts_dir = None
@@ -418,9 +421,12 @@ class ContextBuilder:
 
         board_id = task_data.get("board_id")
         if board_id:
-            board_name, memory_workspace = await self._resolve_board(board_id, agent_name)
+            board_name, memory_workspace, memory_mode = await self._resolve_board(
+                board_id, agent_name
+            )
             req.board_name = board_name
             req.memory_workspace = memory_workspace
+            req.memory_mode = memory_mode
 
         raw_files = task_data.get("files") or []
         req.files = raw_files
@@ -508,7 +514,7 @@ class ContextBuilder:
 
     async def _resolve_board(
         self, board_id: str, agent_name: str
-    ) -> tuple[str | None, Path | None]:
+    ) -> tuple[str | None, Path | None, str | None]:
         """Resolve board-scoped workspace for an agent."""
         try:
             board = await asyncio.to_thread(self._bridge.get_board_by_id, board_id)
@@ -533,11 +539,11 @@ class ContextBuilder:
                         mode,
                         resolved.effective_memory_scope,
                     )
-                    return board_name, resolved.workspace
+                    return board_name, resolved.workspace, mode
         except Exception:
             logger.warning(
                 "[context] Failed to resolve board workspace for '%s'",
                 agent_name,
                 exc_info=True,
             )
-        return None, None
+        return None, None, None

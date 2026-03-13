@@ -141,3 +141,52 @@ def test_supervisor_emits_activity_when_supervision_becomes_ready() -> None:
         task_id="task-1",
         agent_name="claude-pair",
     )
+
+
+def test_supervisor_records_final_result_without_posting_completion_side_effects() -> None:
+    bridge = MagicMock()
+    registry = MagicMock()
+    registry.record_final_result.return_value = {"session_id": "interactive_session:claude"}
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    result = supervisor.record_final_result(
+        session_id="interactive_session:claude",
+        content="Step finished successfully with the requested code changes.",
+        source="claude-mcp",
+    )
+
+    registry.record_final_result.assert_called_once_with(
+        "interactive_session:claude",
+        content="Step finished successfully with the requested code changes.",
+        source="claude-mcp",
+        timestamp=result["recorded_at"],
+    )
+    bridge.update_task_status.assert_not_called()
+    bridge.update_step_status.assert_not_called()
+
+
+def test_supervisor_suppresses_lifecycle_side_effects_during_human_takeover() -> None:
+    bridge = MagicMock()
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+        "control_mode": "human",
+    }
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="session_failed",
+            provider="claude-code",
+            session_id="interactive_session:claude",
+            error="Provider exited while the human was taking over.",
+        )
+    )
+
+    registry.record_supervision.assert_called_once()
+    bridge.update_task_status.assert_not_called()
+    bridge.update_step_status.assert_not_called()
+    bridge.create_activity.assert_not_called()

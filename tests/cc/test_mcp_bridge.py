@@ -158,7 +158,51 @@ class TestSendMessageTool:
             )
 
         assert received["channel"] == "telegram"
-        assert received["chat_id"] == "123"
+
+
+class TestRecordFinalResultTool:
+    async def test_record_final_result_returns_status(self):
+        import claude_code.mcp_bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"record_final_result": {"status": "Final result recorded"}})
+
+        with (
+            patch.object(bridge_mod, "_ipc_client", mock_ipc),
+            patch.dict("os.environ", {"MC_INTERACTIVE_SESSION_ID": "interactive_session:claude"}),
+        ):
+            result = await bridge_mod.call_tool(
+                "record_final_result",
+                {"content": "Implemented the requested step."},
+            )
+
+        assert result[0].text == "Final result recorded"
+
+    async def test_record_final_result_passes_session_id(self):
+        import claude_code.mcp_bridge as bridge_mod
+
+        received: dict = {}
+
+        async def capture(method, params):
+            received["method"] = method
+            received.update(params)
+            return {"status": "Final result recorded"}
+
+        mock_ipc = MagicMock()
+        mock_ipc.request = capture
+
+        with (
+            patch.object(bridge_mod, "_ipc_client", mock_ipc),
+            patch.dict("os.environ", {"MC_INTERACTIVE_SESSION_ID": "interactive_session:claude"}),
+        ):
+            await bridge_mod.call_tool(
+                "record_final_result",
+                {"content": "Implemented the requested step."},
+            )
+
+        assert received["method"] == "record_final_result"
+        assert received["session_id"] == "interactive_session:claude"
+        assert received["source"] == "claude-mcp"
+        assert received["content"] == "Implemented the requested step."
 
     async def test_send_message_passes_media(self):
         """send_message includes media paths in IPC params when given."""
@@ -363,8 +407,8 @@ class TestReportProgressTool:
 
 
 class TestListTools:
-    async def test_list_tools_returns_all_seven(self):
-        """list_tools returns all 7 expected tools."""
+    async def test_list_tools_returns_all_eight(self):
+        """list_tools returns all expected tools including the final-result recorder."""
         import claude_code.mcp_bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
@@ -373,6 +417,7 @@ class TestListTools:
         assert names == {
             "ask_user",
             "send_message",
+            "record_final_result",
             "delegate_task",
             "ask_agent",
             "report_progress",

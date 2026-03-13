@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 
+import { Button } from "@/components/ui/button";
+import type { Id } from "@/convex/_generated/dataModel";
+import { useInteractiveTakeoverControls } from "@/features/interactive/hooks/useInteractiveTakeoverControls";
 import { cn } from "@/lib/utils";
 
 type TerminalStatus = "connecting" | "connected" | "reconnecting" | "error";
@@ -21,7 +24,10 @@ interface InteractiveTerminalPanelProps {
   scopeKind?: "chat" | "task";
   scopeId?: string;
   surface?: string;
-  taskId?: string;
+  taskId?: string | Id<"tasks">;
+  liveSessionId?: string;
+  activeStepId?: Id<"steps">;
+  controlMode?: "agent" | "human";
 }
 
 export function InteractiveTerminalPanel({
@@ -31,6 +37,9 @@ export function InteractiveTerminalPanel({
   scopeId,
   surface = scopeKind === "task" ? "step" : "chat",
   taskId,
+  liveSessionId,
+  activeStepId,
+  controlMode = "agent",
 }: InteractiveTerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -39,11 +48,25 @@ export function InteractiveTerminalPanel({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const attachTokenRef = useRef<string | null>(null);
+  const controlModeRef = useRef<"agent" | "human">(controlMode);
   const reconnectAttemptsRef = useRef(0);
   const mountedRef = useRef(true);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [status, setStatus] = useState<TerminalStatus>("connecting");
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const {
+    requestTakeover,
+    resumeAgent,
+    markDone,
+    isRequestingTakeover,
+    isResumingAgent,
+    isMarkingDone,
+  } = useInteractiveTakeoverControls();
+
+  useEffect(() => {
+    controlModeRef.current = controlMode;
+  }, [controlMode]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -93,6 +116,9 @@ export function InteractiveTerminalPanel({
     resizeObserver.observe(container);
 
     const inputSubscription = terminal.onData((data) => {
+      if (controlModeRef.current !== "human") {
+        return;
+      }
       const socket = socketRef.current;
       if (!socket || socket.readyState !== WebSocket.OPEN) {
         return;
@@ -220,6 +246,67 @@ export function InteractiveTerminalPanel({
     };
   }, [agentName, provider, scopeId, scopeKind, surface, taskId]);
 
+  const effectiveSessionId = liveSessionId ?? sessionId;
+
+  const handleTakeover = async () => {
+    if (!taskId || !activeStepId || !effectiveSessionId) {
+      return;
+    }
+    setActionError(null);
+    try {
+      const socket = socketRef.current;
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "input", data: "\u001b" }));
+      }
+      await requestTakeover({
+        sessionId: effectiveSessionId,
+        taskId: taskId as Id<"tasks">,
+        stepId: activeStepId,
+        agentName,
+        provider,
+      });
+    } catch (nextError) {
+      setActionError(nextError instanceof Error ? nextError.message : "Takeover failed.");
+    }
+  };
+
+  const handleResumeAgent = async () => {
+    if (!taskId || !activeStepId || !effectiveSessionId) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await resumeAgent({
+        sessionId: effectiveSessionId,
+        taskId: taskId as Id<"tasks">,
+        stepId: activeStepId,
+        agentName,
+        provider,
+      });
+    } catch (nextError) {
+      setActionError(nextError instanceof Error ? nextError.message : "Resume failed.");
+    }
+  };
+
+  const handleDone = async () => {
+    if (!taskId || !activeStepId || !effectiveSessionId) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await markDone({
+        sessionId: effectiveSessionId,
+        taskId: taskId as Id<"tasks">,
+        stepId: activeStepId,
+        agentName,
+        provider,
+        content: `Human operator completed the step manually from Live for @${agentName}.`,
+      });
+    } catch (nextError) {
+      setActionError(nextError instanceof Error ? nextError.message : "Manual completion failed.");
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-zinc-950 text-zinc-100">
       <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
@@ -228,8 +315,47 @@ export function InteractiveTerminalPanel({
             Native TUI
           </span>
           <span className="text-xs text-zinc-500">@{agentName}</span>
+          <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-400">
+            {provider}
+          </span>
         </div>
         <div className="flex items-center gap-2 text-[11px]">
+          {scopeKind === "task" && activeStepId && effectiveSessionId ? (
+            controlMode === "human" ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 border border-zinc-700 bg-zinc-900 px-2 text-[11px] text-zinc-100 hover:bg-zinc-800"
+                  onClick={handleResumeAgent}
+                  disabled={isResumingAgent}
+                >
+                  {isResumingAgent ? "Resuming..." : "Resume agent"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 bg-emerald-500 px-2 text-[11px] text-zinc-950 hover:bg-emerald-400"
+                  onClick={handleDone}
+                  disabled={isMarkingDone}
+                >
+                  {isMarkingDone ? "Finishing..." : "Done"}
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-7 border border-zinc-700 bg-zinc-900 px-2 text-[11px] text-zinc-100 hover:bg-zinc-800"
+                onClick={handleTakeover}
+                disabled={isRequestingTakeover}
+              >
+                {isRequestingTakeover ? "Taking over..." : "Take over"}
+              </Button>
+            )
+          ) : null}
           <span
             className={cn(
               "rounded-full px-2 py-0.5 font-medium",
@@ -255,6 +381,14 @@ export function InteractiveTerminalPanel({
           className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200"
         >
           {error}
+        </div>
+      )}
+      {actionError && (
+        <div
+          role="alert"
+          className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100"
+        >
+          {actionError}
         </div>
       )}
       <div

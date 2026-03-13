@@ -189,7 +189,33 @@ class InteractiveSessionRegistry:
             metadata["last_error"] = str(event["error"])
         if event.get("summary") is not None:
             metadata["summary"] = str(event["summary"])
+        if event.get("final_output") is not None:
+            metadata["final_result"] = str(event["final_output"])
+            metadata["final_result_source"] = str(
+                event.get("final_result_source") or event.get("kind") or "supervision"
+            )
+            metadata["final_result_at"] = timestamp
 
+        self._upsert(metadata)
+        return metadata
+
+    def record_final_result(
+        self,
+        session_id: str,
+        *,
+        content: str,
+        source: str,
+        timestamp: str,
+    ) -> dict[str, Any]:
+        existing = self._require_session(session_id)
+        metadata = self._metadata_from_existing(
+            existing,
+            status=str(existing["status"]),
+            timestamp=timestamp,
+        )
+        metadata["final_result"] = content
+        metadata["final_result_source"] = source
+        metadata["final_result_at"] = timestamp
         self._upsert(metadata)
         return metadata
 
@@ -245,6 +271,9 @@ class InteractiveSessionRegistry:
             "last_event_at",
             "last_error",
             "summary",
+            "final_result",
+            "final_result_source",
+            "final_result_at",
         ):
             if existing.get(key) is not None:
                 metadata[key] = existing[key]

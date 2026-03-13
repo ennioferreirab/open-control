@@ -83,9 +83,10 @@ class CodexInteractiveAdapter:
         task_prompt: str | None = None,
         board_name: str | None = None,
         memory_mode: str = "clean",
+        memory_workspace: Path | None = None,
         resume_session_id: str | None = None,
     ) -> InteractiveLaunchSpec:
-        del orientation, task_prompt, board_name, memory_mode, resume_session_id
+        del board_name, memory_mode, resume_session_id
         await self.healthcheck(agent=agent)
 
         try:
@@ -114,6 +115,11 @@ class CodexInteractiveAdapter:
             cwd=cwd,
             command=self._build_command(agent),
             capabilities=list(self.capabilities),
+            environment={"MEMORY_WORKSPACE": str(memory_workspace or cwd)},
+            bootstrap_input=_build_bootstrap_prompt(
+                orientation=orientation,
+                task_prompt=task_prompt,
+            ),
         )
 
     async def stop_session(self, session_key: str) -> None:
@@ -133,3 +139,10 @@ class CodexInteractiveAdapter:
         if model:
             command.extend(["--model", model])
         return command
+
+
+def _build_bootstrap_prompt(*, orientation: str | None, task_prompt: str | None) -> str | None:
+    parts = [part.strip() for part in (orientation, task_prompt) if part and part.strip()]
+    if not parts:
+        return None
+    return "\n\n".join(parts)

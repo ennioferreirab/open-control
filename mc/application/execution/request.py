@@ -89,6 +89,7 @@ class ExecutionRequest:
     board: dict[str, Any] | None = None
     board_name: str | None = None
     memory_workspace: Path | None = None
+    memory_mode: str | None = None
 
     # Files
     files: list[dict[str, Any]] = field(default_factory=list)

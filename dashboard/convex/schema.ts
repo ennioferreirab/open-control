@@ -30,7 +30,15 @@ export const interactiveSessionCapabilityValidator = v.union(
   v.literal("commands"),
   v.literal("mcp-tools"),
 );
-export const interactiveProviderValidator = v.union(v.literal("claude-code"), v.literal("codex"));
+export const interactiveSessionControlModeValidator = v.union(
+  v.literal("agent"),
+  v.literal("human"),
+);
+export const interactiveProviderValidator = v.union(
+  v.literal("claude-code"),
+  v.literal("codex"),
+  v.literal("mc"),
+);
 
 export default defineSchema({
   boards: defineTable({
@@ -370,6 +378,12 @@ export default defineSchema({
     lastEventAt: v.optional(v.string()),
     lastError: v.optional(v.string()),
     summary: v.optional(v.string()),
+    finalResult: v.optional(v.string()),
+    finalResultSource: v.optional(v.string()),
+    finalResultAt: v.optional(v.string()),
+    controlMode: v.optional(interactiveSessionControlModeValidator),
+    manualTakeoverAt: v.optional(v.string()),
+    manualCompletionRequestedAt: v.optional(v.string()),
   })
     .index("by_sessionId", ["sessionId"])
     .index("by_agentName", ["agentName"])

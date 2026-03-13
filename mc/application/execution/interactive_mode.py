@@ -17,7 +17,7 @@ def resolve_step_runner_type(request: Any) -> RunnerType:
     interactive_provider = getattr(agent, "interactive_provider", None) if agent else None
     backend = getattr(agent, "backend", None) if agent else None
     is_interactive = (
-        interactive_provider in {"claude-code", "codex"}
+        interactive_provider in {"claude-code", "codex", "mc"}
         or request.is_cc
         or backend == "claude-code"
     )

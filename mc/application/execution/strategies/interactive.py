@@ -66,8 +66,11 @@ class InteractiveTuiRunnerStrategy:
                 task_id=request.task_id,
                 step_id=request.step_id,
                 timestamp=timestamp,
-                task_prompt=request.title,
+                orientation=request.agent_prompt,
+                task_prompt=_build_interactive_task_prompt(request),
                 board_name=request.board_name,
+                memory_mode=request.memory_mode or "clean",
+                memory_workspace=request.memory_workspace,
             )
         except Exception as exc:
             increment_interactive_metric("interactive_startup_failure_total")
@@ -82,7 +85,10 @@ class InteractiveTuiRunnerStrategy:
         increment_interactive_metric("interactive_startup_success_total")
         request.session_key = session_id
 
-        return await self._wait_for_outcome(session_id=session_id)
+        return await self._wait_for_outcome(
+            session_id=session_id,
+            memory_workspace=request.memory_workspace,
+        )
 
     def _resolve_provider(self, request: ExecutionRequest) -> str:
         agent = request.agent
@@ -108,7 +114,12 @@ class InteractiveTuiRunnerStrategy:
             interactive_provider=provider,
         )
 
-    async def _wait_for_outcome(self, *, session_id: str) -> ExecutionResult:
+    async def _wait_for_outcome(
+        self,
+        *,
+        session_id: str,
+        memory_workspace: Any | None = None,
+    ) -> ExecutionResult:
         while True:
             metadata = self._bridge.query(
                 "interactiveSessions:getForRuntime",
@@ -122,12 +133,47 @@ class InteractiveTuiRunnerStrategy:
                     session_id=session_id,
                 )
 
-            last_event_kind = str(metadata.get("last_event_kind") or "")
-            if last_event_kind == "turn_completed":
+            manual_completion_requested_at = str(
+                metadata.get("manual_completion_requested_at") or ""
+            ).strip()
+            control_mode = str(metadata.get("control_mode") or "").strip()
+            final_result = str(metadata.get("final_result") or "").strip()
+            if manual_completion_requested_at:
+                if not final_result:
+                    return ExecutionResult(
+                        success=False,
+                        error_category=ErrorCategory.RUNNER,
+                        error_message=(
+                            "Manual Live completion is missing a canonical final result."
+                        ),
+                        session_id=session_id,
+                    )
                 return ExecutionResult(
                     success=True,
-                    output=str(metadata.get("summary") or "Interactive session completed."),
+                    output=final_result,
                     session_id=session_id,
+                    memory_workspace=memory_workspace,
+                )
+
+            last_event_kind = str(metadata.get("last_event_kind") or "")
+            if last_event_kind == "turn_completed":
+                if control_mode == "human":
+                    await asyncio.sleep(self._poll_interval_seconds)
+                    continue
+                if not final_result:
+                    return ExecutionResult(
+                        success=False,
+                        error_category=ErrorCategory.RUNNER,
+                        error_message=(
+                            "Interactive session completed but is missing a canonical final result."
+                        ),
+                        session_id=session_id,
+                    )
+                return ExecutionResult(
+                    success=True,
+                    output=final_result,
+                    session_id=session_id,
+                    memory_workspace=memory_workspace,
                 )
             if last_event_kind == "session_failed" or metadata.get("supervision_state") == "failed":
                 return ExecutionResult(
@@ -139,6 +185,21 @@ class InteractiveTuiRunnerStrategy:
                         or "Interactive session failed."
                     ),
                     session_id=session_id,
+                    memory_workspace=memory_workspace,
                 )
 
             await asyncio.sleep(self._poll_interval_seconds)
+
+
+def _build_interactive_task_prompt(request: ExecutionRequest) -> str:
+    parts: list[str] = []
+    if request.is_step and request.step_title:
+        parts.append(f"Step: {request.step_title}")
+    elif request.title:
+        parts.append(request.title)
+
+    description = (request.description or request.step_description or "").strip()
+    if description:
+        parts.append(description)
+
+    return "\n\n".join(part for part in parts if part).strip()

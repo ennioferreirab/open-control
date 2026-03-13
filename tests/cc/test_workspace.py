@@ -394,6 +394,21 @@ class TestMcpConfigGeneration:
         assert env["AGENT_NAME"] == "my-agent"
         assert env["TASK_ID"] == "task-abc"
 
+    def test_mcp_json_includes_interactive_session_id_when_present(self, tmp_path: Path) -> None:
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        ctx = manager.prepare(
+            "my-agent",
+            agent,
+            "task-abc",
+            interactive_session_id="interactive_session:claude",
+        )
+
+        data = json.loads(ctx.mcp_config.read_text())
+        env = data["mcpServers"]["nanobot"]["env"]
+
+        assert env["MC_INTERACTIVE_SESSION_ID"] == "interactive_session:claude"
+
     def test_mcp_json_includes_explicit_memory_workspace(self, tmp_path: Path) -> None:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent()

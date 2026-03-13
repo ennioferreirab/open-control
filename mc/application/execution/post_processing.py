@@ -251,6 +251,122 @@ def build_cc_task_memory_consolidation_hook(
     return cc_task_memory_consolidation_hook
 
 
+def build_interactive_memory_consolidation_hook(
+    *,
+    bridge: Any | None = None,
+):
+    """Return the canonical memory hook for interactive TUI step execution."""
+
+    async def interactive_memory_consolidation_hook(
+        request: ExecutionRequest,
+        result: ExecutionResult,
+    ) -> None:
+        if request.runner_type != RunnerType.INTERACTIVE_TUI:
+            return
+
+        if request.session_boundary_reason is None:
+            _log_consolidation_event(
+                agent_name=request.agent_name,
+                backend=RunnerType.INTERACTIVE_TUI.value,
+                channel="mc",
+                trigger_type="session_boundary",
+                boundary_reason=None,
+                memory_workspace=result.memory_workspace,
+                artifacts_workspace=result.memory_workspace,
+                action="skipped",
+                skip_reason="no_session_boundary",
+            )
+            return
+
+        if result.memory_workspace is None:
+            _log_consolidation_event(
+                agent_name=request.agent_name,
+                backend=RunnerType.INTERACTIVE_TUI.value,
+                channel="mc",
+                trigger_type="session_boundary",
+                boundary_reason=request.session_boundary_reason,
+                memory_workspace=None,
+                artifacts_workspace=None,
+                action="skipped",
+                skip_reason="missing_memory_workspace",
+            )
+            return
+
+        task_output = (result.output or result.error_message or "").strip()
+        if not task_output:
+            _log_consolidation_event(
+                agent_name=request.agent_name,
+                backend=RunnerType.INTERACTIVE_TUI.value,
+                channel="mc",
+                trigger_type="session_boundary",
+                boundary_reason=request.session_boundary_reason,
+                memory_workspace=result.memory_workspace,
+                artifacts_workspace=result.memory_workspace,
+                action="skipped",
+                skip_reason="missing_task_output",
+            )
+            return
+
+        async def _consolidate() -> None:
+            try:
+                model = resolve_consolidation_model(bridge)
+                if model is None:
+                    _log_consolidation_event(
+                        agent_name=request.agent_name,
+                        backend=RunnerType.INTERACTIVE_TUI.value,
+                        channel="mc",
+                        trigger_type="session_boundary",
+                        boundary_reason=request.session_boundary_reason,
+                        memory_workspace=result.memory_workspace,
+                        artifacts_workspace=result.memory_workspace,
+                        action="skipped",
+                        skip_reason="missing_consolidation_model",
+                    )
+                    return
+
+                ok = await consolidate_task_output(
+                    result.memory_workspace,
+                    task_title=request.title,
+                    task_output=task_output,
+                    task_status="completed" if result.success else "error",
+                    task_id=request.task_id,
+                    model=model,
+                )
+                _log_consolidation_event(
+                    agent_name=request.agent_name,
+                    backend=RunnerType.INTERACTIVE_TUI.value,
+                    channel="mc",
+                    trigger_type="session_boundary",
+                    boundary_reason=request.session_boundary_reason,
+                    memory_workspace=result.memory_workspace,
+                    artifacts_workspace=result.memory_workspace,
+                    action="consolidated" if ok else "skipped",
+                    skip_reason=None if ok else "consolidate_returned_false",
+                    files_touched=_memory_files_touched(result.memory_workspace) if ok else [],
+                )
+            except Exception:
+                _log_consolidation_event(
+                    agent_name=request.agent_name,
+                    backend=RunnerType.INTERACTIVE_TUI.value,
+                    channel="mc",
+                    trigger_type="session_boundary",
+                    boundary_reason=request.session_boundary_reason,
+                    memory_workspace=result.memory_workspace,
+                    artifacts_workspace=result.memory_workspace,
+                    action="failed",
+                    skip_reason="exception",
+                )
+                logger.warning(
+                    "[execution] Interactive memory consolidation failed for task '%s'",
+                    request.task_id,
+                    exc_info=True,
+                )
+
+        create_background_task(_consolidate())
+
+    return interactive_memory_consolidation_hook
+
+
 def build_execution_engine(
     *,
     bridge: Any | None = None,
@@ -277,5 +393,6 @@ def build_execution_engine(
             relocate_invalid_memory_hook,
             nanobot_memory_consolidation_hook,
             build_cc_task_memory_consolidation_hook(bridge=bridge),
+            build_interactive_memory_consolidation_hook(bridge=bridge),
         ],
     )

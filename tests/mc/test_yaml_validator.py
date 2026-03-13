@@ -381,6 +381,25 @@ class TestBackendField:
         assert result.backend == "nanobot"
         assert result.interactive_provider == "codex"
 
+    def test_interactive_provider_can_enable_mc_live_without_changing_backend(
+        self, tmp_path: Path
+    ) -> None:
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
+            name: mc-agent
+            role: Agent
+            prompt: "You are an MC-backed interactive agent."
+            backend: nanobot
+            interactive_provider: mc
+        """,
+        )
+        result = validate_agent_file(path)
+        assert isinstance(result, AgentData)
+        assert result.backend == "nanobot"
+        assert result.interactive_provider == "mc"
+
     def test_invalid_interactive_provider_value(self, tmp_path: Path) -> None:
         path = _write_yaml(
             tmp_path,

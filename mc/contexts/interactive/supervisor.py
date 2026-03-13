@@ -34,14 +34,37 @@ class InteractiveExecutionSupervisor:
                 "turn_id": merged_event.turn_id,
                 "item_id": merged_event.item_id,
                 "summary": merged_event.summary,
+                "final_output": merged_event.final_output,
+                "final_result_source": merged_event.provider,
                 "error": merged_event.error,
                 "status": merged_event.status,
                 "agent_name": merged_event.agent_name,
             },
             timestamp=timestamp,
         )
+        if _string_or_none(metadata.get("control_mode")) == "human":
+            return updated_metadata
+        current_control_mode = _string_or_none(updated_metadata.get("control_mode"))
+        if current_control_mode == "human":
+            return updated_metadata
         self._apply_lifecycle_side_effects(merged_event)
         return updated_metadata
+
+    def record_final_result(
+        self,
+        *,
+        session_id: str,
+        content: str,
+        source: str,
+    ) -> dict[str, Any]:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        metadata = self._registry.record_final_result(
+            session_id,
+            content=content,
+            source=source,
+            timestamp=timestamp,
+        )
+        return {"session_id": session_id, "recorded_at": timestamp, "metadata": metadata}
 
     def _merge_event_context(
         self,

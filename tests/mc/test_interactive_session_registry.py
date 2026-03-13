@@ -91,6 +91,39 @@ def test_record_supervision_updates_runtime_owned_session_state() -> None:
     bridge.mutation.assert_called_once_with("interactiveSessions:upsert", metadata)
 
 
+def test_record_final_result_persists_canonical_step_output() -> None:
+    bridge = MagicMock()
+    bridge.query.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "provider": "claude-code",
+        "scope_kind": "chat",
+        "scope_id": "chat/claude-pair",
+        "surface": "chat",
+        "tmux_session": "mc-int-123",
+        "status": "attached",
+        "capabilities": ["tui", "autocomplete"],
+        "attach_token": "attach-token-123",
+        "task_id": "task-123",
+        "step_id": "step-456",
+    }
+    registry = InteractiveSessionRegistry(bridge)
+
+    metadata = registry.record_final_result(
+        "interactive_session:claude",
+        content="Implemented the requested step and updated the failing tests.",
+        source="claude-mcp",
+        timestamp="2026-03-13T01:10:00.000Z",
+    )
+
+    assert (
+        metadata["final_result"] == "Implemented the requested step and updated the failing tests."
+    )
+    assert metadata["final_result_source"] == "claude-mcp"
+    assert metadata["final_result_at"] == "2026-03-13T01:10:00.000Z"
+    bridge.mutation.assert_called_once_with("interactiveSessions:upsert", metadata)
+
+
 def test_get_queries_interactive_session_metadata_by_session_id() -> None:
     bridge = MagicMock()
     bridge.query.return_value = {"session_id": "interactive_session:claude"}
