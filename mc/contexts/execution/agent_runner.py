@@ -13,6 +13,8 @@ from mc.contexts.execution.session_keys import build_agent_session_key
 from mc.types import LeadAgentExecutionError, is_lead_agent
 
 if TYPE_CHECKING:
+    from nanobot.agent.loop import AgentLoop
+
     from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
@@ -83,6 +85,11 @@ async def _run_agent_on_task(
     workspace = Path.home() / ".nanobot" / "agents" / agent_name
     workspace.mkdir(parents=True, exist_ok=True)
     global_skills_dir = Path.home() / ".nanobot" / "workspace" / "skills"
+    artifacts_workspace = None
+    if board_name:
+        from mc.artifacts import resolve_board_artifacts_workspace
+
+        artifacts_workspace = resolve_board_artifacts_workspace(board_name)
 
     message = build_task_message(task_title, task_description)
     if agent_prompt:
@@ -125,6 +132,7 @@ async def _run_agent_on_task(
         allowed_skills=agent_skills,
         global_skills_dir=global_skills_dir,
         memory_workspace=memory_workspace,
+        artifacts_workspace=artifacts_workspace,
         cron_service=cron_service,
         agent_name=agent_name,
         mc_consolidation_system_prompt=(
@@ -134,7 +142,7 @@ async def _run_agent_on_task(
             "[Task Tag Attributes] (tags and their attribute key=value pairs), "
             "and ## Thread Context (prior human messages in the task thread). "
             "When writing history_entry, use this format for each task: "
-            "'[YYYY-MM-DD HH:MM] Task \"<title>\": <summary>. "
+            '\'[YYYY-MM-DD HH:MM] Task "<title>": <summary>. '
             "Tags: <tag>(<attr=val>, ...). "
             "Files read: <paths>. Files written: <paths>.' "
             "Omit any field that has no data. "
@@ -151,11 +159,7 @@ async def _run_agent_on_task(
             from nanobot.config.loader import load_config as _load_config
 
             cfg = _load_config()
-            telegram_ids = [
-                x
-                for x in cfg.channels.telegram.allow_from
-                if x.lstrip("-").isdigit()
-            ]
+            telegram_ids = [x for x in cfg.channels.telegram.allow_from if x.lstrip("-").isdigit()]
             if telegram_ids:
                 cron_tool.set_telegram_default(telegram_ids[0])
 

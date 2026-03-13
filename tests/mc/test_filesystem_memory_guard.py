@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from nanobot.agent.tools.filesystem import EditFileTool, WriteFileTool
 
 
@@ -12,6 +11,8 @@ async def test_write_file_blocks_non_contract_memory_path(tmp_path):
     result = await tool.execute("memory/notes.md", "artifact")
 
     assert "restricted to memory/MEMORY.md and memory/HISTORY.md" in result
+    assert "artifacts/" in result
+    assert "reusable artifacts" in result
 
 
 @pytest.mark.asyncio
@@ -34,4 +35,5 @@ async def test_edit_file_blocks_non_contract_memory_path(tmp_path):
     result = await tool.execute("memory/rogue.md", "before", "after")
 
     assert "restricted to memory/MEMORY.md and memory/HISTORY.md" in result
+    assert "artifacts/" in result
     assert (memory_dir / "rogue.md").read_text(encoding="utf-8") == "before"

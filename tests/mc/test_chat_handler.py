@@ -16,7 +16,6 @@ from mc.application.execution.request import (
     RunnerType,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -87,7 +86,9 @@ class TestProcessChatMessage:
             patch(
                 "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
-                    prompt="Test prompt", model=None, skills=[],
+                    prompt="Test prompt",
+                    model=None,
+                    skills=[],
                     display_name=None,
                 ),
             ),
@@ -139,7 +140,9 @@ class TestProcessChatMessage:
             patch(
                 "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
-                    prompt="Agent prompt", model=None, skills=[],
+                    prompt="Agent prompt",
+                    model=None,
+                    skills=[],
                     display_name=None,
                 ),
             ),
@@ -221,7 +224,9 @@ class TestProcessChatMessageErrors:
             patch(
                 "mc.infrastructure.agents.yaml_validator.validate_agent_file",
                 return_value=MagicMock(
-                    prompt="Test prompt", model=None, skills=[],
+                    prompt="Test prompt",
+                    model=None,
+                    skills=[],
                     display_name=None,
                 ),
             ),
@@ -318,9 +323,6 @@ class TestChatHandlerPollingLoop:
             return []
 
         bridge.get_pending_chat_messages = fake_get_pending
-
-        # Mock _process_chat_message to avoid the full agent processing
-        original_process = handler._process_chat_message
 
         async def mock_process(m):
             processed.set()
@@ -513,11 +515,11 @@ class TestBridgeChatHelpers:
     """
 
     @patch("mc.bridge.ConvexClient")
-    def test_get_pending_chat_messages_calls_query(self, MockClient):
+    def test_get_pending_chat_messages_calls_query(self, mock_client_cls):
         """get_pending_chat_messages calls chats:listPending query."""
         from mc.bridge import ConvexBridge
 
-        mock_client = MockClient.return_value
+        mock_client = mock_client_cls.return_value
         mock_client.query.return_value = []
 
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -527,11 +529,11 @@ class TestBridgeChatHelpers:
         assert result == []
 
     @patch("mc.bridge.ConvexClient")
-    def test_get_pending_returns_list_or_empty(self, MockClient):
+    def test_get_pending_returns_list_or_empty(self, mock_client_cls):
         """get_pending_chat_messages returns empty list for None."""
         from mc.bridge import ConvexBridge
 
-        mock_client = MockClient.return_value
+        mock_client = mock_client_cls.return_value
         mock_client.query.return_value = None
 
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -539,11 +541,11 @@ class TestBridgeChatHelpers:
         assert result == []
 
     @patch("mc.bridge.ConvexClient")
-    def test_send_chat_response_calls_mutation(self, MockClient):
+    def test_send_chat_response_calls_mutation(self, mock_client_cls):
         """send_chat_response calls chats:send mutation."""
         from mc.bridge import ConvexBridge
 
-        mock_client = MockClient.return_value
+        mock_client = mock_client_cls.return_value
         mock_client.mutation.return_value = None
 
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -560,11 +562,11 @@ class TestBridgeChatHelpers:
         assert payload["status"] == "done"
 
     @patch("mc.bridge.ConvexClient")
-    def test_mark_chat_processing_calls_mutation(self, MockClient):
+    def test_mark_chat_processing_calls_mutation(self, mock_client_cls):
         """mark_chat_processing calls chats:updateStatus with processing."""
         from mc.bridge import ConvexBridge
 
-        mock_client = MockClient.return_value
+        mock_client = mock_client_cls.return_value
         mock_client.mutation.return_value = None
 
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -577,11 +579,11 @@ class TestBridgeChatHelpers:
         assert call_args[1]["status"] == "processing"
 
     @patch("mc.bridge.ConvexClient")
-    def test_mark_chat_done_calls_mutation(self, MockClient):
+    def test_mark_chat_done_calls_mutation(self, mock_client_cls):
         """mark_chat_done calls chats:updateStatus with done."""
         from mc.bridge import ConvexBridge
 
-        mock_client = MockClient.return_value
+        mock_client = mock_client_cls.return_value
         mock_client.mutation.return_value = None
 
         bridge = ConvexBridge("https://test.convex.cloud")
@@ -627,9 +629,7 @@ class TestCCModelRouting:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "cc-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: cc-agent\nmodel: cc/claude-sonnet-4-6"
-        )
+        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
 
         engine_result = ExecutionResult(
             success=True,
@@ -678,17 +678,13 @@ class TestCCModelRouting:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "cc-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: cc-agent\nmodel: cc/claude-sonnet-4-6"
-        )
+        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
 
         captured_requests: list[ExecutionRequest] = []
 
         async def capture_run(req):
             captured_requests.append(req)
-            return ExecutionResult(
-                success=True, output="done", memory_workspace=tmp_path
-            )
+            return ExecutionResult(success=True, output="done", memory_workspace=tmp_path)
 
         mock_engine = MagicMock()
         mock_engine.run = AsyncMock(side_effect=capture_run)
@@ -721,9 +717,7 @@ class TestCCModelRouting:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "gpt-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: gpt-agent\nmodel: gpt-4"
-        )
+        (config_dir / "config.yaml").write_text("name: gpt-agent\nmodel: gpt-4")
 
         engine_result = ExecutionResult(
             success=True,
@@ -759,6 +753,52 @@ class TestCCModelRouting:
         call_args = bridge.send_chat_response.call_args[0]
         assert call_args[0] == "gpt-agent"
         assert call_args[1] == "GPT response"
+
+    @pytest.mark.asyncio
+    async def test_official_channel_binds_default_board_for_request_context(self, tmp_path):
+        """Official-channel chat binds board-scoped resources to the default board."""
+        from mc.contexts.conversation.chat_handler import ChatHandler
+
+        bridge = self._make_cc_bridge()
+        bridge.get_default_board = MagicMock(
+            return_value={"id": "board_default", "name": "default"}
+        )
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(agent_name="gpt-agent", content="Hello GPT!")
+
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "gpt-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("name: gpt-agent\nmodel: gpt-4")
+
+        captured_requests: list[ExecutionRequest] = []
+
+        async def capture_run(req: ExecutionRequest) -> ExecutionResult:
+            captured_requests.append(req)
+            return ExecutionResult(success=True, output="done")
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(side_effect=capture_run)
+
+        with (
+            patch(
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
+                return_value=self._make_validate_result("gpt-4"),
+            ),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
+            patch(
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
+        ):
+            await handler._process_chat_message(msg)
+
+        assert len(captured_requests) == 1
+        assert captured_requests[0].board == {
+            "id": "board_default",
+            "name": "default",
+        }
+        bridge.get_default_board.assert_called_once_with()
 
 
 MC_ROOT = Path(__file__).resolve().parent.parent.parent / "mc"
@@ -819,9 +859,7 @@ class TestChatHandlerEngineIntegration:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "cc-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: cc-agent\nmodel: cc/claude-sonnet-4-6"
-        )
+        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
 
         engine_result = ExecutionResult(
             success=True,
@@ -882,9 +920,7 @@ class TestChatHandlerEngineIntegration:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "cc-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: cc-agent\nmodel: cc/claude-sonnet-4-6"
-        )
+        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
 
         engine_result = ExecutionResult(
             success=True,
@@ -921,6 +957,57 @@ class TestChatHandlerEngineIntegration:
         assert mutation_call[0][1]["value"] == "new-session-id"
 
     @pytest.mark.asyncio
+    async def test_cc_chat_does_not_schedule_per_message_memory_consolidation(self, tmp_path):
+        """CC chat should not invent a per-message consolidation trigger."""
+        from mc.contexts.conversation.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        bridge.get_agent_by_name = MagicMock(return_value=None)
+        handler = ChatHandler(bridge)
+        msg = _make_pending_msg(agent_name="cc-agent", content="No eager consolidation")
+
+        agents_dir = tmp_path / "agents"
+        config_dir = agents_dir / "cc-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
+
+        engine_result = ExecutionResult(
+            success=True,
+            output="CC response",
+            session_id="new-session-id",
+            memory_workspace=tmp_path,
+        )
+
+        mock_engine = MagicMock()
+        mock_engine.run = AsyncMock(return_value=engine_result)
+
+        with (
+            patch(
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
+                return_value=MagicMock(
+                    prompt="Be helpful.",
+                    model="cc/claude-sonnet-4-6",
+                    skills=[],
+                    display_name="CC Test Agent",
+                ),
+            ),
+            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
+            patch(
+                "mc.contexts.conversation.chat_handler.ExecutionEngine",
+                return_value=mock_engine,
+            ),
+            patch(
+                "claude_code.memory_consolidator.CCMemoryConsolidator.consolidate",
+                new=AsyncMock(),
+            ) as consolidate_mock,
+        ):
+            await handler._process_chat_message(msg)
+
+        consolidate_mock.assert_not_awaited()
+        req = mock_engine.run.call_args[0][0]
+        assert req.session_boundary_reason is None
+
+    @pytest.mark.asyncio
     async def test_nanobot_chat_routes_through_engine(self, tmp_path):
         """Non-CC model chat should route through ExecutionEngine with NANOBOT runner."""
         from mc.contexts.conversation.chat_handler import ChatHandler
@@ -933,9 +1020,7 @@ class TestChatHandlerEngineIntegration:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "nb-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: nb-agent\nmodel: gpt-4"
-        )
+        (config_dir / "config.yaml").write_text("name: nb-agent\nmodel: gpt-4")
 
         engine_result = ExecutionResult(
             success=True,

@@ -21,7 +21,8 @@ def _validate_memory_write_target(file_path: Path, workspace: Path | None) -> st
     if len(relative.parts) != 1 or relative.name not in {"MEMORY.md", "HISTORY.md"}:
         return (
             "Writes inside memory/ are restricted to memory/MEMORY.md and "
-            "memory/HISTORY.md. Save task artifacts to the task output directory instead."
+            "memory/HISTORY.md. Save reusable artifacts under artifacts/ and "
+            "task-specific files to the task output directory instead."
         )
     return None
 

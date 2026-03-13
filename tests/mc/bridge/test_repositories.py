@@ -353,9 +353,7 @@ class TestAgentRepository:
         repo = AgentRepository(client)
         repo.clear_agent_archive("dev")
 
-        client.mutation.assert_called_once_with(
-            "agents:clearAgentArchive", {"agent_name": "dev"}
-        )
+        client.mutation.assert_called_once_with("agents:clearAgentArchive", {"agent_name": "dev"})
 
     def test_deactivate_agents_except(self):
         client = _make_client_mock()
@@ -397,6 +395,15 @@ class TestBoardRepository:
         result = repo.ensure_default_board()
         assert result == "board-1"
         client.mutation.assert_called_once_with("boards:ensureDefaultBoard", {})
+
+    def test_get_default_board(self):
+        client = _make_client_mock()
+        client.query.return_value = {"_id": "board-1", "name": "default"}
+        repo = BoardRepository(client)
+
+        result = repo.get_default_board()
+        assert result == {"_id": "board-1", "name": "default"}
+        client.query.assert_called_once_with("boards:getDefault", {})
 
 
 # ── ChatRepository Tests ─────────────────────────────────────────────

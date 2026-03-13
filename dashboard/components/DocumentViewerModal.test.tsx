@@ -8,7 +8,7 @@ vi.mock("@/hooks/useDocumentFetch", () => ({
 
 // Mock next/dynamic — render PdfViewer as a stub
 vi.mock("next/dynamic", () => ({
-  default: (_fn: unknown, _opts: unknown) => {
+  default: () => {
     const Stub = () => <div data-testid="pdf-viewer-stub">PDF Viewer</div>;
     Stub.displayName = "DynamicPdfViewer";
     return Stub;
@@ -66,9 +66,7 @@ vi.mock("@/components/viewers/MarkdownViewer", () => ({
 }));
 
 vi.mock("@/components/viewers/HtmlViewer", () => ({
-  HtmlViewer: ({ content }: { content: string }) => (
-    <div data-testid="html-viewer">{content}</div>
-  ),
+  HtmlViewer: ({ content }: { content: string }) => <div data-testid="html-viewer">{content}</div>,
 }));
 
 vi.mock("@/components/viewers/ImageViewer", () => ({
@@ -79,13 +77,7 @@ vi.mock("@/components/viewers/ImageViewer", () => ({
     blobUrl: string;
     filename: string;
     onDownload: () => void;
-  }) => (
-    <div
-      data-testid="image-viewer"
-      data-blob-url={blobUrl}
-      data-filename={filename}
-    />
-  ),
+  }) => <div data-testid="image-viewer" data-blob-url={blobUrl} data-filename={filename} />,
 }));
 
 // Mock Dialog components to render inline
@@ -100,42 +92,21 @@ vi.mock("@/components/ui/dialog", () => ({
     children: React.ReactNode;
   }) =>
     open ? (
-      <div
-        data-testid="dialog-root"
-        data-on-open-change={String(!!onOpenChange)}
-      >
+      <div data-testid="dialog-root" data-on-open-change={String(!!onOpenChange)}>
         {children}
       </div>
     ) : null,
-  DialogContent: ({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => (
+  DialogContent: ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <div data-testid="dialog-content" className={className}>
       {children}
     </div>
   ),
-  DialogHeader: ({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => (
+  DialogHeader: ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <div data-testid="dialog-header" className={className}>
       {children}
     </div>
   ),
-  DialogTitle: ({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => (
+  DialogTitle: ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <h2 data-testid="dialog-title" className={className}>
       {children}
     </h2>
@@ -239,72 +210,79 @@ describe("DocumentViewerModal", () => {
   // ---- AC #1: Modal opens from Files tab, shows header info ----
 
   it("renders modal when file prop is non-null", () => {
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
     expect(screen.getByTestId("dialog-root")).toBeInTheDocument();
   });
 
   it("does not render modal when file is null", () => {
-    render(
-      <DocumentViewerModal taskId="task_1" file={null} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={null} onClose={vi.fn()} />);
     expect(screen.queryByTestId("dialog-root")).toBeNull();
   });
 
   it("shows file name in modal header", () => {
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
     expect(screen.getByTestId("dialog-title")).toHaveTextContent("readme.txt");
   });
 
-  it("shows file extension as type badge in header", () => {
+  it("downloads board artifacts through the board artifacts route", () => {
+    const originalCreateElement = document.createElement.bind(document);
+    const mockAnchor = { href: "", download: "", click: vi.fn() };
+    const spy = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      if (tag === "a") return mockAnchor as unknown as HTMLElement;
+      return originalCreateElement(tag);
+    });
+
     render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
+      <DocumentViewerModal
+        source={{ kind: "board-artifact", boardName: "default" }}
+        file={{ name: "brief.md", type: "text/markdown", size: 128, path: "templates/brief.md" }}
+        onClose={vi.fn()}
+      />,
     );
+
+    fireEvent.click(screen.getAllByText("Download")[0]);
+
+    expect(mockAnchor.href).toBe("/api/boards/default/artifacts/templates%2Fbrief.md");
+    expect(mockAnchor.download).toBe("brief.md");
+    expect(mockAnchor.click).toHaveBeenCalled();
+
+    spy.mockRestore();
+  });
+
+  it("shows file extension as type badge in header", () => {
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
     expect(screen.getByTestId("badge")).toHaveTextContent("TXT");
   });
 
   it("renders a dialog description for accessibility", () => {
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
     expect(screen.getByTestId("dialog-description")).toHaveTextContent(
-      "Preview and download readme.txt"
+      "Preview and download readme.txt",
     );
   });
 
   it("shows formatted file size in header", () => {
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
     // 2048 bytes = 2 KB
     expect(screen.getByText("2 KB")).toBeInTheDocument();
   });
 
   it("shows a Download button in modal header", () => {
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
     // Find button containing the download icon
     const downloadIcon = screen.getByTestId("icon-download");
     expect(downloadIcon.closest("button")).toBeInTheDocument();
   });
 
   it("shows a close (X) button in modal header", () => {
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
     const xIcon = screen.getByTestId("icon-x");
     expect(xIcon.closest("button")).toBeInTheDocument();
   });
 
   it("calls onClose when X button is clicked", () => {
     const onClose = vi.fn();
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={onClose} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={onClose} />);
     const xIcon = screen.getByTestId("icon-x");
     fireEvent.click(xIcon.closest("button")!);
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -314,24 +292,18 @@ describe("DocumentViewerModal", () => {
     // Capture original before spying to avoid recursion
     const originalCreateElement = document.createElement.bind(document);
     const mockAnchor = { href: "", download: "", click: vi.fn() };
-    const spy = vi
-      .spyOn(document, "createElement")
-      .mockImplementation((tag: string) => {
-        if (tag === "a") return mockAnchor as unknown as HTMLElement;
-        return originalCreateElement(tag);
-      });
+    const spy = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      if (tag === "a") return mockAnchor as unknown as HTMLElement;
+      return originalCreateElement(tag);
+    });
 
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
 
     // Click the download icon button in the header
     const downloadIcon = screen.getByTestId("icon-download");
     fireEvent.click(downloadIcon.closest("button")!);
 
-    expect(mockAnchor.href).toBe(
-      "/api/tasks/task_1/files/attachments/readme.txt"
-    );
+    expect(mockAnchor.href).toBe("/api/tasks/task_1/files/attachments/readme.txt");
     expect(mockAnchor.download).toBe("readme.txt");
     expect(mockAnchor.click).toHaveBeenCalledTimes(1);
 
@@ -351,7 +323,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "data.txt" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     const pre = document.querySelector("pre");
@@ -366,7 +338,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "log.txt" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByText("14px")).toBeInTheDocument();
@@ -378,7 +350,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "log.txt" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     const plusIcons = screen.getAllByTestId("icon-plus");
@@ -392,7 +364,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "log.txt" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     const minusIcons = screen.getAllByTestId("icon-minus");
@@ -406,7 +378,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "log.txt" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     const minusIcons = screen.getAllByTestId("icon-minus");
@@ -425,7 +397,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "log.txt" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     const plusIcons = screen.getAllByTestId("icon-plus");
@@ -444,7 +416,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "config.json" }}
         onClose={vi.fn()}
-      />
+      />,
     );
     const pre = document.querySelector("pre");
     expect(pre).not.toBeNull();
@@ -457,7 +429,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "data.csv" }}
         onClose={vi.fn()}
-      />
+      />,
     );
     expect(document.querySelector("pre")).not.toBeNull();
   });
@@ -473,7 +445,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "reports/summary.md", subfolder: "output" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     const viewer = screen.getByTestId("markdown-viewer");
@@ -488,7 +460,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "config.yaml" }}
         onClose={vi.fn()}
-      />
+      />,
     );
     expect(document.querySelector("pre")).not.toBeNull();
   });
@@ -506,7 +478,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "script.py" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByTestId("syntax-highlighter")).toBeInTheDocument();
@@ -518,13 +490,10 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "script.py" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
-    expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute(
-      "data-language",
-      "python"
-    );
+    expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute("data-language", "python");
   });
 
   it("passes correct language for .ts -> typescript", () => {
@@ -533,13 +502,10 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "utils.ts" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
-    expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute(
-      "data-language",
-      "typescript"
-    );
+    expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute("data-language", "typescript");
   });
 
   it("passes correct language for .js -> javascript", () => {
@@ -548,13 +514,10 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "app.js" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
-    expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute(
-      "data-language",
-      "javascript"
-    );
+    expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute("data-language", "javascript");
   });
 
   it("passes correct language for .tsx -> tsx", () => {
@@ -563,13 +526,10 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "Component.tsx" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
-    expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute(
-      "data-language",
-      "tsx"
-    );
+    expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute("data-language", "tsx");
   });
 
   it("passes showLineNumbers=true to SyntaxHighlighter", () => {
@@ -578,12 +538,12 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "script.py" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByTestId("syntax-highlighter")).toHaveAttribute(
       "data-show-line-numbers",
-      "true"
+      "true",
     );
   });
 
@@ -593,7 +553,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "script.py" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByText("14px")).toBeInTheDocument();
@@ -607,12 +567,10 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "archive.zip" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
-    expect(
-      screen.getByText("Preview not available for this file type.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Preview not available for this file type.")).toBeInTheDocument();
   });
 
   it("shows Download button in unsupported fallback body", () => {
@@ -621,7 +579,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "archive.zip" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     // Unsupported view renders a Download button in the body in addition to the header one
@@ -635,7 +593,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "archive.zip" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.queryByTestId("syntax-highlighter")).toBeNull();
@@ -651,9 +609,7 @@ describe("DocumentViewerModal", () => {
       error: null,
     });
 
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
@@ -666,9 +622,7 @@ describe("DocumentViewerModal", () => {
       error: "HTTP 404",
     });
 
-    render(
-      <DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />
-    );
+    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
 
     expect(screen.getByText(/Error: HTTP 404/)).toBeInTheDocument();
   });
@@ -688,7 +642,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "report.pdf" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByTestId("pdf-viewer-stub")).toBeInTheDocument();
@@ -705,7 +659,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "README.md" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByTestId("markdown-viewer")).toBeInTheDocument();
@@ -722,7 +676,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "page.html" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByTestId("html-viewer")).toBeInTheDocument();
@@ -741,7 +695,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "photo.png" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByTestId("image-viewer")).toBeInTheDocument();
@@ -762,7 +716,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "icon.svg" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByTestId("image-viewer")).toBeInTheDocument();
@@ -780,7 +734,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "page.htm" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByTestId("html-viewer")).toBeInTheDocument();
@@ -797,7 +751,7 @@ describe("DocumentViewerModal", () => {
         taskId="task_1"
         file={{ ...baseFile, name: "config.yml" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     const pre = document.querySelector("pre");
@@ -811,27 +765,23 @@ describe("DocumentViewerModal", () => {
   it("Download button URL-encodes filename with special characters", () => {
     const originalCreateElement = document.createElement.bind(document);
     const mockAnchor = { href: "", download: "", click: vi.fn() };
-    const spy = vi
-      .spyOn(document, "createElement")
-      .mockImplementation((tag: string) => {
-        if (tag === "a") return mockAnchor as unknown as HTMLElement;
-        return originalCreateElement(tag);
-      });
+    const spy = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      if (tag === "a") return mockAnchor as unknown as HTMLElement;
+      return originalCreateElement(tag);
+    });
 
     render(
       <DocumentViewerModal
         taskId="task_1"
         file={{ ...baseFile, name: "my report (2).txt" }}
         onClose={vi.fn()}
-      />
+      />,
     );
 
     const downloadIcon = screen.getByTestId("icon-download");
     fireEvent.click(downloadIcon.closest("button")!);
 
-    expect(mockAnchor.href).toBe(
-      "/api/tasks/task_1/files/attachments/my%20report%20(2).txt"
-    );
+    expect(mockAnchor.href).toBe("/api/tasks/task_1/files/attachments/my%20report%20(2).txt");
     expect(mockAnchor.download).toBe("my report (2).txt");
     expect(mockAnchor.click).toHaveBeenCalledTimes(1);
 

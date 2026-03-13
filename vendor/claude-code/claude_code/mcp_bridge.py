@@ -38,9 +38,16 @@ def _get_board_name() -> str | None:
     return os.environ.get("BOARD_NAME") or None
 
 
+def _get_memory_workspace() -> str | None:
+    return os.environ.get("MEMORY_WORKSPACE") or None
+
+
 def _resolve_memory_workspace():
     """Resolve the memory workspace path for search_memory, board-aware."""
     from pathlib import Path
+    memory_workspace = _get_memory_workspace()
+    if memory_workspace:
+        return Path(memory_workspace)
     agent_name = _get_agent_name()
     board_name = _get_board_name()
     if board_name:

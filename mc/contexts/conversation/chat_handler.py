@@ -246,11 +246,14 @@ class ChatHandler:
             agent_prompt = inject_orientation(agent_name, agent_prompt, bridge=self._bridge)
 
             from mc.types import NANOBOT_AGENT_NAME
+
             if agent_name == NANOBOT_AGENT_NAME:
                 agent_prompt = None
 
             # Resolve tier references
             from mc.types import is_cc_model, is_tier_reference
+
+            channel_board = await self._resolve_channel_board_binding()
 
             if agent_model and is_tier_reference(agent_model):
                 from mc.infrastructure.providers.tier_resolver import TierResolver
@@ -268,6 +271,7 @@ class ChatHandler:
                     agent_display_name=agent_display_name,
                     agent_data_full=agent_data_full,
                     content=content,
+                    channel_board=channel_board,
                 )
             else:
                 engine_result = await self._run_nanobot_chat(
@@ -276,6 +280,7 @@ class ChatHandler:
                     agent_prompt=agent_prompt,
                     agent_skills=agent_skills,
                     content=content,
+                    channel_board=channel_board,
                 )
 
             if not engine_result.success:
@@ -326,6 +331,7 @@ class ChatHandler:
         agent_display_name: str,
         agent_data_full: Any | None,
         content: str,
+        channel_board: dict[str, Any] | None,
     ) -> ExecutionResult:
         """Execute CC chat through ExecutionEngine.
 
@@ -387,6 +393,8 @@ class ChatHandler:
             entity_id=task_id,
             task_id=task_id,
             title=prompt,
+            board=channel_board,
+            board_name=channel_board.get("name") if isinstance(channel_board, dict) else None,
             agent=agent_data_for_cc,
             agent_name=agent_name,
             agent_prompt=agent_prompt,
@@ -439,48 +447,6 @@ class ChatHandler:
             except Exception:
                 logger.warning("[chat] Failed to persist CC session for %s", agent_name)
 
-        # Fire-and-forget memory consolidation
-        _ws_cwd = engine_result.memory_workspace
-        if _ws_cwd is not None:
-            _task_status = "error" if not engine_result.success else "completed"
-            _task_output = engine_result.output or ""
-
-            async def _post_chat_consolidate() -> None:
-                try:
-                    from claude_code.memory_consolidator import (
-                        CCMemoryConsolidator,
-                    )
-
-                    from mc.memory.service import resolve_consolidation_model
-
-                    _model = resolve_consolidation_model(self._bridge)
-                    if _model is None:
-                        logger.warning(
-                            "[chat] No model available for CC memory consolidation of @%s",
-                            agent_name,
-                        )
-                        return
-                    consolidator = CCMemoryConsolidator(_ws_cwd)
-                    await consolidator.consolidate(
-                        task_title=f"chat with @{agent_name}",
-                        task_output=_task_output,
-                        task_status=_task_status,
-                        task_id=task_id,
-                        model=_model,
-                    )
-                    logger.info(
-                        "[chat] CC memory consolidation done for @%s",
-                        agent_name,
-                    )
-                except Exception:
-                    logger.warning(
-                        "[chat] CC memory consolidation failed for @%s",
-                        agent_name,
-                        exc_info=True,
-                    )
-
-            create_background_task(_post_chat_consolidate())
-
         return engine_result
 
     async def _run_nanobot_chat(
@@ -491,6 +457,7 @@ class ChatHandler:
         agent_prompt: str | None,
         agent_skills: list[str] | None,
         content: str,
+        channel_board: dict[str, Any] | None,
     ) -> ExecutionResult:
         """Execute nanobot chat through ExecutionEngine.
 
@@ -511,6 +478,8 @@ class ChatHandler:
             task_id=task_id,
             title=message,
             description=None,
+            board=channel_board,
+            board_name=channel_board.get("name") if isinstance(channel_board, dict) else None,
             agent_name=agent_name,
             agent_prompt=agent_prompt,
             agent_model=agent_model,
@@ -530,3 +499,21 @@ class ChatHandler:
         )
 
         return await engine.run(request)
+
+    async def _resolve_channel_board_binding(self) -> dict[str, Any] | None:
+        """Bind board-scoped official-channel resources to the default board."""
+        try:
+            board = await asyncio.to_thread(self._bridge.get_default_board)
+            if isinstance(board, dict):
+                logger.info(
+                    "[chat] Bound official-channel request to default board '%s'",
+                    board.get("name", "<unknown>"),
+                )
+                return board
+            return None
+        except Exception:
+            logger.warning(
+                "[chat] Failed to resolve default board for official-channel binding",
+                exc_info=True,
+            )
+            return None

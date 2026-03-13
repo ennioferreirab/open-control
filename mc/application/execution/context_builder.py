@@ -26,9 +26,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.file_enricher import (
-    build_merged_source_context,
     build_file_context,
     build_file_manifest,
+    build_merged_source_context,
     load_merged_source_payloads,
     resolve_task_dirs,
 )
@@ -130,6 +130,7 @@ class ContextBuilder:
         """Lazily create and return a TierResolver instance."""
         if self._tier_resolver is None:
             from mc.infrastructure.providers.tier_resolver import TierResolver
+
             self._tier_resolver = TierResolver(self._bridge)
         return self._tier_resolver
 
@@ -182,15 +183,17 @@ class ContextBuilder:
         # 2. Sync from Convex (source of truth)
         convex_agent = await self._fetch_convex_agent(agent_name)
         agent_prompt, agent_model, agent_skills = sync_agent_from_convex(
-            agent_name, agent_prompt, agent_model, agent_skills, convex_agent,
+            agent_name,
+            agent_prompt,
+            agent_model,
+            agent_skills,
+            convex_agent,
         )
 
         # 3. Resolve tiers
         reasoning_level: str | None = None
         try:
-            agent_model, reasoning_level = resolve_tier(
-                agent_model, self._get_tier_resolver()
-            )
+            agent_model, reasoning_level = resolve_tier(agent_model, self._get_tier_resolver())
         except ValueError as exc:
             logger.error("[context] Tier resolution failed for '%s': %s", agent_name, exc)
             raise
@@ -223,9 +226,27 @@ class ContextBuilder:
         req.files = raw_files
         req.file_manifest = build_file_manifest(raw_files)
 
+        board_source = fresh_task if isinstance(fresh_task, dict) else (task_data or {})
+        board_id = board_source.get("board_id")
+        if board_id:
+            board_name, memory_workspace = await self._resolve_board(board_id, agent_name)
+            req.board_name = board_name
+            req.memory_workspace = memory_workspace
+
+        memory_dir = str(req.memory_workspace / "memory") if req.memory_workspace else None
+        artifacts_dir = None
+        if req.board_name:
+            from mc.artifacts import resolve_board_artifacts_workspace
+
+            artifacts_dir = str(resolve_board_artifacts_workspace(req.board_name))
+
         # Build file context and append to description
         file_context = build_file_context(
-            req.file_manifest, files_dir, output_dir
+            req.file_manifest,
+            files_dir,
+            output_dir,
+            memory_dir=memory_dir,
+            artifacts_dir=artifacts_dir,
         )
         req.description = (req.description or "") + f"\n\n{file_context}"
 
@@ -240,15 +261,11 @@ class ContextBuilder:
             if merged_source_context:
                 req.description = (req.description or "") + f"\n\n{merged_source_context}"
         except Exception:
-            logger.warning(
-                "[context] Merged source context failed for '%s'", title, exc_info=True
-            )
+            logger.warning("[context] Merged source context failed for '%s'", title, exc_info=True)
 
         # 7. Build thread context
         try:
-            thread_messages = await asyncio.to_thread(
-                self._bridge.get_task_messages, task_id
-            )
+            thread_messages = await asyncio.to_thread(self._bridge.get_task_messages, task_id)
             req.thread_messages = thread_messages
             thread_context = build_thread_context(thread_messages)
             if thread_context:
@@ -256,11 +273,14 @@ class ContextBuilder:
                 req.description = (req.description or "") + f"\n{thread_context}"
                 logger.info(
                     "[context] Thread context injected for task '%s' (%d messages)",
-                    title, len(thread_messages),
+                    title,
+                    len(thread_messages),
                 )
         except Exception:
             logger.warning(
-                "[context] Thread context failed for '%s'", title, exc_info=True,
+                "[context] Thread context failed for '%s'",
+                title,
+                exc_info=True,
             )
 
         # 8. Build tag attributes context
@@ -271,15 +291,16 @@ class ContextBuilder:
                 tag_attrs_context = await self._build_tag_attrs(task_id, task_tags)
                 if tag_attrs_context:
                     req.tag_attributes = tag_attrs_context
-                    req.description = (
-                        (req.description or "") + f"\n\n{tag_attrs_context}"
-                    )
+                    req.description = (req.description or "") + f"\n\n{tag_attrs_context}"
                     logger.info(
-                        "[context] Tag attributes injected for task '%s'", title,
+                        "[context] Tag attributes injected for task '%s'",
+                        title,
                     )
         except Exception:
             logger.warning(
-                "[context] Tag attributes failed for '%s'", title, exc_info=True,
+                "[context] Tag attributes failed for '%s'",
+                title,
+                exc_info=True,
             )
 
         # 9. Inject orientation
@@ -294,15 +315,6 @@ class ContextBuilder:
             roster = build_agent_roster()
             if roster:
                 req.description = (req.description or "") + f"\n\n{roster}"
-
-        # 10. Resolve board workspace
-        board_id = (task_data or {}).get("board_id")
-        if board_id:
-            board_name, memory_workspace = await self._resolve_board(
-                board_id, agent_name
-            )
-            req.board_name = board_name
-            req.memory_workspace = memory_workspace
 
         # Populate final fields
         req.agent_prompt = agent_prompt
@@ -341,7 +353,8 @@ class ContextBuilder:
         if is_lead_agent(agent_name):
             logger.warning(
                 "[context] Step '%s' assigned to lead-agent; rerouting to '%s'",
-                step_title, NANOBOT_AGENT_NAME,
+                step_title,
+                NANOBOT_AGENT_NAME,
             )
             agent_name = NANOBOT_AGENT_NAME
 
@@ -368,15 +381,17 @@ class ContextBuilder:
         # 2. Sync from Convex
         convex_agent = await self._fetch_convex_agent(agent_name)
         agent_prompt, agent_model, agent_skills = sync_agent_from_convex(
-            agent_name, agent_prompt, agent_model, agent_skills, convex_agent,
+            agent_name,
+            agent_prompt,
+            agent_model,
+            agent_skills,
+            convex_agent,
         )
 
         # 3. Resolve tiers
         reasoning_level: str | None = None
         try:
-            agent_model, reasoning_level = resolve_tier(
-                agent_model, self._get_tier_resolver()
-            )
+            agent_model, reasoning_level = resolve_tier(agent_model, self._get_tier_resolver())
         except ValueError:
             raise
 
@@ -401,18 +416,32 @@ class ContextBuilder:
         task_title = task_data.get("title", "Untitled Task")
         req.title = task_title
 
+        board_id = task_data.get("board_id")
+        if board_id:
+            board_name, memory_workspace = await self._resolve_board(board_id, agent_name)
+            req.board_name = board_name
+            req.memory_workspace = memory_workspace
+
         raw_files = task_data.get("files") or []
         req.files = raw_files
         files_dir, output_dir = resolve_task_dirs(task_id)
         req.files_dir = files_dir
         req.output_dir = output_dir
         req.file_manifest = build_file_manifest(raw_files)
+        memory_dir = str(req.memory_workspace / "memory") if req.memory_workspace else None
+        artifacts_dir = None
+        if req.board_name:
+            from mc.artifacts import resolve_board_artifacts_workspace
+
+            artifacts_dir = str(resolve_board_artifacts_workspace(req.board_name))
 
         # Build step-specific file context (execution description)
         file_context = build_file_context(
             req.file_manifest,
             files_dir,
             output_dir,
+            memory_dir=memory_dir,
+            artifacts_dir=artifacts_dir,
             is_step=True,
             step_title=step_title,
             step_description=step_description,
@@ -421,9 +450,7 @@ class ContextBuilder:
         )
 
         # 7. Build thread context with predecessor awareness
-        thread_messages = await asyncio.to_thread(
-            self._bridge.get_task_messages, task_id
-        )
+        thread_messages = await asyncio.to_thread(self._bridge.get_task_messages, task_id)
         req.thread_messages = thread_messages
         thread_context = build_thread_context(
             thread_messages,
@@ -437,15 +464,6 @@ class ContextBuilder:
             execution_description += f"\n{thread_context}"
         req.description = execution_description
 
-        # 8. Resolve board workspace
-        board_id = task_data.get("board_id")
-        if board_id:
-            board_name, memory_workspace = await self._resolve_board(
-                board_id, agent_name
-            )
-            req.board_name = board_name
-            req.memory_workspace = memory_workspace
-
         # Populate final fields
         req.agent_prompt = agent_prompt
         req.agent_model = agent_model
@@ -458,14 +476,10 @@ class ContextBuilder:
 
         return req
 
-    async def _fetch_convex_agent(
-        self, agent_name: str
-    ) -> dict[str, Any] | None:
+    async def _fetch_convex_agent(self, agent_name: str) -> dict[str, Any] | None:
         """Fetch agent data from Convex (best-effort)."""
         try:
-            return await asyncio.to_thread(
-                self._bridge.get_agent_by_name, agent_name
-            )
+            return await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
         except Exception:
             logger.warning(
                 "[context] Could not fetch Convex agent for '%s', using YAML",
@@ -474,9 +488,7 @@ class ContextBuilder:
             )
             return None
 
-    async def _build_tag_attrs(
-        self, task_id: str, task_tags: list[str]
-    ) -> str:
+    async def _build_tag_attrs(self, task_id: str, task_tags: list[str]) -> str:
         """Build tag attributes context string."""
         tag_attr_values = await asyncio.to_thread(
             self._bridge.query,
@@ -499,25 +511,29 @@ class ContextBuilder:
     ) -> tuple[str | None, Path | None]:
         """Resolve board-scoped workspace for an agent."""
         try:
-            board = await asyncio.to_thread(
-                self._bridge.get_board_by_id, board_id
-            )
+            board = await asyncio.to_thread(self._bridge.get_board_by_id, board_id)
             if board:
                 board_name = board.get("name")
                 if board_name:
                     from mc.infrastructure.boards import (
                         get_agent_memory_mode,
-                        resolve_board_workspace,
+                        resolve_memory_workspace,
                     )
+
                     mode = get_agent_memory_mode(board, agent_name)
-                    memory_workspace = resolve_board_workspace(
-                        board_name, agent_name, mode=mode
+                    resolved = resolve_memory_workspace(
+                        agent_name,
+                        board_name=board_name,
+                        mode=mode,
                     )
                     logger.info(
-                        "[context] Board workspace for '%s' on '%s' (mode=%s)",
-                        agent_name, board_name, mode,
+                        "[context] Board workspace for '%s' on '%s' (mode=%s, scope=%s)",
+                        agent_name,
+                        board_name,
+                        mode,
+                        resolved.effective_memory_scope,
                     )
-                    return board_name, memory_workspace
+                    return board_name, resolved.workspace
         except Exception:
             logger.warning(
                 "[context] Failed to resolve board workspace for '%s'",

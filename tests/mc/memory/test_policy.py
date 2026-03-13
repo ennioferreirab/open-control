@@ -11,7 +11,6 @@ from mc.memory.policy import (
     iter_memory_markdown_files,
 )
 
-
 # ── is_memory_markdown_file ─────────────────────────────────────────────────
 
 
@@ -32,19 +31,6 @@ class TestIsMemoryMarkdownFile:
     @pytest.mark.parametrize(
         "name",
         [
-            "MEMORY_2026-03-05_1430.md",
-            "MEMORY_2026-01-01_0000.md",
-            "HISTORY_2025-12-31_2359.md",
-            "HISTORY_2026-03-05_143000.md",  # 6-digit time variant
-            "MEMORY_2026-03-05_143000.md",
-        ],
-    )
-    def test_archive_files_accepted(self, name):
-        assert is_memory_markdown_file(Path(name)) is True
-
-    @pytest.mark.parametrize(
-        "name",
-        [
             "rogue.md",
             "notes.md",
             "MEMORY.txt",
@@ -52,7 +38,11 @@ class TestIsMemoryMarkdownFile:
             "memory.md",  # lowercase
             "history.md",
             "MEMORY_baddate.md",
+            "MEMORY_2026-03-05_1430.md",
+            "MEMORY_2026-01-01_0000.md",
             "MEMORY_2026-03-05.md",  # no time component
+            "HISTORY_2025-12-31_2359.md",
+            "HISTORY_2026-03-05_143000.md",
             "RANDOM_2026-03-05_1430.md",  # wrong prefix
             "memory-index.sqlite",
         ],
@@ -73,7 +63,6 @@ class TestIsAllowedMemoryFile:
             "MEMORY.md",
             "HISTORY.md",
             "HISTORY_ARCHIVE.md",
-            "MEMORY_2026-03-05_1430.md",
             "memory-index.sqlite",
             "memory-index.sqlite-shm",
             "memory-index.sqlite-wal",
@@ -136,13 +125,21 @@ class TestIterMemoryMarkdownFiles:
         assert "data.json" not in names
 
     def test_includes_archive_files(self, tmp_path):
-        (tmp_path / "HISTORY_2026-01-15_0800.md").write_text("arch", encoding="utf-8")
-        (tmp_path / "MEMORY_2026-02-20_1200.md").write_text("arch2", encoding="utf-8")
+        (tmp_path / "HISTORY_ARCHIVE.md").write_text("arch", encoding="utf-8")
 
         result = iter_memory_markdown_files(tmp_path)
         names = [p.name for p in result]
-        assert "HISTORY_2026-01-15_0800.md" in names
-        assert "MEMORY_2026-02-20_1200.md" in names
+        assert "HISTORY_ARCHIVE.md" in names
+
+    def test_excludes_youtube_summarizer_style_files(self, tmp_path):
+        (tmp_path / "MEMORY.md").write_text("facts", encoding="utf-8")
+        (tmp_path / "kelvincleto_summary_2026-03-05.md").write_text("rogue", encoding="utf-8")
+        (tmp_path / "kelvincleto_videos.json").write_text("{}", encoding="utf-8")
+
+        result = iter_memory_markdown_files(tmp_path)
+        names = [p.name for p in result]
+
+        assert names == ["MEMORY.md"]
 
     def test_results_are_sorted(self, tmp_path):
         (tmp_path / "MEMORY.md").write_text("", encoding="utf-8")
@@ -177,12 +174,26 @@ class TestFindInvalidMemoryFiles:
         (tmp_path / "MEMORY.md").write_text("", encoding="utf-8")
         (tmp_path / "rogue.md").write_text("bad", encoding="utf-8")
         (tmp_path / "notes.txt").write_text("bad", encoding="utf-8")
+        (tmp_path / "HISTORY_2026-03-05_1430.md").write_text("legacy", encoding="utf-8")
 
         result = find_invalid_memory_files(tmp_path)
         names = [p.name for p in result]
+        assert "HISTORY_2026-03-05_1430.md" in names
         assert "rogue.md" in names
         assert "notes.txt" in names
         assert "MEMORY.md" not in names
+
+    def test_detects_youtube_summarizer_style_files(self, tmp_path):
+        (tmp_path / "kelvincleto_summary_2026-03-05.md").write_text("summary", encoding="utf-8")
+        (tmp_path / "kelvincleto_videos.json").write_text("{}", encoding="utf-8")
+
+        result = find_invalid_memory_files(tmp_path)
+        names = [p.name for p in result]
+
+        assert names == [
+            "kelvincleto_summary_2026-03-05.md",
+            "kelvincleto_videos.json",
+        ]
 
     def test_detects_directories_as_invalid(self, tmp_path):
         subdir = tmp_path / "subdir"

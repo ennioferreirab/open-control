@@ -15,10 +15,29 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryWorkspaceResolution:
+    """Canonical memory storage for one logical agent identity."""
+
+    workspace: Path
+    effective_memory_scope: str
+    memory_file: Path
+    history_file: Path
+    index_file: Path
+
+
+def _resolve_global_agent_workspace(agent_name: str) -> Path:
+    workspace = Path.home() / ".nanobot" / "agents" / agent_name
+    (workspace / "memory").mkdir(parents=True, exist_ok=True)
+    (workspace / "sessions").mkdir(exist_ok=True)
+    return workspace
 
 
 def get_agent_memory_mode(
@@ -57,9 +76,7 @@ def resolve_board_workspace(
     Returns:
         Path to ~/.nanobot/boards/{board_name}/agents/{agent_name}/
     """
-    board_workspace = (
-        Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
-    )
+    board_workspace = Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
     memory_dir = board_workspace / "memory"
     sessions_dir = board_workspace / "sessions"
     memory_dir.mkdir(parents=True, exist_ok=True)
@@ -71,6 +88,34 @@ def resolve_board_workspace(
         _setup_clean(memory_dir, agent_name, board_name)
 
     return board_workspace
+
+
+def resolve_memory_workspace(
+    agent_name: str,
+    *,
+    board_name: str | None = None,
+    mode: str = "clean",
+) -> MemoryWorkspaceResolution:
+    """Resolve the canonical memory target for `agent_name + effective scope`.
+
+    `clean` mode keeps memory isolated per board.
+    `with_history` collapses to the shared agent workspace regardless of board.
+    """
+    if board_name and mode == "clean":
+        workspace = resolve_board_workspace(board_name, agent_name, mode=mode)
+        effective_memory_scope = "board"
+    else:
+        workspace = _resolve_global_agent_workspace(agent_name)
+        effective_memory_scope = "shared-agent"
+
+    memory_dir = workspace / "memory"
+    return MemoryWorkspaceResolution(
+        workspace=workspace,
+        effective_memory_scope=effective_memory_scope,
+        memory_file=memory_dir / "MEMORY.md",
+        history_file=memory_dir / "HISTORY.md",
+        index_file=memory_dir / "memory-index.sqlite",
+    )
 
 
 def _setup_with_history(memory_dir: Path, agent_name: str, board_name: str) -> None:
@@ -108,7 +153,8 @@ def _setup_with_history(memory_dir: Path, agent_name: str, board_name: str) -> N
 
     logger.info(
         "[board_utils] Set up with_history symlinks for agent '%s' on board '%s'",
-        agent_name, board_name,
+        agent_name,
+        board_name,
     )
 
 
@@ -121,27 +167,28 @@ def _setup_clean(memory_dir: Path, agent_name: str, board_name: str) -> None:
         memory_md.unlink()
 
     if not memory_md.exists():
-        global_memory = (
-            Path.home() / ".nanobot" / "agents" / agent_name / "memory" / "MEMORY.md"
-        )
+        global_memory = Path.home() / ".nanobot" / "agents" / agent_name / "memory" / "MEMORY.md"
         if global_memory.exists() and not global_memory.is_symlink():
             shutil.copy2(global_memory, memory_md)
             logger.info(
                 "[board_utils] Bootstrapped board-scoped MEMORY.md for agent '%s' on board '%s'",
-                agent_name, board_name,
+                agent_name,
+                board_name,
             )
         elif global_memory.is_symlink() and global_memory.exists():
             # Global is itself a symlink but resolves -- read and write content
             shutil.copy2(global_memory, memory_md)
             logger.info(
                 "[board_utils] Bootstrapped board-scoped MEMORY.md for agent '%s' on board '%s'",
-                agent_name, board_name,
+                agent_name,
+                board_name,
             )
         else:
             memory_md.write_text("", encoding="utf-8")
             logger.info(
                 "[board_utils] Created empty board-scoped MEMORY.md for agent '%s' on board '%s'",
-                agent_name, board_name,
+                agent_name,
+                board_name,
             )
 
     history_md = memory_dir / "HISTORY.md"

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
-interface FileRef {
-  name: string;
-  subfolder: string;
-}
+import {
+  buildDocumentUrl,
+  resolveDocumentSource,
+  type DocumentFileRef,
+  type DocumentSource,
+} from "@/lib/documentSources";
 
 interface FetchState {
   requestKey: string | null;
@@ -35,20 +36,44 @@ function isBinary(filename: string): boolean {
   return BINARY_EXTS.has(ext);
 }
 
-function getRequestKey(taskId: string, file: FileRef | null): string | null {
-  if (!file) {
+function getRequestKey(source: DocumentSource | null, file: DocumentFileRef | null): string | null {
+  if (!source || !file) {
     return null;
   }
-
-  return `${taskId}:${file.subfolder}:${file.name}`;
+  if (source.kind === "task") {
+    return `task:${source.taskId}:${file.subfolder ?? ""}:${file.name}`;
+  }
+  return `board-artifact:${source.boardName}:${file.path ?? file.name}`;
 }
 
-export function useDocumentFetch(taskId: string, file: FileRef | null): FetchResult {
+export function useDocumentFetch(
+  sourceOrTaskId: string | DocumentSource,
+  file: DocumentFileRef | null,
+): FetchResult {
   const [state, setState] = useState<FetchState>(INITIAL_STATE);
-  const requestKey = useMemo(() => getRequestKey(taskId, file), [taskId, file]);
+  const taskId =
+    typeof sourceOrTaskId === "string"
+      ? sourceOrTaskId
+      : sourceOrTaskId.kind === "task"
+        ? sourceOrTaskId.taskId
+        : null;
+  const boardName =
+    typeof sourceOrTaskId !== "string" && sourceOrTaskId.kind === "board-artifact"
+      ? sourceOrTaskId.boardName
+      : null;
+  const source = useMemo(
+    () =>
+      taskId
+        ? resolveDocumentSource(undefined, taskId)
+        : boardName
+          ? { kind: "board-artifact" as const, boardName }
+          : null,
+    [boardName, taskId],
+  );
+  const requestKey = useMemo(() => getRequestKey(source, file), [source, file]);
 
   useEffect(() => {
-    if (!file || !requestKey) {
+    if (!source || !file || !requestKey) {
       return;
     }
 
@@ -58,7 +83,7 @@ export function useDocumentFetch(taskId: string, file: FileRef | null): FetchRes
 
     const load = async () => {
       try {
-        const url = `/api/tasks/${taskId}/files/${file.subfolder}/${encodeURIComponent(file.name)}`;
+        const url = buildDocumentUrl(source, file);
         const response = await fetch(url, { signal: controller.signal });
 
         if (!response.ok) {
@@ -109,9 +134,9 @@ export function useDocumentFetch(taskId: string, file: FileRef | null): FetchRes
         URL.revokeObjectURL(createdObjectUrl);
       }
     };
-  }, [file, requestKey, taskId]);
+  }, [file, requestKey, source]);
 
-  if (!file || !requestKey) {
+  if (!source || !file || !requestKey) {
     return {
       content: null,
       blobUrl: null,

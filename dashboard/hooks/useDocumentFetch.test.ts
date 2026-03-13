@@ -15,6 +15,7 @@ global.fetch = mockFetch;
 const textFile = { name: "readme.txt", subfolder: "attachments" };
 const binaryFile = { name: "photo.png", subfolder: "output" };
 const pdfFile = { name: "report.pdf", subfolder: "attachments" };
+const boardArtifactFile = { name: "brief.md", path: "templates/brief.md" };
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -95,6 +96,30 @@ describe("useDocumentFetch", () => {
     );
 
     // drain pending microtasks to avoid act() warnings
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  });
+
+  it("constructs correct fetch URL for board artifacts", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: vi.fn().mockResolvedValue("artifact content"),
+      blob: vi.fn(),
+    });
+
+    renderHook(() =>
+      useDocumentFetch({ kind: "board-artifact", boardName: "default" }, boardArtifactFile),
+    );
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/boards/default/artifacts/templates%2Fbrief.md",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();

@@ -29,6 +29,10 @@ class BoardRepository:
         """
         return self._client.query("boards:getById", {"board_id": board_id})
 
+    def get_default_board(self) -> dict[str, Any] | None:
+        """Fetch the current default board."""
+        return self._client.query("boards:getDefault", {})
+
     def ensure_default_board(self) -> Any:
         """Ensure a default board exists in Convex.
 

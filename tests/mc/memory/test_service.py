@@ -78,6 +78,37 @@ class TestQuarantineInvalidMemoryFiles:
         moved = result[0]
         assert moved.read_text(encoding="utf-8") == "bad content"
 
+    def test_moves_legacy_snapshot_files_to_quarantine(self, tmp_path):
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        legacy = memory_dir / "HISTORY_2026-03-05_1430.md"
+        legacy.write_text("legacy history", encoding="utf-8")
+
+        result = quarantine_invalid_memory_files(tmp_path)
+
+        assert len(result) == 1
+        assert result[0].name == "HISTORY_2026-03-05_1430.md"
+        assert result[0].read_text(encoding="utf-8") == "legacy history"
+        assert not legacy.exists()
+
+    def test_moves_youtube_summarizer_style_files_to_quarantine(self, tmp_path):
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        summary = memory_dir / "kelvincleto_summary_2026-03-05.md"
+        listing = memory_dir / "kelvincleto_videos.json"
+        summary.write_text("summary", encoding="utf-8")
+        listing.write_text("{}", encoding="utf-8")
+
+        result = quarantine_invalid_memory_files(tmp_path)
+        names = [path.name for path in result]
+
+        assert names == [
+            "kelvincleto_summary_2026-03-05.md",
+            "kelvincleto_videos.json",
+        ]
+        assert not summary.exists()
+        assert not listing.exists()
+
     def test_custom_quarantine_root(self, tmp_path):
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir()
@@ -126,7 +157,7 @@ class TestQuarantineInvalidMemoryFiles:
         memory_dir.mkdir()
         mem = memory_dir / "MEMORY.md"
         hist = memory_dir / "HISTORY.md"
-        archive = memory_dir / "HISTORY_2026-03-05_1430.md"
+        archive = memory_dir / "HISTORY_ARCHIVE.md"
         sqlite_path = memory_dir / "memory-index.sqlite"
         lock = memory_dir / ".memory.lock"
         mem.write_text("mem", encoding="utf-8")

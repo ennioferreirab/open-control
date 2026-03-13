@@ -5,17 +5,18 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-
-from claude_code.workspace import CCWorkspaceManager
-from mc.types import AgentData
 from claude_code.types import WorkspaceContext
+from claude_code.workspace import CCWorkspaceManager
 
+from mc.types import AgentData
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_agent(
     name: str = "test-agent",
@@ -45,6 +46,7 @@ def _write_nanobot_config(home: Path, data: dict) -> None:
 # WorkspaceContext structure
 # ---------------------------------------------------------------------------
 
+
 class TestWorkspaceContext:
     def test_correct_paths_returned(self, tmp_path: Path) -> None:
         """prepare() returns WorkspaceContext with correct paths."""
@@ -68,6 +70,7 @@ class TestWorkspaceContext:
 # ---------------------------------------------------------------------------
 # Directory structure
 # ---------------------------------------------------------------------------
+
 
 class TestDirectoryStructure:
     def test_creates_workspace_directory(self, tmp_path: Path) -> None:
@@ -113,6 +116,7 @@ class TestDirectoryStructure:
 # ---------------------------------------------------------------------------
 # CLAUDE.md generation (AC1)
 # ---------------------------------------------------------------------------
+
 
 class TestClaudeMdGeneration:
     def test_claude_md_contains_agent_prompt(self, tmp_path: Path) -> None:
@@ -199,6 +203,7 @@ class TestClaudeMdGeneration:
 # ---------------------------------------------------------------------------
 # Skills mapping (AC2)
 # ---------------------------------------------------------------------------
+
 
 class TestSkillsMapping:
     def test_symlink_created_for_existing_skill(self, tmp_path: Path) -> None:
@@ -330,6 +335,7 @@ class TestSkillsMapping:
 # MCP config generation (AC3)
 # ---------------------------------------------------------------------------
 
+
 class TestMcpConfigGeneration:
     def test_mcp_json_written(self, tmp_path: Path) -> None:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
@@ -363,6 +369,61 @@ class TestMcpConfigGeneration:
         assert env["MC_SOCKET_PATH"] == "/tmp/mc-my-agent-task-abc.sock"
         assert env["AGENT_NAME"] == "my-agent"
         assert env["TASK_ID"] == "task-abc"
+
+    def test_mcp_json_includes_explicit_memory_workspace(self, tmp_path: Path) -> None:
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        board_workspace = tmp_path / "boards" / "default" / "agents" / "my-agent"
+        board_workspace.mkdir(parents=True, exist_ok=True)
+        (board_workspace / "memory").mkdir()
+        (board_workspace / "sessions").mkdir()
+
+        with patch(
+            "mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace
+        ):
+            ctx = manager.prepare(
+                "my-agent",
+                agent,
+                "task-abc",
+                board_name="default",
+                memory_mode="with_history",
+            )
+
+        data = json.loads(ctx.mcp_config.read_text())
+        env = data["mcpServers"]["nanobot"]["env"]
+
+        expected_memory_workspace = tmp_path / "agents" / "my-agent"
+        assert env["MEMORY_WORKSPACE"] == str(expected_memory_workspace)
+        assert env["BOARD_NAME"] == "default"
+
+    def test_claude_md_loads_memory_from_effective_shared_workspace(self, tmp_path: Path) -> None:
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+        board_workspace = tmp_path / "boards" / "default" / "agents" / "my-agent"
+        board_workspace.mkdir(parents=True, exist_ok=True)
+        (board_workspace / "memory").mkdir()
+        (board_workspace / "sessions").mkdir()
+
+        shared_memory_dir = tmp_path / "agents" / "my-agent" / "memory"
+        shared_memory_dir.mkdir(parents=True, exist_ok=True)
+        (shared_memory_dir / "MEMORY.md").write_text(
+            "Shared fact: reuse the incident rollback checklist.",
+            encoding="utf-8",
+        )
+
+        with patch(
+            "mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace
+        ):
+            ctx = manager.prepare(
+                "my-agent",
+                agent,
+                "task-abc",
+                board_name="default",
+                memory_mode="with_history",
+            )
+
+        content = ctx.claude_md.read_text(encoding="utf-8")
+        assert "reuse the incident rollback checklist" in content
 
     def test_mcp_json_includes_resolved_secret_env_vars(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -411,6 +472,7 @@ class TestMcpConfigGeneration:
 # Input validation (C1, H3)
 # ---------------------------------------------------------------------------
 
+
 class TestInputValidation:
     def test_invalid_agent_name_with_slash_raises(self, tmp_path: Path) -> None:
         """C1: agent_name containing '/' must raise ValueError."""
@@ -448,6 +510,7 @@ class TestInputValidation:
 # Idempotent preparation
 # ---------------------------------------------------------------------------
 
+
 class TestIdempotentPreparation:
     def test_prepare_twice_no_errors(self, tmp_path: Path) -> None:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
@@ -476,6 +539,7 @@ class TestIdempotentPreparation:
 # ---------------------------------------------------------------------------
 # Skill availability check (via SkillsLoader)
 # ---------------------------------------------------------------------------
+
 
 class TestSkillAvailabilityCheck:
     """Verify that _map_skills() skips unavailable skills detected by SkillsLoader."""
@@ -539,9 +603,10 @@ class TestSkillAvailabilityCheck:
 
         warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
         assert any(
-            "missing-binary-skill" in msg and "unavailable" in msg
-            for msg in warning_messages
-        ), f"Expected WARNING containing 'missing-binary-skill' and 'unavailable', got: {warning_messages}"
+            "missing-binary-skill" in msg and "unavailable" in msg for msg in warning_messages
+        ), (
+            f"Expected WARNING containing 'missing-binary-skill' and 'unavailable', got: {warning_messages}"
+        )
 
 
 class TestBoardScopedWorkspace:
@@ -564,8 +629,12 @@ class TestBoardScopedWorkspace:
         # prepare(), so Python re-resolves the name from mc.infrastructure.boards on every call.
         # If workspace.py ever hoists the import to module level, the target must change
         # to "claude_code.workspace.resolve_board_workspace".
-        with patch("mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace) as mock_resolve:
-            ctx = manager.prepare("test-agent", agent, "task123", board_name="myboard", memory_mode="clean")
+        with patch(
+            "mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace
+        ) as mock_resolve:
+            ctx = manager.prepare(
+                "test-agent", agent, "task123", board_name="myboard", memory_mode="clean"
+            )
 
         mock_resolve.assert_called_once_with("myboard", "test-agent", mode="clean")
         assert ctx.cwd == board_workspace
@@ -590,8 +659,12 @@ class TestBoardScopedWorkspace:
         (board_workspace / "sessions").mkdir()
 
         # See patch-target note in test_board_scoped_workspace_uses_board_path.
-        with patch("mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace) as mock_resolve:
-            manager.prepare("test-agent", agent, "task123", board_name="projboard", memory_mode="with_history")
+        with patch(
+            "mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace
+        ) as mock_resolve:
+            manager.prepare(
+                "test-agent", agent, "task123", board_name="projboard", memory_mode="with_history"
+            )
 
         mock_resolve.assert_called_once_with("projboard", "test-agent", mode="with_history")
 
@@ -608,8 +681,10 @@ class TestBoardScopedWorkspace:
         (board_workspace / "sessions").mkdir()
 
         # See patch-target note in test_board_scoped_workspace_uses_board_path.
-        with patch("mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace):
-            ctx = manager.prepare("test-agent", agent, "task999", board_name="b1")
+        with patch(
+            "mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace
+        ):
+            manager.prepare("test-agent", agent, "task999", board_name="b1")
 
         claude_md = board_workspace / "CLAUDE.md"
         assert claude_md.exists()

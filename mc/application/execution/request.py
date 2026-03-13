@@ -17,10 +17,10 @@ from typing import Any
 
 from mc.types import AgentData
 
-
 # ---------------------------------------------------------------------------
 # Story 16.1 — Entity type constants
 # ---------------------------------------------------------------------------
+
 
 class EntityType:
     """Entity type constants for execution requests."""
@@ -32,6 +32,7 @@ class EntityType:
 # ---------------------------------------------------------------------------
 # Story 16.2 — Runner type and error category enums
 # ---------------------------------------------------------------------------
+
 
 class RunnerType(str, Enum):
     """Which backend runs the agent work."""
@@ -53,6 +54,7 @@ class ErrorCategory(str, Enum):
 # ---------------------------------------------------------------------------
 # Unified ExecutionRequest (16.1 fields + 16.2 additions)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ExecutionRequest:
@@ -132,6 +134,7 @@ class ExecutionRequest:
     runner_type: RunnerType = RunnerType.NANOBOT
     step_id: str | None = None
     session_key: str | None = None
+    session_boundary_reason: str | None = None
 
     @property
     def is_task(self) -> bool:
@@ -147,12 +150,14 @@ class ExecutionRequest:
     def safe_task_id(self) -> str:
         """Return filesystem-safe task ID."""
         from mc.types import task_safe_id
+
         return task_safe_id(self.task_id)
 
 
 # ---------------------------------------------------------------------------
 # Story 16.2 — ExecutionResult
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ExecutionResult:

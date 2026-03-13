@@ -54,9 +54,7 @@ class BridgeRepositoryFacadeMixin:
         self, source_task_id: str, parent_task_id: str, agent_name: str = "agent"
     ) -> None:
         self._ensure_repos()
-        self._tasks.sync_output_files_to_parent(
-            source_task_id, parent_task_id, agent_name
-        )
+        self._tasks.sync_output_files_to_parent(source_task_id, parent_task_id, agent_name)
 
     def create_step(self, step_data: dict[str, Any]) -> str:
         self._ensure_repos()
@@ -107,9 +105,7 @@ class BridgeRepositoryFacadeMixin:
         artifacts: list[dict[str, Any]] | None = None,
     ) -> Any:
         self._ensure_repos()
-        return self._messages.post_step_completion(
-            task_id, step_id, agent_name, content, artifacts
-        )
+        return self._messages.post_step_completion(task_id, step_id, agent_name, content, artifacts)
 
     def post_lead_agent_message(
         self,
@@ -127,9 +123,7 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._messages.get_recent_user_messages(since_timestamp)
 
-    def post_system_error(
-        self, task_id: str, content: str, step_id: str | None = None
-    ) -> Any:
+    def post_system_error(self, task_id: str, content: str, step_id: str | None = None) -> Any:
         self._ensure_repos()
         return self._messages.post_system_error(task_id, content, step_id)
 
@@ -185,6 +179,10 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._boards.get_board_by_id(board_id)
 
+    def get_default_board(self) -> dict[str, Any] | None:
+        self._ensure_repos()
+        return self._boards.get_default_board()
+
     def ensure_default_board(self) -> Any:
         self._ensure_repos()
         return self._boards.ensure_default_board()
@@ -207,9 +205,7 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._chats.mark_chat_done(chat_id)
 
-    def subscribe(
-        self, function_name: str, args: dict[str, Any] | None = None
-    ) -> Iterator[Any]:
+    def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         self._ensure_repos()
         return self._subscriptions.subscribe(function_name, args)
 

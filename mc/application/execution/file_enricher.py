@@ -62,6 +62,8 @@ def build_file_context(
     files_dir: str,
     output_dir: str,
     *,
+    memory_dir: str | None = None,
+    artifacts_dir: str | None = None,
     is_step: bool = False,
     step_title: str = "",
     step_description: str = "",
@@ -102,8 +104,7 @@ def build_file_context(
         # Inject task-level file manifest
         if file_manifest:
             manifest_summary = ", ".join(
-                f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
-                for f in file_manifest
+                f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})" for f in file_manifest
             )
             desc += (
                 f"\n\nTask has {len(file_manifest)} file(s) in its manifest. "
@@ -123,6 +124,16 @@ def build_file_context(
                 )
                 desc += f"\n\n{delegation_summary}"
 
+        guidance_lines: list[str] = []
+        if memory_dir:
+            guidance_lines.append(
+                f"Store long-term facts and consolidated history in: {memory_dir}"
+            )
+        if artifacts_dir:
+            guidance_lines.append(f"Store reusable board artifacts in: {artifacts_dir}")
+        guidance_lines.append(f"Save task deliverables to: {output_dir}")
+        desc += "\n\n[Persistence Rules]\n" + "\n".join(guidance_lines)
+
         parts.append(desc)
     else:
         # Task format: workspace instructions
@@ -134,14 +145,22 @@ def build_file_context(
         )
         if file_manifest:
             manifest_summary = ", ".join(
-                f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
-                for f in file_manifest
+                f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})" for f in file_manifest
             )
             task_instruction += (
                 f"\nTask has {len(file_manifest)} attached file(s) "
                 f"at {files_dir}/attachments. "
                 f"File manifest: {manifest_summary}"
             )
+        guidance_lines: list[str] = []
+        if memory_dir:
+            guidance_lines.append(
+                f"Store long-term facts and consolidated history in: {memory_dir}"
+            )
+        if artifacts_dir:
+            guidance_lines.append(f"Store reusable board artifacts in: {artifacts_dir}")
+        guidance_lines.append(f"Save task deliverables to: {output_dir}")
+        task_instruction += "\n\n[Persistence Rules]\n" + "\n".join(guidance_lines)
         parts.append(task_instruction)
 
     return "\n".join(parts)
@@ -185,16 +204,22 @@ async def load_merged_source_payloads(
         return []
 
     is_merge_task = _read_merge_field(task_data, "is_merge_task", "isMergeTask") is True
-    source_task_ids = _read_merge_field(
-        task_data,
-        "merge_source_task_ids",
-        "mergeSourceTaskIds",
-    ) or []
-    source_labels = _read_merge_field(
-        task_data,
-        "merge_source_labels",
-        "mergeSourceLabels",
-    ) or []
+    source_task_ids = (
+        _read_merge_field(
+            task_data,
+            "merge_source_task_ids",
+            "mergeSourceTaskIds",
+        )
+        or []
+    )
+    source_labels = (
+        _read_merge_field(
+            task_data,
+            "merge_source_labels",
+            "mergeSourceLabels",
+        )
+        or []
+    )
 
     if not is_merge_task or not isinstance(source_task_ids, list) or not source_task_ids:
         return []
@@ -230,21 +255,30 @@ async def load_merged_source_payloads(
         }
 
         resolved = [payload]
-        nested_source_ids = _read_merge_field(
-            source_task,
-            "merge_source_task_ids",
-            "mergeSourceTaskIds",
-        ) or []
-        nested_source_labels = _read_merge_field(
-            source_task,
-            "merge_source_labels",
-            "mergeSourceLabels",
-        ) or []
-        nested_is_merge = _read_merge_field(
-            source_task,
-            "is_merge_task",
-            "isMergeTask",
-        ) is True
+        nested_source_ids = (
+            _read_merge_field(
+                source_task,
+                "merge_source_task_ids",
+                "mergeSourceTaskIds",
+            )
+            or []
+        )
+        nested_source_labels = (
+            _read_merge_field(
+                source_task,
+                "merge_source_labels",
+                "mergeSourceLabels",
+            )
+            or []
+        )
+        nested_is_merge = (
+            _read_merge_field(
+                source_task,
+                "is_merge_task",
+                "isMergeTask",
+            )
+            is True
+        )
 
         if nested_is_merge and isinstance(nested_source_ids, list) and nested_source_ids:
             for nested_index, nested_task_id in enumerate(nested_source_ids):

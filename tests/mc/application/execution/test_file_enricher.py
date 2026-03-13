@@ -113,6 +113,21 @@ class TestBuildFileContextTask:
         assert "a.txt" in result
         assert "b.pdf" in result
 
+    def test_distinguishes_memory_artifacts_and_output(self) -> None:
+        result = build_file_context(
+            [],
+            "/tasks/abc",
+            "/tasks/abc/output",
+            memory_dir="/agents/dev-agent/memory",
+            artifacts_dir="/boards/default/artifacts",
+        )
+
+        assert (
+            "Store long-term facts and consolidated history in: /agents/dev-agent/memory" in result
+        )
+        assert "Store reusable board artifacts in: /boards/default/artifacts" in result
+        assert "Save task deliverables to: /tasks/abc/output" in result
+
 
 class TestBuildFileContextStep:
     """Tests for build_file_context in step mode."""

@@ -5,7 +5,9 @@ from mc.memory.index import MemoryIndex, SearchResult
 
 
 def test_sync_indexes_file(tmp_path):
-    (tmp_path / "MEMORY.md").write_text("Project memory includes keyword: banana.", encoding="utf-8")
+    (tmp_path / "MEMORY.md").write_text(
+        "Project memory includes keyword: banana.", encoding="utf-8"
+    )
     idx = MemoryIndex(tmp_path)
 
     idx.sync()
@@ -158,8 +160,12 @@ def test_history_archive_is_indexed_with_snapshot_timestamps(tmp_path):
     assert rows
     assert any("Old deployment note" in row[0] for row in rows)
     assert any("Recent deployment note" in row[0] for row in rows)
-    assert min(row[1] for row in rows) == datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc).timestamp()
-    assert max(row[1] for row in rows) == datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc).timestamp()
+    assert (
+        min(row[1] for row in rows) == datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc).timestamp()
+    )
+    assert (
+        max(row[1] for row in rows) == datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc).timestamp()
+    )
 
 
 def test_history_archive_search_prefers_recent_snapshot(tmp_path):
@@ -186,7 +192,7 @@ def test_history_archive_search_prefers_recent_snapshot(tmp_path):
     assert "newrelease" in results[0].content
 
 
-def test_legacy_history_snapshot_files_remain_indexable(tmp_path):
+def test_legacy_history_snapshot_files_are_excluded_from_index(tmp_path):
     legacy = tmp_path / "HISTORY_2026-03-05_2214.md"
     legacy.write_text("Legacy history snapshot with asteroid.", encoding="utf-8")
     idx = MemoryIndex(tmp_path)
@@ -194,8 +200,14 @@ def test_legacy_history_snapshot_files_remain_indexable(tmp_path):
     idx.sync()
 
     results = idx.search("asteroid")
-    assert results
-    assert any("asteroid" in result.content.lower() for result in results)
+    assert not results
+
+    rows = idx._conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE file_path = ?",
+        (str(legacy),),
+    ).fetchone()
+    assert rows is not None
+    assert rows[0] == 0
 
 
 def test_temporal_decay_penalizes_old(tmp_path):
@@ -252,3 +264,122 @@ def test_index_reads_embedding_model_from_env(tmp_path, monkeypatch):
     idx = MemoryIndex(tmp_path)
     assert idx._provider.__class__.__name__ == "LiteLLMProvider"
     assert idx._provider.model == "some-model"
+
+
+def test_sync_canonicalizes_shared_symlink_paths(tmp_path):
+    global_memory = tmp_path / "agents" / "nanobot" / "memory"
+    global_memory.mkdir(parents=True)
+    (global_memory / "MEMORY.md").write_text("Shared banana memory.", encoding="utf-8")
+
+    board_memory = tmp_path / "boards" / "default" / "agents" / "nanobot" / "memory"
+    board_memory.mkdir(parents=True)
+    (board_memory / "MEMORY.md").symlink_to(global_memory / "MEMORY.md")
+    (board_memory / "memory-index.sqlite").symlink_to(global_memory / "memory-index.sqlite")
+
+    global_idx = MemoryIndex(global_memory)
+    global_idx.sync()
+
+    board_idx = MemoryIndex(board_memory)
+    board_idx.sync()
+
+    tracked_paths = [
+        row[0] for row in board_idx._conn.execute("SELECT path FROM files ORDER BY path").fetchall()
+    ]
+    assert tracked_paths == [str(global_memory / "MEMORY.md")]
+
+    sources = [
+        row[0]
+        for row in board_idx._conn.execute(
+            "SELECT DISTINCT file_path FROM chunks ORDER BY file_path"
+        ).fetchall()
+    ]
+    assert sources == [str(global_memory / "MEMORY.md")]
+
+    results = board_idx.search("banana", top_k=10)
+    assert len(results) == 1
+    assert results[0].source == str(global_memory / "MEMORY.md")
+
+
+def test_sync_prunes_legacy_duplicates_for_equivalent_shared_paths(tmp_path):
+    global_memory = tmp_path / "agents" / "nanobot" / "memory"
+    global_memory.mkdir(parents=True)
+    shared_file = global_memory / "MEMORY.md"
+    shared_file.write_text("Shared banana memory.", encoding="utf-8")
+
+    board_memory = tmp_path / "boards" / "default" / "agents" / "nanobot" / "memory"
+    board_memory.mkdir(parents=True)
+    board_file = board_memory / "MEMORY.md"
+    board_file.symlink_to(shared_file)
+    (board_memory / "memory-index.sqlite").symlink_to(global_memory / "memory-index.sqlite")
+
+    idx = MemoryIndex(board_memory)
+    idx.sync_file(shared_file)
+
+    with idx._conn:
+        idx._conn.execute(
+            "INSERT INTO files(path, hash, mtime) VALUES (?, ?, ?)",
+            (str(board_file), "legacy-board-hash", board_file.stat().st_mtime),
+        )
+        cur = idx._conn.execute(
+            """
+            INSERT INTO chunks(file_path, content, offset_start, offset_end, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(board_file), "Shared banana memory.", 0, 21, 0.0),
+        )
+        idx._conn.execute(
+            "INSERT INTO chunks_fts(rowid, content) VALUES (?, ?)",
+            (int(cur.lastrowid), "Shared banana memory."),
+        )
+
+    legacy_sources = {
+        row[0] for row in idx._conn.execute("SELECT DISTINCT file_path FROM chunks").fetchall()
+    }
+    assert legacy_sources == {str(shared_file), str(board_file)}
+
+    idx.sync()
+
+    tracked_paths = {
+        row[0] for row in idx._conn.execute("SELECT path FROM files ORDER BY path").fetchall()
+    }
+    assert tracked_paths == {str(shared_file)}
+
+    sources = {
+        row[0] for row in idx._conn.execute("SELECT DISTINCT file_path FROM chunks").fetchall()
+    }
+    assert sources == {str(shared_file)}
+
+    results = idx.search("banana", top_k=10)
+    assert len(results) == 1
+    assert results[0].source == str(shared_file)
+
+
+def test_sync_preserves_clean_board_isolation_for_same_content(tmp_path):
+    global_memory = tmp_path / "agents" / "nanobot" / "memory"
+    global_memory.mkdir(parents=True)
+    global_file = global_memory / "MEMORY.md"
+    global_file.write_text("Shared banana memory.", encoding="utf-8")
+
+    board_memory = tmp_path / "boards" / "clean-board" / "agents" / "nanobot" / "memory"
+    board_memory.mkdir(parents=True)
+    board_file = board_memory / "MEMORY.md"
+    board_file.write_text("Shared banana memory.", encoding="utf-8")
+
+    global_idx = MemoryIndex(global_memory)
+    global_idx.sync()
+
+    board_idx = MemoryIndex(board_memory)
+    board_idx.sync()
+
+    global_sources = {
+        row[0]
+        for row in global_idx._conn.execute("SELECT DISTINCT file_path FROM chunks").fetchall()
+    }
+    board_sources = {
+        row[0]
+        for row in board_idx._conn.execute("SELECT DISTINCT file_path FROM chunks").fetchall()
+    }
+
+    assert global_sources == {str(global_file)}
+    assert board_sources == {str(board_file)}
+    assert global_sources != board_sources

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import {
   Sheet,
   SheetContent,
@@ -12,9 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Trash2 } from "lucide-react";
+import { Loader2, Paperclip, Trash2 } from "lucide-react";
 import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
 import { useBoardSettingsSheet } from "@/features/boards/hooks/useBoardSettingsSheet";
+import { DocumentViewerModal } from "@/components/DocumentViewerModal";
 
 interface BoardSettingsSheetProps {
   open: boolean;
@@ -22,6 +24,7 @@ interface BoardSettingsSheetProps {
 }
 
 export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     board,
     confirmDelete,
@@ -34,15 +37,35 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
     handleSave,
     isDefault,
     nonSystemAgents,
+    artifacts,
+    artifactsError,
+    artifactsLoading,
+    artifactSource,
+    closeArtifactViewer,
+    isUploadingArtifacts,
+    openArtifact,
+    selectedArtifact,
     saving,
     setConfirmDelete,
     setDescription,
     setDisplayName,
     toggleAgent,
     toggleAgentMode,
+    uploadArtifacts,
+    uploadArtifactsError,
   } = useBoardSettingsSheet(onClose);
 
   if (!board) return null;
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleArtifactFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    await uploadArtifacts(files);
+  };
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -143,6 +166,80 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
             ))}
           </div>
 
+          <div className="space-y-2 pt-3 border-t border-border">
+            <div>
+              <Label>Board Artifacts</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Durable files shared across future executions on this board.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleArtifactFileChange}
+                aria-label="Attach board artifacts"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleUploadClick}
+                disabled={isUploadingArtifacts}
+              >
+                {isUploadingArtifacts ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Paperclip className="mr-1 h-3.5 w-3.5" />
+                )}
+                Upload artifact
+              </Button>
+              {uploadArtifactsError && (
+                <p className="text-xs text-red-500">{uploadArtifactsError}</p>
+              )}
+            </div>
+            {artifactsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading artifacts...</p>
+            ) : artifactsError ? (
+              <p className="text-xs text-red-500">{artifactsError}</p>
+            ) : artifacts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No persistent artifacts yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {artifacts.map((artifact) => (
+                  <div
+                    key={artifact.path}
+                    className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openArtifact(artifact)}
+                      className="min-w-0 text-left text-sm hover:underline"
+                    >
+                      <span className="block truncate">{artifact.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {artifact.path}
+                      </span>
+                    </button>
+                    {artifactSource && (
+                      <a
+                        href={`/api/boards/${artifactSource.boardName}/artifacts/${encodeURIComponent(
+                          artifact.path,
+                        )}`}
+                        download={artifact.name}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Download
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Delete board — hidden for default board */}
           {!isDefault && (
             <div className="pt-3 border-t border-border space-y-2">
@@ -197,6 +294,13 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
           </Button>
         </div>
       </SheetContent>
+      {artifactSource && (
+        <DocumentViewerModal
+          source={artifactSource}
+          file={selectedArtifact}
+          onClose={closeArtifactViewer}
+        />
+      )}
     </Sheet>
   );
 }

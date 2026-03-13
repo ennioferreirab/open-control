@@ -99,9 +99,7 @@ class TestBuildTaskContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_basic_task_context(
-        self, mock_config: MagicMock, bridge: MagicMock
-    ) -> None:
+    async def test_basic_task_context(self, mock_config: MagicMock, bridge: MagicMock) -> None:
         builder = ContextBuilder(bridge)
         req = await builder.build_task_context(
             task_id="task_123",
@@ -123,9 +121,7 @@ class TestBuildTaskContext:
         "mc.application.execution.context_builder.load_agent_config",
         return_value=("yaml prompt", "gpt-4", ["code"]),
     )
-    async def test_agent_config_loaded(
-        self, mock_config: MagicMock, bridge: MagicMock
-    ) -> None:
+    async def test_agent_config_loaded(self, mock_config: MagicMock, bridge: MagicMock) -> None:
         builder = ContextBuilder(bridge)
         await builder.build_task_context(
             task_id="task_123",
@@ -141,9 +137,7 @@ class TestBuildTaskContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_convex_sync_overrides_yaml(
-        self, mock_config: MagicMock
-    ) -> None:
+    async def test_convex_sync_overrides_yaml(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge(
             agent_data={
                 "prompt": "convex prompt",
@@ -168,9 +162,7 @@ class TestBuildTaskContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_file_manifest_injected(
-        self, mock_config: MagicMock
-    ) -> None:
+    async def test_file_manifest_injected(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge(
             task_data={
                 "id": "task_123",
@@ -199,8 +191,12 @@ class TestBuildTaskContext:
     async def test_merge_sources_include_absolute_paths_and_delimited_threads(
         self, mock_config: MagicMock
     ) -> None:
-        source_a_path = str(Path.home() / ".nanobot" / "tasks" / "task_a" / "attachments" / "source-a.pdf")
-        source_b_path = str(Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "source-b.md")
+        source_a_path = str(
+            Path.home() / ".nanobot" / "tasks" / "task_a" / "attachments" / "source-a.pdf"
+        )
+        source_b_path = str(
+            Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "source-b.md"
+        )
 
         current_task = {
             "id": "task_merge",
@@ -220,7 +216,12 @@ class TestBuildTaskContext:
                 "description": "First source",
                 "status": "done",
                 "files": [
-                    {"name": "source-a.pdf", "type": "application/pdf", "size": 1024, "subfolder": "attachments"},
+                    {
+                        "name": "source-a.pdf",
+                        "type": "application/pdf",
+                        "size": 1024,
+                        "subfolder": "attachments",
+                    },
                 ],
             },
             "task_b": {
@@ -229,7 +230,12 @@ class TestBuildTaskContext:
                 "description": "Second source",
                 "status": "done",
                 "files": [
-                    {"name": "source-b.md", "type": "text/markdown", "size": 512, "subfolder": "output"},
+                    {
+                        "name": "source-b.md",
+                        "type": "text/markdown",
+                        "size": 512,
+                        "subfolder": "output",
+                    },
                 ],
             },
         }
@@ -294,8 +300,12 @@ class TestBuildTaskContext:
         assert "[Source Thread B]" in (req.description or "")
         assert source_a_path in (req.description or "")
         assert source_b_path in (req.description or "")
-        assert str(Path.home() / ".nanobot" / "tasks" / "task_a" / "output" / "report-a.md") in (req.description or "")
-        assert str(Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "report-b.md") in (req.description or "")
+        assert str(Path.home() / ".nanobot" / "tasks" / "task_a" / "output" / "report-a.md") in (
+            req.description or ""
+        )
+        assert str(Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "report-b.md") in (
+            req.description or ""
+        )
 
     @pytest.mark.asyncio
     @patch(
@@ -362,13 +372,15 @@ class TestBuildTaskContext:
             return None
 
         def message_side_effect(task_id: str) -> list[dict[str, Any]]:
-            return [{
-                "author_name": "agent",
-                "author_type": "agent",
-                "timestamp": "2026-01-01T10:00:00Z",
-                "content": f"{task_id} completed",
-                "type": "step_completion",
-            }]
+            return [
+                {
+                    "author_name": "agent",
+                    "author_type": "agent",
+                    "timestamp": "2026-01-01T10:00:00Z",
+                    "content": f"{task_id} completed",
+                    "type": "step_completion",
+                }
+            ]
 
         bridge.query = MagicMock(side_effect=query_side_effect)
         bridge.get_agent_by_name = MagicMock(return_value=None)
@@ -395,12 +407,8 @@ class TestBuildTaskContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_thread_context_injected(
-        self, mock_config: MagicMock
-    ) -> None:
-        bridge = _make_mock_bridge(
-            messages=[_user_msg("Please help me")]
-        )
+    async def test_thread_context_injected(self, mock_config: MagicMock) -> None:
+        bridge = _make_mock_bridge(messages=[_user_msg("Please help me")])
         builder = ContextBuilder(bridge)
         req = await builder.build_task_context(
             task_id="task_123",
@@ -416,9 +424,7 @@ class TestBuildTaskContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_nanobot_prompt_cleared(
-        self, mock_config: MagicMock, bridge: MagicMock
-    ) -> None:
+    async def test_nanobot_prompt_cleared(self, mock_config: MagicMock, bridge: MagicMock) -> None:
         """System agent (nanobot) should have prompt cleared."""
         builder = ContextBuilder(bridge)
         req = await builder.build_task_context(
@@ -434,9 +440,7 @@ class TestBuildTaskContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_trust_level_propagated(
-        self, mock_config: MagicMock, bridge: MagicMock
-    ) -> None:
+    async def test_trust_level_propagated(self, mock_config: MagicMock, bridge: MagicMock) -> None:
         builder = ContextBuilder(bridge)
         req = await builder.build_task_context(
             task_id="task_123",
@@ -466,6 +470,82 @@ class TestBuildTaskContext:
         assert req.output_dir != ""
         assert req.output_dir.endswith("/output")
 
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.roster_builder.load_agent_config",
+        return_value=(None, None, None),
+    )
+    async def test_with_history_board_uses_shared_agent_memory_workspace(
+        self, mock_config: MagicMock, tmp_path: Path
+    ) -> None:
+        bridge = _make_mock_bridge(
+            task_data={
+                "id": "task_123",
+                "title": "Test",
+                "files": [],
+                "tags": [],
+                "board_id": "board_default",
+            },
+            board_data={
+                "id": "board_default",
+                "name": "default",
+                "agent_memory_modes": [
+                    {"agent_name": "test-agent", "mode": "with_history"},
+                ],
+            },
+        )
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            builder = ContextBuilder(bridge)
+            req = await builder.build_task_context(
+                task_id="task_123",
+                title="Test",
+                description=None,
+                agent_name="test-agent",
+            )
+
+        assert req.board_name == "default"
+        assert req.memory_workspace == (tmp_path / ".nanobot" / "agents" / "test-agent")
+
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.roster_builder.load_agent_config",
+        return_value=(None, None, None),
+    )
+    async def test_clean_board_uses_board_scoped_memory_workspace(
+        self, mock_config: MagicMock, tmp_path: Path
+    ) -> None:
+        bridge = _make_mock_bridge(
+            task_data={
+                "id": "task_123",
+                "title": "Test",
+                "files": [],
+                "tags": [],
+                "board_id": "board_default",
+            },
+            board_data={
+                "id": "board_default",
+                "name": "default",
+                "agent_memory_modes": [
+                    {"agent_name": "test-agent", "mode": "clean"},
+                ],
+            },
+        )
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            builder = ContextBuilder(bridge)
+            req = await builder.build_task_context(
+                task_id="task_123",
+                title="Test",
+                description=None,
+                agent_name="test-agent",
+            )
+
+        assert req.board_name == "default"
+        assert req.memory_workspace == (
+            tmp_path / ".nanobot" / "boards" / "default" / "agents" / "test-agent"
+        )
+
 
 # ── Step Context Tests ───────────────────────────────────────────────────────
 
@@ -478,9 +558,7 @@ class TestBuildStepContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_basic_step_context(
-        self, mock_config: MagicMock
-    ) -> None:
+    async def test_basic_step_context(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge()
         builder = ContextBuilder(bridge)
         step = {
@@ -504,9 +582,7 @@ class TestBuildStepContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_step_with_predecessors(
-        self, mock_config: MagicMock
-    ) -> None:
+    async def test_step_with_predecessors(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge(
             messages=[
                 _step_completion("step_0", "Step 0 completed"),
@@ -531,9 +607,7 @@ class TestBuildStepContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_step_execution_description_format(
-        self, mock_config: MagicMock
-    ) -> None:
+    async def test_step_execution_description_format(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge()
         builder = ContextBuilder(bridge)
         step = {
@@ -552,9 +626,7 @@ class TestBuildStepContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_lead_agent_rerouted(
-        self, mock_config: MagicMock
-    ) -> None:
+    async def test_lead_agent_rerouted(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge()
         builder = ContextBuilder(bridge)
         step = {
@@ -577,12 +649,8 @@ class TestCCExecutionContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, "cc/claude-sonnet-4-20250514", None),
     )
-    async def test_cc_model_detected(
-        self, mock_config: MagicMock
-    ) -> None:
-        bridge = _make_mock_bridge(
-            agent_data={"model": "cc/claude-sonnet-4-20250514"}
-        )
+    async def test_cc_model_detected(self, mock_config: MagicMock) -> None:
+        bridge = _make_mock_bridge(agent_data={"model": "cc/claude-sonnet-4-20250514"})
         builder = ContextBuilder(bridge)
         req = await builder.build_task_context(
             task_id="task_123",
@@ -598,12 +666,8 @@ class TestCCExecutionContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, "cc/claude-sonnet-4-20250514", None),
     )
-    async def test_cc_step_detected(
-        self, mock_config: MagicMock
-    ) -> None:
-        bridge = _make_mock_bridge(
-            agent_data={"model": "cc/claude-sonnet-4-20250514"}
-        )
+    async def test_cc_step_detected(self, mock_config: MagicMock) -> None:
+        bridge = _make_mock_bridge(agent_data={"model": "cc/claude-sonnet-4-20250514"})
         builder = ContextBuilder(bridge)
         step = {
             "id": "step_1",
@@ -625,9 +689,7 @@ class TestHumanStepContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_human_step_has_minimal_context(
-        self, mock_config: MagicMock
-    ) -> None:
+    async def test_human_step_has_minimal_context(self, mock_config: MagicMock) -> None:
         """Human steps get the same context structure but no agent execution."""
         bridge = _make_mock_bridge()
         builder = ContextBuilder(bridge)
@@ -688,12 +750,8 @@ class TestTierResolution:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, "tier:standard-high", None),
     )
-    async def test_tier_resolved_in_task_context(
-        self, mock_config: MagicMock
-    ) -> None:
-        bridge = _make_mock_bridge(
-            agent_data={"model": "tier:standard-high"}
-        )
+    async def test_tier_resolved_in_task_context(self, mock_config: MagicMock) -> None:
+        bridge = _make_mock_bridge(agent_data={"model": "tier:standard-high"})
         # Mock the TierResolver
         with patch("mc.application.execution.context_builder.resolve_tier") as mock_resolve:
             mock_resolve.return_value = ("gpt-4o", "high")

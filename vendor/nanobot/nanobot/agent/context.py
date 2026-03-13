@@ -18,10 +18,17 @@ class ContextBuilder:
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
 
-    def __init__(self, workspace: Path, global_skills_dir: Path | None = None):
+    def __init__(
+        self,
+        workspace: Path,
+        global_skills_dir: Path | None = None,
+        artifacts_workspace: Path | None = None,
+    ):
         self.workspace = workspace
+        self.artifacts_workspace = artifacts_workspace
         try:
             from mc.memory import create_memory_store
+
             self.memory = create_memory_store(workspace)
         except ImportError:
             self.memory = MemoryStore(workspace)
@@ -59,8 +66,20 @@ Skills with available="false" need dependencies installed first - you can try in
     def _get_identity(self) -> str:
         """Get the core identity section."""
         workspace_path = str(self.workspace.expanduser().resolve())
+        artifacts_path = (
+            str(self.artifacts_workspace.expanduser().resolve())
+            if self.artifacts_workspace is not None
+            else None
+        )
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
+
+        artifacts_line = ""
+        if artifacts_path:
+            artifacts_line = (
+                f"\n- Board artifacts: {artifacts_path} "
+                f"(store reusable files here for future executions)"
+            )
 
         return f"""# nanobot 🐈
 
@@ -74,6 +93,8 @@ Your workspace is at: {workspace_path}
 - Long-term memory: {workspace_path}/memory/MEMORY.md (write important facts here)
 - History log: {workspace_path}/memory/HISTORY.md (grep-searchable). Each entry starts with [YYYY-MM-DD HH:MM].
 - Custom skills: {workspace_path}/skills/{{skill-name}}/SKILL.md
+{artifacts_line}
+- Task-specific deliverables belong in task output directories, not memory/ or board artifacts.
 
 ## nanobot Guidelines
 - State intent before tool calls, but NEVER predict or claim results before receiving them.
@@ -154,15 +175,21 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
         return images + [{"type": "text", "text": text}]
 
     def add_tool_result(
-        self, messages: list[dict[str, Any]],
-        tool_call_id: str, tool_name: str, result: str,
+        self,
+        messages: list[dict[str, Any]],
+        tool_call_id: str,
+        tool_name: str,
+        result: str,
     ) -> list[dict[str, Any]]:
         """Add a tool result to the message list."""
-        messages.append({"role": "tool", "tool_call_id": tool_call_id, "name": tool_name, "content": result})
+        messages.append(
+            {"role": "tool", "tool_call_id": tool_call_id, "name": tool_name, "content": result}
+        )
         return messages
 
     def add_assistant_message(
-        self, messages: list[dict[str, Any]],
+        self,
+        messages: list[dict[str, Any]],
         content: str | None,
         tool_calls: list[dict[str, Any]] | None = None,
         reasoning_content: str | None = None,

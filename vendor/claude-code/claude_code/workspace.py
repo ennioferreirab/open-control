@@ -16,8 +16,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from mc.types import AgentData
 from claude_code.types import WorkspaceContext
+from mc.types import AgentData
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 # path computed from __file__ so this module keeps working if the
 # vendor package layout changes.
 try:
-    from nanobot.agent.skills import BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR  # type: ignore[import]
+    from nanobot.agent.skills import (
+        BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR,  # type: ignore[import]
+    )
 except ImportError:  # pragma: no cover – vendor package not on path
     _VENDOR_SKILLS_DIR = Path(__file__).parent.parent.parent / "nanobot" / "nanobot" / "skills"
 
@@ -126,6 +128,16 @@ class CCWorkspaceManager:
             from mc.infrastructure.boards import resolve_board_workspace
 
             workspace = resolve_board_workspace(board_name, agent_name, mode=memory_mode)
+            from mc.artifacts import resolve_board_artifacts_workspace
+
+            artifacts_workspace = resolve_board_artifacts_workspace(board_name, root=self._root)
+            if memory_mode == "clean":
+                memory_workspace = workspace
+            else:
+                memory_workspace = self._root / "agents" / agent_name
+                memory_workspace.mkdir(parents=True, exist_ok=True)
+                (memory_workspace / "memory").mkdir(exist_ok=True)
+                (memory_workspace / "sessions").mkdir(exist_ok=True)
             # resolve_board_workspace already creates memory/ and sessions/.
             # Keep these calls for idempotent safety.
             (workspace / "memory").mkdir(parents=True, exist_ok=True)
@@ -135,12 +147,20 @@ class CCWorkspaceManager:
             workspace.mkdir(parents=True, exist_ok=True)
             (workspace / "memory").mkdir(exist_ok=True)
             (workspace / "sessions").mkdir(exist_ok=True)
+            memory_workspace = workspace
+            artifacts_workspace = None
 
         # Skills must be mapped BEFORE generating CLAUDE.md so the skills
         # summary in _generate_claude_md() can reference the mapped symlinks.
         self._map_skills(workspace, agent_config.skills)
-        self._generate_claude_md(workspace, agent_config, orientation=orientation,
-                                 task_prompt=task_prompt)
+        self._generate_claude_md(
+            workspace,
+            agent_config,
+            orientation=orientation,
+            task_prompt=task_prompt,
+            memory_workspace=memory_workspace,
+            artifacts_workspace=artifacts_workspace,
+        )
 
         # H3: Validate socket path length (macOS limit ~104 chars)
         # Include first 8 chars of task_id to prevent socket clobber when the
@@ -150,8 +170,14 @@ class CCWorkspaceManager:
             raise ValueError(
                 f"Socket path too long ({len(socket_path)} chars, max {_MAX_SOCKET_PATH_LEN}): {socket_path}"
             )
-        self._generate_mcp_json(workspace, agent_name, task_id, socket_path,
-                                board_name=board_name)
+        self._generate_mcp_json(
+            workspace,
+            agent_name,
+            task_id,
+            socket_path,
+            board_name=board_name,
+            memory_workspace=memory_workspace,
+        )
 
         return WorkspaceContext(
             cwd=workspace,
@@ -165,8 +191,13 @@ class CCWorkspaceManager:
     # ------------------------------------------------------------------
 
     def _generate_claude_md(
-        self, workspace: Path, config: AgentData, orientation: str | None = None,
+        self,
+        workspace: Path,
+        config: AgentData,
+        orientation: str | None = None,
         task_prompt: str | None = None,
+        memory_workspace: Path | None = None,
+        artifacts_workspace: Path | None = None,
     ) -> None:
         """Write CLAUDE.md with agent identity, context, and MCP tools guide.
 
@@ -184,6 +215,7 @@ class CCWorkspaceManager:
          10. Soul (config.soul) — last for personality override
         """
         parts: list[str] = []
+        effective_memory_workspace = memory_workspace or workspace
 
         # 1. Agent identity section
         identity_lines: list[str] = []
@@ -195,7 +227,13 @@ class CCWorkspaceManager:
         parts.append("\n".join(identity_lines))
 
         # 2. Workspace guidance
-        parts.append(self._workspace_guidance(workspace))
+        parts.append(
+            self._workspace_guidance(
+                workspace,
+                memory_workspace=effective_memory_workspace,
+                artifacts_workspace=artifacts_workspace,
+            )
+        )
 
         # 3. Runtime context
         parts.append(self._runtime_context())
@@ -214,13 +252,13 @@ class CCWorkspaceManager:
             parts.append(bootstrap)
 
         # 6. Memory
-        memory = self._load_memory(workspace)
+        memory = self._load_memory(effective_memory_workspace)
         if memory:
             parts.append(f"## Memory\n\n{memory}")
 
         # 6.5. Relevant history (hybrid search)
         if task_prompt:
-            relevant = self._search_relevant_history(workspace, task_prompt)
+            relevant = self._search_relevant_history(effective_memory_workspace, task_prompt)
             if relevant:
                 parts.append(f"## Relevant History\n\n{relevant}")
 
@@ -302,6 +340,7 @@ class CCWorkspaceManager:
         """
         try:
             from mc.memory import create_memory_store
+
             store = create_memory_store(workspace)
             ctx = store.get_memory_context()
             return ctx if ctx else None
@@ -327,6 +366,7 @@ class CCWorkspaceManager:
         """
         try:
             from mc.memory.index import MemoryIndex
+
             index = MemoryIndex(workspace / "memory")
             index.sync()
             results = index.search(query, top_k=5)
@@ -343,6 +383,7 @@ class CCWorkspaceManager:
         """Load always-on skills content for injection into CLAUDE.md."""
         try:
             from nanobot.agent.skills import SkillsLoader  # type: ignore[import]
+
             loader = SkillsLoader(workspace, global_skills_dir=self._root / "workspace" / "skills")
             always_names = loader.get_always_skills()
             if not always_names:
@@ -366,6 +407,7 @@ class CCWorkspaceManager:
         """
         try:
             from nanobot.agent.skills import SkillsLoader  # type: ignore[import]
+
             loader = SkillsLoader(workspace, global_skills_dir=self._root / "workspace" / "skills")
             return loader.build_skills_summary(allowed_names=skill_names)
         except ImportError:
@@ -391,20 +433,38 @@ class CCWorkspaceManager:
         tz = time.strftime("%Z") or "UTC"
         return f"## Runtime\n\n{runtime}, Python {platform.python_version()}\nCurrent Time: {now} ({tz})\n"
 
-    def _workspace_guidance(self, workspace: Path) -> str:
+    def _workspace_guidance(
+        self,
+        workspace: Path,
+        *,
+        memory_workspace: Path | None = None,
+        artifacts_workspace: Path | None = None,
+    ) -> str:
         """Build workspace guidance section.
 
         Args:
             workspace: The agent-specific workspace directory.
+            memory_workspace: Effective memory workspace, if distinct.
 
         Returns:
             Workspace guidance section string.
         """
         ws = str(workspace.expanduser().resolve())
+        memory_ws = str((memory_workspace or workspace).expanduser().resolve())
+        artifacts_ws = (
+            str(artifacts_workspace.expanduser().resolve())
+            if artifacts_workspace is not None
+            else None
+        )
+        artifacts_line = ""
+        if artifacts_ws:
+            artifacts_line = f"- Board artifacts: {artifacts_ws}\n"
         return (
             f"## Workspace\n\n"
             f"Your workspace is at: {ws}\n"
-            f"- Long-term memory: {ws}/memory/MEMORY.md\n"
+            f"- Long-term memory: {memory_ws}/memory/MEMORY.md\n"
+            f"{artifacts_line}"
+            f"- Task-specific deliverables stay in task output directories.\n"
             f"- Custom skills: .claude/skills/{{skill-name}}/SKILL.md\n"
         )
 
@@ -428,6 +488,7 @@ class CCWorkspaceManager:
         _loader = None
         try:
             from nanobot.agent.skills import SkillsLoader
+
             _loader = SkillsLoader(
                 workspace,
                 global_skills_dir=self._root / "workspace" / "skills",
@@ -451,7 +512,8 @@ class CCWorkspaceManager:
                 missing = _loader.get_missing_requirements(skill_name) or "unknown"
                 logger.warning(
                     "Skill '%s' is unavailable (missing: %s) — skipping symlink",
-                    skill_name, missing,
+                    skill_name,
+                    missing,
                 )
                 continue
 
@@ -491,6 +553,7 @@ class CCWorkspaceManager:
         socket_path: str,
         *,
         board_name: str | None = None,
+        memory_workspace: Path | None = None,
     ) -> None:
         """Write .mcp.json that configures the nanobot MCP server subprocess."""
         from mc.infrastructure.secrets import resolve_secret_env
@@ -500,6 +563,9 @@ class CCWorkspaceManager:
             "MC_SOCKET_PATH": socket_path,
             "AGENT_NAME": agent_name,
             "TASK_ID": task_id,
+            # search_memory must use the exact workspace chosen by execution,
+            # not reconstruct a parallel path from board metadata.
+            "MEMORY_WORKSPACE": str(memory_workspace or workspace),
         }
         if board_name:
             env["BOARD_NAME"] = board_name
@@ -512,6 +578,4 @@ class CCWorkspaceManager:
                 }
             }
         }
-        (workspace / ".mcp.json").write_text(
-            json.dumps(config, indent=2), encoding="utf-8"
-        )
+        (workspace / ".mcp.json").write_text(json.dumps(config, indent=2), encoding="utf-8")

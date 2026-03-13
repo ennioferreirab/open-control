@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,6 +13,7 @@ pytestmark = pytest.mark.asyncio
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_ipc(responses: dict) -> MagicMock:
     """Create an IPC client mock whose request() returns canned responses."""
@@ -28,6 +29,7 @@ def _make_mock_ipc(responses: dict) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Test ask_user tool
 # ---------------------------------------------------------------------------
+
 
 class TestAskUserTool:
     async def test_ask_user_returns_answer(self):
@@ -88,6 +90,7 @@ class TestAskUserTool:
 # Test send_message tool
 # ---------------------------------------------------------------------------
 
+
 class TestSendMessageTool:
     async def test_send_message_returns_status(self):
         """send_message returns the IPC status string."""
@@ -96,9 +99,7 @@ class TestSendMessageTool:
         mock_ipc = _make_mock_ipc({"send_message": {"status": "Message sent"}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-            result = await bridge_mod.call_tool(
-                "send_message", {"content": "hello world"}
-            )
+            result = await bridge_mod.call_tool("send_message", {"content": "hello world"})
 
         assert result[0].text == "Message sent"
 
@@ -153,19 +154,16 @@ class TestSendMessageTool:
 # Test delegate_task tool
 # ---------------------------------------------------------------------------
 
+
 class TestDelegateTaskTool:
     async def test_delegate_task_success(self):
         """delegate_task returns task_id and status on success."""
         import claude_code.mcp_bridge as bridge_mod
 
-        mock_ipc = _make_mock_ipc(
-            {"delegate_task": {"task_id": "abc123", "status": "created"}}
-        )
+        mock_ipc = _make_mock_ipc({"delegate_task": {"task_id": "abc123", "status": "created"}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-            result = await bridge_mod.call_tool(
-                "delegate_task", {"description": "write a report"}
-            )
+            result = await bridge_mod.call_tool("delegate_task", {"description": "write a report"})
 
         assert "abc123" in result[0].text
         assert "created" in result[0].text
@@ -174,9 +172,7 @@ class TestDelegateTaskTool:
         """delegate_task surfaces IPC errors."""
         import claude_code.mcp_bridge as bridge_mod
 
-        mock_ipc = _make_mock_ipc(
-            {"delegate_task": {"error": "Self-delegation prevented"}}
-        )
+        mock_ipc = _make_mock_ipc({"delegate_task": {"error": "Self-delegation prevented"}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
             result = await bridge_mod.call_tool(
@@ -222,14 +218,13 @@ class TestDelegateTaskTool:
 # Test ask_agent tool
 # ---------------------------------------------------------------------------
 
+
 class TestAskAgentTool:
     async def test_ask_agent_returns_response(self):
         """ask_agent returns the IPC response string."""
         import claude_code.mcp_bridge as bridge_mod
 
-        mock_ipc = _make_mock_ipc(
-            {"ask_agent": {"response": "The answer is 42."}}
-        )
+        mock_ipc = _make_mock_ipc({"ask_agent": {"response": "The answer is 42."}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
             result = await bridge_mod.call_tool(
@@ -242,9 +237,7 @@ class TestAskAgentTool:
         """ask_agent surfaces IPC errors in the result text."""
         import claude_code.mcp_bridge as bridge_mod
 
-        mock_ipc = _make_mock_ipc(
-            {"ask_agent": {"error": "Agent 'ghost' not found."}}
-        )
+        mock_ipc = _make_mock_ipc({"ask_agent": {"error": "Agent 'ghost' not found."}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
             result = await bridge_mod.call_tool(
@@ -283,14 +276,13 @@ class TestAskAgentTool:
 # Test report_progress tool
 # ---------------------------------------------------------------------------
 
+
 class TestReportProgressTool:
     async def test_report_progress_returns_status(self):
         """report_progress returns 'Progress reported'."""
         import claude_code.mcp_bridge as bridge_mod
 
-        mock_ipc = _make_mock_ipc(
-            {"report_progress": {"status": "Progress reported"}}
-        )
+        mock_ipc = _make_mock_ipc({"report_progress": {"status": "Progress reported"}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
             result = await bridge_mod.call_tool(
@@ -313,9 +305,7 @@ class TestReportProgressTool:
         mock_ipc.request = capture
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-            await bridge_mod.call_tool(
-                "report_progress", {"message": "done", "percentage": 100}
-            )
+            await bridge_mod.call_tool("report_progress", {"message": "done", "percentage": 100})
 
         assert received["percentage"] == 100
         assert received["message"] == "done"
@@ -324,14 +314,10 @@ class TestReportProgressTool:
         """report_progress works without the optional percentage."""
         import claude_code.mcp_bridge as bridge_mod
 
-        mock_ipc = _make_mock_ipc(
-            {"report_progress": {"status": "Progress reported"}}
-        )
+        mock_ipc = _make_mock_ipc({"report_progress": {"status": "Progress reported"}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-            result = await bridge_mod.call_tool(
-                "report_progress", {"message": "starting"}
-            )
+            result = await bridge_mod.call_tool("report_progress", {"message": "starting"})
 
         assert result[0].text == "Progress reported"
 
@@ -339,6 +325,7 @@ class TestReportProgressTool:
 # ---------------------------------------------------------------------------
 # Test list_tools
 # ---------------------------------------------------------------------------
+
 
 class TestListTools:
     async def test_list_tools_returns_all_seven(self):
@@ -384,6 +371,7 @@ class TestListTools:
 # Test cron tool
 # ---------------------------------------------------------------------------
 
+
 class TestCronTool:
     async def test_cron_list_returns_jobs(self):
         """cron list action returns the job listing from IPC."""
@@ -401,9 +389,7 @@ class TestCronTool:
         """cron add action returns creation confirmation."""
         import claude_code.mcp_bridge as bridge_mod
 
-        mock_ipc = _make_mock_ipc(
-            {"cron": {"result": "Created job 'daily report' (id: abc123)"}}
-        )
+        mock_ipc = _make_mock_ipc({"cron": {"result": "Created job 'daily report' (id: abc123)"}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
             result = await bridge_mod.call_tool(
@@ -426,9 +412,7 @@ class TestCronTool:
         mock_ipc = _make_mock_ipc({"cron": {"result": "Removed job abc123"}})
 
         with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-            result = await bridge_mod.call_tool(
-                "cron", {"action": "remove", "job_id": "abc123"}
-            )
+            result = await bridge_mod.call_tool("cron", {"action": "remove", "job_id": "abc123"})
 
         assert len(result) == 1
         assert "Removed job abc123" in result[0].text
@@ -463,10 +447,12 @@ class TestCronTool:
 # Test search_memory board-scoped workspace
 # ---------------------------------------------------------------------------
 
+
 class TestSearchMemoryBoardScope:
     async def test_search_memory_uses_board_workspace_when_set(self, tmp_path):
         """search_memory resolves board-scoped workspace when BOARD_NAME is set."""
         import claude_code.mcp_bridge as bridge_mod
+
         from mc.memory.store import HybridMemoryStore
 
         board_ws = tmp_path / "board-agent"
@@ -474,9 +460,7 @@ class TestSearchMemoryBoardScope:
         store.write_long_term("Board-specific fact about deployment")
 
         with patch.object(bridge_mod, "_resolve_memory_workspace", return_value=board_ws):
-            result = await bridge_mod.call_tool(
-                "search_memory", {"query": "deployment"}
-            )
+            result = await bridge_mod.call_tool("search_memory", {"query": "deployment"})
 
         assert len(result) == 1
         assert "deployment" in result[0].text
@@ -484,6 +468,7 @@ class TestSearchMemoryBoardScope:
     async def test_search_memory_uses_global_workspace_without_board(self, tmp_path):
         """search_memory falls back to global agent workspace when no BOARD_NAME."""
         import claude_code.mcp_bridge as bridge_mod
+
         from mc.memory.store import HybridMemoryStore
 
         global_ws = tmp_path / "global-agent"
@@ -491,17 +476,16 @@ class TestSearchMemoryBoardScope:
         store.write_long_term("Global fact about infrastructure")
 
         with patch.object(bridge_mod, "_resolve_memory_workspace", return_value=global_ws):
-            result = await bridge_mod.call_tool(
-                "search_memory", {"query": "infrastructure"}
-            )
+            result = await bridge_mod.call_tool("search_memory", {"query": "infrastructure"})
 
         assert len(result) == 1
         assert "infrastructure" in result[0].text
 
-    def test_resolve_memory_workspace_with_board(self):
+    async def test_resolve_memory_workspace_with_board(self):
         """_resolve_memory_workspace constructs board-scoped path when BOARD_NAME set."""
-        import claude_code.mcp_bridge as bridge_mod
         from pathlib import Path
+
+        import claude_code.mcp_bridge as bridge_mod
 
         with (
             patch.object(bridge_mod, "_get_agent_name", return_value="owl"),
@@ -512,10 +496,11 @@ class TestSearchMemoryBoardScope:
         expected = Path.home() / ".nanobot" / "boards" / "default" / "agents" / "owl"
         assert ws == expected
 
-    def test_resolve_memory_workspace_without_board(self):
+    async def test_resolve_memory_workspace_without_board(self):
         """_resolve_memory_workspace constructs global path when no BOARD_NAME."""
-        import claude_code.mcp_bridge as bridge_mod
         from pathlib import Path
+
+        import claude_code.mcp_bridge as bridge_mod
 
         with (
             patch.object(bridge_mod, "_get_agent_name", return_value="owl"),
@@ -525,3 +510,56 @@ class TestSearchMemoryBoardScope:
 
         expected = Path.home() / ".nanobot" / "agents" / "owl"
         assert ws == expected
+
+    async def test_resolve_memory_workspace_prefers_explicit_env_path(self):
+        """_resolve_memory_workspace uses the exact execution workspace when provided."""
+        from pathlib import Path
+
+        import claude_code.mcp_bridge as bridge_mod
+
+        explicit_ws = Path("/tmp/custom-memory-workspace")
+        with (
+            patch.dict("os.environ", {"MEMORY_WORKSPACE": str(explicit_ws)}, clear=False),
+            patch.object(bridge_mod, "_get_agent_name", return_value="owl"),
+            patch.object(bridge_mod, "_get_board_name", return_value="default"),
+        ):
+            ws = bridge_mod._resolve_memory_workspace()
+
+        assert ws == explicit_ws
+
+    async def test_search_memory_finds_cc_consolidated_content(self, tmp_path):
+        """search_memory must retrieve facts written by the CC consolidator."""
+        import claude_code.mcp_bridge as bridge_mod
+        from claude_code.memory_consolidator import CCMemoryConsolidator
+
+        response = MagicMock()
+        tool_call = MagicMock()
+        tool_call.arguments = json.dumps(
+            {
+                "history_entry": "[2026-03-05 12:07] Stored rollback checklist for payments.",
+                "memory_update": "Payments deploys require a rollback checklist before release.",
+            }
+        )
+        response.tool_calls = [tool_call]
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value=response)
+
+        with patch(
+            "mc.memory.service.create_provider",
+            return_value=(provider, "resolved-model"),
+        ):
+            ok = await CCMemoryConsolidator(tmp_path).consolidate(
+                task_title="Payments release",
+                task_output="Prepared rollback checklist and release notes",
+                task_status="completed",
+                task_id="task-9",
+                model="claude-haiku",
+            )
+
+        assert ok is True
+
+        with patch.object(bridge_mod, "_resolve_memory_workspace", return_value=tmp_path):
+            result = await bridge_mod.call_tool("search_memory", {"query": "rollback checklist"})
+
+        assert len(result) == 1
+        assert "rollback checklist" in result[0].text.lower()

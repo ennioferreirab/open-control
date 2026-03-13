@@ -4,8 +4,9 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from claude_code.memory_consolidator import CCMemoryConsolidator
+
+from mc.memory import create_memory_store
 
 
 def _make_llm_response(history_entry: str, memory_update: str) -> MagicMock:
@@ -210,3 +211,26 @@ async def test_consolidate_creates_memory_dir(tmp_path):
 
     assert ok is True
     assert (tmp_path / "memory").exists()
+
+
+@pytest.mark.asyncio
+async def test_consolidate_syncs_index_for_search(tmp_path):
+    consolidator = CCMemoryConsolidator(tmp_path)
+    response = _make_llm_response(
+        "[2026-03-05 12:06] Captured canary rollout preference for deploys.",
+        "Deployment policy: prefer canary rollout before broad release.",
+    )
+
+    with _mock_provider(response):
+        ok = await consolidator.consolidate(
+            task_title="Deploy API",
+            task_output="Used canary rollout and verified health checks",
+            task_status="completed",
+            task_id="task-8",
+            model="claude-haiku",
+        )
+
+    assert ok is True
+    store = create_memory_store(tmp_path)
+    results = store.search("canary rollout", top_k=3)
+    assert "canary rollout" in results.lower()

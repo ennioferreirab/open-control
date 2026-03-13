@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
-
-_ARCHIVE_RE = re.compile(r"^(MEMORY|HISTORY)_\d{4}-\d{2}-\d{2}_\d{4}(?:\d{2})?\.md$")
 
 _PRIMARY_MARKDOWN = {"MEMORY.md", "HISTORY.md", "HISTORY_ARCHIVE.md"}
 _SQLITE_FILES = {
@@ -23,8 +20,7 @@ _LOCK_FILES = {
 
 def is_memory_markdown_file(path: Path) -> bool:
     """Return True if the file is part of the supported markdown memory contract."""
-    name = path.name
-    return name in _PRIMARY_MARKDOWN or bool(_ARCHIVE_RE.match(name))
+    return path.name in _PRIMARY_MARKDOWN
 
 
 def is_allowed_memory_file(path: Path) -> bool:

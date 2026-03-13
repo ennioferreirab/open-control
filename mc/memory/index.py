@@ -58,9 +58,7 @@ class MemoryIndex:
             self._vec_available = False
 
         self._vec_dim: int | None = None
-        row = self._conn.execute(
-            "SELECT value FROM meta WHERE key = 'vec_dim'"
-        ).fetchone()
+        row = self._conn.execute("SELECT value FROM meta WHERE key = 'vec_dim'").fetchone()
         if row is not None:
             try:
                 self._vec_dim = int(row[0])
@@ -112,9 +110,7 @@ class MemoryIndex:
             return
 
         if self._vec_dim is not None and self._vec_dim != dim:
-            raise ValueError(
-                f"Embedding dim mismatch: existing={self._vec_dim}, incoming={dim}"
-            )
+            raise ValueError(f"Embedding dim mismatch: existing={self._vec_dim}, incoming={dim}")
 
         conn.execute(
             f"""
@@ -132,29 +128,35 @@ class MemoryIndex:
         self._vec_dim = dim
 
     def sync(self) -> None:
-        allowed_paths = {str(path) for path in iter_memory_markdown_files(self.memory_dir)}
-        for path in sorted(Path(p) for p in allowed_paths):
+        raw_paths = iter_memory_markdown_files(self.memory_dir)
+        allowed_paths = {self._canonicalize_path(path) for path in raw_paths}
+        for path in sorted(raw_paths):
             self.sync_file(path)
         self._prune_untracked_files(allowed_paths)
 
     def sync_file(self, path: Path) -> None:
         path = Path(path)
         path_str = str(path)
+        canonical_path_str = self._canonicalize_path(path)
         if not path.exists():
-            self._delete_file_records(path_str)
+            self._delete_equivalent_file_records(path_str, canonical_path_str)
             return
         if not is_memory_markdown_file(path):
-            self._delete_file_records(path_str)
+            self._delete_equivalent_file_records(path_str, canonical_path_str)
             return
 
         raw = path.read_bytes()
         digest = hashlib.md5(raw).hexdigest()
+        equivalent_paths = self._find_equivalent_paths(canonical_path_str)
 
         row = self._conn.execute(
             "SELECT hash FROM files WHERE path = ?",
-            (path_str,),
+            (canonical_path_str,),
         ).fetchone()
+        alias_paths = equivalent_paths - {canonical_path_str}
         if row and row[0] == digest:
+            with self._conn:
+                self._delete_file_records_many(alias_paths)
             return
 
         text = raw.decode("utf-8", errors="replace")
@@ -165,27 +167,7 @@ class MemoryIndex:
         chunk_texts: list[str] = []
 
         with self._conn:
-            old_ids = [
-                r[0]
-                for r in self._conn.execute(
-                    "SELECT id FROM chunks WHERE file_path = ?", (path_str,)
-                ).fetchall()
-            ]
-            self._conn.execute("DELETE FROM chunks WHERE file_path = ?", (path_str,))
-            if old_ids:
-                self._conn.executemany(
-                    "DELETE FROM chunks_fts WHERE rowid = ?",
-                    [(chunk_id,) for chunk_id in old_ids],
-                )
-                if self._vec_available:
-                    vec_table = self._conn.execute(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_vec'"
-                    ).fetchone()
-                    if vec_table:
-                        self._conn.executemany(
-                            "DELETE FROM chunks_vec WHERE rowid = ?",
-                            [(chunk_id,) for chunk_id in old_ids],
-                        )
+            self._delete_file_records_many(alias_paths | {canonical_path_str})
 
             for content, start, end, created_at in chunks:
                 cur = self._conn.execute(
@@ -193,7 +175,7 @@ class MemoryIndex:
                     INSERT INTO chunks(file_path, content, offset_start, offset_end, created_at)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    (path_str, content, start, end, created_at),
+                    (canonical_path_str, content, start, end, created_at),
                 )
                 chunk_id = int(cur.lastrowid)
                 self._conn.execute(
@@ -203,11 +185,7 @@ class MemoryIndex:
                 chunk_ids.append(chunk_id)
                 chunk_texts.append(content)
 
-            if (
-                chunk_ids
-                and self._vec_available
-                and not self._provider_is_null
-            ):
+            if chunk_ids and self._vec_available and not self._provider_is_null:
                 embeddings = self._provider.embed(chunk_texts)
                 if embeddings:
                     first_dim = len(embeddings[0])
@@ -228,7 +206,7 @@ class MemoryIndex:
                 INSERT INTO files(path, hash, mtime) VALUES (?, ?, ?)
                 ON CONFLICT(path) DO UPDATE SET hash=excluded.hash, mtime=excluded.mtime
                 """,
-                (path_str, digest, path.stat().st_mtime),
+                (canonical_path_str, digest, path.stat().st_mtime),
             )
 
     def _build_chunk_entries(
@@ -244,7 +222,9 @@ class MemoryIndex:
                 return archive_chunks
         return [
             (content, start, end, created_at_default)
-            for content, start, end in self._chunk_text(text, max_chars=_DEFAULT_CHUNK_SIZE, overlap=_DEFAULT_CHUNK_OVERLAP)
+            for content, start, end in self._chunk_text(
+                text, max_chars=_DEFAULT_CHUNK_SIZE, overlap=_DEFAULT_CHUNK_OVERLAP
+            )
         ]
 
     @staticmethod
@@ -264,7 +244,9 @@ class MemoryIndex:
                 continue
             created_at = MemoryIndex._parse_archive_timestamp(match.group("timestamp"))
             body_start = match.start("body")
-            for content, start, end in MemoryIndex._chunk_text(body, max_chars=_DEFAULT_CHUNK_SIZE, overlap=_DEFAULT_CHUNK_OVERLAP):
+            for content, start, end in MemoryIndex._chunk_text(
+                body, max_chars=_DEFAULT_CHUNK_SIZE, overlap=_DEFAULT_CHUNK_OVERLAP
+            ):
                 archive_chunks.append((content, body_start + start, body_start + end, created_at))
         return archive_chunks
 
@@ -282,38 +264,82 @@ class MemoryIndex:
         return dt.timestamp()
 
     def _prune_untracked_files(self, allowed_paths: set[str]) -> None:
-        tracked = [
-            str(row[0])
-            for row in self._conn.execute("SELECT path FROM files").fetchall()
-        ]
+        tracked = [str(row[0]) for row in self._conn.execute("SELECT path FROM files").fetchall()]
         for path_str in tracked:
             if path_str not in allowed_paths or not Path(path_str).exists():
                 self._delete_file_records(path_str)
 
-    def _delete_file_records(self, path_str: str) -> None:
-        old_ids = [
-            r[0]
-            for r in self._conn.execute(
-                "SELECT id FROM chunks WHERE file_path = ?", (path_str,)
+    @staticmethod
+    def _canonicalize_path(path: Path | str) -> str:
+        candidate = Path(path).expanduser()
+        try:
+            return str(candidate.resolve(strict=False))
+        except OSError:
+            return str(candidate)
+
+    def _find_equivalent_paths(self, canonical_path_str: str) -> set[str]:
+        tracked_paths = {
+            str(row[0])
+            for row in self._conn.execute(
+                """
+                SELECT path FROM files
+                UNION
+                SELECT DISTINCT file_path FROM chunks
+                """
             ).fetchall()
-        ]
+        }
+        return {
+            tracked_path
+            for tracked_path in tracked_paths
+            if self._canonicalize_path(tracked_path) == canonical_path_str
+        }
+
+    def _delete_equivalent_file_records(self, *paths: str) -> None:
+        canonical_paths = {self._canonicalize_path(path) for path in paths}
+        equivalent_paths: set[str] = set()
+        for canonical_path in canonical_paths:
+            equivalent_paths |= self._find_equivalent_paths(canonical_path)
+        for path in paths:
+            equivalent_paths.add(str(path))
+        self._delete_file_records_many(equivalent_paths)
+
+    def _delete_file_records_many(self, paths: set[str]) -> None:
+        if not paths:
+            return
+
+        old_ids: list[int] = []
+        for tracked_path in paths:
+            old_ids.extend(
+                r[0]
+                for r in self._conn.execute(
+                    "SELECT id FROM chunks WHERE file_path = ?", (tracked_path,)
+                ).fetchall()
+            )
+
+        for tracked_path in paths:
+            self._conn.execute("DELETE FROM chunks WHERE file_path = ?", (tracked_path,))
+
+        if old_ids:
+            self._conn.executemany(
+                "DELETE FROM chunks_fts WHERE rowid = ?",
+                [(chunk_id,) for chunk_id in old_ids],
+            )
+            if self._vec_available:
+                vec_table = self._conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_vec'"
+                ).fetchone()
+                if vec_table:
+                    self._conn.executemany(
+                        "DELETE FROM chunks_vec WHERE rowid = ?",
+                        [(chunk_id,) for chunk_id in old_ids],
+                    )
+
+        for tracked_path in paths:
+            self._conn.execute("DELETE FROM files WHERE path = ?", (tracked_path,))
+
+    def _delete_file_records(self, path_str: str) -> None:
         with self._conn:
-            self._conn.execute("DELETE FROM chunks WHERE file_path = ?", (path_str,))
-            if old_ids:
-                self._conn.executemany(
-                    "DELETE FROM chunks_fts WHERE rowid = ?",
-                    [(chunk_id,) for chunk_id in old_ids],
-                )
-                if self._vec_available:
-                    vec_table = self._conn.execute(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_vec'"
-                    ).fetchone()
-                    if vec_table:
-                        self._conn.executemany(
-                            "DELETE FROM chunks_vec WHERE rowid = ?",
-                            [(chunk_id,) for chunk_id in old_ids],
-                        )
-            self._conn.execute("DELETE FROM files WHERE path = ?", (path_str,))
+            self._delete_file_records_many({path_str})
 
     @staticmethod
     def _chunk_text(
@@ -434,9 +460,7 @@ class MemoryIndex:
                 vec_results = self._vector_search(query_emb[0], limit=limit)
 
         if bm25_results and vec_results:
-            merged = self._merge_hybrid(
-                bm25_results, vec_results, vector_weight=vector_weight
-            )
+            merged = self._merge_hybrid(bm25_results, vec_results, vector_weight=vector_weight)
         else:
             merged = bm25_results or vec_results
 
@@ -529,9 +553,7 @@ class MemoryIndex:
         return results
 
     @staticmethod
-    def _temporal_decay(
-        results: list[SearchResult], decay_lambda: float
-    ) -> list[SearchResult]:
+    def _temporal_decay(results: list[SearchResult], decay_lambda: float) -> list[SearchResult]:
         now = time.time()
         decayed: list[SearchResult] = []
         for result in results:
@@ -609,9 +631,7 @@ class MemoryIndex:
         *,
         vector_weight: float,
     ) -> list[SearchResult]:
-        bm25_map = {
-            (r.content, r.source, r.created_at): r.score for r in bm25_results
-        }
+        bm25_map = {(r.content, r.source, r.created_at): r.score for r in bm25_results}
         vec_map = {(r.content, r.source, r.created_at): r.score for r in vec_results}
         all_keys = list(set(bm25_map) | set(vec_map))
 

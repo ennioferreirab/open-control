@@ -10,15 +10,14 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from claude_code.workspace import CCWorkspaceManager
-from mc.types import AgentData
 
+from mc.types import AgentData
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_agent(
     name: str = "test-agent",
@@ -49,6 +48,7 @@ def _prepare_and_read(tmp_path: Path, agent: AgentData, *, agent_name: str = "te
 # Bootstrap files
 # ---------------------------------------------------------------------------
 
+
 class TestBootstrapFilesLoading:
     def test_bootstrap_files_loaded_from_workspace(self, tmp_path: Path) -> None:
         """AC: Bootstrap files in the agent workspace appear in CLAUDE.md."""
@@ -75,7 +75,9 @@ class TestBootstrapFilesLoading:
         agent = _make_agent()
         content = _prepare_and_read(tmp_path, agent)
 
-        assert "Global tools guide" in content, "TOOLS.md global fallback content missing from CLAUDE.md"
+        assert "Global tools guide" in content, (
+            "TOOLS.md global fallback content missing from CLAUDE.md"
+        )
 
     def test_bootstrap_agent_overrides_global(self, tmp_path: Path) -> None:
         """Agent-local bootstrap files take priority over global workspace files."""
@@ -108,7 +110,9 @@ class TestBootstrapFilesLoading:
         """SOUL.md must NOT be loaded via bootstrap — only via config.soul."""
         agent_workspace = tmp_path / "agents" / "test-agent"
         agent_workspace.mkdir(parents=True, exist_ok=True)
-        (agent_workspace / "SOUL.md").write_text("SOUL via file — should be ignored", encoding="utf-8")
+        (agent_workspace / "SOUL.md").write_text(
+            "SOUL via file — should be ignored", encoding="utf-8"
+        )
 
         # Agent has no soul configured via config.soul
         agent = _make_agent(soul=None)
@@ -129,6 +133,7 @@ class TestBootstrapFilesLoading:
 # ---------------------------------------------------------------------------
 # Memory injection
 # ---------------------------------------------------------------------------
+
 
 class TestMemoryInjection:
     def test_memory_injected(self, tmp_path: Path) -> None:
@@ -178,6 +183,7 @@ class TestMemoryInjection:
 # ---------------------------------------------------------------------------
 # Skills summary
 # ---------------------------------------------------------------------------
+
 
 class TestSkillsSummary:
     def test_skills_summary_generated(self, tmp_path: Path) -> None:
@@ -265,6 +271,7 @@ class TestSkillsSummary:
 # Runtime context
 # ---------------------------------------------------------------------------
 
+
 class TestRuntimeContext:
     def test_runtime_context_present(self, tmp_path: Path) -> None:
         """AC: ## Runtime section exists in generated CLAUDE.md."""
@@ -298,6 +305,7 @@ class TestRuntimeContext:
 # Workspace guidance
 # ---------------------------------------------------------------------------
 
+
 class TestWorkspaceGuidance:
     def test_workspace_guidance_present(self, tmp_path: Path) -> None:
         """AC: ## Workspace section exists in generated CLAUDE.md."""
@@ -329,10 +337,27 @@ class TestWorkspaceGuidance:
 
         assert ".claude/skills/" in content
 
+    def test_workspace_guidance_contains_board_artifacts_path(self, tmp_path: Path) -> None:
+        """## Workspace section references the board-scoped artifacts directory."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        content = manager.prepare(
+            "test-agent",
+            agent,
+            "task123",
+            board_name="default",
+        ).claude_md.read_text(encoding="utf-8")
+
+        expected = tmp_path / "boards" / "default" / "artifacts"
+        assert str(expected.resolve()) in content
+        assert "Board artifacts" in content
+
 
 # ---------------------------------------------------------------------------
 # Section ordering
 # ---------------------------------------------------------------------------
+
 
 class TestSectionOrdering:
     def test_identity_before_workspace(self, tmp_path: Path) -> None:
@@ -380,6 +405,7 @@ class TestSectionOrdering:
 # Regression: existing tests still pass (integration smoke test)
 # ---------------------------------------------------------------------------
 
+
 class TestContextParityRegression:
     def test_all_original_sections_still_present(self, tmp_path: Path) -> None:
         """All sections from the original CLAUDE.md generation must still be present."""
@@ -410,6 +436,7 @@ class TestContextParityRegression:
 # ---------------------------------------------------------------------------
 # Orientation section (CC-9)
 # ---------------------------------------------------------------------------
+
 
 class TestOrientationSection:
     def test_orientation_included_when_provided(self, tmp_path: Path) -> None:
@@ -464,7 +491,9 @@ class TestAlwaysOnSkills:
         agent = _make_agent(name="skill-agent")
         manager = CCWorkspaceManager(workspace_root=tmp_path)
 
-        with patch.object(manager, "_build_always_skills_content", return_value="Always skill content here"):
+        with patch.object(
+            manager, "_build_always_skills_content", return_value="Always skill content here"
+        ):
             ctx = manager.prepare("skill-agent", agent, "task123")
             content = ctx.claude_md.read_text(encoding="utf-8")
 

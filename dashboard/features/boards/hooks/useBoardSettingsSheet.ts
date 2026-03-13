@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useBoard } from "@/components/BoardContext";
 import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
+import type { DocumentSource } from "@/lib/documentSources";
 
 type AgentMemoryMode = { agentName: string; mode: "clean" | "with_history" };
 
@@ -15,6 +16,13 @@ interface DraftState {
   description?: string;
   displayName?: string;
   enabledAgents?: string[];
+}
+
+export interface BoardArtifactRef {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
 }
 
 export interface BoardSettingsSheetState {
@@ -30,6 +38,16 @@ export interface BoardSettingsSheetState {
   handleSave: () => Promise<void>;
   isDefault: boolean;
   nonSystemAgents: Array<NonNullable<ReturnType<typeof useQuery<typeof api.agents.list>>>[number]>;
+  artifacts: BoardArtifactRef[];
+  artifactsError: string;
+  artifactsLoading: boolean;
+  isUploadingArtifacts: boolean;
+  uploadArtifacts: (files: File[]) => Promise<void>;
+  uploadArtifactsError: string;
+  artifactSource: DocumentSource | null;
+  closeArtifactViewer: () => void;
+  openArtifact: (artifact: BoardArtifactRef) => void;
+  selectedArtifact: BoardArtifactRef | null;
   saving: boolean;
   setConfirmDelete: (value: boolean) => void;
   setDescription: (value: string) => void;
@@ -51,6 +69,12 @@ export function useBoardSettingsSheet(onClose: () => void): BoardSettingsSheetSt
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
+  const [artifacts, setArtifacts] = useState<BoardArtifactRef[]>([]);
+  const [artifactsLoading, setArtifactsLoading] = useState(false);
+  const [artifactsError, setArtifactsError] = useState("");
+  const [isUploadingArtifacts, setIsUploadingArtifacts] = useState(false);
+  const [uploadArtifactsError, setUploadArtifactsError] = useState("");
+  const [selectedArtifact, setSelectedArtifact] = useState<BoardArtifactRef | null>(null);
 
   const isDraftForCurrentBoard = draft.boardId === board?._id;
   const displayName = useMemo(
@@ -86,6 +110,59 @@ export function useBoardSettingsSheet(onClose: () => void): BoardSettingsSheetSt
     () => agents?.filter((agent) => !SYSTEM_AGENT_NAMES.has(agent.name) && !agent.deletedAt) ?? [],
     [agents],
   );
+  const artifactSource = useMemo<DocumentSource | null>(
+    () => (board?.name ? { kind: "board-artifact", boardName: board.name } : null),
+    [board?.name],
+  );
+
+  const refreshArtifacts = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!board?.name) {
+        setArtifacts([]);
+        setArtifactsError("");
+        setArtifactsLoading(false);
+        return;
+      }
+
+      setArtifactsLoading(true);
+      setArtifactsError("");
+      try {
+        const response = await fetch(`/api/boards/${board.name}/artifacts`, { signal });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const payload = (await response.json()) as BoardArtifactRef[];
+        setArtifacts(Array.isArray(payload) ? payload : []);
+      } catch (err) {
+        if (signal?.aborted) {
+          return;
+        }
+        setArtifacts([]);
+        setArtifactsError(err instanceof Error ? err.message : "Failed to load board artifacts");
+      } finally {
+        if (!signal?.aborted) {
+          setArtifactsLoading(false);
+        }
+      }
+    },
+    [board?.name],
+  );
+
+  useEffect(() => {
+    if (!board?.name) {
+      setArtifacts([]);
+      setArtifactsError("");
+      setArtifactsLoading(false);
+      setSelectedArtifact(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    void refreshArtifacts(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [board?.name, refreshArtifacts]);
 
   const setDisplayName = useCallback(
     (value: string) => {
@@ -201,9 +278,57 @@ export function useBoardSettingsSheet(onClose: () => void): BoardSettingsSheetSt
     updateBoard,
   ]);
 
+  const openArtifact = useCallback((artifact: BoardArtifactRef) => {
+    setSelectedArtifact(artifact);
+  }, []);
+
+  const closeArtifactViewer = useCallback(() => {
+    setSelectedArtifact(null);
+  }, []);
+
+  const uploadArtifacts = useCallback(
+    async (files: File[]) => {
+      if (!board?.name || files.length === 0) {
+        return;
+      }
+
+      setIsUploadingArtifacts(true);
+      setUploadArtifactsError("");
+      try {
+        const formData = new FormData();
+        for (const file of files) {
+          formData.append("files", file, file.name);
+        }
+
+        const response = await fetch(`/api/boards/${board.name}/artifacts`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        await response.json();
+        await refreshArtifacts();
+      } catch (err) {
+        setUploadArtifactsError(
+          err instanceof Error ? err.message : "Failed to upload board artifacts",
+        );
+      } finally {
+        setIsUploadingArtifacts(false);
+      }
+    },
+    [board?.name, refreshArtifacts],
+  );
+
   return {
     activeBoardId,
+    artifactSource,
+    artifacts,
+    artifactsError,
+    artifactsLoading,
     board: board ?? null,
+    closeArtifactViewer,
     confirmDelete,
     defaultBoard: defaultBoard ?? null,
     description,
@@ -214,12 +339,17 @@ export function useBoardSettingsSheet(onClose: () => void): BoardSettingsSheetSt
     handleDelete,
     handleSave,
     isDefault: board?.isDefault === true,
+    isUploadingArtifacts,
     nonSystemAgents,
+    openArtifact,
     saving,
+    selectedArtifact,
     setConfirmDelete,
     setDescription,
     setDisplayName,
     toggleAgent,
     toggleAgentMode,
+    uploadArtifacts,
+    uploadArtifactsError,
   };
 }

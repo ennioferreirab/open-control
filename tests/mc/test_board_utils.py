@@ -9,14 +9,13 @@ Covers:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import patch
-
 
 # ---------------------------------------------------------------------------
 # resolve_board_workspace -- clean mode
 # ---------------------------------------------------------------------------
+
 
 class TestResolveBoardWorkspaceClean:
     def test_creates_dirs(self, tmp_path: Path) -> None:
@@ -132,6 +131,7 @@ class TestResolveBoardWorkspaceClean:
 # resolve_board_workspace -- with_history mode
 # ---------------------------------------------------------------------------
 
+
 class TestResolveBoardWorkspaceWithHistory:
     def test_creates_symlinks(self, tmp_path: Path) -> None:
         from mc.infrastructure.boards import resolve_board_workspace
@@ -225,9 +225,46 @@ class TestResolveBoardWorkspaceWithHistory:
         assert (ws / "sessions").is_dir()
 
 
+class TestResolveMemoryWorkspace:
+    def test_with_history_uses_shared_agent_workspace(self, tmp_path: Path) -> None:
+        from mc.infrastructure.boards import resolve_memory_workspace
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            resolved = resolve_memory_workspace(
+                "dev-agent",
+                board_name="default",
+                mode="with_history",
+            )
+
+        expected_root = tmp_path / ".nanobot" / "agents" / "dev-agent"
+        assert resolved.workspace == expected_root
+        assert resolved.effective_memory_scope == "shared-agent"
+        assert resolved.memory_file == expected_root / "memory" / "MEMORY.md"
+        assert resolved.history_file == expected_root / "memory" / "HISTORY.md"
+        assert resolved.index_file == expected_root / "memory" / "memory-index.sqlite"
+
+    def test_clean_uses_board_scoped_workspace(self, tmp_path: Path) -> None:
+        from mc.infrastructure.boards import resolve_memory_workspace
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            resolved = resolve_memory_workspace(
+                "dev-agent",
+                board_name="default",
+                mode="clean",
+            )
+
+        expected_root = tmp_path / ".nanobot" / "boards" / "default" / "agents" / "dev-agent"
+        assert resolved.workspace == expected_root
+        assert resolved.effective_memory_scope == "board"
+        assert resolved.memory_file == expected_root / "memory" / "MEMORY.md"
+        assert resolved.history_file == expected_root / "memory" / "HISTORY.md"
+        assert resolved.index_file == expected_root / "memory" / "memory-index.sqlite"
+
+
 # ---------------------------------------------------------------------------
 # get_agent_memory_mode
 # ---------------------------------------------------------------------------
+
 
 class TestGetAgentMemoryMode:
     def test_defaults_to_clean_when_no_board_data(self) -> None:
@@ -281,3 +318,15 @@ class TestGetAgentMemoryMode:
             ],
         }
         assert get_agent_memory_mode(board_data, "dev-agent") == "clean"
+
+
+class TestResolveBoardArtifactsWorkspace:
+    def test_returns_board_scoped_artifacts_dir(self, tmp_path: Path) -> None:
+        from mc.artifacts import resolve_board_artifacts_workspace
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            artifacts_dir = resolve_board_artifacts_workspace("default")
+
+        expected = tmp_path / ".nanobot" / "boards" / "default" / "artifacts"
+        assert artifacts_dir == expected
+        assert artifacts_dir.is_dir()

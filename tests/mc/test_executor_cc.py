@@ -145,14 +145,11 @@ class TestBackendRouting:
             output_dir="/tmp/test-output",
         )
         engine = MagicMock()
-        engine.run = AsyncMock(
-            return_value=ExecutionResult(success=True, output="cc result")
-        )
+        engine.run = AsyncMock(return_value=ExecutionResult(success=True, output="cc result"))
 
         with (
             patch(
-                "mc.application.execution.context_builder.ContextBuilder"
-                ".build_task_context",
+                "mc.application.execution.context_builder.ContextBuilder.build_task_context",
                 new_callable=AsyncMock,
                 return_value=req,
             ),
@@ -199,15 +196,16 @@ class TestBackendRouting:
 
         with (
             patch(
-                "mc.application.execution.context_builder.ContextBuilder"
-                ".build_task_context",
+                "mc.application.execution.context_builder.ContextBuilder.build_task_context",
                 new_callable=AsyncMock,
                 return_value=req,
             ),
             patch.object(executor, "_load_agent_data", return_value=agent_data),
             patch.object(executor, "_execute_cc_task", new_callable=AsyncMock) as mock_cc,
             # Patch the nanobot path so it doesn't actually run
-            patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock) as mock_run,
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock
+            ) as mock_run,
             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
@@ -241,14 +239,15 @@ class TestBackendRouting:
 
         with (
             patch(
-                "mc.application.execution.context_builder.ContextBuilder"
-                ".build_task_context",
+                "mc.application.execution.context_builder.ContextBuilder.build_task_context",
                 new_callable=AsyncMock,
                 return_value=req,
             ),
             patch.object(executor, "_load_agent_data", return_value=None),
             patch.object(executor, "_execute_cc_task", new_callable=AsyncMock) as mock_cc,
-            patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock) as mock_run,
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock
+            ) as mock_run,
             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
@@ -270,7 +269,6 @@ class TestBackendRouting:
 
 
 class TestExecuteCCTaskHappyPath:
-
     @pytest.mark.asyncio
     async def test_successful_execution_transitions_to_review(self):
         bridge = _make_bridge()
@@ -290,19 +288,19 @@ class TestExecuteCCTaskHappyPath:
             patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch("mc.contexts.execution.executor._relocate_invalid_memory_files", return_value=[] ) as mock_relocate,
+            patch(
+                "mc.contexts.execution.executor._relocate_invalid_memory_files", return_value=[]
+            ) as mock_relocate,
         ):
-            await executor._execute_cc_task(
-                "t1", "My task", "desc", "my-cc-agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "My task", "desc", "my-cc-agent", agent_data)
 
         # Should send a work message
         bridge.send_message.assert_called_once()
         call_args = bridge.send_message.call_args[0]
-        assert call_args[0] == "t1"           # task_id
+        assert call_args[0] == "t1"  # task_id
         assert call_args[1] == "my-cc-agent"  # author_name
         assert call_args[2] == AuthorType.AGENT
-        assert "All done" in call_args[3]     # content
+        assert "All done" in call_args[3]  # content
 
         # Should update status to REVIEW
         bridge.update_task_status.assert_called_once()
@@ -337,9 +335,7 @@ class TestExecuteCCTaskHappyPath:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task(
-                "t1", "My title", "My description", "agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "My title", "My description", "agent", agent_data)
 
         assert len(captured) == 1
         assert "My title" in captured[0]
@@ -373,7 +369,11 @@ class TestExecuteCCTaskHappyPath:
             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
         ):
             await executor._execute_cc_task(
-                "t1", "Title only", None, "agent", agent_data,
+                "t1",
+                "Title only",
+                None,
+                "agent",
+                agent_data,
                 needs_enrichment=False,
             )
 
@@ -386,7 +386,6 @@ class TestExecuteCCTaskHappyPath:
 
 
 class TestExecuteCCTaskFailures:
-
     @pytest.mark.asyncio
     async def test_workspace_prep_failure_crashes_task(self):
         executor = _make_executor()
@@ -399,9 +398,7 @@ class TestExecuteCCTaskFailures:
             patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
             patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
         ):
-            await executor._execute_cc_task(
-                "t1", "Failing task", None, "agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "Failing task", None, "agent", agent_data)
 
         mock_crash.assert_awaited_once()
         crash_args = mock_crash.call_args[0]
@@ -424,9 +421,7 @@ class TestExecuteCCTaskFailures:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
         ):
-            await executor._execute_cc_task(
-                "t1", "IPC failure", None, "agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "IPC failure", None, "agent", agent_data)
 
         mock_crash.assert_awaited_once()
         crash_args = mock_crash.call_args[0]
@@ -451,9 +446,7 @@ class TestExecuteCCTaskFailures:
             patch(_PATCH_PROVIDER, return_value=mock_provider),
             patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
         ):
-            await executor._execute_cc_task(
-                "t1", "Exec failure", None, "agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "Exec failure", None, "agent", agent_data)
 
         mock_crash.assert_awaited_once()
         crash_args = mock_crash.call_args[0]
@@ -481,9 +474,7 @@ class TestExecuteCCTaskFailures:
             patch(_PATCH_PROVIDER, return_value=mock_provider),
             patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
         ):
-            await executor._execute_cc_task(
-                "t1", "Error result", None, "agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "Error result", None, "agent", agent_data)
 
         mock_crash.assert_awaited_once()
         crash_args = mock_crash.call_args[0]
@@ -496,7 +487,6 @@ class TestExecuteCCTaskFailures:
 
 
 class TestIPCServerCleanup:
-
     @pytest.mark.asyncio
     async def test_ipc_server_stopped_on_success(self):
         executor = _make_executor()
@@ -515,9 +505,7 @@ class TestIPCServerCleanup:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task(
-                "t1", "title", None, "agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "title", None, "agent", agent_data)
 
         mock_ipc.stop.assert_awaited_once()
 
@@ -540,9 +528,7 @@ class TestIPCServerCleanup:
             patch(_PATCH_PROVIDER, return_value=mock_provider),
             patch.object(executor, "_crash_task", new_callable=AsyncMock),
         ):
-            await executor._execute_cc_task(
-                "t1", "title", None, "agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "title", None, "agent", agent_data)
 
         mock_ipc.stop.assert_awaited_once()
 
@@ -553,7 +539,6 @@ class TestIPCServerCleanup:
 
 
 class TestStreamCallback:
-
     @pytest.mark.asyncio
     async def test_on_stream_callback_posts_activity(self):
         bridge = _make_bridge()
@@ -584,9 +569,7 @@ class TestStreamCallback:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task(
-                "t1", "Stream task", "desc", "my-cc-agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "Stream task", "desc", "my-cc-agent", agent_data)
 
         assert len(captured_callback) == 1
 
@@ -597,8 +580,7 @@ class TestStreamCallback:
         activity_calls = bridge.create_activity.call_args_list
         # The completion activity is also posted; find the step_started one
         step_started_calls = [
-            c for c in activity_calls
-            if c[0][0] == ActivityEventType.STEP_STARTED
+            c for c in activity_calls if c[0][0] == ActivityEventType.STEP_STARTED
         ]
         assert len(step_started_calls) >= 1
         assert "Working on it..." in step_started_calls[0][0][1]
@@ -629,17 +611,14 @@ class TestStreamCallback:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task(
-                "t1", "tool use task", None, "agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "tool use task", None, "agent", agent_data)
 
         await _drain_background_tasks()
 
         # Only the completion activity should be posted
         activity_calls = bridge.create_activity.call_args_list
         step_started_calls = [
-            c for c in activity_calls
-            if c[0][0] == ActivityEventType.STEP_STARTED
+            c for c in activity_calls if c[0][0] == ActivityEventType.STEP_STARTED
         ]
         assert len(step_started_calls) == 0
 
@@ -650,7 +629,6 @@ class TestStreamCallback:
 
 
 class TestCostTracking:
-
     @pytest.mark.asyncio
     async def test_completion_activity_includes_cost(self):
         bridge = _make_bridge()
@@ -671,16 +649,11 @@ class TestCostTracking:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task(
-                "t1", "Cost task", None, "my-cc-agent", agent_data
-            )
+            await executor._execute_cc_task("t1", "Cost task", None, "my-cc-agent", agent_data)
 
         # Find the TASK_COMPLETED activity (posted in _complete_cc_task)
         activity_calls = bridge.create_activity.call_args_list
-        completed_calls = [
-            c for c in activity_calls
-            if c[0][0] == ActivityEventType.TASK_COMPLETED
-        ]
+        completed_calls = [c for c in activity_calls if c[0][0] == ActivityEventType.TASK_COMPLETED]
         assert len(completed_calls) == 1
         description = completed_calls[0][0][1]
         assert "0.0456" in description
@@ -693,7 +666,6 @@ class TestCostTracking:
 
 
 class TestCrashTask:
-
     @pytest.mark.asyncio
     async def test_crash_task_sends_message_and_updates_status(self):
         bridge = _make_bridge()
@@ -726,7 +698,6 @@ class TestCrashTask:
 
 
 class TestCompleteCCTask:
-
     @pytest.mark.asyncio
     async def test_complete_sends_message_activity_and_status(self):
         bridge = _make_bridge()
@@ -778,7 +749,6 @@ class TestCompleteCCTask:
 
 
 class TestOnTaskCompletedCallback:
-
     @pytest.mark.asyncio
     async def test_on_task_completed_called_after_successful_cc_execution(self):
         """_on_task_completed must be called after a successful CC task (M1)."""
@@ -840,9 +810,7 @@ class TestOnTaskCompletedCallback:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task(
-                "t43", "Error task", None, "my-cc-agent", agent_data
-            )
+            await executor._execute_cc_task("t43", "Error task", None, "my-cc-agent", agent_data)
 
         assert completed_task_ids == []
 
@@ -897,14 +865,11 @@ class TestCCModelRouting:
             output_dir="/tmp/test-output",
         )
         engine = MagicMock()
-        engine.run = AsyncMock(
-            return_value=ExecutionResult(success=True, output="cc result")
-        )
+        engine.run = AsyncMock(return_value=ExecutionResult(success=True, output="cc result"))
 
         with (
             patch(
-                "mc.application.execution.context_builder.ContextBuilder"
-                ".build_task_context",
+                "mc.application.execution.context_builder.ContextBuilder.build_task_context",
                 new_callable=AsyncMock,
                 return_value=req,
             ),
@@ -931,6 +896,7 @@ class TestCCModelRouting:
         assert request.agent is nanobot_agent
         assert request.agent.model == "claude-sonnet-4-6"
         assert request.agent.backend == "claude-code"
+        assert request.session_boundary_reason == "task_completion"
 
     @pytest.mark.asyncio
     async def test_cc_model_creates_synthetic_agent_data_when_none(self):
@@ -959,14 +925,11 @@ class TestCCModelRouting:
             output_dir="/tmp/test-output",
         )
         engine = MagicMock()
-        engine.run = AsyncMock(
-            return_value=ExecutionResult(success=True, output="cc result")
-        )
+        engine.run = AsyncMock(return_value=ExecutionResult(success=True, output="cc result"))
 
         with (
             patch(
-                "mc.application.execution.context_builder.ContextBuilder"
-                ".build_task_context",
+                "mc.application.execution.context_builder.ContextBuilder.build_task_context",
                 new_callable=AsyncMock,
                 return_value=req,
             ),
@@ -994,6 +957,7 @@ class TestCCModelRouting:
         assert request.agent.model == "claude-opus-4-6"
         assert request.agent.backend == "claude-code"
         assert request.agent.name == "unknown-agent"
+        assert request.session_boundary_reason == "task_completion"
 
 
 # ---------------------------------------------------------------------------
@@ -1002,7 +966,6 @@ class TestCCModelRouting:
 
 
 class TestLoadAgentData:
-
     def test_returns_none_for_missing_config(self, tmp_path):
         executor = _make_executor()
         # Patch AGENTS_DIR to a temp directory where the agent dir does NOT exist
@@ -1025,7 +988,9 @@ class TestLoadAgentData:
         executor = _make_executor()
         with (
             patch("mc.infrastructure.config.AGENTS_DIR", tmp_path),
-            patch("mc.infrastructure.agents.yaml_validator.validate_agent_file", return_value=expected),
+            patch(
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file", return_value=expected
+            ),
         ):
             result = executor._load_agent_data("my-agent")
 
@@ -1040,7 +1005,10 @@ class TestLoadAgentData:
         executor = _make_executor()
         with (
             patch("mc.infrastructure.config.AGENTS_DIR", tmp_path),
-            patch("mc.infrastructure.agents.yaml_validator.validate_agent_file", return_value=["validation error"]),
+            patch(
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
+                return_value=["validation error"],
+            ),
         ):
             result = executor._load_agent_data("bad-agent")
 

@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import re
+import shutil
 import sys
+import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -25,16 +29,19 @@ DEFAULT_AGENTS = [
     "finance-pricing",
 ]
 REASONING_LEVELS = ("low", "medium", "max")
+WORKSPACE_MODES = ("isolated", "audit")
 
 AGENTS_ROOT = Path.home() / ".nanobot" / "agents"
 SCENARIOS_ROOT = Path.home() / ".nanobot" / "private" / "knowledge-validation"
 RESULTS_ROOT = SCENARIOS_ROOT / "results"
+REAL_HOME = Path.home()
 INPUT_BLOCK_PATTERN = re.compile(
     r"## Input de Teste\s*```(?:text)?\n(.*?)```",
     re.DOTALL,
 )
 
 ExecutionEngine = None
+build_execution_engine = None
 EntityType = None
 ExecutionRequest = None
 RunnerType = None
@@ -52,6 +59,10 @@ class ScenarioRun:
     runner: str
     model: str
     reasoning_level: str | None
+    workspace_mode: str
+    production_hooks: bool
+    workspace_scope: str
+    history_interpretation: str
     success: bool
     duration_seconds: float
     prompt: str
@@ -77,7 +88,7 @@ class LoadedAgent:
 
 
 def bootstrap_runtime() -> None:
-    global ExecutionEngine, EntityType, ExecutionRequest, RunnerType
+    global ExecutionEngine, build_execution_engine, EntityType, ExecutionRequest, RunnerType
     global validate_agent_file, is_cc_model
 
     if ExecutionEngine is not None:
@@ -85,9 +96,16 @@ def bootstrap_runtime() -> None:
 
     try:
         from mc.application.execution.engine import ExecutionEngine as _ExecutionEngine
+        from mc.application.execution.post_processing import (
+            build_execution_engine as _build_execution_engine,
+        )
         from mc.application.execution.request import (
             EntityType as _EntityType,
+        )
+        from mc.application.execution.request import (
             ExecutionRequest as _ExecutionRequest,
+        )
+        from mc.application.execution.request import (
             RunnerType as _RunnerType,
         )
         from mc.infrastructure.agents.yaml_validator import (
@@ -105,6 +123,7 @@ def bootstrap_runtime() -> None:
         raise
 
     ExecutionEngine = _ExecutionEngine
+    build_execution_engine = _build_execution_engine
     EntityType = _EntityType
     ExecutionRequest = _ExecutionRequest
     RunnerType = _RunnerType
@@ -138,6 +157,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=RESULTS_ROOT,
         help="Override the validation results root directory.",
+    )
+    parser.add_argument(
+        "--workspace-mode",
+        choices=WORKSPACE_MODES,
+        default="isolated",
+        help="Use isolated temporary workspaces (default) or audit against the real ~/.nanobot workspace.",
     )
     args = parser.parse_args()
     if args.all and args.agents:
@@ -235,6 +260,44 @@ def make_run_dir(results_root: Path) -> tuple[str, Path]:
     return run_stamp, run_dir
 
 
+def describe_history_interpretation(workspace_mode: str) -> str:
+    if workspace_mode == "audit":
+        return "Audit mode uses the real workspace, so missing history is evaluated against the live agent state."
+    return "Isolated mode uses a temporary workspace, so missing history reflects this validation run only."
+
+
+@contextmanager
+def validation_workspace(workspace_mode: str):
+    if workspace_mode == "audit":
+        yield {"workspace_mode": "audit", "workspace_scope": "real", "home": REAL_HOME}
+        return
+
+    with tempfile.TemporaryDirectory(prefix="nanobot-validation-") as tmp_dir:
+        temp_home = Path(tmp_dir)
+        previous_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(temp_home)
+
+        source_runtime = REAL_HOME / ".nanobot"
+        target_runtime = temp_home / ".nanobot"
+        target_runtime.mkdir(parents=True, exist_ok=True)
+        for filename in ("config.json", "anthropic_oauth.json", "memory_settings.json"):
+            source = source_runtime / filename
+            if source.exists():
+                shutil.copy2(source, target_runtime / filename)
+
+        try:
+            yield {
+                "workspace_mode": "isolated",
+                "workspace_scope": "isolated",
+                "home": temp_home,
+            }
+        finally:
+            if previous_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = previous_home
+
+
 def write_result(run: ScenarioRun) -> None:
     status = "success" if run.success else "failed"
     lines = [
@@ -244,8 +307,15 @@ def write_result(run: ScenarioRun) -> None:
         f"- `runner`: {run.runner}",
         f"- `model`: {run.model}",
         f"- `reasoning_level`: {run.reasoning_level or '-'}",
+        f"- `workspace_mode`: {run.workspace_mode}",
+        f"- `workspace_scope`: {run.workspace_scope}",
+        f"- `production_hooks`: {'yes' if run.production_hooks else 'no'}",
         f"- `duration_seconds`: {run.duration_seconds:.2f}",
         f"- `scenario`: {run.scenario_path}",
+        "",
+        "## Validation Mode",
+        "",
+        run.history_interpretation,
         "",
         "## Prompt",
         "",
@@ -255,22 +325,26 @@ def write_result(run: ScenarioRun) -> None:
         "",
     ]
     if run.error_message:
-        lines.extend([
-            "## Error",
+        lines.extend(
+            [
+                "## Error",
+                "",
+                "```text",
+                run.error_message,
+                "```",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Output",
             "",
             "```text",
-            run.error_message,
+            run.output.strip() or "<empty output>",
             "```",
             "",
-        ])
-    lines.extend([
-        "## Output",
-        "",
-        "```text",
-        run.output.strip() or "<empty output>",
-        "```",
-        "",
-    ])
+        ]
+    )
     run.result_path.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -281,13 +355,13 @@ def write_index(run_dir: Path, runs: list[ScenarioRun]) -> Path:
         f"- `run_dir`: {run_dir}",
         f"- `generated_at`: {datetime.now().isoformat(timespec='seconds')}",
         "",
-        "| Agent | Runner | Model | Reasoning | Status | Duration (s) | Result |",
-        "| --- | --- | --- | --- | --- | ---: | --- |",
+        "| Agent | Runner | Mode | Hooks | Model | Reasoning | Status | Duration (s) | Result |",
+        "| --- | --- | --- | --- | --- | --- | --- | ---: | --- |",
     ]
     for run in runs:
         status = "success" if run.success else "failed"
         lines.append(
-            f"| {run.agent_name} | {run.runner} | {run.model} | {run.reasoning_level or '-'} | {status} | {run.duration_seconds:.2f} | {run.result_path.name} |"
+            f"| {run.agent_name} | {run.runner} | {run.workspace_mode} | {'prod' if run.production_hooks else 'custom'} | {run.model} | {run.reasoning_level or '-'} | {status} | {run.duration_seconds:.2f} | {run.result_path.name} |"
         )
     lines.append("")
     index_path = run_dir / "index.md"
@@ -301,13 +375,15 @@ async def execute_run(
     run_stamp: str,
     run_dir: Path,
     reasoning_level: str | None,
+    workspace_mode: str,
 ) -> ScenarioRun:
     bootstrap_runtime()
     request = build_request(agent, scenario, run_stamp, reasoning_level=reasoning_level)
     result_path = run_dir / f"{agent.agent_name}.md"
     started = time.perf_counter()
-    engine = ExecutionEngine()
-    result = await engine.run(request)
+    with validation_workspace(workspace_mode) as mode_meta:
+        engine = build_execution_engine()
+        result = await engine.run(request)
     duration = time.perf_counter() - started
     error_message = result.error_message if not result.success else None
     output = result.output or ""
@@ -318,6 +394,10 @@ async def execute_run(
         runner=agent.runner.value,
         model=agent.data.model or "-",
         reasoning_level=reasoning_level,
+        workspace_mode=mode_meta["workspace_mode"],
+        production_hooks=True,
+        workspace_scope=mode_meta["workspace_scope"],
+        history_interpretation=describe_history_interpretation(mode_meta["workspace_mode"]),
         success=result.success,
         duration_seconds=duration,
         prompt=scenario.prompt,
@@ -335,6 +415,7 @@ def make_failure_run(
     runner: str,
     model: str,
     reasoning_level: str | None,
+    workspace_mode: str,
     scenario_path: Path | None,
     prompt: str,
     error_message: str,
@@ -345,6 +426,10 @@ def make_failure_run(
         runner=runner,
         model=model,
         reasoning_level=reasoning_level,
+        workspace_mode=workspace_mode,
+        production_hooks=True,
+        workspace_scope="real" if workspace_mode == "audit" else "isolated",
+        history_interpretation=describe_history_interpretation(workspace_mode),
         success=False,
         duration_seconds=0.0,
         prompt=prompt,
@@ -357,7 +442,9 @@ def make_failure_run(
     return run
 
 
-def print_dry_run(agent: LoadedAgent, scenario: LoadedScenario, reasoning_level: str | None) -> None:
+def print_dry_run(
+    agent: LoadedAgent, scenario: LoadedScenario, reasoning_level: str | None
+) -> None:
     print(f"agent={agent.agent_name}")
     print(f"runner={agent.runner.value}")
     print(f"model={agent.data.model or '-'}")
@@ -398,6 +485,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 run_stamp,
                 run_dir,
                 reasoning_level=args.reasoning_level,
+                workspace_mode=args.workspace_mode,
             )
         except Exception as exc:
             scenario_path = None
@@ -421,6 +509,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 runner=runner,
                 model=model,
                 reasoning_level=args.reasoning_level,
+                workspace_mode=args.workspace_mode,
                 scenario_path=scenario_path,
                 prompt=prompt,
                 error_message=f"{type(exc).__name__}: {exc}",

@@ -17,18 +17,6 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.completion_status import resolve_completion_status
-from mc.contexts.execution.executor_agent_config import (
-    build_executor_agent_roster as _build_executor_agent_roster_impl,
-    get_iana_timezone as _get_iana_timezone_impl,
-    load_agent_config as _load_agent_config_impl,
-    load_agent_data as _load_agent_data_impl,
-    maybe_inject_orientation as _maybe_inject_orientation_impl,
-    render_agent_roster as _render_agent_roster_impl,
-)
-from mc.contexts.execution.executor_routing import (
-    pickup_task as _pickup_task_impl,
-    reroute_lead_agent_task as _reroute_lead_agent_task_impl,
-)
 from mc.contexts.execution.agent_runner import (  # noqa: F401
     AgentRunResult,
     _coerce_agent_run_result,
@@ -38,6 +26,30 @@ from mc.contexts.execution.agent_runner import (  # noqa: F401
 from mc.contexts.execution.cc_executor import CCExecutorMixin
 from mc.contexts.execution.completion_reporting import append_task_completion_heartbeat
 from mc.contexts.execution.crash_recovery import AgentGateway
+from mc.contexts.execution.executor_agent_config import (
+    build_executor_agent_roster as _build_executor_agent_roster_impl,
+)
+from mc.contexts.execution.executor_agent_config import (
+    get_iana_timezone as _get_iana_timezone_impl,
+)
+from mc.contexts.execution.executor_agent_config import (
+    load_agent_config as _load_agent_config_impl,
+)
+from mc.contexts.execution.executor_agent_config import (
+    load_agent_data as _load_agent_data_impl,
+)
+from mc.contexts.execution.executor_agent_config import (
+    maybe_inject_orientation as _maybe_inject_orientation_impl,
+)
+from mc.contexts.execution.executor_agent_config import (
+    render_agent_roster as _render_agent_roster_impl,
+)
+from mc.contexts.execution.executor_routing import (
+    pickup_task as _pickup_task_impl,
+)
+from mc.contexts.execution.executor_routing import (
+    reroute_lead_agent_task as _reroute_lead_agent_task_impl,
+)
 from mc.contexts.execution.message_builder import build_task_message  # noqa: F401
 from mc.contexts.execution.output_artifacts import (  # noqa: F401
     _collect_output_artifacts,
@@ -47,18 +59,19 @@ from mc.contexts.execution.output_artifacts import (  # noqa: F401
 )
 from mc.contexts.execution.provider_errors import (  # noqa: F401
     PROVIDER_ERRORS,
+)
+from mc.contexts.execution.provider_errors import (
     _provider_error_action as _provider_error_action_impl,
 )
 from mc.contexts.planning.planner import TaskPlanner
 from mc.types import (
+    LEAD_AGENT_NAME,
     ActivityEventType,
     AgentData,
     AuthorType,
-    LEAD_AGENT_NAME,
     LeadAgentExecutionError,
     MessageType,
     TaskStatus,
-    task_safe_id,
     is_lead_agent,
 )
 
@@ -117,16 +130,21 @@ def _build_tag_attributes_context(
     This wrapper preserves backward compatibility for callers within executor.py.
     """
     from mc.application.execution.context_builder import build_tag_attributes_context
+
     return build_tag_attributes_context(tags, attr_values, attr_catalog)
 
 
 class TaskExecutor(CCExecutorMixin):
     """Picks up assigned tasks and runs agent execution."""
 
-    def __init__(self, bridge: ConvexBridge, cron_service: Any | None = None,
-                 on_task_completed: Any | None = None,
-                 ask_user_registry: Any | None = None,
-                 sleep_controller: Any | None = None) -> None:
+    def __init__(
+        self,
+        bridge: ConvexBridge,
+        cron_service: Any | None = None,
+        on_task_completed: Any | None = None,
+        ask_user_registry: Any | None = None,
+        sleep_controller: Any | None = None,
+    ) -> None:
         self._bridge = bridge
         self._agent_gateway = AgentGateway(bridge)
         self._known_assigned_ids: set[str] = set()
@@ -140,6 +158,7 @@ class TaskExecutor(CCExecutorMixin):
         """Lazily create and return a TierResolver instance."""
         if self._tier_resolver is None:
             from mc.infrastructure.providers.tier_resolver import TierResolver
+
             self._tier_resolver = TierResolver(self._bridge)
         return self._tier_resolver
 
@@ -227,7 +246,8 @@ class TaskExecutor(CCExecutorMixin):
                 if task_data.get("is_manual"):
                     logger.info(
                         "[executor] Skipping manual task '%s' (%s)",
-                        task_data.get("title", ""), task_id,
+                        task_data.get("title", ""),
+                        task_id,
                     )
                     continue
                 self._known_assigned_ids.add(task_id)
@@ -278,14 +298,13 @@ class TaskExecutor(CCExecutorMixin):
         """
         action = _provider_error_action(exc)
         error_class = type(exc).__name__
-        user_message = (
-            f"Provider error: {error_class}: {exc}\n\n"
-            f"Action: {action}"
-        )
+        user_message = f"Provider error: {error_class}: {exc}\n\nAction: {action}"
 
         logger.error(
             "[executor] Provider error on task '%s': %s. Action: %s",
-            title, exc, action,
+            title,
+            exc,
+            action,
         )
 
         # Write system message to task thread with clear instructions
@@ -334,9 +353,7 @@ class TaskExecutor(CCExecutorMixin):
         """
         return _render_agent_roster_impl()
 
-    def _maybe_inject_orientation(
-        self, agent_name: str, agent_prompt: str | None
-    ) -> str | None:
+    def _maybe_inject_orientation(self, agent_name: str, agent_prompt: str | None) -> str | None:
         """Prepend global orientation for non-lead-agent MC agents."""
         return _maybe_inject_orientation_impl(agent_name, agent_prompt)
 
@@ -381,12 +398,8 @@ class TaskExecutor(CCExecutorMixin):
 
         # Unpack unified request into local variables
         description = req.description
-        agent_prompt = req.agent_prompt
         agent_model = req.agent_model
         agent_skills = req.agent_skills
-        reasoning_level = req.reasoning_level
-        board_name = req.board_name
-        memory_workspace = req.memory_workspace
 
         # Route to Claude Code backend:
         # - If agent is configured with backend: claude-code (YAML config)
@@ -397,7 +410,8 @@ class TaskExecutor(CCExecutorMixin):
         if agent_skills is not None:
             logger.info(
                 "[executor] Agent '%s' allowed_skills=%s (only these + always-on skills visible)",
-                agent_name, agent_skills,
+                agent_name,
+                agent_skills,
             )
         else:
             logger.info(
@@ -413,7 +427,9 @@ class TaskExecutor(CCExecutorMixin):
         if description:
             logger.info(
                 "[executor] Task description for '%s' (len=%d, first 300 chars): %s",
-                agent_name, len(description), repr(description[:300]),
+                agent_name,
+                len(description),
+                repr(description[:300]),
             )
 
         try:
@@ -442,6 +458,7 @@ class TaskExecutor(CCExecutorMixin):
             else:
                 req.runner_type = RunnerType.NANOBOT
 
+            req.session_boundary_reason = "task_completion"
             engine = self._build_execution_engine()
             execution_result = await engine.run(req)
 
@@ -496,9 +513,7 @@ class TaskExecutor(CCExecutorMixin):
             result = execution_result.output
 
             # Collect file artifacts produced during agent execution.
-            artifacts = await asyncio.to_thread(
-                _collect_output_artifacts, task_id, pre_snapshot
-            )
+            artifacts = await asyncio.to_thread(_collect_output_artifacts, task_id, pre_snapshot)
 
             if req.runner_type == RunnerType.CLAUDE_CODE:
                 cc_result = SimpleNamespace(
@@ -541,14 +556,6 @@ class TaskExecutor(CCExecutorMixin):
                             "[executor] on_task_completed failed for CC task '%s'",
                             title,
                         )
-                if execution_result.memory_workspace is not None:
-                    self._schedule_cc_consolidation(
-                        _background_tasks,
-                        title,
-                        task_id,
-                        cc_result,
-                        execution_result.memory_workspace,
-                    )
                 return
 
             if step_id:
@@ -616,7 +623,9 @@ class TaskExecutor(CCExecutorMixin):
 
             logger.info(
                 "[executor] Task '%s' completed by '%s' → %s",
-                title, agent_name, final_status,
+                title,
+                agent_name,
+                final_status,
             )
 
             try:
@@ -629,7 +638,9 @@ class TaskExecutor(CCExecutorMixin):
                 )
                 logger.info("[executor] Written task '%s' completion to global HEARTBEAT.md", title)
             except Exception as hb_exc:
-                logger.warning("[executor] Failed to write to HEARTBEAT.md for task '%s': %s", title, hb_exc)
+                logger.warning(
+                    "[executor] Failed to write to HEARTBEAT.md for task '%s': %s", title, hb_exc
+                )
 
             # Deliver cron result to external channel if pending
             if self._on_task_completed:
@@ -641,7 +652,9 @@ class TaskExecutor(CCExecutorMixin):
         except Exception as exc:
             logger.error(
                 "[executor] Agent '%s' crashed on task '%s': %s",
-                agent_name, title, exc,
+                agent_name,
+                title,
+                exc,
             )
             await self._agent_gateway.handle_agent_crash(agent_name, task_id, exc)
             # Pop pending delivery entry to prevent dict leak (empty → skips actual send)
