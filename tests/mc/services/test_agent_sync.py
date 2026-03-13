@@ -306,17 +306,24 @@ class TestProjectionProtection:
         )
         mock_validate.return_value = agent_data
 
-        # Simulate that Convex has a projection-backed agent doc
-        bridge.get_agent_by_name.return_value = {
+        # Simulate that Convex has a projection-backed agent doc via bulk list
+        compiled_doc = {
             "name": "compiled-agent",
             "compiled_from_spec_id": "spec-id-abc",
             "compiled_at": "2025-01-01T00:00:00Z",
         }
+        bridge.list_agents.return_value = [compiled_doc]
+        bridge.get_agent_by_name.return_value = compiled_doc
 
         synced, errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
 
         # Should still appear in synced (for reporting), but NOT call sync_agent
         bridge.sync_agent.assert_not_called()
+        # The projection-backed agent must still be included in the returned synced list
+        assert len(synced) == 1
+        assert synced[0].name == "compiled-agent"
+        # The bulk list_agents call must have been used (no N+1 per-agent query needed)
+        bridge.list_agents.assert_called()
 
     @patch("mc.contexts.agents.sync._write_back_convex_agents")
     @patch("mc.contexts.agents.sync.validate_agent_file")

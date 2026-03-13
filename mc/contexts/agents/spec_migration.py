@@ -16,7 +16,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
@@ -24,6 +24,14 @@ if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
 
 logger = logging.getLogger(__name__)
+
+
+class MigrationResult(TypedDict):
+    """Summary returned by migrate_all."""
+
+    migrated: list[str]
+    skipped: list[str]
+    errors: dict[str, str]
 
 
 def build_spec_payload_from_yaml(config_path: Path) -> dict[str, Any] | None:
@@ -75,6 +83,9 @@ def migrate_agent(
     config_path: Path,
     bridge: "ConvexBridge",
     dry_run: bool = False,
+    *,
+    _prebuilt_payload: dict[str, Any] | None = None,
+    _skip_idempotency_check: bool = False,
 ) -> str | None:
     """Migrate a single agent from config.yaml into an Agent Spec V2 record.
 
@@ -85,14 +96,21 @@ def migrate_agent(
         config_path: Path to the agent's config.yaml file.
         bridge: ConvexBridge instance for Convex communication.
         dry_run: If True, build the payload but do not write to Convex.
+        _prebuilt_payload: Optional pre-validated payload dict.  When provided
+            the YAML build step is skipped (avoids double-validation).
+        _skip_idempotency_check: When True the idempotency check is skipped
+            because the caller (migrate_all) has already performed it.
 
     Returns:
         The spec document ID (existing or newly created), or None if the YAML
         is invalid or an error occurs.
     """
-    payload = build_spec_payload_from_yaml(config_path)
-    if payload is None:
-        return None
+    if _prebuilt_payload is not None:
+        payload = _prebuilt_payload
+    else:
+        payload = build_spec_payload_from_yaml(config_path)
+        if payload is None:
+            return None
 
     agent_name = payload["name"]
 
@@ -100,16 +118,17 @@ def migrate_agent(
         logger.info("[migration] DRY RUN: would migrate agent '%s'", agent_name)
         return f"dry-run:{agent_name}"
 
-    # Idempotency check: skip if a spec already exists
-    existing = bridge.get_agent_spec_by_name(agent_name)
-    if existing is not None:
-        existing_id = existing.get("_id") or existing.get("id")
-        logger.info(
-            "[migration] Agent '%s' already has a spec (%s) — skipping",
-            agent_name,
-            existing_id,
-        )
-        return existing_id
+    # Idempotency check: skip if a spec already exists (skip when caller did it)
+    if not _skip_idempotency_check:
+        existing = bridge.get_agent_spec_by_name(agent_name)
+        if existing is not None:
+            existing_id = existing.get("_id") or existing.get("id")
+            logger.info(
+                "[migration] Agent '%s' already has a spec (%s) — skipping",
+                agent_name,
+                existing_id,
+            )
+            return existing_id
 
     # Create the spec
     try:
@@ -143,7 +162,7 @@ def migrate_all(
     agents_dir: Path,
     bridge: "ConvexBridge",
     dry_run: bool = False,
-) -> dict[str, list[str]]:
+) -> MigrationResult:
     """Migrate all agents in a directory into Agent Spec V2 records.
 
     Iterates over subdirectories in agents_dir, validates each config.yaml,
@@ -202,8 +221,14 @@ def migrate_all(
             skipped.append(agent_name)
             continue
 
-        # Migrate the agent
-        spec_id = migrate_agent(config_path=config_file, bridge=bridge, dry_run=dry_run)
+        # Migrate the agent — pass the pre-built payload and skip re-check
+        spec_id = migrate_agent(
+            config_path=config_file,
+            bridge=bridge,
+            dry_run=dry_run,
+            _prebuilt_payload=payload,
+            _skip_idempotency_check=True,
+        )
         if spec_id is not None:
             migrated.append(agent_name)
         else:

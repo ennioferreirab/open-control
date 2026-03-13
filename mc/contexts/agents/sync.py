@@ -176,7 +176,10 @@ class AgentSyncService:
                     else:
                         valid_agents.append(result)
 
-        # Step 2-3: Resolve model and sync each valid agent
+        # Step 2-3: Resolve model and sync each valid agent.
+        # Pre-fetch all Convex agent docs once to avoid N+1 queries.
+        convex_agents_cache = self._fetch_all_agents_cache()
+
         for agent in valid_agents:
             if not agent.model:
                 agent.model = resolved_default
@@ -187,7 +190,7 @@ class AgentSyncService:
             # If the Convex document for this agent has compiledFromSpecId set,
             # local config.yaml must NOT overwrite it — the spec compiler owns
             # the runtime projection.
-            if self._is_projection_backed(agent.name):
+            if self._is_projection_backed_cached(agent.name, convex_agents_cache):
                 logger.info(
                     "Skipping local YAML upsert for projection-backed agent '%s' "
                     "(compiledFromSpecId is set)",
@@ -213,6 +216,39 @@ class AgentSyncService:
     # ------------------------------------------------------------------
     # Projection Metadata Helpers
     # ------------------------------------------------------------------
+
+    def _fetch_all_agents_cache(self) -> dict[str, dict]:
+        """Fetch all Convex agent docs in a single call and return a name→doc map.
+
+        Used to avoid N+1 queries when checking projection-backed status for
+        every agent in the sync loop.  Returns an empty dict on any error so
+        the caller degrades gracefully.
+        """
+        try:
+            all_agents = self._bridge.list_agents()
+            return {
+                doc["name"]: doc for doc in all_agents if isinstance(doc, dict) and "name" in doc
+            }
+        except Exception:
+            logger.warning(
+                "[agent_sync] Could not bulk-fetch agents from Convex — "
+                "falling back to per-agent queries",
+            )
+            return {}
+
+    def _is_projection_backed_cached(self, agent_name: str, cache: dict[str, dict]) -> bool:
+        """Return True if the cached Convex agent doc has compiledFromSpecId set.
+
+        Uses the pre-fetched cache from _fetch_all_agents_cache to avoid a
+        per-agent Convex query.  Falls back to a live query when the agent is
+        absent from the cache (e.g. the bulk-fetch failed).
+        """
+        if agent_name in cache:
+            agent_doc = cache[agent_name]
+            return bool(agent_doc.get("compiled_from_spec_id"))
+
+        # Cache miss (bulk-fetch may have failed) — fall back to live query.
+        return self._is_projection_backed(agent_name)
 
     def _is_projection_backed(self, agent_name: str) -> bool:
         """Return True if the Convex agent doc has compiledFromSpecId set.
