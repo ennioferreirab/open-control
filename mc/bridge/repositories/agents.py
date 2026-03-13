@@ -44,6 +44,8 @@ class AgentRepository:
             args["is_system"] = True
         if agent_data.backend != "nanobot":
             args["backend"] = agent_data.backend
+        if agent_data.interactive_provider is not None:
+            args["interactive_provider"] = agent_data.interactive_provider
         cc_opts = agent_data.claude_code_opts
         if cc_opts is not None:
             cc_payload: dict[str, Any] = {}
@@ -158,9 +160,7 @@ class AgentRepository:
         )
         return result
 
-    def write_agent_config(
-        self, agent_data: dict[str, Any], agents_dir: Path
-    ) -> None:
+    def write_agent_config(self, agent_data: dict[str, Any], agents_dir: Path) -> None:
         """Write an agent's config back to local YAML.
 
         Used for Convex -> local write-back when dashboard edits are newer
@@ -206,17 +206,16 @@ class AgentRepository:
         backend = agent_data.get("backend")
         if backend and backend != "nanobot":
             config["backend"] = backend
+        interactive_provider = agent_data.get("interactive_provider")
+        if interactive_provider:
+            config["interactive_provider"] = interactive_provider
 
-        claude_code = agent_data.get("claude_code_opts") or agent_data.get(
-            "claude_code"
-        )
+        claude_code = agent_data.get("claude_code_opts") or agent_data.get("claude_code")
         if claude_code and isinstance(claude_code, dict):
             config["claude_code"] = claude_code
 
         config_path.write_text(
-            yaml.dump(
-                config, default_flow_style=False, allow_unicode=True, sort_keys=False
-            ),
+            yaml.dump(config, default_flow_style=False, allow_unicode=True, sort_keys=False),
             encoding="utf-8",
         )
         logger.info("Wrote agent config to %s", config_path)

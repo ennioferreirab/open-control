@@ -1,6 +1,8 @@
 import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+import { interactiveProviderValidator } from "./schema";
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -18,11 +20,14 @@ export const upsertByName = mutation({
     soul: v.optional(v.string()),
     skills: v.array(v.string()),
     model: v.optional(v.string()),
-    claudeCodeOpts: v.optional(v.object({
-      permissionMode: v.optional(v.string()),
-      maxBudgetUsd: v.optional(v.number()),
-      maxTurns: v.optional(v.number()),
-    })),
+    interactiveProvider: v.optional(interactiveProviderValidator),
+    claudeCodeOpts: v.optional(
+      v.object({
+        permissionMode: v.optional(v.string()),
+        maxBudgetUsd: v.optional(v.number()),
+        maxTurns: v.optional(v.number()),
+      }),
+    ),
     isSystem: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -38,7 +43,9 @@ export const upsertByName = mutation({
       // The YAML should have been cleaned up by sync; this guards against manual recreation.
       if (existing.deletedAt) {
         // Agent is soft-deleted; skip re-registration. Log for operator visibility.
-        console.warn(`[agents:upsertByName] Skipped upsert for deleted agent '${args.name}' — YAML should be cleaned up by sync.`);
+        console.warn(
+          `[agents:upsertByName] Skipped upsert for deleted agent '${args.name}' — YAML should be cleaned up by sync.`,
+        );
         return;
       }
       // Convex is source of truth for prompt, variables, and skills edited in
@@ -48,6 +55,7 @@ export const upsertByName = mutation({
         role: args.role,
         soul: args.soul,
         model: args.model,
+        interactiveProvider: args.interactiveProvider,
         lastActiveAt: timestamp,
         // Preserve existing enabled value on update (don't reset on re-sync)
       };
@@ -57,11 +65,17 @@ export const upsertByName = mutation({
       }
       // Bootstrap skills from YAML only when the existing document has no
       // skills yet. After that, dashboard edits remain authoritative.
-      if ((!Array.isArray(existing.skills) || existing.skills.length === 0) && args.skills.length > 0) {
+      if (
+        (!Array.isArray(existing.skills) || existing.skills.length === 0) &&
+        args.skills.length > 0
+      ) {
         patch.skills = args.skills;
       }
       if (args.isSystem !== undefined) {
         patch.isSystem = args.isSystem;
+      }
+      if (args.interactiveProvider !== undefined) {
+        patch.interactiveProvider = args.interactiveProvider;
       }
       if (args.claudeCodeOpts !== undefined) {
         patch.claudeCodeOpts = args.claudeCodeOpts;
@@ -79,6 +93,7 @@ export const upsertByName = mutation({
         enabled: true,
         isSystem: args.isSystem,
         model: args.model,
+        interactiveProvider: args.interactiveProvider,
         claudeCodeOpts: args.claudeCodeOpts,
         lastActiveAt: timestamp,
       });
@@ -139,11 +154,14 @@ export const updateConfig = mutation({
     skills: v.optional(v.array(v.string())),
     model: v.optional(v.string()),
     reasoningLevel: v.optional(v.string()),
-    claudeCodeOpts: v.optional(v.object({
-      permissionMode: v.optional(v.string()),
-      maxBudgetUsd: v.optional(v.number()),
-      maxTurns: v.optional(v.number()),
-    })),
+    interactiveProvider: v.optional(interactiveProviderValidator),
+    claudeCodeOpts: v.optional(
+      v.object({
+        permissionMode: v.optional(v.string()),
+        maxBudgetUsd: v.optional(v.number()),
+        maxTurns: v.optional(v.number()),
+      }),
+    ),
     variables: v.optional(v.array(v.object({ name: v.string(), value: v.string() }))),
   },
   handler: async (ctx, args) => {
@@ -166,6 +184,8 @@ export const updateConfig = mutation({
     if (args.skills !== undefined) updates.skills = args.skills;
     if (args.model !== undefined) updates.model = args.model;
     if (args.reasoningLevel !== undefined) updates.reasoningLevel = args.reasoningLevel;
+    if (args.interactiveProvider !== undefined)
+      updates.interactiveProvider = args.interactiveProvider;
     if (args.claudeCodeOpts !== undefined) updates.claudeCodeOpts = args.claudeCodeOpts;
     if (args.variables !== undefined) updates.variables = args.variables;
 
@@ -273,7 +293,9 @@ export const archiveAgentData = internalMutation({
     }
 
     if (!agent.deletedAt) {
-      throw new Error(`Agent '${args.agentName}' is not deleted — archive only applies to soft-deleted agents`);
+      throw new Error(
+        `Agent '${args.agentName}' is not deleted — archive only applies to soft-deleted agents`,
+      );
     }
 
     const patch: Record<string, unknown> = {};
@@ -331,7 +353,8 @@ export const getArchive = query({
       return null;
     }
 
-    const hasArchive = agent.memoryContent != null || agent.historyContent != null || agent.sessionData != null;
+    const hasArchive =
+      agent.memoryContent != null || agent.historyContent != null || agent.sessionData != null;
     if (!hasArchive) {
       return null;
     }

@@ -20,6 +20,7 @@ else:
 
     class StrEnum(str, Enum):
         """Backport of StrEnum for Python < 3.11."""
+
         pass
 
 
@@ -30,14 +31,16 @@ HUMAN_AGENT_NAME = "human"
 
 # Model tier system (Story 11.1)
 TIER_PREFIX = "tier:"
-VALID_TIER_NAMES: frozenset[str] = frozenset({
-    "standard-low",
-    "standard-medium",
-    "standard-high",
-    "reasoning-low",
-    "reasoning-medium",
-    "reasoning-high",
-})
+VALID_TIER_NAMES: frozenset[str] = frozenset(
+    {
+        "standard-low",
+        "standard-medium",
+        "standard-high",
+        "reasoning-low",
+        "reasoning-medium",
+        "reasoning-high",
+    }
+)
 
 
 class LeadAgentExecutionError(RuntimeError):
@@ -61,7 +64,7 @@ def extract_tier_name(model: str) -> str | None:
     """
     if not model.startswith(TIER_PREFIX):
         return None
-    name = model[len(TIER_PREFIX):]
+    name = model[len(TIER_PREFIX) :]
     return name if name in VALID_TIER_NAMES else None
 
 
@@ -80,6 +83,7 @@ from claude_code.types import (  # noqa: F401, E402 — intentional re-exports
 
 class TaskStatus(StrEnum):
     """Task lifecycle states. Matches Convex tasks.status union type."""
+
     PLANNING = "planning"
     READY = "ready"
     FAILED = "failed"
@@ -94,6 +98,7 @@ class TaskStatus(StrEnum):
 
 class StepStatus(StrEnum):
     """Step lifecycle states. Matches Convex steps.status union type."""
+
     PLANNED = "planned"
     ASSIGNED = "assigned"
     RUNNING = "running"
@@ -106,12 +111,14 @@ class StepStatus(StrEnum):
 
 class TrustLevel(StrEnum):
     """Trust levels for task oversight. Matches Convex tasks.trustLevel union type."""
+
     AUTONOMOUS = "autonomous"
     HUMAN_APPROVED = "human_approved"
 
 
 class AgentStatus(StrEnum):
     """Agent runtime states. Matches Convex agents.status union type."""
+
     ACTIVE = "active"
     IDLE = "idle"
     CRASHED = "crashed"
@@ -119,6 +126,7 @@ class AgentStatus(StrEnum):
 
 class ActivityEventType(StrEnum):
     """Activity feed event types. Matches Convex activities.eventType union type."""
+
     TASK_CREATED = "task_created"
     TASK_PLANNING = "task_planning"
     TASK_FAILED = "task_failed"
@@ -154,6 +162,7 @@ class ActivityEventType(StrEnum):
 
 class MessageType(StrEnum):
     """Message categories. Matches Convex messages.messageType union type."""
+
     WORK = "work"
     REVIEW_FEEDBACK = "review_feedback"
     APPROVAL = "approval"
@@ -168,6 +177,7 @@ class ThreadMessageType(StrEnum):
     Distinct from MessageType (legacy messageType field) — this is the new
     architecture-aligned classification used for structured rendering (Story 2.7).
     """
+
     STEP_COMPLETION = "step_completion"
     USER_MESSAGE = "user_message"
     SYSTEM_ERROR = "system_error"
@@ -181,6 +191,7 @@ StructuredMessageType = ThreadMessageType
 
 class AuthorType(StrEnum):
     """Message author types. Matches Convex messages.authorType union type."""
+
     AGENT = "agent"
     USER = "user"
     SYSTEM = "system"
@@ -189,6 +200,7 @@ class AuthorType(StrEnum):
 @dataclass
 class ExecutionPlanStep:
     """A single step in an execution plan (pre-materialization)."""
+
     temp_id: str
     title: str
     description: str
@@ -210,6 +222,7 @@ def _as_int(value: Any, default: int) -> int:
 @dataclass
 class ExecutionPlan:
     """Structured execution plan stored as JSON on a task document."""
+
     steps: list[ExecutionPlanStep] = field(default_factory=list)
     generated_at: str = ""
     generated_by: str = LEAD_AGENT_NAME
@@ -293,17 +306,14 @@ class ExecutionPlan:
                 or data.get("createdAt")
                 or data.get("created_at", "")
             ),
-            generated_by=(
-                data.get("generatedBy")
-                or data.get("generated_by")
-                or LEAD_AGENT_NAME
-            ),
+            generated_by=(data.get("generatedBy") or data.get("generated_by") or LEAD_AGENT_NAME),
         )
 
 
 @dataclass
 class TaskData:
     """Python representation of a Convex task document (snake_case fields)."""
+
     title: str
     status: str  # TaskStatus value
     trust_level: str  # TrustLevel value
@@ -321,6 +331,7 @@ class TaskData:
 @dataclass
 class AgentData:
     """Python representation of a Convex agent document (snake_case fields)."""
+
     name: str
     display_name: str
     role: str
@@ -335,6 +346,7 @@ class AgentData:
     id: str | None = None  # Convex _id (populated on read)
     backend: str = "nanobot"
     claude_code_opts: ClaudeCodeOpts | None = None
+    interactive_provider: str | None = None
 
 
 @dataclass
@@ -344,6 +356,7 @@ class ArtifactData:
     Mirrors the Convex schema messages.artifacts array element.
     All string values match the Convex schema union types exactly.
     """
+
     path: str
     action: str  # "created" | "modified" | "deleted"
     description: str | None = None
@@ -366,6 +379,7 @@ StepCompletionArtifact = ArtifactData
 @dataclass
 class MessageData:
     """Python representation of a Convex message document (snake_case fields)."""
+
     task_id: str
     author_name: str
     author_type: str  # AuthorType value
@@ -382,6 +396,7 @@ class MessageData:
 @dataclass
 class ActivityData:
     """Python representation of a Convex activity document (snake_case fields)."""
+
     event_type: str  # ActivityEventType value
     description: str
     timestamp: str  # ISO 8601

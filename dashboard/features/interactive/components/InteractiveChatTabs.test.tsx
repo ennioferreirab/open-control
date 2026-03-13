@@ -1,0 +1,45 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { InteractiveChatTabs } from "./InteractiveChatTabs";
+
+vi.mock("./InteractiveTerminalPanel", () => ({
+  InteractiveTerminalPanel: ({ agentName }: { agentName: string }) => (
+    <div data-testid="interactive-terminal-panel">terminal:{agentName}</div>
+  ),
+}));
+
+describe("InteractiveChatTabs", () => {
+  it("renders only chat content when the agent is not interactive", () => {
+    render(
+      <InteractiveChatTabs
+        agentName="writer"
+        interactiveProvider={null}
+        chatView={<div data-testid="chat-view">chat</div>}
+      />,
+    );
+
+    expect(screen.getByTestId("chat-view")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "TUI" })).not.toBeInTheDocument();
+  });
+
+  it("shows Chat and TUI tabs for interactive agents and switches views", () => {
+    render(
+      <InteractiveChatTabs
+        agentName="claude-pair"
+        interactiveProvider="claude-code"
+        chatView={<div data-testid="chat-view">chat</div>}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "TUI" })).toBeInTheDocument();
+    expect(screen.getByTestId("chat-view")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "TUI" }));
+
+    expect(screen.getByTestId("interactive-terminal-panel")).toHaveTextContent(
+      "terminal:claude-pair",
+    );
+  });
+});
