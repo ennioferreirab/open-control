@@ -1,15 +1,13 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { InteractiveChatTabs } from "@/features/interactive/components/InteractiveChatTabs";
+import { getInteractiveAgentProvider } from "@/features/interactive/hooks/useInteractiveAgentProvider";
+import { useSendChat } from "@/hooks/useSendChat";
 import { SendHorizontal, X } from "lucide-react";
-import {
-  AgentMentionAutocomplete,
-  type MentionAgent,
-} from "./AgentMentionAutocomplete";
+import { AgentMentionAutocomplete, type MentionAgent } from "./AgentMentionAutocomplete";
 import { ChatMessages } from "./ChatMessages";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 
@@ -25,8 +23,10 @@ export function ChatPanel() {
   const mentionQueryRef = useRef(mentionQuery);
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const sendChat = useMutation(api.chats.send);
+  const sendChat = useSendChat();
   const selectableAgents = useSelectableAgents();
+  const selectedAgentDoc = selectableAgents?.find((agent) => agent.name === selectedAgent) ?? null;
+  const interactiveProvider = getInteractiveAgentProvider(selectedAgentDoc);
 
   // Keep refs in sync
   useEffect(() => {
@@ -41,44 +41,41 @@ export function ChatPanel() {
   useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
 
   const filteredAgents: MentionAgent[] = (selectableAgents ?? []).map((a) => ({
-      name: a.name,
-      displayName: a.displayName ?? undefined,
-      role: a.role ?? undefined,
-    }));
+    name: a.name,
+    displayName: a.displayName ?? undefined,
+    role: a.role ?? undefined,
+  }));
 
-  const handleTextChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const value = e.target.value;
-      setContent(value);
+  const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setContent(value);
 
-      const cursorPos = e.target.selectionStart ?? value.length;
+    const cursorPos = e.target.selectionStart ?? value.length;
 
-      // Find the last @ before cursor preceded by start-of-input or whitespace
-      let atIndex = -1;
-      for (let i = cursorPos - 1; i >= 0; i--) {
-        if (value[i] === "@") {
-          if (i === 0 || /\s/.test(value[i - 1])) {
-            atIndex = i;
-          }
-          break;
+    // Find the last @ before cursor preceded by start-of-input or whitespace
+    let atIndex = -1;
+    for (let i = cursorPos - 1; i >= 0; i--) {
+      if (value[i] === "@") {
+        if (i === 0 || /\s/.test(value[i - 1])) {
+          atIndex = i;
         }
-        if (/\s/.test(value[i])) break;
+        break;
       }
+      if (/\s/.test(value[i])) break;
+    }
 
-      if (atIndex >= 0) {
-        const q = value.slice(atIndex + 1, cursorPos);
-        if (/[^a-zA-Z0-9_-]/.test(q)) {
-          setMentionQuery(null);
-        } else {
-          setMentionStartIndex(atIndex);
-          setMentionQuery(q);
-        }
-      } else {
+    if (atIndex >= 0) {
+      const q = value.slice(atIndex + 1, cursorPos);
+      if (/[^a-zA-Z0-9_-]/.test(q)) {
         setMentionQuery(null);
+      } else {
+        setMentionStartIndex(atIndex);
+        setMentionQuery(q);
       }
-    },
-    []
-  );
+    } else {
+      setMentionQuery(null);
+    }
+  }, []);
 
   const handleMentionSelect = useCallback((agentName: string) => {
     const currentContent = contentRef.current;
@@ -137,7 +134,18 @@ export function ChatPanel() {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (mentionQuery !== null) {
-      const nav = (textareaRef.current as any)?.__mentionNav;
+      const nav = (
+        textareaRef.current as
+          | (HTMLTextAreaElement & {
+              __mentionNav?: {
+                navigateDown: () => void;
+                navigateUp: () => void;
+                selectFocused: () => boolean;
+                close: () => void;
+              };
+            })
+          | null
+      )?.__mentionNav;
       if (nav) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -197,10 +205,7 @@ export function ChatPanel() {
           onKeyDown={handleKeyDown}
           onFocus={() => clearTimeout(blurTimeoutRef.current)}
           onBlur={() => {
-            blurTimeoutRef.current = setTimeout(
-              () => setMentionQuery(null),
-              150
-            );
+            blurTimeoutRef.current = setTimeout(() => setMentionQuery(null), 150);
           }}
           className="text-sm min-h-[60px] max-h-[100px] resize-none"
         />
@@ -208,33 +213,10 @@ export function ChatPanel() {
     );
   }
 
-  // Agent selected: chat view
-  return (
-    <div className="flex flex-1 flex-col min-h-0 min-w-0">
-      {/* Locked header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
-        <span className="text-xs font-medium text-foreground truncate">
-          Chatting with{" "}
-          <span className="text-primary">@{selectedAgent}</span>
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={() => {
-            setSelectedAgent(null);
-            setContent("");
-          }}
-          aria-label="Close chat"
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      </div>
-
-      {/* Messages area */}
+  const chatView = (
+    <>
       <ChatMessages agentName={selectedAgent} />
 
-      {/* Inline autocomplete above input */}
       {mentionQuery !== null && (
         <div className="shrink-0 px-2">
           <AgentMentionAutocomplete
@@ -248,7 +230,6 @@ export function ChatPanel() {
         </div>
       )}
 
-      {/* Chat input */}
       <div className="shrink-0 border-t border-border p-2">
         <div className="flex gap-1.5">
           <Textarea
@@ -259,10 +240,7 @@ export function ChatPanel() {
             onKeyDown={handleKeyDown}
             onFocus={() => clearTimeout(blurTimeoutRef.current)}
             onBlur={() => {
-              blurTimeoutRef.current = setTimeout(
-                () => setMentionQuery(null),
-                150
-              );
+              blurTimeoutRef.current = setTimeout(() => setMentionQuery(null), 150);
             }}
             className="text-sm min-h-[56px] max-h-[120px] resize-none"
             disabled={isSubmitting}
@@ -278,6 +256,36 @@ export function ChatPanel() {
           </Button>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <div className="flex flex-1 flex-col min-h-0 min-w-0">
+      {/* Locked header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
+        <span className="text-xs font-medium text-foreground truncate">
+          Chatting with <span className="text-primary">@{selectedAgent}</span>
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => {
+            setSelectedAgent(null);
+            setContent("");
+          }}
+          aria-label="Close chat"
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+
+      <InteractiveChatTabs
+        key={`${selectedAgent}:${interactiveProvider ?? "chat"}`}
+        agentName={selectedAgent}
+        interactiveProvider={interactiveProvider}
+        chatView={chatView}
+      />
     </div>
   );
 }

@@ -29,12 +29,7 @@ _NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 _FIX_SUGGESTIONS: dict[str, str] = {
     "missing": "add '{field}: <value>' to your YAML config.",
     "string_type": "provide a string value for '{field}'.",
-    "list_type": (
-        "use YAML list syntax for '{field}':\n"
-        "  {field}:\n"
-        "    - item1\n"
-        "    - item2"
-    ),
+    "list_type": ("use YAML list syntax for '{field}':\n  {field}:\n    - item1\n    - item2"),
 }
 
 _EXPECTED_TYPES: dict[str, str] = {
@@ -56,6 +51,7 @@ class AgentConfig(BaseModel):
     soul: Optional[str] = None
     is_system: Optional[bool] = None
     backend: Optional[str] = None
+    interactive_provider: Optional[str] = None
     claude_code: Optional[dict] = None
 
     @field_validator("backend")
@@ -65,8 +61,18 @@ class AgentConfig(BaseModel):
             return None
         valid = {"nanobot", "claude-code"}
         if v not in valid:
+            raise ValueError(f"Invalid backend '{v}'. Valid options: {', '.join(sorted(valid))}")
+        return v
+
+    @field_validator("interactive_provider")
+    @classmethod
+    def validate_interactive_provider(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        valid = {"claude-code", "codex"}
+        if v not in valid:
             raise ValueError(
-                f"Invalid backend '{v}'. Valid options: {', '.join(sorted(valid))}"
+                f"Invalid interactive_provider '{v}'. Valid options: {', '.join(sorted(valid))}"
             )
         return v
 
@@ -75,8 +81,7 @@ class AgentConfig(BaseModel):
     def validate_name(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError(
-                "Agent name cannot be empty. "
-                "Fix: provide a unique name like 'my-agent'"
+                "Agent name cannot be empty. Fix: provide a unique name like 'my-agent'"
             )
         v = v.strip()
         if not _NAME_PATTERN.match(v):
@@ -92,8 +97,7 @@ class AgentConfig(BaseModel):
     def validate_role(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError(
-                "Agent role cannot be empty. "
-                "Fix: provide a role like 'Senior Developer'"
+                "Agent role cannot be empty. Fix: provide a role like 'Senior Developer'"
             )
         return v.strip()
 
@@ -110,9 +114,7 @@ class AgentConfig(BaseModel):
     @model_validator(mode="after")
     def set_display_name(self) -> AgentConfig:
         if not self.display_name:
-            self.display_name = (
-                self.name.replace("-", " ").replace("_", " ").title()
-            )
+            self.display_name = self.name.replace("-", " ").replace("_", " ").title()
         return self
 
 
@@ -146,11 +148,7 @@ def format_validation_errors(error: ValidationError) -> list[str]:
         suggestion = _FIX_SUGGESTIONS.get(err_type, "check the field value.")
         suggestion = suggestion.format(field=field_name)
 
-        messages.append(
-            f"Field '{field_name}': {raw_msg}. "
-            f"Expected: {expected}. "
-            f"Fix: {suggestion}"
-        )
+        messages.append(f"Field '{field_name}': {raw_msg}. Expected: {expected}. Fix: {suggestion}")
 
     return messages
 
@@ -215,8 +213,7 @@ def validate_agents_dir(
         return valid_agents, errors
 
     yaml_files = sorted(
-        p for p in dir_path.iterdir()
-        if p.is_file() and p.suffix in (".yaml", ".yml")
+        p for p in dir_path.iterdir() if p.is_file() and p.suffix in (".yaml", ".yml")
     )
 
     for file_path in yaml_files:
@@ -244,24 +241,18 @@ def _parse_claude_code_opts(raw: dict) -> ClaudeCodeOpts:
         try:
             budget = float(budget)
         except (TypeError, ValueError):
-            raise ValueError(
-                f"claude_code.max_budget_usd must be a number, got: {budget!r}"
-            )
+            raise ValueError(f"claude_code.max_budget_usd must be a number, got: {budget!r}")
 
     turns = raw.get("max_turns")
     if turns is not None:
         try:
             turns = int(turns)
         except (TypeError, ValueError):
-            raise ValueError(
-                f"claude_code.max_turns must be an integer, got: {turns!r}"
-            )
+            raise ValueError(f"claude_code.max_turns must be an integer, got: {turns!r}")
 
     pm = raw.get("permission_mode", "acceptEdits")
     if not isinstance(pm, str):
-        raise ValueError(
-            f"claude_code.permission_mode must be a string, got: {pm!r}"
-        )
+        raise ValueError(f"claude_code.permission_mode must be a string, got: {pm!r}")
     if pm not in _VALID_PERMISSION_MODES:
         raise ValueError(
             f"claude_code.permission_mode must be one of "
@@ -302,4 +293,5 @@ def _config_to_agent_data(config: AgentConfig) -> AgentData | list[str]:
         is_system=config.is_system or False,
         backend=backend,
         claude_code_opts=cc_opts,
+        interactive_provider=config.interactive_provider,
     )

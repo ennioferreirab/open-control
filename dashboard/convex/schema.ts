@@ -11,6 +11,26 @@ export const taskFileMetadataValidator = v.object({
 });
 
 export const taskFilesValidator = v.optional(v.array(taskFileMetadataValidator));
+export const interactiveSessionStatusValidator = v.union(
+  v.literal("ready"),
+  v.literal("attached"),
+  v.literal("detached"),
+  v.literal("ended"),
+  v.literal("error"),
+);
+export const interactiveSessionScopeKindValidator = v.union(
+  v.literal("chat"),
+  v.literal("task"),
+  v.literal("workspace"),
+);
+export const interactiveSessionCapabilityValidator = v.union(
+  v.literal("tui"),
+  v.literal("autocomplete"),
+  v.literal("interactive-prompts"),
+  v.literal("commands"),
+  v.literal("mcp-tools"),
+);
+export const interactiveProviderValidator = v.union(v.literal("claude-code"), v.literal("codex"));
 
 export default defineSchema({
   boards: defineTable({
@@ -164,11 +184,7 @@ export default defineSchema({
     ),
     planReview: v.optional(
       v.object({
-        kind: v.union(
-          v.literal("request"),
-          v.literal("feedback"),
-          v.literal("decision"),
-        ),
+        kind: v.union(v.literal("request"), v.literal("feedback"), v.literal("decision")),
         planGeneratedAt: v.string(),
         decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
       }),
@@ -191,6 +207,7 @@ export default defineSchema({
     isSystem: v.optional(v.boolean()),
     model: v.optional(v.string()),
     reasoningLevel: v.optional(v.string()),
+    interactiveProvider: v.optional(interactiveProviderValidator),
     claudeCodeOpts: v.optional(
       v.object({
         permissionMode: v.optional(v.string()),
@@ -327,4 +344,25 @@ export default defineSchema({
   })
     .index("by_sessionId", ["sessionId"])
     .index("by_agentName", ["agentName"]),
+
+  interactiveSessions: defineTable({
+    sessionId: v.string(),
+    agentName: v.string(),
+    provider: v.string(),
+    scopeKind: interactiveSessionScopeKindValidator,
+    scopeId: v.optional(v.string()),
+    surface: v.string(),
+    tmuxSession: v.string(),
+    status: interactiveSessionStatusValidator,
+    capabilities: v.array(interactiveSessionCapabilityValidator),
+    attachToken: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+    lastActiveAt: v.optional(v.string()),
+    endedAt: v.optional(v.string()),
+  })
+    .index("by_sessionId", ["sessionId"])
+    .index("by_agentName", ["agentName"])
+    .index("by_provider", ["provider"])
+    .index("by_status", ["status"]),
 });

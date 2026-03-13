@@ -5,18 +5,16 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-import pytest
-
-from mc.types import AgentData
 from mc.infrastructure.agents.yaml_validator import (
     validate_agent_file,
     validate_agents_dir,
 )
-
+from mc.types import AgentData
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_yaml(tmp_path: Path, filename: str, content: str) -> Path:
     """Write a YAML string to a file and return its path."""
@@ -29,11 +27,15 @@ def _write_yaml(tmp_path: Path, filename: str, content: str) -> Path:
 # Valid config tests
 # ---------------------------------------------------------------------------
 
+
 class TestValidConfigs:
     """Tests for valid agent YAML configurations."""
 
     def test_full_config_returns_agent_data(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: dev-agent
             role: Senior Developer
             prompt: "You are a senior developer."
@@ -42,7 +44,8 @@ class TestValidConfigs:
               - debugging
             model: claude-sonnet-4-6
             display_name: Dev Agent
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.name == "dev-agent"
@@ -53,14 +56,16 @@ class TestValidConfigs:
         assert result.display_name == "Dev Agent"
         assert result.status == "idle"
 
-    def test_minimal_config_returns_agent_data_with_defaults(
-        self, tmp_path: Path
-    ) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+    def test_minimal_config_returns_agent_data_with_defaults(self, tmp_path: Path) -> None:
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: my-agent
             role: Assistant
             prompt: "You help with tasks."
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.name == "my-agent"
@@ -69,22 +74,30 @@ class TestValidConfigs:
         assert result.display_name == "My Agent"
 
     def test_display_name_auto_generated_from_name(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: code-review-bot
             role: Reviewer
             prompt: "You review code."
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.display_name == "Code Review Bot"
 
     def test_display_name_with_underscores(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: my-agent
             role: Helper
             prompt: "Help."
             display_name: null
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.display_name == "My Agent"
@@ -94,32 +107,45 @@ class TestValidConfigs:
 # Missing required field tests
 # ---------------------------------------------------------------------------
 
+
 class TestMissingRequired:
     """Tests for missing required fields."""
 
     def test_missing_name(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             role: Developer
             prompt: "You code."
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("name" in e.lower() for e in result)
 
     def test_missing_role(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: dev-agent
             prompt: "You code."
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("role" in e.lower() for e in result)
 
     def test_missing_prompt(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: dev-agent
             role: Developer
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("prompt" in e.lower() for e in result)
@@ -129,36 +155,49 @@ class TestMissingRequired:
 # Wrong type tests
 # ---------------------------------------------------------------------------
 
+
 class TestWrongTypes:
     """Tests for fields with wrong types."""
 
     def test_skills_string_instead_of_list(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: dev-agent
             role: Developer
             prompt: "You code."
             skills: coding
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("skills" in e.lower() for e in result)
 
     def test_name_invalid_characters(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: "My Agent"
             role: Developer
             prompt: "You code."
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("invalid characters" in e.lower() for e in result)
 
     def test_name_uppercase(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: DevAgent
             role: Developer
             prompt: "You code."
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("invalid characters" in e.lower() for e in result)
@@ -168,23 +207,32 @@ class TestWrongTypes:
 # Multi-error collection tests
 # ---------------------------------------------------------------------------
 
+
 class TestMultiError:
     """Tests that multiple errors are collected in a single pass."""
 
     def test_multiple_missing_fields(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             skills: 123
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert len(result) >= 2, f"Expected >=2 errors, got {len(result)}: {result}"
 
     def test_missing_role_and_invalid_skills(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: dev-agent
             prompt: "You code."
             skills: not-a-list
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert len(result) >= 2
@@ -197,15 +245,20 @@ class TestMultiError:
 # YAML parse error tests
 # ---------------------------------------------------------------------------
 
+
 class TestYamlParseErrors:
     """Tests for malformed YAML files."""
 
     def test_malformed_yaml(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: dev-agent
             role: Developer
               bad-indent: oops
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("yaml parse error" in e.lower() for e in result)
@@ -228,11 +281,15 @@ class TestYamlParseErrors:
 # Backend field tests (CC-1)
 # ---------------------------------------------------------------------------
 
+
 class TestBackendField:
     """Tests for the backend field in agent YAML configurations."""
 
     def test_valid_backend_claude_code_with_options(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: cc-agent
             role: Claude Code Agent
             prompt: "You are a claude-code agent."
@@ -246,7 +303,8 @@ class TestBackendField:
                 - Edit
               disallowed_tools:
                 - WebFetch
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.backend == "claude-code"
@@ -258,42 +316,91 @@ class TestBackendField:
         assert result.claude_code_opts.disallowed_tools == ["WebFetch"]
 
     def test_valid_backend_nanobot_explicit(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: nano-agent
             role: Nanobot Agent
             prompt: "You are a nanobot agent."
             backend: nanobot
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.backend == "nanobot"
         assert result.claude_code_opts is None
 
     def test_missing_backend_defaults_to_nanobot(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: my-agent
             role: Agent
             prompt: "You are an agent."
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.backend == "nanobot"
         assert result.claude_code_opts is None
 
     def test_invalid_backend_value(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: my-agent
             role: Agent
             prompt: "You are an agent."
             backend: openai
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("backend" in e.lower() for e in result)
         assert any("invalid" in e.lower() for e in result)
 
+    def test_interactive_provider_can_enable_codex_tui_without_changing_backend(
+        self, tmp_path: Path
+    ) -> None:
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
+            name: codex-agent
+            role: Agent
+            prompt: "You are a codex-backed agent."
+            backend: nanobot
+            interactive_provider: codex
+        """,
+        )
+        result = validate_agent_file(path)
+        assert isinstance(result, AgentData)
+        assert result.backend == "nanobot"
+        assert result.interactive_provider == "codex"
+
+    def test_invalid_interactive_provider_value(self, tmp_path: Path) -> None:
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
+            name: my-agent
+            role: Agent
+            prompt: "You are an agent."
+            interactive_provider: terminal
+        """,
+        )
+        result = validate_agent_file(path)
+        assert isinstance(result, list)
+        assert any("interactive_provider" in e.lower() for e in result)
+
     def test_claude_code_section_with_nanobot_backend_ignored(self, tmp_path: Path) -> None:
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: my-agent
             role: Agent
             prompt: "You are an agent."
@@ -301,7 +408,8 @@ class TestBackendField:
             claude_code:
               max_budget_usd: 5.0
               max_turns: 10
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.backend == "nanobot"
@@ -310,14 +418,18 @@ class TestBackendField:
 
     def test_claude_code_section_with_backend_omitted_ignored(self, tmp_path: Path) -> None:
         """When backend is omitted, it defaults to nanobot and claude_code is ignored."""
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: my-agent
             role: Agent
             prompt: "You are an agent."
             claude_code:
               max_budget_usd: 5.0
               max_turns: 10
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, AgentData)
         assert result.backend == "nanobot"
@@ -326,42 +438,54 @@ class TestBackendField:
 
     def test_claude_code_invalid_budget_type_returns_error(self, tmp_path: Path) -> None:
         """Non-numeric max_budget_usd should return a validation error."""
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: cc-agent
             role: Agent
             prompt: "You are a claude-code agent."
             backend: claude-code
             claude_code:
               max_budget_usd: "abc"
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("max_budget_usd" in e for e in result)
 
     def test_claude_code_invalid_turns_type_returns_error(self, tmp_path: Path) -> None:
         """Non-integer max_turns should return a validation error."""
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: cc-agent
             role: Agent
             prompt: "You are a claude-code agent."
             backend: claude-code
             claude_code:
               max_turns: "notanint"
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("max_turns" in e for e in result)
 
     def test_claude_code_invalid_permission_mode_returns_error(self, tmp_path: Path) -> None:
         """Invalid permission_mode should return a validation error."""
-        path = _write_yaml(tmp_path, "agent.yaml", """\
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
             name: cc-agent
             role: Agent
             prompt: "You are a claude-code agent."
             backend: claude-code
             claude_code:
               permission_mode: superAdmin
-        """)
+        """,
+        )
         result = validate_agent_file(path)
         assert isinstance(result, list)
         assert any("permission_mode" in e for e in result)
@@ -371,25 +495,38 @@ class TestBackendField:
 # Directory validation tests
 # ---------------------------------------------------------------------------
 
+
 class TestDirectoryValidation:
     """Tests for validate_agents_dir."""
 
     def test_mixed_valid_and_invalid(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "good1.yaml", """\
+        _write_yaml(
+            tmp_path,
+            "good1.yaml",
+            """\
             name: agent-one
             role: Tester
             prompt: "You test."
-        """)
-        _write_yaml(tmp_path, "good2.yml", """\
+        """,
+        )
+        _write_yaml(
+            tmp_path,
+            "good2.yml",
+            """\
             name: agent-two
             role: Builder
             prompt: "You build."
-        """)
-        _write_yaml(tmp_path, "bad.yaml", """\
+        """,
+        )
+        _write_yaml(
+            tmp_path,
+            "bad.yaml",
+            """\
             name: "Invalid Name!"
             role: Breaker
             prompt: "Oops."
-        """)
+        """,
+        )
 
         valid, errors = validate_agents_dir(tmp_path)
         assert len(valid) == 2
@@ -409,11 +546,15 @@ class TestDirectoryValidation:
         assert errors == {}
 
     def test_ignores_non_yaml_files(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path, "good.yaml", """\
+        _write_yaml(
+            tmp_path,
+            "good.yaml",
+            """\
             name: agent-one
             role: Tester
             prompt: "You test."
-        """)
+        """,
+        )
         (tmp_path / "readme.md").write_text("# Not YAML", encoding="utf-8")
         (tmp_path / "config.json").write_text("{}", encoding="utf-8")
 

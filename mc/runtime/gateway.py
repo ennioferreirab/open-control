@@ -55,6 +55,7 @@ from mc.infrastructure.config import (  # noqa: F401
     filter_agent_fields,
 )
 from mc.runtime.cron_delivery import build_on_task_completed_callback
+from mc.runtime.interactive import build_interactive_runtime
 from mc.runtime.orchestrator import TaskOrchestrator
 from mc.runtime.polling_settings import _read_polling_settings
 from mc.runtime.task_requeue import on_cron_job
@@ -108,6 +109,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     """
     from nanobot.config.loader import load_config
     from nanobot.cron.service import CronService
+
     from mc.contexts.execution.executor import TaskExecutor
 
     logger.info("[gateway] Agent Gateway started")
@@ -168,6 +170,15 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         admin_key=os.environ.get("CONVEX_ADMIN_KEY", ""),
         admin_url=os.environ.get("CONVEX_URL", ""),
     )
+    interactive_runtime = build_interactive_runtime(
+        bridge,
+        cron_service=cron,
+    )
+    runtime_ctx.services["interactive_runtime"] = interactive_runtime
+    runtime_ctx.services["interactive_session_service"] = interactive_runtime.service
+    runtime_ctx.services["interactive_session_coordinator"] = interactive_runtime.service
+    runtime_ctx.services["interactive_socket_transport"] = interactive_runtime.transport
+    await interactive_runtime.server.start()
 
     orchestrator = TaskOrchestrator(
         runtime_ctx,
@@ -262,6 +273,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     logger.info("[gateway] Agent Gateway stopping...")
 
     cron.stop()
+    await interactive_runtime.server.stop()
 
     # Cancel all loops gracefully
     inbox_task.cancel()

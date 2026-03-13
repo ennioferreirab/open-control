@@ -12,6 +12,7 @@ import type * as activities from "../activities.js";
 import type * as agents from "../agents.js";
 import type * as boards from "../boards.js";
 import type * as chats from "../chats.js";
+import type * as interactiveSessions from "../interactiveSessions.js";
 import type * as lib_readModels from "../lib/readModels.js";
 import type * as lib_stepLifecycle from "../lib/stepLifecycle.js";
 import type * as lib_taskArchive from "../lib/taskArchive.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   agents: typeof agents;
   boards: typeof boards;
   chats: typeof chats;
+  interactiveSessions: typeof interactiveSessions;
   "lib/readModels": typeof lib_readModels;
   "lib/stepLifecycle": typeof lib_stepLifecycle;
   "lib/taskArchive": typeof lib_taskArchive;
