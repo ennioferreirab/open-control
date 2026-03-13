@@ -7,6 +7,17 @@ from typing import Any
 
 _EXPORTS = {
     "AgentSyncService": ("mc.contexts.agents.sync", "AgentSyncService"),
+    "AuthoringPhase": ("mc.contexts.agents.authoring_assist", "AuthoringPhase"),
+    "AuthoringResponse": ("mc.contexts.agents.authoring_assist", "AuthoringResponse"),
+    "SpecDraftPatch": ("mc.contexts.agents.authoring_assist", "SpecDraftPatch"),
+    "generate_agent_assist_response": (
+        "mc.contexts.agents.authoring_assist",
+        "generate_agent_assist_response",
+    ),
+    "generate_squad_assist_response": (
+        "mc.contexts.agents.authoring_assist",
+        "generate_squad_assist_response",
+    ),
 }
 
 __all__ = sorted(_EXPORTS)
