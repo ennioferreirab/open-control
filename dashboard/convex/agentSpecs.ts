@@ -1,10 +1,10 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 import { specStatusValidator } from "./schema";
 
-export const createDraft = mutation({
+export const createDraft = internalMutation({
   args: {
     name: v.string(),
     displayName: v.string(),
@@ -46,7 +46,7 @@ export const createDraft = mutation({
   },
 });
 
-export const publish = mutation({
+export const publish = internalMutation({
   args: {
     specId: v.string(),
   },
@@ -54,6 +54,9 @@ export const publish = mutation({
     const spec = await ctx.db.get(args.specId as Id<"agentSpecs">);
     if (!spec) {
       throw new Error(`Agent spec not found: ${args.specId}`);
+    }
+    if (spec.status !== "draft") {
+      throw new Error("Can only publish specs in draft status");
     }
     const now = new Date().toISOString();
     await ctx.db.patch(args.specId as Id<"agentSpecs">, {
@@ -65,7 +68,7 @@ export const publish = mutation({
   },
 });
 
-export const getDraft = query({
+export const getDraft = internalQuery({
   args: {
     specId: v.string(),
   },
@@ -74,14 +77,14 @@ export const getDraft = query({
   },
 });
 
-export const list = query({
+export const list = internalQuery({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("agentSpecs").collect();
   },
 });
 
-export const listByStatus = query({
+export const listByStatus = internalQuery({
   args: {
     status: specStatusValidator,
   },

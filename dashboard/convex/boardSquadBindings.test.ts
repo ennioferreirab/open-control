@@ -136,6 +136,15 @@ describe("boardSquadBindings.setEnabled", () => {
 
     expect(patches[0].patch.enabled).toBe(false);
   });
+
+  it("throws if binding is not found", async () => {
+    const handler = getHandler(setEnabled);
+    const { ctx } = makeCtx();
+
+    await expect(handler(ctx, { bindingId: "nonexistent-id", enabled: true })).rejects.toThrow(
+      "Board squad binding not found: nonexistent-id",
+    );
+  });
 });
 
 describe("boardSquadBindings.listByBoard", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createDraft, publish, list } from "./reviewSpecs";
+import { createDraft, list, listByStatus, publish } from "./reviewSpecs";
 
 type InsertCall = {
   table: string;
@@ -23,7 +23,8 @@ function makeCtx(existingSpec?: {
   const patches: PatchCall[] = [];
 
   const collect = vi.fn(async () => (existingSpec ? [existingSpec] : []));
-  const query = vi.fn(() => ({ collect }));
+  const withIndex = vi.fn(() => ({ collect }));
+  const query = vi.fn(() => ({ collect, withIndex }));
   const get = vi.fn(async (id: string) => (existingSpec?._id === id ? existingSpec : null));
   const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
     inserts.push({ table, value });
@@ -173,6 +174,29 @@ describe("reviewSpecs.publish", () => {
 
     expect(patches[0].patch.version).toBe(2);
   });
+
+  it("throws if spec is not found", async () => {
+    const handler = getHandler(publish);
+    const { ctx } = makeCtx();
+
+    await expect(handler(ctx, { specId: "nonexistent-id" })).rejects.toThrow(
+      "Review spec not found: nonexistent-id",
+    );
+  });
+
+  it("throws if spec status is not draft", async () => {
+    const handler = getHandler(publish);
+    const { ctx } = makeCtx({
+      _id: "review-spec-id-pub",
+      name: "Standard Review",
+      status: "published",
+      version: 2,
+    });
+
+    await expect(handler(ctx, { specId: "review-spec-id-pub" })).rejects.toThrow(
+      "Can only publish specs in draft status",
+    );
+  });
 });
 
 describe("reviewSpecs.list", () => {
@@ -190,5 +214,32 @@ describe("reviewSpecs.list", () => {
 
     const result = await handler(ctx, {});
     expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+describe("reviewSpecs.listByStatus", () => {
+  it("returns reviewSpecs filtered by the given status", async () => {
+    const handler = getHandler(listByStatus);
+    const { ctx } = makeCtx({
+      _id: "review-spec-id",
+      name: "Standard Review",
+      status: "draft",
+      version: 1,
+      scope: "workflow",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const result = await handler(ctx, { status: "draft" });
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("returns an empty array when no specs match the status", async () => {
+    const handler = getHandler(listByStatus);
+    const { ctx } = makeCtx();
+
+    const result = await handler(ctx, { status: "archived" });
+    expect(Array.isArray(result)).toBe(true);
+    expect((result as unknown[]).length).toBe(0);
   });
 });

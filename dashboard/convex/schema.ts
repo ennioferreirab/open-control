@@ -136,8 +136,8 @@ export default defineSchema({
     files: taskFilesValidator,
     // Execution scaffolding fields (optional, no behavior change yet)
     workMode: v.optional(workModeValidator),
-    squadSpecId: v.optional(v.string()),
-    workflowSpecId: v.optional(v.string()),
+    squadSpecId: v.optional(v.id("squadSpecs")),
+    workflowSpecId: v.optional(v.id("workflowSpecs")),
     createdAt: v.string(),
     updatedAt: v.string(),
   })
@@ -461,7 +461,7 @@ export default defineSchema({
     displayName: v.string(),
     description: v.optional(v.string()),
     // Agent membership
-    agentSpecIds: v.optional(v.array(v.string())),
+    agentSpecIds: v.optional(v.array(v.id("agentSpecs"))),
     // Workflow reference
     defaultWorkflowSpecId: v.optional(v.string()),
     // Catalog metadata
@@ -478,7 +478,7 @@ export default defineSchema({
 
   workflowSpecs: defineTable({
     // Ownership
-    squadSpecId: v.string(),
+    squadSpecId: v.id("squadSpecs"),
     // Identity
     name: v.string(),
     description: v.optional(v.string()),
@@ -547,8 +547,8 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   boardSquadBindings: defineTable({
-    boardId: v.string(),
-    squadSpecId: v.string(),
+    boardId: v.id("boards"),
+    squadSpecId: v.id("squadSpecs"),
     enabled: v.boolean(),
     // Board-level default workflow override
     defaultWorkflowSpecId: v.optional(v.string()),

@@ -1,8 +1,8 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
-export const create = mutation({
+export const create = internalMutation({
   args: {
     boardId: v.string(),
     squadSpecId: v.string(),
@@ -21,7 +21,7 @@ export const create = mutation({
   },
 });
 
-export const setEnabled = mutation({
+export const setEnabled = internalMutation({
   args: {
     bindingId: v.string(),
     enabled: v.boolean(),
@@ -39,7 +39,7 @@ export const setEnabled = mutation({
   },
 });
 
-export const listByBoard = query({
+export const listByBoard = internalQuery({
   args: {
     boardId: v.string(),
   },
@@ -51,7 +51,7 @@ export const listByBoard = query({
   },
 });
 
-export const listBySquad = query({
+export const listBySquad = internalQuery({
   args: {
     squadSpecId: v.string(),
   },

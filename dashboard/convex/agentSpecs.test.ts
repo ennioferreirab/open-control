@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createDraft, list, publish } from "./agentSpecs";
+import { createDraft, list, listByStatus, publish } from "./agentSpecs";
 
 type InsertCall = {
   table: string;
@@ -22,11 +22,10 @@ function makeCtx(existingSpec?: {
   const inserts: InsertCall[] = [];
   const patches: PatchCall[] = [];
 
-  const first = vi.fn(async () => existingSpec ?? null);
-  const withIndex = vi.fn(() => ({ first }));
-  const query = vi.fn(() => ({ withIndex }));
   const collect = vi.fn(async () => (existingSpec ? [existingSpec] : []));
-  const queryAll = vi.fn(() => ({ collect }));
+  const first = vi.fn(async () => existingSpec ?? null);
+  const withIndex = vi.fn(() => ({ collect, first }));
+  const query = vi.fn(() => ({ collect, withIndex }));
   const get = vi.fn(async (id: string) => (existingSpec?._id === id ? existingSpec : null));
   const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
     inserts.push({ table, value });
@@ -37,8 +36,7 @@ function makeCtx(existingSpec?: {
   });
 
   return {
-    ctx: { db: { query: queryAll, get, insert, patch } },
-    queryWithIndex: query,
+    ctx: { db: { query, get, insert, patch } },
     inserts,
     patches,
   };
@@ -140,6 +138,43 @@ describe("agentSpecs.publish", () => {
 
     expect(patches[0].patch.version).toBe(2);
   });
+
+  it("throws if spec is not found", async () => {
+    const handler = getHandler(publish);
+    const { ctx } = makeCtx();
+
+    await expect(handler(ctx, { specId: "nonexistent-id" })).rejects.toThrow(
+      "Agent spec not found: nonexistent-id",
+    );
+  });
+
+  it("throws if spec status is not draft", async () => {
+    const handler = getHandler(publish);
+    const { ctx } = makeCtx({
+      _id: "spec-id-456",
+      name: "my-agent",
+      status: "published",
+      version: 2,
+    });
+
+    await expect(handler(ctx, { specId: "spec-id-456" })).rejects.toThrow(
+      "Can only publish specs in draft status",
+    );
+  });
+
+  it("throws if spec status is archived", async () => {
+    const handler = getHandler(publish);
+    const { ctx } = makeCtx({
+      _id: "spec-id-789",
+      name: "my-agent",
+      status: "archived",
+      version: 3,
+    });
+
+    await expect(handler(ctx, { specId: "spec-id-789" })).rejects.toThrow(
+      "Can only publish specs in draft status",
+    );
+  });
 });
 
 describe("agentSpecs.list", () => {
@@ -159,5 +194,34 @@ describe("agentSpecs.list", () => {
 
     const result = await handler(ctx, {});
     expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+describe("agentSpecs.listByStatus", () => {
+  it("returns agentSpecs filtered by the given status", async () => {
+    const handler = getHandler(listByStatus);
+    const existingSpec = {
+      _id: "spec-id-1",
+      name: "agent-1",
+      status: "published",
+      version: 1,
+      displayName: "Agent 1",
+      role: "A role",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const { ctx } = makeCtx(existingSpec);
+
+    const result = await handler(ctx, { status: "published" });
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("returns an empty array when no specs match the status", async () => {
+    const handler = getHandler(listByStatus);
+    const { ctx } = makeCtx();
+
+    const result = await handler(ctx, { status: "draft" });
+    expect(Array.isArray(result)).toBe(true);
+    expect((result as unknown[]).length).toBe(0);
   });
 });
