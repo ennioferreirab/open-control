@@ -4,7 +4,11 @@ import {
   interactiveSessionCapabilityValidator,
   interactiveSessionScopeKindValidator,
   interactiveSessionStatusValidator,
+  reviewScopeValidator,
+  specStatusValidator,
   taskFileMetadataValidator,
+  workModeValidator,
+  workflowStepTypeValidator,
 } from "./schema";
 
 describe("taskFileMetadataValidator", () => {
@@ -13,6 +17,56 @@ describe("taskFileMetadataValidator", () => {
     expect(taskFileMetadataValidator.fields.restoredAt?.kind).toBe("string");
     expect(taskFileMetadataValidator.fields.restoredAt?.isOptional).toBe("optional");
     expect(taskFileMetadataValidator.fields.uploadedAt.isOptional).toBe("required");
+  });
+});
+
+describe("spec status validator", () => {
+  it("defines draft, published, and archived as valid spec statuses", () => {
+    expect(specStatusValidator.kind).toBe("union");
+    expect(specStatusValidator.members).toHaveLength(3);
+    expect(specStatusValidator.members.map((m: { value?: string }) => m.value)).toEqual([
+      "draft",
+      "published",
+      "archived",
+    ]);
+  });
+});
+
+describe("reviewScopeValidator", () => {
+  it("defines agent, workflow, and execution as valid review scopes", () => {
+    expect(reviewScopeValidator.kind).toBe("union");
+    expect(reviewScopeValidator.members).toHaveLength(3);
+    expect(reviewScopeValidator.members.map((m: { value?: string }) => m.value)).toEqual([
+      "agent",
+      "workflow",
+      "execution",
+    ]);
+  });
+});
+
+describe("workflowStepTypeValidator", () => {
+  it("defines 5 step types for workflow specs", () => {
+    expect(workflowStepTypeValidator.kind).toBe("union");
+    expect(workflowStepTypeValidator.members).toHaveLength(5);
+    expect(workflowStepTypeValidator.members.map((m: { value?: string }) => m.value)).toEqual([
+      "agent",
+      "human",
+      "checkpoint",
+      "review",
+      "system",
+    ]);
+  });
+});
+
+describe("workModeValidator", () => {
+  it("defines manual, ai_single, and ai_workflow as task work modes", () => {
+    expect(workModeValidator.kind).toBe("union");
+    expect(workModeValidator.members).toHaveLength(3);
+    expect(workModeValidator.members.map((m: { value?: string }) => m.value)).toEqual([
+      "manual",
+      "ai_single",
+      "ai_workflow",
+    ]);
   });
 });
 

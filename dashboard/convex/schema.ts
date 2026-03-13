@@ -1,6 +1,36 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// ---------------------------------------------------------------------------
+// Agent Spec V2 validators
+// ---------------------------------------------------------------------------
+
+export const specStatusValidator = v.union(
+  v.literal("draft"),
+  v.literal("published"),
+  v.literal("archived"),
+);
+
+export const reviewScopeValidator = v.union(
+  v.literal("agent"),
+  v.literal("workflow"),
+  v.literal("execution"),
+);
+
+export const workflowStepTypeValidator = v.union(
+  v.literal("agent"),
+  v.literal("human"),
+  v.literal("checkpoint"),
+  v.literal("review"),
+  v.literal("system"),
+);
+
+export const workModeValidator = v.union(
+  v.literal("manual"),
+  v.literal("ai_single"),
+  v.literal("ai_workflow"),
+);
+
 export const taskFileMetadataValidator = v.object({
   name: v.string(),
   type: v.string(),
@@ -104,6 +134,10 @@ export default defineSchema({
     mergePreviousStatus: v.optional(v.string()),
     mergeLockedAt: v.optional(v.string()),
     files: taskFilesValidator,
+    // Execution scaffolding fields (optional, no behavior change yet)
+    workMode: v.optional(workModeValidator),
+    squadSpecId: v.optional(v.string()),
+    workflowSpecId: v.optional(v.string()),
     createdAt: v.string(),
     updatedAt: v.string(),
   })
@@ -389,4 +423,139 @@ export default defineSchema({
     .index("by_agentName", ["agentName"])
     .index("by_provider", ["provider"])
     .index("by_status", ["status"]),
+
+  // ---------------------------------------------------------------------------
+  // Agent Spec V2 — canonical authoring tables
+  // ---------------------------------------------------------------------------
+
+  agentSpecs: defineTable({
+    // Identity
+    name: v.string(),
+    displayName: v.string(),
+    role: v.string(),
+    // Rich authoring sections
+    responsibilities: v.optional(v.array(v.string())),
+    nonGoals: v.optional(v.array(v.string())),
+    principles: v.optional(v.array(v.string())),
+    processGuidance: v.optional(v.string()),
+    voiceGuidance: v.optional(v.string()),
+    antiPatterns: v.optional(v.array(v.string())),
+    outputContract: v.optional(v.string()),
+    skills: v.optional(v.array(v.string())),
+    executionPolicy: v.optional(v.any()),
+    memoryPolicy: v.optional(v.any()),
+    reviewPolicyRef: v.optional(v.string()),
+    // Status and versioning
+    status: specStatusValidator,
+    version: v.number(),
+    publishedAt: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_name", ["name"])
+    .index("by_status", ["status"]),
+
+  squadSpecs: defineTable({
+    // Identity and display
+    name: v.string(),
+    displayName: v.string(),
+    description: v.optional(v.string()),
+    // Agent membership
+    agentSpecIds: v.optional(v.array(v.string())),
+    // Workflow reference
+    defaultWorkflowSpecId: v.optional(v.string()),
+    // Catalog metadata
+    tags: v.optional(v.array(v.string())),
+    // Status and versioning
+    status: specStatusValidator,
+    version: v.number(),
+    publishedAt: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_name", ["name"])
+    .index("by_status", ["status"]),
+
+  workflowSpecs: defineTable({
+    // Ownership
+    squadSpecId: v.string(),
+    // Identity
+    name: v.string(),
+    description: v.optional(v.string()),
+    // Workflow steps
+    steps: v.optional(
+      v.array(
+        v.object({
+          stepId: v.string(),
+          name: v.string(),
+          type: workflowStepTypeValidator,
+          owner: v.optional(v.string()),
+          inputs: v.optional(v.array(v.string())),
+          outputs: v.optional(v.array(v.string())),
+          reviewGate: v.optional(v.boolean()),
+          humanCheckpoint: v.optional(v.boolean()),
+          description: v.optional(v.string()),
+        }),
+      ),
+    ),
+    // Execution config
+    exitCriteria: v.optional(v.string()),
+    executionPolicy: v.optional(v.any()),
+    onReject: v.optional(v.any()),
+    // Status and versioning
+    status: specStatusValidator,
+    version: v.number(),
+    publishedAt: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_squadSpecId", ["squadSpecId"])
+    .index("by_status", ["status"]),
+
+  reviewSpecs: defineTable({
+    // Identity
+    name: v.string(),
+    scope: reviewScopeValidator,
+    // Criteria and weights
+    criteria: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          weight: v.number(),
+          description: v.optional(v.string()),
+        }),
+      ),
+    ),
+    // Veto conditions
+    vetoConditions: v.optional(v.array(v.string())),
+    // Approval policy
+    approvalPolicy: v.optional(v.any()),
+    // Feedback contract
+    feedbackContract: v.optional(v.any()),
+    // Reviewer policy
+    reviewerPolicy: v.optional(v.any()),
+    // Rejection routing
+    rejectionRoutingPolicy: v.optional(v.any()),
+    // Status and versioning
+    status: specStatusValidator,
+    version: v.number(),
+    publishedAt: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_name", ["name"])
+    .index("by_status", ["status"]),
+
+  boardSquadBindings: defineTable({
+    boardId: v.string(),
+    squadSpecId: v.string(),
+    enabled: v.boolean(),
+    // Board-level default workflow override
+    defaultWorkflowSpecId: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_boardId", ["boardId"])
+    .index("by_squadSpecId", ["squadSpecId"])
+    .index("by_boardId_squadSpecId", ["boardId", "squadSpecId"]),
 });
