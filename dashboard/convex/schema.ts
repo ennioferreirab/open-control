@@ -264,6 +264,10 @@ export default defineSchema({
     memoryContent: v.optional(v.string()),
     historyContent: v.optional(v.string()),
     sessionData: v.optional(v.string()),
+    // Runtime projection metadata — set only when this record was compiled from an agentSpec.
+    compiledFromSpecId: v.optional(v.string()),
+    compiledFromVersion: v.optional(v.number()),
+    compiledAt: v.optional(v.string()),
   })
     .index("by_name", ["name"])
     .index("by_status", ["status"]),
