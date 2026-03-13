@@ -113,10 +113,20 @@ export async function POST(request: NextRequest) {
     let config: AgentConfig;
 
     if (body.yaml) {
-      // Chat mode: parse YAML string
+      // Legacy YAML path (kept for backward compatibility)
       config = parseSimpleYaml(body.yaml);
+    } else if (body.specId) {
+      // Spec-projection path: the spec has already been compiled; just write the files
+      config = {
+        name: body.name,
+        role: body.role,
+        prompt: body.prompt,
+        skills: body.skills,
+        model: body.model,
+        display_name: body.displayName,
+      };
     } else {
-      // Form mode: build config from fields
+      // Form/wizard mode: build config from fields
       config = {
         name: body.name,
         role: body.role,
@@ -137,17 +147,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!config.name || !config.role || !config.prompt) {
-      return NextResponse.json(
-        { error: "name, role, and prompt are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "name, role, and prompt are required" }, { status: 400 });
     }
 
     // Validate name pattern
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(config.name)) {
       return NextResponse.json(
         { error: "Invalid agent name. Use lowercase letters, numbers, and hyphens." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -202,9 +209,6 @@ ${config.role}
     return NextResponse.json({ success: true, config });
   } catch (error) {
     console.error("Agent creation failed:", error);
-    return NextResponse.json(
-      { error: "Failed to create agent" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
   }
 }

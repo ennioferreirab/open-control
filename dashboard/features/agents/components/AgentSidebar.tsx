@@ -24,10 +24,15 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CreateAgentSheet } from "@/components/CreateAgentSheet";
 import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
 import { AgentSidebarItem } from "@/features/agents/components/AgentSidebarItem";
+import { CreateAuthoringDialog } from "@/features/agents/components/CreateAuthoringDialog";
+import { AgentAuthoringWizard } from "@/features/agents/components/AgentAuthoringWizard";
+import { SquadAuthoringWizard } from "@/features/agents/components/SquadAuthoringWizard";
+import { SquadSidebarSection } from "@/features/agents/components/SquadSidebarSection";
+import { SquadDetailSheet } from "@/features/agents/components/SquadDetailSheet";
 import { useAgentSidebarData } from "@/features/agents/hooks/useAgentSidebarData";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export function AgentSidebar() {
   const {
@@ -40,7 +45,10 @@ export function AgentSidebar() {
     systemAgents,
   } = useAgentSidebarData();
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [showCreateSheet, setShowCreateSheet] = useState(false);
+  const [showCreateChooser, setShowCreateChooser] = useState(false);
+  const [showAgentWizard, setShowAgentWizard] = useState(false);
+  const [showSquadWizard, setShowSquadWizard] = useState(false);
+  const [selectedSquadId, setSelectedSquadId] = useState<Id<"squadSpecs"> | null>(null);
   const [systemOpen, setSystemOpen] = useState(true);
   const [deletedOpen, setDeletedOpen] = useState(false);
   const [remoteOpen, setRemoteOpen] = useState(true);
@@ -73,6 +81,8 @@ export function AgentSidebar() {
           </div>
         </SidebarHeader>
         <SidebarContent>
+          <SquadSidebarSection onSelectSquad={(id) => setSelectedSquadId(id)} />
+
           <SidebarGroup>
             <SidebarGroupLabel className="flex items-center">
               Registered
@@ -107,15 +117,15 @@ export function AgentSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   size="lg"
-                  tooltip="Create Agent"
-                  onClick={() => setShowCreateSheet(true)}
+                  tooltip="Create Agent or Squad"
+                  onClick={() => setShowCreateChooser(true)}
                   className="!h-auto cursor-pointer"
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40">
                     <Plus className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <span className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-                    Create Agent
+                    Create
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -129,7 +139,9 @@ export function AgentSidebar() {
                   <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
                     <Shield className="mr-1 h-3 w-3" />
                     System
-                    <ChevronDown className={`ml-auto h-3 w-3 transition-transform ${systemOpen ? "" : "-rotate-90"}`} />
+                    <ChevronDown
+                      className={`ml-auto h-3 w-3 transition-transform ${systemOpen ? "" : "-rotate-90"}`}
+                    />
                   </SidebarGroupLabel>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -154,7 +166,9 @@ export function AgentSidebar() {
                   <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
                     <Terminal className="mr-1 h-3 w-3" />
                     Remoto
-                    <ChevronDown className={`ml-auto h-3 w-3 transition-transform ${remoteOpen ? "" : "-rotate-90"}`} />
+                    <ChevronDown
+                      className={`ml-auto h-3 w-3 transition-transform ${remoteOpen ? "" : "-rotate-90"}`}
+                    />
                   </SidebarGroupLabel>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -188,7 +202,9 @@ export function AgentSidebar() {
                   <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
                     <Trash2 className="mr-1 h-3 w-3" />
                     Deleted
-                    <ChevronDown className={`ml-auto h-3 w-3 transition-transform ${deletedOpen ? "" : "-rotate-90"}`} />
+                    <ChevronDown
+                      className={`ml-auto h-3 w-3 transition-transform ${deletedOpen ? "" : "-rotate-90"}`}
+                    />
                   </SidebarGroupLabel>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -210,7 +226,23 @@ export function AgentSidebar() {
         </SidebarContent>
       </Sidebar>
       <AgentConfigSheet agentName={selectedAgent} onClose={() => setSelectedAgent(null)} />
-      <CreateAgentSheet open={showCreateSheet} onClose={() => setShowCreateSheet(false)} />
+      <CreateAuthoringDialog
+        open={showCreateChooser}
+        onClose={() => setShowCreateChooser(false)}
+        onSelectAgent={() => setShowAgentWizard(true)}
+        onSelectSquad={() => setShowSquadWizard(true)}
+      />
+      <AgentAuthoringWizard
+        open={showAgentWizard}
+        onClose={() => setShowAgentWizard(false)}
+        onPublished={() => setShowAgentWizard(false)}
+      />
+      <SquadAuthoringWizard
+        open={showSquadWizard}
+        onClose={() => setShowSquadWizard(false)}
+        onPublished={() => setShowSquadWizard(false)}
+      />
+      <SquadDetailSheet squadId={selectedSquadId} onClose={() => setSelectedSquadId(null)} />
       <AlertDialog
         open={!!agentToDelete}
         onOpenChange={(open) => {
@@ -253,7 +285,10 @@ export function AgentSidebar() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog open={!!agentToRestore} onOpenChange={(open) => !open && setAgentToRestore(null)}>
+      <AlertDialog
+        open={!!agentToRestore}
+        onOpenChange={(open) => !open && setAgentToRestore(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Restore agent?</AlertDialogTitle>

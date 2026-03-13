@@ -9,10 +9,15 @@
  */
 
 import type * as activities from "../activities.js";
+import type * as agentSpecs from "../agentSpecs.js";
 import type * as agents from "../agents.js";
+import type * as boardSquadBindings from "../boardSquadBindings.js";
 import type * as boards from "../boards.js";
 import type * as chats from "../chats.js";
 import type * as interactiveSessions from "../interactiveSessions.js";
+import type * as reviewSpecs from "../reviewSpecs.js";
+import type * as squadSpecs from "../squadSpecs.js";
+import type * as workflowSpecs from "../workflowSpecs.js";
 import type * as lib_readModels from "../lib/readModels.js";
 import type * as lib_stepLifecycle from "../lib/stepLifecycle.js";
 import type * as lib_taskArchive from "../lib/taskArchive.js";
@@ -45,10 +50,15 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activities: typeof activities;
+  agentSpecs: typeof agentSpecs;
   agents: typeof agents;
+  boardSquadBindings: typeof boardSquadBindings;
   boards: typeof boards;
   chats: typeof chats;
   interactiveSessions: typeof interactiveSessions;
+  reviewSpecs: typeof reviewSpecs;
+  squadSpecs: typeof squadSpecs;
+  workflowSpecs: typeof workflowSpecs;
   "lib/readModels": typeof lib_readModels;
   "lib/stepLifecycle": typeof lib_stepLifecycle;
   "lib/taskArchive": typeof lib_taskArchive;
