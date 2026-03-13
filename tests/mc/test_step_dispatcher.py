@@ -260,7 +260,7 @@ class TestStepDispatcher:
 
         engine.run.assert_awaited_once()
         request = engine.run.await_args.args[0]
-        assert request.runner_type == RunnerType.CLAUDE_CODE
+        assert request.runner_type == RunnerType.INTERACTIVE_TUI
         assert request.agent_name == "cc-agent"
 
     @pytest.mark.asyncio

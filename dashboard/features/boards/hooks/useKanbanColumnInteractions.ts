@@ -12,7 +12,7 @@ type TaskColumnStatus =
   | "done"
   | "retrying"
   | "crashed";
-type StepColumnStatus = "assigned" | "running" | "waiting_human" | "completed";
+type StepColumnStatus = "assigned" | "running" | "review" | "waiting_human" | "completed";
 
 export function useKanbanColumnInteractions() {
   const manualMove = useMutation(api.tasks.manualMove);

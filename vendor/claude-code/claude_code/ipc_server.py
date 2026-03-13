@@ -14,14 +14,15 @@ import os
 import shutil
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from mc.ask_user.handler import AskUserHandler
-    from mc.bridge import ConvexBridge
     from nanobot.bus.queue import MessageBus
+
+    from mc.bridge import ConvexBridge
+    from mc.contexts.interactive.types import InteractiveSupervisionSink
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,13 @@ ASK_AGENT_MAX_DEPTH = 2
 class MCSocketServer:
     """IPC server that listens on a Unix socket and dispatches to registered handlers."""
 
-    def __init__(self, bridge: "ConvexBridge | None", bus: "MessageBus | None",
-                 cron_service: Any | None = None) -> None:
+    def __init__(
+        self,
+        bridge: "ConvexBridge | None",
+        bus: "MessageBus | None",
+        cron_service: Any | None = None,
+        interactive_supervisor: "InteractiveSupervisionSink | None" = None,
+    ) -> None:
         self._bridge = bridge
         self._bus = bus
         self._cron_service = cron_service
@@ -45,6 +51,7 @@ class MCSocketServer:
         self._server: asyncio.AbstractServer | None = None
         self._socket_path: str | None = None
         self._ask_user_handler: AskUserHandler | None = None
+        self._interactive_supervisor = interactive_supervisor
 
         # Register default handlers
         self.register("ask_user", self._handle_ask_user)
@@ -53,6 +60,7 @@ class MCSocketServer:
         self.register("ask_agent", self._handle_ask_agent)
         self.register("report_progress", self._handle_report_progress)
         self.register("cron", self._handle_cron)
+        self.register("emit_supervision_event", self._handle_emit_supervision_event)
 
     # ── Registration ──────────────────────────────────────────────────
 
@@ -139,8 +147,9 @@ class MCSocketServer:
 
     async def _handle_ask_user(
         self,
-        question: str,
+        question: str | None = None,
         options: list[str] | None = None,
+        questions: list[dict[str, Any]] | None = None,
         agent_name: str = "agent",
         task_id: str | None = None,
     ) -> dict[str, Any]:
@@ -152,6 +161,7 @@ class MCSocketServer:
         answer = await self._ask_user_handler.ask(
             question=question,
             options=options,
+            questions=questions,
             agent_name=agent_name,
             task_id=task_id,
             bridge=self._bridge,
@@ -171,7 +181,9 @@ class MCSocketServer:
         if self._bus and channel and chat_id:
             from nanobot.bus.events import OutboundMessage
 
-            msg = OutboundMessage(channel=channel, chat_id=chat_id, content=content, media=media or [])
+            msg = OutboundMessage(
+                channel=channel, chat_id=chat_id, content=content, media=media or []
+            )
             try:
                 # C2: use publish_outbound() not publish()
                 await self._bus.publish_outbound(msg)
@@ -184,6 +196,7 @@ class MCSocketServer:
             # Auto-sync media files to task output dir so sync_task_output_files picks them up
             if media and task_id:
                 from mc.types import task_safe_id
+
                 safe_id = task_safe_id(task_id)
                 output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
                 output_dir.mkdir(parents=True, exist_ok=True)
@@ -256,9 +269,7 @@ class MCSocketServer:
             task_args["priority"] = priority
 
         try:
-            new_task_id = await asyncio.to_thread(
-                self._bridge.mutation, "tasks:create", task_args
-            )
+            new_task_id = await asyncio.to_thread(self._bridge.mutation, "tasks:create", task_args)
             return {"task_id": str(new_task_id), "status": "created"}
         except Exception as exc:
             logger.exception("delegate_task failed")
@@ -285,8 +296,8 @@ class MCSocketServer:
                 )
             }
 
-        from mc.infrastructure.config import AGENTS_DIR
         from mc.infrastructure.agents.yaml_validator import validate_agent_file
+        from mc.infrastructure.config import AGENTS_DIR
 
         config_file = AGENTS_DIR / agent_name / "config.yaml"
         if not config_file.exists():
@@ -302,10 +313,12 @@ class MCSocketServer:
 
         # Resolve tier model if needed
         from mc.types import is_tier_reference
+
         if agent_model and is_tier_reference(agent_model):
             if self._bridge:
                 try:
                     from mc.infrastructure.providers.tier_resolver import TierResolver
+
                     agent_model = TierResolver(self._bridge).resolve_model(agent_model)
                 except Exception as exc:
                     return {"error": f"Cannot resolve model tier: {exc}"}
@@ -314,6 +327,7 @@ class MCSocketServer:
 
         try:
             from mc.infrastructure.providers.factory import create_provider
+
             provider, resolved_model = create_provider(agent_model)
         except Exception as exc:
             return {"error": f"Failed to create provider for '{agent_name}': {exc}"}
@@ -324,8 +338,7 @@ class MCSocketServer:
         )
         if agent_prompt:
             focused_prompt = (
-                f"[System instructions]\n{agent_prompt}\n\n"
-                f"[Inter-agent query]\n{focused_prompt}"
+                f"[System instructions]\n{agent_prompt}\n\n[Inter-agent query]\n{focused_prompt}"
             )
 
         session_key = f"mc:ask:{caller_agent}:{agent_name}:{uuid.uuid4().hex[:8]}"
@@ -431,12 +444,14 @@ class MCSocketServer:
             if not message:
                 return {"error": "message is required for add"}
             from nanobot.cron.types import CronSchedule
+
             delete_after = False
             if every_seconds:
                 schedule = CronSchedule(kind="every", every_ms=every_seconds * 1000)
             elif cron_expr:
                 if tz:
                     from zoneinfo import ZoneInfo
+
                     try:
                         ZoneInfo(tz)
                     except (KeyError, Exception):
@@ -444,6 +459,7 @@ class MCSocketServer:
                 schedule = CronSchedule(kind="cron", expr=cron_expr, tz=tz)
             elif at:
                 from datetime import datetime as _dt
+
                 try:
                     dt = _dt.fromisoformat(at)
                 except ValueError:
@@ -474,3 +490,18 @@ class MCSocketServer:
             return {"error": f"Job {job_id} not found"}
 
         return {"error": f"Unknown cron action: {action}"}
+
+    async def _handle_emit_supervision_event(
+        self,
+        provider: str,
+        raw_event: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Normalize and forward a provider lifecycle event into MC supervision."""
+        if self._interactive_supervisor is None:
+            return {"error": "No interactive supervision sink configured."}
+
+        from mc.contexts.interactive.supervision import normalize_provider_event
+
+        event = normalize_provider_event(provider=provider, raw_event=raw_event)
+        metadata = self._interactive_supervisor.handle_event(event)
+        return {"status": "ok", "session_id": metadata.get("session_id")}

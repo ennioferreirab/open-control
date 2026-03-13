@@ -5,7 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-type StepStatus = "assigned" | "running" | "waiting_human" | "completed";
+type StepStatus = "assigned" | "running" | "review" | "waiting_human" | "completed";
 
 export interface AddExecutionStepArgs {
   taskId: Id<"tasks">;

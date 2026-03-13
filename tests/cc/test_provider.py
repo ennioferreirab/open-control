@@ -15,19 +15,18 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from claude_code.provider import ClaudeCodeProvider
-from mc.types import AgentData
 from claude_code.types import CCTaskResult, ClaudeCodeOpts, WorkspaceContext
 
+from mc.types import AgentData
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_agent(
     model: str | None = None,
@@ -51,7 +50,7 @@ def _make_workspace(tmp_path: Path) -> WorkspaceContext:
         cwd=tmp_path,
         mcp_config=mcp_config,
         claude_md=tmp_path / "CLAUDE.md",
-        socket_path=f"/tmp/mc-test-agent.sock",
+        socket_path="/tmp/mc-test-agent.sock",
     )
 
 
@@ -63,6 +62,7 @@ def _write_nanobot_config(home: Path, data: dict) -> None:
 
 class _FakeDefaults:
     """Minimal stand-in for ClaudeCodeConfig."""
+
     default_model = "claude-sonnet-4-6"
     default_max_budget_usd = 5.0
     default_max_turns = 50
@@ -72,6 +72,7 @@ class _FakeDefaults:
 # ---------------------------------------------------------------------------
 # _build_command
 # ---------------------------------------------------------------------------
+
 
 class TestBuildCommand:
     def test_minimal_command_structure(self, tmp_path):
@@ -177,10 +178,10 @@ class TestBuildCommand:
 
         assert "Read" in allowed
         assert "Glob" in allowed
-        assert "mcp__nanobot__*" in allowed  # always injected
+        assert "mcp__mc__*" in allowed  # always injected
 
-    def test_nanobot_mcp_tool_always_added(self, tmp_path):
-        """mcp__nanobot__* is always added even with no agent allowed_tools."""
+    def test_mc_mcp_tool_always_added(self, tmp_path):
+        """mcp__mc__* is always added even with no agent allowed_tools."""
         provider = ClaudeCodeProvider()
         agent = _make_agent()
         ctx = _make_workspace(tmp_path)
@@ -188,7 +189,7 @@ class TestBuildCommand:
 
         # Find --allowedTools values
         allowed = [cmd[i + 1] for i, t in enumerate(cmd) if t == "--allowedTools"]
-        assert "mcp__nanobot__*" in allowed
+        assert "mcp__mc__*" in allowed
 
     def test_disallowed_tools(self, tmp_path):
         """Disallowed tools are forwarded with --disallowedTools."""
@@ -277,6 +278,7 @@ class TestBuildCommand:
 # _parse_stream
 # ---------------------------------------------------------------------------
 
+
 class TestParseStream:
     """Test the NDJSON stream parser."""
 
@@ -330,6 +332,7 @@ class TestParseStream:
 # ---------------------------------------------------------------------------
 # _handle_message / result extraction
 # ---------------------------------------------------------------------------
+
 
 class TestHandleMessage:
     def test_result_message_extracts_fields(self):
@@ -567,11 +570,13 @@ class TestHandleMessage:
 # execute_task integration
 # ---------------------------------------------------------------------------
 
+
 class TestExecuteTask:
     """Integration-level tests using mock subprocess."""
 
     def _make_mock_proc(self, ndjson_lines: list[str], returncode: int = 0) -> MagicMock:
         """Build a mock asyncio.subprocess.Process."""
+
         async def _stdout_iter():
             for line in ndjson_lines:
                 yield (line + "\n").encode()
@@ -592,14 +597,16 @@ class TestExecuteTask:
     async def test_successful_execution(self, tmp_path):
         """execute_task returns correct result on success."""
         lines = [
-            json.dumps({
-                "type": "result",
-                "result": "All done",
-                "is_error": False,
-                "cost_usd": 0.5,
-                "usage": {"input_tokens": 10},
-                "session_id": "sess-1",
-            })
+            json.dumps(
+                {
+                    "type": "result",
+                    "result": "All done",
+                    "is_error": False,
+                    "cost_usd": 0.5,
+                    "usage": {"input_tokens": 10},
+                    "session_id": "sess-1",
+                }
+            )
         ]
         proc = self._make_mock_proc(lines, returncode=0)
 
@@ -608,9 +615,7 @@ class TestExecuteTask:
         ctx = _make_workspace(tmp_path)
 
         with patch("asyncio.create_subprocess_exec", return_value=proc):
-            result = await provider.execute_task(
-                "do stuff", agent, "task-1", ctx
-            )
+            result = await provider.execute_task("do stuff", agent, "task-1", ctx)
 
         assert result.output == "All done"
         assert result.is_error is False
@@ -620,6 +625,7 @@ class TestExecuteTask:
     @pytest.mark.asyncio
     async def test_nonzero_exit_sets_is_error(self, tmp_path):
         """Non-zero exit with no output sets is_error=True and uses stderr."""
+
         async def _read_stderr():
             return b"Something went wrong"
 
@@ -640,14 +646,16 @@ class TestExecuteTask:
     async def test_nonzero_exit_does_not_override_existing_output(self, tmp_path):
         """If output was captured before non-zero exit, is_error stays False."""
         lines = [
-            json.dumps({
-                "type": "result",
-                "result": "partial output",
-                "is_error": False,
-                "cost_usd": 0.0,
-                "usage": {},
-                "session_id": "",
-            })
+            json.dumps(
+                {
+                    "type": "result",
+                    "result": "partial output",
+                    "is_error": False,
+                    "cost_usd": 0.0,
+                    "usage": {},
+                    "session_id": "",
+                }
+            )
         ]
 
         async def _read_stderr():
@@ -670,20 +678,22 @@ class TestExecuteTask:
     async def test_on_stream_callback_invoked(self, tmp_path):
         """on_stream is called for each content block in assistant messages."""
         lines = [
-            json.dumps({
-                "type": "assistant",
-                "message": {
-                    "content": [{"type": "text", "text": "thinking..."}]
-                },
-            }),
-            json.dumps({
-                "type": "result",
-                "result": "done",
-                "is_error": False,
-                "cost_usd": 0.0,
-                "usage": {},
-                "session_id": "",
-            }),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {"content": [{"type": "text", "text": "thinking..."}]},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "result",
+                    "result": "done",
+                    "is_error": False,
+                    "cost_usd": 0.0,
+                    "usage": {},
+                    "session_id": "",
+                }
+            ),
         ]
         proc = self._make_mock_proc(lines)
 
@@ -708,9 +718,7 @@ class TestExecuteTask:
         ctx = _make_workspace(tmp_path)
 
         with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
-            await provider.execute_task(
-                "x", agent, "task-5", ctx, session_id="sess-resume"
-            )
+            await provider.execute_task("x", agent, "task-5", ctx, session_id="sess-resume")
 
         call_args = mock_exec.call_args[0]
         cmd = list(call_args)
@@ -755,6 +763,7 @@ class TestExecuteTask:
     @pytest.mark.asyncio
     async def test_cancellation_kills_process(self, tmp_path):
         """CancelledError causes the process to be killed via _kill_process."""
+
         # Make stdout hang forever so we can cancel
         async def _hanging_stdout():
             await asyncio.sleep(9999)
@@ -789,22 +798,26 @@ class TestExecuteTask:
     async def test_stream_error_then_result_error(self, tmp_path):
         """Stream error followed by result error preserves stream error details."""
         lines = [
-            json.dumps({
-                "type": "stream_event",
-                "event": {
-                    "type": "error",
-                    "error": {
-                        "type": "invalid_request_error",
-                        "message": "Model does not exist",
+            json.dumps(
+                {
+                    "type": "stream_event",
+                    "event": {
+                        "type": "error",
+                        "error": {
+                            "type": "invalid_request_error",
+                            "message": "Model does not exist",
+                        },
                     },
-                },
-            }),
-            json.dumps({
-                "type": "result",
-                "result": "",
-                "is_error": True,
-                "error": {"type": "invalid_request_error", "message": "Model does not exist"},
-            }),
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "result",
+                    "result": "",
+                    "is_error": True,
+                    "error": {"type": "invalid_request_error", "message": "Model does not exist"},
+                }
+            ),
         ]
         proc = self._make_mock_proc(lines, returncode=1)
 
@@ -824,16 +837,18 @@ class TestExecuteTask:
     async def test_stream_error_without_result_message(self, tmp_path):
         """Stream error with no result message preserves error info."""
         lines = [
-            json.dumps({
-                "type": "stream_event",
-                "event": {
-                    "type": "error",
-                    "error": {
-                        "type": "overloaded_error",
-                        "message": "Server is overloaded",
+            json.dumps(
+                {
+                    "type": "stream_event",
+                    "event": {
+                        "type": "error",
+                        "error": {
+                            "type": "overloaded_error",
+                            "message": "Server is overloaded",
+                        },
                     },
-                },
-            }),
+                }
+            ),
         ]
 
         async def _read_stderr():

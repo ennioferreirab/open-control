@@ -66,6 +66,41 @@ class TestAskUserTool:
         assert received_params["options"] == ["A", "B"]
         assert result[0].text == "Option A"
 
+    async def test_ask_user_with_structured_questions(self):
+        """ask_user passes structured question arrays to IPC."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        received_params: dict = {}
+
+        async def capture_request(method, params):
+            received_params.update(params)
+            return {"answer": '{"goal":"recommended","audience":"custom"}'}
+
+        mock_ipc = MagicMock()
+        mock_ipc.request = capture_request
+
+        questions = [
+            {
+                "header": "Goal",
+                "id": "goal",
+                "question": "What is the main goal?",
+                "options": [
+                    {"label": "Speed", "description": "Move quickly."},
+                    {"label": "Quality", "description": "Optimize for quality."},
+                    {"label": "Cost", "description": "Minimize spend."},
+                ],
+            }
+        ]
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "ask_user",
+                {"questions": questions},
+            )
+
+        assert received_params["questions"] == questions
+        assert result[0].text == '{"goal":"recommended","audience":"custom"}'
+
     async def test_ask_user_ipc_failure(self):
         """ask_user handles IPC ConnectionError gracefully and returns friendly message.
 
@@ -354,6 +389,18 @@ class TestListTools:
             assert tool.name
             assert tool.description
             assert tool.inputSchema
+
+    async def test_ask_user_schema_supports_structured_questions(self):
+        """ask_user tool supports questionnaire-style structured prompts."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        tools = await bridge_mod.list_tools()
+        ask_user = next(tool for tool in tools if tool.name == "ask_user")
+
+        questions_schema = ask_user.inputSchema["properties"]["questions"]
+        assert questions_schema["type"] == "array"
+        item_properties = questions_schema["items"]["properties"]
+        assert set(item_properties) >= {"header", "id", "question", "options"}
 
     async def test_unknown_tool_returns_error_text(self):
         """Calling an unregistered tool name returns an error text content."""

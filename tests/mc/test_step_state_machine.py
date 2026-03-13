@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from mc.domain.workflow.state_machine import (
-    STEP_TRANSITION_EVENT_MAP,
     STEP_VALID_TRANSITIONS,
     get_step_event_type,
     is_valid_step_transition,
@@ -13,10 +12,10 @@ from mc.domain.workflow.state_machine import (
 )
 from mc.types import ActivityEventType, StepStatus
 
-
 # ---------------------------------------------------------------------------
 # is_valid_step_transition — valid transitions
 # ---------------------------------------------------------------------------
+
 
 class TestIsValidStepTransitionValid:
     """All valid step transitions return True."""
@@ -72,6 +71,7 @@ class TestIsValidStepTransitionValid:
 # is_valid_step_transition — invalid transitions
 # ---------------------------------------------------------------------------
 
+
 class TestIsValidStepTransitionInvalid:
     """Invalid step transitions return False."""
 
@@ -123,6 +123,7 @@ class TestIsValidStepTransitionInvalid:
 # validate_step_transition
 # ---------------------------------------------------------------------------
 
+
 class TestValidateStepTransition:
     """validate_step_transition raises ValueError on invalid transitions."""
 
@@ -130,7 +131,9 @@ class TestValidateStepTransition:
         validate_step_transition(StepStatus.ASSIGNED, StepStatus.RUNNING)  # no exception
 
     def test_invalid_transition_raises_value_error(self) -> None:
-        with pytest.raises(ValueError, match="Cannot transition step from 'completed' to 'running'"):
+        with pytest.raises(
+            ValueError, match="Cannot transition step from 'completed' to 'running'"
+        ):
             validate_step_transition(StepStatus.COMPLETED, StepStatus.RUNNING)
 
     def test_error_message_includes_from_and_to_status(self) -> None:
@@ -145,6 +148,7 @@ class TestValidateStepTransition:
 # ---------------------------------------------------------------------------
 # get_step_event_type — correct mappings
 # ---------------------------------------------------------------------------
+
 
 class TestGetStepEventType:
     """get_step_event_type returns the correct ActivityEventType for each mapping."""
@@ -199,6 +203,7 @@ class TestGetStepEventType:
 # get_step_event_type — unmapped transitions raise ValueError
 # ---------------------------------------------------------------------------
 
+
 class TestGetStepEventTypeUnmapped:
     """get_step_event_type raises ValueError for transitions without an event mapping."""
 
@@ -232,6 +237,7 @@ class TestGetStepEventTypeUnmapped:
 # Parity test: Python STEP_VALID_TRANSITIONS must mirror the Convex spec
 # ---------------------------------------------------------------------------
 
+
 def test_step_valid_transitions_match_convex_spec() -> None:
     """Guard against Python/Convex state machine drift.
 
@@ -241,8 +247,9 @@ def test_step_valid_transitions_match_convex_spec() -> None:
     """
     expected: dict[str, list[str]] = {
         "planned": ["assigned", "blocked"],
-        "assigned": ["running", "completed", "crashed", "blocked", "waiting_human"],
-        "running": ["completed", "crashed"],
+        "assigned": ["running", "review", "completed", "crashed", "blocked", "waiting_human"],
+        "running": ["review", "completed", "crashed"],
+        "review": ["running", "completed", "crashed"],
         "completed": [],
         "crashed": ["assigned"],
         "blocked": ["assigned", "crashed"],
@@ -259,6 +266,5 @@ def test_step_valid_transitions_match_convex_spec() -> None:
         python_allowed = set(STEP_VALID_TRANSITIONS[state])
         expected_allowed = set(allowed)
         assert python_allowed == expected_allowed, (
-            f"Mismatch for state '{state}': "
-            f"expected {expected_allowed}, got {python_allowed}"
+            f"Mismatch for state '{state}': expected {expected_allowed}, got {python_allowed}"
         )

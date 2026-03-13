@@ -202,10 +202,16 @@ development_status:
   # Adds a provider-agnostic interactive TUI runtime for native CLI terminals
   # inside Mission Control, starting with Claude Code in Chat and extending to
   # Codex on the same infrastructure without mixing with headless execution.
-  epic-27: in-progress
-  27-1-build-interactive-session-runtime-foundation: ready-for-dev
-  27-2-add-claude-code-interactive-session-adapter: ready-for-dev
-  27-3-embed-interactive-tui-tab-in-chat-panel: ready-for-dev
-  27-4-generalize-interactive-adapter-contract-and-add-codex-adapter: ready-for-dev
-  27-5-harden-interactive-session-observability-security-and-reuse: ready-for-dev
+  epic-27: done
+  27-1-build-interactive-session-runtime-foundation: done
+  27-2-add-claude-code-interactive-session-adapter: done
+  27-3-embed-interactive-tui-tab-in-chat-panel: done
+  27-4-generalize-interactive-adapter-contract-and-add-codex-adapter: done
+  27-5-harden-interactive-session-observability-security-and-reuse: done
+  27-6-build-interactive-supervision-contract-and-runtime-sink: done
+  27-7-add-claude-code-hook-supervision-and-ask-user-review-pauses: done
+  27-8-integrate-codex-app-server-supervision: done
+  27-9-make-interactive-tui-the-primary-step-execution-strategy: done
+  27-10-expose-live-attach-for-running-step-sessions: done
+  27-11-add-interactive-execution-migration-controls-and-metrics: done
   epic-27-retrospective: optional

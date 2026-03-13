@@ -29,11 +29,7 @@ vi.mock("./DocumentViewerModal", () => ({
     mockDocumentViewerModal({ taskId, file });
     if (!file) return null;
     return (
-      <div
-        data-testid="document-viewer-modal"
-        data-task-id={taskId}
-        data-file-name={file.name}
-      />
+      <div data-testid="document-viewer-modal" data-task-id={taskId} data-file-name={file.name} />
     );
   },
 }));
@@ -132,6 +128,14 @@ vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
   ),
 }));
 
+vi.mock("@/features/interactive/components/InteractiveTerminalPanel", () => ({
+  InteractiveTerminalPanel: ({ agentName, provider }: { agentName: string; provider: string }) => (
+    <div data-testid="interactive-terminal">
+      live:{agentName}:{provider}
+    </div>
+  ),
+}));
+
 type TaskDoc = Doc<"tasks">;
 
 const baseTask: TaskDoc = {
@@ -159,6 +163,10 @@ const baseMessage = {
 };
 
 function buildDetailView(task: TaskDoc, messages: unknown[] = []) {
+  const awaitingKickoff =
+    typeof (task as Partial<{ awaitingKickoff: boolean }>).awaitingKickoff === "boolean"
+      ? (task as Partial<{ awaitingKickoff: boolean }>).awaitingKickoff === true
+      : false;
   return {
     task,
     board: null,
@@ -175,8 +183,8 @@ function buildDetailView(task: TaskDoc, messages: unknown[] = []) {
     tagAttributes: [],
     tagAttributeValues: [],
     uiFlags: {
-      isAwaitingKickoff: task.status === "review" && (task as any).awaitingKickoff === true,
-      isPaused: task.status === "review" && (task as any).awaitingKickoff !== true,
+      isAwaitingKickoff: task.status === "review" && awaitingKickoff,
+      isPaused: task.status === "review" && !awaitingKickoff,
       isManual: false,
       isPlanEditable:
         task.status === "review" || task.status === "planning" || task.status === "ready",
@@ -185,7 +193,7 @@ function buildDetailView(task: TaskDoc, messages: unknown[] = []) {
       approve: task.status === "review",
       kickoff: task.status === "review" || task.status === "ready",
       pause: task.status === "in_progress",
-      resume: task.status === "review" && (task as any).awaitingKickoff !== true,
+      resume: task.status === "review" && !awaitingKickoff,
       retry: task.status === "crashed" || task.status === "failed",
       savePlan: task.status === "review" || task.status === "planning" || task.status === "ready",
       startInbox: task.status === "inbox",
@@ -201,21 +209,6 @@ describe("TaskDetailSheet", () => {
     mockMutationFn.mockClear();
     mockDocumentViewerModal.mockReset();
   });
-
-  function setupQueryMock(task: TaskDoc, messages: unknown[] = []) {
-    mockUseQuery.mockImplementation((_query: unknown, args: unknown) => {
-      if (args === "skip") return undefined;
-      if (args === undefined) return [];
-      if (
-        typeof args === "object" &&
-        args !== null &&
-        "taskId" in (args as Record<string, unknown>)
-      ) {
-        return buildDetailView(task, messages);
-      }
-      return [];
-    });
-  }
 
   function oneRenderPass(task: TaskDoc, messages: unknown[] = []) {
     mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
@@ -267,6 +260,57 @@ describe("TaskDetailSheet", () => {
     render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
 
     expect(screen.getByText("agent-alpha")).toBeInTheDocument();
+  });
+
+  it("shows live controls for running interactive step sessions and opens the live tab", async () => {
+    const user = userEvent.setup();
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return buildDetailView(baseTask, [baseMessage]);
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        Object.keys(args as Record<string, unknown>).length === 0
+      ) {
+        return [
+          {
+            _id: "session-doc",
+            _creationTime: 1,
+            sessionId: "interactive_session:claude",
+            agentName: "agent-alpha",
+            provider: "claude-code",
+            scopeKind: "task",
+            scopeId: "task1",
+            surface: "step",
+            tmuxSession: "mc-int-123",
+            status: "detached",
+            capabilities: ["tui"],
+            createdAt: "2026-03-13T09:00:00.000Z",
+            updatedAt: "2026-03-13T09:10:00.000Z",
+            taskId: "task1",
+            stepId: "step1",
+            supervisionState: "running",
+          },
+        ];
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    expect(screen.getByTestId("live-session-badge")).toHaveTextContent("Live • Running");
+    expect(screen.getByTestId("live-button")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Live" })).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("live-button"));
+
+    expect(screen.getByTestId("interactive-terminal")).toBeInTheDocument();
   });
 
   it("shows empty thread placeholder when no messages", () => {
@@ -512,7 +556,7 @@ describe("TaskDetailSheet", () => {
     expect(screen.getByTestId("document-viewer-modal")).toHaveAttribute("data-task-id", "task-b");
     expect(screen.getByTestId("document-viewer-modal")).toHaveAttribute(
       "data-file-name",
-      "source-b.md"
+      "source-b.md",
     );
   }, 10000);
 
@@ -2496,7 +2540,7 @@ describe("ThreadMessage", () => {
         message={msgWithArtifacts}
         onArtifactClick={onArtifactClick}
         taskIdOverride={"task-source" as never}
-      />
+      />,
     );
 
     await user.click(screen.getByRole("button", { name: "/output/result.csv" }));

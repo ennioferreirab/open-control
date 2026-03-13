@@ -21,6 +21,7 @@ export const STEP_STATUSES = [
   "planned",
   "assigned",
   "running",
+  "review",
   "completed",
   "crashed",
   "blocked",
@@ -32,8 +33,9 @@ export type StepStatus = (typeof STEP_STATUSES)[number];
 
 export const STEP_TRANSITIONS: Record<StepStatus, StepStatus[]> = {
   planned: ["assigned", "blocked"],
-  assigned: ["running", "completed", "crashed", "blocked", "waiting_human"],
-  running: ["completed", "crashed"],
+  assigned: ["running", "review", "completed", "crashed", "blocked", "waiting_human"],
+  running: ["review", "completed", "crashed"],
+  review: ["running", "completed", "crashed"],
   completed: [],
   crashed: ["assigned"],
   blocked: ["assigned", "crashed"],
@@ -55,10 +57,7 @@ export function isValidStepStatus(status: string): status is StepStatus {
 /**
  * Check if a step status transition is valid.
  */
-export function isValidStepTransition(
-  fromStatus: string,
-  toStatus: string
-): boolean {
+export function isValidStepTransition(fromStatus: string, toStatus: string): boolean {
   if (!isValidStepStatus(fromStatus) || !isValidStepStatus(toStatus)) {
     return false;
   }
@@ -70,7 +69,7 @@ export function isValidStepTransition(
  */
 export function resolveInitialStepStatus(
   status: string | undefined,
-  blockedByCount: number
+  blockedByCount: number,
 ): StepStatus {
   const resolved = status ?? (blockedByCount > 0 ? "blocked" : "assigned");
 
@@ -78,14 +77,10 @@ export function resolveInitialStepStatus(
     throw new ConvexError(`Invalid step status: ${resolved}`);
   }
   if (blockedByCount > 0 && resolved !== "blocked") {
-    throw new ConvexError(
-      "Steps with blockedBy dependencies must use status 'blocked'"
-    );
+    throw new ConvexError("Steps with blockedBy dependencies must use status 'blocked'");
   }
   if (blockedByCount === 0 && resolved === "blocked") {
-    throw new ConvexError(
-      "Step status 'blocked' requires at least one dependency in blockedBy"
-    );
+    throw new ConvexError("Step status 'blocked' requires at least one dependency in blockedBy");
   }
 
   return resolved;
@@ -100,20 +95,16 @@ export type StepWithDependencies = Pick<Doc<"steps">, "_id" | "status" | "blocke
 /**
  * Find blocked steps that are ready to be unblocked (all dependencies completed).
  */
-export function findBlockedStepsReadyToUnblock(
-  steps: StepWithDependencies[]
-): Id<"steps">[] {
-  const stepStatusById = new Map(
-    steps.map((step) => [step._id, step.status] as const)
-  );
+export function findBlockedStepsReadyToUnblock(steps: StepWithDependencies[]): Id<"steps">[] {
+  const stepStatusById = new Map(steps.map((step) => [step._id, step.status] as const));
 
   return steps
     .filter((step) => step.status === "blocked")
     .filter((step) => (step.blockedBy ?? []).length > 0)
     .filter((step) =>
       (step.blockedBy ?? []).every(
-        (blockedStepId) => stepStatusById.get(blockedStepId) === "completed"
-      )
+        (blockedStepId) => stepStatusById.get(blockedStepId) === "completed",
+      ),
     )
     .map((step) => step._id);
 }
@@ -123,14 +114,12 @@ export function findBlockedStepsReadyToUnblock(
  */
 export function resolveBlockedByIds(
   blockedByTempIds: string[],
-  tempIdToRealId: Record<string, Id<"steps">>
+  tempIdToRealId: Record<string, Id<"steps">>,
 ): Id<"steps">[] {
   return blockedByTempIds.map((depTempId) => {
     const resolved = tempIdToRealId[depTempId];
     if (!resolved) {
-      throw new ConvexError(
-        `Unknown blockedByTempId dependency: ${depTempId}`
-      );
+      throw new ConvexError(`Unknown blockedByTempId dependency: ${depTempId}`);
     }
     return resolved;
   });
@@ -169,14 +158,10 @@ export function validateBatchSteps(steps: BatchStepInput[]): void {
   for (const step of steps) {
     for (const depTempId of step.blockedByTempIds) {
       if (!knownTempIds.has(depTempId)) {
-        throw new ConvexError(
-          `Step '${step.tempId}' references unknown dependency '${depTempId}'`
-        );
+        throw new ConvexError(`Step '${step.tempId}' references unknown dependency '${depTempId}'`);
       }
       if (depTempId === step.tempId) {
-        throw new ConvexError(
-          `Step '${step.tempId}' cannot depend on itself`
-        );
+        throw new ConvexError(`Step '${step.tempId}' cannot depend on itself`);
       }
     }
   }
@@ -198,7 +183,7 @@ export async function logStepStatusChange(
     nextStatus: string;
     assignedAgent?: string;
     timestamp: string;
-  }
+  },
 ): Promise<void> {
   await logActivity(ctx, {
     taskId: params.taskId,

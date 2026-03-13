@@ -9,6 +9,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from websockets.exceptions import ConnectionClosed
+
 from mc.infrastructure.interactive import TerminalSize, resize_terminal
 
 
@@ -62,13 +64,15 @@ class InteractiveSocketTransport:
             async for message in websocket:
                 await self._handle_client_message(attached.terminal.master_fd, message)
             await output_task
+        except ConnectionClosed:
+            pass
         except Exception:
             crashed = True
             self._session_service.mark_session_crashed(session_id, timestamp=now())
             raise
         finally:
             output_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            with contextlib.suppress(asyncio.CancelledError, ConnectionClosed):
                 await output_task
             if not crashed:
                 self._session_service.detach_session(session_id, timestamp=now())

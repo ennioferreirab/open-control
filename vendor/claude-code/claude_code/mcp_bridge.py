@@ -16,11 +16,15 @@ from __future__ import annotations
 
 import asyncio
 import os
-import sys
+
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import TextContent, Tool
 
 # ---------------------------------------------------------------------------
 # Environment — M2: read env vars lazily at first use, not at module level
 # ---------------------------------------------------------------------------
+
 
 def _get_socket_path() -> str:
     return os.environ.get("MC_SOCKET_PATH", "/tmp/mc-agent.sock")
@@ -45,6 +49,7 @@ def _get_memory_workspace() -> str | None:
 def _resolve_memory_workspace():
     """Resolve the memory workspace path for search_memory, board-aware."""
     from pathlib import Path
+
     memory_workspace = _get_memory_workspace()
     if memory_workspace:
         return Path(memory_workspace)
@@ -61,14 +66,7 @@ MC_SOCKET_PATH: str = os.environ.get("MC_SOCKET_PATH", "/tmp/mc-agent.sock")
 AGENT_NAME: str = os.environ.get("AGENT_NAME", "agent")
 TASK_ID: str | None = os.environ.get("TASK_ID") or None
 
-# ---------------------------------------------------------------------------
-# MCP server setup
-# ---------------------------------------------------------------------------
-
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-
-server: Server = Server("nanobot")
+server: Server = Server("mc")
 
 # Lazy IPC client — created once in _get_ipc()
 _ipc_client = None
@@ -84,13 +82,6 @@ def _get_ipc():
     return _ipc_client
 
 
-# ---------------------------------------------------------------------------
-# Tool definitions
-# ---------------------------------------------------------------------------
-
-from mcp.types import TextContent, Tool
-
-
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """Return all tools exposed by this MCP bridge."""
@@ -98,20 +89,85 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="ask_user",
             description=(
-                "Ask the user a question and wait for their reply. "
-                "Use when you need clarification or a decision from the human."
+                "Ask the user one question or a short structured questionnaire and wait for "
+                "their reply. Use for clarifications, decisions, approvals, and multi-step "
+                "intake. For structured questionnaires, provide up to 3 questions, each with "
+                "up to 3 options; the UI always allows a fourth free-text response."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "question": {"type": "string", "description": "The question to ask."},
+                    "question": {
+                        "type": "string",
+                        "description": "A single question to ask the user.",
+                    },
                     "options": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Optional list of answer choices.",
+                        "maxItems": 3,
+                        "description": (
+                            "Optional answer choices for a single question. Provide up to 3; "
+                            "the UI always allows a fourth free-text response."
+                        ),
+                    },
+                    "questions": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 3,
+                        "description": (
+                            "Structured questionnaire with up to 3 questions. Use this when "
+                            "you need multiple answers in one interaction."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "header": {
+                                    "type": "string",
+                                    "description": "Short label shown before the question.",
+                                },
+                                "id": {
+                                    "type": "string",
+                                    "description": "Stable identifier for the answer.",
+                                },
+                                "question": {
+                                    "type": "string",
+                                    "description": "Question shown to the user.",
+                                },
+                                "options": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 3,
+                                    "description": (
+                                        "Suggested choices. Provide up to 3; the UI always "
+                                        "allows a fourth free-text response."
+                                    ),
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "label": {
+                                                "type": "string",
+                                                "description": "Short user-facing option label.",
+                                            },
+                                            "description": {
+                                                "type": "string",
+                                                "description": "One-sentence description or tradeoff.",
+                                            },
+                                        },
+                                        "required": ["label", "description"],
+                                        "additionalProperties": False,
+                                    },
+                                },
+                            },
+                            "required": ["header", "id", "question", "options"],
+                            "additionalProperties": False,
+                        },
                     },
                 },
-                "required": ["question"],
+                "oneOf": [
+                    {"required": ["question"]},
+                    {"required": ["questions"]},
+                ],
+                "additionalProperties": False,
             },
         ),
         Tool(
@@ -195,10 +251,23 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["add", "list", "remove"], "description": "Action to perform."},
-                    "message": {"type": "string", "description": "Reminder message (required for add)."},
-                    "every_seconds": {"type": "integer", "description": "Interval in seconds (for recurring tasks)."},
-                    "cron_expr": {"type": "string", "description": "Cron expression like '0 9 * * *'."},
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "list", "remove"],
+                        "description": "Action to perform.",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Reminder message (required for add).",
+                    },
+                    "every_seconds": {
+                        "type": "integer",
+                        "description": "Interval in seconds (for recurring tasks).",
+                    },
+                    "cron_expr": {
+                        "type": "string",
+                        "description": "Cron expression like '0 9 * * *'.",
+                    },
                     "tz": {"type": "string", "description": "IANA timezone for cron expressions."},
                     "at": {"type": "string", "description": "ISO datetime for one-time execution."},
                     "job_id": {"type": "string", "description": "Job ID (required for remove)."},
@@ -240,20 +309,26 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     # H1: Wrap all IPC calls in ConnectionError handler
     if name == "ask_user":
         try:
+            request: dict[str, object] = {
+                "agent_name": AGENT_NAME,
+                "task_id": TASK_ID,
+            }
+            if "questions" in arguments:
+                request["questions"] = arguments["questions"]
+            else:
+                request["question"] = arguments["question"]
+                request["options"] = arguments.get("options")
             result = await ipc.request(
                 "ask_user",
-                {
-                    "question": arguments["question"],
-                    "options": arguments.get("options"),
-                    "agent_name": AGENT_NAME,
-                    "task_id": TASK_ID,
-                },
+                request,
             )
         except ConnectionError:
-            return [TextContent(
-                type="text",
-                text="Mission Control not reachable. Is the gateway running?",
-            )]
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
         return [TextContent(type="text", text=result.get("answer", ""))]
 
     elif name == "send_message":
@@ -270,10 +345,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 },
             )
         except ConnectionError:
-            return [TextContent(
-                type="text",
-                text="Mission Control not reachable. Is the gateway running?",
-            )]
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
         return [TextContent(type="text", text=result.get("status", "Message sent"))]
 
     elif name == "delegate_task":
@@ -289,10 +366,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 },
             )
         except ConnectionError:
-            return [TextContent(
-                type="text",
-                text="Mission Control not reachable. Is the gateway running?",
-            )]
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
         if "error" in result:
             return [TextContent(type="text", text=f"Error: {result['error']}")]
         return [
@@ -314,10 +393,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 },
             )
         except ConnectionError:
-            return [TextContent(
-                type="text",
-                text="Mission Control not reachable. Is the gateway running?",
-            )]
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
         if "error" in result:
             return [TextContent(type="text", text=f"Error: {result['error']}")]
         return [TextContent(type="text", text=result.get("response", ""))]
@@ -334,10 +415,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 },
             )
         except ConnectionError:
-            return [TextContent(
-                type="text",
-                text="Mission Control not reachable. Is the gateway running?",
-            )]
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
         return [TextContent(type="text", text=result.get("status", "Progress reported"))]
 
     elif name == "cron":
@@ -357,7 +440,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 },
             )
         except ConnectionError:
-            return [TextContent(type="text", text="Mission Control not reachable. Is the gateway running?")]
+            return [
+                TextContent(
+                    type="text", text="Mission Control not reachable. Is the gateway running?"
+                )
+            ]
         if "error" in result:
             return [TextContent(type="text", text=f"Error: {result['error']}")]
         return [TextContent(type="text", text=result.get("result", "Done"))]
@@ -367,6 +454,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         top_k = arguments.get("top_k", 5)
         try:
             from mc.memory import create_memory_store
+
             workspace = _resolve_memory_workspace()
             memory_dir = workspace / "memory"
             if not memory_dir.exists():
@@ -377,7 +465,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 return [TextContent(type="text", text="No matching memories found.")]
             return [TextContent(type="text", text=results)]
         except ImportError:
-            return [TextContent(type="text", text="Memory search not available (mc.memory not installed).")]
+            return [
+                TextContent(
+                    type="text", text="Memory search not available (mc.memory not installed)."
+                )
+            ]
         except Exception as e:
             return [TextContent(type="text", text=f"Memory search error: {e}")]
 

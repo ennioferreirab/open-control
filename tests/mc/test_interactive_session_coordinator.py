@@ -81,6 +81,8 @@ async def test_create_or_attach_prepares_launch_and_registers_new_session() -> N
         status="ready",
         capabilities=["tui", "autocomplete"],
         timestamp="2026-03-12T23:00:00.000Z",
+        task_id="task-123",
+        step_id=None,
         rotate_attach_token=True,
     )
     assert result == {"session_id": "interactive_session:claude"}

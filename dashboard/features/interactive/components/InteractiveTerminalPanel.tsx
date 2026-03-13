@@ -18,9 +18,20 @@ const STATUS_LABELS: Record<TerminalStatus, string> = {
 interface InteractiveTerminalPanelProps {
   agentName: string;
   provider: string;
+  scopeKind?: "chat" | "task";
+  scopeId?: string;
+  surface?: string;
+  taskId?: string;
 }
 
-export function InteractiveTerminalPanel({ agentName, provider }: InteractiveTerminalPanelProps) {
+export function InteractiveTerminalPanel({
+  agentName,
+  provider,
+  scopeKind = "chat",
+  scopeId,
+  surface = scopeKind === "task" ? "step" : "chat",
+  taskId,
+}: InteractiveTerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -95,13 +106,17 @@ export function InteractiveTerminalPanel({ agentName, provider }: InteractiveTer
       }
 
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+      const resolvedScopeId =
+        scopeId ?? (scopeKind === "task" ? (taskId ?? `task:${agentName}`) : `chat:${agentName}`);
+      const resolvedTaskId =
+        taskId ?? (scopeKind === "task" ? resolvedScopeId : `chat-${agentName}`);
       const params = new URLSearchParams({
         provider,
         agentName,
-        scopeKind: "chat",
-        scopeId: `chat:${agentName}`,
-        surface: "chat",
-        taskId: `chat-${agentName}`,
+        scopeKind,
+        scopeId: resolvedScopeId,
+        surface,
+        taskId: resolvedTaskId,
         columns: String(terminalRef.current.cols || 120),
         rows: String(terminalRef.current.rows || 40),
       });
@@ -119,7 +134,7 @@ export function InteractiveTerminalPanel({ agentName, provider }: InteractiveTer
       socketRef.current = nextSocket;
 
       nextSocket.onopen = () => {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || socketRef.current !== nextSocket) {
           return;
         }
         reconnectAttemptsRef.current = 0;
@@ -128,7 +143,7 @@ export function InteractiveTerminalPanel({ agentName, provider }: InteractiveTer
       };
 
       nextSocket.onmessage = (event) => {
-        if (!terminalRef.current) {
+        if (!terminalRef.current || socketRef.current !== nextSocket) {
           return;
         }
 
@@ -167,7 +182,7 @@ export function InteractiveTerminalPanel({ agentName, provider }: InteractiveTer
       };
 
       nextSocket.onerror = () => {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || socketRef.current !== nextSocket) {
           return;
         }
         setStatus("error");
@@ -175,9 +190,10 @@ export function InteractiveTerminalPanel({ agentName, provider }: InteractiveTer
       };
 
       nextSocket.onclose = () => {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || socketRef.current !== nextSocket) {
           return;
         }
+        socketRef.current = null;
         const nextAttempt = reconnectAttemptsRef.current + 1;
         reconnectAttemptsRef.current = nextAttempt;
         setStatus("reconnecting");
@@ -193,15 +209,16 @@ export function InteractiveTerminalPanel({ agentName, provider }: InteractiveTer
       if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current);
       }
-      socketRef.current?.close();
+      const activeSocket = socketRef.current;
+      socketRef.current = null;
+      activeSocket?.close();
       inputSubscription.dispose();
       resizeObserver.disconnect();
       terminal.dispose();
-      socketRef.current = null;
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [agentName, provider]);
+  }, [agentName, provider, scopeId, scopeKind, surface, taskId]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-zinc-950 text-zinc-100">

@@ -422,9 +422,9 @@ class TestContextParityRegression:
         assert "## System Prompt" in content
         assert "Specialized test agent." in content
         assert "## Project Conventions" in content
-        assert "mcp__nanobot__ask_user" in content
-        assert "AskUserQuestion" in content
-        assert "does NOT work" in content
+        assert "mcp__mc__ask_user" in content
+        assert "structured questions array" in content
+        assert "free-text fallback" in content
         assert "## Soul" in content
         assert "Wise and thoughtful." in content
 

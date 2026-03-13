@@ -119,6 +119,7 @@ export default defineSchema({
       v.literal("planned"),
       v.literal("assigned"),
       v.literal("running"),
+      v.literal("review"),
       v.literal("completed"),
       v.literal("crashed"),
       v.literal("blocked"),
@@ -360,6 +361,15 @@ export default defineSchema({
     updatedAt: v.string(),
     lastActiveAt: v.optional(v.string()),
     endedAt: v.optional(v.string()),
+    taskId: v.optional(v.string()),
+    stepId: v.optional(v.string()),
+    supervisionState: v.optional(v.string()),
+    activeTurnId: v.optional(v.string()),
+    activeItemId: v.optional(v.string()),
+    lastEventKind: v.optional(v.string()),
+    lastEventAt: v.optional(v.string()),
+    lastError: v.optional(v.string()),
+    summary: v.optional(v.string()),
   })
     .index("by_sessionId", ["sessionId"])
     .index("by_agentName", ["agentName"])

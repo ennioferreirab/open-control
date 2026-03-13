@@ -101,6 +101,26 @@ describe("InteractiveTerminalPanel", () => {
     expect(socketInstance?.url).toContain("scopeId=chat%3Aclaude-pair");
   });
 
+  it("connects to the interactive runtime with task-scoped session parameters", async () => {
+    render(
+      <InteractiveTerminalPanel
+        agentName="claude-pair"
+        provider="claude-code"
+        scopeKind="task"
+        scopeId="task-123"
+        surface="step"
+        taskId="task-123"
+      />,
+    );
+
+    await waitFor(() => expect(socketInstance).not.toBeNull());
+
+    expect(socketInstance?.url).toContain("scopeKind=task");
+    expect(socketInstance?.url).toContain("scopeId=task-123");
+    expect(socketInstance?.url).toContain("surface=step");
+    expect(socketInstance?.url).toContain("taskId=task-123");
+  });
+
   it("shows connected status and surfaces runtime errors", async () => {
     render(<InteractiveTerminalPanel agentName="claude-pair" provider="claude-code" />);
 
@@ -163,6 +183,29 @@ describe("InteractiveTerminalPanel", () => {
     expect(socketInstance).not.toBe(firstSocket);
     expect(socketInstance?.url).toContain("sessionId=interactive_session%3Aclaude");
     expect(socketInstance?.url).toContain("attachToken=attach-token-123");
+    vi.useRealTimers();
+  });
+
+  it("ignores close events from stale sockets after reconnecting the effect", async () => {
+    vi.useFakeTimers();
+    const { rerender } = render(
+      <InteractiveTerminalPanel agentName="claude-pair" provider="claude-code" />,
+    );
+
+    expect(socketInstance).not.toBeNull();
+    const firstSocket = socketInstance;
+
+    rerender(<InteractiveTerminalPanel agentName="claude-pair" provider="codex" />);
+
+    expect(socketInstance).not.toBe(firstSocket);
+    const secondSocket = socketInstance;
+
+    await act(async () => {
+      firstSocket?.onclose?.();
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(socketInstance).toBe(secondSocket);
     vi.useRealTimers();
   });
 });

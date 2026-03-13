@@ -57,13 +57,16 @@ function deriveHumanParentTaskStatus(
   steps: Array<{
     status?: string;
   }>,
-): "done" | "crashed" | "in_progress" {
+): "done" | "crashed" | "in_progress" | "review" {
   const activeSteps = steps.filter((step) => step.status !== "deleted");
   if (activeSteps.length > 0 && activeSteps.every((step) => step.status === "completed")) {
     return "done";
   }
   if (activeSteps.some((step) => step.status === "crashed")) {
     return "crashed";
+  }
+  if (activeSteps.some((step) => step.status === "review")) {
+    return "review";
   }
   return "in_progress";
 }

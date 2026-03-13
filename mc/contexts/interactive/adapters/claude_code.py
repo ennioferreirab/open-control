@@ -13,7 +13,7 @@ from mc.contexts.interactive.errors import (
     InteractiveSessionBootstrapError,
 )
 from mc.contexts.interactive.identity import InteractiveSessionIdentity
-from mc.contexts.interactive.types import InteractiveLaunchSpec
+from mc.contexts.interactive.types import InteractiveLaunchSpec, InteractiveSupervisionSink
 from mc.types import AgentData
 
 
@@ -39,6 +39,7 @@ class ClaudeCodeInteractiveAdapter:
         which: Callable[[str], str | None] = shutil.which,
         bus: Any | None = None,
         cron_service: Any | None = None,
+        supervision_sink: InteractiveSupervisionSink | None = None,
     ) -> None:
         self._bridge = bridge
         self._workspace_manager = workspace_manager or CCWorkspaceManager()
@@ -47,6 +48,7 @@ class ClaudeCodeInteractiveAdapter:
         self._which = which
         self._bus = bus
         self._cron_service = cron_service
+        self._supervision_sink = supervision_sink
         self._socket_servers: dict[str, MCSocketServer] = {}
 
     async def healthcheck(self, *, agent: AgentData) -> None:
@@ -79,6 +81,7 @@ class ClaudeCodeInteractiveAdapter:
                 task_prompt=task_prompt,
                 board_name=board_name,
                 memory_mode=memory_mode,
+                interactive_session_id=identity.session_key,
             )
         except Exception as exc:
             raise InteractiveSessionBootstrapError(
@@ -89,6 +92,7 @@ class ClaudeCodeInteractiveAdapter:
             self._bridge,
             self._bus,
             cron_service=self._cron_service,
+            interactive_supervisor=self._supervision_sink,
         )
         await socket_server.start(workspace_ctx.socket_path)
         self._socket_servers[identity.session_key] = socket_server
@@ -124,7 +128,7 @@ class ClaudeCodeInteractiveAdapter:
         cmd.extend(["--permission-mode", permission_mode])
 
         allowed_tools = list((cc and cc.allowed_tools) or [])
-        allowed_tools.append("mcp__nanobot__*")
+        allowed_tools.append("mcp__mc__*")
         for tool in allowed_tools:
             cmd.extend(["--allowedTools", tool])
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,10 +10,12 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import websockets
+from websockets.exceptions import ConnectionClosed
 
 from mc.contexts.interactive import (
     ClaudeCodeInteractiveAdapter,
     CodexInteractiveAdapter,
+    InteractiveExecutionSupervisor,
     InteractiveSessionCoordinator,
     InteractiveSessionIdentity,
     InteractiveSessionRegistry,
@@ -28,6 +31,7 @@ class InteractiveRuntime:
 
     service: InteractiveSessionCoordinator
     transport: InteractiveSocketTransport
+    supervisor: InteractiveExecutionSupervisor
     server: "InteractiveSocketServer"
     adapters: dict[str, Any]
 
@@ -59,6 +63,12 @@ class InteractiveSocketServer:
             return
         self._server.close()
         await self._server.wait_closed()
+
+    async def _send_error_and_close(self, connection: Any, message: str) -> None:
+        with contextlib.suppress(ConnectionClosed):
+            await connection.send(json.dumps({"type": "error", "message": message}))
+        with contextlib.suppress(ConnectionClosed):
+            await connection.close()
 
     async def handle_connection(self, connection: Any) -> None:
         parsed = urlparse(connection.request.path)
@@ -98,15 +108,7 @@ class InteractiveSocketServer:
                 session_id = session["session_id"]
                 attach_token = session.get("attach_token")
             except Exception as exc:
-                await connection.send(
-                    json.dumps(
-                        {
-                            "type": "error",
-                            "message": str(exc),
-                        }
-                    )
-                )
-                await connection.close()
+                await self._send_error_and_close(connection, str(exc))
                 return
 
         try:
@@ -116,16 +118,10 @@ class InteractiveSocketServer:
                 size=TerminalSize(columns=columns, rows=rows),
                 attach_token=attach_token,
             )
+        except ConnectionClosed:
+            return
         except Exception as exc:
-            await connection.send(
-                json.dumps(
-                    {
-                        "type": "error",
-                        "message": str(exc),
-                    }
-                )
-            )
-            await connection.close()
+            await self._send_error_and_close(connection, str(exc))
 
 
 def build_interactive_runtime(
@@ -138,16 +134,19 @@ def build_interactive_runtime(
 ) -> InteractiveRuntime:
     """Build the provider-agnostic interactive runtime stack."""
 
+    registry = InteractiveSessionRegistry(bridge)
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
     adapters = {
         "claude-code": ClaudeCodeInteractiveAdapter(
             bridge=bridge,
             bus=bus,
             cron_service=cron_service,
+            supervision_sink=supervisor,
         ),
-        "codex": CodexInteractiveAdapter(),
+        "codex": CodexInteractiveAdapter(supervision_sink=supervisor),
     }
     service = InteractiveSessionCoordinator(
-        registry=InteractiveSessionRegistry(bridge),
+        registry=registry,
         tmux=TmuxSessionManager(),
         adapters=adapters,
     )
@@ -166,6 +165,7 @@ def build_interactive_runtime(
     return InteractiveRuntime(
         service=service,
         transport=transport,
+        supervisor=supervisor,
         server=server,
         adapters=adapters,
     )

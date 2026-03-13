@@ -40,10 +40,7 @@ class TestSpecLoading:
     def test_spec_matches_json_file(self) -> None:
         """The loaded SPEC must match the file on disk exactly."""
         spec_path = (
-            Path(__file__).resolve().parents[3]
-            / "shared"
-            / "workflow"
-            / "workflow_spec.json"
+            Path(__file__).resolve().parents[3] / "shared" / "workflow" / "workflow_spec.json"
         )
         with open(spec_path, "r") as f:
             raw = json.load(f)
@@ -121,11 +118,14 @@ class TestStepStatuses:
     def test_contains_waiting_human(self) -> None:
         assert "waiting_human" in STEP_STATUSES
 
+    def test_contains_review(self) -> None:
+        assert "review" in STEP_STATUSES
+
     def test_contains_deleted(self) -> None:
         assert "deleted" in STEP_STATUSES
 
     def test_count(self) -> None:
-        assert len(STEP_STATUSES) == 8
+        assert len(STEP_STATUSES) == 9
 
 
 # ---------------------------------------------------------------------------
@@ -266,11 +266,26 @@ class TestIsValidStepTransition:
     def test_assigned_to_waiting_human_valid(self) -> None:
         assert is_valid_step_transition("assigned", "waiting_human") is True
 
+    def test_assigned_to_review_valid(self) -> None:
+        assert is_valid_step_transition("assigned", "review") is True
+
     def test_running_to_completed_valid(self) -> None:
         assert is_valid_step_transition("running", "completed") is True
 
+    def test_running_to_review_valid(self) -> None:
+        assert is_valid_step_transition("running", "review") is True
+
+    def test_review_to_running_valid(self) -> None:
+        assert is_valid_step_transition("review", "running") is True
+
+    def test_review_to_completed_valid(self) -> None:
+        assert is_valid_step_transition("review", "completed") is True
+
     def test_running_to_crashed_valid(self) -> None:
         assert is_valid_step_transition("running", "crashed") is True
+
+    def test_review_to_crashed_valid(self) -> None:
+        assert is_valid_step_transition("review", "crashed") is True
 
     def test_crashed_to_assigned_valid(self) -> None:
         assert is_valid_step_transition("crashed", "assigned") is True
@@ -516,8 +531,9 @@ class TestParityWithConvex:
         """stepTransitions in spec must match Convex STEP_TRANSITIONS exactly."""
         convex_step_transitions: dict[str, list[str]] = {
             "planned": ["assigned", "blocked"],
-            "assigned": ["running", "completed", "crashed", "blocked", "waiting_human"],
-            "running": ["completed", "crashed"],
+            "assigned": ["running", "review", "completed", "crashed", "blocked", "waiting_human"],
+            "running": ["review", "completed", "crashed"],
+            "review": ["running", "completed", "crashed"],
             "completed": [],
             "crashed": ["assigned"],
             "blocked": ["assigned", "crashed"],

@@ -43,6 +43,9 @@ class TestRunnerType:
     def test_human_value(self) -> None:
         assert RunnerType.HUMAN.value == "human"
 
+    def test_interactive_tui_value(self) -> None:
+        assert RunnerType.INTERACTIVE_TUI.value == "interactive-tui"
+
 
 class TestErrorCategory:
     def test_all_categories(self) -> None:

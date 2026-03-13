@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { Id } from "../_generated/dataModel";
+
 import {
   isValidStepStatus,
   isValidStepTransition,
@@ -11,6 +13,9 @@ import {
   STEP_STATUSES,
   STEP_TRANSITIONS,
 } from "./stepLifecycle";
+
+const asStepId = (value: string): Id<"steps"> => value as Id<"steps">;
+const asTaskId = (value: string): Id<"tasks"> => value as Id<"tasks">;
 
 // ---------------------------------------------------------------------------
 // isValidStepStatus
@@ -43,6 +48,11 @@ describe("isValidStepTransition", () => {
   it("allows valid transitions", () => {
     expect(isValidStepTransition("planned", "assigned")).toBe(true);
     expect(isValidStepTransition("blocked", "assigned")).toBe(true);
+    expect(isValidStepTransition("assigned", "review")).toBe(true);
+    expect(isValidStepTransition("running", "review")).toBe(true);
+    expect(isValidStepTransition("review", "running")).toBe(true);
+    expect(isValidStepTransition("review", "completed")).toBe(true);
+    expect(isValidStepTransition("review", "crashed")).toBe(true);
     expect(isValidStepTransition("running", "completed")).toBe(true);
     expect(isValidStepTransition("crashed", "assigned")).toBe(true);
     expect(isValidStepTransition("assigned", "waiting_human")).toBe(true);
@@ -55,6 +65,7 @@ describe("isValidStepTransition", () => {
     expect(isValidStepTransition("completed", "running")).toBe(false);
     expect(isValidStepTransition("assigned", "planned")).toBe(false);
     expect(isValidStepTransition("waiting_human", "blocked")).toBe(false);
+    expect(isValidStepTransition("review", "blocked")).toBe(false);
   });
 
   it("rejects transitions with invalid statuses", () => {
@@ -82,21 +93,17 @@ describe("resolveInitialStepStatus", () => {
   });
 
   it("throws when blockedBy is non-empty and status is not blocked", () => {
-    expect(() => resolveInitialStepStatus("assigned", 1)).toThrow(
-      /must use status 'blocked'/
-    );
+    expect(() => resolveInitialStepStatus("assigned", 1)).toThrow(/must use status 'blocked'/);
   });
 
   it("throws when status is blocked but there are no dependencies", () => {
     expect(() => resolveInitialStepStatus("blocked", 0)).toThrow(
-      /requires at least one dependency/
+      /requires at least one dependency/,
     );
   });
 
   it("throws for invalid step status", () => {
-    expect(() => resolveInitialStepStatus("invalid_status", 0)).toThrow(
-      /Invalid step status/
-    );
+    expect(() => resolveInitialStepStatus("invalid_status", 0)).toThrow(/Invalid step status/);
   });
 });
 
@@ -115,7 +122,7 @@ describe("findBlockedStepsReadyToUnblock", () => {
     ];
 
     const ready = findBlockedStepsReadyToUnblock(
-      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0]
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
     );
 
     expect(ready).toEqual(["s3", "s4"]);
@@ -130,7 +137,7 @@ describe("findBlockedStepsReadyToUnblock", () => {
     ];
 
     const ready = findBlockedStepsReadyToUnblock(
-      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0]
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
     );
 
     expect(ready).toEqual([]);
@@ -143,19 +150,17 @@ describe("findBlockedStepsReadyToUnblock", () => {
     ];
 
     const ready = findBlockedStepsReadyToUnblock(
-      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0]
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
     );
 
     expect(ready).toEqual([]);
   });
 
   it("handles steps with no blockedBy field", () => {
-    const steps = [
-      { _id: "s1", status: "blocked" },
-    ];
+    const steps = [{ _id: "s1", status: "blocked" }];
 
     const ready = findBlockedStepsReadyToUnblock(
-      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0]
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
     );
 
     expect(ready).toEqual([]);
@@ -169,15 +174,15 @@ describe("findBlockedStepsReadyToUnblock", () => {
 describe("resolveBlockedByIds", () => {
   it("maps blockedBy temp IDs to real step IDs", () => {
     const mapped = resolveBlockedByIds(["step_1", "step_2"], {
-      step_1: "real-1" as any,
-      step_2: "real-2" as any,
+      step_1: asStepId("real-1"),
+      step_2: asStepId("real-2"),
     });
     expect(mapped).toEqual(["real-1", "real-2"]);
   });
 
   it("throws when a dependency temp ID is unknown", () => {
-    expect(() => resolveBlockedByIds(["missing"], {} as any)).toThrow(
-      /Unknown blockedByTempId dependency/
+    expect(() => resolveBlockedByIds(["missing"], {} as Record<string, Id<"steps">>)).toThrow(
+      /Unknown blockedByTempId dependency/,
     );
   });
 
@@ -213,7 +218,7 @@ describe("validateBatchSteps", () => {
           parallelGroup: 2,
           order: 2,
         },
-      ])
+      ]),
     ).not.toThrow();
   });
 
@@ -242,7 +247,7 @@ describe("validateBatchSteps", () => {
           parallelGroup: 1,
           order: 2,
         },
-      ])
+      ]),
     ).toThrow(/Duplicate tempId/);
   });
 
@@ -258,7 +263,7 @@ describe("validateBatchSteps", () => {
           parallelGroup: 1,
           order: 1,
         },
-      ])
+      ]),
     ).toThrow(/unknown dependency/);
   });
 
@@ -274,7 +279,7 @@ describe("validateBatchSteps", () => {
           parallelGroup: 1,
           order: 1,
         },
-      ])
+      ]),
     ).toThrow(/cannot depend on itself/);
   });
 });
@@ -289,7 +294,7 @@ describe("logStepStatusChange", () => {
     const ctx = { db: { insert } };
 
     await logStepStatusChange(ctx, {
-      taskId: "task-1" as any,
+      taskId: asTaskId("task-1"),
       stepTitle: "Deploy to staging",
       previousStatus: "assigned",
       nextStatus: "running",
@@ -311,18 +316,19 @@ describe("logStepStatusChange", () => {
     const ctx = { db: { insert } };
 
     await logStepStatusChange(ctx, {
-      taskId: "task-1" as any,
+      taskId: asTaskId("task-1"),
       stepTitle: "Review docs",
       previousStatus: "waiting_human",
       nextStatus: "completed",
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(insert).toHaveBeenCalledWith("activities",
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
       expect.objectContaining({
         agentName: undefined,
         eventType: "step_status_changed",
-      })
+      }),
     );
   });
 });
