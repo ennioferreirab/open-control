@@ -41,6 +41,7 @@ class InteractiveSessionCoordinator:
         identity: InteractiveSessionIdentity,
         agent: AgentData,
         task_id: str,
+        step_id: str | None = None,
         timestamp: str,
         orientation: str | None = None,
         task_prompt: str | None = None,
@@ -91,6 +92,8 @@ class InteractiveSessionCoordinator:
             status="ready",
             capabilities=launch.capabilities,
             timestamp=timestamp,
+            task_id=task_id,
+            step_id=step_id,
             rotate_attach_token=True,
         )
 

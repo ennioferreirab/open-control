@@ -18,6 +18,15 @@ type InteractiveSessionDoc = {
   attachToken?: string;
   lastActiveAt?: string;
   endedAt?: string;
+  taskId?: string;
+  stepId?: string;
+  supervisionState?: string;
+  activeTurnId?: string;
+  activeItemId?: string;
+  lastEventKind?: string;
+  lastEventAt?: string;
+  lastError?: string;
+  summary?: string;
 };
 
 function makeUpsertCtx(existing?: InteractiveSessionDoc) {
@@ -117,6 +126,9 @@ describe("interactiveSessions.upsert", () => {
       attachToken: "attach-token-123",
       createdAt: "2026-03-12T22:00:00.000Z",
       updatedAt: "2026-03-12T22:00:00.000Z",
+      taskId: "task-123",
+      stepId: "step-456",
+      supervisionState: "idle",
     });
 
     expect(inserts).toHaveLength(1);
@@ -131,6 +143,9 @@ describe("interactiveSessions.upsert", () => {
       status: "ready",
       capabilities: ["tui", "autocomplete", "interactive-prompts", "mcp-tools"],
       attachToken: "attach-token-123",
+      taskId: "task-123",
+      stepId: "step-456",
+      supervisionState: "idle",
     });
     expect(inserts[0].value).not.toHaveProperty("output");
     expect(inserts[0].value).not.toHaveProperty("pendingInput");
@@ -164,6 +179,10 @@ describe("interactiveSessions.upsert", () => {
       attachToken: "attach-token-123",
       updatedAt: "2026-03-12T22:01:00.000Z",
       lastActiveAt: "2026-03-12T22:01:00.000Z",
+      activeTurnId: "turn-1",
+      lastEventKind: "turn_started",
+      lastEventAt: "2026-03-12T22:01:00.000Z",
+      supervisionState: "running",
     });
 
     expect(inserts).toHaveLength(0);
@@ -176,6 +195,10 @@ describe("interactiveSessions.upsert", () => {
         attachToken: "attach-token-123",
         updatedAt: "2026-03-12T22:01:00.000Z",
         lastActiveAt: "2026-03-12T22:01:00.000Z",
+        activeTurnId: "turn-1",
+        lastEventKind: "turn_started",
+        lastEventAt: "2026-03-12T22:01:00.000Z",
+        supervisionState: "running",
       },
     });
     expect(patches[0].patch).not.toHaveProperty("output");

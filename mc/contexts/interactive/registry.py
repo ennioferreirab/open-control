@@ -6,6 +6,7 @@ import secrets
 from typing import Any
 
 from mc.contexts.interactive.identity import InteractiveSessionIdentity
+from mc.contexts.interactive.metrics import increment_interactive_metric
 from mc.types import ActivityEventType
 
 
@@ -23,6 +24,8 @@ class InteractiveSessionRegistry:
         status: str,
         capabilities: list[str],
         timestamp: str,
+        task_id: str | None = None,
+        step_id: str | None = None,
         last_active_at: str | None = None,
         ended_at: str | None = None,
         rotate_attach_token: bool = False,
@@ -36,6 +39,13 @@ class InteractiveSessionRegistry:
         metadata["attach_token"] = self._resolve_attach_token(
             existing=existing,
             rotate=rotate_attach_token,
+        )
+        if task_id is not None:
+            metadata["task_id"] = task_id
+        if step_id is not None:
+            metadata["step_id"] = step_id
+        metadata["supervision_state"] = str(
+            existing.get("supervision_state") if existing else "idle"
         )
         if last_active_at is not None:
             metadata["last_active_at"] = last_active_at
@@ -77,6 +87,8 @@ class InteractiveSessionRegistry:
             f"Interactive TUI session {event_label} for @{existing['agent_name']} on {existing['surface']}.",
             agent_name=existing["agent_name"],
         )
+        if event_label == "reattached":
+            increment_interactive_metric("interactive_live_reattach_success_total")
         return metadata
 
     def mark_detached(self, session_id: str, *, timestamp: str) -> dict[str, Any]:
@@ -149,6 +161,38 @@ class InteractiveSessionRegistry:
         )
         return metadata
 
+    def record_supervision(
+        self,
+        session_id: str,
+        *,
+        event: dict[str, Any],
+        timestamp: str,
+    ) -> dict[str, Any]:
+        existing = self._require_session(session_id)
+        metadata = self._metadata_from_existing(
+            existing,
+            status=str(existing["status"]),
+            timestamp=timestamp,
+        )
+        if event.get("task_id") is not None:
+            metadata["task_id"] = str(event["task_id"])
+        if event.get("step_id") is not None:
+            metadata["step_id"] = str(event["step_id"])
+        if event.get("turn_id") is not None:
+            metadata["active_turn_id"] = str(event["turn_id"])
+        if event.get("item_id") is not None:
+            metadata["active_item_id"] = str(event["item_id"])
+        metadata["last_event_kind"] = str(event["kind"])
+        metadata["last_event_at"] = timestamp
+        metadata["supervision_state"] = _supervision_state_for_kind(str(event["kind"]))
+        if event.get("error") is not None:
+            metadata["last_error"] = str(event["error"])
+        if event.get("summary") is not None:
+            metadata["summary"] = str(event["summary"])
+
+        self._upsert(metadata)
+        return metadata
+
     def _resolve_attach_token(
         self,
         *,
@@ -191,6 +235,19 @@ class InteractiveSessionRegistry:
             "updated_at": timestamp,
             "attach_token": self._resolve_attach_token(existing=existing, rotate=False),
         }
+        for key in (
+            "task_id",
+            "step_id",
+            "supervision_state",
+            "active_turn_id",
+            "active_item_id",
+            "last_event_kind",
+            "last_event_at",
+            "last_error",
+            "summary",
+        ):
+            if existing.get(key) is not None:
+                metadata[key] = existing[key]
         if last_active_at is not None:
             metadata["last_active_at"] = last_active_at
         elif existing.get("last_active_at") is not None:
@@ -213,3 +270,22 @@ class InteractiveSessionRegistry:
             description,
             agent_name=agent_name,
         )
+
+
+def _supervision_state_for_kind(kind: str) -> str:
+    if kind in {"turn_started", "turn_updated", "item_started", "item_completed"}:
+        return "running"
+    if kind in {
+        "approval_requested",
+        "user_input_requested",
+        "ask_user_requested",
+        "paused_for_review",
+    }:
+        return "paused_for_review"
+    if kind == "session_failed":
+        return "failed"
+    if kind == "session_stopped":
+        return "stopped"
+    if kind in {"session_started", "session_ready"}:
+        return "ready"
+    return "idle"

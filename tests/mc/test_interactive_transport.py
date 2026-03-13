@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from websockets.exceptions import ConnectionClosedOK
+from websockets.frames import Close
 
 from mc.infrastructure.interactive import TerminalSize
 from mc.runtime.interactive_transport import InteractiveSocketTransport
@@ -148,4 +150,49 @@ async def test_handle_connection_closes_attached_terminal_on_client_error() -> N
         "interactive_session:claude",
         timestamp="2026-03-12T23:10:00+00:00",
     )
+    attached.terminal.close.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_handle_connection_treats_normal_client_disconnect_as_detach() -> None:
+    service = MagicMock()
+    attached = SimpleNamespace(
+        terminal=SimpleNamespace(master_fd=10, close=MagicMock()),
+        metadata={
+            "session_id": "interactive_session:claude",
+            "attach_token": "attach-token-123",
+        },
+    )
+    service.attach_session.return_value = attached
+    websocket = FakeWebSocket([])
+    websocket.send = AsyncMock(
+        side_effect=[
+            None,
+            ConnectionClosedOK(
+                rcvd=Close(code=1001, reason="going away"),
+                sent=Close(code=1001, reason="going away"),
+                rcvd_then_sent=True,
+            ),
+        ]
+    )
+    transport = InteractiveSocketTransport(
+        session_service=service,
+        read_chunk=MagicMock(side_effect=[b"hello"]),
+        write_chunk=MagicMock(),
+        resize_handler=MagicMock(),
+    )
+
+    await transport.handle_connection(
+        websocket,
+        session_id="interactive_session:claude",
+        size=TerminalSize(columns=120, rows=40),
+        attach_token="attach-token-123",
+        timestamp_factory=lambda: "2026-03-12T23:10:00+00:00",
+    )
+
+    service.detach_session.assert_called_once_with(
+        "interactive_session:claude",
+        timestamp="2026-03-12T23:10:00+00:00",
+    )
+    service.mark_session_crashed.assert_not_called()
     attached.terminal.close.assert_called_once_with()

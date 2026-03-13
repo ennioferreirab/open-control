@@ -41,6 +41,8 @@ async def test_ask_posts_question_and_waits() -> None:
     bridge = MagicMock()
     bridge.send_message = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
+    bridge.update_step_status = MagicMock(return_value=None)
+    bridge.get_steps_by_task = MagicMock(return_value=[{"id": "step-1", "status": "running"}])
 
     ask_task = asyncio.create_task(
         handler.ask(
@@ -72,6 +74,20 @@ async def test_ask_posts_question_and_waits() -> None:
     assert bridge.update_task_status.call_count == 2
     assert bridge.update_task_status.call_args_list[0][0][1] == "review"
     assert bridge.update_task_status.call_args_list[1][0][1] == "in_progress"
+    assert bridge.update_step_status.call_args_list[0][0] == ("step-1", "review")
+    assert bridge.update_step_status.call_args_list[1][0] == ("step-1", "running")
+    assert bridge.create_activity.call_args_list[0][0] == (
+        "review_requested",
+        "Interactive session paused for review for @agent-x.",
+        "task-1",
+        "agent-x",
+    )
+    assert bridge.create_activity.call_args_list[1][0] == (
+        "step_started",
+        "Interactive session resumed after user reply for @agent-x.",
+        "task-1",
+        "agent-x",
+    )
 
 
 @pytest.mark.asyncio
@@ -80,6 +96,8 @@ async def test_ask_without_options() -> None:
     bridge = MagicMock()
     bridge.send_message = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
+    bridge.update_step_status = MagicMock(return_value=None)
+    bridge.get_steps_by_task = MagicMock(return_value=[])
 
     ask_task = asyncio.create_task(
         handler.ask(
@@ -108,6 +126,8 @@ async def test_ask_cleanup_on_exception() -> None:
     bridge = MagicMock()
     bridge.send_message = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
+    bridge.update_step_status = MagicMock(return_value=None)
+    bridge.get_steps_by_task = MagicMock(return_value=[])
 
     ask_task = asyncio.create_task(
         handler.ask(
@@ -127,3 +147,62 @@ async def test_ask_cleanup_on_exception() -> None:
 
     assert request_id not in handler._pending_ask
     assert "task-3" not in handler._task_to_request
+
+
+@pytest.mark.asyncio
+async def test_ask_posts_structured_questionnaire() -> None:
+    handler = AskUserHandler()
+    bridge = MagicMock()
+    bridge.send_message = MagicMock(return_value=None)
+    bridge.update_task_status = MagicMock(return_value=None)
+    bridge.update_step_status = MagicMock(return_value=None)
+    bridge.get_steps_by_task = MagicMock(return_value=[{"id": "step-q", "status": "running"}])
+
+    questions = [
+        {
+            "header": "Goal",
+            "id": "goal",
+            "question": "What is the main goal?",
+            "options": [
+                {"label": "Ship", "description": "Ship as fast as possible."},
+                {"label": "Polish", "description": "Improve quality first."},
+                {"label": "Learn", "description": "Explore before committing."},
+            ],
+        },
+        {
+            "header": "Audience",
+            "id": "audience",
+            "question": "Who is this for?",
+            "options": [
+                {"label": "Internal", "description": "Internal team only."},
+                {"label": "Beta", "description": "Small external beta."},
+                {"label": "Public", "description": "General availability."},
+            ],
+        },
+    ]
+
+    ask_task = asyncio.create_task(
+        handler.ask(
+            question=None,
+            options=None,
+            questions=questions,
+            agent_name="agent-q",
+            task_id="task-q",
+            bridge=bridge,
+        )
+    )
+
+    await _wait_for_pending_request(handler)
+    handler.deliver_user_reply("task-q", '{"goal":"Ship","audience":"Public"}')
+
+    answer = await asyncio.wait_for(ask_task, timeout=2)
+    assert answer == '{"goal":"Ship","audience":"Public"}'
+
+    sent_content = bridge.send_message.call_args[0][3]
+    assert "Questionnaire" in sent_content
+    assert "Goal" in sent_content
+    assert "1. Ship" in sent_content
+    assert "4. Other" in sent_content
+    assert "Audience" in sent_content
+    assert bridge.update_step_status.call_args_list[0][0] == ("step-q", "review")
+    assert bridge.update_step_status.call_args_list[1][0] == ("step-q", "running")

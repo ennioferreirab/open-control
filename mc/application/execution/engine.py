@@ -20,6 +20,7 @@ from mc.application.execution.request import (
 from mc.application.execution.strategies.base import RunnerStrategy
 from mc.application.execution.strategies.claude_code import ClaudeCodeRunnerStrategy
 from mc.application.execution.strategies.human import HumanRunnerStrategy
+from mc.application.execution.strategies.interactive import InteractiveTuiRunnerStrategy
 from mc.application.execution.strategies.nanobot import NanobotRunnerStrategy
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,10 @@ class ExecutionEngine:
                 RunnerType.NANOBOT: NanobotRunnerStrategy(),
                 RunnerType.CLAUDE_CODE: ClaudeCodeRunnerStrategy(),
                 RunnerType.HUMAN: HumanRunnerStrategy(),
+                RunnerType.INTERACTIVE_TUI: InteractiveTuiRunnerStrategy(
+                    bridge=None,
+                    session_coordinator=None,
+                ),
             }
         self._post_execution_hooks = (
             post_execution_hooks if post_execution_hooks is not None else []
@@ -106,9 +111,7 @@ class ExecutionEngine:
         Raises KeyError if no strategy is registered for the type.
         """
         if runner_type not in self._strategies:
-            raise KeyError(
-                f"No strategy registered for runner type: {runner_type!r}"
-            )
+            raise KeyError(f"No strategy registered for runner type: {runner_type!r}")
         return self._strategies[runner_type]
 
     async def run(self, request: ExecutionRequest) -> ExecutionResult:
@@ -170,9 +173,7 @@ class ExecutionEngine:
 
         return result
 
-    async def _run_post_execution(
-        self, request: ExecutionRequest, result: ExecutionResult
-    ) -> None:
+    async def _run_post_execution(self, request: ExecutionRequest, result: ExecutionResult) -> None:
         """Run centralized post-execution steps.
 
         Post-execution runs for BOTH task and step execution, and for

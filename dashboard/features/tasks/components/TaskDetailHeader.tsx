@@ -2,20 +2,13 @@
 
 import { Fragment, type KeyboardEvent } from "react";
 import type { Doc } from "@/convex/_generated/dataModel";
-import {
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Pause, Pencil, Play, Trash2 } from "lucide-react";
 import { TAG_COLORS } from "@/lib/constants";
-import type {
-  MergedTaskRef,
-  TaskDetailViewData,
-} from "@/features/tasks/hooks/useTaskDetailView";
+import type { MergedTaskRef, TaskDetailViewData } from "@/features/tasks/hooks/useTaskDetailView";
 import { InlineRejection } from "@/components/InlineRejection";
 
 type HeaderStatusColors = NonNullable<TaskDetailViewData["colors"]>;
@@ -56,7 +49,7 @@ interface TaskDetailHeaderProps {
   isStartingInbox: boolean;
   isPausing: boolean;
   isResuming: boolean;
-  isKickingOff: boolean;
+  liveSessionLabel: string | null;
   isEditingTitle: boolean;
   editTitleValue: string;
   isEditingDescription: boolean;
@@ -69,6 +62,7 @@ interface TaskDetailHeaderProps {
   onSavePlan: () => void | Promise<void>;
   onStartInbox: () => void | Promise<void>;
   onDeleteTask: () => void | Promise<void>;
+  onOpenLive?: (() => void) | null;
   onOpenMergedTask: (taskId: Doc<"tasks">["_id"]) => void;
   onToggleRejection: () => void;
   onDeleteConfirmOpen: () => void;
@@ -135,7 +129,7 @@ export function TaskDetailHeader({
   isStartingInbox,
   isPausing,
   isResuming,
-  isKickingOff,
+  liveSessionLabel,
   isEditingTitle,
   editTitleValue,
   isEditingDescription,
@@ -148,6 +142,7 @@ export function TaskDetailHeader({
   onSavePlan,
   onStartInbox,
   onDeleteTask,
+  onOpenLive,
   onOpenMergedTask,
   onToggleRejection,
   onDeleteConfirmOpen,
@@ -210,7 +205,8 @@ export function TaskDetailHeader({
               color ? (
                 <span className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`} />
               ) : null;
-            const attrs = tagAttrValues?.filter((value) => value.tagName === tag && value.value) ?? [];
+            const attrs =
+              tagAttrValues?.filter((value) => value.tagName === tag && value.value) ?? [];
             if (attrs.length === 0) {
               return (
                 <span key={tag} className={chipClass} title={tag}>
@@ -222,15 +218,13 @@ export function TaskDetailHeader({
             return (
               <Fragment key={tag}>
                 {attrs.map((attr) => {
-                  const attrDef = tagAttributesList?.find((attribute) => attribute._id === attr.attributeId);
+                  const attrDef = tagAttributesList?.find(
+                    (attribute) => attribute._id === attr.attributeId,
+                  );
                   if (!attrDef) return null;
                   const label = `${tag}:${attrDef.name}=${attr.value}`;
                   return (
-                    <span
-                      key={`${tag}-${attr.attributeId}`}
-                      className={chipClass}
-                      title={label}
-                    >
+                    <span key={`${tag}-${attr.attributeId}`} className={chipClass} title={label}>
                       {renderDot()}
                       <span className="truncate">{label}</span>
                     </span>
@@ -270,6 +264,28 @@ export function TaskDetailHeader({
             >
               Retry from Beginning
             </Button>
+          )}
+          {liveSessionLabel && (
+            <>
+              <Badge
+                variant="outline"
+                className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200"
+                data-testid="live-session-badge"
+              >
+                {liveSessionLabel}
+              </Badge>
+              {onOpenLive && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 px-2"
+                  onClick={() => void onOpenLive()}
+                  data-testid="live-button"
+                >
+                  Live
+                </Button>
+              )}
+            </>
           )}
           {task.status === "in_progress" && (
             <Button

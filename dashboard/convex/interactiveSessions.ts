@@ -29,6 +29,15 @@ export const upsert = internalMutation({
     updatedAt: v.string(),
     lastActiveAt: v.optional(v.string()),
     endedAt: v.optional(v.string()),
+    taskId: v.optional(v.string()),
+    stepId: v.optional(v.string()),
+    supervisionState: v.optional(v.string()),
+    activeTurnId: v.optional(v.string()),
+    activeItemId: v.optional(v.string()),
+    lastEventKind: v.optional(v.string()),
+    lastEventAt: v.optional(v.string()),
+    lastError: v.optional(v.string()),
+    summary: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -50,6 +59,15 @@ export const upsert = internalMutation({
         updatedAt: args.updatedAt,
         lastActiveAt: args.lastActiveAt,
         endedAt: args.endedAt,
+        taskId: args.taskId,
+        stepId: args.stepId,
+        supervisionState: args.supervisionState,
+        activeTurnId: args.activeTurnId,
+        activeItemId: args.activeItemId,
+        lastEventKind: args.lastEventKind,
+        lastEventAt: args.lastEventAt,
+        lastError: args.lastError,
+        summary: args.summary,
       });
       return;
     }
@@ -69,6 +87,15 @@ export const upsert = internalMutation({
       updatedAt: args.updatedAt,
       lastActiveAt: args.lastActiveAt,
       endedAt: args.endedAt,
+      taskId: args.taskId,
+      stepId: args.stepId,
+      supervisionState: args.supervisionState,
+      activeTurnId: args.activeTurnId,
+      activeItemId: args.activeItemId,
+      lastEventKind: args.lastEventKind,
+      lastEventAt: args.lastEventAt,
+      lastError: args.lastError,
+      summary: args.summary,
     });
   },
 });

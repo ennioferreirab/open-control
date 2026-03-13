@@ -20,6 +20,7 @@ from mc.application.execution.strategies.claude_code import (
     ClaudeCodeRunnerStrategy,
 )
 from mc.application.execution.strategies.human import HumanRunnerStrategy
+from mc.application.execution.strategies.interactive import InteractiveTuiRunnerStrategy
 from mc.application.execution.strategies.nanobot import NanobotRunnerStrategy
 from mc.memory.service import consolidate_task_output, resolve_consolidation_model
 
@@ -255,6 +256,7 @@ def build_execution_engine(
     bridge: Any | None = None,
     cron_service: Any | None = None,
     ask_user_registry: Any | None = None,
+    interactive_session_coordinator: Any | None = None,
 ) -> ExecutionEngine:
     """Create the canonical execution engine used by production runtime paths."""
     return ExecutionEngine(
@@ -266,6 +268,10 @@ def build_execution_engine(
                 ask_user_registry=ask_user_registry,
             ),
             RunnerType.HUMAN: HumanRunnerStrategy(),
+            RunnerType.INTERACTIVE_TUI: InteractiveTuiRunnerStrategy(
+                bridge=bridge,
+                session_coordinator=interactive_session_coordinator,
+            ),
         },
         post_execution_hooks=[
             relocate_invalid_memory_hook,

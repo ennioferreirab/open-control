@@ -22,6 +22,8 @@ import { TaskDetailFilesTab } from "@/features/tasks/components/TaskDetailFilesT
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { TaskDetailHeader } from "@/features/tasks/components/TaskDetailHeader";
+import { InteractiveTerminalPanel } from "@/features/interactive/components/InteractiveTerminalPanel";
+import { useTaskInteractiveSession } from "@/features/interactive/hooks/useTaskInteractiveSession";
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
@@ -67,6 +69,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [mergeQuery, setMergeQuery] = useState("");
   // --- Feature hooks ---
   const view = useTaskDetailView(taskId, { mergeQuery });
+  const liveSession = useTaskInteractiveSession(taskId);
   const actions = useTaskDetailActions();
   const planState = usePlanEditorState(view.taskExecutionPlan, view.isAwaitingKickoff);
 
@@ -79,7 +82,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     tagAttrValues,
     mergedIntoTask,
     directMergeSources,
-    mergeSources,
     mergeSourceThreads,
     mergeCandidates,
     displayFiles,
@@ -180,9 +182,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const isMergeLockedSource = Boolean(task?.mergedIntoTaskId);
   const mergeAlias = task?.isMergeTask ? buildMergeAliasDisplay(directMergeSources) : undefined;
   const planForDisplay = activePlan ?? taskExecutionPlan ?? null;
-  const hasMaterializedLiveSteps = Boolean(
-    liveSteps?.some((step) => step.status !== "deleted"),
-  );
+  const hasMaterializedLiveSteps = Boolean(liveSteps?.some((step) => step.status !== "deleted"));
   const hasManualMergePlanReady =
     taskStatus === "review" &&
     task?.isManual &&
@@ -194,6 +194,12 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   useEffect(() => {
     setPlanViewMode("both");
   }, [taskId]);
+
+  useEffect(() => {
+    if (activeTab === "live" && !liveSession.session) {
+      setActiveTab("thread");
+    }
+  }, [activeTab, liveSession.session, setActiveTab]);
 
   // Track if user is at bottom via IntersectionObserver
   useEffect(() => {
@@ -220,11 +226,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
 
   useEffect(() => {
     const scrollTarget = threadEndRef.current;
-    if (
-      isAtBottom &&
-      messageCount > 0 &&
-      typeof scrollTarget?.scrollIntoView === "function"
-    ) {
+    if (isAtBottom && messageCount > 0 && typeof scrollTarget?.scrollIntoView === "function") {
       scrollTarget.scrollIntoView({ behavior: "smooth" });
     }
   }, [messageCount, isAtBottom]);
@@ -541,7 +543,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               isStartingInbox={isStartingInbox}
               isPausing={isPausing}
               isResuming={isResuming}
-              isKickingOff={isKickingOff}
+              liveSessionLabel={liveSession.stateLabel}
               isEditingTitle={isEditingTitle}
               editTitleValue={editTitleValue}
               isEditingDescription={isEditingDescription}
@@ -567,6 +569,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               onSavePlan={handleSavePlan}
               onStartInbox={handleStartInbox}
               onDeleteTask={handleDeleteTask}
+              onOpenLive={liveSession.session ? () => setActiveTab("live") : null}
               onOpenMergedTask={(mergedTaskId) => onTaskOpen?.(mergedTaskId)}
               onToggleRejection={() => setShowRejection((current) => !current)}
               onDeleteConfirmOpen={() => setShowDeleteConfirm(true)}
@@ -597,6 +600,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               <TabsList className="mx-6 mt-4">
                 <TabsTrigger value="thread">Thread</TabsTrigger>
                 <TabsTrigger value="plan">Execution Plan</TabsTrigger>
+                {liveSession.session && <TabsTrigger value="live">Live</TabsTrigger>}
                 <TabsTrigger value="config">Config</TabsTrigger>
                 <TabsTrigger value="files">
                   {displayFiles.length > 0 ? `Files (${displayFiles.length})` : "Files"}
@@ -671,6 +675,24 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                   )}
                 </div>
               </TabsContent>
+
+              {task && liveSession.session && (
+                <TabsContent
+                  value="live"
+                  className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
+                >
+                  <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
+                    <InteractiveTerminalPanel
+                      agentName={liveSession.session.agentName}
+                      provider={liveSession.session.provider}
+                      scopeKind="task"
+                      scopeId={task._id}
+                      surface="step"
+                      taskId={task._id}
+                    />
+                  </div>
+                </TabsContent>
+              )}
 
               {task && (
                 <TaskDetailConfigTab

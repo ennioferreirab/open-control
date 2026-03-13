@@ -50,13 +50,9 @@ async def generate_title_via_low_agent(
     # Fetch low-agent model config
     agent_data: dict | None = None
     try:
-        agent_data = await asyncio.to_thread(
-            bridge.get_agent_by_name, LOW_AGENT_NAME
-        )
+        agent_data = await asyncio.to_thread(bridge.get_agent_by_name, LOW_AGENT_NAME)
     except Exception:
-        logger.warning(
-            "[orchestrator] Failed to fetch low-agent config", exc_info=True
-        )
+        logger.warning("[orchestrator] Failed to fetch low-agent config", exc_info=True)
 
     if not agent_data:
         logger.warning("[orchestrator] low-agent not found; skipping auto-title")
@@ -72,7 +68,7 @@ async def generate_title_via_low_agent(
             )
             if raw_tiers:
                 tiers = json.loads(raw_tiers)
-                tier_name = low_model[len("tier:"):]
+                tier_name = low_model[len("tier:") :]
                 low_model = tiers.get(tier_name) or None
                 if low_model:
                     logger.info(
@@ -115,26 +111,13 @@ async def generate_title_via_low_agent(
             max_tokens=60,
         )
         if response.finish_reason == "error":
-            logger.warning(
-                "[orchestrator] Auto-title LLM error: %s", response.content
-            )
+            logger.warning("[orchestrator] Auto-title LLM error: %s", response.content)
             return None
-        title = (
-            (response.content or "")
-            .strip()
-            .lstrip("#")
-            .strip()
-            .strip('"')
-            .strip("'")
-        )
+        title = (response.content or "").strip().lstrip("#").strip().strip('"').strip("'")
         if not title:
-            logger.warning(
-                "[orchestrator] Auto-title LLM returned empty content"
-            )
+            logger.warning("[orchestrator] Auto-title LLM returned empty content")
             return None
-        logger.info(
-            "[orchestrator] Auto-title generated via low-agent: '%s'", title
-        )
+        logger.info("[orchestrator] Auto-title generated via low-agent: '%s'", title)
         return title
     except Exception:
         logger.exception("[orchestrator] Auto-title generation failed")
@@ -172,6 +155,9 @@ class TaskOrchestrator:
             self._bridge,
             cron_service=cron_service,
             ask_user_registry=ask_user_registry,
+            interactive_session_coordinator=self._ctx.services.get(
+                "interactive_session_coordinator"
+            ),
         )
 
         # Shared kickoff ID set -- prevents double-dispatch between
@@ -194,9 +180,7 @@ class TaskOrchestrator:
             self._step_dispatcher,
             known_kickoff_ids=self._known_kickoff_ids,
         )
-        self._review_worker = ReviewWorker(
-            self._ctx, ask_user_registry=ask_user_registry
-        )
+        self._review_worker = ReviewWorker(self._ctx, ask_user_registry=ask_user_registry)
         self._kickoff_worker = KickoffResumeWorker(
             self._ctx,
             self._plan_materializer,
@@ -278,26 +262,14 @@ class TaskOrchestrator:
             task_id, agent_name, content, message_type
         )
 
-    async def handle_review_feedback(
-        self, task_id: str, reviewer_name: str, feedback: str
-    ) -> None:
+    async def handle_review_feedback(self, task_id: str, reviewer_name: str, feedback: str) -> None:
         """Handle reviewer feedback on a task (FR28)."""
-        await self._review_worker.handle_review_feedback(
-            task_id, reviewer_name, feedback
-        )
+        await self._review_worker.handle_review_feedback(task_id, reviewer_name, feedback)
 
-    async def handle_agent_revision(
-        self, task_id: str, agent_name: str, content: str
-    ) -> None:
+    async def handle_agent_revision(self, task_id: str, agent_name: str, content: str) -> None:
         """Handle an agent's revision in response to review feedback (FR29)."""
-        await self._review_worker.handle_agent_revision(
-            task_id, agent_name, content
-        )
+        await self._review_worker.handle_agent_revision(task_id, agent_name, content)
 
-    async def handle_review_approval(
-        self, task_id: str, reviewer_name: str
-    ) -> None:
+    async def handle_review_approval(self, task_id: str, reviewer_name: str) -> None:
         """Handle reviewer approval of a task (FR30)."""
-        await self._review_worker.handle_review_approval(
-            task_id, reviewer_name
-        )
+        await self._review_worker.handle_review_approval(task_id, reviewer_name)

@@ -51,10 +51,10 @@ class AskUserTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Ask the human user a question and wait for their reply. "
+            "Ask the human user a question or a short structured questionnaire and wait for their reply. "
             "The call BLOCKS until the user actually responds — do NOT proceed "
             "until you receive the answer. Use this for clarifications, "
-            "questionnaires (one question at a time), or confirmations. "
+            "questionnaires, or confirmations. "
             "NEVER guess or fabricate user input."
         )
 
@@ -70,13 +70,56 @@ class AskUserTool(Tool):
                 "options": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Optional list of choices for the user.",
+                    "maxItems": 3,
+                    "description": (
+                        "Optional list of choices for a single question. "
+                        "Provide up to 3; the UI always allows a fourth free-text response."
+                    ),
+                },
+                "questions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "description": (
+                        "Structured questionnaire with up to 3 questions. Each question may "
+                        "include up to 3 options; the UI always allows a fourth free-text response."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "header": {"type": "string"},
+                            "id": {"type": "string"},
+                            "question": {"type": "string"},
+                            "options": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 3,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "label": {"type": "string"},
+                                        "description": {"type": "string"},
+                                    },
+                                    "required": ["label", "description"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                        },
+                        "required": ["header", "id", "question", "options"],
+                        "additionalProperties": False,
+                    },
                 },
             },
-            "required": ["question"],
+            "oneOf": [{"required": ["question"]}, {"required": ["questions"]}],
         }
 
-    async def execute(self, question: str, options: list[str] | None = None, **kwargs: Any) -> str:
+    async def execute(
+        self,
+        question: str | None = None,
+        options: list[str] | None = None,
+        questions: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> str:
         """Post question to thread, wait for user reply, return it."""
         if not self._bridge or not self._task_id:
             return "Error: ask_user requires Mission Control context (bridge + task_id)."
@@ -87,6 +130,7 @@ class AskUserTool(Tool):
         return await self._handler.ask(
             question=question,
             options=options,
+            questions=questions,
             agent_name=agent_name,
             task_id=self._task_id,
             bridge=self._bridge,

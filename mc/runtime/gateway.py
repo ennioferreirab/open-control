@@ -178,6 +178,7 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     runtime_ctx.services["interactive_session_service"] = interactive_runtime.service
     runtime_ctx.services["interactive_session_coordinator"] = interactive_runtime.service
     runtime_ctx.services["interactive_socket_transport"] = interactive_runtime.transport
+    runtime_ctx.services["interactive_execution_supervisor"] = interactive_runtime.supervisor
     await interactive_runtime.server.start()
 
     orchestrator = TaskOrchestrator(

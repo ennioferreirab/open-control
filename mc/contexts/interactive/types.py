@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 from mc.contexts.interactive.identity import InteractiveSessionIdentity
+from mc.contexts.interactive.supervision_types import InteractiveSupervisionEvent
 from mc.infrastructure.interactive import AttachedTerminal
 from mc.types import AgentData
 
@@ -54,3 +55,10 @@ class InteractiveProviderAdapter(Protocol):
 
     async def stop_session(self, session_key: str) -> None:
         """Tear down provider-specific runtime state for a session."""
+
+
+class InteractiveSupervisionSink(Protocol):
+    """Consumer for normalized interactive supervision events."""
+
+    def handle_event(self, event: InteractiveSupervisionEvent) -> dict[str, object]:
+        """Consume a provider-agnostic lifecycle event."""

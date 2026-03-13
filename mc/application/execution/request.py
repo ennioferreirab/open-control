@@ -40,6 +40,7 @@ class RunnerType(str, Enum):
     NANOBOT = "nanobot"
     CLAUDE_CODE = "claude-code"
     HUMAN = "human"
+    INTERACTIVE_TUI = "interactive-tui"
 
 
 class ErrorCategory(str, Enum):

@@ -19,10 +19,14 @@ from mc.contexts.interactive.identity import (
 )
 from mc.contexts.interactive.registry import InteractiveSessionRegistry
 from mc.contexts.interactive.service import InteractiveSessionService
+from mc.contexts.interactive.supervision import normalize_provider_event
+from mc.contexts.interactive.supervision_types import InteractiveSupervisionEvent
+from mc.contexts.interactive.supervisor import InteractiveExecutionSupervisor
 from mc.contexts.interactive.types import (
     InteractiveAttachment,
     InteractiveLaunchSpec,
     InteractiveProviderAdapter,
+    InteractiveSupervisionSink,
 )
 
 __all__ = [
@@ -40,6 +44,10 @@ __all__ = [
     "InteractiveSessionRegistry",
     "InteractiveSessionService",
     "InteractiveAttachment",
+    "InteractiveExecutionSupervisor",
+    "InteractiveSupervisionEvent",
+    "InteractiveSupervisionSink",
     "build_interactive_session_key",
     "build_tmux_session_name",
+    "normalize_provider_event",
 ]

@@ -243,6 +243,34 @@ Public package API:
 - `mc.contexts.execution.execute_step_via_cc`
 - `mc.contexts.execution.build_task_message`
 
+#### `mc.contexts.interactive`
+
+Interactive owns provider-backed TUI sessions, their runtime metadata, and the
+normalized supervision contract that sits above PTY transport.
+
+Responsibilities:
+
+- interactive session identity and registry
+- provider-backed interactive adapter contracts
+- normalized supervision event types and mapping
+- runtime-owned supervision sinks for task and step lifecycle projection
+- interactive session coordination independent from browser attach
+
+Key modules:
+
+- `mc.contexts.interactive.identity`
+- `mc.contexts.interactive.registry`
+- `mc.contexts.interactive.coordinator`
+- `mc.contexts.interactive.supervision`
+- `mc.contexts.interactive.supervision_types`
+- `mc.contexts.interactive.supervisor`
+
+Design rule:
+
+- `mc.contexts.interactive` owns structured session lifecycle and supervision;
+  `mc.runtime.interactive_transport` remains a byte-oriented PTY relay and must
+  not absorb provider lifecycle inference.
+
 #### `mc.contexts.conversation`
 
 Conversation owns user-facing interaction and task-thread logic.

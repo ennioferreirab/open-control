@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import shutil
+from inspect import isawaitable
 from pathlib import Path
-from typing import Callable
+from typing import Awaitable, Callable
 
+from mc.contexts.interactive.adapters.codex_app_server import (
+    CodexAppServerSession,
+    start_codex_app_server_session,
+    stop_codex_app_server_session,
+)
 from mc.contexts.interactive.errors import (
     InteractiveSessionBinaryMissingError,
     InteractiveSessionBootstrapError,
 )
 from mc.contexts.interactive.identity import InteractiveSessionIdentity
-from mc.contexts.interactive.types import InteractiveLaunchSpec
+from mc.contexts.interactive.types import InteractiveLaunchSpec, InteractiveSupervisionSink
 from mc.infrastructure.config import AGENTS_DIR
 from mc.types import AgentData
 
@@ -48,10 +54,17 @@ class CodexInteractiveAdapter:
         cli_path: str = "codex",
         which: Callable[[str], str | None] = shutil.which,
         agents_dir: Path = AGENTS_DIR,
+        supervision_sink: InteractiveSupervisionSink | None = None,
+        supervision_starter: Callable[
+            ..., Awaitable[CodexAppServerSession] | CodexAppServerSession
+        ] = start_codex_app_server_session,
     ) -> None:
         self._cli_path = cli_path
         self._which = which
         self._agents_dir = agents_dir
+        self._supervision_sink = supervision_sink
+        self._supervision_starter = supervision_starter
+        self._supervision_sessions: dict[str, CodexAppServerSession] = {}
 
     async def healthcheck(self, *, agent: AgentData) -> None:
         del agent
@@ -72,7 +85,7 @@ class CodexInteractiveAdapter:
         memory_mode: str = "clean",
         resume_session_id: str | None = None,
     ) -> InteractiveLaunchSpec:
-        del identity, task_id, orientation, task_prompt, board_name, memory_mode, resume_session_id
+        del orientation, task_prompt, board_name, memory_mode, resume_session_id
         await self.healthcheck(agent=agent)
 
         try:
@@ -83,6 +96,20 @@ class CodexInteractiveAdapter:
                 f"Codex workspace bootstrap failed: {exc}"
             ) from exc
 
+        if self._supervision_sink is not None:
+            session = self._supervision_starter(
+                session_id=identity.session_key,
+                task_id=task_id,
+                step_id=None,
+                agent_name=agent.name,
+                cwd=cwd,
+                sink=self._supervision_sink,
+                cli_path=self._cli_path,
+            )
+            if isawaitable(session):
+                session = await session
+            self._supervision_sessions[identity.session_key] = session
+
         return InteractiveLaunchSpec(
             cwd=cwd,
             command=self._build_command(agent),
@@ -90,7 +117,9 @@ class CodexInteractiveAdapter:
         )
 
     async def stop_session(self, session_key: str) -> None:
-        del session_key
+        session = self._supervision_sessions.pop(session_key, None)
+        if session is not None:
+            await stop_codex_app_server_session(session)
 
     def _build_command(self, agent: AgentData) -> list[str]:
         command = [

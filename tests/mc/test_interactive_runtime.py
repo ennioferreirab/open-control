@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from websockets.exceptions import ConnectionClosedOK
+from websockets.frames import Close
 
 from mc.runtime.interactive import (
     InteractiveRuntime,
@@ -25,6 +27,7 @@ def test_build_interactive_runtime_creates_provider_agnostic_runtime() -> None:
     assert runtime.transport is not None
     assert "claude-code" in runtime.adapters
     assert "codex" in runtime.adapters
+    assert runtime.adapters["codex"]._supervision_sink is runtime.supervisor
 
 
 @pytest.mark.asyncio
@@ -189,6 +192,39 @@ async def test_interactive_socket_server_closes_unauthorized_attach_attempts() -
 
     connection.send.assert_awaited_once()
     assert "not authorized" in connection.send.await_args.args[0]
+    connection.close.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_interactive_socket_server_ignores_normal_connection_close_during_error_handling() -> (
+    None
+):
+    transport = MagicMock()
+    transport.handle_connection = AsyncMock(side_effect=RuntimeError("not authorized"))
+    server = InteractiveSocketServer(
+        transport=transport,
+        coordinator=MagicMock(),
+        load_agent=MagicMock(),
+        host="127.0.0.1",
+        port=8877,
+    )
+    connection = SimpleNamespace(
+        request=SimpleNamespace(
+            path="/interactive?sessionId=interactive_session:claude&columns=120&rows=40"
+        ),
+        send=AsyncMock(
+            side_effect=ConnectionClosedOK(
+                rcvd=Close(code=1001, reason="going away"),
+                sent=Close(code=1001, reason="going away"),
+                rcvd_then_sent=True,
+            )
+        ),
+        close=AsyncMock(),
+    )
+
+    await server.handle_connection(connection)
+
+    connection.send.assert_awaited_once()
     connection.close.assert_awaited_once_with()
 
 

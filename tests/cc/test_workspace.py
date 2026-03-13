@@ -133,11 +133,11 @@ class TestClaudeMdGeneration:
         ctx = manager.prepare("test-agent", agent, "task123")
 
         content = ctx.claude_md.read_text()
-        assert "mcp__nanobot__ask_user" in content
-        assert "mcp__nanobot__send_message" in content
-        assert "mcp__nanobot__delegate_task" in content
-        assert "mcp__nanobot__ask_agent" in content
-        assert "mcp__nanobot__report_progress" in content
+        assert "mcp__mc__ask_user" in content
+        assert "mcp__mc__send_message" in content
+        assert "mcp__mc__delegate_task" in content
+        assert "mcp__mc__ask_agent" in content
+        assert "mcp__mc__report_progress" in content
 
     def test_claude_md_contains_ask_user_warning(self, tmp_path: Path) -> None:
         """The IMPORTANT warning about AskUserQuestion must be present."""
@@ -146,8 +146,8 @@ class TestClaudeMdGeneration:
         ctx = manager.prepare("test-agent", agent, "task123")
 
         content = ctx.claude_md.read_text()
-        assert "AskUserQuestion" in content
-        assert "does NOT work" in content
+        assert "structured questions array" in content
+        assert "free-text fallback" in content
 
     def test_claude_md_contains_conventions_section(self, tmp_path: Path) -> None:
         """AC1: CLAUDE.md must include a Project Conventions section."""
@@ -198,6 +198,30 @@ class TestClaudeMdGeneration:
         content = ctx.claude_md.read_text()
         assert "Second prompt." in content
         assert "First prompt." not in content
+
+    def test_prepare_writes_claude_hook_settings_for_interactive_sessions(
+        self, tmp_path: Path
+    ) -> None:
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        ctx = manager.prepare(
+            "test-agent",
+            agent,
+            "task123",
+            interactive_session_id="interactive_session:claude",
+        )
+
+        settings_path = ctx.cwd / ".claude" / "settings.json"
+        settings = json.loads(settings_path.read_text())
+        hooks = settings["hooks"]
+
+        assert "SessionStart" in hooks
+        assert "Stop" in hooks
+        assert "PermissionRequest" in hooks
+        command = hooks["Stop"][0]["hooks"][0]["command"]
+        assert "claude_code.hook_bridge" in command
+        assert "MC_INTERACTIVE_SESSION_ID=interactive_session:claude" in command
 
 
 # ---------------------------------------------------------------------------

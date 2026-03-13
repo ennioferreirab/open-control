@@ -21,8 +21,16 @@ import {
 describe("TASK_STATUSES", () => {
   it("contains all expected task statuses", () => {
     const expected = [
-      "planning", "ready", "failed", "inbox", "assigned",
-      "in_progress", "review", "done", "retrying", "crashed",
+      "planning",
+      "ready",
+      "failed",
+      "inbox",
+      "assigned",
+      "in_progress",
+      "review",
+      "done",
+      "retrying",
+      "crashed",
     ];
     for (const s of expected) {
       expect(TASK_STATUSES).toContain(s);
@@ -37,16 +45,23 @@ describe("TASK_STATUSES", () => {
 describe("STEP_STATUSES", () => {
   it("contains all expected step statuses", () => {
     const expected = [
-      "planned", "assigned", "running", "completed",
-      "crashed", "blocked", "waiting_human", "deleted",
+      "planned",
+      "assigned",
+      "running",
+      "review",
+      "completed",
+      "crashed",
+      "blocked",
+      "waiting_human",
+      "deleted",
     ];
     for (const s of expected) {
       expect(STEP_STATUSES).toContain(s);
     }
   });
 
-  it("has exactly 8 statuses", () => {
-    expect(STEP_STATUSES).toHaveLength(8);
+  it("has exactly 9 statuses", () => {
+    expect(STEP_STATUSES).toHaveLength(9);
   });
 });
 
@@ -260,12 +275,32 @@ describe("isValidStepTransition", () => {
     expect(isValidStepTransition("assigned", "waiting_human")).toBe(true);
   });
 
+  it("allows assigned -> review", () => {
+    expect(isValidStepTransition("assigned", "review")).toBe(true);
+  });
+
   it("allows running -> completed", () => {
     expect(isValidStepTransition("running", "completed")).toBe(true);
   });
 
+  it("allows running -> review", () => {
+    expect(isValidStepTransition("running", "review")).toBe(true);
+  });
+
+  it("allows review -> running", () => {
+    expect(isValidStepTransition("review", "running")).toBe(true);
+  });
+
+  it("allows review -> completed", () => {
+    expect(isValidStepTransition("review", "completed")).toBe(true);
+  });
+
   it("allows running -> crashed", () => {
     expect(isValidStepTransition("running", "crashed")).toBe(true);
+  });
+
+  it("allows review -> crashed", () => {
+    expect(isValidStepTransition("review", "crashed")).toBe(true);
   });
 
   it("allows crashed -> assigned", () => {
@@ -311,9 +346,7 @@ describe("isValidStepTransition", () => {
 
 describe("getStepAllowedTransitions", () => {
   it("returns correct transitions for planned", () => {
-    expect(new Set(getStepAllowedTransitions("planned"))).toEqual(
-      new Set(["assigned", "blocked"]),
-    );
+    expect(new Set(getStepAllowedTransitions("planned"))).toEqual(new Set(["assigned", "blocked"]));
   });
 
   it("returns empty for completed", () => {
@@ -340,6 +373,10 @@ describe("getStepTransitionEvent", () => {
 
   it("returns step_started for assigned->running", () => {
     expect(getStepTransitionEvent("assigned", "running")).toBe("step_started");
+  });
+
+  it("returns review_requested for running->review", () => {
+    expect(getStepTransitionEvent("running", "review")).toBe("review_requested");
   });
 
   it("returns step_completed for running->completed", () => {

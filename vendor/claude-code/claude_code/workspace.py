@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import platform
+import shlex
 import time
 from datetime import datetime
 from pathlib import Path
@@ -33,32 +34,38 @@ except ImportError:  # pragma: no cover – vendor package not on path
     _VENDOR_SKILLS_DIR = Path(__file__).parent.parent.parent / "nanobot" / "nanobot" / "skills"
 
 _MCP_TOOLS_GUIDE = """\
-## Available MCP Tools (nanobot server)
+## Available MCP Tools (mc server)
 
-Use these tools via the `mcp__nanobot__` prefix:
+Use these tools via the `mcp__mc__` prefix:
 
-- **mcp__nanobot__ask_user** — Ask the human user a question and wait for their reply.
-- **mcp__nanobot__send_message** — Send a message to another agent or to the task thread.
-- **mcp__nanobot__delegate_task** — Delegate a subtask to a specialist agent.
-- **mcp__nanobot__ask_agent** — Ask a specific agent a question and get a reply.
-- **mcp__nanobot__report_progress** — Report task progress back to Mission Control.
-- **mcp__nanobot__cron** — Schedule reminders and recurring tasks (add/list/remove).
-- **mcp__nanobot__search_memory** — Search agent memory and history for relevant past events and decisions.
+- **mcp__mc__ask_user** — Ask the human user a question or a short structured questionnaire and wait for their reply.
+- **mcp__mc__send_message** — Send a message to another agent or to the task thread.
+- **mcp__mc__delegate_task** — Delegate a subtask to a specialist agent.
+- **mcp__mc__ask_agent** — Ask a specific agent a question and get a reply.
+- **mcp__mc__report_progress** — Report task progress back to Mission Control.
+- **mcp__mc__cron** — Schedule reminders and recurring tasks (add/list/remove).
+- **mcp__mc__search_memory** — Search agent memory and history for relevant past events and decisions.
 
 ### CRITICAL: User Interaction Rules
 
 **NEVER** guess, assume, or fabricate user input. If a task requires information from the user:
 
-1. Call `mcp__nanobot__ask_user` with your question.
+1. Call `mcp__mc__ask_user` with your question.
 2. The call BLOCKS until the user replies — wait for it.
 3. Only then proceed to the next question or action.
 
-Examples of when you MUST use `mcp__nanobot__ask_user`:
-- Running a questionnaire or wizard (ask each question one at a time, wait for reply)
+Examples of when you MUST use `mcp__mc__ask_user`:
+- Running a questionnaire or wizard (either one question at a time, or a short structured questions array)
 - Confirming a destructive action before executing it
 - Gathering required parameters that were not provided in the task
 
-> **IMPORTANT**: `AskUserQuestion` does NOT work. You MUST use `mcp__nanobot__ask_user` instead.
+Structured questionnaire rules:
+- Use the `questions` array when you need 2-3 related answers in one interaction
+- Each question may include up to 3 explicit options
+- The UI always offers a free-text fallback as the fourth choice
+- Prefer concise headers/ids so the final reply is easy to parse
+
+> **IMPORTANT**: Use `mcp__mc__ask_user` for both single questions and structured questions arrays.
 """
 
 _DEFAULT_CONVENTIONS = """\
@@ -97,6 +104,7 @@ class CCWorkspaceManager:
         task_prompt: str | None = None,
         board_name: str | None = None,
         memory_mode: str = "clean",
+        interactive_session_id: str | None = None,
     ) -> WorkspaceContext:
         """Set up the workspace directory for an agent and return its context.
 
@@ -177,6 +185,13 @@ class CCWorkspaceManager:
             socket_path,
             board_name=board_name,
             memory_workspace=memory_workspace,
+        )
+        self._generate_hook_settings(
+            workspace,
+            agent_name=agent_name,
+            task_id=task_id,
+            socket_path=socket_path,
+            interactive_session_id=interactive_session_id,
         )
 
         return WorkspaceContext(
@@ -579,3 +594,56 @@ class CCWorkspaceManager:
             }
         }
         (workspace / ".mcp.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+
+    def _generate_hook_settings(
+        self,
+        workspace: Path,
+        *,
+        agent_name: str,
+        task_id: str,
+        socket_path: str,
+        interactive_session_id: str | None,
+    ) -> None:
+        claude_dir = workspace / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
+        settings_path = claude_dir / "settings.json"
+        if interactive_session_id is None:
+            settings_path.write_text(json.dumps({"hooks": {}}, indent=2), encoding="utf-8")
+            return
+
+        command = self._build_hook_command(
+            socket_path=socket_path,
+            agent_name=agent_name,
+            task_id=task_id,
+            interactive_session_id=interactive_session_id,
+        )
+        command_hook = [{"hooks": [{"type": "command", "command": command}]}]
+        tool_hook = [{"matcher": "*", "hooks": [{"type": "command", "command": command}]}]
+        settings = {
+            "hooks": {
+                "SessionStart": command_hook,
+                "UserPromptSubmit": command_hook,
+                "PermissionRequest": command_hook,
+                "Stop": command_hook,
+                "PreToolUse": tool_hook,
+                "PostToolUse": tool_hook,
+                "PostToolUseFailure": tool_hook,
+            }
+        }
+        settings_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+
+    def _build_hook_command(
+        self,
+        *,
+        socket_path: str,
+        agent_name: str,
+        task_id: str,
+        interactive_session_id: str,
+    ) -> str:
+        env_parts = [
+            f"MC_SOCKET_PATH={shlex.quote(socket_path)}",
+            f"MC_INTERACTIVE_SESSION_ID={shlex.quote(interactive_session_id)}",
+            f"AGENT_NAME={shlex.quote(agent_name)}",
+            f"TASK_ID={shlex.quote(task_id)}",
+        ]
+        return " ".join([*env_parts, "uv run python -m claude_code.hook_bridge"])

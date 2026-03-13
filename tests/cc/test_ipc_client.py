@@ -3,22 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import os
-import tempfile
 import uuid
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 from claude_code.ipc_client import MCSocketClient
 from claude_code.ipc_server import MCSocketServer
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _short_sock() -> str:
     """Return a short /tmp socket path safe for macOS's 104-char limit."""
@@ -46,6 +42,7 @@ async def _make_server_and_client(
 # ---------------------------------------------------------------------------
 # MCSocketClient tests
 # ---------------------------------------------------------------------------
+
 
 class TestMCSocketClientRoundTrip:
     async def test_basic_request_response(self):
@@ -124,6 +121,7 @@ class TestMCSocketClientTimeout:
 # ---------------------------------------------------------------------------
 # MCSocketServer tests
 # ---------------------------------------------------------------------------
+
 
 class TestMCSocketServerHandlers:
     async def test_send_message_no_delivery_path_returns_error(self):
@@ -288,3 +286,34 @@ class TestMCSocketServerHandlers:
         assert result.get("answer") == "Yes, ready!"
 
         await srv.stop()
+
+    async def test_emit_supervision_event_routes_to_interactive_supervisor(self):
+        sock = _short_sock()
+
+        supervisor = MagicMock()
+        supervisor.handle_event = MagicMock(
+            return_value={"session_id": "interactive_session:claude"}
+        )
+
+        srv = MCSocketServer(None, None, interactive_supervisor=supervisor)
+        await srv.start(sock)
+        client = MCSocketClient(sock)
+
+        try:
+            result = await client.request(
+                "emit_supervision_event",
+                {
+                    "provider": "claude-code",
+                    "raw_event": {
+                        "eventName": "Stop",
+                        "session_id": "interactive_session:claude",
+                        "task_id": "task-1",
+                    },
+                },
+            )
+            assert result == {"status": "ok", "session_id": "interactive_session:claude"}
+            handled_event = supervisor.handle_event.call_args.args[0]
+            assert handled_event.kind == "turn_completed"
+            assert handled_event.session_id == "interactive_session:claude"
+        finally:
+            await srv.stop()

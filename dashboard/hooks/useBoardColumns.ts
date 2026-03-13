@@ -56,6 +56,7 @@ export function stepStatusToColumnStatus(
     case "crashed":
       return "in_progress";
     case "waiting_human":
+    case "review":
       return "review";
     case "completed":
     case "deleted":

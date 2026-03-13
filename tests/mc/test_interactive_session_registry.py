@@ -28,6 +28,8 @@ def test_register_upserts_dedicated_interactive_session_metadata() -> None:
         status="ready",
         capabilities=["tui", "autocomplete"],
         timestamp="2026-03-12T22:15:00.000Z",
+        task_id="task-123",
+        step_id="step-456",
     )
 
     bridge.mutation.assert_called_once_with("interactiveSessions:upsert", metadata)
@@ -35,6 +37,8 @@ def test_register_upserts_dedicated_interactive_session_metadata() -> None:
     assert metadata["tmux_session"] == identity.tmux_session_name
     assert metadata["scope_kind"] == "chat"
     assert metadata["scope_id"] == "chat/claude-pair"
+    assert metadata["task_id"] == "task-123"
+    assert metadata["step_id"] == "step-456"
     assert metadata["attach_token"] == "attach-token-123"
     assert "output" not in metadata
     assert "pending_input" not in metadata
@@ -43,6 +47,48 @@ def test_register_upserts_dedicated_interactive_session_metadata() -> None:
         "Interactive TUI session created for @claude-pair on chat.",
         agent_name="claude-pair",
     )
+
+
+def test_record_supervision_updates_runtime_owned_session_state() -> None:
+    bridge = MagicMock()
+    bridge.query.side_effect = [
+        {
+            "session_id": "interactive_session:claude",
+            "agent_name": "claude-pair",
+            "provider": "claude-code",
+            "scope_kind": "chat",
+            "scope_id": "chat/claude-pair",
+            "surface": "chat",
+            "tmux_session": "mc-int-123",
+            "status": "attached",
+            "capabilities": ["tui", "autocomplete"],
+            "attach_token": "attach-token-123",
+            "task_id": "task-123",
+            "step_id": "step-456",
+        }
+    ]
+    registry = InteractiveSessionRegistry(bridge)
+
+    metadata = registry.record_supervision(
+        "interactive_session:claude",
+        event={
+            "kind": "turn_started",
+            "task_id": "task-123",
+            "step_id": "step-456",
+            "turn_id": "turn-1",
+            "summary": "Claude started the turn.",
+        },
+        timestamp="2026-03-12T22:21:00.000Z",
+    )
+
+    assert metadata["task_id"] == "task-123"
+    assert metadata["step_id"] == "step-456"
+    assert metadata["active_turn_id"] == "turn-1"
+    assert metadata["last_event_kind"] == "turn_started"
+    assert metadata["last_event_at"] == "2026-03-12T22:21:00.000Z"
+    assert metadata["supervision_state"] == "running"
+    assert metadata["summary"] == "Claude started the turn."
+    bridge.mutation.assert_called_once_with("interactiveSessions:upsert", metadata)
 
 
 def test_get_queries_interactive_session_metadata_by_session_id() -> None:

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.completion_status import resolve_completion_status
+from mc.application.execution.interactive_mode import resolve_step_runner_type
 from mc.types import (
     NANOBOT_AGENT_NAME,
     ActivityEventType,
@@ -133,11 +134,13 @@ class StepDispatcher:
         bridge: ConvexBridge,
         cron_service: Any | None = None,
         ask_user_registry: Any | None = None,
+        interactive_session_coordinator: Any | None = None,
     ) -> None:
         self._bridge = bridge
         self._cron_service = cron_service
         self._tier_resolver: Any | None = None
         self._ask_user_registry = ask_user_registry
+        self._interactive_session_coordinator = interactive_session_coordinator
 
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance (shared across steps)."""
@@ -155,6 +158,7 @@ class StepDispatcher:
             bridge=self._bridge,
             cron_service=self._cron_service,
             ask_user_registry=self._ask_user_registry,
+            interactive_session_coordinator=self._interactive_session_coordinator,
         )
 
     async def dispatch_steps(self, task_id: str, step_ids: list[str]) -> None:
@@ -397,9 +401,7 @@ class StepDispatcher:
             # (Story 2.5).
             pre_snapshot = await asyncio.to_thread(snapshot_output_dir, task_id)
 
-            from mc.application.execution.request import RunnerType
-
-            req.runner_type = RunnerType.CLAUDE_CODE if req.is_cc else RunnerType.NANOBOT
+            req.runner_type = resolve_step_runner_type(req)
 
             result = await _run_step_agent(
                 agent_name=agent_name,

@@ -12,10 +12,10 @@ import asyncio
 import json
 import logging
 import signal
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable
+from typing import TYPE_CHECKING, AsyncIterator, Callable
 
-from mc.types import AgentData
 from claude_code.types import CCTaskResult, WorkspaceContext
+from mc.types import AgentData
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ClaudeCodeConfig
@@ -141,6 +141,7 @@ class ClaudeCodeProvider:
             model = model[3:]
         if model:
             from claude_code.types import CC_AVAILABLE_MODELS
+
             known_bare = {m.removeprefix("cc/") for m in CC_AVAILABLE_MODELS}
             if model not in known_bare:
                 logger.warning(
@@ -156,9 +157,7 @@ class ClaudeCodeProvider:
         budget = (cc and cc.max_budget_usd) or (
             self._defaults and self._defaults.default_max_budget_usd
         )
-        turns = (cc and cc.max_turns) or (
-            self._defaults and self._defaults.default_max_turns
-        )
+        turns = (cc and cc.max_turns) or (self._defaults and self._defaults.default_max_turns)
         if budget is not None:
             cmd.extend(["--max-budget-usd", str(budget)])
         if turns is not None:
@@ -177,7 +176,7 @@ class ClaudeCodeProvider:
             for tool in cc.allowed_tools:
                 cmd.extend(["--allowedTools", tool])
         # Always allow the nanobot MCP tool namespace
-        cmd.extend(["--allowedTools", "mcp__nanobot__*"])
+        cmd.extend(["--allowedTools", "mcp__mc__*"])
 
         # Disallowed tools
         if cc and cc.disallowed_tools:

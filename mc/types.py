@@ -102,6 +102,7 @@ class StepStatus(StrEnum):
     PLANNED = "planned"
     ASSIGNED = "assigned"
     RUNNING = "running"
+    REVIEW = "review"
     COMPLETED = "completed"
     CRASHED = "crashed"
     BLOCKED = "blocked"
