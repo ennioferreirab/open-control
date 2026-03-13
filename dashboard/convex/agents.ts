@@ -53,15 +53,22 @@ export const upsertByName = mutation({
       const patch: Record<string, unknown> = {
         displayName: args.displayName,
         role: args.role,
-        soul: args.soul,
         model: args.model,
         interactiveProvider: args.interactiveProvider,
         lastActiveAt: timestamp,
         // Preserve existing enabled value on update (don't reset on re-sync)
       };
-      // Set prompt only if agent has none yet (first-time bootstrap)
-      if (!existing.prompt && args.prompt) {
-        patch.prompt = args.prompt;
+      // When the agent has a compiled projection, prompt and soul are
+      // authoritative from the spec compiler — never overwrite them from YAML.
+      if (!existing.compiledFromSpecId) {
+        // Set prompt only if agent has none yet (first-time bootstrap)
+        if (!existing.prompt && args.prompt) {
+          patch.prompt = args.prompt;
+        }
+        // Set soul from YAML only for non-compiled agents.
+        if (args.soul !== undefined) {
+          patch.soul = args.soul;
+        }
       }
       // Bootstrap skills from YAML only when the existing document has no
       // skills yet. After that, dashboard edits remain authoritative.
@@ -385,6 +392,81 @@ export const clearAgentArchive = internalMutation({
       memoryContent: undefined,
       historyContent: undefined,
       sessionData: undefined,
+    });
+  },
+});
+
+export const publishProjection = mutation({
+  args: {
+    name: v.string(),
+    displayName: v.string(),
+    role: v.string(),
+    prompt: v.string(),
+    soul: v.string(),
+    skills: v.array(v.string()),
+    model: v.optional(v.string()),
+    interactiveProvider: v.optional(interactiveProviderValidator),
+    compiledFromSpecId: v.string(),
+    compiledFromVersion: v.number(),
+    compiledAt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("agents")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+
+    const timestamp = new Date().toISOString();
+
+    if (existing) {
+      // Guard: refuse to publish to a soft-deleted agent. A deleted agent must
+      // be explicitly restored before it can receive new projection data.
+      if (existing.deletedAt) {
+        throw new Error(
+          `Cannot publish projection to deleted agent '${args.name}' — restore it first.`,
+        );
+      }
+      const patch: Record<string, unknown> = {
+        displayName: args.displayName,
+        role: args.role,
+        // publishProjection always overwrites prompt/soul with the compiled values.
+        prompt: args.prompt,
+        soul: args.soul,
+        skills: args.skills,
+        compiledFromSpecId: args.compiledFromSpecId,
+        compiledFromVersion: args.compiledFromVersion,
+        compiledAt: args.compiledAt,
+        lastActiveAt: timestamp,
+      };
+      if (args.model !== undefined) patch.model = args.model;
+      if (args.interactiveProvider !== undefined)
+        patch.interactiveProvider = args.interactiveProvider;
+      await ctx.db.patch(existing._id, patch);
+    } else {
+      await ctx.db.insert("agents", {
+        name: args.name,
+        displayName: args.displayName,
+        role: args.role,
+        prompt: args.prompt,
+        soul: args.soul,
+        skills: args.skills,
+        status: "idle",
+        enabled: true,
+        model: args.model,
+        interactiveProvider: args.interactiveProvider,
+        compiledFromSpecId: args.compiledFromSpecId,
+        compiledFromVersion: args.compiledFromVersion,
+        compiledAt: args.compiledAt,
+        lastActiveAt: timestamp,
+      });
+    }
+
+    // Write activity event
+    await ctx.db.insert("activities", {
+      agentName: args.name,
+      eventType: "agent_config_updated",
+      description: `Agent '${args.displayName}' runtime projection published from spec '${args.compiledFromSpecId}' v${args.compiledFromVersion}`,
+      timestamp,
     });
   },
 });
