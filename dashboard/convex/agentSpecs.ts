@@ -43,6 +43,13 @@ export const create = mutation({
     model: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("agentSpecs")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+    if (existing) {
+      throw new Error("A spec with this name already exists");
+    }
     const now = new Date().toISOString();
     return ctx.db.insert("agentSpecs", {
       ...args,

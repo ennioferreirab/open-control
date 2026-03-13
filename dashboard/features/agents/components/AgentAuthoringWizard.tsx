@@ -2,7 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { Check, ChevronRight, Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -133,6 +139,10 @@ export function AgentAuthoringWizard({ open, onClose, onPublished }: AgentAuthor
       <DialogContent className="max-w-4xl p-0">
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle className="text-lg font-semibold">Create Agent</DialogTitle>
+          <DialogDescription className="sr-only">
+            Define and publish a new agent spec with purpose, context, working style, and execution
+            policy.
+          </DialogDescription>
           <div className="mt-2">
             <PhaseIndicator phases={PHASES} currentPhase={currentPhase} />
           </div>

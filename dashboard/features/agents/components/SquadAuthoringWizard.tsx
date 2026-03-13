@@ -2,14 +2,23 @@
 
 import { useState, useCallback } from "react";
 import { Check, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { useCreateSquadDraft } from "@/features/agents/hooks/useCreateSquadDraft";
+import type { SquadSpecDraft } from "@/features/agents/hooks/useCreateSquadDraft";
 
 type SquadPhase = "outcome" | "team-design" | "workflow-design" | "variants" | "review-approval";
+type SquadDraft = SquadSpecDraft;
 
 const SQUAD_PHASES: { id: SquadPhase; label: string; step: number }[] = [
   { id: "outcome", label: "Outcome", step: 1 },
@@ -18,24 +27,6 @@ const SQUAD_PHASES: { id: SquadPhase; label: string; step: number }[] = [
   { id: "variants", label: "Variants", step: 4 },
   { id: "review-approval", label: "Review & Approval", step: 5 },
 ];
-
-interface WorkflowStep {
-  id: string;
-  title: string;
-  type: "agent" | "human" | "checkpoint" | "review" | "system";
-  description: string;
-}
-
-interface SquadDraft {
-  name: string;
-  displayName: string;
-  description: string;
-  outcome: string;
-  agentRoles: Array<{ name: string; role: string }>;
-  workflowSteps: WorkflowStep[];
-  exitCriteria: string;
-  reviewPolicy: string;
-}
 
 interface SquadAuthoringWizardProps {
   open: boolean;
@@ -86,17 +77,6 @@ function SquadSummaryPanel({ draft }: { draft: SquadDraft }) {
   );
 }
 
-const EMPTY_DRAFT: SquadDraft = {
-  name: "",
-  displayName: "",
-  description: "",
-  outcome: "",
-  agentRoles: [],
-  workflowSteps: [],
-  exitCriteria: "",
-  reviewPolicy: "",
-};
-
 function PhaseIndicator({
   phases,
   currentPhase,
@@ -138,12 +118,7 @@ function PhaseIndicator({
 
 export function SquadAuthoringWizard({ open, onClose, onPublished }: SquadAuthoringWizardProps) {
   const [currentPhase, setCurrentPhase] = useState<SquadPhase>("outcome");
-  const [draft, setDraft] = useState<SquadDraft>(EMPTY_DRAFT);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const updateDraft = useCallback((patch: Partial<SquadDraft>) => {
-    setDraft((prev) => ({ ...prev, ...patch }));
-  }, []);
+  const { draft, isSaving, updateDraft, publishDraft } = useCreateSquadDraft();
 
   const handleNext = useCallback(() => {
     const currentIdx = SQUAD_PHASES.findIndex((p) => p.id === currentPhase);
@@ -160,17 +135,12 @@ export function SquadAuthoringWizard({ open, onClose, onPublished }: SquadAuthor
   }, [currentPhase]);
 
   const handlePublish = useCallback(async () => {
-    if (!draft.name) return;
-    setIsSaving(true);
-    try {
-      // In the future this will call the squadSpecs Convex mutation
-      // For now we just call onPublished to close the wizard
-      onPublished(draft.name);
+    const name = await publishDraft();
+    if (name) {
+      onPublished(name);
       onClose();
-    } finally {
-      setIsSaving(false);
     }
-  }, [draft.name, onPublished, onClose]);
+  }, [publishDraft, onPublished, onClose]);
 
   const isLastPhase = currentPhase === "review-approval";
   const canPublish = !!draft.name;
@@ -182,6 +152,10 @@ export function SquadAuthoringWizard({ open, onClose, onPublished }: SquadAuthor
       <DialogContent className="max-w-4xl p-0">
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle className="text-lg font-semibold">Create Squad</DialogTitle>
+          <DialogDescription className="sr-only">
+            Define and publish a new squad blueprint with team design, workflow, and approval
+            policy.
+          </DialogDescription>
           <div className="mt-2">
             <PhaseIndicator phases={SQUAD_PHASES} currentPhase={currentPhase} />
           </div>

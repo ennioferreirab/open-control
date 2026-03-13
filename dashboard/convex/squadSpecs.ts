@@ -32,6 +32,19 @@ export const create = mutation({
     agentSpecIds: v.array(v.id("agentSpecs")),
   },
   handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("squadSpecs")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+    if (existing) {
+      throw new Error("A spec with this name already exists");
+    }
+    for (const agentSpecId of args.agentSpecIds) {
+      const agentSpec = await ctx.db.get(agentSpecId);
+      if (!agentSpec) {
+        throw new Error(`Agent spec not found: ${agentSpecId}`);
+      }
+    }
     const now = new Date().toISOString();
     return ctx.db.insert("squadSpecs", {
       name: args.name,
