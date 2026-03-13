@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 # Re-export gateway helpers that are used by the service but defined externally.
 # These are imported lazily or passed as dependencies to keep this module testable.
 
+
 def _read_file_or_none(path: Path) -> str | None:
     """Return file content as a string, or None if the file does not exist."""
     try:
@@ -59,12 +60,14 @@ def _read_session_data(sessions_dir: Path) -> str | None:
 def ensure_nanobot_agent(agents_dir: Path) -> None:
     """Delegate to gateway.ensure_nanobot_agent."""
     from mc.infrastructure.agent_bootstrap import ensure_nanobot_agent as _impl
+
     _impl(agents_dir)
 
 
 def ensure_low_agent(bridge: "ConvexBridge") -> None:
     """Delegate to gateway.ensure_low_agent."""
     from mc.infrastructure.agent_bootstrap import ensure_low_agent as _impl
+
     _impl(bridge)
 
 
@@ -74,24 +77,28 @@ def sync_skills_impl(
 ) -> list[str]:
     """Delegate to gateway.sync_skills."""
     from mc.infrastructure.agent_bootstrap import sync_skills as _impl
+
     return _impl(bridge, builtin_skills_dir)
 
 
 def list_available_models() -> list[str]:
     """Delegate to provider_factory.list_available_models."""
     from mc.infrastructure.providers.factory import list_available_models as _impl
+
     return _impl()
 
 
 def _config_default_model() -> str:
     """Delegate to gateway._config_default_model."""
     from mc.infrastructure.config import _config_default_model as _impl
+
     return _impl()
 
 
 def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
     """Delegate to gateway._write_back_convex_agents."""
     from mc.infrastructure.agent_bootstrap import _write_back_convex_agents as _impl
+
     _impl(bridge, agents_dir)
 
 
@@ -150,9 +157,7 @@ class AgentSyncService:
                 config_file = child / "config.yaml"
                 if child.is_dir() and config_file.is_file():
                     try:
-                        raw = yaml.safe_load(
-                            config_file.read_text(encoding="utf-8")
-                        )
+                        raw = yaml.safe_load(config_file.read_text(encoding="utf-8"))
                         if isinstance(raw, dict) and raw.get("role") in non_agent_roles:
                             logger.debug(
                                 "Skipping non-agent directory %s (role=%s)",
@@ -167,9 +172,7 @@ class AgentSyncService:
                     if isinstance(result, list):
                         errors[child.name] = result
                         for msg in result:
-                            logger.error(
-                                "Skipping invalid agent %s: %s", child.name, msg
-                            )
+                            logger.error("Skipping invalid agent %s: %s", child.name, msg)
                     else:
                         valid_agents.append(result)
 
@@ -177,10 +180,20 @@ class AgentSyncService:
         for agent in valid_agents:
             if not agent.model:
                 agent.model = resolved_default
-            elif "/" not in agent.model and resolved_default.endswith(
-                "/" + agent.model
-            ):
+            elif "/" not in agent.model and resolved_default.endswith("/" + agent.model):
                 agent.model = resolved_default
+
+            # Step 2a: Guard against overwriting projection-backed agents.
+            # If the Convex document for this agent has compiledFromSpecId set,
+            # local config.yaml must NOT overwrite it — the spec compiler owns
+            # the runtime projection.
+            if self._is_projection_backed(agent.name):
+                logger.info(
+                    "Skipping local YAML upsert for projection-backed agent '%s' "
+                    "(compiledFromSpecId is set)",
+                    agent.name,
+                )
+                continue
 
             try:
                 self._bridge.sync_agent(agent)
@@ -196,6 +209,36 @@ class AgentSyncService:
             logger.exception("Failed to deactivate removed agents")
 
         return valid_agents, errors
+
+    # ------------------------------------------------------------------
+    # Projection Metadata Helpers
+    # ------------------------------------------------------------------
+
+    def _is_projection_backed(self, agent_name: str) -> bool:
+        """Return True if the Convex agent doc has compiledFromSpecId set.
+
+        When an agent has been compiled from an Agent Spec V2, local YAML must
+        not overwrite the runtime projection.  Only the spec compiler should
+        update such agents.
+
+        Returns False if the agent is not yet in Convex (new agent) or if the
+        Convex doc has no compiledFromSpecId (legacy/uncompiled agent).
+        Fail-safe: returns False on any bridge error so legacy sync continues.
+        """
+        try:
+            agent_doc = self._bridge.get_agent_by_name(agent_name)
+        except Exception:
+            logger.warning(
+                "[agent_sync] Could not query Convex for agent '%s' projection "
+                "metadata — treating as legacy (unprotected)",
+                agent_name,
+            )
+            return False
+
+        if agent_doc is None:
+            return False
+
+        return bool(agent_doc.get("compiled_from_spec_id"))
 
     # ------------------------------------------------------------------
     # Deleted Agent Cleanup
@@ -227,8 +270,7 @@ class AgentSyncService:
 
             if memory is None and history is None and session is None:
                 logger.info(
-                    "No archive data for agent '%s' — skipping archive call, "
-                    "proceeding to cleanup",
+                    "No archive data for agent '%s' — skipping archive call, proceeding to cleanup",
                     name,
                 )
             else:
@@ -236,20 +278,15 @@ class AgentSyncService:
                     self._bridge.archive_agent_data(name, memory, history, session)
                     logger.info("Archived agent data for '%s'", name)
                 except Exception:
-                    logger.exception(
-                        "Failed to archive agent '%s' — skipping cleanup", name
-                    )
+                    logger.exception("Failed to archive agent '%s' — skipping cleanup", name)
                     continue  # Don't delete if archive failed
 
             try:
                 shutil.rmtree(agent_dir)
-                logger.info(
-                    "Removed local folder for deleted agent '%s'", name
-                )
+                logger.info("Removed local folder for deleted agent '%s'", name)
             except OSError:
                 logger.exception(
-                    "Failed to remove local folder for agent '%s' — "
-                    "will retry on next sync",
+                    "Failed to remove local folder for agent '%s' — will retry on next sync",
                     name,
                 )
 
@@ -318,9 +355,7 @@ class AgentSyncService:
                     {"key": "model_tiers", "value": json.dumps(updated)},
                 )
             else:
-                logger.info(
-                    "[agent_sync] Model tiers up to date — no migration needed"
-                )
+                logger.info("[agent_sync] Model tiers up to date — no migration needed")
 
     # ------------------------------------------------------------------
     # Embedding Model Sync
@@ -329,9 +364,7 @@ class AgentSyncService:
     def sync_embedding_model(self) -> None:
         """Sync the embedding model setting from Convex to environment."""
         try:
-            model = self._bridge.query(
-                "settings:get", {"key": "memory_embedding_model"}
-            )
+            model = self._bridge.query("settings:get", {"key": "memory_embedding_model"})
         except Exception:
             logger.warning("[agent_sync] Failed to read memory_embedding_model setting")
             return
@@ -348,18 +381,14 @@ class AgentSyncService:
             settings_path = Path.home() / ".nanobot" / "memory_settings.json"
             existing: dict = {}
             if settings_path.exists():
-                existing = json.loads(
-                    settings_path.read_text(encoding="utf-8")
-                )
+                existing = json.loads(settings_path.read_text(encoding="utf-8"))
             existing["embedding_model"] = model or ""
             settings_path.write_text(
                 json.dumps(existing, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
         except Exception:
-            logger.debug(
-                "[agent_sync] Failed to persist embedding model to memory_settings.json"
-            )
+            logger.debug("[agent_sync] Failed to persist embedding model to memory_settings.json")
 
     # ------------------------------------------------------------------
     # Skills Sync

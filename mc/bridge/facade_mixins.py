@@ -205,6 +205,43 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._chats.mark_chat_done(chat_id)
 
+    # ------------------------------------------------------------------
+    # Specs repository façade methods
+    # ------------------------------------------------------------------
+
+    def create_agent_spec(
+        self,
+        name: str,
+        role: str,
+        prompt: str,
+        display_name: str | None = None,
+        model: str | None = None,
+        skills: list[str] | None = None,
+        soul: str | None = None,
+    ) -> Any:
+        self._ensure_repos()
+        return self._specs.create_agent_spec(
+            name=name,
+            role=role,
+            prompt=prompt,
+            display_name=display_name,
+            model=model,
+            skills=skills,
+            soul=soul,
+        )
+
+    def get_agent_spec_by_name(self, name: str) -> dict[str, Any] | None:
+        self._ensure_repos()
+        return self._specs.get_agent_spec_by_name(name)
+
+    def publish_agent_spec(self, spec_id: str) -> Any:
+        self._ensure_repos()
+        return self._specs.publish_agent_spec(spec_id)
+
+    def create_board_agent_binding(self, board_id: str, agent_name: str) -> Any:
+        self._ensure_repos()
+        return self._specs.create_board_agent_binding(board_id, agent_name)
+
     def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         self._ensure_repos()
         return self._subscriptions.subscribe(function_name, args)

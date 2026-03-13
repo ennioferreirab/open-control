@@ -37,6 +37,7 @@ from mc.bridge.repositories.agents import AgentRepository
 from mc.bridge.repositories.boards import BoardRepository
 from mc.bridge.repositories.chats import ChatRepository
 from mc.bridge.repositories.messages import MessageRepository
+from mc.bridge.repositories.specs import SpecsRepository
 from mc.bridge.repositories.steps import StepRepository
 from mc.bridge.repositories.tasks import TaskRepository
 from mc.bridge.retry import (  # noqa: F401
@@ -74,6 +75,7 @@ class ConvexBridge(BridgeRepositoryFacadeMixin):
         self._agents = AgentRepository(adapter)
         self._boards = BoardRepository(adapter)
         self._chats = ChatRepository(adapter)
+        self._specs = SpecsRepository(adapter)
         self._subscriptions = SubscriptionManager(adapter)
 
     def _ensure_repos(self) -> None:
@@ -90,18 +92,14 @@ class ConvexBridge(BridgeRepositoryFacadeMixin):
     def mutation(self, function_name: str, args: dict[str, Any] | None = None) -> Any:
         return self._mutation_with_retry(function_name, args)
 
-    def _mutation_with_retry(
-        self, function_name: str, args: dict[str, Any] | None = None
-    ) -> Any:
+    def _mutation_with_retry(self, function_name: str, args: dict[str, Any] | None = None) -> Any:
         camel_args = _convert_keys_to_camel(args) if args else {}
         last_exception = None
         max_attempts = MAX_RETRIES + 1
 
         for attempt in range(1, max_attempts + 1):
             try:
-                logger.debug(
-                    "mutation %s attempt %d args=%s", function_name, attempt, camel_args
-                )
+                logger.debug("mutation %s attempt %d args=%s", function_name, attempt, camel_args)
                 result = self._client.mutation(function_name, camel_args)
                 if attempt > 1:
                     logger.info(

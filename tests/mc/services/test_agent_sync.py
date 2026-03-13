@@ -59,9 +59,7 @@ def _write_agent_yaml(agents_dir: Path, name: str, role: str = "Test Agent") -> 
 class TestAgentSyncServiceInit:
     """Verify constructor and basic attributes."""
 
-    def test_stores_bridge_and_agents_dir(
-        self, bridge: MagicMock, agents_dir: Path
-    ) -> None:
+    def test_stores_bridge_and_agents_dir(self, bridge: MagicMock, agents_dir: Path) -> None:
         svc = AgentSyncService(bridge=bridge, agents_dir=agents_dir)
         assert svc._bridge is bridge
         assert svc._agents_dir == agents_dir
@@ -202,11 +200,14 @@ class TestCleanupDeletedAgents:
 class TestSyncModelTiers:
     """Test sync_model_tiers — model tier sync logic."""
 
-    @patch("mc.contexts.agents.sync.list_available_models", return_value=[
-        "anthropic/claude-opus-4-5",
-        "anthropic/claude-sonnet-4-5",
-        "anthropic/claude-haiku-4-5",
-    ])
+    @patch(
+        "mc.contexts.agents.sync.list_available_models",
+        return_value=[
+            "anthropic/claude-opus-4-5",
+            "anthropic/claude-sonnet-4-5",
+            "anthropic/claude-haiku-4-5",
+        ],
+    )
     def test_seeds_default_tiers_when_none_exist(
         self, mock_models: MagicMock, service: AgentSyncService, bridge: MagicMock
     ) -> None:
@@ -218,9 +219,12 @@ class TestSyncModelTiers:
         # Should set connected_models and model_tiers
         assert bridge.mutation.call_count == 2
 
-    @patch("mc.contexts.agents.sync.list_available_models", return_value=[
-        "anthropic/claude-sonnet-4-5",
-    ])
+    @patch(
+        "mc.contexts.agents.sync.list_available_models",
+        return_value=[
+            "anthropic/claude-sonnet-4-5",
+        ],
+    )
     def test_migrates_stale_tier_values(
         self, mock_models: MagicMock, service: AgentSyncService, bridge: MagicMock
     ) -> None:
@@ -271,3 +275,141 @@ class TestSyncSkills:
         result = service.sync_skills()
         assert result == ["skill-a", "skill-b"]
         mock_sync.assert_called_once()
+
+
+class TestProjectionProtection:
+    """Test that AgentSyncService does NOT overwrite projection-backed agents."""
+
+    @patch("mc.contexts.agents.sync._write_back_convex_agents")
+    @patch("mc.contexts.agents.sync.validate_agent_file")
+    @patch("mc.contexts.agents.sync.ensure_low_agent")
+    @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
+    def test_skips_upsert_for_projection_backed_agent(
+        self,
+        mock_ensure_nanobot: MagicMock,
+        mock_ensure_low: MagicMock,
+        mock_validate: MagicMock,
+        mock_write_back: MagicMock,
+        service: AgentSyncService,
+        agents_dir: Path,
+        bridge: MagicMock,
+    ) -> None:
+        """A compiled projection-backed agent must NOT be overwritten by local YAML."""
+        from mc.types import AgentData
+
+        _write_agent_yaml(agents_dir, "compiled-agent")
+        agent_data = AgentData(
+            name="compiled-agent",
+            display_name="Compiled Agent",
+            role="Developer",
+            prompt="Local YAML prompt.",
+        )
+        mock_validate.return_value = agent_data
+
+        # Simulate that Convex has a projection-backed agent doc
+        bridge.get_agent_by_name.return_value = {
+            "name": "compiled-agent",
+            "compiled_from_spec_id": "spec-id-abc",
+            "compiled_at": "2025-01-01T00:00:00Z",
+        }
+
+        synced, errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
+
+        # Should still appear in synced (for reporting), but NOT call sync_agent
+        bridge.sync_agent.assert_not_called()
+
+    @patch("mc.contexts.agents.sync._write_back_convex_agents")
+    @patch("mc.contexts.agents.sync.validate_agent_file")
+    @patch("mc.contexts.agents.sync.ensure_low_agent")
+    @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
+    def test_allows_upsert_for_legacy_agent(
+        self,
+        mock_ensure_nanobot: MagicMock,
+        mock_ensure_low: MagicMock,
+        mock_validate: MagicMock,
+        mock_write_back: MagicMock,
+        service: AgentSyncService,
+        agents_dir: Path,
+        bridge: MagicMock,
+    ) -> None:
+        """An uncompiled legacy agent (no compiledFromSpecId) is synced normally."""
+        from mc.types import AgentData
+
+        _write_agent_yaml(agents_dir, "legacy-agent")
+        agent_data = AgentData(
+            name="legacy-agent",
+            display_name="Legacy Agent",
+            role="Developer",
+            prompt="Legacy prompt.",
+        )
+        mock_validate.return_value = agent_data
+
+        # No projection metadata
+        bridge.get_agent_by_name.return_value = {
+            "name": "legacy-agent",
+            "compiled_from_spec_id": None,
+        }
+
+        synced, errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
+
+        bridge.sync_agent.assert_called_once()
+
+    @patch("mc.contexts.agents.sync._write_back_convex_agents")
+    @patch("mc.contexts.agents.sync.validate_agent_file")
+    @patch("mc.contexts.agents.sync.ensure_low_agent")
+    @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
+    def test_allows_upsert_for_new_agent_not_in_convex(
+        self,
+        mock_ensure_nanobot: MagicMock,
+        mock_ensure_low: MagicMock,
+        mock_validate: MagicMock,
+        mock_write_back: MagicMock,
+        service: AgentSyncService,
+        agents_dir: Path,
+        bridge: MagicMock,
+    ) -> None:
+        """A brand-new agent not yet in Convex is synced normally."""
+        from mc.types import AgentData
+
+        _write_agent_yaml(agents_dir, "new-agent")
+        agent_data = AgentData(
+            name="new-agent",
+            display_name="New Agent",
+            role="Developer",
+            prompt="New prompt.",
+        )
+        mock_validate.return_value = agent_data
+
+        # Not in Convex at all
+        bridge.get_agent_by_name.return_value = None
+
+        synced, errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
+
+        bridge.sync_agent.assert_called_once()
+
+
+class TestWriteBackProjectionProtection:
+    """Test that write-back materializes config.yaml/SOUL.md from projection."""
+
+    def test_write_back_still_works_for_projection_backed_agent(self, tmp_path: Path) -> None:
+        """Write-back should still materialize config.yaml from a projection-backed agent."""
+        from mc.runtime.gateway import _write_back_convex_agents
+
+        mock_bridge = MagicMock()
+        mock_bridge.list_agents.return_value = [
+            {
+                "name": "compiled-agent",
+                "role": "Developer",
+                "prompt": "Compiled prompt.",
+                "compiled_from_spec_id": "spec-id-abc",
+                "compiled_at": "2099-01-01T00:00:00Z",
+                "last_active_at": "2099-01-01T00:00:00+00:00",
+            }
+        ]
+
+        _write_back_convex_agents(mock_bridge, tmp_path)
+
+        # Write-back SHOULD still be called for projection-backed agents
+        mock_bridge.write_agent_config.assert_called_once()
+        call_args = mock_bridge.write_agent_config.call_args[0]
+        assert call_args[0]["name"] == "compiled-agent"
