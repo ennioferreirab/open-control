@@ -1,16 +1,17 @@
 """Tests for the gateway module — Tasks 1–5."""
 
 import asyncio
-import dataclasses
+import os
+import signal
 from pathlib import Path
-from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Task 1.1: _resolve_convex_url()
 # ---------------------------------------------------------------------------
+
 
 class TestResolveConvexUrl:
     """Test _resolve_convex_url() resolves from env var or .env.local fallback."""
@@ -59,6 +60,7 @@ class TestResolveConvexUrl:
 # Task 1.2 / 1.3: main() replaces placeholder with real bridge init
 # ---------------------------------------------------------------------------
 
+
 class TestMainFunction:
     """Test that main() creates a bridge, syncs agents, and runs the gateway."""
 
@@ -68,8 +70,10 @@ class TestMainFunction:
         from mc.runtime.gateway import main
 
         monkeypatch.delenv("CONVEX_URL", raising=False)
-        with patch("mc.runtime.gateway._resolve_convex_url", return_value=None), \
-             patch("mc.runtime.gateway.logger") as mock_logger:
+        with (
+            patch("mc.runtime.gateway._resolve_convex_url", return_value=None),
+            patch("mc.runtime.gateway.logger") as mock_logger,
+        ):
             # main() should return early (not hang) when URL is unresolvable
             await main()
             mock_logger.error.assert_called()
@@ -83,11 +87,15 @@ class TestMainFunction:
         mock_bridge.close = MagicMock()
 
         monkeypatch.setenv("CONVEX_ADMIN_KEY", "test-admin-key")
-        with patch("mc.runtime.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
-             patch("mc.bridge.ConvexBridge", return_value=mock_bridge) as mock_bridge_cls, \
-             patch("mc.runtime.gateway.sync_agent_registry", return_value=([], {})) as mock_sync, \
-             patch("mc.runtime.gateway.run_gateway", new_callable=AsyncMock) as mock_run, \
-             patch("mc.runtime.gateway.AGENTS_DIR", Path("/nonexistent")):
+        with (
+            patch(
+                "mc.runtime.gateway._resolve_convex_url", return_value="https://test.convex.cloud"
+            ),
+            patch("mc.bridge.ConvexBridge", return_value=mock_bridge) as mock_bridge_cls,
+            patch("mc.runtime.gateway.sync_agent_registry", return_value=([], {})),
+            patch("mc.runtime.gateway.run_gateway", new_callable=AsyncMock) as mock_run,
+            patch("mc.runtime.gateway.AGENTS_DIR", Path("/nonexistent")),
+        ):
             await main()
 
             mock_bridge_cls.assert_called_once_with("https://test.convex.cloud", "test-admin-key")
@@ -100,10 +108,14 @@ class TestMainFunction:
         from mc.runtime.gateway import main
 
         monkeypatch.delenv("CONVEX_ADMIN_KEY", raising=False)
-        with patch("mc.runtime.gateway._resolve_convex_url", return_value="https://test.convex.cloud"), \
-             patch("mc.runtime.gateway._resolve_admin_key", return_value=None), \
-             patch("mc.runtime.gateway.logger") as mock_logger, \
-             patch("mc.bridge.ConvexBridge") as mock_bridge_cls:
+        with (
+            patch(
+                "mc.runtime.gateway._resolve_convex_url", return_value="https://test.convex.cloud"
+            ),
+            patch("mc.runtime.gateway._resolve_admin_key", return_value=None),
+            patch("mc.runtime.gateway.logger") as mock_logger,
+            patch("mc.bridge.ConvexBridge") as mock_bridge_cls,
+        ):
             await main()
             mock_logger.error.assert_called()
             mock_bridge_cls.assert_not_called()
@@ -112,6 +124,7 @@ class TestMainFunction:
 # ---------------------------------------------------------------------------
 # Task 1.4: run_gateway() starts routing loop + timeout checker
 # ---------------------------------------------------------------------------
+
 
 class TestRunGateway:
     """Verify run_gateway starts all loops: routing, review, executor, timeout."""
@@ -131,41 +144,44 @@ class TestRunGateway:
         mock_channel_manager_cls = MagicMock(return_value=mock_channels_instance)
         mock_mc_channel = MagicMock()
 
-        with patch("mc.runtime.gateway.TaskOrchestrator") as MockOrch, \
-             patch("mc.runtime.gateway.TimeoutChecker") as MockTC, \
-             patch("mc.contexts.execution.executor.TaskExecutor") as MockExec, \
-             patch("mc.contexts.conversation.chat_handler.ChatHandler") as MockCH, \
-             patch("mc.contexts.conversation.ask_user.watcher.AskUserReplyWatcher") as MockAUW, \
-             patch("mc.contexts.planning.supervisor.PlanNegotiationSupervisor") as MockPNS, \
-             patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls), \
-             patch("nanobot.config.loader.load_config"), \
-             patch("nanobot.bus.queue.MessageBus"), \
-             patch("nanobot.channels.mission_control.MissionControlChannel", return_value=mock_mc_channel), \
-             patch("mc.contexts.conversation.mentions.watcher.MentionWatcher") as MockMW:
-            mock_orch_instance = MockOrch.return_value
+        with (
+            patch("mc.runtime.gateway.TaskOrchestrator") as mock_orch_cls,
+            patch("mc.runtime.gateway.TimeoutChecker") as mock_tc_cls,
+            patch("mc.contexts.execution.executor.TaskExecutor") as mock_exec_cls,
+            patch("mc.contexts.conversation.chat_handler.ChatHandler") as mock_ch_cls,
+            patch("mc.contexts.conversation.ask_user.watcher.AskUserReplyWatcher") as mock_auw_cls,
+            patch("mc.contexts.planning.supervisor.PlanNegotiationSupervisor") as mock_pns_cls,
+            patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls),
+            patch("nanobot.config.loader.load_config"),
+            patch("nanobot.bus.queue.MessageBus"),
+            patch(
+                "nanobot.channels.mission_control.MissionControlChannel",
+                return_value=mock_mc_channel,
+            ),
+            patch("mc.contexts.conversation.mentions.watcher.MentionWatcher") as mock_mw_cls,
+        ):
+            mock_orch_instance = mock_orch_cls.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
             mock_orch_instance.start_kickoff_watch_loop = AsyncMock()
             mock_orch_instance.start_inbox_routing_loop = AsyncMock()
 
-            mock_tc_instance = MockTC.return_value
+            mock_tc_instance = mock_tc_cls.return_value
             mock_tc_instance.start = AsyncMock()
 
-            mock_exec_instance = MockExec.return_value
+            mock_exec_instance = mock_exec_cls.return_value
             mock_exec_instance.start_execution_loop = AsyncMock()
 
-            mock_ch_instance = MockCH.return_value
+            mock_ch_instance = mock_ch_cls.return_value
             mock_ch_instance.run = AsyncMock()
 
-            MockMW.return_value.run = AsyncMock()
-            MockAUW.return_value.run = AsyncMock()
-            MockPNS.return_value.run = AsyncMock()
+            mock_mw_cls.return_value.run = AsyncMock()
+            mock_auw_cls.return_value.run = AsyncMock()
+            mock_pns_cls.return_value.run = AsyncMock()
 
             # run_gateway waits on a stop_event; we need to trigger it
             async def trigger_stop():
                 await asyncio.sleep(0.05)
-                import signal
-                import os
                 os.kill(os.getpid(), signal.SIGTERM)
 
             stop_task = asyncio.create_task(trigger_stop())
@@ -181,7 +197,7 @@ class TestRunGateway:
                     pass
 
             # Story 20.3: gateway now passes RuntimeContext instead of bare bridge
-            MockOrch.assert_called_once_with(
+            mock_orch_cls.assert_called_once_with(
                 ANY,
                 cron_service=ANY,
                 ask_user_registry=ANY,
@@ -189,15 +205,20 @@ class TestRunGateway:
             )
             # Verify the first arg is a RuntimeContext wrapping the expected bridge
             from mc.infrastructure.runtime_context import RuntimeContext
-            ctx_arg = MockOrch.call_args[0][0]
+
+            ctx_arg = mock_orch_cls.call_args[0][0]
             assert isinstance(ctx_arg, RuntimeContext)
             assert ctx_arg.bridge is mock_bridge
-            assert MockTC.call_args.kwargs["sleep_controller"] is not None
-            assert MockExec.call_args.kwargs["sleep_controller"] is not None
-            assert MockCH.call_args.kwargs["sleep_controller"] is not None
-            assert MockMW.call_args.kwargs["sleep_controller"] is not None
-            assert MockAUW.call_args.kwargs["sleep_controller"] is not None
-            assert MockPNS.call_args.kwargs["sleep_controller"] is not None
+            assert "interactive_runtime" in ctx_arg.services
+            assert "interactive_session_service" in ctx_arg.services
+            assert "interactive_session_coordinator" in ctx_arg.services
+            assert "interactive_socket_transport" in ctx_arg.services
+            assert mock_tc_cls.call_args.kwargs["sleep_controller"] is not None
+            assert mock_exec_cls.call_args.kwargs["sleep_controller"] is not None
+            assert mock_ch_cls.call_args.kwargs["sleep_controller"] is not None
+            assert mock_mw_cls.call_args.kwargs["sleep_controller"] is not None
+            assert mock_auw_cls.call_args.kwargs["sleep_controller"] is not None
+            assert mock_pns_cls.call_args.kwargs["sleep_controller"] is not None
             mock_orch_instance.start_routing_loop.assert_called_once()
             mock_orch_instance.start_review_routing_loop.assert_called_once()
             mock_orch_instance.start_kickoff_watch_loop.assert_called_once()
@@ -209,6 +230,7 @@ class TestRunGateway:
 # ---------------------------------------------------------------------------
 # Task 2: AgentData construction filters extra fields
 # ---------------------------------------------------------------------------
+
 
 class TestAgentDataFiltering:
     """Test that AgentData construction tolerates extra fields from Convex."""
@@ -251,6 +273,7 @@ class TestAgentDataFiltering:
 # Task 3: Assigned → in_progress task pickup (execution loop)
 # ---------------------------------------------------------------------------
 
+
 class TestExecutionLoop:
     """Test start_execution_loop() picks up assigned tasks."""
 
@@ -288,7 +311,9 @@ class TestExecutionLoop:
                     pass
 
         mock_bridge.update_task_status.assert_any_call(
-            "task_123", "in_progress", "test-agent",
+            "task_123",
+            "in_progress",
+            "test-agent",
             unittest_any_string(),
         )
 
@@ -378,9 +403,11 @@ class TestExecutionLoop:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "dev-agent", "display_name": "Dev", "role": "dev", "skills": ["coding"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {"name": "dev-agent", "display_name": "Dev", "role": "dev", "skills": ["coding"]},
+            ]
+        )
 
         task_data = {
             "id": "task_lead_reroute",
@@ -389,21 +416,25 @@ class TestExecutionLoop:
             "assigned_agent": "lead-agent",
             "trust_level": "autonomous",
         }
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(
-                temp_id="step_1",
-                title="Execute",
-                description="Execute",
-                assigned_agent="dev-agent",
-            ),
-        ])
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Execute",
+                    description="Execute",
+                    assigned_agent="dev-agent",
+                ),
+            ]
+        )
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.contexts.execution.executor.TaskPlanner") as MockPlanner, \
-             patch.object(executor, "_execute_task", new_callable=AsyncMock) as mock_execute, \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
-            MockPlanner.return_value.plan_task = AsyncMock(return_value=plan)
+        with (
+            patch("mc.contexts.execution.executor.TaskPlanner") as mock_planner_cls,
+            patch.object(executor, "_execute_task", new_callable=AsyncMock) as mock_execute,
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
+            mock_planner_cls.return_value.plan_task = AsyncMock(return_value=plan)
             await executor._pickup_task(task_data)
 
         mock_execute.assert_not_called()
@@ -419,6 +450,7 @@ class TestExecutionLoop:
 # ---------------------------------------------------------------------------
 # Task 4: Task execution and completion
 # ---------------------------------------------------------------------------
+
 
 class TestTaskExecution:
     """Test task execution writes results and transitions to done/review."""
@@ -436,9 +468,15 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Task completed successfully", "mock_session_key", MagicMock())), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                return_value=("Task completed successfully", "mock_session_key", MagicMock()),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_001", "Test task", "Do testing", "test-agent", "autonomous"
             )
@@ -460,9 +498,15 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Done", "mock_session_key", MagicMock())), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                return_value=("Done", "mock_session_key", MagicMock()),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_002", "Review task", "Do review", "test-agent", "human_approved"
             )
@@ -484,9 +528,15 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Here is my work output", "mock_session_key", MagicMock())), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                return_value=("Here is my work output", "mock_session_key", MagicMock()),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_003", "Work task", "Do work", "test-agent", "autonomous"
             )
@@ -516,9 +566,15 @@ class TestTaskExecution:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Done", "mock_session_key", MagicMock())), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                return_value=("Done", "mock_session_key", MagicMock()),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_004", "Event task", "Test events", "test-agent", "autonomous"
             )
@@ -539,10 +595,16 @@ class TestTaskExecution:
         executor = TaskExecutor(mock_bridge)
 
         crash_error = RuntimeError("Agent exploded")
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, side_effect=crash_error), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough), \
-             patch.object(executor, "_agent_gateway") as mock_gw:
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                side_effect=crash_error,
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+            patch.object(executor, "_agent_gateway") as mock_gw,
+        ):
             mock_gw.handle_agent_crash = AsyncMock()
             await executor._execute_task(
                 "task_005", "Crash task", "Will crash", "crash-agent", "autonomous"
@@ -555,6 +617,7 @@ class TestTaskExecution:
 # ---------------------------------------------------------------------------
 # Lead-agent pure-orchestrator guards
 # ---------------------------------------------------------------------------
+
 
 class TestLeadAgentExecutionGuards:
     """Hard guards should block lead-agent from all execution paths."""
@@ -600,6 +663,7 @@ class TestLeadAgentExecutionGuards:
 # Test 5.5: Trust level determines final status
 # ---------------------------------------------------------------------------
 
+
 class TestTrustLevelStatus:
     """Test trust level determines done vs review."""
 
@@ -616,9 +680,15 @@ class TestTrustLevelStatus:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Reviewed", "mock_session_key", MagicMock())), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                return_value=("Reviewed", "mock_session_key", MagicMock()),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_006", "Reviewed task", "For review", "review-agent", "agent_reviewed"
             )
@@ -631,6 +701,7 @@ class TestTrustLevelStatus:
 # ---------------------------------------------------------------------------
 # Agent config loading and memory cleanup
 # ---------------------------------------------------------------------------
+
 
 class TestLoadAgentConfig:
     """Test _load_agent_config loads prompt and model from YAML."""
@@ -692,9 +763,15 @@ class TestKnownAssignedIdsCleanup:
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_cleanup")
 
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Done", "mock_session_key", MagicMock())), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                return_value=("Done", "mock_session_key", MagicMock()),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_cleanup", "Cleanup test", None, "agent", "autonomous"
             )
@@ -715,13 +792,17 @@ class TestKnownAssignedIdsCleanup:
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_crash_cleanup")
 
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, side_effect=RuntimeError("boom")), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough), \
-             patch.object(executor._agent_gateway, "handle_agent_crash", new_callable=AsyncMock):
-            await executor._execute_task(
-                "task_crash_cleanup", "Crash", None, "agent", "autonomous"
-            )
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("boom"),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+            patch.object(executor._agent_gateway, "handle_agent_crash", new_callable=AsyncMock),
+        ):
+            await executor._execute_task("task_crash_cleanup", "Crash", None, "agent", "autonomous")
 
         assert "task_crash_cleanup" not in executor._known_assigned_ids
 
@@ -729,6 +810,7 @@ class TestKnownAssignedIdsCleanup:
 # ---------------------------------------------------------------------------
 # Story 8.4 Task 1: Orchestrator does NOT create duplicate activity events
 # ---------------------------------------------------------------------------
+
 
 class TestOrchestratorNoDuplicateActivity:
     """After Story 8.4, orchestrator must NOT call create_activity for transitions
@@ -747,9 +829,11 @@ class TestOrchestratorNoDuplicateActivity:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "agent-a", "display_name": "Agent A", "role": "dev", "skills": ["coding"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {"name": "agent-a", "display_name": "Agent A", "role": "dev", "skills": ["coding"]},
+            ]
+        )
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -780,9 +864,16 @@ class TestOrchestratorNoDuplicateActivity:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "test-agent", "display_name": "Test", "role": "dev", "skills": ["testing"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {
+                    "name": "test-agent",
+                    "display_name": "Test",
+                    "role": "dev",
+                    "skills": ["testing"],
+                },
+            ]
+        )
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -884,6 +975,7 @@ class TestOrchestratorNoDuplicateActivity:
 # Story 8.4 Task 2: Executor does NOT create duplicate activity events
 # ---------------------------------------------------------------------------
 
+
 class TestExecutorNoDuplicateActivity:
     """After Story 8.4, executor must NOT call create_activity for
     task_started and task_completed (Convex handles them)."""
@@ -908,8 +1000,10 @@ class TestExecutorNoDuplicateActivity:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch.object(executor, "_execute_task", new_callable=AsyncMock), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch.object(executor, "_execute_task", new_callable=AsyncMock),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._pickup_task(task_data)
 
         mock_bridge.create_activity.assert_not_called()
@@ -928,9 +1022,15 @@ class TestExecutorNoDuplicateActivity:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch("mc.contexts.execution.executor._run_agent_on_task", new_callable=AsyncMock, return_value=("Done", "mock_session_key", MagicMock())), \
-             patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                return_value=("Done", "mock_session_key", MagicMock()),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_no_dup_2", "No dup complete", None, "agent", "autonomous"
             )
@@ -957,8 +1057,10 @@ class TestExecutorNoDuplicateActivity:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch.object(executor, "_execute_task", new_callable=AsyncMock), \
-             patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch.object(executor, "_execute_task", new_callable=AsyncMock),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._pickup_task(task_data)
 
         mock_bridge.send_message.assert_called_once()
@@ -967,6 +1069,7 @@ class TestExecutorNoDuplicateActivity:
 # ---------------------------------------------------------------------------
 # Story 8.4 Task 3: Orchestrator inbox deduplication
 # ---------------------------------------------------------------------------
+
 
 class TestOrchestratorDeduplication:
     """The orchestrator must skip already-routed inbox tasks."""
@@ -1039,6 +1142,7 @@ class TestOrchestratorDeduplication:
 # ---------------------------------------------------------------------------
 # Story 8.4 Task 4: Bridge subscription reconnection
 # ---------------------------------------------------------------------------
+
 
 class TestBridgeAsyncSubscribe:
     """Test bridge async_subscribe uses get_running_loop and reconnects."""
@@ -1153,6 +1257,7 @@ class TestBridgeAsyncSubscribe:
 # Story 8.4 Task 5: Fix empty agent_name in bridge
 # ---------------------------------------------------------------------------
 
+
 class TestBridgeAgentNameHandling:
     """Test that bridge.update_task_status omits agent_name when None."""
 
@@ -1191,6 +1296,7 @@ class TestBridgeAgentNameHandling:
 # Agent delete/restore: _cleanup_deleted_agents, _restore_archived_files,
 # _write_back with archive restoration, upsertByName skip for deleted agents
 # ---------------------------------------------------------------------------
+
 
 class TestCleanupDeletedAgents:
     """Test _cleanup_deleted_agents archives and removes local agent folders."""
@@ -1296,7 +1402,9 @@ class TestCleanupDeletedAgents:
         _cleanup_deleted_agents(mock_bridge, tmp_path)
 
         mock_bridge.archive_agent_data.assert_not_called()
-        assert not agent_dir.exists(), "Folder should still be removed when there is no content to archive"
+        assert not agent_dir.exists(), (
+            "Folder should still be removed when there is no content to archive"
+        )
 
     def test_continues_after_rmtree_failure(self, tmp_path):
         """If shutil.rmtree fails, logs error but continues cleanup for subsequent agents."""
@@ -1309,7 +1417,10 @@ class TestCleanupDeletedAgents:
             (memory_dir / "MEMORY.md").write_text("data", encoding="utf-8")
 
         mock_bridge = MagicMock()
-        mock_bridge.list_deleted_agents.return_value = [{"name": "agent-one"}, {"name": "agent-two"}]
+        mock_bridge.list_deleted_agents.return_value = [
+            {"name": "agent-one"},
+            {"name": "agent-two"},
+        ]
         mock_bridge.archive_agent_data.return_value = None
 
         with patch("shutil.rmtree", side_effect=[OSError("Permission denied"), None]):
@@ -1364,7 +1475,9 @@ class TestRestoreArchivedFiles:
         agent_dir = tmp_path / "empty-agent"
         agent_dir.mkdir()
 
-        _restore_archived_files(agent_dir, {"memory_content": None, "history_content": None, "session_data": None})
+        _restore_archived_files(
+            agent_dir, {"memory_content": None, "history_content": None, "session_data": None}
+        )
 
         assert not (agent_dir / "memory").exists()
         assert not (agent_dir / "sessions").exists()
@@ -1378,13 +1491,15 @@ class TestWriteBackRestoresArchive:
         from mc.runtime.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
-        mock_bridge.list_agents.return_value = [{
-            "name": "restored-agent",
-            "display_name": "Restored Agent",
-            "role": "tester",
-            "last_active_at": "2026-02-23T12:00:00Z",
-            "skills": [],
-        }]
+        mock_bridge.list_agents.return_value = [
+            {
+                "name": "restored-agent",
+                "display_name": "Restored Agent",
+                "role": "tester",
+                "last_active_at": "2026-02-23T12:00:00Z",
+                "skills": [],
+            }
+        ]
         mock_bridge.write_agent_config.return_value = None
         mock_bridge.get_agent_archive.return_value = None  # No archive
 
@@ -1397,13 +1512,15 @@ class TestWriteBackRestoresArchive:
         from mc.runtime.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
-        mock_bridge.list_agents.return_value = [{
-            "name": "restored-agent",
-            "display_name": "Restored Agent",
-            "role": "tester",
-            "last_active_at": "2026-02-23T12:00:00Z",
-            "skills": [],
-        }]
+        mock_bridge.list_agents.return_value = [
+            {
+                "name": "restored-agent",
+                "display_name": "Restored Agent",
+                "role": "tester",
+                "last_active_at": "2026-02-23T12:00:00Z",
+                "skills": [],
+            }
+        ]
         mock_bridge.write_agent_config.return_value = None
         mock_bridge.get_agent_archive.return_value = {
             "memory_content": "# Memories",
@@ -1426,7 +1543,6 @@ class TestWriteBackRestoresArchive:
     def test_does_not_call_restore_for_existing_agent(self, tmp_path):
         """For agents with existing local YAML (update path), archive is NOT fetched."""
         from mc.runtime.gateway import _write_back_convex_agents
-        import time
 
         # Create existing local YAML
         agent_dir = tmp_path / "existing-agent"
@@ -1438,13 +1554,15 @@ class TestWriteBackRestoresArchive:
         old_ts = "2020-01-01T00:00:00Z"
 
         mock_bridge = MagicMock()
-        mock_bridge.list_agents.return_value = [{
-            "name": "existing-agent",
-            "display_name": "Existing Agent",
-            "role": "tester",
-            "last_active_at": old_ts,
-            "skills": [],
-        }]
+        mock_bridge.list_agents.return_value = [
+            {
+                "name": "existing-agent",
+                "display_name": "Existing Agent",
+                "role": "tester",
+                "last_active_at": old_ts,
+                "skills": [],
+            }
+        ]
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 
@@ -1461,9 +1579,20 @@ class TestSyncAgentRegistryCallsCleanup:
         mock_bridge = MagicMock()
         call_order = []
 
-        with patch("mc.infrastructure.agent_bootstrap._cleanup_deleted_agents", side_effect=lambda b, d: call_order.append("cleanup")), \
-             patch("mc.infrastructure.agent_bootstrap._write_back_convex_agents", side_effect=lambda b, d: call_order.append("write_back")), \
-             patch("mc.infrastructure.config._config_default_model", return_value="anthropic/claude-haiku-4-5"):
+        with (
+            patch(
+                "mc.infrastructure.agent_bootstrap._cleanup_deleted_agents",
+                side_effect=lambda b, d: call_order.append("cleanup"),
+            ),
+            patch(
+                "mc.infrastructure.agent_bootstrap._write_back_convex_agents",
+                side_effect=lambda b, d: call_order.append("write_back"),
+            ),
+            patch(
+                "mc.infrastructure.config._config_default_model",
+                return_value="anthropic/claude-haiku-4-5",
+            ),
+        ):
             sync_agent_registry(mock_bridge, tmp_path)
 
         assert call_order[0] == "cleanup", "cleanup must run before write_back"
@@ -1474,10 +1603,13 @@ class TestSyncAgentRegistryCallsCleanup:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _AnyString:
     """Matches any string in assertions."""
+
     def __eq__(self, other):
         return isinstance(other, str)
+
     def __repr__(self):
         return "<ANY_STRING>"
 
