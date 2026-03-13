@@ -33,3 +33,5 @@ CLAUDE.md.bkp
 .playwright-mcp/*
 .playwright-cli/*
 .codex-tmp/
+output/playwright/*
+output/.DS_Store
