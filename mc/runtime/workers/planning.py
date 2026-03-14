@@ -85,12 +85,28 @@ class PlanningWorker:
             logger.info("[planning] Skipping manual task '%s' (%s)", title, task_id)
             return
 
+        # Layer 3 defense: bypass the LLM planner for workflow missions whose
+        # execution plan was already compiled at launch time.  Invoking the
+        # lead-agent planner here would overwrite the workflow plan.
+        raw_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
+        work_mode = task_data.get("work_mode") or task_data.get("workMode")
+        if work_mode == "ai_workflow" and raw_plan.get("generatedBy") == "workflow":
+            logger.info(
+                "[planning] Workflow task '%s' (%s): skipping LLM planner, using pre-compiled plan",
+                title,
+                task_id,
+            )
+            await self._dispatch_workflow_plan(task_id, title, raw_plan, task_data)
+            return
+
         from mc.contexts.planning.planner import _is_delegatable
         from mc.infrastructure.config import filter_agent_fields
 
         agents_data = await asyncio.to_thread(self._bridge.list_agents)
         agents = [AgentData(**filter_agent_fields(agent)) for agent in agents_data]
-        agents = [agent for agent in agents if agent.enabled is not False and _is_delegatable(agent)]
+        agents = [
+            agent for agent in agents if agent.enabled is not False and _is_delegatable(agent)
+        ]
 
         board_id = task_data.get("board_id")
         if board_id:
@@ -266,9 +282,7 @@ class PlanningWorker:
                 title,
                 len(created_step_ids),
             )
-            asyncio.create_task(
-                self._step_dispatcher.dispatch_steps(task_id, created_step_ids)
-            )
+            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
             logger.info(
                 "[planning] Task '%s': step dispatch started (autonomous mode)",
                 title,
@@ -300,3 +314,73 @@ class PlanningWorker:
             task_id,
             plan.to_dict(),
         )
+
+    async def _dispatch_workflow_plan(
+        self,
+        task_id: str,
+        title: str,
+        raw_plan: dict[str, Any],
+        task_data: dict[str, Any],
+    ) -> None:
+        """Materialize and dispatch a pre-compiled workflow execution plan.
+
+        This is the Layer 3 bypass path for ai_workflow tasks.  The workflow
+        plan is already stored on the task document — we must NOT overwrite it.
+        We parse it, materialize steps, and dispatch without touching the plan.
+        """
+        plan = ExecutionPlan.from_dict(raw_plan)
+
+        supervision_mode = task_data.get("supervision_mode", "autonomous")
+        if supervision_mode != "autonomous":
+            # Transition to review with awaitingKickoff so the dashboard shows
+            # the kick-off UI for the pre-compiled workflow plan.
+            await asyncio.to_thread(
+                self._bridge.update_task_status,
+                task_id,
+                TaskStatus.REVIEW,
+                None,
+                f"Workflow plan ready for review: '{title}'",
+                True,  # awaiting_kickoff
+            )
+            logger.info(
+                "[planning] Workflow task '%s' transitioned to review (awaitingKickoff).",
+                title,
+            )
+            return
+
+        try:
+            self._known_kickoff_ids.add(task_id)
+            created_step_ids = await asyncio.to_thread(
+                self._plan_materializer.materialize,
+                task_id,
+                plan,
+            )
+            logger.info(
+                "[planning] Workflow task '%s': materialized %d step records",
+                title,
+                len(created_step_ids),
+            )
+            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
+            logger.info(
+                "[planning] Workflow task '%s': step dispatch started (autonomous mode)",
+                title,
+            )
+        except Exception as exc:
+            logger.error(
+                "[planning] Workflow plan materialization failed for task '%s': %s",
+                title,
+                exc,
+                exc_info=True,
+            )
+            await asyncio.to_thread(
+                self._bridge.send_message,
+                task_id,
+                "System",
+                AuthorType.SYSTEM,
+                (
+                    "Workflow plan materialization failed:\n"
+                    f"```\n{type(exc).__name__}: {exc}\n```\n"
+                    "Task marked as failed."
+                ),
+                MessageType.SYSTEM_EVENT,
+            )
