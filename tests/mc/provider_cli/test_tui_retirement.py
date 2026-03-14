@@ -41,8 +41,14 @@ class TestInteractiveChatTabsNoTuiDependency:
             DASHBOARD_ROOT / "features" / "interactive" / "components" / "InteractiveChatTabs.tsx"
         )
         source = _read_source(source_path)
-        assert '"TUI"' not in source and "'TUI'" not in source, (
-            "InteractiveChatTabs.tsx still contains a TUI tab button."
+        # Check for functional TUI tab usage (not just mentions in comments)
+        functional_lines = [
+            line for line in source.splitlines()
+            if not line.strip().startswith("*") and not line.strip().startswith("//")
+        ]
+        functional_source = "\n".join(functional_lines)
+        assert '"TUI"' not in functional_source and "'TUI'" not in functional_source, (
+            "InteractiveChatTabs.tsx still contains a functional TUI tab button."
         )
 
     def test_has_no_active_tui_type(self) -> None:
