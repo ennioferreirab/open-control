@@ -7,6 +7,8 @@ import { approveTask } from "./taskReview";
 // Helpers
 // ---------------------------------------------------------------------------
 
+type Ctx = Parameters<typeof approveTask>[0];
+
 function makeCtx(task: object | null) {
   const patch = vi.fn(async () => undefined);
   const insert = vi.fn(async () => "new-id");
@@ -16,7 +18,8 @@ function makeCtx(task: object | null) {
   const withIndex = vi.fn(() => ({ collect }));
   const query = vi.fn(() => ({ withIndex }));
 
-  return { db: { get, patch, insert, query }, patch, insert, get };
+  const db = { get, patch, insert, query } as unknown as Ctx["db"];
+  return { db, patch, insert, get };
 }
 
 // ---------------------------------------------------------------------------
