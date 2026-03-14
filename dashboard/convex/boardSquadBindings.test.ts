@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { create, listByBoard, setEnabled } from "./boardSquadBindings";
+import {
+  bind,
+  create,
+  getEffectiveWorkflowId,
+  listByBoard,
+  listEnabledByBoard,
+  setEnabled,
+} from "./boardSquadBindings";
 
 type InsertCall = {
   table: string;
@@ -74,10 +81,10 @@ describe("boardSquadBindings.create", () => {
     await handler(ctx, {
       boardId: "board-id-1",
       squadSpecId: "squad-spec-id-1",
-      defaultWorkflowSpecId: "workflow-spec-id-1",
+      defaultWorkflowSpecIdOverride: "workflow-spec-id-1",
     });
 
-    expect(inserts[0].value.defaultWorkflowSpecId).toBe("workflow-spec-id-1");
+    expect(inserts[0].value.defaultWorkflowSpecIdOverride).toBe("workflow-spec-id-1");
   });
 
   it("starts as enabled by default", async () => {
@@ -177,5 +184,154 @@ describe("boardSquadBindings - one squad can be enabled on many boards", () => {
     expect(inserts[1].value.boardId).toBe("board-id-2");
     expect(inserts[0].value.squadSpecId).toBe("squad-spec-id-1");
     expect(inserts[1].value.squadSpecId).toBe("squad-spec-id-1");
+  });
+});
+
+describe("boardSquadBindings.listEnabledByBoard", () => {
+  it("returns only enabled bindings for a board", async () => {
+    const handler = getHandler(listEnabledByBoard);
+    const { ctx } = makeCtx({
+      _id: "binding-id-1",
+      boardId: "board-id-1",
+      squadSpecId: "squad-spec-id-1",
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const result = (await handler(ctx, { boardId: "board-id-1" })) as unknown[];
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("filters out disabled bindings", async () => {
+    const inserts: InsertCall[] = [];
+    const patches: PatchCall[] = [];
+
+    // Create a context where collect returns one disabled binding
+    const disabledBinding = {
+      _id: "binding-id-2",
+      boardId: "board-id-1",
+      squadSpecId: "squad-spec-id-2",
+      enabled: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const collect = vi.fn(async () => [disabledBinding]);
+    const first = vi.fn(async () => null);
+    const withIndex = vi.fn(() => ({ collect, first }));
+    const query = vi.fn(() => ({ withIndex }));
+    const get = vi.fn(async () => null);
+    const insert = vi.fn(async (_table: string, value: Record<string, unknown>) => {
+      inserts.push({ table: _table, value });
+      return "new-id";
+    });
+    const patch = vi.fn(async (id: string, p: Record<string, unknown>) => {
+      patches.push({ id, patch: p });
+    });
+
+    const ctx = { db: { query, get, insert, patch } };
+    const handler = getHandler(listEnabledByBoard);
+
+    const result = (await handler(ctx, { boardId: "board-id-1" })) as unknown[];
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe("boardSquadBindings.getEffectiveWorkflowId", () => {
+  function makeEffectiveCtx(
+    binding: Record<string, unknown> | null,
+    squadSpec: Record<string, unknown> | null,
+  ) {
+    const first = vi.fn(async () => binding);
+    const withIndex = vi.fn(() => ({ first }));
+    const query = vi.fn(() => ({ withIndex }));
+    const get = vi.fn(async () => squadSpec);
+
+    return { db: { query, get } };
+  }
+
+  it("returns the board-level override when set", async () => {
+    const handler = getHandler(getEffectiveWorkflowId);
+    const ctx = makeEffectiveCtx(
+      {
+        _id: "binding-1",
+        boardId: "board-1",
+        squadSpecId: "squad-1",
+        enabled: true,
+        defaultWorkflowSpecIdOverride: "wf-override-1",
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01",
+      },
+      {
+        _id: "squad-1",
+        defaultWorkflowSpecId: "wf-default-1",
+      },
+    );
+
+    const result = await handler(ctx, { boardId: "board-1", squadSpecId: "squad-1" });
+    expect(result).toBe("wf-override-1");
+  });
+
+  it("falls back to the squad-level default when no override", async () => {
+    const handler = getHandler(getEffectiveWorkflowId);
+    const ctx = makeEffectiveCtx(
+      {
+        _id: "binding-1",
+        boardId: "board-1",
+        squadSpecId: "squad-1",
+        enabled: true,
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01",
+      },
+      {
+        _id: "squad-1",
+        defaultWorkflowSpecId: "wf-default-1",
+      },
+    );
+
+    const result = await handler(ctx, { boardId: "board-1", squadSpecId: "squad-1" });
+    expect(result).toBe("wf-default-1");
+  });
+
+  it("returns null when no binding and no squad default", async () => {
+    const handler = getHandler(getEffectiveWorkflowId);
+    const ctx = makeEffectiveCtx(null, { _id: "squad-1" });
+
+    const result = await handler(ctx, { boardId: "board-1", squadSpecId: "squad-1" });
+    expect(result).toBeNull();
+  });
+});
+
+describe("boardSquadBindings.bind", () => {
+  it("creates a new binding when none exists", async () => {
+    const handler = getHandler(bind);
+    const { ctx, inserts } = makeCtx();
+
+    await handler(ctx, { boardId: "board-id-1", squadSpecId: "squad-spec-id-1" });
+
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].table).toBe("boardSquadBindings");
+    expect(inserts[0].value.enabled).toBe(true);
+  });
+
+  it("patches an existing binding when it already exists", async () => {
+    const existingBinding = {
+      _id: "binding-id-1",
+      boardId: "board-id-1",
+      squadSpecId: "squad-spec-id-1",
+      enabled: false,
+      createdAt: "2024-01-01",
+      updatedAt: "2024-01-01",
+    };
+    const handler = getHandler(bind);
+    const { ctx, inserts, patches } = makeCtx(existingBinding);
+
+    await handler(ctx, { boardId: "board-id-1", squadSpecId: "squad-spec-id-1" });
+
+    // Should patch, not insert a second binding
+    expect(inserts).toHaveLength(0);
+    expect(patches).toHaveLength(1);
+    expect(patches[0].patch.enabled).toBe(true);
   });
 });
