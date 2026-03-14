@@ -2,12 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AgentAuthoringWizard } from "./AgentAuthoringWizard";
 
-vi.mock("convex/react", () => ({
-  useQuery: vi.fn(() => ({ name: "nanobot", model: "cc/claude-sonnet" })),
-}));
-
-vi.mock("@/features/interactive/hooks/useInteractiveAgentProvider", () => ({
-  getInteractiveAgentProvider: vi.fn(() => "claude-code"),
+vi.mock("@/features/agents/hooks/useNanobotProvider", () => ({
+  useNanobotProvider: vi.fn(() => "claude-code"),
 }));
 
 vi.mock("./AgentTerminal", () => ({
@@ -40,12 +36,8 @@ describe("AgentAuthoringWizard", () => {
     expect(screen.getByText("Create Agent")).toBeInTheDocument();
   });
 
-  it("calls onClose when dialog is dismissed", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const handleClose = vi.fn();
-    render(<AgentAuthoringWizard open={true} onClose={handleClose} />);
-    // Dialog close button (X) or pressing Escape
-    const closeBtn = screen.getByRole("button", { name: /close/i });
-    if (closeBtn) await userEvent.click(closeBtn);
+  it("does not render terminal when closed", () => {
+    render(<AgentAuthoringWizard open={false} onClose={vi.fn()} />);
+    expect(screen.queryByTestId("agent-terminal")).not.toBeInTheDocument();
   });
 });

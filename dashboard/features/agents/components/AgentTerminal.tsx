@@ -55,7 +55,8 @@ export function AgentTerminal({ agentName, provider, prompt, scopeId }: AgentTer
     if (prompt) {
       params.set("prompt", prompt);
     }
-    const url = `ws://${window.location.hostname}:8765/interactive?${params}`;
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const url = `${protocol}://${window.location.hostname}:8765/interactive?${params}`;
     const socket = new WebSocket(url);
     socket.binaryType = "arraybuffer";
 

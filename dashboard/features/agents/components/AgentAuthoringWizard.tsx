@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getInteractiveAgentProvider } from "@/features/interactive/hooks/useInteractiveAgentProvider";
+import { useNanobotProvider } from "@/features/agents/hooks/useNanobotProvider";
 import { AgentTerminal } from "./AgentTerminal";
 
 interface AgentAuthoringWizardProps {
@@ -19,12 +17,17 @@ interface AgentAuthoringWizardProps {
 }
 
 export function AgentAuthoringWizard({ open, onClose }: AgentAuthoringWizardProps) {
-  const [scopeId] = useState(() => `create-agent:${crypto.randomUUID()}`);
-  const nanobotAgent = useQuery(api.agents.getByName, { name: "nanobot" });
-  const provider = getInteractiveAgentProvider(nanobotAgent) ?? "claude-code";
+  const [generation, setGeneration] = useState(0);
+  const scopeId = useMemo(() => `create-agent:${generation}-${crypto.randomUUID()}`, [generation]);
+  const provider = useNanobotProvider();
+
+  const handleClose = () => {
+    setGeneration((g) => g + 1);
+    onClose();
+  };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-4xl p-0 h-[600px] flex flex-col">
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle className="text-lg font-semibold">Create Agent</DialogTitle>
