@@ -32,8 +32,10 @@ class NanobotRunnerStrategy:
         Returns an ExecutionResult with the agent output on success, or
         an error result with categorized error on failure.
         """
+        from mc.contexts.execution.agent_runner import _coerce_agent_run_result
+
         try:
-            result_text, session_key, loop = await self._run_agent_loop(request)
+            raw_result, session_key, loop = await self._run_agent_loop(request)
         except _PROVIDER_ERRORS as exc:
             logger.error(
                 "[nanobot-strategy] Provider error for task '%s': %s",
@@ -59,17 +61,31 @@ class NanobotRunnerStrategy:
                 error_exception=exc,
             )
 
+        # Coerce to AgentRunResult so we get structured error info even when
+        # the loop returns a plain string (backward-compat path).
+        run_result = _coerce_agent_run_result(raw_result)
+
+        if run_result.is_error:
+            logger.error(
+                "[nanobot-strategy] Agent loop reported error for task '%s': %s",
+                request.title,
+                run_result.error_message,
+            )
+            return ExecutionResult(
+                success=False,
+                error_category=ErrorCategory.RUNNER,
+                error_message=run_result.error_message or run_result.content,
+            )
+
         return ExecutionResult(
             success=True,
-            output=result_text,
+            output=run_result.content,
             session_id=session_key,
             memory_workspace=getattr(loop, "memory_workspace", None),
             session_loop=loop,
         )
 
-    async def _run_agent_loop(
-        self, request: ExecutionRequest
-    ) -> tuple[str, str, object]:
+    async def _run_agent_loop(self, request: ExecutionRequest) -> tuple[str, str, object]:
         """Set up and run the nanobot AgentLoop.
 
         Returns (result_text, session_key, loop) on success.

@@ -19,6 +19,41 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Native tool names that overlap with the Phase 1 MCP surface and must be
+# hidden in MC runtime so the model sees only one canonical surface.
+# ---------------------------------------------------------------------------
+_MC_OVERLAPPING_NATIVE_TOOLS = frozenset(
+    {"ask_user", "ask_agent", "delegate_task", "message", "cron"}
+)
+
+
+def _build_mc_mcp_servers(
+    task_id: str | None = None,
+    agent_name: str | None = None,
+) -> dict:
+    """Build the mcp_servers config for the repo-owned MC MCP bridge.
+
+    The bridge is launched as a Python subprocess (stdio transport) so that
+    the model sees the canonical Phase 1 MC tool surface.
+    """
+    import sys
+
+    env: dict[str, str] = {}
+    if task_id:
+        env["TASK_ID"] = task_id
+    if agent_name:
+        env["AGENT_NAME"] = agent_name
+
+    config: dict[str, Any] = {
+        "command": sys.executable,
+        "args": ["-m", "mc.runtime.mcp.bridge"],
+    }
+    if env:
+        config["env"] = env
+
+    return {"mc": config}
+
 
 @dataclass(slots=True)
 class AgentRunResult:
@@ -123,6 +158,9 @@ async def _run_agent_on_task(
 
     provider, resolved_model = _call_provider_factory(agent_model)
 
+    # Build the MC MCP server config so the model sees the Phase 1 surface.
+    mcp_servers = _build_mc_mcp_servers(task_id=task_id, agent_name=agent_name)
+
     bus = MessageBus()
     loop = AgentLoop(
         bus=bus,
@@ -136,6 +174,7 @@ async def _run_agent_on_task(
         artifacts_workspace=artifacts_workspace,
         cron_service=cron_service,
         agent_name=agent_name,
+        mcp_servers=mcp_servers,
         mc_consolidation_system_prompt=(
             "You are a memory consolidation agent processing MC task history. "
             "User messages may contain <title>...</title> and <description>...</description> XML tags identifying the task. "
@@ -151,50 +190,31 @@ async def _run_agent_on_task(
         ),
     )
 
-    loop.tools.unregister("delegate_task")
-
-    if cron_tool := loop.tools.get("cron"):
-        from nanobot.agent.tools.cron import CronTool as _CronTool
-
-        if isinstance(cron_tool, _CronTool):
-            from nanobot.config.loader import load_config as _load_config
-
-            cfg = _load_config()
-            telegram_ids = [x for x in cfg.channels.telegram.allow_from if x.lstrip("-").isdigit()]
-            if telegram_ids:
-                cron_tool.set_telegram_default(telegram_ids[0])
-
-    if ask_tool := loop.tools.get("ask_agent"):
-        from nanobot.agent.tools.ask_agent import AskAgentTool
-
-        if isinstance(ask_tool, AskAgentTool):
-            ask_tool.set_context(
-                caller_agent=agent_name,
-                task_id=task_id,
-                depth=0,
-                bridge=bridge,
-            )
+    # Unregister native tools that overlap with the Phase 1 MCP surface.
+    # The model must see one canonical surface (the MCP tools), not duplicates.
+    # delegate_task is also in the overlap set; keep unregistering it for safety.
+    for _tool_name in _MC_OVERLAPPING_NATIVE_TOOLS:
+        try:
+            loop.tools.unregister(_tool_name)
+        except Exception:
+            pass  # Tool may not be registered — silently skip
 
     ask_user_cleanup: tuple[Any | None, str | None] | None = None
-    if ask_user_tool := loop.tools.get("ask_user"):
-        from nanobot.agent.tools.ask_user import AskUserTool
-
-        if isinstance(ask_user_tool, AskUserTool):
+    # ask_user and ask_agent are now served via MCP; their native registrations
+    # have been removed above.  We still wire up the ask_user handler/registry
+    # so that in-process IPC flows work when the bridge calls back into MC.
+    if ask_user_registry and task_id:
+        try:
             from mc.contexts.conversation.ask_user.handler import AskUserHandler
 
             handler = AskUserHandler()
-            if ask_user_registry and task_id:
-                ask_user_registry.register(task_id, handler)
-            ask_user_tool.set_context(
-                agent_name=agent_name,
-                task_id=task_id,
-                bridge=bridge,
-                handler=handler,
-            )
+            ask_user_registry.register(task_id, handler)
             ask_user_cleanup = (ask_user_registry, task_id)
+        except Exception:
+            pass
 
     try:
-        result = await loop.process_direct(
+        direct_result = await loop.process_direct_result(
             content=message,
             session_key=session_key,
             channel="mc",
@@ -208,4 +228,11 @@ async def _run_agent_on_task(
             if registry and cleanup_task_id:
                 registry.unregister(cleanup_task_id)
 
+    # Wrap the DirectProcessResult into an AgentRunResult so callers that use
+    # _coerce_agent_run_result() receive structured error info.
+    result = AgentRunResult(
+        content=direct_result.content,
+        is_error=direct_result.is_error,
+        error_message=direct_result.error_message,
+    )
     return result, session_key, loop
