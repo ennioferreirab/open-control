@@ -143,9 +143,7 @@ class ProviderSessionRegistry:
         record.provider_session_id = provider_session_id
         return record
 
-    def update_child_pids(
-        self, mc_session_id: str, child_pids: list[int]
-    ) -> ProviderSessionRecord:
+    def update_child_pids(self, mc_session_id: str, child_pids: list[int]) -> ProviderSessionRecord:
         """Replace the child_pids list for the session."""
         record = self.require(mc_session_id)
         record.child_pids = list(child_pids)

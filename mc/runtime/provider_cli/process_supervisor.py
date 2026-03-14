@@ -154,8 +154,7 @@ class ProviderProcessSupervisor:
                 parent = psutil.Process(handle.pid)
                 info["status"] = parent.status()
                 info["children"] = [
-                    {"pid": c.pid, "status": c.status()}
-                    for c in parent.children(recursive=True)
+                    {"pid": c.pid, "status": c.status()} for c in parent.children(recursive=True)
                 ]
             except psutil.NoSuchProcess:
                 info["status"] = "gone"

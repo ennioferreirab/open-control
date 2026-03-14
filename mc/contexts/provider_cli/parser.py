@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from mc.contexts.provider_cli.types import ParsedCliEvent, ProviderProcessHandle, ProviderSessionSnapshot
+from mc.contexts.provider_cli.types import (
+    ParsedCliEvent,
+    ProviderProcessHandle,
+    ProviderSessionSnapshot,
+)
 
 
 class ProviderCLIParser(Protocol):
