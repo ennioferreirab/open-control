@@ -1,152 +1,123 @@
-import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock child_process exec to avoid actually running Python
-const mockExecPromise = vi.hoisted(() => vi.fn());
+const mockExecFn = vi.hoisted(() => vi.fn());
 const mockWriteFile = vi.hoisted(() => vi.fn());
 const mockUnlink = vi.hoisted(() => vi.fn());
 
 vi.mock("child_process", () => ({
-  default: { exec: vi.fn() },
-  exec: vi.fn(),
+  default: { exec: mockExecFn },
+  exec: mockExecFn,
 }));
 
 vi.mock("util", () => ({
-  default: { promisify: () => mockExecPromise },
-  promisify: () => mockExecPromise,
+  default: { promisify: () => mockExecFn },
+  promisify: () => mockExecFn,
 }));
 
 vi.mock("fs/promises", () => ({
-  default: { writeFile: mockWriteFile, unlink: mockUnlink },
+  default: {
+    writeFile: mockWriteFile,
+    unlink: mockUnlink,
+  },
   writeFile: mockWriteFile,
   unlink: mockUnlink,
 }));
 
+vi.mock("os", () => ({
+  default: { tmpdir: () => "/tmp" },
+  tmpdir: () => "/tmp",
+}));
+
 vi.mock("crypto", () => ({
-  default: { randomUUID: () => "test-uuid-1234" },
-  randomUUID: () => "test-uuid-1234",
+  default: { randomUUID: () => "test-uuid" },
+  randomUUID: () => "test-uuid",
 }));
 
 import { POST } from "./route";
 
-function makeRequest(body: unknown): NextRequest {
-  return new NextRequest("http://localhost/api/authoring/agent-wizard", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: typeof body === "string" ? body : JSON.stringify(body),
-  });
-}
+const VALID_AGENT_RESPONSE = JSON.stringify({
+  assistant_message: "Here is your researcher agent.",
+  phase: "proposal",
+  draft_graph_patch: {
+    agents: [{ key: "researcher", role: "Researcher" }],
+  },
+  unresolved_questions: [],
+  preview: {},
+  readiness: 0.5,
+  mode: "agent",
+});
 
 beforeEach(() => {
-  vi.resetAllMocks();
+  vi.clearAllMocks();
   mockWriteFile.mockResolvedValue(undefined);
   mockUnlink.mockResolvedValue(undefined);
+  mockExecFn.mockResolvedValue({ stdout: VALID_AGENT_RESPONSE, stderr: "" });
 });
 
 describe("POST /api/authoring/agent-wizard", () => {
-  it("returns structured authoring response, not raw YAML", async () => {
-    const structuredResponse = {
-      question: "What is the primary purpose of this agent?",
-      draft_patch: { fields: { purpose: "Finance tracking" } },
-      phase: "purpose",
-      readiness: 0.0,
-      summary_sections: {},
-      recommended_next_phase: "operating_context",
-    };
-    mockExecPromise.mockResolvedValue({
-      stdout: JSON.stringify(structuredResponse),
-      stderr: "",
+  it("returns structured authoring response with canonical phase", async () => {
+    const req = new Request("http://localhost/api/authoring/agent-wizard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "Create a researcher agent" }],
+        phase: "proposal",
+      }),
     });
 
-    const req = makeRequest({
-      messages: [{ role: "user", content: "I want a finance agent" }],
-      current_spec: {},
-      phase: "purpose",
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
+    const res = await POST(req as never);
     const body = await res.json();
-    // Must return structured fields
-    expect(body).toHaveProperty("question");
-    expect(body).toHaveProperty("draft_patch");
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveProperty("assistant_message");
     expect(body).toHaveProperty("phase");
+    expect(["discovery", "proposal", "refinement", "approval"]).toContain(body.phase);
+    expect(body).toHaveProperty("draft_graph_patch");
+    expect(body).toHaveProperty("unresolved_questions");
     expect(body).toHaveProperty("readiness");
-    expect(body).toHaveProperty("summary_sections");
-    expect(body).toHaveProperty("recommended_next_phase");
-    // Must NOT have a raw yaml field
-    expect(body).not.toHaveProperty("yaml");
+  });
+
+  it("returns draft_graph_patch with agents array for agent mode", async () => {
+    const req = new Request("http://localhost/api/authoring/agent-wizard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "I want a coding agent" }],
+        phase: "discovery",
+      }),
+    });
+
+    const res = await POST(req as never);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveProperty("draft_graph_patch");
+    // draft_graph_patch is an object (not a flat string)
+    expect(typeof body.draft_graph_patch).toBe("object");
   });
 
   it("returns 400 when no user message is present", async () => {
-    const req = makeRequest({
-      messages: [],
-      current_spec: {},
-      phase: "purpose",
+    const req = new Request("http://localhost/api/authoring/agent-wizard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [], phase: "discovery" }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req as never);
     expect(res.status).toBe(400);
   });
 
-  it("forwards current_spec and phase to Python backend", async () => {
-    const structuredResponse = {
-      question: "Describe the operating context",
-      draft_patch: { fields: {} },
-      phase: "operating_context",
-      readiness: 0.2,
-      summary_sections: { purpose: "Finance" },
-      recommended_next_phase: "working_style",
-    };
-    mockExecPromise.mockResolvedValue({
-      stdout: JSON.stringify(structuredResponse),
-      stderr: "",
+  it("returns 400 when phase is not canonical", async () => {
+    const req = new Request("http://localhost/api/authoring/agent-wizard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "hello" }],
+        phase: "ideation",
+      }),
     });
 
-    const req = makeRequest({
-      messages: [{ role: "user", content: "Finance agent for banking" }],
-      current_spec: { purpose: "Finance tracking" },
-      phase: "operating_context",
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
-    // Verify the Python script was invoked with the input data
-    expect(mockWriteFile).toHaveBeenCalled();
-    const inputWriteCall = mockWriteFile.mock.calls.find(
-      (call: string[]) => call[0] && String(call[0]).includes("input"),
-    );
-    if (inputWriteCall) {
-      const inputData = JSON.parse(inputWriteCall[1] as string);
-      expect(inputData.current_spec).toEqual({ purpose: "Finance tracking" });
-      expect(inputData.phase).toBe("operating_context");
-    }
-  });
-
-  it("returns fallback structured response when Python exec fails", async () => {
-    mockExecPromise.mockRejectedValue(new Error("Python failed"));
-
-    const req = makeRequest({
-      messages: [{ role: "user", content: "I want an agent" }],
-      current_spec: {},
-      phase: "purpose",
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
-    const body = await res.json();
-    // Even on failure, must return structured response, not raw YAML
-    expect(body).toHaveProperty("question");
-    expect(body).not.toHaveProperty("yaml");
-  });
-
-  it("returns 500 on malformed request body", async () => {
-    const req = makeRequest("not-valid-json");
-
-    const res = await POST(req);
-    expect(res.status).toBe(500);
+    const res = await POST(req as never);
+    expect(res.status).toBe(400);
   });
 });

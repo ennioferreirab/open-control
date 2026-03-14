@@ -1,580 +1,273 @@
-"""Tests for the structured authoring assist module.
+"""Tests for the shared authoring engine and draft-graph contract.
 
-Covers:
-- agent wizard responses return the next deep question plus a structured draft patch
-- squad wizard responses can refine agents, workflows, and review policy together
-- the contract returns readiness, summary sections, and recommended next phase
-- phase progression logic
+Canonical phases: discovery, proposal, refinement, approval.
 """
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from mc.contexts.agents.authoring_assist import (
-    AuthoringPhase,
+    CANONICAL_PHASES,
+    AuthoringMode,
     AuthoringResponse,
-    SpecDraftPatch,
-    advance_agent_phase,
-    advance_squad_phase,
-    build_agent_question,
-    build_squad_question,
-    compute_readiness,
-    generate_agent_assist_response,
-    generate_squad_assist_response,
+    build_agent_authoring_response,
+    build_squad_authoring_response,
 )
 
-# ---------------------------------------------------------------------------
-# AuthoringPhase enum
-# ---------------------------------------------------------------------------
+
+class TestCanonicalPhases:
+    """Canonical phase set is exactly the four defined phases."""
+
+    def test_canonical_phases_set(self) -> None:
+        assert CANONICAL_PHASES == {"discovery", "proposal", "refinement", "approval"}
+
+    def test_canonical_phases_is_frozenset(self) -> None:
+        assert isinstance(CANONICAL_PHASES, frozenset)
 
 
-class TestAuthoringPhase:
-    """Verify phase ordering."""
+class TestAuthoringMode:
+    """AuthoringMode enum covers agent and squad modes."""
 
-    def test_agent_phases_exist(self) -> None:
-        assert AuthoringPhase.PURPOSE in AuthoringPhase
-        assert AuthoringPhase.OPERATING_CONTEXT in AuthoringPhase
-        assert AuthoringPhase.WORKING_STYLE in AuthoringPhase
-        assert AuthoringPhase.EXECUTION_POLICY in AuthoringPhase
-        assert AuthoringPhase.REVIEW_POLICY in AuthoringPhase
-        assert AuthoringPhase.SUMMARY in AuthoringPhase
+    def test_agent_mode(self) -> None:
+        assert AuthoringMode.AGENT == "agent"
 
-    def test_phases_are_ordered(self) -> None:
-        phases = list(AuthoringPhase)
-        assert phases.index(AuthoringPhase.PURPOSE) < phases.index(AuthoringPhase.OPERATING_CONTEXT)
-        assert phases.index(AuthoringPhase.OPERATING_CONTEXT) < phases.index(
-            AuthoringPhase.WORKING_STYLE
-        )
-        assert phases.index(AuthoringPhase.WORKING_STYLE) < phases.index(
-            AuthoringPhase.EXECUTION_POLICY
-        )
-        assert phases.index(AuthoringPhase.EXECUTION_POLICY) < phases.index(
-            AuthoringPhase.REVIEW_POLICY
-        )
-        assert phases.index(AuthoringPhase.REVIEW_POLICY) < phases.index(AuthoringPhase.SUMMARY)
+    def test_squad_mode(self) -> None:
+        assert AuthoringMode.SQUAD == "squad"
 
 
-# ---------------------------------------------------------------------------
-# AuthoringResponse shape
-# ---------------------------------------------------------------------------
+class TestAuthoringResponseModel:
+    """AuthoringResponse dataclass contract."""
 
-
-class TestAuthoringResponse:
-    """Verify the structured response contract."""
-
-    def test_response_has_required_fields(self) -> None:
+    def test_agent_response_fields(self) -> None:
         resp = AuthoringResponse(
-            question="What is the agent's main purpose?",
-            draft_patch=SpecDraftPatch(fields={}),
-            phase=AuthoringPhase.PURPOSE,
-            readiness=0.0,
-            summary_sections={},
-            recommended_next_phase=AuthoringPhase.OPERATING_CONTEXT,
+            assistant_message="Here is your agent proposal.",
+            phase="proposal",
+            draft_graph_patch={"agents": [{"key": "researcher", "role": "Researcher"}]},
+            unresolved_questions=["What data sources should the agent use?"],
+            preview={"agents_count": 1},
+            readiness=0.4,
+            mode=AuthoringMode.AGENT,
         )
-        assert resp.question
-        assert resp.phase == AuthoringPhase.PURPOSE
-        assert 0.0 <= resp.readiness <= 1.0
+        assert resp.assistant_message == "Here is your agent proposal."
+        assert resp.phase == "proposal"
+        assert resp.draft_graph_patch == {"agents": [{"key": "researcher", "role": "Researcher"}]}
+        assert resp.unresolved_questions == ["What data sources should the agent use?"]
+        assert resp.preview == {"agents_count": 1}
+        assert resp.readiness == 0.4
+        assert resp.mode == AuthoringMode.AGENT
 
-    def test_response_serializes_to_dict(self) -> None:
+    def test_squad_response_fields(self) -> None:
         resp = AuthoringResponse(
-            question="Describe the agent's operating context.",
-            draft_patch=SpecDraftPatch(fields={"purpose": "Test purpose"}),
-            phase=AuthoringPhase.OPERATING_CONTEXT,
-            readiness=0.2,
-            summary_sections={"purpose": "Test purpose"},
-            recommended_next_phase=AuthoringPhase.WORKING_STYLE,
+            assistant_message="Here is your squad proposal.",
+            phase="proposal",
+            draft_graph_patch={
+                "squad": {"outcome": "Grow an expert personal brand"},
+                "agents": [{"key": "researcher", "role": "Researcher"}],
+                "workflows": [{"key": "default", "steps": []}],
+            },
+            unresolved_questions=[],
+            preview={"squad_name": "brand-squad"},
+            readiness=0.6,
+            mode=AuthoringMode.SQUAD,
         )
-        data = resp.to_dict()
-        assert data["question"] == "Describe the agent's operating context."
-        assert data["phase"] == "operating_context"
-        assert data["readiness"] == 0.2
-        assert "draft_patch" in data
-        assert "summary_sections" in data
-        assert data["recommended_next_phase"] == "working_style"
+        assert resp.phase == "proposal"
+        assert "squad" in resp.draft_graph_patch
+        assert "agents" in resp.draft_graph_patch
+        assert "workflows" in resp.draft_graph_patch
+        assert resp.mode == AuthoringMode.SQUAD
 
-    def test_draft_patch_contains_fields(self) -> None:
-        patch = SpecDraftPatch(
-            fields={
-                "purpose": "Analyze financial data",
-                "responsibilities": ["Track payments", "Generate reports"],
-            }
+    def test_invalid_phase_raises(self) -> None:
+        with pytest.raises(ValueError, match="phase"):
+            AuthoringResponse(
+                assistant_message="msg",
+                phase="ideation",  # not a canonical phase
+                draft_graph_patch={},
+                unresolved_questions=[],
+                preview={},
+                readiness=0.0,
+                mode=AuthoringMode.AGENT,
+            )
+
+    def test_all_canonical_phases_are_valid(self) -> None:
+        for phase in CANONICAL_PHASES:
+            resp = AuthoringResponse(
+                assistant_message="msg",
+                phase=phase,
+                draft_graph_patch={},
+                unresolved_questions=[],
+                preview={},
+                readiness=0.0,
+                mode=AuthoringMode.AGENT,
+            )
+            assert resp.phase == phase
+
+    def test_to_dict_has_canonical_keys(self) -> None:
+        resp = AuthoringResponse(
+            assistant_message="Hello",
+            phase="discovery",
+            draft_graph_patch={"agents": []},
+            unresolved_questions=["Q1"],
+            preview={},
+            readiness=0.1,
+            mode=AuthoringMode.AGENT,
         )
-        assert patch.fields["purpose"] == "Analyze financial data"
-        assert len(patch.fields["responsibilities"]) == 2
+        d = resp.to_dict()
+        assert "assistant_message" in d
+        assert "phase" in d
+        assert "draft_graph_patch" in d
+        assert "unresolved_questions" in d
+        assert "preview" in d
+        assert "readiness" in d
+        assert "mode" in d
 
 
-# ---------------------------------------------------------------------------
-# compute_readiness
-# ---------------------------------------------------------------------------
-
-
-class TestComputeReadiness:
-    """Verify readiness scoring based on filled sections."""
-
-    def test_empty_spec_has_zero_readiness(self) -> None:
-        assert compute_readiness({}) == 0.0
-
-    def test_full_spec_has_full_readiness(self) -> None:
-        spec = {
-            "purpose": "Test purpose",
-            "operating_context": "Test context",
-            "working_style": "Test style",
-            "execution_policy": "Test policy",
-            "review_policy": "Test review",
-        }
-        readiness = compute_readiness(spec)
-        assert readiness == 1.0
-
-    def test_partial_spec_has_proportional_readiness(self) -> None:
-        spec = {
-            "purpose": "Test purpose",
-            "operating_context": "Test context",
-        }
-        readiness = compute_readiness(spec)
-        assert 0.0 < readiness < 1.0
-
-    def test_empty_string_fields_do_not_count(self) -> None:
-        spec = {"purpose": "", "operating_context": ""}
-        readiness = compute_readiness(spec)
-        assert readiness == 0.0
-
-
-# ---------------------------------------------------------------------------
-# build_agent_question
-# ---------------------------------------------------------------------------
-
-
-class TestBuildAgentQuestion:
-    """Verify question generation for each phase."""
-
-    def test_purpose_phase_asks_about_purpose(self) -> None:
-        question = build_agent_question(AuthoringPhase.PURPOSE, {})
-        assert question
-        assert len(question) > 0
-
-    def test_operating_context_phase(self) -> None:
-        question = build_agent_question(AuthoringPhase.OPERATING_CONTEXT, {"purpose": "Finance"})
-        assert question
-
-    def test_working_style_phase(self) -> None:
-        question = build_agent_question(
-            AuthoringPhase.WORKING_STYLE,
-            {"purpose": "Finance", "operating_context": "Banking"},
-        )
-        assert question
-
-    def test_execution_policy_phase(self) -> None:
-        question = build_agent_question(AuthoringPhase.EXECUTION_POLICY, {})
-        assert question
-
-    def test_review_policy_phase(self) -> None:
-        question = build_agent_question(AuthoringPhase.REVIEW_POLICY, {})
-        assert question
-
-    def test_summary_phase_returns_summary_prompt(self) -> None:
-        spec = {
-            "purpose": "Finance assistant",
-            "operating_context": "Banking sector",
-            "working_style": "Concise and accurate",
-            "execution_policy": "Autonomous with review",
-            "review_policy": "Peer review required",
-        }
-        question = build_agent_question(AuthoringPhase.SUMMARY, spec)
-        assert question
-
-
-# ---------------------------------------------------------------------------
-# advance_agent_phase
-# ---------------------------------------------------------------------------
-
-
-class TestAdvanceAgentPhase:
-    """Verify phase advancement logic."""
-
-    def test_advances_from_purpose_to_operating_context(self) -> None:
-        next_phase = advance_agent_phase(AuthoringPhase.PURPOSE, {"purpose": "Finance agent"})
-        assert next_phase == AuthoringPhase.OPERATING_CONTEXT
-
-    def test_advances_from_operating_context_to_working_style(self) -> None:
-        next_phase = advance_agent_phase(
-            AuthoringPhase.OPERATING_CONTEXT,
-            {"purpose": "Finance", "operating_context": "Banking"},
-        )
-        assert next_phase == AuthoringPhase.WORKING_STYLE
-
-    def test_stays_at_phase_when_current_empty(self) -> None:
-        next_phase = advance_agent_phase(AuthoringPhase.PURPOSE, {})
-        assert next_phase == AuthoringPhase.PURPOSE
-
-    def test_advances_all_the_way_to_summary(self) -> None:
-        spec = {
-            "purpose": "Test",
-            "operating_context": "Test",
-            "working_style": "Test",
-            "execution_policy": "Test",
-            "review_policy": "Test",
-        }
-        phase = AuthoringPhase.REVIEW_POLICY
-        next_phase = advance_agent_phase(phase, spec)
-        assert next_phase == AuthoringPhase.SUMMARY
-
-
-# ---------------------------------------------------------------------------
-# generate_agent_assist_response (mocked LLM)
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateAgentAssistResponse:
-    """Tests for the full agent authoring assist flow with mocked LLM."""
+class TestBuildAgentAuthoringResponse:
+    """build_agent_authoring_response constructs a valid AuthoringResponse."""
 
     @pytest.mark.asyncio
     async def test_returns_authoring_response(self) -> None:
         mock_response = MagicMock()
-        mock_response.content = "This agent will handle financial analysis and reporting."
-
+        mock_response.content = (
+            '{"assistant_message": "I propose a researcher agent.", '
+            '"phase": "proposal", '
+            '"draft_graph_patch": {"agents": [{"key": "researcher", "role": "Researcher"}]}, '
+            '"unresolved_questions": [], '
+            '"preview": {}, '
+            '"readiness": 0.5}'
+        )
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        messages = [{"role": "user", "content": "I want a finance agent"}]
-        current_spec: dict[str, Any] = {}
-
-        result = await generate_agent_assist_response(
+        result = await build_agent_authoring_response(
             provider=provider,
-            messages=messages,
-            current_spec=current_spec,
-            phase=AuthoringPhase.PURPOSE,
+            messages=[{"role": "user", "content": "Create a researcher agent"}],
+            current_phase="proposal",
         )
 
         assert isinstance(result, AuthoringResponse)
-        assert result.phase in AuthoringPhase
-        assert 0.0 <= result.readiness <= 1.0
-        assert result.question
+        assert result.phase in CANONICAL_PHASES
+        assert result.mode == AuthoringMode.AGENT
 
     @pytest.mark.asyncio
-    async def test_response_never_returns_raw_yaml(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = "name: finance-agent\nrole: Finance\nprompt: Test"
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        messages = [{"role": "user", "content": "I want a finance agent"}]
-        result = await generate_agent_assist_response(
-            provider=provider,
-            messages=messages,
-            current_spec={},
-            phase=AuthoringPhase.PURPOSE,
-        )
-
-        # Response contract must not expose raw YAML as a top-level field
-        data = result.to_dict()
-        assert "yaml" not in data
-
-    @pytest.mark.asyncio
-    async def test_updates_draft_patch_from_user_input(self) -> None:
+    async def test_uses_canonical_phase_from_payload(self) -> None:
         mock_response = MagicMock()
         mock_response.content = (
-            "This agent specializes in financial analysis, tracking payments and boletos."
+            '{"assistant_message": "Starting discovery.", '
+            '"phase": "discovery", '
+            '"draft_graph_patch": {}, '
+            '"unresolved_questions": ["What does this agent do?"], '
+            '"preview": {}, '
+            '"readiness": 0.0}'
         )
-
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        messages = [{"role": "user", "content": "Create a finance agent that tracks payments"}]
-        result = await generate_agent_assist_response(
+        result = await build_agent_authoring_response(
             provider=provider,
-            messages=messages,
-            current_spec={},
-            phase=AuthoringPhase.PURPOSE,
+            messages=[{"role": "user", "content": "I want an agent"}],
+            current_phase="discovery",
         )
 
-        # Draft patch should contain structured fields, not YAML
-        assert isinstance(result.draft_patch.fields, dict)
+        assert result.phase == "discovery"
+        assert result.unresolved_questions == ["What does this agent do?"]
 
     @pytest.mark.asyncio
-    async def test_includes_summary_sections(self) -> None:
+    async def test_fallback_on_invalid_llm_response(self) -> None:
         mock_response = MagicMock()
-        mock_response.content = "This is a useful response about the agent purpose."
-
+        mock_response.content = "Not valid JSON at all"
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        current_spec = {"purpose": "Finance tracking"}
-        result = await generate_agent_assist_response(
+        result = await build_agent_authoring_response(
             provider=provider,
-            messages=[{"role": "user", "content": "Tell me more"}],
-            current_spec=current_spec,
-            phase=AuthoringPhase.OPERATING_CONTEXT,
+            messages=[{"role": "user", "content": "Create an agent"}],
+            current_phase="discovery",
         )
 
-        assert isinstance(result.summary_sections, dict)
+        assert isinstance(result, AuthoringResponse)
+        assert result.phase in CANONICAL_PHASES
+        assert result.mode == AuthoringMode.AGENT
+
+
+class TestBuildSquadAuthoringResponse:
+    """build_squad_authoring_response uses graph patches not flat strings."""
 
     @pytest.mark.asyncio
-    async def test_recommended_next_phase_is_valid(self) -> None:
+    async def test_returns_squad_authoring_response(self) -> None:
         mock_response = MagicMock()
-        mock_response.content = "Great purpose! Now let's explore the operating context."
-
+        mock_response.content = (
+            '{"assistant_message": "Here is a squad proposal.", '
+            '"phase": "proposal", '
+            '"draft_graph_patch": {'
+            '  "squad": {"outcome": "Grow an expert personal brand"}, '
+            '  "agents": [{"key": "researcher", "role": "Researcher"}], '
+            '  "workflows": [{"key": "default", "steps": []}]'
+            "}, "
+            '"unresolved_questions": [], '
+            '"preview": {"squad_name": "brand-squad"}, '
+            '"readiness": 0.6}'
+        )
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        result = await generate_agent_assist_response(
+        result = await build_squad_authoring_response(
             provider=provider,
-            messages=[{"role": "user", "content": "I want a research agent"}],
-            current_spec={"purpose": "Research and analysis"},
-            phase=AuthoringPhase.PURPOSE,
+            messages=[{"role": "user", "content": "Create a brand squad"}],
+            current_phase="proposal",
         )
 
-        assert result.recommended_next_phase in AuthoringPhase
-
-
-# ---------------------------------------------------------------------------
-# build_squad_question
-# ---------------------------------------------------------------------------
-
-
-class TestBuildSquadQuestion:
-    """Verify question generation for squad wizard."""
-
-    def test_team_design_phase(self) -> None:
-        question = build_squad_question("team_design", {})
-        assert question
-        assert len(question) > 0
-
-    def test_workflow_design_phase(self) -> None:
-        question = build_squad_question("workflow_design", {"team_design": "3 agents"})
-        assert question
-
-    def test_review_design_phase(self) -> None:
-        question = build_squad_question("review_design", {})
-        assert question
-
-    def test_approval_phase(self) -> None:
-        question = build_squad_question(
-            "approval",
-            {
-                "team_design": "3 agents",
-                "workflow_design": "Sequential",
-                "review_design": "Peer review",
-            },
-        )
-        assert question
-
-
-# ---------------------------------------------------------------------------
-# advance_squad_phase
-# ---------------------------------------------------------------------------
-
-
-class TestAdvanceSquadPhase:
-    """Verify squad phase advancement."""
-
-    def test_advances_from_team_design_to_workflow_design(self) -> None:
-        next_phase = advance_squad_phase("team_design", {"team_design": "3 agents"})
-        assert next_phase == "workflow_design"
-
-    def test_stays_at_phase_when_current_empty(self) -> None:
-        next_phase = advance_squad_phase("team_design", {})
-        assert next_phase == "team_design"
-
-    def test_advances_through_all_squad_phases(self) -> None:
-        spec: dict[str, Any] = {}
-        phase = "team_design"
-        spec["team_design"] = "3 specialized agents"
-        phase = advance_squad_phase(phase, spec)
-        assert phase == "workflow_design"
-
-        spec["workflow_design"] = "Sequential pipeline"
-        phase = advance_squad_phase(phase, spec)
-        assert phase == "review_design"
-
-        spec["review_design"] = "Peer review with rubric"
-        phase = advance_squad_phase(phase, spec)
-        assert phase == "approval"
-
-
-# ---------------------------------------------------------------------------
-# generate_squad_assist_response (mocked LLM)
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateSquadAssistResponse:
-    """Tests for the squad authoring assist with mocked LLM."""
+        assert isinstance(result, AuthoringResponse)
+        assert result.phase == "proposal"
+        assert result.mode == AuthoringMode.SQUAD
+        # Must be structured graph patch, not flat strings
+        assert "squad" in result.draft_graph_patch
+        assert "agents" in result.draft_graph_patch
+        assert "workflows" in result.draft_graph_patch
 
     @pytest.mark.asyncio
-    async def test_returns_structured_response(self) -> None:
+    async def test_no_flat_team_design_key(self) -> None:
+        """Squad response must NOT contain old flat team_design key."""
         mock_response = MagicMock()
-        mock_response.content = "Your squad needs a lead, a researcher, and a writer."
-
+        mock_response.content = (
+            '{"assistant_message": "Squad designed.", '
+            '"phase": "refinement", '
+            '"draft_graph_patch": {'
+            '  "squad": {"outcome": "Build a content engine"}, '
+            '  "agents": [], '
+            '  "workflows": []'
+            "}, "
+            '"unresolved_questions": [], '
+            '"preview": {}, '
+            '"readiness": 0.7}'
+        )
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        result = await generate_squad_assist_response(
+        result = await build_squad_authoring_response(
             provider=provider,
-            messages=[{"role": "user", "content": "I need a research squad"}],
-            current_spec={},
-            phase="team_design",
+            messages=[{"role": "user", "content": "Refine squad"}],
+            current_phase="refinement",
         )
 
-        assert isinstance(result, dict)
-        assert "question" in result
-        assert "draft_patch" in result
-        assert "readiness" in result
-        assert "summary_sections" in result
-        assert "recommended_next_phase" in result
+        assert "team_design" not in result.draft_graph_patch
+        assert "workflow_design" not in result.draft_graph_patch
 
     @pytest.mark.asyncio
-    async def test_never_returns_raw_yaml(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = "name: research-squad\nagents: [researcher, writer]"
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await generate_squad_assist_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "Research squad"}],
-            current_spec={},
-            phase="team_design",
-        )
-
-        assert "yaml" not in result
-
-    @pytest.mark.asyncio
-    async def test_can_refine_agents_workflows_and_review(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = "The workflow should have 3 steps: research, draft, and review."
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        current_spec = {
-            "team_design": "Lead, researcher, writer",
-            "workflow_design": "Draft workflow",
-        }
-        result = await generate_squad_assist_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "Refine the workflow"}],
-            current_spec=current_spec,
-            phase="workflow_design",
-        )
-
-        assert "recommended_next_phase" in result
-        assert "summary_sections" in result
-
-
-# ---------------------------------------------------------------------------
-# H1: LLM response used for draft patch
-# ---------------------------------------------------------------------------
-
-
-class TestLLMResponseUsedForDraftPatch:
-    """Verify that LLM response content is used to build the draft patch."""
-
-    @pytest.mark.asyncio
-    async def test_agent_draft_patch_uses_llm_content(self) -> None:
-        llm_summary = "This agent is a specialized finance analyst that tracks boletos."
-        mock_response = MagicMock()
-        mock_response.content = llm_summary
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        messages = [{"role": "user", "content": "I want a finance agent"}]
-        result = await generate_agent_assist_response(
-            provider=provider,
-            messages=messages,
-            current_spec={},
-            phase=AuthoringPhase.PURPOSE,
-        )
-
-        # The draft patch should contain the LLM interpretation, not the raw user message
-        assert result.draft_patch.fields.get("purpose") == llm_summary
-
-    @pytest.mark.asyncio
-    async def test_agent_draft_patch_falls_back_to_user_msg_when_llm_content_empty(
-        self,
-    ) -> None:
+    async def test_fallback_on_invalid_llm_response(self) -> None:
         mock_response = MagicMock()
         mock_response.content = ""
-
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        user_text = "I want a finance agent"
-        messages = [{"role": "user", "content": user_text}]
-        result = await generate_agent_assist_response(
+        result = await build_squad_authoring_response(
             provider=provider,
-            messages=messages,
-            current_spec={},
-            phase=AuthoringPhase.PURPOSE,
+            messages=[{"role": "user", "content": "Create a squad"}],
+            current_phase="discovery",
         )
 
-        # Falls back to raw user message when LLM returns empty content
-        assert result.draft_patch.fields.get("purpose") == user_text
-
-    @pytest.mark.asyncio
-    async def test_squad_draft_patch_uses_llm_content(self) -> None:
-        llm_summary = "A three-agent squad: lead, researcher, and writer."
-        mock_response = MagicMock()
-        mock_response.content = llm_summary
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await generate_squad_assist_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "I need a research squad"}],
-            current_spec={},
-            phase="team_design",
-        )
-
-        assert result["draft_patch"]["fields"].get("team_design") == llm_summary
-
-
-# ---------------------------------------------------------------------------
-# H3: advance_agent_phase handles non-string spec values
-# ---------------------------------------------------------------------------
-
-
-class TestAdvanceAgentPhaseNonStringValues:
-    """Verify advance_agent_phase does not crash on non-string spec values."""
-
-    def test_handles_integer_spec_value(self) -> None:
-        # Should not crash; integer value is falsy-ish when cast to str "0" still has content
-        spec = {"purpose": 42}
-        # Integers cast to "42" which is non-empty — should advance
-        next_phase = advance_agent_phase(AuthoringPhase.PURPOSE, spec)
-        assert next_phase == AuthoringPhase.OPERATING_CONTEXT
-
-    def test_handles_list_spec_value(self) -> None:
-        spec = {"purpose": ["item1", "item2"]}
-        # Lists cast to str which is non-empty — should advance
-        next_phase = advance_agent_phase(AuthoringPhase.PURPOSE, spec)
-        assert next_phase == AuthoringPhase.OPERATING_CONTEXT
-
-    def test_handles_none_spec_value(self) -> None:
-        spec: dict[str, Any] = {"purpose": None}
-        # None → str(None or "") → "" — stays in phase
-        next_phase = advance_agent_phase(AuthoringPhase.PURPOSE, spec)
-        assert next_phase == AuthoringPhase.PURPOSE
-
-
-# ---------------------------------------------------------------------------
-# M4: advance_squad_phase handles unknown phase strings
-# ---------------------------------------------------------------------------
-
-
-class TestAdvanceSquadPhaseUnknownPhase:
-    """Verify advance_squad_phase does not crash on unknown phase strings."""
-
-    def test_unknown_phase_returns_first_phase(self) -> None:
-        next_phase = advance_squad_phase("unknown_phase", {"unknown_phase": "some content"})
-        assert next_phase == "team_design"
-
-    def test_empty_string_phase_returns_first_phase(self) -> None:
-        next_phase = advance_squad_phase("", {"": "some content"})
-        assert next_phase == "team_design"
+        assert isinstance(result, AuthoringResponse)
+        assert result.phase in CANONICAL_PHASES
+        assert result.mode == AuthoringMode.SQUAD
