@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createDraft, list, listByStatus, publish, publishGraph, setDefaultWorkflow } from "./squadSpecs";
+import {
+  createDraft,
+  list,
+  listByStatus,
+  publish,
+  publishGraph,
+  setDefaultWorkflow,
+} from "./squadSpecs";
 
 type InsertCall = {
   table: string;
@@ -327,8 +334,7 @@ describe("squadSpecs.publishGraph", () => {
     await handler(ctx, { graph: GRAPH_FIXTURE });
 
     const squadInsert = inserts.find((i) => i.table === "squadSpecs");
-    const hasDefaultInInsert =
-      squadInsert && squadInsert.value.defaultWorkflowSpecId !== undefined;
+    const hasDefaultInInsert = squadInsert && squadInsert.value.defaultWorkflowSpecId !== undefined;
     const hasDefaultInPatch = patches.some((p) => p.patch.defaultWorkflowSpecId !== undefined);
 
     expect(hasDefaultInInsert || hasDefaultInPatch).toBe(true);
