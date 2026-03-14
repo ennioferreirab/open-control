@@ -507,6 +507,26 @@ export default defineSchema({
     .index("by_squadSpecId", ["squadSpecId"])
     .index("by_boardId_squadSpecId", ["boardId", "squadSpecId"]),
 
+  sessionActivityLog: defineTable({
+    sessionId: v.string(),
+    seq: v.number(),
+    kind: v.string(),
+    ts: v.string(),
+    toolName: v.optional(v.string()),
+    toolInput: v.optional(v.string()),
+    filePath: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    error: v.optional(v.string()),
+    turnId: v.optional(v.string()),
+    itemId: v.optional(v.string()),
+    stepId: v.optional(v.string()),
+    agentName: v.optional(v.string()),
+    provider: v.optional(v.string()),
+    requiresAction: v.optional(v.boolean()),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_session_seq", ["sessionId", "seq"]),
+
   interactiveSessions: defineTable({
     sessionId: v.string(),
     agentName: v.string(),
@@ -542,5 +562,4 @@ export default defineSchema({
     .index("by_agentName", ["agentName"])
     .index("by_provider", ["provider"])
     .index("by_status", ["status"]),
-
 });
