@@ -868,3 +868,143 @@ class TestExecuteTask:
         assert result.error_type == "overloaded_error"
         assert result.error_message == "Server is overloaded"
         assert "overloaded_error" in result.output
+
+
+# ---------------------------------------------------------------------------
+# AnthropicOAuthProvider — thinking temperature contract
+# ---------------------------------------------------------------------------
+
+
+class TestAnthropicThinkingTemperature:
+    """Lock Anthropic thinking payload temperature behavior (AC #1, #2).
+
+    Adaptive thinking and budgeted thinking both require temperature=1.0.
+    Non-thinking requests must keep the caller-supplied temperature.
+    """
+
+    def _make_fake_response(self) -> tuple[str, list, str, dict, str | None]:
+        return ("response text", [], "stop", {"total_tokens": 10}, None)
+
+    @pytest.mark.asyncio
+    async def test_adaptive_thinking_forces_temperature_1(self) -> None:
+        """Adaptive thinking requests (claude-*-4-6 models) must set temperature=1.0."""
+        from nanobot.providers.anthropic_oauth_provider import AnthropicOAuthProvider
+
+        provider = AnthropicOAuthProvider(
+            default_model="anthropic-oauth/claude-sonnet-4-6-20250514"
+        )
+        messages = [{"role": "user", "content": "hello"}]
+
+        captured_bodies: list[dict] = []
+
+        async def _fake_request(headers: dict, body: dict) -> tuple:
+            captured_bodies.append(body)
+            return ("ok", [], "stop", {"total_tokens": 5}, None)
+
+        with (
+            patch(
+                "nanobot.providers.anthropic_oauth_provider.get_anthropic_token",
+                return_value="tok",
+            ),
+            patch(
+                "nanobot.providers.anthropic_oauth_provider._request_anthropic",
+                new=_fake_request,
+            ),
+        ):
+            await provider.chat(
+                messages,
+                model="claude-sonnet-4-6-20250514",
+                temperature=0.5,
+                reasoning_level="medium",
+            )
+
+        assert len(captured_bodies) == 1
+        body = captured_bodies[0]
+        assert body.get("thinking", {}).get("type") == "adaptive", (
+            "adaptive model should produce thinking.type=adaptive"
+        )
+        assert body["temperature"] == 1.0, (
+            f"adaptive thinking must force temperature=1.0, got {body['temperature']}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_budgeted_thinking_forces_temperature_1(self) -> None:
+        """Budgeted (enabled) thinking requests must set temperature=1.0."""
+        from nanobot.providers.anthropic_oauth_provider import AnthropicOAuthProvider
+
+        provider = AnthropicOAuthProvider(
+            default_model="anthropic-oauth/claude-sonnet-3-5-20241022"
+        )
+        messages = [{"role": "user", "content": "hello"}]
+
+        captured_bodies: list[dict] = []
+
+        async def _fake_request(headers: dict, body: dict) -> tuple:
+            captured_bodies.append(body)
+            return ("ok", [], "stop", {"total_tokens": 5}, None)
+
+        with (
+            patch(
+                "nanobot.providers.anthropic_oauth_provider.get_anthropic_token",
+                return_value="tok",
+            ),
+            patch(
+                "nanobot.providers.anthropic_oauth_provider._request_anthropic",
+                new=_fake_request,
+            ),
+        ):
+            await provider.chat(
+                messages,
+                model="claude-sonnet-3-5-20241022",
+                temperature=0.3,
+                reasoning_level="medium",
+            )
+
+        assert len(captured_bodies) == 1
+        body = captured_bodies[0]
+        assert body.get("thinking", {}).get("type") == "enabled", (
+            "non-adaptive model should produce thinking.type=enabled"
+        )
+        assert body["temperature"] == 1.0, (
+            f"budgeted thinking must force temperature=1.0, got {body['temperature']}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_non_thinking_keeps_caller_temperature(self) -> None:
+        """Non-thinking requests must keep the caller-supplied temperature unchanged."""
+        from nanobot.providers.anthropic_oauth_provider import AnthropicOAuthProvider
+
+        provider = AnthropicOAuthProvider(
+            default_model="anthropic-oauth/claude-sonnet-4-6-20250514"
+        )
+        messages = [{"role": "user", "content": "hello"}]
+
+        captured_bodies: list[dict] = []
+
+        async def _fake_request(headers: dict, body: dict) -> tuple:
+            captured_bodies.append(body)
+            return ("ok", [], "stop", {"total_tokens": 5}, None)
+
+        with (
+            patch(
+                "nanobot.providers.anthropic_oauth_provider.get_anthropic_token",
+                return_value="tok",
+            ),
+            patch(
+                "nanobot.providers.anthropic_oauth_provider._request_anthropic",
+                new=_fake_request,
+            ),
+        ):
+            await provider.chat(
+                messages,
+                model="claude-sonnet-4-6-20250514",
+                temperature=0.42,
+                # no reasoning_level — non-thinking path
+            )
+
+        assert len(captured_bodies) == 1
+        body = captured_bodies[0]
+        assert "thinking" not in body, "non-thinking request should not include thinking key"
+        assert body["temperature"] == 0.42, (
+            f"non-thinking request must preserve caller temperature, got {body['temperature']}"
+        )

@@ -57,9 +57,7 @@ class AnthropicOAuthProvider(LLMProvider):
             "content-type": "application/json",
         }
 
-        system_text, api_messages = _convert_messages(
-            self._sanitize_empty_content(messages)
-        )
+        system_text, api_messages = _convert_messages(self._sanitize_empty_content(messages))
 
         body: dict[str, Any] = {
             "model": model,
@@ -81,6 +79,7 @@ class AnthropicOAuthProvider(LLMProvider):
                 effort = _map_effort(reasoning_level, model)
                 body["output_config"] = {"effort": effort}
                 body["thinking"] = {"type": "adaptive"}
+                body["temperature"] = 1.0  # Anthropic requires temp=1.0 with thinking
                 logger.debug(
                     "reasoning -> effort={} (adaptive) [model={}]",
                     effort,
@@ -131,10 +130,7 @@ class AnthropicOAuthProvider(LLMProvider):
                 timeout=10.0,
             )
             resp.raise_for_status()
-            return [
-                f"anthropic-oauth/{m['id']}"
-                for m in resp.json().get("data", [])
-            ]
+            return [f"anthropic-oauth/{m['id']}" for m in resp.json().get("data", [])]
         except Exception:
             return []
 
@@ -142,6 +138,7 @@ class AnthropicOAuthProvider(LLMProvider):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _strip_prefix(model: str) -> str:
     for prefix in ("anthropic-oauth/", "anthropic_oauth/"):
@@ -209,12 +206,14 @@ def _convert_messages(
                         args = json.loads(args)
                     except json.JSONDecodeError:
                         args = {"raw": args}
-                blocks.append({
-                    "type": "tool_use",
-                    "id": tc.get("id", "tool_0"),
-                    "name": fn.get("name", ""),
-                    "input": args,
-                })
+                blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc.get("id", "tool_0"),
+                        "name": fn.get("name", ""),
+                        "input": args,
+                    }
+                )
 
             if blocks:
                 api_messages.append({"role": "assistant", "content": blocks})
@@ -222,14 +221,18 @@ def _convert_messages(
 
         if role == "tool":
             tool_content = content if isinstance(content, str) else json.dumps(content or "")
-            api_messages.append({
-                "role": "user",
-                "content": [{
-                    "type": "tool_result",
-                    "tool_use_id": msg.get("tool_call_id", "tool_0"),
-                    "content": tool_content,
-                }],
-            })
+            api_messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": msg.get("tool_call_id", "tool_0"),
+                            "content": tool_content,
+                        }
+                    ],
+                }
+            )
             continue
 
     return system_text, api_messages
@@ -252,19 +255,23 @@ def _convert_content(content: Any) -> str | list[dict[str, Any]]:
                     # data:image/png;base64,... format
                     meta, data = url.split(",", 1) if "," in url else ("", url)
                     media_type = meta.split(";")[0].split(":")[1] if ":" in meta else "image/png"
-                    blocks.append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": data,
-                        },
-                    })
+                    blocks.append(
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": data,
+                            },
+                        }
+                    )
                 else:
-                    blocks.append({
-                        "type": "image",
-                        "source": {"type": "url", "url": url},
-                    })
+                    blocks.append(
+                        {
+                            "type": "image",
+                            "source": {"type": "url", "url": url},
+                        }
+                    )
         return blocks or content
     return str(content) if content else "(empty)"
 
@@ -277,17 +284,20 @@ def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         name = fn.get("name")
         if not name:
             continue
-        converted.append({
-            "name": name,
-            "description": fn.get("description", ""),
-            "input_schema": fn.get("parameters") or {"type": "object", "properties": {}},
-        })
+        converted.append(
+            {
+                "name": name,
+                "description": fn.get("description", ""),
+                "input_schema": fn.get("parameters") or {"type": "object", "properties": {}},
+            }
+        )
     return converted
 
 
 # ---------------------------------------------------------------------------
 # SSE streaming
 # ---------------------------------------------------------------------------
+
 
 async def _request_anthropic(
     headers: dict[str, str],
@@ -373,11 +383,13 @@ async def _consume_sse(
                     args = json.loads(raw) if raw else {}
                 except json.JSONDecodeError:
                     args = {"raw": raw}
-                tool_calls.append(ToolCallRequest(
-                    id=buf["id"],
-                    name=buf["name"],
-                    arguments=args,
-                ))
+                tool_calls.append(
+                    ToolCallRequest(
+                        id=buf["id"],
+                        name=buf["name"],
+                        arguments=args,
+                    )
+                )
 
         elif event_type == "message_delta":
             delta = event.get("delta") or {}
