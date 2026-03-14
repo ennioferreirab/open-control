@@ -180,42 +180,20 @@ class TaskPlanner:
         On LLM failure, falls back to heuristic planning.
         """
         started_at = time.perf_counter()
-        try:
-            plan = await self._llm_plan(
-                title,
-                description,
-                agents,
-                files=files,
-                model=model,
-                reasoning_level=reasoning_level,
-            )
-            if explicit_agent:
-                self._override_agents(plan, explicit_agent)
-            self._validate_agent_names(plan, agents)
-            self._prevent_lead_agent_steps(plan, agents)
-            logger.info(
-                "[planner] Planned task via LLM in %.2fs (%d steps)",
-                time.perf_counter() - started_at,
-                len(plan.steps),
-            )
-            return plan
-        except asyncio.TimeoutError:
-            logger.warning(
-                "[planner] LLM planning timed out after %ds, using heuristic fallback",
-                LLM_TIMEOUT_SECONDS,
-            )
-        except Exception as exc:
-            logger.warning(
-                "[planner] LLM planning failed (%s), using heuristic fallback",
-                type(exc).__name__,
-                exc_info=True,
-            )
-
-        plan = self._fallback_heuristic_plan(title, description, agents, explicit_agent)
+        plan = await self._llm_plan(
+            title,
+            description,
+            agents,
+            files=files,
+            model=model,
+            reasoning_level=reasoning_level,
+        )
+        if explicit_agent:
+            self._override_agents(plan, explicit_agent)
         self._validate_agent_names(plan, agents)
         self._prevent_lead_agent_steps(plan, agents)
         logger.info(
-            "[planner] Planned task via heuristic fallback in %.2fs (%d steps)",
+            "[planner] Planned task via LLM in %.2fs (%d steps)",
             time.perf_counter() - started_at,
             len(plan.steps),
         )
