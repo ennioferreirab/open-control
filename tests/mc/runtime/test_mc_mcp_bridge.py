@@ -18,6 +18,8 @@ EXPECTED_PHASE1_TOOLS = {
     "cron",
     "report_progress",
     "record_final_result",
+    "create_agent_spec",
+    "publish_squad_graph",
 }
 
 # AC3: Transport-coupled names must never appear on the public surface.
@@ -271,3 +273,155 @@ class TestAC4LowVendorImpact:
 
         assert hasattr(bridge, "list_tools")
         assert hasattr(bridge, "call_tool")
+
+
+class TestSpecToolsRegistration:
+    """Verify create_agent_spec and publish_squad_graph are in PHASE1_TOOLS."""
+
+    def test_create_agent_spec_tool_present(self):
+        """create_agent_spec tool is registered in PHASE1_TOOLS."""
+        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+
+        names = {t.name for t in PHASE1_TOOLS}
+        assert "create_agent_spec" in names
+
+    def test_publish_squad_graph_tool_present(self):
+        """publish_squad_graph tool is registered in PHASE1_TOOLS."""
+        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+
+        names = {t.name for t in PHASE1_TOOLS}
+        assert "publish_squad_graph" in names
+
+    def test_create_agent_spec_has_required_fields_in_schema(self):
+        """create_agent_spec schema requires name, displayName, role."""
+        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+
+        tool = next(t for t in PHASE1_TOOLS if t.name == "create_agent_spec")
+        required = tool.inputSchema.get("required", [])
+        assert "name" in required
+        assert "displayName" in required
+        assert "role" in required
+
+    def test_publish_squad_graph_has_required_fields_in_schema(self):
+        """publish_squad_graph schema requires squad, agents, workflows."""
+        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+
+        tool = next(t for t in PHASE1_TOOLS if t.name == "publish_squad_graph")
+        required = tool.inputSchema.get("required", [])
+        assert "squad" in required
+        assert "agents" in required
+        assert "workflows" in required
+
+
+class TestSpecToolsDispatch:
+    """Verify create_agent_spec and publish_squad_graph are dispatched via IPC."""
+
+    pytestmark = pytest.mark.asyncio
+
+    async def test_create_agent_spec_forwarded_via_ipc(self):
+        """create_agent_spec dispatches to IPC with correct payload."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"create_agent_spec": {"spec_id": "spec-abc-123"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "create_agent_spec",
+                {
+                    "name": "my-agent",
+                    "displayName": "My Agent",
+                    "role": "Developer",
+                    "responsibilities": ["Write code"],
+                    "principles": ["DRY"],
+                },
+            )
+
+        assert len(result) == 1
+        assert "spec-abc-123" in result[0].text
+
+    async def test_create_agent_spec_connection_error_handled(self):
+        """ConnectionError during create_agent_spec returns a friendly message."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = MagicMock()
+
+        async def failing_request(method, params):
+            raise ConnectionError("Cannot connect")
+
+        mock_ipc.request = failing_request
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "create_agent_spec",
+                {"name": "x", "displayName": "X", "role": "Dev"},
+            )
+
+        assert len(result) == 1
+        assert (
+            "not reachable" in result[0].text.lower() or "mission control" in result[0].text.lower()
+        )
+
+    async def test_publish_squad_graph_forwarded_via_ipc(self):
+        """publish_squad_graph dispatches to IPC with correct payload."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"publish_squad_graph": {"squad_id": "squad-xyz-456"}})
+
+        graph_args = {
+            "squad": {"name": "my-squad", "displayName": "My Squad"},
+            "agents": [{"key": "a1", "name": "agent1", "role": "Dev"}],
+            "workflows": [
+                {
+                    "key": "w1",
+                    "name": "Workflow 1",
+                    "steps": [{"key": "s1", "type": "task", "agentKey": "a1"}],
+                }
+            ],
+        }
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("publish_squad_graph", graph_args)
+
+        assert len(result) == 1
+        assert "squad-xyz-456" in result[0].text
+
+    async def test_publish_squad_graph_connection_error_handled(self):
+        """ConnectionError during publish_squad_graph returns a friendly message."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = MagicMock()
+
+        async def failing_request(method, params):
+            raise ConnectionError("Cannot connect")
+
+        mock_ipc.request = failing_request
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "publish_squad_graph",
+                {
+                    "squad": {"name": "x", "displayName": "X"},
+                    "agents": [],
+                    "workflows": [],
+                },
+            )
+
+        assert len(result) == 1
+        assert (
+            "not reachable" in result[0].text.lower() or "mission control" in result[0].text.lower()
+        )
+
+    async def test_create_agent_spec_ipc_error_returned(self):
+        """IPC error response for create_agent_spec is returned to caller."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"create_agent_spec": {"error": "Spec already exists"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "create_agent_spec",
+                {"name": "existing", "displayName": "Existing", "role": "Dev"},
+            )
+
+        assert len(result) == 1
+        assert "error" in result[0].text.lower() or "already exists" in result[0].text.lower()

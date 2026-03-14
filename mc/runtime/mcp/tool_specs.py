@@ -6,7 +6,7 @@ namespace identity is carried by the MCP server identity, not by suffixes.
 
 Phase 1 tools:
   ask_user, ask_agent, delegate_task, send_message, cron,
-  report_progress, record_final_result
+  report_progress, record_final_result, create_agent_spec, publish_squad_graph
 """
 
 from __future__ import annotations
@@ -232,6 +232,209 @@ PHASE1_TOOLS: list[Tool] = [
                 }
             },
             "required": ["content"],
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="create_agent_spec",
+        description=(
+            "Create a V2 agent specification in Mission Control. "
+            "Defines the agent's identity, responsibilities, principles, and policies."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Agent name slug (unique identifier).",
+                },
+                "displayName": {
+                    "type": "string",
+                    "description": "Human-readable display name for the agent.",
+                },
+                "role": {
+                    "type": "string",
+                    "description": "Agent role description.",
+                },
+                "responsibilities": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "What this agent is responsible for.",
+                },
+                "nonGoals": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "What this agent explicitly does NOT do.",
+                },
+                "principles": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Core principles guiding the agent.",
+                },
+                "workingStyle": {
+                    "type": "string",
+                    "description": "Description of how the agent approaches tasks.",
+                },
+                "qualityRules": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Rules for producing quality output.",
+                },
+                "antiPatterns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Patterns this agent explicitly avoids.",
+                },
+                "outputContract": {
+                    "type": "string",
+                    "description": "Description of outputs this agent produces.",
+                },
+                "toolPolicy": {
+                    "type": "string",
+                    "description": "Policy for tool usage.",
+                },
+                "memoryPolicy": {
+                    "type": "string",
+                    "description": "Policy for memory and context persistence.",
+                },
+                "executionPolicy": {
+                    "type": "string",
+                    "description": "Policy for task execution.",
+                },
+                "reviewPolicyRef": {
+                    "type": "string",
+                    "description": "Reference to a review policy.",
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of skill names the agent uses.",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Optional model identifier override.",
+                },
+            },
+            "required": ["name", "displayName", "role"],
+            "additionalProperties": False,
+        },
+    ),
+    Tool(
+        name="publish_squad_graph",
+        description=(
+            "Publish a complete squad blueprint to Mission Control. "
+            "Creates the squad, its agents, and workflows in a single operation."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "squad": {
+                    "type": "object",
+                    "description": "Squad identity and metadata.",
+                    "properties": {
+                        "name": {"type": "string", "description": "Squad name slug."},
+                        "displayName": {
+                            "type": "string",
+                            "description": "Human-readable squad name.",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional squad description.",
+                        },
+                        "outcome": {
+                            "type": "string",
+                            "description": "Optional desired outcome statement.",
+                        },
+                    },
+                    "required": ["name", "displayName"],
+                    "additionalProperties": False,
+                },
+                "agents": {
+                    "type": "array",
+                    "description": "Agent entries in the squad.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "key": {
+                                "type": "string",
+                                "description": "Local key used in workflow steps.",
+                            },
+                            "name": {"type": "string", "description": "Agent name slug."},
+                            "role": {"type": "string", "description": "Agent role."},
+                            "displayName": {
+                                "type": "string",
+                                "description": "Optional human-readable name.",
+                            },
+                        },
+                        "required": ["key", "name", "role"],
+                        "additionalProperties": False,
+                    },
+                },
+                "workflows": {
+                    "type": "array",
+                    "description": "Workflow definitions for the squad.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "key": {"type": "string", "description": "Workflow key."},
+                            "name": {"type": "string", "description": "Workflow name."},
+                            "steps": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "key": {
+                                            "type": "string",
+                                            "description": "Step key.",
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "enum": [
+                                                "agent",
+                                                "human",
+                                                "checkpoint",
+                                                "review",
+                                                "system",
+                                            ],
+                                            "description": "Step type.",
+                                        },
+                                        "agentKey": {
+                                            "type": "string",
+                                            "description": "Agent key for this step.",
+                                        },
+                                        "dependsOn": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                            "description": "Step keys this step depends on.",
+                                        },
+                                        "title": {
+                                            "type": "string",
+                                            "description": "Optional step title.",
+                                        },
+                                        "description": {
+                                            "type": "string",
+                                            "description": "Optional step description.",
+                                        },
+                                    },
+                                    "required": ["key", "type"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                            "exitCriteria": {
+                                "type": "string",
+                                "description": "Optional workflow exit criteria.",
+                            },
+                        },
+                        "required": ["key", "name", "steps"],
+                        "additionalProperties": False,
+                    },
+                },
+                "reviewPolicy": {
+                    "type": "string",
+                    "description": "Optional review policy for the squad.",
+                },
+            },
+            "required": ["squad", "agents", "workflows"],
             "additionalProperties": False,
         },
     ),

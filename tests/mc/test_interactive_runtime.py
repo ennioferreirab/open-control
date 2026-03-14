@@ -250,3 +250,44 @@ async def test_interactive_socket_server_start_and_stop() -> None:
     serve_cm.assert_awaited_once()
     ws_server.close.assert_called_once_with()
     ws_server.wait_closed.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_interactive_socket_server_passes_prompt_to_coordinator() -> None:
+    transport = MagicMock()
+    transport.handle_connection = AsyncMock()
+    coordinator = MagicMock()
+    coordinator.create_or_attach = AsyncMock(
+        return_value={"session_id": "interactive_session:claude"}
+    )
+    load_agent = MagicMock(
+        return_value=AgentData(
+            name="nanobot",
+            display_name="Owl",
+            role="Assistant",
+            backend="claude-code",
+        )
+    )
+    server = InteractiveSocketServer(
+        transport=transport,
+        coordinator=coordinator,
+        load_agent=load_agent,
+        host="127.0.0.1",
+        port=8877,
+    )
+    connection = SimpleNamespace(
+        request=SimpleNamespace(
+            path=(
+                "/interactive?provider=claude-code&agentName=nanobot"
+                "&scopeKind=chat&scopeId=create-agent:abc&surface=chat&taskId=create-agent:abc"
+                "&columns=120&rows=40"
+                "&prompt=Use+the+create-agent+skill"
+            )
+        )
+    )
+
+    await server.handle_connection(connection)
+
+    coordinator.create_or_attach.assert_awaited_once()
+    call_kwargs = coordinator.create_or_attach.await_args.kwargs
+    assert call_kwargs["task_prompt"] == "Use the create-agent skill"

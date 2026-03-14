@@ -213,11 +213,22 @@ class BridgeRepositoryFacadeMixin:
         self,
         name: str,
         role: str,
-        prompt: str,
+        prompt: str | None = None,
         display_name: str | None = None,
         model: str | None = None,
         skills: list[str] | None = None,
         soul: str | None = None,
+        responsibilities: list[str] | None = None,
+        non_goals: list[str] | None = None,
+        principles: list[str] | None = None,
+        working_style: str | None = None,
+        quality_rules: list[str] | None = None,
+        anti_patterns: list[str] | None = None,
+        output_contract: str | None = None,
+        tool_policy: str | None = None,
+        memory_policy: str | None = None,
+        execution_policy: str | None = None,
+        review_policy_ref: str | None = None,
     ) -> Any:
         self._ensure_repos()
         return self._specs.create_agent_spec(
@@ -228,6 +239,17 @@ class BridgeRepositoryFacadeMixin:
             model=model,
             skills=skills,
             soul=soul,
+            responsibilities=responsibilities,
+            non_goals=non_goals,
+            principles=principles,
+            working_style=working_style,
+            quality_rules=quality_rules,
+            anti_patterns=anti_patterns,
+            output_contract=output_contract,
+            tool_policy=tool_policy,
+            memory_policy=memory_policy,
+            execution_policy=execution_policy,
+            review_policy_ref=review_policy_ref,
         )
 
     def get_agent_spec_by_name(self, name: str) -> dict[str, Any] | None:
@@ -241,6 +263,10 @@ class BridgeRepositoryFacadeMixin:
     def create_board_agent_binding(self, board_id: str, agent_name: str) -> Any:
         self._ensure_repos()
         return self._specs.create_board_agent_binding(board_id, agent_name)
+
+    def publish_squad_graph(self, graph: dict[str, Any]) -> Any:
+        self._ensure_repos()
+        return self._specs.publish_squad_graph(graph)
 
     def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         self._ensure_repos()

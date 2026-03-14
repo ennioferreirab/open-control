@@ -252,6 +252,63 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return [TextContent(type="text", text=f"Error: {result['error']}")]
         return [TextContent(type="text", text=result.get("status", "Final result recorded"))]
 
+    elif name == "create_agent_spec":
+        try:
+            result = await ipc.request(
+                "create_agent_spec",
+                {
+                    "name": arguments["name"],
+                    "display_name": arguments.get("displayName"),
+                    "role": arguments["role"],
+                    "responsibilities": arguments.get("responsibilities"),
+                    "non_goals": arguments.get("nonGoals"),
+                    "principles": arguments.get("principles"),
+                    "working_style": arguments.get("workingStyle"),
+                    "quality_rules": arguments.get("qualityRules"),
+                    "anti_patterns": arguments.get("antiPatterns"),
+                    "output_contract": arguments.get("outputContract"),
+                    "tool_policy": arguments.get("toolPolicy"),
+                    "memory_policy": arguments.get("memoryPolicy"),
+                    "execution_policy": arguments.get("executionPolicy"),
+                    "review_policy_ref": arguments.get("reviewPolicyRef"),
+                    "skills": arguments.get("skills"),
+                    "model": arguments.get("model"),
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=f"Agent spec created: {result.get('spec_id', 'ok')}")]
+
+    elif name == "publish_squad_graph":
+        try:
+            result = await ipc.request(
+                "publish_squad_graph",
+                {
+                    "graph": arguments,
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=f"Squad published: {result.get('squad_id', 'ok')}")]
+
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 

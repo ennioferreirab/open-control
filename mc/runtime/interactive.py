@@ -87,6 +87,7 @@ class InteractiveSocketServer:
                 scope_id = params.get("scopeId", [f"chat:{agent_name}"])[0]
                 surface = params.get("surface", ["chat"])[0]
                 task_id = params.get("taskId", [scope_id])[0]
+                prompt = params.get("prompt", [None])[0]
 
                 identity = InteractiveSessionIdentity(
                     provider=provider,
@@ -105,6 +106,7 @@ class InteractiveSocketServer:
                     agent=agent,
                     task_id=task_id,
                     timestamp=datetime.now(timezone.utc).isoformat(),
+                    task_prompt=prompt,
                 )
                 session_id = session["session_id"]
                 attach_token = session.get("attach_token")
