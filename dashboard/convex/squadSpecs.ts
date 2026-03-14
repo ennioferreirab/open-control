@@ -1,8 +1,9 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 import { specStatusValidator } from "./schema";
+import { publishSquadGraph } from "./lib/squadGraphPublisher";
 
 export const createDraft = internalMutation({
   args: {
@@ -86,5 +87,63 @@ export const listByStatus = internalQuery({
       .query("squadSpecs")
       .withIndex("by_status", (q) => q.eq("status", args.status))
       .collect();
+  },
+});
+
+/**
+ * Publish a full squad graph — agents, workflows, and the squad itself —
+ * in a single atomic mutation.
+ *
+ * Accepts a structured graph object and delegates to the squad graph
+ * publisher, which orchestrates all child spec creation and wires up
+ * the agentSpecIds and defaultWorkflowSpecId on the resulting squadSpec.
+ *
+ * This mutation does NOT create tasks or execute workflows.
+ */
+export const publishGraph = mutation({
+  args: {
+    graph: v.object({
+      squad: v.object({
+        name: v.string(),
+        displayName: v.string(),
+        description: v.optional(v.string()),
+        outcome: v.optional(v.string()),
+      }),
+      agents: v.array(
+        v.object({
+          key: v.string(),
+          name: v.string(),
+          role: v.string(),
+          displayName: v.optional(v.string()),
+        }),
+      ),
+      workflows: v.array(
+        v.object({
+          key: v.string(),
+          name: v.string(),
+          steps: v.array(
+            v.object({
+              key: v.string(),
+              type: v.union(
+                v.literal("agent"),
+                v.literal("human"),
+                v.literal("checkpoint"),
+                v.literal("review"),
+                v.literal("system"),
+              ),
+              agentKey: v.optional(v.string()),
+              dependsOn: v.optional(v.array(v.string())),
+              title: v.optional(v.string()),
+              description: v.optional(v.string()),
+            }),
+          ),
+          exitCriteria: v.optional(v.string()),
+        }),
+      ),
+      reviewPolicy: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    return await publishSquadGraph(ctx, args.graph);
   },
 });
