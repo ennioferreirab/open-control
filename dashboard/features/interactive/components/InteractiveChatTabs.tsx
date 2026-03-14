@@ -4,7 +4,8 @@ import { ReactNode, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-import { InteractiveTerminalPanel } from "./InteractiveTerminalPanel";
+import { ProviderLiveChatPanel } from "./ProviderLiveChatPanel";
+import { selectProviderSessionStatus } from "@/features/interactive/hooks/useProviderSession";
 
 interface InteractiveChatTabsProps {
   agentName: string;
@@ -12,7 +13,7 @@ interface InteractiveChatTabsProps {
   chatView: ReactNode;
 }
 
-type ActiveTab = "chat" | "tui";
+type ActiveTab = "chat" | "live";
 
 export function InteractiveChatTabs({
   agentName,
@@ -29,7 +30,7 @@ export function InteractiveChatTabs({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-border px-2 pt-2">
         <div className="flex gap-1">
-          {(["chat", "tui"] as const).map((tab) => (
+          {(["chat", "live"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -41,7 +42,7 @@ export function InteractiveChatTabs({
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
               )}
             >
-              {tab === "chat" ? "Chat" : "TUI"}
+              {tab === "chat" ? "Chat" : "Live"}
             </button>
           ))}
         </div>
@@ -50,7 +51,14 @@ export function InteractiveChatTabs({
         {activeTab === "chat" ? (
           chatView
         ) : (
-          <InteractiveTerminalPanel agentName={agentName} provider={interactiveProvider} />
+          <ProviderLiveChatPanel
+            sessionId={null}
+            events={[]}
+            status={selectProviderSessionStatus(null)}
+            agentName={agentName}
+            provider={interactiveProvider}
+            isLoading={false}
+          />
         )}
       </div>
     </div>
