@@ -1,0 +1,26 @@
+[    2067ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3001/favicon.ico:0
+[    3716ms] Error: [CONVEX Q(squadSpecs:list)] [Request ID: 506175523fb97270] Server Error
+Could not find public function for 'squadSpecs:list'. Did you forget to run `npx convex dev` or `npx convex deploy`?
+
+  Called by client
+    at OptimisticQueryResults.queryResult (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/browser/sync/optimistic_updates_impl.js:155:13)
+    at BaseConvexClient.localQueryResult (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/browser/sync/client.js:455:40)
+    at Object.localQueryResult (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/client.js:232:34)
+    at QueriesObserver.getLocalResults (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/queries_observer.js:71:23)
+    at getCurrentValue (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/use_queries.js:45:25)
+    at eval (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/use_subscription.js:39:23)
+    at basicStateReducer (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:8258:45)
+    at dispatchSetStateInternal (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:9479:28)
+    at dispatchSetState (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:9454:7)
+    at checkForUpdates (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/use_subscription.js:35:7)
+    at QueriesObserver.notifyListeners (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/queries_observer.js:133:7)
+    at eval (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/queries_observer.js:114:51)
+    at ConvexReactClient.transition (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/client.js:440:11)
+    at ConvexReactClient.handleTransition (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/client.js:433:10)
+    at PaginatedQueryClient.eval [as onTransition] (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/react/client.js:131:28)
+    at PaginatedQueryClient.onBaseTransition (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/browser/sync/paginated_query_client.js:153:10)
+    at eval (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/browser/sync/paginated_query_client.js:24:28)
+    at BaseConvexClient.handleTransition (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/browser/sync/client.js:354:7)
+    at BaseConvexClient.notifyOnQueryResultChanges (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/browser/sync/client.js:332:10)
+    at WebSocketManager.onMessage (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/browser/sync/client.js:236:20)
+    at ws.onmessage (webpack-internal:///(app-pages-browser)/./node_modules/convex/dist/esm/browser/sync/web_socket_manager.js:270:29)

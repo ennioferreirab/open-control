@@ -1,0 +1,66 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e5]:
+      - generic [ref=e7]:
+        - img [ref=e8]
+        - generic [ref=e11]: Agents
+        - button "Toggle Sidebar" [ref=e13] [cursor=pointer]:
+          - img
+          - generic [ref=e14]: Toggle Sidebar
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - img [ref=e18]
+            - text: Squads
+          - list
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - text: Registered
+            - button "Delete an agent" [ref=e25] [cursor=pointer]:
+              - img [ref=e26]
+          - list [ref=e29]:
+            - listitem [ref=e30]:
+              - button "Create" [ref=e31] [cursor=pointer]:
+                - img [ref=e33]
+                - generic [ref=e34]: Create
+    - main [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - heading "Mission Control" [level=1] [ref=e39]
+          - generic [ref=e42]:
+            - img
+            - textbox "Search tasks" [ref=e43]:
+              - /placeholder: Search tasks…
+          - generic [ref=e44]:
+            - generic [ref=e46]: Gateway unavailable
+            - button "Open cron jobs" [ref=e47] [cursor=pointer]:
+              - img [ref=e48]
+            - button "Open tags" [ref=e51] [cursor=pointer]:
+              - img [ref=e52]
+            - button "Open settings" [ref=e55] [cursor=pointer]:
+              - img [ref=e56]
+            - button "Show activity feed" [ref=e59] [cursor=pointer]:
+              - img [ref=e60]
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - textbox "Task title..." [ref=e68]
+            - textbox "Task description (optional)" [ref=e70]:
+              - generic [ref=e71]: Description...
+          - generic [ref=e72]:
+            - generic [ref=e73]:
+              - button "Create" [ref=e74] [cursor=pointer]
+              - button "Attach files" [ref=e75] [cursor=pointer]:
+                - img
+              - button "Switch to manual mode" [ref=e76] [cursor=pointer]:
+                - img
+                - generic [ref=e77]: AI
+            - generic [ref=e78]:
+              - button "Autonomous" [ref=e79] [cursor=pointer]:
+                - img [ref=e80]
+                - generic [ref=e82]: Autonomous
+              - combobox [ref=e83] [cursor=pointer]:
+                - generic: Auto (Lead Agent)
+                - img [ref=e84]
+  - button "Open Next.js Dev Tools" [ref=e92] [cursor=pointer]:
+    - img [ref=e93]
+  - alert [ref=e96]

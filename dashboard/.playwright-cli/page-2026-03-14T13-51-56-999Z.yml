@@ -1,0 +1,393 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e5]:
+      - generic [ref=e7]:
+        - img [ref=e8]
+        - generic [ref=e11]: Agents
+        - button "Toggle Sidebar" [ref=e13] [cursor=pointer]:
+          - img
+          - generic [ref=e14]: Toggle Sidebar
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - img [ref=e18]
+            - text: Squads
+          - list [ref=e97]:
+            - listitem [ref=e98]:
+              - button "IN instagram Desenvolver a identidade pessoal e o perfil da pessoa" [ref=e99] [cursor=pointer]:
+                - generic [ref=e100]: IN
+                - generic [ref=e101]:
+                  - generic [ref=e102]: instagram
+                  - generic [ref=e103]: Desenvolver a identidade pessoal e o perfil da pessoa
+            - listitem [ref=e639]:
+              - button "LC LinkedIn Content Squad" [ref=e640] [cursor=pointer]:
+                - generic [ref=e641]: LC
+                - generic [ref=e643]: LinkedIn Content Squad
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - text: Registered
+            - button "Delete an agent" [ref=e25] [cursor=pointer]:
+              - img [ref=e26]
+          - list [ref=e29]:
+            - listitem [ref=e104]:
+              - button "YS Youtube Summarizer YouTube Channel Video Summarizer" [ref=e105] [cursor=pointer]:
+                - generic [ref=e106]: YS
+                - generic [ref=e107]:
+                  - generic [ref=e108]: Youtube Summarizer
+                  - generic [ref=e109]: YouTube Channel Video Summarizer
+            - listitem [ref=e111]:
+              - button "IC Image Creator Agent Image Creator with Design Guidelines" [ref=e112] [cursor=pointer]:
+                - generic [ref=e113]: IC
+                - generic [ref=e114]:
+                  - generic [ref=e115]: Image Creator Agent
+                  - generic [ref=e116]: Image Creator with Design Guidelines
+            - listitem [ref=e118]:
+              - button "CR Contracts Risk Contracts and commercial risk strategist for B2B AI-native services" [ref=e119] [cursor=pointer]:
+                - generic [ref=e120]: CR
+                - generic [ref=e121]:
+                  - generic [ref=e122]: Contracts Risk
+                  - generic [ref=e123]: Contracts and commercial risk strategist for B2B AI-native services
+            - listitem [ref=e125]:
+              - button "DS Delivery Systems Delivery systems strategist for 21-day AI proof-of-value engagements" [ref=e126] [cursor=pointer]:
+                - generic [ref=e127]: DS
+                - generic [ref=e128]:
+                  - generic [ref=e129]: Delivery Systems
+                  - generic [ref=e130]: Delivery systems strategist for 21-day AI proof-of-value engagements
+            - listitem [ref=e132]:
+              - button "FP Finance Pricing Finance and pricing strategist for 21-day AI proof-of-value offers" [ref=e133] [cursor=pointer]:
+                - generic [ref=e134]: FP
+                - generic [ref=e135]:
+                  - generic [ref=e136]: Finance Pricing
+                  - generic [ref=e137]: Finance and pricing strategist for 21-day AI proof-of-value offers
+            - listitem [ref=e139]:
+              - button "MC Marketing Copy Marketing copy strategist for AI-native consulting offers and proposals" [ref=e140] [cursor=pointer]:
+                - generic [ref=e141]: MC
+                - generic [ref=e142]:
+                  - generic [ref=e143]: Marketing Copy
+                  - generic [ref=e144]: Marketing copy strategist for AI-native consulting offers and proposals
+            - listitem [ref=e146]:
+              - button "OS Offer Strategist Offer strategist for AI-native consulting proofs of value" [ref=e147] [cursor=pointer]:
+                - generic [ref=e148]: OS
+                - generic [ref=e149]:
+                  - generic [ref=e150]: Offer Strategist
+                  - generic [ref=e151]: Offer strategist for AI-native consulting proofs of value
+            - listitem [ref=e153]:
+              - button "SR Sales RevOps Consultative sales and revenue operations strategist for 21-day proofs of value" [ref=e154] [cursor=pointer]:
+                - generic [ref=e155]: SR
+                - generic [ref=e156]:
+                  - generic [ref=e157]: Sales RevOps
+                  - generic [ref=e158]: Consultative sales and revenue operations strategist for 21-day proofs of value
+            - listitem [ref=e160]:
+              - button "NL Nanobot Live MC Interactive Nanobot" [ref=e161] [cursor=pointer]:
+                - generic [ref=e162]: NL
+                - generic [ref=e163]:
+                  - generic [ref=e164]: Nanobot Live
+                  - generic [ref=e165]: MC Interactive Nanobot
+            - listitem [ref=e167]:
+              - button "NL Nanobot Live Proof MC Interactive Nanobot" [ref=e168] [cursor=pointer]:
+                - generic [ref=e169]: NL
+                - generic [ref=e170]:
+                  - generic [ref=e171]: Nanobot Live Proof
+                  - generic [ref=e172]: MC Interactive Nanobot
+            - listitem [ref=e174]:
+              - button "NL Nanobot Live Proof 2 MC Interactive Nanobot" [ref=e175] [cursor=pointer]:
+                - generic [ref=e176]: NL
+                - generic [ref=e177]:
+                  - generic [ref=e178]: Nanobot Live Proof 2
+                  - generic [ref=e179]: MC Interactive Nanobot
+            - listitem [ref=e181]:
+              - button "NL Nanobot Live Proof 3 MC Interactive Nanobot" [ref=e182] [cursor=pointer]:
+                - generic [ref=e183]: NL
+                - generic [ref=e184]:
+                  - generic [ref=e185]: Nanobot Live Proof 3
+                  - generic [ref=e186]: MC Interactive Nanobot
+            - listitem [ref=e188]:
+              - button "NL Nanobot Live Proof 4 MC Interactive Nanobot" [ref=e189] [cursor=pointer]:
+                - generic [ref=e190]: NL
+                - generic [ref=e191]:
+                  - generic [ref=e192]: Nanobot Live Proof 4
+                  - generic [ref=e193]: MC Interactive Nanobot
+            - listitem [ref=e195]:
+              - button "NL Nanobot Live Proof 5 MC Interactive Nanobot" [ref=e196] [cursor=pointer]:
+                - generic [ref=e197]: NL
+                - generic [ref=e198]:
+                  - generic [ref=e199]: Nanobot Live Proof 5
+                  - generic [ref=e200]: MC Interactive Nanobot
+            - listitem [ref=e30]:
+              - button "Create" [ref=e31] [cursor=pointer]:
+                - img [ref=e33]
+                - generic [ref=e34]: Create
+        - generic [ref=e203]:
+          - generic [ref=e204] [cursor=pointer]:
+            - img [ref=e205]
+            - text: System
+            - img [ref=e207]
+          - list [ref=e210]:
+            - listitem [ref=e211]:
+              - button "LA Lead Agent Lead Orchestrator" [ref=e212] [cursor=pointer]:
+                - generic [ref=e213]: LA
+                - generic [ref=e214]:
+                  - generic [ref=e215]: Lead Agent
+                  - generic [ref=e216]: Lead Orchestrator
+            - listitem [ref=e218]:
+              - button "\ud83eO 🦉 Owl Personal Assistant and Task Delegation Fallback" [ref=e219] [cursor=pointer]:
+                - generic [ref=e220]: �O
+                - generic [ref=e221]:
+                  - generic [ref=e222]: 🦉 Owl
+                  - generic [ref=e223]: Personal Assistant and Task Delegation Fallback
+        - generic [ref=e226]:
+          - generic [ref=e227] [cursor=pointer]:
+            - img [ref=e228]
+            - text: Remoto
+            - img [ref=e230]
+          - list [ref=e233]:
+            - listitem [ref=e234]:
+              - button "10.20.35.19 HM" [ref=e235] [cursor=pointer]:
+                - img [ref=e237]
+                - generic [ref=e239]:
+                  - generic [ref=e240]: 10.20.35.19
+                  - generic [ref=e241]: HM
+            - listitem [ref=e243]:
+              - button "10.30.1.114 PD" [ref=e244] [cursor=pointer]:
+                - img [ref=e246]
+                - generic [ref=e248]:
+                  - generic [ref=e249]: 10.30.1.114
+                  - generic [ref=e250]: PD
+            - listitem [ref=e252]:
+              - button "10.20.45.12 DS" [ref=e253] [cursor=pointer]:
+                - img [ref=e255]
+                - generic [ref=e257]:
+                  - generic [ref=e258]: 10.20.45.12
+                  - generic [ref=e259]: DS
+            - listitem [ref=e261]:
+              - button "192.168.0.4 Macnook" [ref=e262] [cursor=pointer]:
+                - img [ref=e264]
+                - generic [ref=e266]:
+                  - generic [ref=e267]: 192.168.0.4
+                  - generic [ref=e268]: Macnook
+            - listitem [ref=e270]:
+              - button "192.168.0.9 Macbook" [ref=e271] [cursor=pointer]:
+                - img [ref=e273]
+                - generic [ref=e275]:
+                  - generic [ref=e276]: 192.168.0.9
+                  - generic [ref=e277]: Macbook
+        - generic [ref=e281] [cursor=pointer]:
+          - img [ref=e282]
+          - text: Deleted
+          - img [ref=e285]
+    - main [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - heading "Mission Control" [level=1] [ref=e39]
+          - generic [ref=e40]:
+            - generic [ref=e287]:
+              - button "Default" [ref=e288] [cursor=pointer]:
+                - text: Default
+                - img
+              - button "Board settings" [ref=e289] [cursor=pointer]:
+                - img [ref=e290]
+            - generic [ref=e41]:
+              - generic [ref=e42]:
+                - img
+                - textbox "Search tasks" [ref=e43]:
+                  - /placeholder: Search tasks…
+              - button "Open filter picker" [ref=e293] [cursor=pointer]:
+                - img
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - generic [ref=e46]: Gateway sleeping · sync in 3:35
+              - button "Wake now" [ref=e644] [cursor=pointer]
+            - button "Open cron jobs" [ref=e47] [cursor=pointer]:
+              - img [ref=e48]
+            - button "Open tags" [ref=e51] [cursor=pointer]:
+              - img [ref=e52]
+            - button "Open settings" [ref=e55] [cursor=pointer]:
+              - img [ref=e56]
+            - button "Show activity feed" [ref=e59] [cursor=pointer]:
+              - img [ref=e60]
+        - generic [ref=e64]:
+          - generic [ref=e66]:
+            - generic [ref=e67]:
+              - textbox "Task title..." [ref=e68]
+              - textbox "Task description (optional)" [ref=e70]:
+                - generic [ref=e71]: Description...
+            - generic [ref=e72]:
+              - generic [ref=e73]:
+                - button "Create" [ref=e74] [cursor=pointer]
+                - button "Attach files" [ref=e75] [cursor=pointer]:
+                  - img
+                - button "Switch to manual mode" [ref=e76] [cursor=pointer]:
+                  - img
+                  - generic [ref=e77]: AI
+              - generic [ref=e78]:
+                - button "Autonomous" [ref=e79] [cursor=pointer]:
+                  - img [ref=e80]
+                  - generic [ref=e82]: Autonomous
+                - combobox [ref=e83] [cursor=pointer]:
+                  - generic: Auto (Lead Agent)
+                  - img [ref=e84]
+          - generic [ref=e295]:
+            - button "Anatel" [ref=e296] [cursor=pointer]: Anatel
+            - button "Nanobot Mission Control" [ref=e298] [cursor=pointer]: Nanobot Mission Control
+            - button "Pessoal" [ref=e300] [cursor=pointer]: Pessoal
+            - button "SEI Workflows" [ref=e302] [cursor=pointer]: SEI Workflows
+            - button "Sprova" [ref=e304] [cursor=pointer]: Sprova
+            - button "UnB" [ref=e306] [cursor=pointer]: UnB
+            - button "merged" [ref=e308] [cursor=pointer]: merged
+        - generic [ref=e310]:
+          - generic [ref=e311]:
+            - generic [ref=e312]:
+              - img [ref=e313]
+              - generic [ref=e315]: Favorites
+            - generic [ref=e316]:
+              - generic [ref=e317] [cursor=pointer]:
+                - generic [ref=e318]: "?"
+                - generic [ref=e319]: Diretrizes da empresa
+                - generic [ref=e320]: done
+                - img [ref=e321]
+              - generic [ref=e323] [cursor=pointer]:
+                - generic [ref=e324]: "?"
+                - generic [ref=e325]: Roteiro Entrevista ClimaFlow
+                - generic [ref=e326]: inbox
+                - img [ref=e327]
+              - generic [ref=e329] [cursor=pointer]:
+                - generic [ref=e330]: "?"
+                - generic [ref=e331]: Vamos fazer um brainstorm paralelo juntando nossos agentes , os que fizerem sentido , e elencar os melhores nomes candidatos para a empresa
+                - generic [ref=e332]: done
+                - img [ref=e333]
+              - generic [ref=e335] [cursor=pointer]:
+                - generic [ref=e336]: "?"
+                - generic [ref=e337]: Criar logo da empresa Provit
+                - generic [ref=e338]: done
+                - img [ref=e339]
+          - generic [ref=e341]:
+            - generic [ref=e342]:
+              - generic [ref=e343]:
+                - generic [ref=e344]:
+                  - heading "Inbox" [level=2] [ref=e346]
+                  - generic [ref=e347]: "14"
+                - generic [ref=e349]:
+                  - button "Expand Anatel (1 items)" [ref=e352] [cursor=pointer]:
+                    - img [ref=e353]
+                    - heading "Anatel" [level=3] [ref=e356]
+                    - generic [ref=e357]: "1"
+                  - button "Expand nano-mcontrol (4 items)" [ref=e360] [cursor=pointer]:
+                    - img [ref=e361]
+                    - heading "nano-mcontrol" [level=3] [ref=e363]
+                    - generic [ref=e364]: "4"
+                  - button "Expand Nanobot Mission Control (1 items)" [ref=e367] [cursor=pointer]:
+                    - img [ref=e368]
+                    - heading "Nanobot Mission Control" [level=3] [ref=e371]
+                    - generic [ref=e372]: "1"
+                  - button "Expand Sprova (2 items)" [ref=e375] [cursor=pointer]:
+                    - img [ref=e376]
+                    - heading "Sprova" [level=3] [ref=e379]
+                    - generic [ref=e380]: "2"
+                  - button "Expand UnB (1 items)" [ref=e383] [cursor=pointer]:
+                    - img [ref=e384]
+                    - heading "UnB" [level=3] [ref=e387]
+                    - generic [ref=e388]: "1"
+                  - button "Expand Untagged (5 items)" [ref=e391] [cursor=pointer]:
+                    - img [ref=e392]
+                    - heading "Untagged" [level=3] [ref=e394]
+                    - generic [ref=e395]: "5"
+              - generic [ref=e396]:
+                - generic [ref=e397]:
+                  - heading "Assigned" [level=2] [ref=e399]
+                  - generic [ref=e400]: "0"
+                - paragraph [ref=e402]: No tasks
+              - generic [ref=e403]:
+                - generic [ref=e404]:
+                  - heading "In Progress" [level=2] [ref=e406]
+                  - generic [ref=e407]: "10"
+                - generic [ref=e409]:
+                  - button "Expand Validate Nanobot Live support (proof 5) (1 items)" [ref=e412] [cursor=pointer]:
+                    - img [ref=e413]
+                    - heading "Validate Nanobot Live support (proof 5)" [level=3] [ref=e415]
+                    - generic [ref=e416]: "1"
+                  - button "Expand Validate Nanobot Live support (proof 4) (1 items)" [ref=e419] [cursor=pointer]:
+                    - img [ref=e420]
+                    - heading "Validate Nanobot Live support (proof 4)" [level=3] [ref=e422]
+                    - generic [ref=e423]: "1"
+                  - button "Expand Validate Nanobot Live support (proof 3) (1 items)" [ref=e426] [cursor=pointer]:
+                    - img [ref=e427]
+                    - heading "Validate Nanobot Live support (proof 3)" [level=3] [ref=e429]
+                    - generic [ref=e430]: "1"
+                  - button "Expand Validate Nanobot Live support (proof 2) (1 items)" [ref=e433] [cursor=pointer]:
+                    - img [ref=e434]
+                    - heading "Validate Nanobot Live support (proof 2)" [level=3] [ref=e436]
+                    - generic [ref=e437]: "1"
+                  - button "Expand Validate Nanobot Live support (proof) (1 items)" [ref=e440] [cursor=pointer]:
+                    - img [ref=e441]
+                    - heading "Validate Nanobot Live support (proof)" [level=3] [ref=e443]
+                    - generic [ref=e444]: "1"
+                  - button "Expand Validate Nanobot Live support (1 items)" [ref=e447] [cursor=pointer]:
+                    - img [ref=e448]
+                    - heading "Validate Nanobot Live support" [level=3] [ref=e450]
+                    - generic [ref=e451]: "1"
+                  - button "Expand Story 27.14 Live takeover proof (1 items)" [ref=e454] [cursor=pointer]:
+                    - img [ref=e455]
+                    - heading "Story 27.14 Live takeover proof" [level=3] [ref=e457]
+                    - generic [ref=e458]: "1"
+                  - 'button "Expand 🌙 Executar skill dream: consolidar HISTORY.md, extrair fatos para MEMORY.md, remover entradas com mais de 7 dias. (1 items)" [ref=e461] [cursor=pointer]':
+                    - img [ref=e462]
+                    - 'heading "🌙 Executar skill dream: consolidar HISTORY.md, extrair fatos para MEMORY.md, remover entradas com mais de 7 dias." [level=3] [ref=e464]'
+                    - generic [ref=e465]: "1"
+                  - button "Expand nano-mcontrol (1 items)" [ref=e468] [cursor=pointer]:
+                    - img [ref=e469]
+                    - heading "nano-mcontrol" [level=3] [ref=e471]
+                    - generic [ref=e472]: "1"
+                  - button "Expand Untagged (1 items)" [ref=e475] [cursor=pointer]:
+                    - img [ref=e476]
+                    - heading "Untagged" [level=3] [ref=e478]
+                    - generic [ref=e479]: "1"
+              - generic [ref=e480]:
+                - generic [ref=e481]:
+                  - heading "Review" [level=2] [ref=e483]
+                  - generic [ref=e484]: "4"
+                  - generic [ref=e485]: "4"
+                - generic [ref=e487]:
+                  - button "Expand Sprova (1 items)" [ref=e490] [cursor=pointer]:
+                    - img [ref=e491]
+                    - heading "Sprova" [level=3] [ref=e494]
+                    - generic [ref=e495]: "1"
+                  - button "Expand Untagged (3 items)" [ref=e498] [cursor=pointer]:
+                    - img [ref=e499]
+                    - heading "Untagged" [level=3] [ref=e501]
+                    - generic [ref=e502]: "3"
+              - generic [ref=e503]:
+                - generic [ref=e504]:
+                  - heading "Done" [level=2] [ref=e506]
+                  - generic [ref=e507]: "38"
+                  - img "Clear done tasks" [ref=e508] [cursor=pointer]
+                  - img "View all done tasks" [ref=e511] [cursor=pointer]
+                - generic [ref=e513]:
+                  - button "Expand merged (3 items)" [ref=e516] [cursor=pointer]:
+                    - img [ref=e517]
+                    - heading "merged" [level=3] [ref=e520]
+                    - generic [ref=e521]: "3"
+                  - button "Expand nano-mcontrol (7 items)" [ref=e524] [cursor=pointer]:
+                    - img [ref=e525]
+                    - heading "nano-mcontrol" [level=3] [ref=e527]
+                    - generic [ref=e528]: "7"
+                  - button "Expand Nanobot Mission Control (3 items)" [ref=e531] [cursor=pointer]:
+                    - img [ref=e532]
+                    - heading "Nanobot Mission Control" [level=3] [ref=e535]
+                    - generic [ref=e536]: "3"
+                  - button "Expand Pessoal, merged (1 items)" [ref=e539] [cursor=pointer]:
+                    - img [ref=e540]
+                    - heading "Pessoal, merged" [level=3] [ref=e544]
+                    - generic [ref=e545]: "1"
+                  - button "Expand Sprova (2 items)" [ref=e548] [cursor=pointer]:
+                    - img [ref=e549]
+                    - heading "Sprova" [level=3] [ref=e552]
+                    - generic [ref=e553]: "2"
+                  - button "Expand Untagged (22 items)" [ref=e556] [cursor=pointer]:
+                    - img [ref=e557]
+                    - heading "Untagged" [level=3] [ref=e559]
+                    - generic [ref=e560]: "22"
+            - button "Open trash" [ref=e561] [cursor=pointer]:
+              - img [ref=e562]
+  - button "Open Next.js Dev Tools" [ref=e92] [cursor=pointer]:
+    - img [ref=e93]
+  - alert [ref=e96]

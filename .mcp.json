@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "mc-specs": {
+      "command": "node",
+      "args": [
+        "/Users/ennio/Documents/nanobot-ennio/dashboard/scripts/mcp-specs-server.mjs"
+      ]
+    }
+  }
+}

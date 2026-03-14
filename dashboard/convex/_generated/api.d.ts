@@ -18,6 +18,7 @@ import type * as interactiveSessions from "../interactiveSessions.js";
 import type * as lib_readModels from "../lib/readModels.js";
 import type * as lib_specCompiler from "../lib/specCompiler.js";
 import type * as lib_squadGraphPublisher from "../lib/squadGraphPublisher.js";
+import type * as lib_squadMissionLaunch from "../lib/squadMissionLaunch.js";
 import type * as lib_stepLifecycle from "../lib/stepLifecycle.js";
 import type * as lib_taskArchive from "../lib/taskArchive.js";
 import type * as lib_taskDetailView from "../lib/taskDetailView.js";
@@ -30,9 +31,11 @@ import type * as lib_taskReview from "../lib/taskReview.js";
 import type * as lib_taskStatus from "../lib/taskStatus.js";
 import type * as lib_threadRules from "../lib/threadRules.js";
 import type * as lib_workflowContract from "../lib/workflowContract.js";
+import type * as lib_workflowExecutionCompiler from "../lib/workflowExecutionCompiler.js";
 import type * as lib_workflowHelpers from "../lib/workflowHelpers.js";
 import type * as messages from "../messages.js";
 import type * as reviewSpecs from "../reviewSpecs.js";
+import type * as sessionActivityLog from "../sessionActivityLog.js";
 import type * as settings from "../settings.js";
 import type * as skills from "../skills.js";
 import type * as squadSpecs from "../squadSpecs.js";
@@ -42,6 +45,7 @@ import type * as tagAttributes from "../tagAttributes.js";
 import type * as taskTags from "../taskTags.js";
 import type * as tasks from "../tasks.js";
 import type * as terminalSessions from "../terminalSessions.js";
+import type * as workflowRuns from "../workflowRuns.js";
 import type * as workflowSpecs from "../workflowSpecs.js";
 
 import type {
@@ -61,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   "lib/readModels": typeof lib_readModels;
   "lib/specCompiler": typeof lib_specCompiler;
   "lib/squadGraphPublisher": typeof lib_squadGraphPublisher;
+  "lib/squadMissionLaunch": typeof lib_squadMissionLaunch;
   "lib/stepLifecycle": typeof lib_stepLifecycle;
   "lib/taskArchive": typeof lib_taskArchive;
   "lib/taskDetailView": typeof lib_taskDetailView;
@@ -73,9 +78,11 @@ declare const fullApi: ApiFromModules<{
   "lib/taskStatus": typeof lib_taskStatus;
   "lib/threadRules": typeof lib_threadRules;
   "lib/workflowContract": typeof lib_workflowContract;
+  "lib/workflowExecutionCompiler": typeof lib_workflowExecutionCompiler;
   "lib/workflowHelpers": typeof lib_workflowHelpers;
   messages: typeof messages;
   reviewSpecs: typeof reviewSpecs;
+  sessionActivityLog: typeof sessionActivityLog;
   settings: typeof settings;
   skills: typeof skills;
   squadSpecs: typeof squadSpecs;
@@ -85,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   taskTags: typeof taskTags;
   tasks: typeof tasks;
   terminalSessions: typeof terminalSessions;
+  workflowRuns: typeof workflowRuns;
   workflowSpecs: typeof workflowSpecs;
 }>;
 
