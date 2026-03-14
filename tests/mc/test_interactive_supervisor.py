@@ -190,3 +190,100 @@ def test_supervisor_suppresses_lifecycle_side_effects_during_human_takeover() ->
     bridge.update_task_status.assert_not_called()
     bridge.update_step_status.assert_not_called()
     bridge.create_activity.assert_not_called()
+
+
+# ── Task 1: session activity payload serialization ────────────────────
+
+
+def test_supervisor_record_supervision_omits_none_optional_fields() -> None:
+    """Optional string fields must not be sent as None to record_supervision."""
+    bridge = MagicMock()
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="turn_started",
+            session_id="interactive_session:claude",
+            provider="claude-code",
+            # No turn_id, item_id, summary, final_output, error, status, agent_name
+        )
+    )
+
+    call_kwargs = registry.record_supervision.call_args
+    event_payload = call_kwargs[1]["event"]  # keyword arg "event"
+
+    # Required fields must be present
+    assert "kind" in event_payload
+    assert event_payload["kind"] == "turn_started"
+
+    # Optional fields that are None must be omitted, not sent as None
+    for optional_field in ("turn_id", "item_id", "summary", "final_output", "error", "status"):
+        assert (
+            event_payload.get(optional_field) is not None or optional_field not in event_payload
+        ), f"Optional field '{optional_field}' must be omitted when None, not sent as None"
+
+
+def test_supervisor_record_supervision_includes_present_optional_fields() -> None:
+    """Optional fields with values must still be included in the payload."""
+    bridge = MagicMock()
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="turn_started",
+            session_id="interactive_session:claude",
+            provider="claude-code",
+            turn_id="turn-99",
+            summary="Working on it",
+        )
+    )
+
+    call_kwargs = registry.record_supervision.call_args
+    event_payload = call_kwargs[1]["event"]
+
+    assert event_payload["turn_id"] == "turn-99"
+    assert event_payload["summary"] == "Working on it"
+
+
+def test_supervisor_record_supervision_no_null_values_in_payload() -> None:
+    """The event payload passed to record_supervision must not contain any None values."""
+    bridge = MagicMock()
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="session_ready",
+            session_id="interactive_session:claude",
+            provider="claude-code",
+        )
+    )
+
+    call_kwargs = registry.record_supervision.call_args
+    event_payload = call_kwargs[1]["event"]
+
+    null_fields = [k for k, v in event_payload.items() if v is None]
+    assert null_fields == [], f"Payload must not contain null values, found: {null_fields}"

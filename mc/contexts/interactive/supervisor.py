@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -9,6 +10,8 @@ from mc.contexts.interactive.metrics import increment_interactive_metric
 from mc.contexts.interactive.registry import InteractiveSessionRegistry
 from mc.contexts.interactive.supervision_types import InteractiveSupervisionEvent
 from mc.types import ActivityEventType
+
+logger = logging.getLogger(__name__)
 
 
 class InteractiveExecutionSupervisor:
@@ -25,21 +28,30 @@ class InteractiveExecutionSupervisor:
         timestamp = event.occurred_at or datetime.now(timezone.utc).isoformat()
         metadata = self._registry.get(event.session_id) or {}
         merged_event = self._merge_event_context(event, metadata)
+        event_payload: dict[str, Any] = {"kind": merged_event.kind}
+        if merged_event.task_id is not None:
+            event_payload["task_id"] = merged_event.task_id
+        if merged_event.step_id is not None:
+            event_payload["step_id"] = merged_event.step_id
+        if merged_event.turn_id is not None:
+            event_payload["turn_id"] = merged_event.turn_id
+        if merged_event.item_id is not None:
+            event_payload["item_id"] = merged_event.item_id
+        if merged_event.summary is not None:
+            event_payload["summary"] = merged_event.summary
+        if merged_event.final_output is not None:
+            event_payload["final_output"] = merged_event.final_output
+        if merged_event.provider is not None:
+            event_payload["final_result_source"] = merged_event.provider
+        if merged_event.error is not None:
+            event_payload["error"] = merged_event.error
+        if merged_event.status is not None:
+            event_payload["status"] = merged_event.status
+        if merged_event.agent_name is not None:
+            event_payload["agent_name"] = merged_event.agent_name
         updated_metadata = self._registry.record_supervision(
             merged_event.session_id,
-            event={
-                "kind": merged_event.kind,
-                "task_id": merged_event.task_id,
-                "step_id": merged_event.step_id,
-                "turn_id": merged_event.turn_id,
-                "item_id": merged_event.item_id,
-                "summary": merged_event.summary,
-                "final_output": merged_event.final_output,
-                "final_result_source": merged_event.provider,
-                "error": merged_event.error,
-                "status": merged_event.status,
-                "agent_name": merged_event.agent_name,
-            },
+            event=event_payload,
             timestamp=timestamp,
         )
         if _string_or_none(metadata.get("control_mode")) == "human":
