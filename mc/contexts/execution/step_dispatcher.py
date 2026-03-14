@@ -342,14 +342,30 @@ class StepDispatcher:
             task_id,
             agent_name,
         )
-        if agent_name == "human":
-            # Human agents NEVER spawn a process and NEVER change status.
-            # The step stays "assigned" until a human explicitly acts on it
-            # via the dashboard (acceptHumanStep / manualMoveStep).
-            logger.info(
-                "[dispatcher] Step '%s' assigned to human — leaving as assigned, skipping dispatch",
-                step_title,
-            )
+        # Workflow gate steps (human, checkpoint, review) transition directly to
+        # waiting_human so the dashboard can surface them for human action.
+        workflow_step_type = step.get("workflow_step_type")
+        is_gate_step = workflow_step_type in ("human", "checkpoint", "review")
+
+        if agent_name == "human" or is_gate_step:
+            # Gate steps and human-assigned steps go to waiting_human immediately.
+            # They stay there until a human explicitly acts via the dashboard.
+            if is_gate_step and agent_name != "human":
+                await asyncio.to_thread(
+                    self._bridge.update_step_status,
+                    step_id,
+                    StepStatus.WAITING_HUMAN,
+                )
+                logger.info(
+                    "[dispatcher] Step '%s' (type=%s) set to waiting_human",
+                    step_title,
+                    workflow_step_type,
+                )
+            else:
+                logger.info(
+                    "[dispatcher] Step '%s' assigned to human — leaving as assigned, skipping dispatch",
+                    step_title,
+                )
             return []
 
         await asyncio.to_thread(

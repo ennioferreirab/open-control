@@ -177,6 +177,12 @@ export default defineSchema({
     completedAt: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
     attachedFiles: v.optional(v.array(v.string())),
+    // Workflow metadata — set only when the step was materialized from a workflowSpec.
+    workflowStepId: v.optional(v.string()),
+    workflowStepType: v.optional(workflowStepTypeValidator),
+    agentSpecId: v.optional(v.id("agentSpecs")),
+    reviewSpecId: v.optional(v.id("reviewSpecs")),
+    onRejectStepId: v.optional(v.string()),
   })
     .index("by_taskId", ["taskId"])
     .index("by_status", ["status"]),
@@ -493,6 +499,24 @@ export default defineSchema({
     updatedAt: v.string(),
   })
     .index("by_name", ["name"])
+    .index("by_status", ["status"]),
+
+  workflowRuns: defineTable({
+    taskId: v.id("tasks"),
+    squadSpecId: v.id("squadSpecs"),
+    workflowSpecId: v.id("workflowSpecs"),
+    boardId: v.id("boards"),
+    status: v.union(
+      v.literal("active"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("paused"),
+    ),
+    launchedAt: v.string(),
+    completedAt: v.optional(v.string()),
+    stepMapping: v.optional(v.any()),
+  })
+    .index("by_taskId", ["taskId"])
     .index("by_status", ["status"]),
 
   boardSquadBindings: defineTable({

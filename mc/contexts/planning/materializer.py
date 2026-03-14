@@ -92,17 +92,29 @@ class PlanMaterializer:
                 step.assigned_agent or NANOBOT_AGENT_NAME
             ).strip() or NANOBOT_AGENT_NAME
 
-            payload.append(
-                {
-                    "temp_id": step.temp_id,
-                    "title": title,
-                    "description": description,
-                    "assigned_agent": assigned_agent,
-                    "blocked_by_temp_ids": [dep for dep in step.blocked_by if dep],
-                    "parallel_group": as_positive_int(step.parallel_group, default=1),
-                    "order": as_positive_int(step.order, default=index),
-                }
-            )
+            entry: dict[str, object] = {
+                "temp_id": step.temp_id,
+                "title": title,
+                "description": description,
+                "assigned_agent": assigned_agent,
+                "blocked_by_temp_ids": [dep for dep in step.blocked_by if dep],
+                "parallel_group": as_positive_int(step.parallel_group, default=1),
+                "order": as_positive_int(step.order, default=index),
+            }
+
+            # Preserve workflow metadata when present.
+            if step.workflow_step_id is not None:
+                entry["workflow_step_id"] = step.workflow_step_id
+            if step.workflow_step_type is not None:
+                entry["workflow_step_type"] = step.workflow_step_type
+            if step.agent_spec_id is not None:
+                entry["agent_spec_id"] = step.agent_spec_id
+            if step.review_spec_id is not None:
+                entry["review_spec_id"] = step.review_spec_id
+            if step.on_reject_step_id is not None:
+                entry["on_reject_step_id"] = step.on_reject_step_id
+
+            payload.append(entry)
 
         return payload
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from mc.types import ActivityEventType, ExecutionPlan, StepStatus, TaskStatus
@@ -83,7 +84,9 @@ class KickoffResumeWorker:
         execution_plan = task_data.get("execution_plan") or {}
         generated_at = ""
         if isinstance(execution_plan, dict):
-            generated_at = str(execution_plan.get("generated_at") or execution_plan.get("generatedAt") or "")
+            generated_at = str(
+                execution_plan.get("generated_at") or execution_plan.get("generatedAt") or ""
+            )
         return f"{updated_at}|{generated_at}"
 
     async def _process_task(self, task_id: str, task_data: dict[str, Any]) -> None:
@@ -134,7 +137,9 @@ class KickoffResumeWorker:
                 title,
                 len(dispatchable_step_ids),
             )
-            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, dispatchable_step_ids))
+            asyncio.create_task(
+                self._step_dispatcher.dispatch_steps(task_id, dispatchable_step_ids)
+            )
         else:
             logger.info(
                 "[kickoff] Resumed task '%s' has no dispatchable steps (may still have running steps)",
@@ -151,6 +156,12 @@ class KickoffResumeWorker:
                 plan,
                 skip_kickoff=True,
             )
+
+            # Create provenance record for ai_workflow tasks.
+            work_mode = task_data.get("work_mode") or task_data.get("workMode")
+            if work_mode == "ai_workflow":
+                await self._create_workflow_run(task_id, task_data, created_step_ids, plan)
+
             asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
             logger.info(
                 "[kickoff] Task '%s': materialized %d steps after kick-off",
@@ -268,3 +279,54 @@ class KickoffResumeWorker:
                     self._bridge.check_and_unblock_dependents(dependency_id)
 
         return created_step_ids
+
+    async def _create_workflow_run(
+        self,
+        task_id: str,
+        task_data: dict[str, Any],
+        created_step_ids: list[str],
+        plan: ExecutionPlan,
+    ) -> None:
+        """Create a workflowRun provenance record for an ai_workflow task."""
+        squad_spec_id = task_data.get("squad_spec_id") or task_data.get("squadSpecId")
+        workflow_spec_id = task_data.get("workflow_spec_id") or task_data.get("workflowSpecId")
+        board_id = task_data.get("board_id") or task_data.get("boardId")
+
+        if not squad_spec_id or not workflow_spec_id or not board_id:
+            logger.warning(
+                "[kickoff] Skipping workflowRun creation for task %s: "
+                "missing squadSpecId=%s workflowSpecId=%s boardId=%s",
+                task_id,
+                squad_spec_id,
+                workflow_spec_id,
+                board_id,
+            )
+            return
+
+        # Build step mapping: workflow temp_id → real Convex step id
+        step_mapping: dict[str, str] = {}
+        for plan_step, real_id in zip(plan.steps, created_step_ids):
+            if plan_step.workflow_step_id:
+                step_mapping[plan_step.workflow_step_id] = real_id
+
+        launched_at = datetime.now(timezone.utc).isoformat()
+        try:
+            await asyncio.to_thread(
+                self._bridge.mutation,
+                "workflowRuns:create",
+                {
+                    "task_id": task_id,
+                    "squad_spec_id": squad_spec_id,
+                    "workflow_spec_id": workflow_spec_id,
+                    "board_id": board_id,
+                    "launched_at": launched_at,
+                    "step_mapping": step_mapping if step_mapping else None,
+                },
+            )
+            logger.info("[kickoff] Created workflowRun for task %s", task_id)
+        except Exception:
+            logger.warning(
+                "[kickoff] Failed to create workflowRun for task %s (non-fatal)",
+                task_id,
+                exc_info=True,
+            )
