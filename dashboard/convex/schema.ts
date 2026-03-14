@@ -436,6 +436,7 @@ export default defineSchema({
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
     version: v.number(),
     tags: v.optional(v.array(v.string())),
+    publishedAt: v.optional(v.string()),
     createdAt: v.string(),
     updatedAt: v.string(),
   })
@@ -469,8 +470,15 @@ export default defineSchema({
     executionPolicy: v.optional(v.string()),
     reviewSpecId: v.optional(v.id("reviewSpecs")),
     onRejectDefault: v.optional(v.string()),
+    onReject: v.optional(
+      v.object({
+        returnToStep: v.string(),
+        maxRetries: v.optional(v.number()),
+      }),
+    ),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
     version: v.number(),
+    publishedAt: v.optional(v.string()),
     createdAt: v.string(),
     updatedAt: v.string(),
   })

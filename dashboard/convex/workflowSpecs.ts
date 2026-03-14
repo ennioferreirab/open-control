@@ -27,6 +27,12 @@ export const createDraft = internalMutation({
     exitCriteria: v.optional(v.string()),
     executionPolicy: v.optional(v.string()),
     onRejectDefault: v.optional(v.string()),
+    onReject: v.optional(
+      v.object({
+        returnToStep: v.string(),
+        maxRetries: v.optional(v.number()),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
@@ -38,6 +44,7 @@ export const createDraft = internalMutation({
       exitCriteria: args.exitCriteria,
       executionPolicy: args.executionPolicy,
       onRejectDefault: args.onRejectDefault,
+      onReject: args.onReject,
       status: "draft",
       version: 1,
       createdAt: now,
@@ -62,6 +69,7 @@ export const publish = internalMutation({
     await ctx.db.patch(args.specId as Id<"workflowSpecs">, {
       status: "published",
       version: spec.version + 1,
+      publishedAt: now,
       updatedAt: now,
     });
   },
