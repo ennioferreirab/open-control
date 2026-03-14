@@ -11,6 +11,7 @@ from mc.types import (
     AgentData,
     ClaudeCodeOpts,
     ExecutionPlan,
+    ExecutionPlanStep,
     extract_cc_model_name,
     is_cc_model,
 )
@@ -259,6 +260,106 @@ class TestExecutionPlanFromDict:
         assert step.workflow_step_type == "agent"
         assert step.agent_spec_id == "spec-1"
         assert step.on_reject_step_id == "step_0"
+
+
+class TestExecutionPlanRoundTrip:
+    """Tests for ExecutionPlan.to_dict / from_dict round-trip fidelity."""
+
+    def test_round_trip_workflow_metadata_preserved(self) -> None:
+        """Workflow metadata fields survive to_dict → from_dict."""
+        step = ExecutionPlanStep(
+            temp_id="step-analyze",
+            title="Analyze",
+            description="Analyze requirements",
+            assigned_agent="nanobot",
+            blocked_by=[],
+            parallel_group=1,
+            order=0,
+            workflow_step_id="analyze-step",
+            workflow_step_type="agent",
+            agent_spec_id="agent-spec-123",
+            on_reject_step_id=None,
+            review_spec_id=None,
+        )
+        plan = ExecutionPlan(steps=[step], generated_by="workflow")
+        plan.generated_at = "2026-03-14T10:00:00Z"
+
+        d = plan.to_dict()
+        restored = ExecutionPlan.from_dict(d)
+
+        assert len(restored.steps) == 1
+        s = restored.steps[0]
+        assert s.workflow_step_id == "analyze-step"
+        assert s.workflow_step_type == "agent"
+        assert s.agent_spec_id == "agent-spec-123"
+        assert s.review_spec_id is None
+        assert s.on_reject_step_id is None
+
+    def test_round_trip_review_spec_and_on_reject(self) -> None:
+        """reviewSpecId and onRejectStepId survive round-trip."""
+        step = ExecutionPlanStep(
+            temp_id="step-review",
+            title="Review",
+            description="Review output",
+            assigned_agent="nanobot",
+            blocked_by=["step-analyze"],
+            parallel_group=2,
+            order=1,
+            workflow_step_id="review-step",
+            workflow_step_type="review",
+            agent_spec_id=None,
+            review_spec_id="review-spec-456",
+            on_reject_step_id="step-analyze",
+        )
+        plan = ExecutionPlan(steps=[step], generated_by="workflow")
+        plan.generated_at = "2026-03-14T10:00:00Z"
+
+        d = plan.to_dict()
+        # Verify camelCase keys in dict
+        assert d["steps"][0]["reviewSpecId"] == "review-spec-456"
+        assert d["steps"][0]["onRejectStepId"] == "step-analyze"
+        assert d["steps"][0]["workflowStepId"] == "review-step"
+        assert d["steps"][0]["workflowStepType"] == "review"
+        assert d["generatedBy"] == "workflow"
+
+        restored = ExecutionPlan.from_dict(d)
+        s = restored.steps[0]
+        assert s.review_spec_id == "review-spec-456"
+        assert s.on_reject_step_id == "step-analyze"
+        assert s.workflow_step_id == "review-step"
+        assert s.workflow_step_type == "review"
+
+    def test_round_trip_none_fields_omitted_from_dict(self) -> None:
+        """None workflow metadata fields must NOT appear as keys in to_dict output."""
+        step = ExecutionPlanStep(
+            temp_id="plain-step",
+            title="Plain",
+            description="A plain step",
+            assigned_agent="nanobot",
+            blocked_by=[],
+            parallel_group=1,
+            order=0,
+        )
+        plan = ExecutionPlan(steps=[step])
+        d = plan.to_dict()
+        step_dict = d["steps"][0]
+        assert "workflowStepId" not in step_dict
+        assert "workflowStepType" not in step_dict
+        assert "agentSpecId" not in step_dict
+        assert "reviewSpecId" not in step_dict
+        assert "onRejectStepId" not in step_dict
+
+    def test_round_trip_generated_by_workflow(self) -> None:
+        """generatedBy='workflow' is always preserved in to_dict."""
+        plan = ExecutionPlan(steps=[], generated_by="workflow")
+        d = plan.to_dict()
+        assert d["generatedBy"] == "workflow"
+
+    def test_round_trip_generated_by_lead_agent(self) -> None:
+        """generatedBy='lead-agent' is always preserved in to_dict."""
+        plan = ExecutionPlan(steps=[], generated_by="lead-agent")
+        d = plan.to_dict()
+        assert d["generatedBy"] == "lead-agent"
 
 
 class TestCCModelHelpers:

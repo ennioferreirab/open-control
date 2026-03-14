@@ -389,6 +389,11 @@ class PlanningWorker:
                 exc_info=True,
             )
             await asyncio.to_thread(
+                self._bridge.update_task_status,
+                task_id,
+                TaskStatus.FAILED,
+            )
+            await asyncio.to_thread(
                 self._bridge.send_message,
                 task_id,
                 "System",

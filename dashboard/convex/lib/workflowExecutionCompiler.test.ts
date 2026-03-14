@@ -273,6 +273,40 @@ describe("order and parallelGroup", () => {
     const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
     expect(plan.steps[0].parallelGroup).toBe(1);
   });
+
+  it("assigns parallelGroup=1 to root steps (no dependencies)", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const root = plan.steps.find((s) => s.tempId === "step-research")!;
+    expect(root.parallelGroup).toBe(1);
+  });
+
+  it("assigns parallelGroup=2 to steps depending on group-1 steps", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const write = plan.steps.find((s) => s.tempId === "step-write")!;
+    expect(write.parallelGroup).toBe(2);
+  });
+
+  it("assigns parallelGroup=3 to steps depending on group-2 steps (linear chain)", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const review = plan.steps.find((s) => s.tempId === "step-review")!;
+    expect(review.parallelGroup).toBe(3);
+  });
+
+  it("assigns same parallelGroup to parallel steps with same dependency depth", () => {
+    const plan = compileWorkflowExecutionPlan(PARALLEL_WORKFLOW, AGENT_REFS);
+    const researchA = plan.steps.find((s) => s.tempId === "step-research-a")!;
+    const researchB = plan.steps.find((s) => s.tempId === "step-research-b")!;
+    expect(researchA.parallelGroup).toBe(researchB.parallelGroup);
+    expect(researchA.parallelGroup).toBe(1);
+  });
+
+  it("assigns a deeper parallelGroup to the merge step in a fan-in pattern", () => {
+    const plan = compileWorkflowExecutionPlan(PARALLEL_WORKFLOW, AGENT_REFS);
+    const mergeStep = plan.steps.find((s) => s.tempId === "step-merge")!;
+    const researchA = plan.steps.find((s) => s.tempId === "step-research-a")!;
+    expect(mergeStep.parallelGroup).toBeGreaterThan(researchA.parallelGroup);
+    expect(mergeStep.parallelGroup).toBe(2);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -22,8 +22,9 @@ import { TaskDetailFilesTab } from "@/features/tasks/components/TaskDetailFilesT
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { TaskDetailHeader } from "@/features/tasks/components/TaskDetailHeader";
-import { InteractiveTerminalPanel } from "@/features/interactive/components/InteractiveTerminalPanel";
+import { ProviderLiveChatPanel } from "@/features/interactive/components/ProviderLiveChatPanel";
 import { useTaskInteractiveSession } from "@/features/interactive/hooks/useTaskInteractiveSession";
+import { useProviderSession } from "@/features/interactive/hooks/useProviderSession";
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
@@ -70,6 +71,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   // --- Feature hooks ---
   const view = useTaskDetailView(taskId, { mergeQuery });
   const liveSession = useTaskInteractiveSession(taskId);
+  const providerSession = useProviderSession(liveSession.session ?? undefined);
   const actions = useTaskDetailActions();
   const planState = usePlanEditorState(view.taskExecutionPlan, view.isAwaitingKickoff);
 
@@ -688,23 +690,14 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                   value="live"
                   className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
                 >
-                  <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
-                    <InteractiveTerminalPanel
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <ProviderLiveChatPanel
+                      sessionId={providerSession.sessionId}
+                      events={providerSession.events}
+                      status={providerSession.status}
                       agentName={liveSession.session.agentName}
                       provider={liveSession.session.provider}
-                      scopeKind="task"
-                      scopeId={task._id}
-                      surface="step"
-                      taskId={task._id}
-                      liveSessionId={liveSession.session.sessionId}
-                      activeStepId={liveSession.activeStep?._id}
-                      controlMode={
-                        (
-                          liveSession.session as typeof liveSession.session & {
-                            controlMode?: "agent" | "human";
-                          }
-                        ).controlMode ?? "agent"
-                      }
+                      isLoading={providerSession.isLoading}
                     />
                   </div>
                 </TabsContent>

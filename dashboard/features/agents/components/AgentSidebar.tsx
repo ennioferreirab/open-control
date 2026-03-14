@@ -35,6 +35,7 @@ import { SquadSidebarSection } from "@/features/agents/components/SquadSidebarSe
 import { SquadDetailSheet } from "@/features/agents/components/SquadDetailSheet";
 import { useAgentSidebarData } from "@/features/agents/hooks/useAgentSidebarData";
 import { useSquadSidebarData } from "@/features/agents/hooks/useSquadSidebarData";
+import { useBoard } from "@/components/BoardContext";
 import type { Id } from "@/convex/_generated/dataModel";
 
 type SelectableItem =
@@ -52,6 +53,7 @@ export function AgentSidebar() {
     systemAgents,
   } = useAgentSidebarData();
   const { archiveSquad, archivedSquads, unarchiveSquad } = useSquadSidebarData();
+  const { activeBoardId } = useBoard();
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [showCreateChooser, setShowCreateChooser] = useState(false);
   const [showAgentWizard, setShowAgentWizard] = useState(false);
@@ -350,7 +352,11 @@ export function AgentSidebar() {
       />
       <AgentAuthoringWizard open={showAgentWizard} onClose={() => setShowAgentWizard(false)} />
       <SquadAuthoringWizard open={showSquadWizard} onClose={() => setShowSquadWizard(false)} />
-      <SquadDetailSheet squadId={selectedSquadId} onClose={() => setSelectedSquadId(null)} />
+      <SquadDetailSheet
+        squadId={selectedSquadId}
+        boardId={activeBoardId ?? undefined}
+        onClose={() => setSelectedSquadId(null)}
+      />
       <AlertDialog
         open={showBulkDeleteDialog}
         onOpenChange={(open) => {

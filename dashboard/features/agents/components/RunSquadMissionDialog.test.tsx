@@ -30,9 +30,10 @@ describe("RunSquadMissionDialog", () => {
   it("does not render content when open is false", () => {
     mockUseRunSquadMission.mockReturnValue({
       isLaunching: false,
+      error: null,
       effectiveWorkflowId: MOCK_WORKFLOW_ID,
       launch: vi.fn(),
-    });
+    } as unknown as ReturnType<typeof useRunSquadMission>);
 
     const { queryByRole } = render(
       <RunSquadMissionDialog
@@ -51,9 +52,10 @@ describe("RunSquadMissionDialog", () => {
   it("renders the dialog with squad display name when open", () => {
     mockUseRunSquadMission.mockReturnValue({
       isLaunching: false,
+      error: null,
       effectiveWorkflowId: MOCK_WORKFLOW_ID,
       launch: vi.fn(),
-    });
+    } as unknown as ReturnType<typeof useRunSquadMission>);
 
     render(
       <RunSquadMissionDialog
@@ -73,9 +75,10 @@ describe("RunSquadMissionDialog", () => {
   it("disables the Launch Mission button when title is empty", () => {
     mockUseRunSquadMission.mockReturnValue({
       isLaunching: false,
+      error: null,
       effectiveWorkflowId: MOCK_WORKFLOW_ID,
       launch: vi.fn(),
-    });
+    } as unknown as ReturnType<typeof useRunSquadMission>);
 
     render(
       <RunSquadMissionDialog
@@ -95,9 +98,10 @@ describe("RunSquadMissionDialog", () => {
   it("enables the Launch Mission button when title is filled and workflow exists", () => {
     mockUseRunSquadMission.mockReturnValue({
       isLaunching: false,
+      error: null,
       effectiveWorkflowId: MOCK_WORKFLOW_ID,
       launch: vi.fn(),
-    });
+    } as unknown as ReturnType<typeof useRunSquadMission>);
 
     render(
       <RunSquadMissionDialog
@@ -121,9 +125,10 @@ describe("RunSquadMissionDialog", () => {
     const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
     mockUseRunSquadMission.mockReturnValue({
       isLaunching: false,
+      error: null,
       effectiveWorkflowId: MOCK_WORKFLOW_ID,
       launch: mockLaunch,
-    });
+    } as unknown as ReturnType<typeof useRunSquadMission>);
 
     const onLaunched = vi.fn();
 
@@ -159,9 +164,10 @@ describe("RunSquadMissionDialog", () => {
     const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
     mockUseRunSquadMission.mockReturnValue({
       isLaunching: false,
+      error: null,
       effectiveWorkflowId: MOCK_WORKFLOW_ID,
       launch: mockLaunch,
-    });
+    } as unknown as ReturnType<typeof useRunSquadMission>);
 
     const onLaunched = vi.fn();
 
@@ -189,9 +195,10 @@ describe("RunSquadMissionDialog", () => {
   it("shows Launching... on the button while isLaunching is true", () => {
     mockUseRunSquadMission.mockReturnValue({
       isLaunching: true,
+      error: null,
       effectiveWorkflowId: MOCK_WORKFLOW_ID,
       launch: vi.fn(),
-    });
+    } as unknown as ReturnType<typeof useRunSquadMission>);
 
     render(
       <RunSquadMissionDialog
@@ -210,9 +217,10 @@ describe("RunSquadMissionDialog", () => {
   it("calls onClose when Cancel is clicked", () => {
     mockUseRunSquadMission.mockReturnValue({
       isLaunching: false,
+      error: null,
       effectiveWorkflowId: MOCK_WORKFLOW_ID,
       launch: vi.fn(),
-    });
+    } as unknown as ReturnType<typeof useRunSquadMission>);
 
     const onClose = vi.fn();
 
@@ -229,5 +237,27 @@ describe("RunSquadMissionDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("displays the error message when error is non-null", () => {
+    mockUseRunSquadMission.mockReturnValue({
+      isLaunching: false,
+      error: new Error("Board not found or has been deleted"),
+      effectiveWorkflowId: MOCK_WORKFLOW_ID,
+      launch: vi.fn(),
+    } as unknown as ReturnType<typeof useRunSquadMission>);
+
+    render(
+      <RunSquadMissionDialog
+        open={true}
+        onClose={vi.fn()}
+        onLaunched={vi.fn()}
+        squadSpecId={MOCK_SQUAD_ID}
+        squadDisplayName="Review Squad"
+        boardId={MOCK_BOARD_ID}
+      />,
+    );
+
+    expect(screen.getByText("Board not found or has been deleted")).toBeInTheDocument();
   });
 });

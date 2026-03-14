@@ -250,19 +250,30 @@ class ExecutionPlan:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a dict with camelCase keys for Convex storage."""
+        step_dicts = []
+        for s in self.steps:
+            step: dict[str, Any] = {
+                "tempId": s.temp_id,
+                "title": s.title,
+                "description": s.description,
+                "assignedAgent": s.assigned_agent,
+                "blockedBy": s.blocked_by,
+                "parallelGroup": s.parallel_group,
+                "order": s.order,
+            }
+            if s.workflow_step_id is not None:
+                step["workflowStepId"] = s.workflow_step_id
+            if s.workflow_step_type is not None:
+                step["workflowStepType"] = s.workflow_step_type
+            if s.agent_spec_id is not None:
+                step["agentSpecId"] = s.agent_spec_id
+            if s.review_spec_id is not None:
+                step["reviewSpecId"] = s.review_spec_id
+            if s.on_reject_step_id is not None:
+                step["onRejectStepId"] = s.on_reject_step_id
+            step_dicts.append(step)
         return {
-            "steps": [
-                {
-                    "tempId": s.temp_id,
-                    "title": s.title,
-                    "description": s.description,
-                    "assignedAgent": s.assigned_agent,
-                    "blockedBy": s.blocked_by,
-                    "parallelGroup": s.parallel_group,
-                    "order": s.order,
-                }
-                for s in self.steps
-            ],
+            "steps": step_dicts,
             "generatedAt": self.generated_at,
             "generatedBy": self.generated_by,
         }

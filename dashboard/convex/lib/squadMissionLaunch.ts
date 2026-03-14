@@ -64,6 +64,11 @@ export async function launchSquadMission(
   ctx: LaunchMutationCtx,
   args: LaunchSquadMissionArgs,
 ): Promise<Id<"tasks">> {
+  const board = await ctx.db.get(args.boardId);
+  if (!board || board.deletedAt != null) {
+    throw new ConvexError("Board not found or has been deleted");
+  }
+
   const squadSpec = await ctx.db.get(args.squadSpecId);
   if (!squadSpec || squadSpec.status !== "published") {
     throw new ConvexError("Squad must be published before launching a mission");
@@ -72,6 +77,10 @@ export async function launchSquadMission(
   const workflowSpec = await ctx.db.get(args.workflowSpecId);
   if (!workflowSpec || workflowSpec.status !== "published") {
     throw new ConvexError("Workflow must be published before launching a mission");
+  }
+
+  if (workflowSpec.squadSpecId !== args.squadSpecId) {
+    throw new ConvexError("Workflow does not belong to the selected squad");
   }
 
   const now = new Date().toISOString();
@@ -107,11 +116,17 @@ export async function launchSquadMission(
   // Build agent refs from the squadSpec's agentSpecIds
   const agentRefs: AgentSpecRef[] = [];
   const agentSpecIds = (squadSpec.agentSpecIds ?? []) as Id<"agentSpecs">[];
+  const missingAgentSpecIds: string[] = [];
   for (const agentSpecId of agentSpecIds) {
     const agentSpec = await ctx.db.get(agentSpecId);
     if (agentSpec) {
       agentRefs.push({ specId: String(agentSpecId), agentName: agentSpec.name });
+    } else {
+      missingAgentSpecIds.push(String(agentSpecId));
     }
+  }
+  if (missingAgentSpecIds.length > 0) {
+    throw new ConvexError(`Agent specs not found: ${missingAgentSpecIds.join(", ")}`);
   }
 
   // Compile the workflow spec into an execution plan and attach it
