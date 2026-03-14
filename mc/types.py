@@ -198,6 +198,16 @@ class AuthorType(StrEnum):
     SYSTEM = "system"
 
 
+class WorkflowStepType(StrEnum):
+    """Workflow step types. Matches Convex workflowStepTypeValidator union type."""
+
+    AGENT = "agent"
+    HUMAN = "human"
+    CHECKPOINT = "checkpoint"
+    REVIEW = "review"
+    SYSTEM = "system"
+
+
 @dataclass
 class ExecutionPlanStep:
     """A single step in an execution plan (pre-materialization)."""
@@ -209,6 +219,12 @@ class ExecutionPlanStep:
     blocked_by: list[str] = field(default_factory=list)
     parallel_group: int = 1
     order: int = 1
+    # Workflow metadata — present when step was compiled from a workflowSpec.
+    workflow_step_id: str | None = None
+    workflow_step_type: str | None = None  # WorkflowStepType value
+    agent_spec_id: str | None = None
+    review_spec_id: str | None = None
+    on_reject_step_id: str | None = None
 
 
 def _as_int(value: Any, default: int) -> int:
