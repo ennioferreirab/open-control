@@ -28,6 +28,12 @@ def _stringify_input(raw: object, max_len: int = 2000) -> str | None:
     return text[:max_len] if len(text) > max_len else text
 
 
+def _set_if(d: dict[str, Any], key: str, value: Any) -> None:
+    """Only set *key* in *d* when *value* is not None."""
+    if value is not None:
+        d[key] = value
+
+
 def _extract_file_path(metadata: dict) -> str | None:
     """Extract file path from tool input when available."""
     inp = metadata.get("input", {})
@@ -68,27 +74,37 @@ class InteractiveExecutionSupervisor:
             timestamp=timestamp,
         )
         try:
-            self._bridge.mutation(
-                "sessionActivityLog:append",
-                {
-                    "session_id": event.session_id,
-                    "kind": event.kind,
-                    "ts": timestamp,
-                    "tool_name": event.metadata.get("tool_name") if event.metadata else None,
-                    "tool_input": _stringify_input(
-                        event.metadata.get("input") if event.metadata else None
-                    ),
-                    "file_path": _extract_file_path(event.metadata) if event.metadata else None,
-                    "summary": (event.summary or "")[:1000] or None,
-                    "error": (event.error or "")[:2000] or None,
-                    "turn_id": event.turn_id,
-                    "item_id": event.item_id,
-                    "step_id": event.step_id,
-                    "agent_name": event.agent_name,
-                    "provider": event.provider,
-                    "requires_action": event.kind in _ACTION_KINDS,
-                },
+            # Build payload, omitting None values (Convex rejects null for
+            # optional string fields — it expects the key to be absent).
+            activity_payload: dict[str, Any] = {
+                "session_id": event.session_id,
+                "kind": event.kind,
+                "ts": timestamp,
+                "requires_action": event.kind in _ACTION_KINDS,
+            }
+            _set_if(
+                activity_payload,
+                "tool_name",
+                event.metadata.get("tool_name") if event.metadata else None,
             )
+            _set_if(
+                activity_payload,
+                "tool_input",
+                _stringify_input(event.metadata.get("input") if event.metadata else None),
+            )
+            _set_if(
+                activity_payload,
+                "file_path",
+                _extract_file_path(event.metadata) if event.metadata else None,
+            )
+            _set_if(activity_payload, "summary", (event.summary or "")[:1000] or None)
+            _set_if(activity_payload, "error", (event.error or "")[:2000] or None)
+            _set_if(activity_payload, "turn_id", event.turn_id)
+            _set_if(activity_payload, "item_id", event.item_id)
+            _set_if(activity_payload, "step_id", event.step_id)
+            _set_if(activity_payload, "agent_name", event.agent_name)
+            _set_if(activity_payload, "provider", event.provider)
+            self._bridge.mutation("sessionActivityLog:append", activity_payload)
         except Exception:
             pass  # Activity log write failure must not break supervision
         if _string_or_none(metadata.get("control_mode")) == "human":
