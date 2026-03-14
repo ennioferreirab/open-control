@@ -175,14 +175,20 @@ class InteractiveExecutionSupervisor:
                 if event.step_id
                 else "Interactive turn started"
             )
-            self._bridge.update_task_status(
-                event.task_id,
-                "in_progress",
-                agent_name=event.agent_name,
-                description=description,
-            )
+            try:
+                self._bridge.update_task_status(
+                    event.task_id,
+                    "in_progress",
+                    agent_name=event.agent_name,
+                    description=description,
+                )
+            except Exception:
+                pass  # Task may already be in_progress
         if event.step_id:
-            self._bridge.update_step_status(event.step_id, "running")
+            try:
+                self._bridge.update_step_status(event.step_id, "running")
+            except Exception:
+                pass  # Step may already be running
         if event.task_id and event.agent_name:
             self._bridge.create_activity(
                 ActivityEventType.STEP_STARTED,
