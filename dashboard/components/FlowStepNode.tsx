@@ -156,6 +156,8 @@ export type FlowStepNodeData = {
   retryError?: string;
   parentTaskId?: string;
   onOpenParentTask?: (taskId: string) => void;
+  onOpenLive?: (stepId: string) => void;
+  isLiveStep?: boolean;
 };
 
 export type FlowStepNodeType = Node<FlowStepNodeData, "flowStep">;
@@ -186,6 +188,8 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
     isVisualOnly,
     parentTaskId,
     onOpenParentTask,
+    onOpenLive,
+    isLiveStep,
   } = data;
   const resolvedStatus = status ?? "planned";
   const meta = isVisualOnly
@@ -239,6 +243,24 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
         {/* Agent badge */}
         {agentDisplay && (
           <p className="text-[10px] text-muted-foreground mt-1 truncate">{agentDisplay}</p>
+        )}
+
+        {isLiveStep && onOpenLive && !isEditMode && (
+          <div className="mt-1">
+            <button
+              type="button"
+              data-testid={`live-step-${step.tempId}`}
+              className="text-[10px] text-emerald-600 font-medium flex items-center gap-0.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenLive(step.tempId);
+              }}
+              aria-label="Open live session"
+            >
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live
+            </button>
+          </div>
         )}
 
         {parentTaskId && onOpenParentTask && (

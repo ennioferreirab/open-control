@@ -139,6 +139,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   } = actions;
 
   const { activePlan, localPlan, setLocalPlan, activeTab, setActiveTab } = planState;
+  const handleOpenLive = useCallback(() => setActiveTab("live"), [setActiveTab]);
   const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("both");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [filterStepIds, setFilterStepIds] = useState<Set<string>>(new Set());
@@ -656,6 +657,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                         setFilterStepIds(new Set([stepId]));
                         setActiveTab("thread");
                       }}
+                      onOpenLive={liveSession.session ? handleOpenLive : undefined}
+                      liveStepId={liveSession.activeStep?._id}
                     />
                   </div>
                   {task && messages && !isMergeLockedSource && planViewMode !== "canvas" && (

@@ -83,6 +83,8 @@ interface ExecutionPlanTabProps {
   onViewModeChange?: (mode: ExecutionPlanViewMode) => void;
   onClearPlan?: () => void;
   isClearingPlan?: boolean;
+  onOpenLive?: (stepId: string) => void;
+  liveStepId?: string;
 }
 
 interface NormalizedStep {
@@ -296,15 +298,11 @@ export function ExecutionPlanTab({
   onViewModeChange,
   onClearPlan,
   isClearingPlan = false,
+  onOpenLive,
+  liveStepId,
 }: ExecutionPlanTabProps) {
-  const {
-    acceptHumanStep,
-    retryStep,
-    manualMoveStep,
-    addStep,
-    updateStep,
-    deleteStep,
-  } = useExecutionPlanActions();
+  const { acceptHumanStep, retryStep, manualMoveStep, addStep, updateStep, deleteStep } =
+    useExecutionPlanActions();
   const [acceptingStepId, setAcceptingStepId] = useState<string | null>(null);
   const [acceptErrors, setAcceptErrors] = useState<Record<string, string>>({});
   const [retryingStepId, setRetryingStepId] = useState<string | null>(null);
@@ -557,6 +555,7 @@ export function ExecutionPlanTab({
       if (n.id === "__start__" || n.id === "__end__") return n;
       // Compute hasParallelSiblings for merge button visibility
       const stepData = planSteps.find((step) => step.tempId === n.id);
+      const matchedDisplayStep = displaySteps.find((s) => s.stepId === n.id);
       const isMergeAliasStep = n.id === VISUAL_MERGE_ALIAS_ID;
       const isVisualOnly = n.id === VISUAL_MERGE_ALIAS_ID;
       const hasParallelSiblings = stepData
@@ -582,8 +581,12 @@ export function ExecutionPlanTab({
           isRetrying: retryingStepId === n.id,
           retryError: retryErrors[n.id],
           isVisualOnly,
-          parentTaskId: displaySteps.find((s) => s.stepId === n.id)?.liveId ?? n.id,
+          parentTaskId: matchedDisplayStep?.liveId ?? n.id,
           onOpenParentTask,
+          onOpenLive: isVisualOnly ? undefined : onOpenLive,
+          isLiveStep: Boolean(
+            liveStepId && (n.id === liveStepId || matchedDisplayStep?.liveId === liveStepId),
+          ),
         },
       };
     });
@@ -610,6 +613,8 @@ export function ExecutionPlanTab({
     handleStepClick,
     taskId,
     onOpenParentTask,
+    onOpenLive,
+    liveStepId,
   ]);
 
   // Build existingSteps for the blocked-by selector
@@ -855,11 +860,11 @@ export function ExecutionPlanTab({
 
   return (
     <div className="flex flex-col h-full" onClick={dismissEdit}>
-        <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
-          <span className="text-xs text-muted-foreground">
-            {completedCount}/{steps.length} steps completed
-          </span>
-          <div className="flex justify-center">{renderViewControls()}</div>
+      <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
+        <span className="text-xs text-muted-foreground">
+          {completedCount}/{steps.length} steps completed
+        </span>
+        <div className="flex justify-center">{renderViewControls()}</div>
         {taskId && (isReviewMode || isLiveMode) && (
           <Button
             variant="ghost"

@@ -78,4 +78,46 @@ describe("FlowStepNode", () => {
 
     expect(onOpenParentTask).toHaveBeenCalledWith("task-123");
   });
+
+  describe("Live button", () => {
+    it("renders when isLiveStep and onOpenLive are set", () => {
+      const onOpenLive = vi.fn();
+      renderNode({ isLiveStep: true, onOpenLive, status: "running" });
+
+      expect(screen.getByRole("button", { name: "Open live session" })).toBeInTheDocument();
+    });
+
+    it("does not render when isLiveStep is false", () => {
+      renderNode({ isLiveStep: false, onOpenLive: vi.fn(), status: "running" });
+
+      expect(screen.queryByRole("button", { name: "Open live session" })).not.toBeInTheDocument();
+    });
+
+    it("does not render when onOpenLive is undefined", () => {
+      renderNode({ isLiveStep: true, onOpenLive: undefined, status: "running" });
+
+      expect(screen.queryByRole("button", { name: "Open live session" })).not.toBeInTheDocument();
+    });
+
+    it("does not render in edit mode", () => {
+      renderNode({ isLiveStep: true, onOpenLive: vi.fn(), isEditMode: true });
+
+      expect(screen.queryByRole("button", { name: "Open live session" })).not.toBeInTheDocument();
+    });
+
+    it("calls onOpenLive with step tempId when clicked", () => {
+      const onOpenLive = vi.fn();
+      renderNode({ isLiveStep: true, onOpenLive, status: "running" });
+
+      fireEvent.click(screen.getByRole("button", { name: "Open live session" }));
+
+      expect(onOpenLive).toHaveBeenCalledWith("step-1");
+    });
+
+    it("has the correct data-testid", () => {
+      renderNode({ isLiveStep: true, onOpenLive: vi.fn(), status: "running" });
+
+      expect(screen.getByTestId("live-step-step-1")).toBeInTheDocument();
+    });
+  });
 });
