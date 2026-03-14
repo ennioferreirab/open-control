@@ -1,4 +1,10 @@
-"""Composition helpers for the interactive TUI runtime."""
+"""Composition helpers for the interactive TUI runtime.
+
+.. deprecated::
+    Superseded by the provider CLI runtime (Stories 28.1-28.6). The legacy
+    PTY + WebSocket server wiring is retained while the gateway still boots it.
+    Migrate callers to the provider CLI runtime and remove this module.
+"""
 
 from __future__ import annotations
 

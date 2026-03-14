@@ -1,4 +1,11 @@
-"""Runtime-owned socket transport for interactive PTY sessions."""
+"""Runtime-owned socket transport for interactive PTY sessions.
+
+.. deprecated::
+    Superseded by the provider CLI process supervisor (Stories 28.1-28.6).
+    The provider CLI live-share model streams output directly through the MC
+    gateway instead of a dedicated PTY/WebSocket server. Retained while
+    ``build_interactive_runtime()`` is still wired. Do NOT add new callers.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +21,7 @@ from typing import Any, Callable
 
 from websockets.exceptions import ConnectionClosed
 
+from mc.contexts.interactive.identity import InteractiveSessionIdentity
 from mc.infrastructure.interactive import TerminalSize, resize_terminal
 
 logger = logging.getLogger(__name__)
@@ -48,6 +56,7 @@ class InteractiveSocketTransport:
         self._resize_handler = resize_handler
         self._monotonic_time = monotonic_time
         self._active_websockets: dict[str, Any] = {}
+        self._pending_terminations: set[str] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
         module_log_level = _resolve_transport_log_level()
         if module_log_level is not None:
@@ -125,7 +134,21 @@ class InteractiveSocketTransport:
                 _ACTIVE_SESSION_CONNECTIONS.pop(session_id, None)
                 active_connections = 0
             if not crashed:
-                if active_connections == 0:
+                should_terminate = session_id in self._pending_terminations
+                if should_terminate:
+                    self._pending_terminations.discard(session_id)
+                if active_connections == 0 and should_terminate:
+                    with contextlib.suppress(Exception):
+                        await self._session_service.terminate_session(
+                            self._resolve_identity(session_id),
+                            timestamp=now(),
+                        )
+                    logger.debug(
+                        "[interactive] session terminated connection_id=%s session=%s",
+                        connection_id,
+                        session_id,
+                    )
+                elif active_connections == 0:
                     self._session_service.detach_session(session_id, timestamp=now())
                 logger.debug(
                     "[interactive] connection detached connection_id=%s session=%s active_connections=%d",
@@ -208,6 +231,10 @@ class InteractiveSocketTransport:
         if event_type == "resize":
             size = TerminalSize(columns=payload["columns"], rows=payload["rows"])
             await asyncio.to_thread(self._resize_handler, master_fd, size)
+            return
+
+        if event_type == "terminate":
+            self._pending_terminations.add(session_id)
 
     async def _activate_connection(
         self, session_id: str, websocket: Any, connection_id: str
@@ -240,3 +267,14 @@ class InteractiveSocketTransport:
                 self._active_websockets.pop(session_id, None)
             if session_id not in self._active_websockets:
                 self._session_locks.pop(session_id, None)
+
+    def _resolve_identity(self, session_id: str) -> InteractiveSessionIdentity:
+        """Reconstruct session identity from registry metadata."""
+        metadata = self._session_service._registry.get(session_id) or {}
+        return InteractiveSessionIdentity(
+            provider=metadata.get("provider", "claude-code"),
+            agent_name=metadata.get("agent_name", "unknown"),
+            scope_kind=metadata.get("scope_kind", "chat"),
+            scope_id=metadata.get("scope_id", session_id),
+            surface=metadata.get("surface", "chat"),
+        )
