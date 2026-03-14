@@ -81,6 +81,7 @@ class AnthropicOAuthProvider(LLMProvider):
                 effort = _map_effort(reasoning_level, model)
                 body["output_config"] = {"effort": effort}
                 body["thinking"] = {"type": "adaptive"}
+                body["temperature"] = 1.0  # Anthropic requires temp=1.0 with thinking
                 logger.debug(
                     "reasoning -> effort={} (adaptive) [model={}]",
                     effort,
