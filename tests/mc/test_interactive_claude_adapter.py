@@ -249,3 +249,150 @@ async def test_stop_session_stops_socket_server_when_present() -> None:
     await adapter.stop_session(identity.session_key)
 
     socket_server.stop.assert_awaited_once_with()
+
+
+# ---------------------------------------------------------------------------
+# Task 1: Lock the transitional Claude startup contract (Story 28.0c)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_prepare_launch_with_task_prompt_produces_bootstrap_input() -> None:
+    """A Claude step session must start with an execution turn, not sit at the CLI prompt.
+
+    When a task_prompt is provided, bootstrap_input must be set so the coordinator
+    sends it immediately via send_keys — this is the startup contract that prevents
+    the session from stalling indefinitely at the interactive CLI prompt.
+    """
+    workspace_manager = MagicMock()
+    workspace_manager.prepare.return_value = _workspace()
+    socket_server = MagicMock()
+    socket_server.start = AsyncMock()
+    adapter = ClaudeCodeInteractiveAdapter(
+        bridge=MagicMock(),
+        workspace_manager=workspace_manager,
+        socket_server_factory=MagicMock(return_value=socket_server),
+        cli_path="claude",
+        which=MagicMock(return_value="/usr/local/bin/claude"),
+    )
+
+    launch = await adapter.prepare_launch(
+        identity=_identity(),
+        agent=_agent(),
+        task_id="task-123",
+        task_prompt="Implement the login feature",
+    )
+
+    assert launch.bootstrap_input == "Implement the login feature", (
+        "bootstrap_input must equal task_prompt so the session starts executing immediately "
+        "rather than waiting at the initial CLI prompt."
+    )
+
+
+@pytest.mark.asyncio
+async def test_prepare_launch_without_task_prompt_produces_no_bootstrap_input() -> None:
+    """When no task_prompt is given, bootstrap_input is None.
+
+    This means the session will sit at the interactive prompt — acceptable for
+    pure chat sessions but must be explicitly pinned so the contract is clear.
+    """
+    workspace_manager = MagicMock()
+    workspace_manager.prepare.return_value = _workspace()
+    socket_server = MagicMock()
+    socket_server.start = AsyncMock()
+    adapter = ClaudeCodeInteractiveAdapter(
+        bridge=MagicMock(),
+        workspace_manager=workspace_manager,
+        socket_server_factory=MagicMock(return_value=socket_server),
+        cli_path="claude",
+        which=MagicMock(return_value="/usr/local/bin/claude"),
+    )
+
+    launch = await adapter.prepare_launch(
+        identity=_identity(),
+        agent=_agent(),
+        task_id="task-123",
+        task_prompt=None,
+    )
+
+    assert launch.bootstrap_input is None
+
+
+@pytest.mark.asyncio
+async def test_prepare_launch_with_whitespace_only_prompt_produces_no_bootstrap_input() -> None:
+    """Whitespace-only task_prompt is normalized to None, preventing a blank startup turn."""
+    workspace_manager = MagicMock()
+    workspace_manager.prepare.return_value = _workspace()
+    socket_server = MagicMock()
+    socket_server.start = AsyncMock()
+    adapter = ClaudeCodeInteractiveAdapter(
+        bridge=MagicMock(),
+        workspace_manager=workspace_manager,
+        socket_server_factory=MagicMock(return_value=socket_server),
+        cli_path="claude",
+        which=MagicMock(return_value="/usr/local/bin/claude"),
+    )
+
+    launch = await adapter.prepare_launch(
+        identity=_identity(),
+        agent=_agent(),
+        task_id="task-123",
+        task_prompt="   \n  ",
+    )
+
+    assert launch.bootstrap_input is None
+
+
+@pytest.mark.asyncio
+async def test_socket_server_is_started_for_ipc_observability() -> None:
+    """The IPC socket server must be started so MC can observe/control the session.
+
+    This pins that prepare_launch always starts an MCSocketServer on the
+    workspace socket_path, enabling supervision and intervention hooks.
+    """
+    workspace_manager = MagicMock()
+    workspace_manager.prepare.return_value = _workspace()
+    socket_server = MagicMock()
+    socket_server.start = AsyncMock()
+    socket_server_factory = MagicMock(return_value=socket_server)
+    adapter = ClaudeCodeInteractiveAdapter(
+        bridge=MagicMock(),
+        workspace_manager=workspace_manager,
+        socket_server_factory=socket_server_factory,
+        cli_path="claude",
+        which=MagicMock(return_value="/usr/local/bin/claude"),
+    )
+
+    await adapter.prepare_launch(
+        identity=_identity(),
+        agent=_agent(),
+        task_id="task-123",
+        task_prompt="Implement the login feature",
+    )
+
+    socket_server.start.assert_awaited_once_with(_workspace().socket_path)
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_input_is_stripped_of_leading_trailing_whitespace() -> None:
+    """task_prompt whitespace is stripped before being used as bootstrap_input."""
+    workspace_manager = MagicMock()
+    workspace_manager.prepare.return_value = _workspace()
+    socket_server = MagicMock()
+    socket_server.start = AsyncMock()
+    adapter = ClaudeCodeInteractiveAdapter(
+        bridge=MagicMock(),
+        workspace_manager=workspace_manager,
+        socket_server_factory=MagicMock(return_value=socket_server),
+        cli_path="claude",
+        which=MagicMock(return_value="/usr/local/bin/claude"),
+    )
+
+    launch = await adapter.prepare_launch(
+        identity=_identity(),
+        agent=_agent(),
+        task_id="task-123",
+        task_prompt="  Implement the login feature  ",
+    )
+
+    assert launch.bootstrap_input == "Implement the login feature"
