@@ -71,7 +71,7 @@ describe("FlowStepNode", () => {
     expect(onRetry).toHaveBeenCalledWith("step-1");
   });
 
-  it("shows a task parent link and opens the parent task when clicked", () => {
+  it("shows a task parent link and switches to step tab when clicked", () => {
     const { onOpenParentTask } = renderNode();
 
     fireEvent.click(screen.getByRole("button", { name: "Task Parent link" }));

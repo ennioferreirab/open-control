@@ -582,7 +582,7 @@ export function ExecutionPlanTab({
           isRetrying: retryingStepId === n.id,
           retryError: retryErrors[n.id],
           isVisualOnly,
-          parentTaskId: taskId,
+          parentTaskId: displaySteps.find((s) => s.stepId === n.id)?.liveId ?? n.id,
           onOpenParentTask,
         },
       };

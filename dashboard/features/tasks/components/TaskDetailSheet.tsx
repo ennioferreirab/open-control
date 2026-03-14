@@ -141,6 +141,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const { activePlan, localPlan, setLocalPlan, activeTab, setActiveTab } = planState;
   const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("both");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [filterStepIds, setFilterStepIds] = useState<Set<string>>(new Set());
 
   const handleDeleteTask = async () => {
     if (!task || !isTaskLoaded) return;
@@ -193,6 +194,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
 
   useEffect(() => {
     setPlanViewMode("both");
+    setFilterStepIds(new Set());
   }, [taskId]);
 
   useEffect(() => {
@@ -623,6 +625,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 task={task}
                 isMergeLockedSource={isMergeLockedSource}
                 onMessageSent={scrollToBottom}
+                filterStepIds={filterStepIds}
+                onFilterStepIdsChange={setFilterStepIds}
               />
 
               <TabsContent
@@ -648,11 +652,10 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       onViewModeChange={setPlanViewMode}
                       onClearPlan={canClearPlan ? handleClearPlan : undefined}
                       isClearingPlan={isClearingPlan}
-                      onOpenParentTask={
-                        onTaskOpen
-                          ? (parentTaskId) => onTaskOpen(parentTaskId as Id<"tasks">)
-                          : undefined
-                      }
+                      onOpenParentTask={(stepId) => {
+                        setFilterStepIds(new Set([stepId]));
+                        setActiveTab("thread");
+                      }}
                     />
                   </div>
                   {task && messages && !isMergeLockedSource && planViewMode !== "canvas" && (
