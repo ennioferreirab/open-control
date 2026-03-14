@@ -35,7 +35,10 @@ export function RunSquadMissionDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
 
-  const { isLaunching, effectiveWorkflowId, launch } = useRunSquadMission(boardId, squadSpecId);
+  const { isLaunching, error, effectiveWorkflowId, launch } = useRunSquadMission(
+    boardId,
+    squadSpecId,
+  );
 
   const canLaunch = title.trim().length > 0 && effectiveWorkflowId != null && !isLaunching;
 
@@ -96,6 +99,8 @@ export function RunSquadMissionDialog({
               squad settings before launching a mission.
             </p>
           )}
+
+          {error && <p className="text-sm text-destructive">{error.message}</p>}
         </div>
 
         <DialogFooter>

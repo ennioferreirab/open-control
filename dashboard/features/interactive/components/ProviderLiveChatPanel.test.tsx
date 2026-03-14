@@ -1,210 +1,120 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 import { ProviderLiveChatPanel } from "./ProviderLiveChatPanel";
 
 describe("ProviderLiveChatPanel", () => {
-  it("renders with empty messages array without error", () => {
+  it("renders a loading state when isLoading is true", () => {
     render(
       <ProviderLiveChatPanel
-        messages={[]}
-        sessionStatus={{ provider: "claude-code", status: "idle" }}
-        isStreaming={false}
+        sessionId={null}
+        events={[]}
+        status="loading"
+        agentName="claude-pair"
+        provider="claude-code"
+        isLoading={true}
       />,
     );
 
-    expect(screen.getByTestId("provider-live-chat-panel")).toBeInTheDocument();
+    expect(screen.getByText(/connecting to provider session/i)).toBeInTheDocument();
   });
 
-  it("renders messages with different kinds visually distinguished", () => {
+  it("renders an empty state when there are no events and not loading", () => {
     render(
       <ProviderLiveChatPanel
-        messages={[
-          { kind: "output", text: "Running tests..." },
-          { kind: "error", text: "Test failed: assertion error" },
-          { kind: "session_discovered", text: "Session discovered" },
+        sessionId={null}
+        events={[]}
+        status="idle"
+        agentName="claude-pair"
+        provider="claude-code"
+        isLoading={false}
+      />,
+    );
+
+    expect(screen.getByText(/no output/i)).toBeInTheDocument();
+  });
+
+  it("renders streamed events as text blocks", () => {
+    render(
+      <ProviderLiveChatPanel
+        sessionId="session-123"
+        events={[
+          { id: "evt-1", text: "Running tests...", kind: "text" },
+          { id: "evt-2", text: "All tests passed.", kind: "text" },
         ]}
-        sessionStatus={{ provider: "claude-code", status: "running" }}
-        isStreaming={false}
+        status="streaming"
+        agentName="claude-pair"
+        provider="claude-code"
+        isLoading={false}
       />,
     );
 
     expect(screen.getByText("Running tests...")).toBeInTheDocument();
-    expect(screen.getByText("Test failed: assertion error")).toBeInTheDocument();
-    expect(screen.getByText("Session discovered")).toBeInTheDocument();
-
-    // error messages should have a visually distinctive data attribute or role
-    const errorMsg = screen.getByText("Test failed: assertion error").closest("[data-kind]");
-    expect(errorMsg).toHaveAttribute("data-kind", "error");
-
-    const outputMsg = screen.getByText("Running tests...").closest("[data-kind]");
-    expect(outputMsg).toHaveAttribute("data-kind", "output");
-
-    const sessionMsg = screen.getByText("Session discovered").closest("[data-kind]");
-    expect(sessionMsg).toHaveAttribute("data-kind", "session_discovered");
+    expect(screen.getByText("All tests passed.")).toBeInTheDocument();
   });
 
-  it("shows session status information in the status bar", () => {
+  it("renders an error state when status is error", () => {
     render(
       <ProviderLiveChatPanel
-        messages={[]}
-        sessionStatus={{
-          provider: "claude-code",
-          status: "attached",
-          agentName: "claude-pair",
-          sessionId: "sess-abc123",
-        }}
-        isStreaming={false}
+        sessionId={null}
+        events={[]}
+        status="error"
+        agentName="claude-pair"
+        provider="claude-code"
+        isLoading={false}
+        errorMessage="Provider session failed to start."
       />,
     );
 
-    expect(screen.getByText("claude-code")).toBeInTheDocument();
-    expect(screen.getByText("attached")).toBeInTheDocument();
-    expect(screen.getByText("claude-pair")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Provider session failed to start.");
   });
 
-  it("shows streaming indicator when isStreaming is true", () => {
+  it("renders a completed state with session metadata", () => {
     render(
       <ProviderLiveChatPanel
-        messages={[]}
-        sessionStatus={{ provider: "claude-code", status: "running" }}
-        isStreaming={true}
+        sessionId="session-abc"
+        events={[{ id: "evt-1", text: "Done.", kind: "text" }]}
+        status="completed"
+        agentName="writer"
+        provider="codex"
+        isLoading={false}
       />,
     );
 
-    expect(screen.getByTestId("streaming-indicator")).toBeInTheDocument();
+    expect(screen.getByText("Done.")).toBeInTheDocument();
+    expect(screen.getByText(/@writer/i)).toBeInTheDocument();
+    expect(screen.getByText(/codex/i)).toBeInTheDocument();
   });
 
-  it("does not show streaming indicator when isStreaming is false", () => {
+  it("shows the session id when provided", () => {
     render(
       <ProviderLiveChatPanel
-        messages={[]}
-        sessionStatus={{ provider: "claude-code", status: "idle" }}
-        isStreaming={false}
+        sessionId="session-xyz-1234567890"
+        events={[]}
+        status="completed"
+        agentName="claude-pair"
+        provider="claude-code"
+        isLoading={false}
       />,
     );
 
-    expect(screen.queryByTestId("streaming-indicator")).not.toBeInTheDocument();
+    expect(screen.getByText(/session-xyz/i)).toBeInTheDocument();
   });
 
-  it("calls onSendMessage when user submits input", () => {
-    const onSendMessage = vi.fn();
-
-    render(
+  it("does not render any terminal-specific elements", () => {
+    const { container } = render(
       <ProviderLiveChatPanel
-        messages={[]}
-        sessionStatus={{ provider: "claude-code", status: "running" }}
-        isStreaming={false}
-        onSendMessage={onSendMessage}
+        sessionId="session-123"
+        events={[{ id: "evt-1", text: "output", kind: "text" }]}
+        status="streaming"
+        agentName="claude-pair"
+        provider="claude-code"
+        isLoading={false}
       />,
     );
 
-    const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "Hello agent" } });
-    fireEvent.submit(input.closest("form")!);
-
-    expect(onSendMessage).toHaveBeenCalledWith("Hello agent");
-  });
-
-  it("clears the input after sending a message", () => {
-    const onSendMessage = vi.fn();
-
-    render(
-      <ProviderLiveChatPanel
-        messages={[]}
-        sessionStatus={{ provider: "claude-code", status: "running" }}
-        isStreaming={false}
-        onSendMessage={onSendMessage}
-      />,
-    );
-
-    const input = screen.getByRole("textbox") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "Hello agent" } });
-    fireEvent.submit(input.closest("form")!);
-
-    expect(input.value).toBe("");
-  });
-
-  it("does not show input field when onSendMessage is not provided", () => {
-    render(
-      <ProviderLiveChatPanel
-        messages={[]}
-        sessionStatus={{ provider: "claude-code", status: "idle" }}
-        isStreaming={false}
-      />,
-    );
-
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  });
-
-  it("can be used in a chat context", () => {
-    render(
-      <ProviderLiveChatPanel
-        messages={[{ kind: "output", text: "Agent is thinking..." }]}
-        sessionStatus={{
-          provider: "claude-code",
-          status: "attached",
-          agentName: "my-agent",
-        }}
-        isStreaming={true}
-      />,
-    );
-
-    expect(screen.getByTestId("provider-live-chat-panel")).toBeInTheDocument();
-    expect(screen.getByText("Agent is thinking...")).toBeInTheDocument();
-  });
-
-  it("can be used in a step live share context", () => {
-    render(
-      <ProviderLiveChatPanel
-        messages={[
-          { kind: "turn_started", text: "Turn started" },
-          { kind: "output", text: "Step output line 1" },
-        ]}
-        sessionStatus={{
-          provider: "codex",
-          status: "running",
-          agentName: "codex-agent",
-          sessionId: "step-session-xyz",
-        }}
-        isStreaming={false}
-      />,
-    );
-
-    expect(screen.getByTestId("provider-live-chat-panel")).toBeInTheDocument();
-    expect(screen.getByText("Step output line 1")).toBeInTheDocument();
-    expect(screen.getByText("codex")).toBeInTheDocument();
-  });
-
-  it("does not render any terminal emulation elements", () => {
-    render(
-      <ProviderLiveChatPanel
-        messages={[{ kind: "output", text: "Some output" }]}
-        sessionStatus={{ provider: "claude-code", status: "running" }}
-        isStreaming={false}
-      />,
-    );
-
-    // No xterm container
-    expect(screen.queryByTestId("interactive-terminal")).not.toBeInTheDocument();
-  });
-
-  it("renders messages with optional timestamp metadata", () => {
-    render(
-      <ProviderLiveChatPanel
-        messages={[
-          {
-            kind: "output",
-            text: "Timestamped message",
-            timestamp: "2026-03-14T10:00:00Z",
-            metadata: { source: "stdout" },
-          },
-        ]}
-        sessionStatus={{ provider: "claude-code", status: "running" }}
-        isStreaming={false}
-      />,
-    );
-
-    expect(screen.getByText("Timestamped message")).toBeInTheDocument();
+    // No xterm canvas or terminal DOM elements
+    expect(container.querySelector(".xterm")).toBeNull();
+    expect(container.querySelector("[data-testid='interactive-terminal']")).toBeNull();
   });
 });

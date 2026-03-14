@@ -108,6 +108,45 @@ export interface WorkflowExecutionPlan {
  *
  * @throws If an agent-type step references an agentSpecId that is not in `agentRefs`.
  */
+/**
+ * Compute the parallel group (topological layer) for each step.
+ *
+ * Group 1 = steps with no dependencies.
+ * Group N = steps whose all dependencies are in groups < N.
+ * This is a simple BFS/topological layer calculation.
+ */
+function computeParallelGroups(steps: WorkflowSpecStep[]): Map<string, number> {
+  const groups = new Map<string, number>();
+  const remaining = new Set(steps.map((s) => s.id));
+
+  let group = 1;
+  while (remaining.size > 0) {
+    const ready: string[] = [];
+    for (const stepId of remaining) {
+      const step = steps.find((s) => s.id === stepId)!;
+      const deps = step.dependsOn ?? [];
+      // A step is ready when all its dependencies have been assigned a group
+      if (deps.every((depId) => groups.has(depId))) {
+        ready.push(stepId);
+      }
+    }
+    if (ready.length === 0) {
+      // Cycle or unresolvable dependency — assign remaining to current group
+      for (const stepId of remaining) {
+        groups.set(stepId, group);
+      }
+      break;
+    }
+    for (const stepId of ready) {
+      groups.set(stepId, group);
+      remaining.delete(stepId);
+    }
+    group++;
+  }
+
+  return groups;
+}
+
 export function compileWorkflowExecutionPlan(
   workflow: WorkflowSpecInput,
   agentRefs: AgentSpecRef[],
@@ -118,6 +157,9 @@ export function compileWorkflowExecutionPlan(
   for (const ref of agentRefs) {
     agentLookup.set(ref.specId, ref.agentName);
   }
+
+  // Compute topological layer groups for parallelGroup assignment
+  const parallelGroups = computeParallelGroups(workflow.steps);
 
   const compiledSteps: WorkflowExecutionPlanStep[] = workflow.steps.map((step, index) => {
     // Resolve agent name
@@ -142,7 +184,7 @@ export function compileWorkflowExecutionPlan(
       description: step.description ?? step.title,
       assignedAgent,
       blockedBy,
-      parallelGroup: 1,
+      parallelGroup: parallelGroups.get(step.id) ?? 1,
       order: index,
       workflowStepId: step.id,
       workflowStepType: step.type,
