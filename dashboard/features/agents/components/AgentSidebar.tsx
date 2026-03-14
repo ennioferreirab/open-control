@@ -232,16 +232,8 @@ export function AgentSidebar() {
         onSelectAgent={() => setShowAgentWizard(true)}
         onSelectSquad={() => setShowSquadWizard(true)}
       />
-      <AgentAuthoringWizard
-        open={showAgentWizard}
-        onClose={() => setShowAgentWizard(false)}
-        onPublished={() => setShowAgentWizard(false)}
-      />
-      <SquadAuthoringWizard
-        open={showSquadWizard}
-        onClose={() => setShowSquadWizard(false)}
-        onPublished={() => setShowSquadWizard(false)}
-      />
+      <AgentAuthoringWizard open={showAgentWizard} onClose={() => setShowAgentWizard(false)} />
+      <SquadAuthoringWizard open={showSquadWizard} onClose={() => setShowSquadWizard(false)} />
       <SquadDetailSheet squadId={selectedSquadId} onClose={() => setSelectedSquadId(null)} />
       <AlertDialog
         open={!!agentToDelete}
