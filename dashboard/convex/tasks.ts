@@ -19,11 +19,7 @@ import {
   updateTaskTags,
   updateTaskTitle,
 } from "./lib/taskMetadata";
-import {
-  appendTaskFiles,
-  removeAttachmentTaskFile,
-  replaceTaskOutputFiles,
-} from "./lib/taskFiles";
+import { appendTaskFiles, removeAttachmentTaskFile, replaceTaskOutputFiles } from "./lib/taskFiles";
 import {
   isValidTaskTransition,
   logTaskCreated,
@@ -40,11 +36,7 @@ import {
   hasLineageOverlap,
   restoreDetachedMergeSource,
 } from "./lib/taskMerge";
-import {
-  approveKickOffTask,
-  pauseTaskExecution,
-  resumeTaskExecution,
-} from "./lib/taskStatus";
+import { approveKickOffTask, pauseTaskExecution, resumeTaskExecution } from "./lib/taskStatus";
 import {
   clearTaskExecutionPlan,
   kickOffTask,
@@ -63,6 +55,7 @@ import {
   returnTaskToLeadAgent,
   updateTaskStatusInternal,
 } from "./lib/taskReview";
+import { launchSquadMission } from "./lib/squadMissionLaunch";
 
 // ---------------------------------------------------------------------------
 // Re-export for backward compatibility (messages.ts imports isValidTransition)
@@ -149,9 +142,7 @@ export const searchMergeCandidates = query({
       }
       filtered.push(task);
     }
-    return filtered
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, 10);
+    return filtered.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 10);
   },
 });
 
@@ -374,7 +365,9 @@ export const removeMergeSource = mutation({
       throw new ConvexError("Merged tasks must keep at least 2 direct sources");
     }
 
-    const nextDirectSources = currentDirectSources.filter((sourceId) => sourceId !== args.sourceTaskId);
+    const nextDirectSources = currentDirectSources.filter(
+      (sourceId) => sourceId !== args.sourceTaskId,
+    );
     const now = new Date().toISOString();
 
     await ctx.db.patch(args.taskId, {
@@ -749,5 +742,26 @@ export const getDetailView = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
     return await buildTaskDetailView(ctx, args.taskId);
+  },
+});
+
+/**
+ * Launch a squad mission by creating a task instance bound to a published
+ * squadSpec and workflowSpec.
+ *
+ * Validates that both specs are published, then creates a task with
+ * workMode = "ai_workflow" and a workflow plan placeholder.
+ * Returns the created task id for navigation.
+ */
+export const launchMission = mutation({
+  args: {
+    squadSpecId: v.id("squadSpecs"),
+    workflowSpecId: v.id("workflowSpecs"),
+    boardId: v.id("boards"),
+    title: v.string(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await launchSquadMission(ctx, args);
   },
 });

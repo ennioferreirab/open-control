@@ -10,6 +10,7 @@ import {
   create,
   createMergedTask,
   kickOff,
+  launchMission,
   manualMove,
   pauseTask,
   removeMergeSource,
@@ -1073,24 +1074,15 @@ describe("tasks.clearExecutionPlan", () => {
     const withIndex = vi.fn(() => ({ collect }));
     const query = vi.fn(() => ({ withIndex }));
 
-    const taskId = await handler(
-      { db: { get, patch, insert, query } },
-      { taskId: "task-1" },
-    );
+    const taskId = await handler({ db: { get, patch, insert, query } }, { taskId: "task-1" });
 
     expect(taskId).toBe("task-1");
     expect(patch).toHaveBeenCalledWith(
       "task-1",
       expect.objectContaining({ executionPlan: undefined }),
     );
-    expect(patch).toHaveBeenCalledWith(
-      "step-a",
-      expect.objectContaining({ status: "deleted" }),
-    );
-    expect(patch).toHaveBeenCalledWith(
-      "step-b",
-      expect.objectContaining({ status: "deleted" }),
-    );
+    expect(patch).toHaveBeenCalledWith("step-a", expect.objectContaining({ status: "deleted" }));
+    expect(patch).toHaveBeenCalledWith("step-b", expect.objectContaining({ status: "deleted" }));
     expect(insert).toHaveBeenCalledWith(
       "messages",
       expect.objectContaining({
@@ -1515,5 +1507,118 @@ describe("tasks.approveAndKickOff", () => {
       /requires awaitingKickoff or isManual/,
     );
     expect(patch).not.toHaveBeenCalled();
+  });
+});
+
+function getLaunchMissionHandler() {
+  return (
+    launchMission as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
+}
+
+describe("tasks.launchMission", () => {
+  function makeLaunchCtx(opts: {
+    squadSpec?: Record<string, unknown> | null;
+    workflowSpec?: Record<string, unknown> | null;
+  }) {
+    const inserts: InsertCall[] = [];
+
+    const get = vi.fn(async (id: string) => {
+      if (opts.squadSpec && id === opts.squadSpec._id) return opts.squadSpec;
+      if (opts.workflowSpec && id === opts.workflowSpec._id) return opts.workflowSpec;
+      return null;
+    });
+
+    const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
+      inserts.push({ table, value });
+      return table === "tasks" ? "task-mission-id-1" : "activity-id-1";
+    });
+
+    const first = vi.fn(async () => null);
+    const withIndex = vi.fn(() => ({ first }));
+    const query = vi.fn(() => ({ withIndex }));
+
+    return {
+      ctx: { db: { query, get, insert } },
+      inserts,
+    };
+  }
+
+  const mockSquad = {
+    _id: "squad-id-1",
+    name: "review-squad",
+    displayName: "Review Squad",
+    status: "published",
+    version: 1,
+    agentSpecIds: [],
+    createdAt: "2024-01-01",
+    updatedAt: "2024-01-01",
+  };
+
+  const mockWorkflow = {
+    _id: "workflow-id-1",
+    squadSpecId: "squad-id-1",
+    name: "Default Workflow",
+    steps: [],
+    status: "published",
+    version: 1,
+    createdAt: "2024-01-01",
+    updatedAt: "2024-01-01",
+  };
+
+  it("creates a task with workMode=ai_workflow for a published squad and workflow", async () => {
+    const handler = getLaunchMissionHandler();
+    const { ctx, inserts } = makeLaunchCtx({ squadSpec: mockSquad, workflowSpec: mockWorkflow });
+
+    const taskId = await handler(ctx, {
+      squadSpecId: "squad-id-1",
+      workflowSpecId: "workflow-id-1",
+      boardId: "board-id-1",
+      title: "Mission: review release",
+    });
+
+    expect(taskId).toBe("task-mission-id-1");
+
+    const taskInsert = inserts.find((e) => e.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert!.value.workMode).toBe("ai_workflow");
+    expect(taskInsert!.value.squadSpecId).toBe("squad-id-1");
+    expect(taskInsert!.value.workflowSpecId).toBe("workflow-id-1");
+  });
+
+  it("throws if squad spec is not published", async () => {
+    const handler = getLaunchMissionHandler();
+    const { ctx } = makeLaunchCtx({
+      squadSpec: { ...mockSquad, status: "draft" },
+      workflowSpec: mockWorkflow,
+    });
+
+    await expect(
+      handler(ctx, {
+        squadSpecId: "squad-id-1",
+        workflowSpecId: "workflow-id-1",
+        boardId: "board-id-1",
+        title: "Mission",
+      }),
+    ).rejects.toThrow("Squad must be published");
+  });
+
+  it("throws if workflow spec is not published", async () => {
+    const handler = getLaunchMissionHandler();
+    const { ctx } = makeLaunchCtx({
+      squadSpec: mockSquad,
+      workflowSpec: { ...mockWorkflow, status: "draft" },
+    });
+
+    await expect(
+      handler(ctx, {
+        squadSpecId: "squad-id-1",
+        workflowSpecId: "workflow-id-1",
+        boardId: "board-id-1",
+        title: "Mission",
+      }),
+    ).rejects.toThrow("Workflow must be published");
   });
 });
