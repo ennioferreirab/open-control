@@ -46,7 +46,7 @@ class TestSpecsRepositoryCreateSpec:
         assert result == "spec-id-123"
         client.mutation.assert_called_once()
         call_args = client.mutation.call_args
-        assert "agentSpecs:create" in call_args[0][0]
+        assert call_args[0][0] == "agentSpecs:createDraft"
 
     def test_create_agent_spec_includes_required_fields(self) -> None:
         from mc.bridge.repositories.specs import SpecsRepository

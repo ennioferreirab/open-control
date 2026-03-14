@@ -347,3 +347,71 @@ class TestMCSocketServerHandlers:
             )
         finally:
             await srv.stop()
+
+    async def test_create_agent_spec_dispatches_to_bridge(self):
+        """create_agent_spec calls bridge.create_agent_spec + publish."""
+        sock = _short_sock()
+
+        mock_bridge = MagicMock()
+        mock_bridge.create_agent_spec = MagicMock(return_value="spec-id-123")
+        mock_bridge.publish_agent_spec = MagicMock(return_value=None)
+
+        srv = MCSocketServer(mock_bridge, None)
+        await srv.start(sock)
+        client = MCSocketClient(sock)
+
+        try:
+            result = await client.request(
+                "create_agent_spec",
+                {
+                    "name": "my-agent",
+                    "role": "Developer",
+                    "display_name": "My Agent",
+                },
+            )
+            assert result.get("spec_id") == "spec-id-123"
+            mock_bridge.create_agent_spec.assert_called_once()
+            mock_bridge.publish_agent_spec.assert_called_once_with("spec-id-123")
+        finally:
+            await srv.stop()
+
+    async def test_create_agent_spec_no_bridge_returns_error(self):
+        """create_agent_spec returns error when bridge is unavailable."""
+        sock = _short_sock()
+        srv, client, _ = await _make_server_and_client(sock)
+
+        try:
+            result = await client.request(
+                "create_agent_spec",
+                {"name": "x", "role": "Y"},
+            )
+            assert "error" in result
+        finally:
+            await srv.stop()
+
+    async def test_publish_squad_graph_dispatches_to_bridge(self):
+        """publish_squad_graph calls bridge.publish_squad_graph."""
+        sock = _short_sock()
+
+        mock_bridge = MagicMock()
+        mock_bridge.publish_squad_graph = MagicMock(return_value="squad-id-abc")
+
+        srv = MCSocketServer(mock_bridge, None)
+        await srv.start(sock)
+        client = MCSocketClient(sock)
+
+        graph = {
+            "squad": {"name": "s1", "displayName": "S1"},
+            "agents": [],
+            "workflows": [],
+        }
+
+        try:
+            result = await client.request(
+                "publish_squad_graph",
+                {"graph": graph},
+            )
+            assert result.get("squad_id") == "squad-id-abc"
+            mock_bridge.publish_squad_graph.assert_called_once_with(graph)
+        finally:
+            await srv.stop()
