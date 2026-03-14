@@ -3,7 +3,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { AgentActivityFeed } from "@/features/interactive/components/AgentActivityFeed";
 import { InteractiveChatTabs } from "@/features/interactive/components/InteractiveChatTabs";
+import { useAgentChatSession } from "@/features/interactive/hooks/useAgentChatSession";
 import { getInteractiveAgentProvider } from "@/features/interactive/hooks/useInteractiveAgentProvider";
 import { useSendChat } from "@/hooks/useSendChat";
 import { SendHorizontal, X } from "lucide-react";
@@ -27,6 +29,7 @@ export function ChatPanel() {
   const selectableAgents = useSelectableAgents();
   const selectedAgentDoc = selectableAgents?.find((agent) => agent.name === selectedAgent) ?? null;
   const interactiveProvider = getInteractiveAgentProvider(selectedAgentDoc);
+  const activeSession = useAgentChatSession(selectedAgent);
 
   // Keep refs in sync
   useEffect(() => {
@@ -286,6 +289,17 @@ export function ChatPanel() {
         interactiveProvider={interactiveProvider}
         chatView={chatView}
       />
+
+      {activeSession && (
+        <div className="shrink-0 border-t border-border">
+          <AgentActivityFeed
+            sessionId={activeSession.sessionId}
+            provider={activeSession.provider}
+            agentName={activeSession.agentName}
+            supervisionState={activeSession.supervisionState ?? undefined}
+          />
+        </div>
+      )}
     </div>
   );
 }
