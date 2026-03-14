@@ -1,0 +1,351 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  compileWorkflowExecutionPlan,
+  type WorkflowSpecInput,
+  type AgentSpecRef,
+  type WorkflowExecutionPlan,
+  type WorkflowExecutionPlanStep,
+} from "./workflowExecutionCompiler";
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const AGENT_REFS: AgentSpecRef[] = [
+  { specId: "agentSpec-id-1", agentName: "audience-researcher" },
+  { specId: "agentSpec-id-2", agentName: "post-writer" },
+  { specId: "agentSpec-id-3", agentName: "content-reviewer" },
+];
+
+const MINIMAL_WORKFLOW: WorkflowSpecInput = {
+  specId: "workflowSpec-id-1",
+  name: "Default Workflow",
+  steps: [
+    {
+      id: "step-research",
+      title: "Research audience",
+      type: "agent",
+      agentSpecId: "agentSpec-id-1",
+    },
+  ],
+};
+
+const MULTI_STEP_WORKFLOW: WorkflowSpecInput = {
+  specId: "workflowSpec-id-2",
+  name: "Full Pipeline",
+  steps: [
+    {
+      id: "step-research",
+      title: "Research audience",
+      type: "agent",
+      agentSpecId: "agentSpec-id-1",
+      description: "Research the target audience thoroughly",
+    },
+    {
+      id: "step-write",
+      title: "Write post",
+      type: "agent",
+      agentSpecId: "agentSpec-id-2",
+      dependsOn: ["step-research"],
+    },
+    {
+      id: "step-review",
+      title: "Review content",
+      type: "agent",
+      agentSpecId: "agentSpec-id-3",
+      dependsOn: ["step-write"],
+    },
+  ],
+};
+
+const PARALLEL_WORKFLOW: WorkflowSpecInput = {
+  specId: "workflowSpec-id-3",
+  name: "Parallel Pipeline",
+  steps: [
+    {
+      id: "step-research-a",
+      title: "Research topic A",
+      type: "agent",
+      agentSpecId: "agentSpec-id-1",
+    },
+    {
+      id: "step-research-b",
+      title: "Research topic B",
+      type: "agent",
+      agentSpecId: "agentSpec-id-2",
+    },
+    {
+      id: "step-merge",
+      title: "Merge results",
+      type: "agent",
+      agentSpecId: "agentSpec-id-3",
+      dependsOn: ["step-research-a", "step-research-b"],
+    },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// compileWorkflowExecutionPlan — basic shape
+// ---------------------------------------------------------------------------
+
+describe("compileWorkflowExecutionPlan", () => {
+  it("returns a plan with steps array", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(Array.isArray(plan.steps)).toBe(true);
+    expect(plan.steps.length).toBe(1);
+  });
+
+  it("returns a plan with generatedAt ISO timestamp", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan.generatedAt).toBeTruthy();
+    expect(() => new Date(plan.generatedAt).toISOString()).not.toThrow();
+  });
+
+  it("marks plan generatedBy as 'workflow'", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan.generatedBy).toBe("workflow");
+  });
+
+  it("carries workflowSpecId in the plan metadata", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan.workflowSpecId).toBe("workflowSpec-id-1");
+  });
+
+  it("accepts an optional generatedAt for deterministic output", () => {
+    const fixedAt = "2026-01-15T12:00:00.000Z";
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS, fixedAt);
+    expect(plan.generatedAt).toBe(fixedAt);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Step compilation — identity and stable temp ids
+// ---------------------------------------------------------------------------
+
+describe("step tempId stability", () => {
+  it("assigns a tempId to each compiled step", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    for (const step of plan.steps) {
+      expect(step.tempId).toBeTruthy();
+      expect(typeof step.tempId).toBe("string");
+    }
+  });
+
+  it("uses the workflow step id as the tempId (stable across compilations)", () => {
+    const plan1 = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const plan2 = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+
+    for (let i = 0; i < plan1.steps.length; i++) {
+      expect(plan1.steps[i].tempId).toBe(plan2.steps[i].tempId);
+    }
+  });
+
+  it("preserves the original workflow step id as the tempId", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const stepIds = plan.steps.map((s) => s.tempId);
+    expect(stepIds).toContain("step-research");
+    expect(stepIds).toContain("step-write");
+    expect(stepIds).toContain("step-review");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Step compilation — title and description
+// ---------------------------------------------------------------------------
+
+describe("step title and description", () => {
+  it("copies the workflow step title to the compiled step", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const researchStep = plan.steps.find((s) => s.tempId === "step-research");
+    expect(researchStep!.title).toBe("Research audience");
+  });
+
+  it("copies the workflow step description when present", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const researchStep = plan.steps.find((s) => s.tempId === "step-research");
+    expect(researchStep!.description).toBe("Research the target audience thoroughly");
+  });
+
+  it("uses the title as the description fallback when no description is present", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const writeStep = plan.steps.find((s) => s.tempId === "step-write");
+    expect(writeStep!.description).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Agent resolution
+// ---------------------------------------------------------------------------
+
+describe("agent resolution", () => {
+  it("resolves agentSpecId to an assignedAgent name", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan.steps[0].assignedAgent).toBe("audience-researcher");
+  });
+
+  it("resolves different agent spec ids to different agent names", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const researchStep = plan.steps.find((s) => s.tempId === "step-research");
+    const writeStep = plan.steps.find((s) => s.tempId === "step-write");
+    expect(researchStep!.assignedAgent).toBe("audience-researcher");
+    expect(writeStep!.assignedAgent).toBe("post-writer");
+  });
+
+  it("assigns empty string for assignedAgent when agentSpecId is absent (human/checkpoint step)", () => {
+    const humanWorkflow: WorkflowSpecInput = {
+      specId: "wf-human",
+      name: "Human Review Workflow",
+      steps: [
+        {
+          id: "step-human-review",
+          title: "Human approval",
+          type: "human",
+        },
+      ],
+    };
+    const plan = compileWorkflowExecutionPlan(humanWorkflow, AGENT_REFS);
+    expect(plan.steps[0].assignedAgent).toBe("");
+  });
+
+  it("throws when an agentSpecId cannot be resolved", () => {
+    const badWorkflow: WorkflowSpecInput = {
+      specId: "wf-bad",
+      name: "Bad Workflow",
+      steps: [
+        {
+          id: "step-bad",
+          title: "Bad step",
+          type: "agent",
+          agentSpecId: "nonexistent-spec-id",
+        },
+      ],
+    };
+    expect(() => compileWorkflowExecutionPlan(badWorkflow, AGENT_REFS)).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dependency mapping (dependsOn → blockedBy)
+// ---------------------------------------------------------------------------
+
+describe("dependency mapping", () => {
+  it("compiles steps with no dependencies to blockedBy=[]", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan.steps[0].blockedBy).toEqual([]);
+  });
+
+  it("maps dependsOn ids to blockedBy tempIds", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const writeStep = plan.steps.find((s) => s.tempId === "step-write");
+    expect(writeStep!.blockedBy).toEqual(["step-research"]);
+  });
+
+  it("maps multiple dependsOn ids to blockedBy", () => {
+    const plan = compileWorkflowExecutionPlan(PARALLEL_WORKFLOW, AGENT_REFS);
+    const mergeStep = plan.steps.find((s) => s.tempId === "step-merge");
+    expect(mergeStep!.blockedBy).toContain("step-research-a");
+    expect(mergeStep!.blockedBy).toContain("step-research-b");
+    expect(mergeStep!.blockedBy).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Order and parallelGroup assignment
+// ---------------------------------------------------------------------------
+
+describe("order and parallelGroup", () => {
+  it("assigns an order to each step starting at 0", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const orders = plan.steps.map((s) => s.order);
+    expect(orders[0]).toBe(0);
+  });
+
+  it("assigns sequential orders across steps", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    const orders = plan.steps.map((s) => s.order);
+    for (let i = 0; i < orders.length; i++) {
+      expect(orders[i]).toBe(i);
+    }
+  });
+
+  it("assigns parallelGroup=0 to all steps in a serial chain", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan.steps[0].parallelGroup).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Workflow metadata on steps
+// ---------------------------------------------------------------------------
+
+describe("workflow metadata on steps", () => {
+  it("preserves workflowStepId on each compiled step", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    for (const step of plan.steps) {
+      expect(step.workflowStepId).toBeTruthy();
+    }
+  });
+
+  it("preserves workflowStepType on each compiled step", () => {
+    const plan = compileWorkflowExecutionPlan(MULTI_STEP_WORKFLOW, AGENT_REFS);
+    for (const step of plan.steps) {
+      expect(step.workflowStepType).toBeTruthy();
+    }
+  });
+
+  it("carries agentSpecId on agent-type steps", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan.steps[0].agentSpecId).toBe("agentSpec-id-1");
+  });
+
+  it("does not carry agentSpecId on non-agent steps", () => {
+    const humanWorkflow: WorkflowSpecInput = {
+      specId: "wf-human",
+      name: "Human Workflow",
+      steps: [{ id: "step-human", title: "Human step", type: "human" }],
+    };
+    const plan = compileWorkflowExecutionPlan(humanWorkflow, AGENT_REFS);
+    expect(plan.steps[0].agentSpecId).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Plan source distinguishes workflow from lead-agent
+// ---------------------------------------------------------------------------
+
+describe("plan source metadata", () => {
+  it("workflow-generated plan has generatedBy='workflow' not 'lead-agent'", () => {
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan.generatedBy).toBe("workflow");
+    expect(plan.generatedBy).not.toBe("lead-agent");
+  });
+
+  it("lead-agent plan shape stays compatible: still has generatedAt and steps", () => {
+    // This test verifies that the workflow plan output is structurally
+    // compatible with the existing ExecutionPlanInput shape (has steps, generatedAt)
+    const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    expect(plan).toHaveProperty("steps");
+    expect(plan).toHaveProperty("generatedAt");
+    expect(plan).toHaveProperty("generatedBy");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Type exports
+// ---------------------------------------------------------------------------
+
+describe("type exports", () => {
+  it("WorkflowExecutionPlan is compatible with lead-agent ExecutionPlanInput structure", () => {
+    const plan: WorkflowExecutionPlan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
+    // Must have the shared fields
+    const step: WorkflowExecutionPlanStep = plan.steps[0];
+    expect(step.tempId).toBeDefined();
+    expect(step.title).toBeDefined();
+    expect(step.description).toBeDefined();
+    expect(step.assignedAgent).toBeDefined();
+    expect(step.blockedBy).toBeDefined();
+    expect(typeof step.parallelGroup).toBe("number");
+    expect(typeof step.order).toBe("number");
+  });
+});
