@@ -211,9 +211,7 @@ class TaskPlanner:
                 exc_info=True,
             )
 
-        plan = self._fallback_heuristic_plan(
-            title, description, agents, explicit_agent
-        )
+        plan = self._fallback_heuristic_plan(title, description, agents, explicit_agent)
         self._validate_agent_names(plan, agents)
         self._prevent_lead_agent_steps(plan, agents)
         logger.info(
@@ -311,8 +309,8 @@ class TaskPlanner:
         from claude_code.workspace import CCWorkspaceManager
         from nanobot.config.loader import load_config
 
-        from mc.infrastructure.orientation import load_orientation
         from mc.contexts.conversation.ask_user.handler import AskUserHandler
+        from mc.infrastructure.orientation import load_orientation
 
         cc_opts = ClaudeCodeOpts()
         cc_opts.max_turns = CC_PLANNING_MAX_TURNS
@@ -372,21 +370,18 @@ class TaskPlanner:
         finally:
             await ipc_server.stop()
 
-    def _validate_agent_names(
-        self, plan: ExecutionPlan, agents: list[AgentData]
-    ) -> None:
+    def _validate_agent_names(self, plan: ExecutionPlan, agents: list[AgentData]) -> None:
         """Replace invalid/disallowed agent names with nanobot."""
         fallback_agent = self._fallback_agent_name(agents)
-        delegatable_names = {a.name for a in agents if _is_delegatable(a)} | {NANOBOT_AGENT_NAME, HUMAN_AGENT_NAME}
+        delegatable_names = {a.name for a in agents if _is_delegatable(a)} | {
+            NANOBOT_AGENT_NAME,
+            HUMAN_AGENT_NAME,
+        }
         for step in plan.steps:
-            if (
-                not step.assigned_agent
-                or step.assigned_agent not in delegatable_names
-            ):
+            if not step.assigned_agent or step.assigned_agent not in delegatable_names:
                 if step.assigned_agent:
                     logger.warning(
-                        "[planner] Invalid/disallowed agent '%s' on step '%s', "
-                        "replacing with '%s'",
+                        "[planner] Invalid/disallowed agent '%s' on step '%s', replacing with '%s'",
                         step.assigned_agent,
                         step.temp_id,
                         fallback_agent,
@@ -395,9 +390,7 @@ class TaskPlanner:
 
     def _override_agents(self, plan: ExecutionPlan, agent_name: str) -> None:
         """Override all step assignments with an explicit agent."""
-        assigned_name = (
-            NANOBOT_AGENT_NAME if is_lead_agent(agent_name) else agent_name
-        )
+        assigned_name = NANOBOT_AGENT_NAME if is_lead_agent(agent_name) else agent_name
         if assigned_name != agent_name:
             logger.warning(
                 "[planner] Explicit lead-agent override replaced with '%s' "
@@ -408,12 +401,18 @@ class TaskPlanner:
             step.assigned_agent = assigned_name
 
     def _fallback_agent_name(self, agents: list[AgentData]) -> str:
-        """Choose a non-lead fallback agent name."""
+        """Choose a non-lead fallback agent name.
+
+        Prefers the first delegatable agent over the hardcoded nanobot default
+        so that agents with explicit backends (e.g., cc/) are not silently
+        downgraded to the nanobot runner.
+        """
+        for a in agents:
+            if _is_delegatable(a) and not is_lead_agent(a.name):
+                return a.name
         return NANOBOT_AGENT_NAME
 
-    def _prevent_lead_agent_steps(
-        self, plan: ExecutionPlan, agents: list[AgentData]
-    ) -> None:
+    def _prevent_lead_agent_steps(self, plan: ExecutionPlan, agents: list[AgentData]) -> None:
         """Final enforcement pass: lead-agent can never be a step executor."""
         fallback_agent = self._fallback_agent_name(agents)
         for step in plan.steps:
@@ -444,28 +443,27 @@ class TaskPlanner:
         else:
             keywords = extract_keywords(clean_title, clean_description)
             scored = [
-                (agent, score_agent(agent, keywords))
-                for agent in agents
-                if _is_delegatable(agent)
+                (agent, score_agent(agent, keywords)) for agent in agents if _is_delegatable(agent)
             ]
             scored.sort(key=lambda x: x[1], reverse=True)
 
-            assigned_agent = (
-                scored[0][0].name
-                if scored and scored[0][1] > 0
-                else NANOBOT_AGENT_NAME
-            )
+            if scored:
+                assigned_agent = scored[0][0].name
+            else:
+                assigned_agent = self._fallback_agent_name(agents)
 
         if is_lead_agent(assigned_agent):
             assigned_agent = NANOBOT_AGENT_NAME
 
-        return ExecutionPlan(steps=[
-            ExecutionPlanStep(
-                temp_id="step_1",
-                title=clean_title,
-                description=clean_description,
-                assigned_agent=assigned_agent,
-                parallel_group=1,
-                order=1,
-            )
-        ])
+        return ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title=clean_title,
+                    description=clean_description,
+                    assigned_agent=assigned_agent,
+                    parallel_group=1,
+                    order=1,
+                )
+            ]
+        )
