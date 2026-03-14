@@ -1,16 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 import { InteractiveChatTabs } from "./InteractiveChatTabs";
 
-vi.mock("./InteractiveTerminalPanel", () => ({
-  InteractiveTerminalPanel: ({ agentName }: { agentName: string }) => (
-    <div data-testid="interactive-terminal-panel">terminal:{agentName}</div>
-  ),
-}));
-
 describe("InteractiveChatTabs", () => {
-  it("renders only chat content when the agent is not interactive", () => {
+  it("renders chat content when the agent is not interactive", () => {
     render(
       <InteractiveChatTabs
         agentName="writer"
@@ -20,10 +14,9 @@ describe("InteractiveChatTabs", () => {
     );
 
     expect(screen.getByTestId("chat-view")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "TUI" })).not.toBeInTheDocument();
   });
 
-  it("shows Chat and TUI tabs for interactive agents and switches views", () => {
+  it("renders chat content for interactive agents (TUI tab removed in Story 28.7)", () => {
     render(
       <InteractiveChatTabs
         agentName="claude-pair"
@@ -32,14 +25,9 @@ describe("InteractiveChatTabs", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "TUI" })).toBeInTheDocument();
+    // Chat view is always shown — no TUI tab any more
     expect(screen.getByTestId("chat-view")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "TUI" }));
-
-    expect(screen.getByTestId("interactive-terminal-panel")).toHaveTextContent(
-      "terminal:claude-pair",
-    );
+    expect(screen.queryByRole("button", { name: "TUI" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Chat" })).not.toBeInTheDocument();
   });
 });

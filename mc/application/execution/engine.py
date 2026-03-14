@@ -92,14 +92,18 @@ class ExecutionEngine:
         if strategies is not None:
             self._strategies: dict[RunnerType, RunnerStrategy] = strategies
         else:
+            # PROVIDER_CLI is the production default; INTERACTIVE_TUI is the escape hatch.
+            # Both share the same strategy — the coordinator drives the session. (Story 28.7)
+            _default_interactive = InteractiveTuiRunnerStrategy(
+                bridge=None,
+                session_coordinator=None,
+            )
             self._strategies = {
                 RunnerType.NANOBOT: NanobotRunnerStrategy(),
                 RunnerType.CLAUDE_CODE: ClaudeCodeRunnerStrategy(),
                 RunnerType.HUMAN: HumanRunnerStrategy(),
-                RunnerType.INTERACTIVE_TUI: InteractiveTuiRunnerStrategy(
-                    bridge=None,
-                    session_coordinator=None,
-                ),
+                RunnerType.PROVIDER_CLI: _default_interactive,
+                RunnerType.INTERACTIVE_TUI: _default_interactive,
             }
         self._post_execution_hooks = (
             post_execution_hooks if post_execution_hooks is not None else []

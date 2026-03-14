@@ -1,10 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
-
-import { cn } from "@/lib/utils";
-
-import { InteractiveTerminalPanel } from "./InteractiveTerminalPanel";
+import { ReactNode } from "react";
 
 interface InteractiveChatTabsProps {
   agentName: string;
@@ -12,47 +8,21 @@ interface InteractiveChatTabsProps {
   chatView: ReactNode;
 }
 
-type ActiveTab = "chat" | "tui";
-
-export function InteractiveChatTabs({
-  agentName,
-  interactiveProvider,
-  chatView,
-}: InteractiveChatTabsProps) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
-
-  if (!interactiveProvider) {
-    return <>{chatView}</>;
-  }
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-border px-2 pt-2">
-        <div className="flex gap-1">
-          {(["chat", "tui"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "rounded-t-md px-3 py-1.5 text-xs font-medium transition-colors",
-                activeTab === tab
-                  ? "bg-background text-foreground border-x border-t border-border"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-              )}
-            >
-              {tab === "chat" ? "Chat" : "TUI"}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="min-h-0 flex-1">
-        {activeTab === "chat" ? (
-          chatView
-        ) : (
-          <InteractiveTerminalPanel agentName={agentName} provider={interactiveProvider} />
-        )}
-      </div>
-    </div>
-  );
+/**
+ * Chat view for interactive agents.
+ *
+ * The legacy "TUI" tab (PTY/tmux remote terminal) has been removed as part of
+ * Story 28.7. The provider CLI live-share surface is now the primary path and
+ * is rendered directly in TaskDetailSheet via the "live" tab. This component
+ * now acts as a simple passthrough that renders the chat view for both
+ * interactive and non-interactive agents.
+ *
+ * @deprecated The tab-switching behaviour is retired. Callers can use this
+ * component for API compatibility, but it no longer renders the TUI terminal.
+ */
+export function InteractiveChatTabs({ chatView, ...props }: InteractiveChatTabsProps) {
+  // agentName and interactiveProvider are retained in props for API compatibility
+  // but are no longer used to render a TUI tab (Story 28.7 — TUI tab retired).
+  void props;
+  return <>{chatView}</>;
 }

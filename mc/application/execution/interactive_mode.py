@@ -11,7 +11,13 @@ INTERACTIVE_MODE_ENV = "MC_INTERACTIVE_EXECUTION_MODE"
 
 
 def resolve_step_runner_type(request: Any) -> RunnerType:
-    """Resolve step execution mode without silently falling back for interactive agents."""
+    """Resolve step execution mode without silently falling back for interactive agents.
+
+    Production default (no env var, or ``interactive-first``) is now
+    ``PROVIDER_CLI`` (Story 28.7).  The legacy PTY/tmux path
+    ``INTERACTIVE_TUI`` is only reachable via the explicit escape hatch
+    ``MC_INTERACTIVE_EXECUTION_MODE=interactive-tui``.
+    """
 
     agent = getattr(request, "agent", None)
     interactive_provider = getattr(agent, "interactive_provider", None) if agent else None
@@ -24,10 +30,16 @@ def resolve_step_runner_type(request: Any) -> RunnerType:
     if not is_interactive:
         return RunnerType.NANOBOT
 
-    mode = os.environ.get(INTERACTIVE_MODE_ENV, "interactive-first").strip().lower()
+    mode = os.environ.get(INTERACTIVE_MODE_ENV, "provider-cli").strip().lower()
     if mode in {"disabled", "off", "headless-only"}:
         raise RuntimeError(
             f"Interactive execution is disabled by {INTERACTIVE_MODE_ENV}={mode!r} for agent '{request.agent_name}'."
         )
 
-    return RunnerType.INTERACTIVE_TUI
+    # Explicit legacy escape hatch: interactive-tui routes to the PTY/tmux runtime.
+    if mode == "interactive-tui":
+        return RunnerType.INTERACTIVE_TUI
+
+    # All other values (provider-cli, interactive-first, or unrecognised) default
+    # to PROVIDER_CLI — the new production path.
+    return RunnerType.PROVIDER_CLI

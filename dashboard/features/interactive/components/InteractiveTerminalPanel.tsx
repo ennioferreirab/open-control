@@ -1,3 +1,14 @@
+/**
+ * @deprecated InteractiveTerminalPanel — PTY/xterm TUI panel (Story 28.7)
+ *
+ * This component implements the legacy remote TUI path backed by a PTY/tmux
+ * WebSocket server (port 8765). It is no longer imported from primary paths
+ * (TaskDetailSheet, InteractiveChatTabs). The production default is now the
+ * provider CLI live-share model.
+ *
+ * Keep this file until the websocket server and tmux runtime are fully
+ * retired. Do not add new consumers. Tracked for deletion in a follow-up.
+ */
 "use client";
 
 import { useEffect, useRef, useState } from "react";

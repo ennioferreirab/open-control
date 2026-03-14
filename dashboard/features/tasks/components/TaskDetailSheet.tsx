@@ -22,7 +22,6 @@ import { TaskDetailFilesTab } from "@/features/tasks/components/TaskDetailFilesT
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { TaskDetailHeader } from "@/features/tasks/components/TaskDetailHeader";
-import { InteractiveTerminalPanel } from "@/features/interactive/components/InteractiveTerminalPanel";
 import { useTaskInteractiveSession } from "@/features/interactive/hooks/useTaskInteractiveSession";
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
@@ -688,24 +687,18 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                   value="live"
                   className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
                 >
-                  <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
-                    <InteractiveTerminalPanel
-                      agentName={liveSession.session.agentName}
-                      provider={liveSession.session.provider}
-                      scopeKind="task"
-                      scopeId={task._id}
-                      surface="step"
-                      taskId={task._id}
-                      liveSessionId={liveSession.session.sessionId}
-                      activeStepId={liveSession.activeStep?._id}
-                      controlMode={
-                        (
-                          liveSession.session as typeof liveSession.session & {
-                            controlMode?: "agent" | "human";
-                          }
-                        ).controlMode ?? "agent"
-                      }
-                    />
+                  {/* Provider CLI live-share panel — replaces the legacy TUI terminal.
+                      ProviderLiveChatPanel (Story 28-5) will be mounted here once
+                      it lands. The PTY/xterm InteractiveTerminalPanel is retired
+                      from this surface as of Story 28.7. */}
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-4 text-sm text-muted-foreground">
+                    <p>
+                      Live session active for{" "}
+                      <span className="font-medium text-foreground">
+                        @{liveSession.session.agentName}
+                      </span>
+                    </p>
+                    <p className="mt-1 text-xs">Provider: {liveSession.session.provider}</p>
                   </div>
                 </TabsContent>
               )}

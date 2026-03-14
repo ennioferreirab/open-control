@@ -29,16 +29,23 @@ def _request(
     )
 
 
-def test_resolve_step_runner_type_prefers_interactive_runtime_for_supported_agents() -> None:
+def test_resolve_step_runner_type_prefers_provider_cli_for_supported_agents() -> None:
+    """Default (no env var) now routes to PROVIDER_CLI (Story 28.7)."""
+    import os
+
+    os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
     runner_type = resolve_step_runner_type(_request(provider="codex"))
 
-    assert runner_type == RunnerType.INTERACTIVE_TUI
+    assert runner_type == RunnerType.PROVIDER_CLI
 
 
 def test_resolve_step_runner_type_supports_mc_interactive_provider() -> None:
+    import os
+
+    os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
     runner_type = resolve_step_runner_type(_request(provider="mc"))
 
-    assert runner_type == RunnerType.INTERACTIVE_TUI
+    assert runner_type == RunnerType.PROVIDER_CLI
 
 
 def test_resolve_step_runner_type_keeps_noninteractive_agents_on_nanobot() -> None:
