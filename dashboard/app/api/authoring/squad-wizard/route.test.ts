@@ -1,162 +1,132 @@
-import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock child_process exec to avoid actually running Python
-const mockExecPromise = vi.hoisted(() => vi.fn());
+const mockExecFn = vi.hoisted(() => vi.fn());
 const mockWriteFile = vi.hoisted(() => vi.fn());
 const mockUnlink = vi.hoisted(() => vi.fn());
 
 vi.mock("child_process", () => ({
-  default: { exec: vi.fn() },
-  exec: vi.fn(),
+  default: { exec: mockExecFn },
+  exec: mockExecFn,
 }));
 
 vi.mock("util", () => ({
-  default: { promisify: () => mockExecPromise },
-  promisify: () => mockExecPromise,
+  default: { promisify: () => mockExecFn },
+  promisify: () => mockExecFn,
 }));
 
 vi.mock("fs/promises", () => ({
-  default: { writeFile: mockWriteFile, unlink: mockUnlink },
+  default: {
+    writeFile: mockWriteFile,
+    unlink: mockUnlink,
+  },
   writeFile: mockWriteFile,
   unlink: mockUnlink,
 }));
 
+vi.mock("os", () => ({
+  default: { tmpdir: () => "/tmp" },
+  tmpdir: () => "/tmp",
+}));
+
 vi.mock("crypto", () => ({
-  default: { randomUUID: () => "test-uuid-1234" },
-  randomUUID: () => "test-uuid-1234",
+  default: { randomUUID: () => "test-uuid" },
+  randomUUID: () => "test-uuid",
 }));
 
 import { POST } from "./route";
 
-function makeRequest(body: unknown): NextRequest {
-  return new NextRequest("http://localhost/api/authoring/squad-wizard", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: typeof body === "string" ? body : JSON.stringify(body),
-  });
-}
+const VALID_SQUAD_RESPONSE = JSON.stringify({
+  assistant_message: "Here is your squad proposal.",
+  phase: "proposal",
+  draft_graph_patch: {
+    squad: { outcome: "Grow an expert personal brand" },
+    agents: [{ key: "researcher", role: "Researcher" }],
+    workflows: [{ key: "default", steps: [] }],
+  },
+  unresolved_questions: [],
+  preview: { squad_name: "brand-squad" },
+  readiness: 0.6,
+  mode: "squad",
+});
 
 beforeEach(() => {
-  vi.resetAllMocks();
+  vi.clearAllMocks();
   mockWriteFile.mockResolvedValue(undefined);
   mockUnlink.mockResolvedValue(undefined);
+  mockExecFn.mockResolvedValue({ stdout: VALID_SQUAD_RESPONSE, stderr: "" });
 });
 
 describe("POST /api/authoring/squad-wizard", () => {
-  it("returns structured squad authoring response", async () => {
-    const structuredResponse = {
-      question: "How many agents should be in your squad?",
-      draft_patch: { fields: { team_design: "3 specialized agents" } },
-      phase: "team_design",
-      readiness: 0.0,
-      summary_sections: {},
-      recommended_next_phase: "workflow_design",
-    };
-    mockExecPromise.mockResolvedValue({
-      stdout: JSON.stringify(structuredResponse),
-      stderr: "",
+  it("returns structured squad authoring response with canonical phase", async () => {
+    const req = new Request("http://localhost/api/authoring/squad-wizard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "Create a brand squad" }],
+        phase: "proposal",
+      }),
     });
 
-    const req = makeRequest({
-      messages: [{ role: "user", content: "I need a research squad" }],
-      current_spec: {},
-      phase: "team_design",
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
+    const res = await POST(req as never);
     const body = await res.json();
-    // Must return structured fields
-    expect(body).toHaveProperty("question");
-    expect(body).toHaveProperty("draft_patch");
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveProperty("assistant_message");
     expect(body).toHaveProperty("phase");
+    expect(["discovery", "proposal", "refinement", "approval"]).toContain(body.phase);
+    expect(body).toHaveProperty("draft_graph_patch");
+    expect(body).toHaveProperty("unresolved_questions");
     expect(body).toHaveProperty("readiness");
-    expect(body).toHaveProperty("summary_sections");
-    expect(body).toHaveProperty("recommended_next_phase");
-    // Must NOT have a raw yaml field
-    expect(body).not.toHaveProperty("yaml");
+  });
+
+  it("returns graph patch with squad/agents/workflows keys, not flat strings", async () => {
+    const req = new Request("http://localhost/api/authoring/squad-wizard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "Build a brand squad" }],
+        phase: "proposal",
+      }),
+    });
+
+    const res = await POST(req as never);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    const patch = body.draft_graph_patch;
+    expect(typeof patch).toBe("object");
+    // Must NOT be flat strings (old contract)
+    expect(typeof patch).not.toBe("string");
+    expect(patch).not.toHaveProperty("team_design");
+    expect(patch).not.toHaveProperty("workflow_design");
+    // Must be structured graph patch
+    expect(patch).toHaveProperty("squad");
+    expect(patch).toHaveProperty("agents");
+    expect(patch).toHaveProperty("workflows");
   });
 
   it("returns 400 when no user message is present", async () => {
-    const req = makeRequest({
-      messages: [],
-      current_spec: {},
-      phase: "team_design",
+    const req = new Request("http://localhost/api/authoring/squad-wizard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [], phase: "discovery" }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req as never);
     expect(res.status).toBe(400);
   });
 
-  it("can refine agents, workflows, and review policy together", async () => {
-    const refinedResponse = {
-      question: "How should the review process work for the squad's outputs?",
-      draft_patch: {
-        fields: {
-          workflow_design: "Sequential with 3 steps: research, draft, review",
-        },
-      },
-      phase: "review_design",
-      readiness: 0.5,
-      summary_sections: {
-        team_design: "Lead, researcher, writer",
-        workflow_design: "Sequential pipeline",
-      },
-      recommended_next_phase: "approval",
-    };
-    mockExecPromise.mockResolvedValue({
-      stdout: JSON.stringify(refinedResponse),
-      stderr: "",
+  it("returns 400 when phase is not canonical", async () => {
+    const req = new Request("http://localhost/api/authoring/squad-wizard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "hello" }],
+        phase: "brainstorm",
+      }),
     });
 
-    const req = makeRequest({
-      messages: [
-        { role: "user", content: "I need a research squad" },
-        { role: "assistant", content: "How many agents?" },
-        { role: "user", content: "3 agents: lead, researcher, writer" },
-        { role: "assistant", content: "What workflow?" },
-        { role: "user", content: "Sequential pipeline with review" },
-      ],
-      current_spec: {
-        team_design: "Lead, researcher, writer",
-        workflow_design: "Sequential pipeline",
-      },
-      phase: "review_design",
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
-    const body = await res.json();
-    expect(body.phase).toBe("review_design");
-    expect(body.summary_sections).toHaveProperty("team_design");
-    expect(body.summary_sections).toHaveProperty("workflow_design");
-  });
-
-  it("returns fallback structured response when Python exec fails", async () => {
-    mockExecPromise.mockRejectedValue(new Error("Python failed"));
-
-    const req = makeRequest({
-      messages: [{ role: "user", content: "I need a squad" }],
-      current_spec: {},
-      phase: "team_design",
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
-    const body = await res.json();
-    // Even on failure, must return structured response, not raw YAML
-    expect(body).toHaveProperty("question");
-    expect(body).not.toHaveProperty("yaml");
-  });
-
-  it("returns 500 on malformed request body", async () => {
-    const req = makeRequest("not-valid-json");
-
-    const res = await POST(req);
-    expect(res.status).toBe(500);
+    const res = await POST(req as never);
+    expect(res.status).toBe(400);
   });
 });
