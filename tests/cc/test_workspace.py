@@ -225,6 +225,136 @@ class TestClaudeMdGeneration:
 
 
 # ---------------------------------------------------------------------------
+# Task 2: Operator visibility for the transitional Claude step path (Story 28.0c)
+# ---------------------------------------------------------------------------
+
+
+class TestSessionObservability:
+    """Pin that a running Claude interactive session is observable/intervenable.
+
+    These tests document the visibility contract for the transitional runtime
+    path (pre-provider-CLI). Story 28.2 is the canonical cutover.
+    """
+
+    def test_session_is_observable_via_hook_settings_when_session_id_is_present(
+        self, tmp_path: Path
+    ) -> None:
+        """When interactive_session_id is provided, all lifecycle hooks are wired.
+
+        This ensures Mission Control can observe the session lifecycle (start, stop,
+        permission requests, tool use) and intervene via the hook bridge.
+        """
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        ctx = manager.prepare(
+            "test-agent",
+            agent,
+            "task123",
+            interactive_session_id="interactive_session:claude-code:agent:step:step-1:step",
+        )
+
+        settings_path = ctx.cwd / ".claude" / "settings.json"
+        settings = json.loads(settings_path.read_text())
+        hooks = settings["hooks"]
+
+        # All observable lifecycle events must be present.
+        assert "SessionStart" in hooks, "SessionStart hook required for session observability"
+        assert "Stop" in hooks, "Stop hook required for session lifecycle tracking"
+        assert "PermissionRequest" in hooks, "PermissionRequest hook enables intervention"
+        assert "UserPromptSubmit" in hooks, "UserPromptSubmit hook required for activity feed"
+        assert "PreToolUse" in hooks, "PreToolUse hook required for tool activity visibility"
+        assert "PostToolUse" in hooks, "PostToolUse hook required for tool result visibility"
+
+    def test_session_hook_command_embeds_session_id_for_routing(self, tmp_path: Path) -> None:
+        """The hook command must embed the session ID so events are routed to the right session."""
+        session_id = "interactive_session:claude-code:myagent:step:step-42:step"
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        ctx = manager.prepare(
+            "myagent",
+            agent,
+            "task-99",
+            interactive_session_id=session_id,
+        )
+
+        settings_path = ctx.cwd / ".claude" / "settings.json"
+        settings = json.loads(settings_path.read_text())
+        hooks = settings["hooks"]
+
+        # Every hook command must embed the session ID for correct event routing.
+        session_hook_command = hooks["SessionStart"][0]["hooks"][0]["command"]
+        assert f"MC_INTERACTIVE_SESSION_ID={session_id}" in session_hook_command
+        stop_hook_command = hooks["Stop"][0]["hooks"][0]["command"]
+        assert f"MC_INTERACTIVE_SESSION_ID={session_id}" in stop_hook_command
+
+    def test_session_hook_command_embeds_task_id_for_routing(self, tmp_path: Path) -> None:
+        """The hook command must embed task_id so the bridge can route events back to the task."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        ctx = manager.prepare(
+            "test-agent",
+            agent,
+            "task-abc-123",
+            interactive_session_id="interactive_session:claude",
+        )
+
+        settings_path = ctx.cwd / ".claude" / "settings.json"
+        settings = json.loads(settings_path.read_text())
+        hooks = settings["hooks"]
+
+        hook_command = hooks["SessionStart"][0]["hooks"][0]["command"]
+        assert "TASK_ID=task-abc-123" in hook_command
+
+    def test_session_without_interactive_id_produces_empty_hooks(self, tmp_path: Path) -> None:
+        """When no interactive_session_id is given, no hooks are wired.
+
+        Headless step execution (non-interactive) does not require lifecycle hooks
+        since supervision goes through the IPC socket directly.
+        """
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        ctx = manager.prepare(
+            "test-agent",
+            agent,
+            "task123",
+            interactive_session_id=None,
+        )
+
+        settings_path = ctx.cwd / ".claude" / "settings.json"
+        settings = json.loads(settings_path.read_text())
+        hooks = settings["hooks"]
+
+        assert hooks == {}, (
+            "Without interactive_session_id, hooks must be empty — "
+            "lifecycle tracking is only required for interactive sessions."
+        )
+
+    def test_mcp_socket_path_is_embedded_in_hook_command(self, tmp_path: Path) -> None:
+        """The IPC socket path must appear in the hook command for the bridge to connect."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        ctx = manager.prepare(
+            "test-agent",
+            agent,
+            "task123",
+            interactive_session_id="interactive_session:claude",
+        )
+
+        settings_path = ctx.cwd / ".claude" / "settings.json"
+        settings = json.loads(settings_path.read_text())
+        hooks = settings["hooks"]
+
+        hook_command = hooks["SessionStart"][0]["hooks"][0]["command"]
+        # The socket path must be embedded so the hook bridge knows where to connect.
+        assert "MC_SOCKET_PATH=/tmp/mc-test-agent-task123.sock" in hook_command
+
+
+# ---------------------------------------------------------------------------
 # Skills mapping (AC2)
 # ---------------------------------------------------------------------------
 
