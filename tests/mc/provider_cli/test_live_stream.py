@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
-import pytest
-
 from mc.contexts.provider_cli.types import ParsedCliEvent
 from mc.runtime.provider_cli.live_stream import LiveStreamProjector, ProjectedEvent
 

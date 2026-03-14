@@ -12,7 +12,9 @@ def _make_registry() -> ProviderSessionRegistry:
     return ProviderSessionRegistry()
 
 
-def _create_session(registry: ProviderSessionRegistry, mc_session_id: str = "s1") -> ProviderSessionRecord:
+def _create_session(
+    registry: ProviderSessionRegistry, mc_session_id: str = "s1"
+) -> ProviderSessionRecord:
     return registry.create(
         mc_session_id=mc_session_id,
         provider="test-provider",

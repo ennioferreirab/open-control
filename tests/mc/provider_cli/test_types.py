@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from mc.contexts.provider_cli.types import (
     ParsedCliEvent,
     ProviderProcessHandle,

@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import signal
 
-import pytest
-
 from mc.contexts.provider_cli.types import ProviderProcessHandle
 from mc.runtime.provider_cli.process_supervisor import ProviderProcessSupervisor
 
@@ -186,7 +184,6 @@ class TestProviderProcessSupervisor:
 
     async def test_launch_inherits_env_when_none(self) -> None:
         """When env=None, inherit the current process environment."""
-        import os
 
         supervisor = ProviderProcessSupervisor()
         # HOME is always set in normal environments

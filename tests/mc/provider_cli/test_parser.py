@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from mc.contexts.provider_cli.parser import ProviderCLIParser
-from mc.contexts.provider_cli.types import ParsedCliEvent, ProviderProcessHandle, ProviderSessionSnapshot
+from mc.contexts.provider_cli.types import (
+    ParsedCliEvent,
+    ProviderProcessHandle,
+    ProviderSessionSnapshot,
+)
 
 
 class _ConcreteParser:

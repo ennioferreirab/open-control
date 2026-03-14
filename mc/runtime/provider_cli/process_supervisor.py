@@ -104,7 +104,9 @@ class ProviderProcessSupervisor:
         proc = self._processes.get(handle.mc_session_id)
         if proc is None:
             return None
-        return await proc.wait()
+        exit_code = await proc.wait()
+        self._processes.pop(handle.mc_session_id, None)
+        return exit_code
 
     async def send_signal(self, handle: ProviderProcessHandle, sig: signal.Signals) -> None:
         """Send *sig* to the process group owned by *handle*.

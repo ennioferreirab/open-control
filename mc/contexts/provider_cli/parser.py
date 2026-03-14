@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from mc.contexts.provider_cli.types import (
     ParsedCliEvent,
@@ -11,6 +11,7 @@ from mc.contexts.provider_cli.types import (
 )
 
 
+@runtime_checkable
 class ProviderCLIParser(Protocol):
     """Protocol for provider-specific CLI adapters."""
 
