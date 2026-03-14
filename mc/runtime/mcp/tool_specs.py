@@ -389,6 +389,13 @@ PHASE1_TOOLS: list[Tool] = [
                                         },
                                         "type": {
                                             "type": "string",
+                                            "enum": [
+                                                "agent",
+                                                "human",
+                                                "checkpoint",
+                                                "review",
+                                                "system",
+                                            ],
                                             "description": "Step type.",
                                         },
                                         "agentKey": {

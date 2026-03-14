@@ -357,7 +357,9 @@ class TestSpecToolsDispatch:
             )
 
         assert len(result) == 1
-        assert "not reachable" in result[0].text.lower() or "mission control" in result[0].text.lower()
+        assert (
+            "not reachable" in result[0].text.lower() or "mission control" in result[0].text.lower()
+        )
 
     async def test_publish_squad_graph_forwarded_via_ipc(self):
         """publish_squad_graph dispatches to IPC with correct payload."""
@@ -405,7 +407,9 @@ class TestSpecToolsDispatch:
             )
 
         assert len(result) == 1
-        assert "not reachable" in result[0].text.lower() or "mission control" in result[0].text.lower()
+        assert (
+            "not reachable" in result[0].text.lower() or "mission control" in result[0].text.lower()
+        )
 
     async def test_create_agent_spec_ipc_error_returned(self):
         """IPC error response for create_agent_spec is returned to caller."""

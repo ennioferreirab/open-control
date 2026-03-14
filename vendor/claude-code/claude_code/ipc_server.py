@@ -62,6 +62,8 @@ class MCSocketServer:
         self.register("report_progress", self._handle_report_progress)
         self.register("cron", self._handle_cron)
         self.register("emit_supervision_event", self._handle_emit_supervision_event)
+        self.register("create_agent_spec", self._handle_create_agent_spec)
+        self.register("publish_squad_graph", self._handle_publish_squad_graph)
 
     # ── Registration ──────────────────────────────────────────────────
 
@@ -528,3 +530,72 @@ class MCSocketServer:
         event = normalize_provider_event(provider=provider, raw_event=raw_event)
         metadata = self._interactive_supervisor.handle_event(event)
         return {"status": "ok", "session_id": metadata.get("session_id")}
+
+    async def _handle_create_agent_spec(
+        self,
+        name: str,
+        role: str,
+        display_name: str | None = None,
+        responsibilities: list[str] | None = None,
+        non_goals: list[str] | None = None,
+        principles: list[str] | None = None,
+        working_style: str | None = None,
+        quality_rules: list[str] | None = None,
+        anti_patterns: list[str] | None = None,
+        output_contract: str | None = None,
+        tool_policy: str | None = None,
+        memory_policy: str | None = None,
+        execution_policy: str | None = None,
+        review_policy_ref: str | None = None,
+        skills: list[str] | None = None,
+        model: str | None = None,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create and publish an agent spec V2 via the bridge."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            spec_id = await asyncio.to_thread(
+                self._bridge.create_agent_spec,
+                name=name,
+                role=role,
+                display_name=display_name,
+                responsibilities=responsibilities,
+                non_goals=non_goals,
+                principles=principles,
+                working_style=working_style,
+                quality_rules=quality_rules,
+                anti_patterns=anti_patterns,
+                output_contract=output_contract,
+                tool_policy=tool_policy,
+                memory_policy=memory_policy,
+                execution_policy=execution_policy,
+                review_policy_ref=review_policy_ref,
+                skills=skills,
+                model=model,
+            )
+            if spec_id:
+                await asyncio.to_thread(self._bridge.publish_agent_spec, spec_id)
+            return {"spec_id": str(spec_id) if spec_id else "ok"}
+        except Exception as exc:
+            logger.exception("create_agent_spec failed")
+            return {"error": str(exc)}
+
+    async def _handle_publish_squad_graph(
+        self,
+        graph: dict[str, Any],
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Publish a complete squad graph via the bridge."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            squad_id = await asyncio.to_thread(self._bridge.publish_squad_graph, graph)
+            return {"squad_id": str(squad_id) if squad_id else "ok"}
+        except Exception as exc:
+            logger.exception("publish_squad_graph failed")
+            return {"error": str(exc)}
