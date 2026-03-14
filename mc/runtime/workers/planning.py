@@ -90,7 +90,9 @@ class PlanningWorker:
 
         agents_data = await asyncio.to_thread(self._bridge.list_agents)
         agents = [AgentData(**filter_agent_fields(agent)) for agent in agents_data]
-        agents = [agent for agent in agents if agent.enabled is not False and _is_delegatable(agent)]
+        agents = [
+            agent for agent in agents if agent.enabled is not False and _is_delegatable(agent)
+        ]
 
         board_id = task_data.get("board_id")
         if board_id:
@@ -134,18 +136,34 @@ class PlanningWorker:
         )
 
         try:
-            planning_model = None
+            # Use the Lead Agent's configured model for planning.
+            # Lead Agent is excluded from the delegatable agents list,
+            # so we look it up from the full agents_data.
+            lead_agent_raw = next(
+                (a for a in agents_data if a.get("name") == self._lead_agent_name), None
+            )
+            planning_model = lead_agent_raw.get("model") if lead_agent_raw else None
             planning_reasoning_level = None
-            try:
-                from mc.infrastructure.providers.tier_resolver import TierResolver
 
-                tier_resolver = TierResolver(self._bridge)
-                planning_model = tier_resolver.resolve_model("tier:standard-medium")
-                planning_reasoning_level = tier_resolver.resolve_reasoning_level(
-                    "tier:standard-medium"
-                )
-            except (ValueError, Exception) as exc:
-                logger.debug("[planning] Could not resolve planning tier: %s", exc)
+            # If the Lead Agent model is a tier reference, resolve it.
+            if planning_model:
+                from mc.types import is_tier_reference
+
+                if is_tier_reference(planning_model):
+                    try:
+                        from mc.infrastructure.providers.tier_resolver import TierResolver
+
+                        tier_resolver = TierResolver(self._bridge)
+                        planning_reasoning_level = tier_resolver.resolve_reasoning_level(
+                            planning_model
+                        )
+                        planning_model = tier_resolver.resolve_model(planning_model)
+                    except (ValueError, Exception) as exc:
+                        logger.warning(
+                            "[planning] Tier resolution failed for lead-agent model: %s", exc
+                        )
+
+            logger.info("[planning] Using lead-agent model for planning: %s", planning_model)
 
             planner = TaskPlanner(self._bridge)
             plan = await planner.plan_task(
@@ -266,9 +284,7 @@ class PlanningWorker:
                 title,
                 len(created_step_ids),
             )
-            asyncio.create_task(
-                self._step_dispatcher.dispatch_steps(task_id, created_step_ids)
-            )
+            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
             logger.info(
                 "[planning] Task '%s': step dispatch started (autonomous mode)",
                 title,
