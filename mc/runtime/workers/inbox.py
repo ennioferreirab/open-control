@@ -65,9 +65,7 @@ class InboxWorker:
         )
 
         if auto_title and description:
-            generated_title = await generate_title_via_low_agent(
-                self._bridge, description
-            )
+            generated_title = await generate_title_via_low_agent(self._bridge, description)
             if generated_title:
                 title = generated_title
                 await asyncio.to_thread(
@@ -99,6 +97,29 @@ class InboxWorker:
                 "[inbox] auto_title=True but no description for task %s",
                 task_id,
             )
+
+        # Layer 2 defense: bypass planning for workflow missions whose execution
+        # plan was already compiled at launch time.  Routing them through
+        # planning would overwrite the workflow plan with a lead-agent plan.
+        execution_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
+        is_workflow_plan = execution_plan.get("generatedBy") == "workflow"
+        work_mode = task_data.get("work_mode") or task_data.get("workMode")
+
+        if work_mode == "ai_workflow" and is_workflow_plan:
+            await asyncio.to_thread(
+                self._bridge.update_task_status,
+                task_id,
+                "review",
+                None,
+                f"Workflow plan ready for kick-off: '{title}'",
+                True,  # awaiting_kickoff
+            )
+            logger.info(
+                "[inbox] Workflow task %s ('%s') -> review (awaitingKickoff); bypassing planning",
+                task_id,
+                title,
+            )
+            return
 
         next_status = "assigned" if assigned_agent else "planning"
         await asyncio.to_thread(
