@@ -44,7 +44,7 @@ export function useCreateSquadDraft(): UseCreateSquadDraftReturn {
   const [draft, setDraft] = useState<SquadSpecDraft>(EMPTY_SQUAD_DRAFT);
   const [isSaving, setIsSaving] = useState(false);
 
-  const createSquadSpec = useMutation(api.squadSpecs.create);
+  const publishGraphMutation = useMutation(api.squadSpecs.publishGraph);
 
   const updateDraft = useCallback((patch: Partial<SquadSpecDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -54,12 +54,46 @@ export function useCreateSquadDraft(): UseCreateSquadDraftReturn {
     if (!draft.name) return null;
     setIsSaving(true);
     try {
-      await createSquadSpec({
-        name: draft.name,
-        displayName: draft.displayName || draft.name,
-        description: draft.description || undefined,
-        outcome: draft.outcome || undefined,
-        agentSpecIds: [],
+      // Build the workflow steps from the draft
+      const workflowSteps = draft.workflowSteps.map((step) => ({
+        key: step.id,
+        type: step.type,
+        title: step.title,
+        description: step.description || undefined,
+      }));
+
+      // Build the agents list from agentRoles
+      const agents = draft.agentRoles.map((ar) => ({
+        key: ar.name,
+        name: ar.name,
+        role: ar.role,
+      }));
+
+      // Build workflows list
+      const workflows =
+        workflowSteps.length > 0
+          ? [
+              {
+                key: "default",
+                name: "Default Workflow",
+                steps: workflowSteps,
+                exitCriteria: draft.exitCriteria || undefined,
+              },
+            ]
+          : [];
+
+      await publishGraphMutation({
+        graph: {
+          squad: {
+            name: draft.name,
+            displayName: draft.displayName || draft.name,
+            description: draft.description || undefined,
+            outcome: draft.outcome || undefined,
+          },
+          agents,
+          workflows,
+          reviewPolicy: draft.reviewPolicy || undefined,
+        },
       });
       return draft.name;
     } catch {
@@ -67,7 +101,7 @@ export function useCreateSquadDraft(): UseCreateSquadDraftReturn {
     } finally {
       setIsSaving(false);
     }
-  }, [draft, createSquadSpec]);
+  }, [draft, publishGraphMutation]);
 
   return { draft, isSaving, updateDraft, publishDraft };
 }
