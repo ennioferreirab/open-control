@@ -122,14 +122,28 @@ class InteractiveExecutionSupervisor:
                 if event.step_id
                 else "Interactive turn started"
             )
-            self._bridge.update_task_status(
-                event.task_id,
-                "in_progress",
-                agent_name=event.agent_name,
-                description=description,
-            )
+            try:
+                self._bridge.update_task_status(
+                    event.task_id,
+                    "in_progress",
+                    agent_name=event.agent_name,
+                    description=description,
+                )
+            except Exception as exc:
+                if _is_same_status_error(exc, "in_progress"):
+                    logger.debug(
+                        "Task %s already in_progress — idempotent, skipping", event.task_id
+                    )
+                else:
+                    raise
         if event.step_id:
-            self._bridge.update_step_status(event.step_id, "running")
+            try:
+                self._bridge.update_step_status(event.step_id, "running")
+            except Exception as exc:
+                if _is_same_status_error(exc, "running"):
+                    logger.debug("Step %s already running — idempotent, skipping", event.step_id)
+                else:
+                    raise
         if event.task_id and event.agent_name:
             self._bridge.create_activity(
                 ActivityEventType.STEP_STARTED,
@@ -202,3 +216,13 @@ def _string_or_none(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _is_same_status_error(exc: Exception, status: str) -> bool:
+    """Return True if *exc* represents a no-op same-status transition for *status*.
+
+    Convex validators raise when the current status equals the requested status.
+    The message contains a pattern like "<status> -> <status>".
+    """
+    msg = str(exc)
+    return f"{status} -> {status}" in msg

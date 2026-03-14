@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from mc.contexts.interactive.supervision_types import InteractiveSupervisionEvent
 from mc.contexts.interactive.supervisor import InteractiveExecutionSupervisor
 from mc.types import ActivityEventType
@@ -287,3 +289,81 @@ def test_supervisor_record_supervision_no_null_values_in_payload() -> None:
 
     null_fields = [k for k, v in event_payload.items() if v is None]
     assert null_fields == [], f"Payload must not contain null values, found: {null_fields}"
+
+
+# ── Task 2: idempotent supervision status projection ─────────────────
+
+
+def test_supervisor_turn_started_is_idempotent_when_task_already_in_progress() -> None:
+    """Repeated turn_started must not fail when task is already in_progress."""
+    bridge = MagicMock()
+    # Simulate update_task_status raising the same-status transition error
+    bridge.update_task_status.side_effect = Exception(
+        "Cannot transition in_progress -> in_progress"
+    )
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    # Should not raise even though update_task_status raises a same-status error
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="turn_started",
+            session_id="interactive_session:claude",
+            provider="claude-code",
+        )
+    )
+
+
+def test_supervisor_item_started_is_idempotent_when_step_already_running() -> None:
+    """Repeated item_started must not fail when step is already running."""
+    bridge = MagicMock()
+    bridge.update_step_status.side_effect = Exception("Cannot transition running -> running")
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    # Should not raise even though update_step_status raises a same-status error
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="item_started",
+            session_id="interactive_session:claude",
+            provider="claude-code",
+        )
+    )
+
+
+def test_supervisor_genuine_transition_failure_still_surfaces() -> None:
+    """Unexpected transition failures must not be silently swallowed."""
+    bridge = MagicMock()
+    bridge.update_task_status.side_effect = Exception("Network timeout connecting to Convex")
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    with pytest.raises(Exception, match="Network timeout"):
+        supervisor.handle_event(
+            InteractiveSupervisionEvent(
+                kind="turn_started",
+                session_id="interactive_session:claude",
+                provider="claude-code",
+            )
+        )

@@ -473,3 +473,52 @@ class TestSettingsRepository:
         client = _make_client_mock()
         repo = SettingsRepository(client)
         assert repo._client is client
+
+
+# ── Idempotency: same-status transition behavior ──────────────────────
+
+
+class TestStepRepositoryIdempotency:
+    """Repositories surface mutation errors transparently; same-status
+    suppression is the caller's responsibility (e.g. the supervisor)."""
+
+    def test_update_step_status_propagates_same_status_error(self):
+        """StepRepository re-raises same-status errors from Convex."""
+        client = _make_client_mock()
+        client.mutation.side_effect = Exception("Cannot transition running -> running")
+        repo = StepRepository(client)
+
+        with pytest.raises(Exception, match="running -> running"):
+            repo.update_step_status("step-1", "running")
+
+    def test_update_step_status_propagates_genuine_error(self):
+        """StepRepository re-raises unexpected Convex errors."""
+        client = _make_client_mock()
+        client.mutation.side_effect = RuntimeError("Network error")
+        repo = StepRepository(client)
+
+        with pytest.raises(RuntimeError, match="Network error"):
+            repo.update_step_status("step-1", "running")
+
+
+class TestTaskRepositoryIdempotency:
+    """Repositories surface mutation errors transparently; same-status
+    suppression is the caller's responsibility (e.g. the supervisor)."""
+
+    def test_update_task_status_propagates_same_status_error(self):
+        """TaskRepository re-raises same-status errors from Convex."""
+        client = _make_client_mock()
+        client.mutation.side_effect = Exception("Cannot transition in_progress -> in_progress")
+        repo = TaskRepository(client)
+
+        with pytest.raises(Exception, match="in_progress -> in_progress"):
+            repo.update_task_status("task-1", "in_progress")
+
+    def test_update_task_status_propagates_genuine_error(self):
+        """TaskRepository re-raises unexpected Convex errors."""
+        client = _make_client_mock()
+        client.mutation.side_effect = RuntimeError("Convex unreachable")
+        repo = TaskRepository(client)
+
+        with pytest.raises(RuntimeError, match="Convex unreachable"):
+            repo.update_task_status("task-1", "in_progress")
