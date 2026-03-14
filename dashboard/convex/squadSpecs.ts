@@ -47,6 +47,7 @@ export const publish = internalMutation({
     await ctx.db.patch(args.specId as Id<"squadSpecs">, {
       status: "published",
       version: spec.version + 1,
+      publishedAt: now,
       updatedAt: now,
     });
   },

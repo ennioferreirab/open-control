@@ -83,7 +83,9 @@ class KickoffResumeWorker:
         execution_plan = task_data.get("execution_plan") or {}
         generated_at = ""
         if isinstance(execution_plan, dict):
-            generated_at = str(execution_plan.get("generated_at") or execution_plan.get("generatedAt") or "")
+            generated_at = str(
+                execution_plan.get("generated_at") or execution_plan.get("generatedAt") or ""
+            )
         return f"{updated_at}|{generated_at}"
 
     async def _process_task(self, task_id: str, task_data: dict[str, Any]) -> None:
@@ -134,7 +136,9 @@ class KickoffResumeWorker:
                 title,
                 len(dispatchable_step_ids),
             )
-            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, dispatchable_step_ids))
+            asyncio.create_task(
+                self._step_dispatcher.dispatch_steps(task_id, dispatchable_step_ids)
+            )
         else:
             logger.info(
                 "[kickoff] Resumed task '%s' has no dispatchable steps (may still have running steps)",

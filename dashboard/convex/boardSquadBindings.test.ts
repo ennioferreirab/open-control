@@ -74,10 +74,10 @@ describe("boardSquadBindings.create", () => {
     await handler(ctx, {
       boardId: "board-id-1",
       squadSpecId: "squad-spec-id-1",
-      defaultWorkflowSpecId: "workflow-spec-id-1",
+      defaultWorkflowSpecIdOverride: "workflow-spec-id-1",
     });
 
-    expect(inserts[0].value.defaultWorkflowSpecId).toBe("workflow-spec-id-1");
+    expect(inserts[0].value.defaultWorkflowSpecIdOverride).toBe("workflow-spec-id-1");
   });
 
   it("starts as enabled by default", async () => {

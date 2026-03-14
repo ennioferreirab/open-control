@@ -68,9 +68,7 @@ class StepRepository:
             args["error_message"] = error_message
 
         result = self._client.mutation("steps:updateStatus", args)
-        self._log_state_transition(
-            "step", f"Step {step_id} status changed to {status}"
-        )
+        self._log_state_transition("step", f"Step {step_id} status changed to {status}")
         return result
 
     def get_steps_by_task(self, task_id: str) -> list[dict[str, Any]]:
