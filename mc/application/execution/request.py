@@ -40,6 +40,8 @@ class RunnerType(str, Enum):
     NANOBOT = "nanobot"
     CLAUDE_CODE = "claude-code"
     HUMAN = "human"
+    # INTERACTIVE_TUI is the legacy PTY/tmux path — kept as an escape hatch only.
+    # The production default is now PROVIDER_CLI (Story 28.7).
     INTERACTIVE_TUI = "interactive-tui"
     PROVIDER_CLI = "provider-cli"
 

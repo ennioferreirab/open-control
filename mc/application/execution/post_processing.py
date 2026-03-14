@@ -375,6 +375,13 @@ def build_execution_engine(
     interactive_session_coordinator: Any | None = None,
 ) -> ExecutionEngine:
     """Create the canonical execution engine used by production runtime paths."""
+    # Both PROVIDER_CLI (production default) and INTERACTIVE_TUI (escape hatch)
+    # use the same strategy implementation — the coordinator drives the session
+    # regardless of the PTY/tmux layer. (Story 28.7)
+    _interactive_strategy = InteractiveTuiRunnerStrategy(
+        bridge=bridge,
+        session_coordinator=interactive_session_coordinator,
+    )
     return ExecutionEngine(
         strategies={
             RunnerType.NANOBOT: NanobotRunnerStrategy(),
@@ -384,10 +391,8 @@ def build_execution_engine(
                 ask_user_registry=ask_user_registry,
             ),
             RunnerType.HUMAN: HumanRunnerStrategy(),
-            RunnerType.INTERACTIVE_TUI: InteractiveTuiRunnerStrategy(
-                bridge=bridge,
-                session_coordinator=interactive_session_coordinator,
-            ),
+            RunnerType.PROVIDER_CLI: _interactive_strategy,
+            RunnerType.INTERACTIVE_TUI: _interactive_strategy,
         },
         post_execution_hooks=[
             relocate_invalid_memory_hook,

@@ -23,6 +23,8 @@ import signal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mc.application.execution.interactive_mode import INTERACTIVE_MODE_ENV
+
 # Re-export AgentGateway from crash_handler for backward compatibility
 from mc.contexts.execution.crash_recovery import MAX_AUTO_RETRIES, AgentGateway  # noqa: F401
 from mc.infrastructure.agent_bootstrap import (  # noqa: F401
@@ -178,16 +180,27 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         admin_key=os.environ.get("CONVEX_ADMIN_KEY", ""),
         admin_url=os.environ.get("CONVEX_URL", ""),
     )
-    interactive_runtime = build_interactive_runtime(
-        bridge,
-        cron_service=cron,
-    )
-    runtime_ctx.services["interactive_runtime"] = interactive_runtime
-    runtime_ctx.services["interactive_session_service"] = interactive_runtime.service
-    runtime_ctx.services["interactive_session_coordinator"] = interactive_runtime.service
-    runtime_ctx.services["interactive_socket_transport"] = interactive_runtime.transport
-    runtime_ctx.services["interactive_execution_supervisor"] = interactive_runtime.supervisor
-    await interactive_runtime.server.start()
+    # Build the legacy PTY/tmux interactive runtime ONLY when the explicit escape
+    # hatch is active (MC_INTERACTIVE_EXECUTION_MODE=interactive-tui).
+    # The production default (PROVIDER_CLI) does not need the TmuxSessionManager
+    # or the websocket server. (Story 28.7)
+    _exec_mode = os.environ.get(INTERACTIVE_MODE_ENV, "provider-cli").strip().lower()
+    _tui_escape_hatch = _exec_mode == "interactive-tui"
+    if _tui_escape_hatch:
+        interactive_runtime = build_interactive_runtime(
+            bridge,
+            cron_service=cron,
+        )
+        runtime_ctx.services["interactive_runtime"] = interactive_runtime
+        runtime_ctx.services["interactive_session_service"] = interactive_runtime.service
+        runtime_ctx.services["interactive_session_coordinator"] = interactive_runtime.service
+        runtime_ctx.services["interactive_socket_transport"] = interactive_runtime.transport
+        runtime_ctx.services["interactive_execution_supervisor"] = interactive_runtime.supervisor
+        await interactive_runtime.server.start()
+        logger.info("[gateway] Legacy TUI runtime started (escape hatch active)")
+    else:
+        interactive_runtime = None
+        logger.info("[gateway] Provider-CLI path active — TUI runtime not started")
 
     orchestrator = TaskOrchestrator(
         runtime_ctx,
@@ -282,7 +295,8 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     logger.info("[gateway] Agent Gateway stopping...")
 
     cron.stop()
-    await interactive_runtime.server.stop()
+    if interactive_runtime is not None:
+        await interactive_runtime.server.stop()
 
     # Cancel all loops gracefully
     inbox_task.cancel()
