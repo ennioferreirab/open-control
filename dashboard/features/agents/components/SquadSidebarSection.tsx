@@ -8,11 +8,15 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useSquadSidebarData } from "@/features/agents/hooks/useSquadSidebarData";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface SquadSidebarSectionProps {
   onSelectSquad: (squadId: Id<"squadSpecs">) => void;
+  deleteMode?: boolean;
+  selectedSquadIds?: Set<string>;
+  onToggleSquadSelect?: (squadId: Id<"squadSpecs">, displayName: string) => void;
 }
 
 function getSquadInitials(displayName: string): string {
@@ -23,7 +27,12 @@ function getSquadInitials(displayName: string): string {
   return displayName.slice(0, 2).toUpperCase();
 }
 
-export function SquadSidebarSection({ onSelectSquad }: SquadSidebarSectionProps) {
+export function SquadSidebarSection({
+  onSelectSquad,
+  deleteMode,
+  selectedSquadIds,
+  onToggleSquadSelect,
+}: SquadSidebarSectionProps) {
   const { squads, isLoading } = useSquadSidebarData();
 
   return (
@@ -39,10 +48,14 @@ export function SquadSidebarSection({ onSelectSquad }: SquadSidebarSectionProps)
       )}
       <SidebarMenu>
         {squads.map((squad) => (
-          <SidebarMenuItem key={squad._id}>
+          <SidebarMenuItem key={squad._id} className="flex items-center">
             <SidebarMenuButton
               size="lg"
-              onClick={() => onSelectSquad(squad._id)}
+              onClick={() =>
+                deleteMode
+                  ? onToggleSquadSelect?.(squad._id, squad.displayName)
+                  : onSelectSquad(squad._id)
+              }
               className="!h-auto cursor-pointer"
               tooltip={`${squad.displayName}${squad.description ? ` — ${squad.description}` : ""}`}
             >
@@ -60,6 +73,15 @@ export function SquadSidebarSection({ onSelectSquad }: SquadSidebarSectionProps)
                 )}
               </div>
             </SidebarMenuButton>
+            {deleteMode && (
+              <div className="shrink-0 px-2">
+                <Checkbox
+                  checked={selectedSquadIds?.has(squad._id)}
+                  onCheckedChange={() => onToggleSquadSelect?.(squad._id, squad.displayName)}
+                  aria-label={`Select ${squad.displayName}`}
+                />
+              </div>
+            )}
           </SidebarMenuItem>
         ))}
       </SidebarMenu>

@@ -20,8 +20,12 @@ export interface UseAuthoringSessionReturn {
   isLoading: boolean;
   /** Error from the last request, if any. */
   error: string | null;
+  /** Readiness score (0–1) from the last LLM response. */
+  readiness: number;
   /** Send a user message and update session state. */
   sendMessage: (content: string) => Promise<void>;
+  /** Manually patch the accumulated draft graph (for user edits). */
+  patchDraftGraph: (patch: Record<string, unknown>) => void;
   /** Reset session to initial state. */
   reset: () => void;
 }
@@ -44,6 +48,7 @@ export function useAuthoringSession(mode: AuthoringMode): UseAuthoringSessionRet
   const [draftGraph, setDraftGraph] = useState<Record<string, unknown>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [readiness, setReadiness] = useState(0);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -84,6 +89,7 @@ export function useAuthoringSession(mode: AuthoringMode): UseAuthoringSessionRet
           ...prev,
           ...(parsed.draftGraphPatch as Record<string, unknown>),
         }));
+        setReadiness(parsed.readiness);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         setError(message);
@@ -96,12 +102,17 @@ export function useAuthoringSession(mode: AuthoringMode): UseAuthoringSessionRet
     [mode, phase, transcript],
   );
 
+  const patchDraftGraph = useCallback((patch: Record<string, unknown>) => {
+    setDraftGraph((prev) => ({ ...prev, ...patch }));
+  }, []);
+
   const reset = useCallback(() => {
     setPhase("discovery");
     setTranscript([]);
     setDraftGraph({});
     setError(null);
     setIsLoading(false);
+    setReadiness(0);
   }, []);
 
   return {
@@ -110,7 +121,9 @@ export function useAuthoringSession(mode: AuthoringMode): UseAuthoringSessionRet
     draftGraph,
     isLoading,
     error,
+    readiness,
     sendMessage,
+    patchDraftGraph,
     reset,
   };
 }

@@ -30,6 +30,29 @@ interface InteractiveTerminalPanelProps {
   controlMode?: "agent" | "human";
 }
 
+async function copyTerminalSelection(selection: string): Promise<void> {
+  if (!selection) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(selection);
+    return;
+  } catch {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = selection;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  }
+}
+
 export function InteractiveTerminalPanel({
   agentName,
   provider,
@@ -71,6 +94,7 @@ export function InteractiveTerminalPanel({
   useEffect(() => {
     mountedRef.current = true;
     const terminal = new Terminal({
+      convertEol: true,
       cursorBlink: true,
       fontFamily: '"SFMono-Regular", "Menlo", "Monaco", monospace',
       fontSize: 12,
@@ -109,6 +133,48 @@ export function InteractiveTerminalPanel({
       );
     };
 
+    const fitAndResize = () => {
+      fitAddon.fit();
+      sendResize();
+    };
+
+    terminal.attachCustomKeyEventHandler((event) => {
+      const isCopyShortcut =
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        event.key.toLowerCase() === "c" &&
+        terminal.hasSelection();
+      if (!isCopyShortcut) {
+        return true;
+      }
+      void copyTerminalSelection(terminal.getSelection());
+      event.preventDefault();
+      return false;
+    });
+
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      const isCopyShortcut =
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        event.key.toLowerCase() === "c" &&
+        terminal.hasSelection();
+      if (!isCopyShortcut) {
+        return;
+      }
+      event.preventDefault();
+      void copyTerminalSelection(terminal.getSelection());
+    };
+
+    const handleDocumentCopy = (event: ClipboardEvent) => {
+      if (!terminal.hasSelection()) {
+        return;
+      }
+      event.clipboardData?.setData("text/plain", terminal.getSelection());
+      event.preventDefault();
+    };
+    document.addEventListener("keydown", handleDocumentKeyDown, true);
+    document.addEventListener("copy", handleDocumentCopy);
+
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
       sendResize();
@@ -116,7 +182,8 @@ export function InteractiveTerminalPanel({
     resizeObserver.observe(container);
 
     const inputSubscription = terminal.onData((data) => {
-      if (controlModeRef.current !== "human") {
+      const allowsDirectInput = scopeKind === "chat" || controlModeRef.current === "human";
+      if (!allowsDirectInput) {
         return;
       }
       const socket = socketRef.current;
@@ -185,6 +252,7 @@ export function InteractiveTerminalPanel({
               sessionIdRef.current = payload.sessionId ?? null;
               attachTokenRef.current = payload.attachToken ?? null;
               setSessionId(payload.sessionId ?? null);
+              requestAnimationFrame(fitAndResize);
               return;
             }
             if (payload.type === "error") {
@@ -238,6 +306,8 @@ export function InteractiveTerminalPanel({
       const activeSocket = socketRef.current;
       socketRef.current = null;
       activeSocket?.close();
+      document.removeEventListener("keydown", handleDocumentKeyDown, true);
+      document.removeEventListener("copy", handleDocumentCopy);
       inputSubscription.dispose();
       resizeObserver.disconnect();
       terminal.dispose();

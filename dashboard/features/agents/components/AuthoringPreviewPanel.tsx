@@ -13,6 +13,7 @@ interface AuthoringPreviewPanelProps {
   draftGraph: Record<string, unknown>;
   phase: AuthoringPhase;
   readiness: number;
+  onAgentClick?: () => void;
 }
 
 function ReadinessBar({ value }: { value: number }) {
@@ -37,6 +38,7 @@ export function AuthoringPreviewPanel({
   draftGraph,
   phase,
   readiness,
+  onAgentClick,
 }: AuthoringPreviewPanelProps) {
   const agents = Array.isArray(draftGraph.agents) ? (draftGraph.agents as AgentEntry[]) : [];
   const firstAgent = agents[0];
@@ -54,7 +56,11 @@ export function AuthoringPreviewPanel({
       </div>
 
       {firstAgent ? (
-        <div className="space-y-1 text-muted-foreground">
+        <button
+          type="button"
+          onClick={onAgentClick}
+          className="w-full text-left space-y-1 text-muted-foreground rounded-md p-2 -mx-2 transition-colors hover:bg-muted/60 cursor-pointer"
+        >
           {(firstAgent.name ?? firstAgent.key) && (
             <p className="font-medium text-foreground capitalize">
               {String(firstAgent.name ?? firstAgent.key)}
@@ -64,7 +70,8 @@ export function AuthoringPreviewPanel({
           {agents.length > 1 && (
             <p className="text-xs text-muted-foreground/70">+{agents.length - 1} more agents</p>
           )}
-        </div>
+          <p className="text-xs text-primary/70 mt-1">Click to view & edit</p>
+        </button>
       ) : (
         <p className="text-xs text-muted-foreground">No agents defined yet.</p>
       )}

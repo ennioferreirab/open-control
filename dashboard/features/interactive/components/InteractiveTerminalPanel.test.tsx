@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InteractiveTerminalPanel } from "./InteractiveTerminalPanel";
 
+const mockClipboardWriteText = vi.fn();
 const mockOpen = vi.fn();
 const mockLoadAddon = vi.fn();
 const mockWrite = vi.fn();
@@ -10,11 +11,16 @@ const mockDispose = vi.fn();
 const mockFit = vi.fn();
 const mockOnDataDispose = vi.fn();
 const terminalOnDataHandlers: Array<(data: string) => void> = [];
+const mockAttachCustomKeyEventHandler = vi.fn();
 const mockRequestTakeover = vi.fn();
 const mockResumeAgent = vi.fn();
 const mockMarkDone = vi.fn();
 
 let socketInstance: FakeWebSocket | null = null;
+let terminalCustomKeyEventHandler: ((event: KeyboardEvent) => boolean) | null = null;
+let terminalHasSelection = false;
+let terminalSelection = "";
+let terminalOptions: Record<string, unknown> | null = null;
 
 class FakeWebSocket {
   static OPEN = 1;
@@ -47,10 +53,20 @@ vi.mock("@xterm/xterm", () => ({
     cols = 120;
     rows = 40;
 
+    constructor(options: Record<string, unknown>) {
+      terminalOptions = options;
+    }
+
     open = mockOpen;
     loadAddon = mockLoadAddon;
     write = mockWrite;
     dispose = mockDispose;
+    hasSelection = () => terminalHasSelection;
+    getSelection = () => terminalSelection;
+    attachCustomKeyEventHandler = (handler: (event: KeyboardEvent) => boolean) => {
+      terminalCustomKeyEventHandler = handler;
+      mockAttachCustomKeyEventHandler(handler);
+    };
 
     onData(handler: (data: string) => void) {
       terminalOnDataHandlers.push(handler);
@@ -80,12 +96,18 @@ describe("InteractiveTerminalPanel", () => {
   beforeEach(() => {
     socketInstance = null;
     terminalOnDataHandlers.length = 0;
+    terminalCustomKeyEventHandler = null;
+    terminalHasSelection = false;
+    terminalSelection = "";
+    terminalOptions = null;
+    mockClipboardWriteText.mockClear();
     mockOpen.mockClear();
     mockLoadAddon.mockClear();
     mockWrite.mockClear();
     mockDispose.mockClear();
     mockFit.mockClear();
     mockOnDataDispose.mockClear();
+    mockAttachCustomKeyEventHandler.mockClear();
     mockRequestTakeover.mockClear();
     mockResumeAgent.mockClear();
     mockMarkDone.mockClear();
@@ -101,9 +123,19 @@ describe("InteractiveTerminalPanel", () => {
         disconnect() {}
       },
     });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: mockClipboardWriteText },
+    });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
   });
 
   afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -116,6 +148,7 @@ describe("InteractiveTerminalPanel", () => {
     expect(socketInstance?.url).toContain("agentName=claude-pair");
     expect(socketInstance?.url).toContain("scopeKind=chat");
     expect(socketInstance?.url).toContain("scopeId=chat%3Aclaude-pair");
+    expect(terminalOptions?.convertEol).toBe(true);
   });
 
   it("connects to the interactive runtime with task-scoped session parameters", async () => {
@@ -200,7 +233,30 @@ describe("InteractiveTerminalPanel", () => {
     expect(socketInstance).not.toBe(firstSocket);
     expect(socketInstance?.url).toContain("sessionId=interactive_session%3Aclaude");
     expect(socketInstance?.url).toContain("attachToken=attach-token-123");
-    vi.useRealTimers();
+  });
+
+  it("fits and sends a resize event after attaching to the runtime", async () => {
+    render(<InteractiveTerminalPanel agentName="claude-pair" provider="claude-code" />);
+
+    await waitFor(() => expect(socketInstance).not.toBeNull());
+
+    await act(async () => {
+      socketInstance?.onopen?.();
+      socketInstance?.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "attached",
+            sessionId: "interactive_session:claude",
+            attachToken: "attach-token-123",
+          }),
+        }),
+      );
+    });
+
+    expect(mockFit).toHaveBeenCalled();
+    expect(socketInstance?.sent).toContain(
+      JSON.stringify({ type: "resize", columns: 120, rows: 40 }),
+    );
   });
 
   it("ignores close events from stale sockets after reconnecting the effect", async () => {
@@ -223,10 +279,31 @@ describe("InteractiveTerminalPanel", () => {
     });
 
     expect(socketInstance).toBe(secondSocket);
-    vi.useRealTimers();
   });
 
   it("does not forward terminal input until human takeover is active", async () => {
+    render(
+      <InteractiveTerminalPanel
+        agentName="claude-pair"
+        provider="claude-code"
+        scopeKind="task"
+        scopeId="task-123"
+        surface="step"
+        taskId="task-123"
+      />,
+    );
+
+    await waitFor(() => expect(socketInstance).not.toBeNull());
+
+    await act(async () => {
+      socketInstance?.onopen?.();
+      terminalOnDataHandlers[0]?.("ls");
+    });
+
+    expect(socketInstance?.sent).toEqual([]);
+  });
+
+  it("forwards terminal input immediately for chat-scoped sessions", async () => {
     render(<InteractiveTerminalPanel agentName="claude-pair" provider="claude-code" />);
 
     await waitFor(() => expect(socketInstance).not.toBeNull());
@@ -236,6 +313,30 @@ describe("InteractiveTerminalPanel", () => {
       terminalOnDataHandlers[0]?.("ls");
     });
 
+    expect(socketInstance?.sent).toContain(JSON.stringify({ type: "input", data: "ls" }));
+  });
+
+  it("copies the current terminal selection with ctrl+c instead of sending SIGINT", async () => {
+    render(<InteractiveTerminalPanel agentName="claude-pair" provider="claude-code" />);
+
+    await waitFor(() => expect(socketInstance).not.toBeNull());
+
+    terminalHasSelection = true;
+    terminalSelection = "texto selecionado";
+    const preventDefault = vi.fn();
+
+    const allowed = terminalCustomKeyEventHandler?.({
+      key: "c",
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      preventDefault,
+    } as unknown as KeyboardEvent);
+    await Promise.resolve();
+
+    expect(allowed).toBe(false);
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(mockClipboardWriteText).toHaveBeenCalledWith("texto selecionado");
     expect(socketInstance?.sent).toEqual([]);
   });
 

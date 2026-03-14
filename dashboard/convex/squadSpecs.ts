@@ -70,7 +70,7 @@ export const setDefaultWorkflow = internalMutation({
   },
 });
 
-export const list = internalQuery({
+export const list = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("squadSpecs").collect();
@@ -108,6 +108,32 @@ export const getById = query({
  *
  * This mutation does NOT create tasks or execute workflows.
  */
+export const archiveSquad = mutation({
+  args: { squadSpecId: v.id("squadSpecs") },
+  handler: async (ctx, args) => {
+    const spec = await ctx.db.get(args.squadSpecId);
+    if (!spec) throw new Error("Squad not found");
+    if (spec.status === "archived") throw new Error("Already archived");
+    await ctx.db.patch(args.squadSpecId, {
+      status: "archived",
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
+export const unarchiveSquad = mutation({
+  args: { squadSpecId: v.id("squadSpecs") },
+  handler: async (ctx, args) => {
+    const spec = await ctx.db.get(args.squadSpecId);
+    if (!spec) throw new Error("Squad not found");
+    if (spec.status !== "archived") throw new Error("Squad is not archived");
+    await ctx.db.patch(args.squadSpecId, {
+      status: "published",
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
 export const publishGraph = mutation({
   args: {
     graph: v.object({

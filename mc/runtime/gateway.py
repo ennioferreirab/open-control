@@ -76,6 +76,14 @@ logger = logging.getLogger(__name__)
 _plan_negotiation_supervisor: "PlanNegotiationSupervisor | None" = None
 
 
+def _resolve_log_level(env_var: str = "MC_LOG_LEVEL") -> int:
+    """Resolve the gateway root log level from environment, defaulting to INFO."""
+
+    level_name = os.environ.get(env_var, "INFO").strip().upper()
+    level = getattr(logging, level_name, None)
+    return level if isinstance(level, int) else logging.INFO
+
+
 async def _run_plan_negotiation_manager(
     bridge: "ConvexBridge",
     ask_user_registry: "Any | None" = None,
@@ -403,5 +411,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=_resolve_log_level())
     asyncio.run(main())

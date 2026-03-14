@@ -47,11 +47,10 @@ export function InteractiveChatTabs({
         </div>
       </div>
       <div className="min-h-0 flex-1">
-        {activeTab === "chat" ? (
-          chatView
-        ) : (
+        <div className={cn("h-full", activeTab === "chat" ? "block" : "hidden")}>{chatView}</div>
+        <div className={cn("h-full", activeTab === "tui" ? "block" : "hidden")}>
           <InteractiveTerminalPanel agentName={agentName} provider={interactiveProvider} />
-        )}
+        </div>
       </div>
     </div>
   );

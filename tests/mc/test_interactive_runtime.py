@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from websockets.exceptions import ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 from websockets.frames import Close
 
 from mc.runtime.interactive import (
     InteractiveRuntime,
     InteractiveSocketServer,
+    _BenignHandshakeAbortFilter,
     build_interactive_runtime,
 )
 from mc.types import AgentData
@@ -29,6 +31,40 @@ def test_build_interactive_runtime_creates_provider_agnostic_runtime() -> None:
     assert "codex" in runtime.adapters
     assert "mc" in runtime.adapters
     assert runtime.adapters["codex"]._supervision_sink is runtime.supervisor
+
+
+def test_benign_handshake_abort_filter_drops_client_cancelled_handshake_errors() -> None:
+    filter_ = _BenignHandshakeAbortFilter()
+    record = logging.LogRecord(
+        name="mc.runtime.interactive.websocket",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg="opening handshake failed",
+        args=(),
+        exc_info=(
+            ConnectionClosedError,
+            ConnectionClosedError(None, None, None),
+            None,
+        ),
+    )
+
+    assert filter_.filter(record) is False
+
+
+def test_benign_handshake_abort_filter_keeps_other_websocket_errors() -> None:
+    filter_ = _BenignHandshakeAbortFilter()
+    record = logging.LogRecord(
+        name="mc.runtime.interactive.websocket",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg="connection handler failed",
+        args=(),
+        exc_info=(RuntimeError, RuntimeError("boom"), None),
+    )
+
+    assert filter_.filter(record) is True
 
 
 @pytest.mark.asyncio

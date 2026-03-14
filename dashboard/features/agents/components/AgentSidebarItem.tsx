@@ -4,7 +4,8 @@ import { Doc } from "@/convex/_generated/dataModel";
 import { useSidebar } from "@/components/ui/sidebar";
 import { SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAgentSidebarItemState } from "@/features/agents/hooks/useAgentSidebarItemState";
-import { RotateCcw, Trash2, Terminal } from "lucide-react";
+import { RotateCcw, Terminal } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { AgentStatus } from "@/lib/constants";
 import { useBoard } from "@/components/BoardContext";
 
@@ -47,11 +48,20 @@ interface AgentSidebarItemProps {
   agent: Doc<"agents">;
   onClick?: () => void;
   onChat?: () => void;
-  onDelete?: () => void;
   onRestore?: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentSidebarItemProps) {
+export function AgentSidebarItem({
+  agent,
+  onClick,
+  onRestore,
+  selectable,
+  selected,
+  onToggleSelect,
+}: AgentSidebarItemProps) {
   const { state, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
   const initials = getInitials(agent.displayName);
@@ -75,6 +85,10 @@ export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentS
   const ipAddress = agent.variables?.find((variable) => variable.name === "ipAddress")?.value;
 
   const handleClick = () => {
+    if (selectable) {
+      onToggleSelect?.();
+      return;
+    }
     if (isRemoteTerminal && terminalSessions && terminalSessions.length > 0) {
       const session = terminalSessions[0];
       toggleTerminal(session.sessionId, agent.name);
@@ -164,23 +178,20 @@ export function AgentSidebarItem({ agent, onClick, onDelete, onRestore }: AgentS
             </>
           )}
         </div>
-        {!onDelete && !onRestore && (
+        {!selectable && !onRestore && (
           <span
             className={`h-2 w-2 shrink-0 rounded-full transition-colors duration-200 ${statusStyle}`}
           />
         )}
       </SidebarMenuButton>
-      {onDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="shrink-0 px-2 text-muted-foreground hover:text-destructive transition-colors"
-          aria-label={`Delete ${agent.displayName}`}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+      {selectable && (
+        <div className="shrink-0 px-2">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggleSelect?.()}
+            aria-label={`Select ${agent.displayName}`}
+          />
+        </div>
       )}
       {onRestore && (
         <button

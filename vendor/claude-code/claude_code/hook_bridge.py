@@ -18,13 +18,23 @@ def _read_stdin_payload() -> dict[str, Any]:
     return json.loads(raw)
 
 
+def _warn_and_continue(message: str) -> int:
+    print(f"[mc-hook-bridge] warning: {message}", file=sys.stderr)
+    return 0
+
+
 async def _main() -> int:
     socket_path = os.environ.get("MC_SOCKET_PATH")
     session_id = os.environ.get("MC_INTERACTIVE_SESSION_ID")
     if not socket_path or not session_id:
-        raise RuntimeError("MC hook bridge requires MC_SOCKET_PATH and MC_INTERACTIVE_SESSION_ID")
+        return _warn_and_continue(
+            "MC hook bridge requires MC_SOCKET_PATH and MC_INTERACTIVE_SESSION_ID"
+        )
 
-    payload = _read_stdin_payload()
+    try:
+        payload = _read_stdin_payload()
+    except Exception as exc:
+        return _warn_and_continue(f"failed to parse hook payload: {exc}")
     event_name = payload.get("hook_event_name")
     raw_event = dict(payload)
     if event_name:
@@ -36,15 +46,18 @@ async def _main() -> int:
         raw_event["agent_name"] = os.environ["AGENT_NAME"]
 
     client = MCSocketClient(socket_path)
-    result = await client.request(
-        "emit_supervision_event",
-        {
-            "provider": "claude-code",
-            "raw_event": raw_event,
-        },
-    )
+    try:
+        result = await client.request(
+            "emit_supervision_event",
+            {
+                "provider": "claude-code",
+                "raw_event": raw_event,
+            },
+        )
+    except Exception as exc:
+        return _warn_and_continue(f"failed to emit supervision event: {exc}")
     if result.get("error"):
-        raise RuntimeError(str(result["error"]))
+        return _warn_and_continue(f"supervision event rejected: {result['error']}")
     return 0
 
 

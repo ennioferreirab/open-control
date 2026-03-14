@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import websockets
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, ConnectionClosedError, InvalidMessage
 
 from mc.contexts.interactive import (
     ClaudeCodeInteractiveAdapter,
@@ -24,6 +25,33 @@ from mc.contexts.interactive import (
 from mc.contexts.interactive.agent_loader import load_interactive_agent
 from mc.infrastructure.interactive import TerminalSize, TmuxSessionManager
 from mc.runtime.interactive_transport import InteractiveSocketTransport
+
+
+class _BenignHandshakeAbortFilter(logging.Filter):
+    """Drop noisy handshake-abort traces caused by clients cancelling connection setup."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.msg != "opening handshake failed":
+            return True
+        exc = record.exc_info[1] if record.exc_info else None
+        if isinstance(exc, ConnectionClosedError):
+            return False
+        if isinstance(exc, InvalidMessage) and isinstance(exc.__cause__, EOFError):
+            return False
+        return True
+
+
+def _interactive_server_logger() -> logging.Logger:
+    filter_ = _BenignHandshakeAbortFilter()
+    logger = logging.getLogger("mc.runtime.interactive.websocket")
+    if not any(isinstance(existing, _BenignHandshakeAbortFilter) for existing in logger.filters):
+        logger.addFilter(filter_)
+    default_logger = logging.getLogger("websockets.server")
+    if not any(
+        isinstance(existing, _BenignHandshakeAbortFilter) for existing in default_logger.filters
+    ):
+        default_logger.addFilter(filter_)
+    return logger
 
 
 @dataclass
@@ -57,7 +85,12 @@ class InteractiveSocketServer:
         self._server: Any | None = None
 
     async def start(self) -> None:
-        self._server = await websockets.serve(self.handle_connection, self.host, self.port)
+        self._server = await websockets.serve(
+            self.handle_connection,
+            self.host,
+            self.port,
+            logger=_interactive_server_logger(),
+        )
 
     async def stop(self) -> None:
         if self._server is None:
