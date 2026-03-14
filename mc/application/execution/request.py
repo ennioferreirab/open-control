@@ -41,6 +41,7 @@ class RunnerType(str, Enum):
     CLAUDE_CODE = "claude-code"
     HUMAN = "human"
     INTERACTIVE_TUI = "interactive-tui"
+    PROVIDER_CLI = "provider-cli"
 
 
 class ErrorCategory(str, Enum):

@@ -30,4 +30,7 @@ def resolve_step_runner_type(request: Any) -> RunnerType:
             f"Interactive execution is disabled by {INTERACTIVE_MODE_ENV}={mode!r} for agent '{request.agent_name}'."
         )
 
+    if mode == "provider-cli":
+        return RunnerType.PROVIDER_CLI
+
     return RunnerType.INTERACTIVE_TUI
