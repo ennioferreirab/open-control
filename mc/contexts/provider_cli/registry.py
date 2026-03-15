@@ -66,6 +66,10 @@ class ProviderSessionRecord:
     final_result: str | None = None
     last_error: str | None = None
     last_event_kind: str | None = None
+    # Command-effect diagnostics (Story 28-22)
+    last_control_command: str | None = None
+    last_control_outcome: str | None = None
+    last_control_error: str | None = None
 
     def update_metadata(self, **kwargs: Any) -> None:
         """Update metadata fields incrementally (only non-None values are applied)."""

@@ -70,8 +70,10 @@ class ProviderCliControlPlane:
             await self._intervention.interrupt(
                 mc_session_id, entry["handle"], entry["parser"]
             )
+            self._persist_diagnostic(mc_session_id, "interrupt", "applied")
             return {"mc_session_id": mc_session_id, "action": "interrupt", "outcome": "applied"}
         except Exception as exc:
+            self._persist_diagnostic(mc_session_id, "interrupt", "failed", str(exc))
             return {
                 "mc_session_id": mc_session_id,
                 "action": "interrupt",
@@ -90,8 +92,10 @@ class ProviderCliControlPlane:
             await self._intervention.stop(
                 mc_session_id, entry["handle"], entry["parser"]
             )
+            self._persist_diagnostic(mc_session_id, "stop", "applied")
             return {"mc_session_id": mc_session_id, "action": "stop", "outcome": "applied"}
         except Exception as exc:
+            self._persist_diagnostic(mc_session_id, "stop", "failed", str(exc))
             return {
                 "mc_session_id": mc_session_id,
                 "action": "stop",
@@ -110,8 +114,10 @@ class ProviderCliControlPlane:
             await self._intervention.resume(
                 mc_session_id, entry["handle"], message, entry["parser"]
             )
+            self._persist_diagnostic(mc_session_id, "resume", "applied")
             return {"mc_session_id": mc_session_id, "action": "resume", "outcome": "applied"}
         except Exception as exc:
+            self._persist_diagnostic(mc_session_id, "resume", "failed", str(exc))
             return {
                 "mc_session_id": mc_session_id,
                 "action": "resume",
@@ -126,3 +132,19 @@ class ProviderCliControlPlane:
         if mc_session_id not in self._parsers:
             return {"mc_session_id": mc_session_id, "error": "parser_not_registered"}
         return None
+
+    def _persist_diagnostic(
+        self,
+        mc_session_id: str,
+        command: str,
+        outcome: str,
+        error: str | None = None,
+    ) -> None:
+        """Persist command-effect diagnostics to the session record."""
+        record = self._registry.get(mc_session_id)
+        if record is not None:
+            record.update_metadata(
+                last_control_command=command,
+                last_control_outcome=outcome,
+                last_control_error=error,
+            )
