@@ -61,6 +61,7 @@ class ProviderCliRunnerStrategy:
         projector: "LiveStreamProjector | None" = None,
         supervision_sink: Callable[[dict[str, Any]], None] | None = None,
         control_plane: Any | None = None,
+        bridge: Any | None = None,
     ) -> None:
         self._parser = parser
         self._registry = registry
@@ -70,6 +71,7 @@ class ProviderCliRunnerStrategy:
         self._projector = projector
         self._control_plane = control_plane
         self._supervision_sink = supervision_sink
+        self._bridge = bridge
 
     async def execute(self, request: ExecutionRequest) -> ExecutionResult:
         """Execute a task via the provider CLI backend.
@@ -123,7 +125,8 @@ class ProviderCliRunnerStrategy:
             cwd=self._cwd,
         )
 
-        # 3. Register the session
+        # 3. Register the session with bootstrap prompt metadata
+        bootstrap_prompt = (request.prompt or "")[:500] or None
         record = self._registry.create(
             mc_session_id=handle.mc_session_id,
             provider=self._parser.provider_name,
@@ -133,6 +136,7 @@ class ProviderCliRunnerStrategy:
             supports_resume=True,
             supports_interrupt=True,
             supports_stop=True,
+            bootstrap_prompt=bootstrap_prompt,
         )
 
         # 4. Transition to RUNNING
@@ -215,6 +219,7 @@ class ProviderCliRunnerStrategy:
                 error_events[0].text if error_events else f"Process exited with code {exit_code}"
             )
             self._registry.update_status(handle.mc_session_id, SessionStatus.CRASHED)
+            record.update_metadata(last_error=error_msg)
             self._cleanup(handle.mc_session_id)
             return ExecutionResult(
                 success=False,
@@ -224,6 +229,7 @@ class ProviderCliRunnerStrategy:
             )
 
         self._registry.update_status(handle.mc_session_id, SessionStatus.COMPLETED)
+        record.update_metadata(final_result=output_text[:500] if output_text else None)
         self._cleanup(handle.mc_session_id)
         return ExecutionResult(
             success=True,

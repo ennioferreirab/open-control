@@ -61,6 +61,17 @@ class ProviderSessionRecord:
     supports_interrupt: bool
     supports_stop: bool
     extra: dict[str, Any] = field(default_factory=dict)
+    # Session metadata (Story 28-19)
+    bootstrap_prompt: str | None = None
+    final_result: str | None = None
+    last_error: str | None = None
+    last_event_kind: str | None = None
+
+    def update_metadata(self, **kwargs: Any) -> None:
+        """Update metadata fields incrementally (only non-None values are applied)."""
+        for key, value in kwargs.items():
+            if value is not None and hasattr(self, key):
+                setattr(self, key, value)
 
 
 class ProviderSessionRegistry:
@@ -88,6 +99,7 @@ class ProviderSessionRegistry:
         provider_session_id: str | None = None,
         child_pids: list[int] | None = None,
         extra: dict[str, Any] | None = None,
+        bootstrap_prompt: str | None = None,
     ) -> ProviderSessionRecord:
         """Register a new session record.  Raises if mc_session_id already exists."""
         if mc_session_id in self._sessions:
@@ -105,6 +117,7 @@ class ProviderSessionRegistry:
             supports_interrupt=supports_interrupt,
             supports_stop=supports_stop,
             extra=dict(extra or {}),
+            bootstrap_prompt=bootstrap_prompt,
         )
         self._sessions[mc_session_id] = record
         return record
