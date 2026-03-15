@@ -51,6 +51,11 @@ export const upsert = internalMutation({
     controlMode: v.optional(interactiveSessionControlModeValidator),
     manualTakeoverAt: v.optional(v.string()),
     manualCompletionRequestedAt: v.optional(v.string()),
+    bootstrapPrompt: v.optional(v.string()),
+    providerSessionId: v.optional(v.string()),
+    lastControlCommand: v.optional(v.string()),
+    lastControlOutcome: v.optional(v.string()),
+    lastControlError: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -87,6 +92,11 @@ export const upsert = internalMutation({
         controlMode: args.controlMode,
         manualTakeoverAt: args.manualTakeoverAt,
         manualCompletionRequestedAt: args.manualCompletionRequestedAt,
+        bootstrapPrompt: args.bootstrapPrompt,
+        providerSessionId: args.providerSessionId,
+        lastControlCommand: args.lastControlCommand,
+        lastControlOutcome: args.lastControlOutcome,
+        lastControlError: args.lastControlError,
       });
       return;
     }
@@ -121,6 +131,11 @@ export const upsert = internalMutation({
       controlMode: args.controlMode,
       manualTakeoverAt: args.manualTakeoverAt,
       manualCompletionRequestedAt: args.manualCompletionRequestedAt,
+      bootstrapPrompt: args.bootstrapPrompt,
+      providerSessionId: args.providerSessionId,
+      lastControlCommand: args.lastControlCommand,
+      lastControlOutcome: args.lastControlOutcome,
+      lastControlError: args.lastControlError,
     });
   },
 });

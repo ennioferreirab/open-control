@@ -589,6 +589,12 @@ export default defineSchema({
     controlMode: v.optional(interactiveSessionControlModeValidator),
     manualTakeoverAt: v.optional(v.string()),
     manualCompletionRequestedAt: v.optional(v.string()),
+    // Provider-CLI metadata (Stories 28-19, 28-22, 28-26)
+    bootstrapPrompt: v.optional(v.string()),
+    providerSessionId: v.optional(v.string()),
+    lastControlCommand: v.optional(v.string()),
+    lastControlOutcome: v.optional(v.string()),
+    lastControlError: v.optional(v.string()),
   })
     .index("by_sessionId", ["sessionId"])
     .index("by_agentName", ["agentName"])
