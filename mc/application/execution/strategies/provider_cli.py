@@ -96,13 +96,66 @@ class ProviderCliRunnerStrategy:
     def _build_command(self, request: ExecutionRequest) -> list[str]:
         """Build the full command for the provider CLI process.
 
-        Appends ``--prompt <request.prompt>`` to the base command when the
-        request carries a non-empty prompt.  The base command list stored in
-        ``self._command`` is never mutated — a new list is always returned.
+        Inserts ``-p <request.prompt>`` immediately after the binary (position 1)
+        when the request carries a non-empty prompt, then appends the remaining
+        base-command flags and any agent-specific runtime flags.
+
+        The base command list stored in ``self._command`` is never mutated —
+        a new list is always returned.
+
+        Claude CLI contract:
+            claude -p "prompt text" --verbose --output-format stream-json ...
         """
-        command = list(self._command)
+        binary = self._command[0]
+        rest_of_base = list(self._command[1:])
+
+        command: list[str] = [binary]
+
+        # The prompt must appear immediately after the binary so that the Claude
+        # CLI interprets it as the positional print-mode argument.
         if request.prompt:
-            command.extend(["--prompt", request.prompt])
+            command.extend(["-p", request.prompt])
+
+        command.extend(rest_of_base)
+
+        # Agent-specific runtime flags (model, permissions, tools, MCP config)
+        agent = request.agent
+        if agent is not None:
+            # MCP config — derived from memory workspace if available
+            memory_ws = request.memory_workspace
+            if memory_ws is not None:
+                # Look for .mcp.json in the agent root (one level up from memory/)
+                agent_root = memory_ws.parent
+                mcp_config = agent_root / ".mcp.json"
+                if mcp_config.exists():
+                    command.extend(["--mcp-config", str(mcp_config)])
+
+            # Model — strip cc/ prefix if present
+            model = request.model or (agent.model if agent.model else None)
+            if model:
+                if model.startswith("cc/"):
+                    model = model[3:]
+                command.extend(["--model", model])
+
+            # Permission mode and tool lists from claude_code_opts
+            cc_opts = agent.claude_code_opts
+            if cc_opts is not None:
+                if cc_opts.permission_mode:
+                    command.extend(["--permission-mode", cc_opts.permission_mode])
+
+                if cc_opts.allowed_tools:
+                    for tool in cc_opts.allowed_tools:
+                        command.extend(["--allowedTools", tool])
+                # Always allow the nanobot MCP tool namespace
+                command.extend(["--allowedTools", "mcp__mc__*"])
+
+                if cc_opts.disallowed_tools:
+                    for tool in cc_opts.disallowed_tools:
+                        command.extend(["--disallowedTools", tool])
+
+                if cc_opts.effort_level:
+                    command.extend(["--effort", cc_opts.effort_level])
+
         return command
 
     def _cleanup(self, mc_session_id: str) -> None:
@@ -215,9 +268,15 @@ class ProviderCliRunnerStrategy:
         has_error = bool(error_events) or (exit_code is not None and exit_code != 0)
 
         if has_error:
-            error_msg = (
-                error_events[0].text if error_events else f"Process exited with code {exit_code}"
-            )
+            if error_events:
+                error_msg = error_events[0].text
+            elif text_events:
+                # Prefer captured text output over a generic exit-code message so
+                # that diagnostic messages printed by the CLI (e.g. "Not logged in")
+                # are surfaced directly to the caller.
+                error_msg = "".join(e.text or "" for e in text_events)
+            else:
+                error_msg = f"Process exited with code {exit_code}"
             self._registry.update_status(handle.mc_session_id, SessionStatus.CRASHED)
             record.update_metadata(last_error=error_msg)
             self._cleanup(handle.mc_session_id)
