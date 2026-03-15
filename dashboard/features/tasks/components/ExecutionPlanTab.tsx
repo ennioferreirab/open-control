@@ -84,7 +84,7 @@ interface ExecutionPlanTabProps {
   onClearPlan?: () => void;
   isClearingPlan?: boolean;
   onOpenLive?: (stepId: string) => void;
-  liveStepId?: string;
+  liveStepIds?: string[];
 }
 
 interface NormalizedStep {
@@ -299,7 +299,7 @@ export function ExecutionPlanTab({
   onClearPlan,
   isClearingPlan = false,
   onOpenLive,
-  liveStepId,
+  liveStepIds,
 }: ExecutionPlanTabProps) {
   const { acceptHumanStep, retryStep, manualMoveStep, addStep, updateStep, deleteStep } =
     useExecutionPlanActions();
@@ -313,6 +313,8 @@ export function ExecutionPlanTab({
   const [editStepError, setEditStepError] = useState<string | null>(null);
   const editFormRef = useRef<HTMLDivElement>(null);
   const shouldOverlayLiveSteps = taskStatus !== "review" && taskStatus !== "inbox" && !isEditMode;
+
+  const liveStepIdSet = useMemo(() => new Set(liveStepIds ?? []), [liveStepIds]);
 
   const steps = useMemo(() => {
     if (!executionPlan?.steps || executionPlan.steps.length === 0) return [];
@@ -585,7 +587,8 @@ export function ExecutionPlanTab({
           onOpenParentTask,
           onOpenLive: isVisualOnly ? undefined : onOpenLive,
           isLiveStep: Boolean(
-            liveStepId && (n.id === liveStepId || matchedDisplayStep?.liveId === liveStepId),
+            liveStepIdSet.has(n.id) ||
+              (matchedDisplayStep?.liveId != null && liveStepIdSet.has(matchedDisplayStep.liveId)),
           ),
         },
       };
@@ -611,10 +614,9 @@ export function ExecutionPlanTab({
     retryErrors,
     canAddOrEdit,
     handleStepClick,
-    taskId,
     onOpenParentTask,
     onOpenLive,
-    liveStepId,
+    liveStepIdSet,
   ]);
 
   // Build existingSteps for the blocked-by selector

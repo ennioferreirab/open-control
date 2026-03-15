@@ -11,6 +11,7 @@ Story 28.18 adds LiveStreamProjector and supervision_sink wiring.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -171,13 +172,23 @@ class ProviderCliRunnerStrategy:
         *,
         agent_name: str,
         provider: str,
+        task_id: str | None,
+        step_id: str | None,
         bootstrap_prompt: str | None,
+        provider_session_id: str | None = None,
+        status: str = "ready",
+        ended_at: str | None = None,
+        final_result: str | None = None,
+        last_error: str | None = None,
     ) -> None:
         """Persist a new provider-cli session record to interactiveSessions in Convex.
 
-        Called at session startup (Story 28-29, AC #1).  Uses the minimal
-        mandatory field set required by interactiveSessions:upsert, treating
-        mc_session_id as the Convex session_id and 'step' as the scope_kind.
+        Project provider-cli runtime state into the interactiveSessions surface model.
+
+        The Convex schema does not expose the internal provider-cli lifecycle
+        states (running, stopped, crashed). Instead, active sessions map to
+        ``ready``, normal termination maps to ``ended``, and failures map to
+        ``error``.
         """
         if self._bridge is None:
             return
@@ -186,23 +197,29 @@ class ProviderCliRunnerStrategy:
             "session_id": mc_session_id,
             "agent_name": agent_name,
             "provider": provider,
-            "scope_kind": "step",
+            "scope_kind": "task",
+            "scope_id": task_id,
             "surface": "provider-cli",
             "tmux_session": mc_session_id,
-            "status": "running",
+            "status": status,
             "capabilities": [],
             "updated_at": timestamp,
+            "task_id": task_id,
+            "step_id": step_id,
         }
         if bootstrap_prompt is not None:
             metadata["bootstrap_prompt"] = bootstrap_prompt
-        try:
-            self._bridge.mutation("interactiveSessions:upsert", metadata)
-        except Exception as exc:
-            logger.warning(
-                "[provider-cli-strategy] Failed to persist session to Convex for '%s': %s",
-                mc_session_id,
-                exc,
-            )
+        if provider_session_id is not None:
+            metadata["provider_session_id"] = provider_session_id
+        if ended_at is not None:
+            metadata["ended_at"] = ended_at
+        if final_result is not None:
+            metadata["final_result"] = final_result
+            metadata["final_result_source"] = "provider-cli"
+            metadata["final_result_at"] = timestamp
+        if last_error is not None:
+            metadata["last_error"] = last_error
+        self._bridge.mutation("interactiveSessions:upsert", metadata)
 
     def _patch_provider_cli_metadata(
         self,
@@ -220,14 +237,48 @@ class ProviderCliRunnerStrategy:
             return
         payload: dict[str, Any] = {"session_id": mc_session_id}
         payload.update(fields)
-        try:
-            self._bridge.mutation("interactiveSessions:patchProviderCliMetadata", payload)
-        except Exception as exc:
-            logger.warning(
-                "[provider-cli-strategy] Failed to patch Convex metadata for '%s': %s",
-                mc_session_id,
-                exc,
-            )
+        self._bridge.mutation("interactiveSessions:patchProviderCliMetadata", payload)
+
+    def _append_activity_log(
+        self,
+        *,
+        session_id: str,
+        event: ParsedCliEvent,
+        timestamp: str,
+        step_id: str | None,
+        agent_name: str,
+        provider: str,
+    ) -> None:
+        """Persist provider-cli activity events for dashboard Live surfaces."""
+        if self._bridge is None:
+            return
+
+        payload: dict[str, Any] = {
+            "session_id": session_id,
+            "kind": event.kind,
+            "ts": timestamp,
+            "step_id": step_id,
+            "agent_name": agent_name,
+            "provider": provider,
+        }
+
+        if event.kind == "tool_use":
+            metadata = event.metadata or {}
+            payload["tool_name"] = metadata.get("tool_name") or event.text or "tool_use"
+            tool_input = metadata.get("tool_input")
+            if tool_input is not None:
+                if isinstance(tool_input, str):
+                    payload["tool_input"] = tool_input
+                else:
+                    payload["tool_input"] = json.dumps(tool_input, ensure_ascii=True, sort_keys=True)
+            payload["summary"] = payload["tool_name"]
+        elif event.kind == "error":
+            payload["error"] = event.text or "Provider CLI error"
+        else:
+            if event.text:
+                payload["summary"] = event.text
+
+        self._bridge.mutation("sessionActivityLog:append", payload)
 
     async def _run(self, request: ExecutionRequest) -> ExecutionResult:
         """Core execution — raises on failure for the outer handler."""
@@ -258,12 +309,27 @@ class ProviderCliRunnerStrategy:
         )
 
         # 3b. Persist session metadata to Convex (Story 28-29, AC #1)
-        self._persist_session_to_convex(
-            handle.mc_session_id,
-            agent_name=request.agent_name,
-            provider=self._parser.provider_name,
-            bootstrap_prompt=bootstrap_prompt,
-        )
+        try:
+            self._persist_session_to_convex(
+                handle.mc_session_id,
+                agent_name=request.agent_name,
+                provider=self._parser.provider_name,
+                task_id=request.task_id,
+                step_id=request.step_id,
+                bootstrap_prompt=bootstrap_prompt,
+            )
+        except Exception:
+            try:
+                await self._parser.stop(handle)
+            except Exception:
+                logger.warning(
+                    "[provider-cli-strategy] Failed to stop session '%s' after Convex startup "
+                    "persistence error",
+                    handle.mc_session_id,
+                    exc_info=True,
+                )
+            self._cleanup(handle.mc_session_id)
+            raise
 
         # 4. Transition to RUNNING
         self._registry.update_status(handle.mc_session_id, SessionStatus.RUNNING)
@@ -283,6 +349,7 @@ class ProviderCliRunnerStrategy:
                 events = self._parser.parse_output(chunk)
                 for event in events:
                     collected_events.append(event)
+                    projected_timestamp = datetime.now(timezone.utc).isoformat()
                     # Update registry with discovered session ID
                     if event.kind == "session_id" and event.provider_session_id:
                         self._registry.update_provider_session_id(
@@ -297,6 +364,7 @@ class ProviderCliRunnerStrategy:
                     # Project the event through the live stream projector (Story 28-18)
                     if self._projector is not None:
                         projected = self._projector.project(event, session_id=mc_session_id)
+                        projected_timestamp = projected.timestamp
                         # Deliver normalized payload to supervision sink if wired
                         if self._supervision_sink is not None:
                             self._supervision_sink(
@@ -310,12 +378,26 @@ class ProviderCliRunnerStrategy:
                                     "timestamp": projected.timestamp,
                                 }
                             )
-        except Exception as exc:
-            logger.warning(
-                "[provider-cli-strategy] Stream error for session '%s': %s",
-                mc_session_id,
-                exc,
-            )
+                    self._append_activity_log(
+                        session_id=mc_session_id,
+                        event=event,
+                        timestamp=projected_timestamp,
+                        step_id=request.step_id,
+                        agent_name=request.agent_name,
+                        provider=self._parser.provider_name,
+                    )
+        except Exception:
+            try:
+                await self._parser.stop(handle)
+            except Exception:
+                logger.warning(
+                    "[provider-cli-strategy] Failed to stop session '%s' after stream/supervision "
+                    "error",
+                    handle.mc_session_id,
+                    exc_info=True,
+                )
+            self._cleanup(handle.mc_session_id)
+            raise
 
         # 6. Wait for exit
         exit_code = await self._supervisor.wait_for_exit(handle)
@@ -343,7 +425,31 @@ class ProviderCliRunnerStrategy:
             output_text = error_events[0].text or ""
 
         # Determine success
+        current_status = record.status
         has_error = bool(error_events) or (exit_code is not None and exit_code != 0)
+
+        if current_status == SessionStatus.STOPPED:
+            error_msg = "Session stopped by operator."
+            record.update_metadata(last_error=error_msg)
+            self._persist_session_to_convex(
+                handle.mc_session_id,
+                agent_name=request.agent_name,
+                provider=self._parser.provider_name,
+                task_id=request.task_id,
+                step_id=request.step_id,
+                bootstrap_prompt=bootstrap_prompt,
+                provider_session_id=session_id,
+                status="error",
+                ended_at=datetime.now(timezone.utc).isoformat(),
+                last_error=error_msg,
+            )
+            self._cleanup(handle.mc_session_id)
+            return ExecutionResult(
+                success=False,
+                error_category=ErrorCategory.RUNNER,
+                error_message=error_msg,
+                session_id=session_id,
+            )
 
         if has_error:
             if error_events:
@@ -355,8 +461,21 @@ class ProviderCliRunnerStrategy:
                 error_msg = "".join(e.text or "" for e in text_events)
             else:
                 error_msg = f"Process exited with code {exit_code}"
-            self._registry.update_status(handle.mc_session_id, SessionStatus.CRASHED)
+            if current_status != SessionStatus.CRASHED:
+                self._registry.update_status(handle.mc_session_id, SessionStatus.CRASHED)
             record.update_metadata(last_error=error_msg)
+            self._persist_session_to_convex(
+                handle.mc_session_id,
+                agent_name=request.agent_name,
+                provider=self._parser.provider_name,
+                task_id=request.task_id,
+                step_id=request.step_id,
+                bootstrap_prompt=bootstrap_prompt,
+                provider_session_id=session_id,
+                status="error",
+                ended_at=datetime.now(timezone.utc).isoformat(),
+                last_error=error_msg,
+            )
             self._cleanup(handle.mc_session_id)
             return ExecutionResult(
                 success=False,
@@ -367,6 +486,18 @@ class ProviderCliRunnerStrategy:
 
         self._registry.update_status(handle.mc_session_id, SessionStatus.COMPLETED)
         record.update_metadata(final_result=output_text[:500] if output_text else None)
+        self._persist_session_to_convex(
+            handle.mc_session_id,
+            agent_name=request.agent_name,
+            provider=self._parser.provider_name,
+            task_id=request.task_id,
+            step_id=request.step_id,
+            bootstrap_prompt=bootstrap_prompt,
+            provider_session_id=session_id,
+            status="ended",
+            ended_at=datetime.now(timezone.utc).isoformat(),
+            final_result=output_text[:500] if output_text else None,
+        )
         self._cleanup(handle.mc_session_id)
         return ExecutionResult(
             success=True,

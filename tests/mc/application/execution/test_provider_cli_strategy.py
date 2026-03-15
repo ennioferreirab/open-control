@@ -16,7 +16,7 @@ from mc.application.execution.request import (
 )
 from mc.application.execution.strategies.provider_cli import ProviderCliRunnerStrategy
 from mc.contexts.provider_cli.registry import ProviderSessionRegistry
-from mc.contexts.provider_cli.types import ParsedCliEvent, ProviderProcessHandle
+from mc.contexts.provider_cli.types import ParsedCliEvent, ProviderProcessHandle, SessionStatus
 from mc.types import AgentData, ClaudeCodeOpts
 
 # ---------------------------------------------------------------------------
@@ -29,12 +29,14 @@ def _make_request(
     agent_name: str = "dev",
     title: str = "Do the work",
     description: str | None = None,
+    step_id: str = "step-001",
     runner_type: RunnerType = RunnerType.PROVIDER_CLI,
 ) -> ExecutionRequest:
     return ExecutionRequest(
         entity_type=EntityType.STEP,
-        entity_id="step-001",
+        entity_id=step_id,
         task_id=task_id,
+        step_id=step_id,
         agent_name=agent_name,
         title=title,
         description=description,
@@ -1043,6 +1045,8 @@ async def test_strategy_persists_bootstrap_prompt_to_convex_via_bridge() -> None
     ]
     assert len(prompts_persisted) >= 1, "bootstrap_prompt must be persisted to Convex"
     assert prompts_persisted[0] == "Implement the bootstrap feature end-to-end."
+    assert upsert_calls[0][0][1]["scope_kind"] == "task"
+    assert upsert_calls[0][0][1]["status"] == "ready"
 
 
 @pytest.mark.asyncio
@@ -1107,6 +1111,266 @@ async def test_strategy_persists_provider_session_id_to_convex_via_bridge() -> N
     ]
     assert len(session_ids_persisted) >= 1, "provider_session_id must be persisted to Convex"
     assert session_ids_persisted[0] == "claude-sess-persist-xyz"
+
+
+@pytest.mark.asyncio
+async def test_strategy_appends_provider_cli_events_to_session_activity_log() -> None:
+    """Parsed provider-cli events must be persisted for Live session surfaces."""
+    handle = _make_handle(mc_session_id="mc-activity-001")
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+    parser.start_session = AsyncMock(return_value=handle)
+    parser.stop = AsyncMock()
+    parser.parse_output = MagicMock(
+        side_effect=[
+            [ParsedCliEvent(kind="tool_use", text="WebSearch", metadata={"tool_name": "WebSearch", "tool_input": "copy examples"})],
+            [ParsedCliEvent(kind="result", text="Found examples")],
+        ]
+    )
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"chunk1"
+        yield b"chunk2"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    bridge = MagicMock()
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=ProviderSessionRegistry(),
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request(step_id="step-live-001"))
+
+    assert result.success is True
+    activity_calls = [
+        call for call in bridge.mutation.call_args_list if call[0][0] == "sessionActivityLog:append"
+    ]
+    assert len(activity_calls) == 2
+    assert activity_calls[0][0][1]["kind"] == "tool_use"
+    assert activity_calls[0][0][1]["tool_name"] == "WebSearch"
+    assert activity_calls[0][0][1]["tool_input"] == "copy examples"
+    assert activity_calls[1][0][1]["kind"] == "result"
+    assert activity_calls[1][0][1]["summary"] == "Found examples"
+
+
+@pytest.mark.asyncio
+async def test_strategy_stringifies_tool_input_dict_for_activity_log() -> None:
+    """tool_input must be serialized before sessionActivityLog append."""
+    handle = _make_handle(mc_session_id="mc-activity-dict-001")
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+    parser.start_session = AsyncMock(return_value=handle)
+    parser.stop = AsyncMock()
+    parser.parse_output = MagicMock(
+        side_effect=[
+            [
+                ParsedCliEvent(
+                    kind="tool_use",
+                    text="ToolSearch",
+                    metadata={
+                        "tool_name": "ToolSearch",
+                        "tool_input": {"query": "WebSearch", "maxResults": 1},
+                    },
+                )
+            ],
+            [ParsedCliEvent(kind="result", text="Done")],
+        ]
+    )
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"chunk1"
+        yield b"chunk2"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    bridge = MagicMock()
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=ProviderSessionRegistry(),
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request(step_id="step-live-dict-001"))
+
+    assert result.success is True
+    activity_calls = [
+        call for call in bridge.mutation.call_args_list if call[0][0] == "sessionActivityLog:append"
+    ]
+    assert activity_calls[0][0][1]["tool_input"] == '{"maxResults": 1, "query": "WebSearch"}'
+
+
+@pytest.mark.asyncio
+async def test_strategy_fails_when_provider_session_id_patch_to_convex_fails() -> None:
+    """Provider session id persistence is mandatory once discovered."""
+    handle = _make_handle(mc_session_id="mc-patch-fail-001")
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+    parser.start_session = AsyncMock(return_value=handle)
+    parser.stop = AsyncMock()
+
+    session_id_event = ParsedCliEvent(
+        kind="session_id",
+        text="claude-sess-persist-xyz",
+        provider_session_id="claude-sess-persist-xyz",
+    )
+    parser.parse_output = MagicMock(side_effect=[[session_id_event]])
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"chunk1"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    bridge = MagicMock()
+
+    def fail_on_patch(fn_name: str, payload: dict[str, str]) -> None:
+        if fn_name == "interactiveSessions:patchProviderCliMetadata":
+            raise RuntimeError("Convex metadata patch failed")
+
+    bridge.mutation.side_effect = fail_on_patch
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=ProviderSessionRegistry(),
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request())
+
+    assert result.success is False
+    assert result.error_message == "RuntimeError: Convex metadata patch failed"
+    parser.stop.assert_awaited_once_with(handle)
+
+
+@pytest.mark.asyncio
+async def test_strategy_fails_when_stream_output_errors() -> None:
+    """Supervisor/stream errors are execution failures, not warnings."""
+    handle = _make_handle(mc_session_id="mc-stream-fail-001")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    async def fake_stream(h: ProviderProcessHandle):
+        raise RuntimeError("stream exploded")
+        yield b""  # pragma: no cover
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+    )
+
+    result = await strategy.execute(_make_request())
+
+    assert result.success is False
+    assert result.error_message == "RuntimeError: stream exploded"
+    parser.stop.assert_awaited_once_with(handle)
+    assert registry.get(handle.mc_session_id) is None
+
+
+@pytest.mark.asyncio
+async def test_strategy_fails_when_startup_session_persistence_to_convex_fails() -> None:
+    """Startup session registration in Convex is mandatory for provider-cli execution."""
+    handle = _make_handle(mc_session_id="mc-bridge-fail-001")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"output"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    bridge = MagicMock()
+
+    def fail_on_upsert(fn_name: str, payload: dict[str, str]) -> None:
+        if fn_name == "interactiveSessions:upsert":
+            raise RuntimeError("Convex startup persistence failed")
+
+    bridge.mutation.side_effect = fail_on_upsert
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request())
+
+    assert result.success is False
+    assert result.error_message == "RuntimeError: Convex startup persistence failed"
+    parser.stop.assert_awaited_once_with(handle)
+    assert registry.get(handle.mc_session_id) is None
+
+
+@pytest.mark.asyncio
+async def test_strategy_treats_stopped_session_as_controlled_failure() -> None:
+    """A stop command must not force a stopped -> crashed transition."""
+    handle = _make_handle(mc_session_id="mc-stop-001")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    async def fake_stream(h: ProviderProcessHandle):
+        registry.update_status(handle.mc_session_id, SessionStatus.STOPPED)
+        yield b""
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=1)
+
+    bridge = MagicMock()
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request())
+
+    assert result.success is False
+    assert result.error_message == "Session stopped by operator."
+    assert registry.get(handle.mc_session_id) is None
+
+    upsert_calls = [
+        call
+        for call in bridge.mutation.call_args_list
+        if call[0][0] == "interactiveSessions:upsert"
+    ]
+    assert upsert_calls[-1][0][1]["status"] == "error"
+    assert upsert_calls[-1][0][1]["last_error"] == "Session stopped by operator."
 
 
 @pytest.mark.asyncio

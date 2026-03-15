@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
+import { useQuery } from "convex/react";
 
+import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type {
   ProviderEvent,
@@ -12,8 +14,11 @@ type InteractiveSessionDoc = Doc<"interactiveSessions">;
 
 type RawActivityEntry = {
   _id: string;
-  content?: string;
-  type?: string;
+  kind: string;
+  summary?: string;
+  error?: string;
+  toolName?: string;
+  toolInput?: string;
 };
 
 /**
@@ -48,8 +53,11 @@ export function selectProviderSessionStatus(
 export function normalizeProviderEvents(entries: RawActivityEntry[]): ProviderEvent[] {
   return entries.map((entry) => ({
     id: entry._id,
-    text: entry.content ?? "",
-    kind: entry.type ?? "text",
+    text:
+      entry.summary ??
+      entry.error ??
+      (entry.toolName ? `${entry.toolName}${entry.toolInput ? `: ${entry.toolInput}` : ""}` : ""),
+    kind: entry.kind ?? "text",
   }));
 }
 
@@ -65,16 +73,17 @@ type UseProviderSessionResult = {
 /**
  * Derive provider session view-model from a Convex interactive session document.
  *
- * Events are currently empty — a future story will wire up a session activity
- * log subscription. The panel will show provider status and metadata today,
- * and streamed text events once the activity log API is available.
- *
  * Falls back gracefully when no session exists: returns idle status and
  * empty events without throwing.
  */
 export function useProviderSession(
   session: InteractiveSessionDoc | null | undefined,
 ): UseProviderSessionResult {
+  const activityEntries = useQuery(
+    api.sessionActivityLog.listForSession,
+    session?.sessionId ? { sessionId: session.sessionId } : "skip",
+  ) as RawActivityEntry[] | undefined;
+
   const sessionStatus = useMemo(() => {
     if (session === undefined) {
       return selectProviderSessionStatus(undefined);
@@ -85,11 +94,13 @@ export function useProviderSession(
     return selectProviderSessionStatus(session.status);
   }, [session]);
 
-  // Events will be populated by a future activity log subscription.
-  // For now the panel renders the session status and metadata.
-  const events = useMemo<ProviderEvent[]>(() => [], []);
+  const events = useMemo<ProviderEvent[]>(
+    () => normalizeProviderEvents(activityEntries ?? []),
+    [activityEntries],
+  );
 
-  const isLoading = session === undefined;
+  const isLoading =
+    session === undefined || (session?.sessionId != null && activityEntries === undefined);
 
   return {
     events,

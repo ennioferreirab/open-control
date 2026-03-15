@@ -601,6 +601,7 @@ class TestBuildStepContext:
         assert isinstance(req, ExecutionRequest)
         assert req.entity_type == EntityType.STEP
         assert req.entity_id == "step_1"
+        assert req.step_id == "step_1"
         assert req.task_id == "task_123"
         assert req.step_title == "Analyze data"
         assert req.agent_name == "data-agent"
