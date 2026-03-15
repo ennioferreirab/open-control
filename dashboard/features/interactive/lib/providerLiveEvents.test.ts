@@ -8,6 +8,14 @@ import {
 } from "./providerLiveEvents";
 
 describe("classifyProviderEventCategory", () => {
+  it("classifies tool_use as tool", () => {
+    expect(classifyProviderEventCategory({ kind: "tool_use", toolName: "WebSearch" })).toBe("tool");
+  });
+
+  it("classifies session_id as system", () => {
+    expect(classifyProviderEventCategory({ kind: "session_id" })).toBe("system");
+  });
+
   it("classifies item_started with toolName as tool", () => {
     expect(classifyProviderEventCategory({ kind: "item_started", toolName: "Read" })).toBe("tool");
   });
@@ -115,6 +123,22 @@ describe("buildProviderLiveEvent", () => {
     });
   });
 
+  it("builds a structured session id event", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-session",
+      kind: "session_id",
+      ts: "2026-03-15T10:01:00.000Z",
+      summary: "c8332f85-b01e-46a4-a6e4-6443f0ee75ab",
+    });
+
+    expect(event).toMatchObject({
+      id: "evt-session",
+      category: "system",
+      title: "Session ID",
+      body: "c8332f85-b01e-46a4-a6e4-6443f0ee75ab",
+    });
+  });
+
   it("builds a structured action event from approval_requested", () => {
     const event = buildProviderLiveEvent({
       _id: "evt-3",
@@ -187,5 +211,55 @@ describe("buildProviderLiveEvents", () => {
 
   it("returns an empty array for empty input", () => {
     expect(buildProviderLiveEvents([])).toEqual([]);
+  });
+
+  it("filters machine-payload text noise from the live stream", () => {
+    const events = buildProviderLiveEvents([
+      {
+        _id: "machine-1",
+        kind: "text",
+        ts: "2026-03-15T10:00:00.000Z",
+        summary:
+          '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"},"session_id":"abc"}',
+      },
+      {
+        _id: "human-1",
+        kind: "text",
+        ts: "2026-03-15T10:01:00.000Z",
+        summary: "Readable response from the agent.",
+      },
+    ]);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      id: "human-1",
+      category: "text",
+      body: "Readable response from the agent.",
+    });
+  });
+
+  it("drops duplicate text that is immediately superseded by a matching result event", () => {
+    const duplicateBody = "Compound interest grows because interest earns interest.";
+    const events = buildProviderLiveEvents([
+      {
+        _id: "text-1",
+        kind: "text",
+        ts: "2026-03-15T10:00:00.000Z",
+        summary: duplicateBody,
+      },
+      {
+        _id: "result-1",
+        kind: "result",
+        ts: "2026-03-15T10:01:00.000Z",
+        summary: duplicateBody,
+      },
+    ]);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      id: "result-1",
+      category: "result",
+      body: duplicateBody,
+    });
   });
 });

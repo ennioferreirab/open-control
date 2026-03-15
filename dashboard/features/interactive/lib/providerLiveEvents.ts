@@ -60,6 +60,7 @@ const ACTION_KINDS = new Set([
 ]);
 
 const SYSTEM_KINDS = new Set([
+  "session_id",
   "session_started",
   "session_ready",
   "session_stopped",
@@ -67,7 +68,73 @@ const SYSTEM_KINDS = new Set([
   "turn_updated",
 ]);
 
-const RESULT_KINDS = new Set(["item_completed", "turn_completed"]);
+const TOOL_KINDS = new Set(["tool_use"]);
+const RESULT_KINDS = new Set(["item_completed", "turn_completed", "result"]);
+const ERROR_KINDS = new Set(["error", "session_failed"]);
+const TEXT_KINDS = new Set(["text", "output"]);
+
+const CATEGORY_ORDER: ReadonlyArray<ProviderLiveCategory> = [
+  "result",
+  "tool",
+  "skill",
+  "action",
+  "text",
+  "error",
+  "system",
+];
+
+export function compareProviderLiveCategories(
+  left: ProviderLiveCategory,
+  right: ProviderLiveCategory,
+): number {
+  return CATEGORY_ORDER.indexOf(left) - CATEGORY_ORDER.indexOf(right);
+}
+
+function normalizeText(value: string | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function normalizeComparableText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function looksLikeStructuredNoise(summary: string): boolean {
+  const text = summary.trim();
+  if (!text || text === "text") {
+    return true;
+  }
+
+  if (
+    text.includes('"type":"rate_limit_event"') ||
+    text.includes('"type": "rate_limit_event"') ||
+    text.includes('"tool_result"') ||
+    text.includes('"tool_use_id"') ||
+    text.includes('"session_id"') ||
+    text.includes('"uuid"')
+  ) {
+    return true;
+  }
+
+  if (
+    text.length > 240 &&
+    (text.includes('","url":"https://') ||
+      text.includes('{"title":"') ||
+      text.includes('"Links: [{') ||
+      text.includes('"total_deferred_tools"'))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function shouldIgnoreProviderEntry(raw: RawEntry): boolean {
+  if (!TEXT_KINDS.has(raw.kind)) {
+    return false;
+  }
+
+  return looksLikeStructuredNoise(raw.summary ?? "");
+}
 
 /**
  * Map a raw activity entry to a stable visual category.
@@ -78,6 +145,11 @@ export function classifyProviderEventCategory(
 ): ProviderLiveCategory {
   const { kind, toolName } = entry;
 
+  if (TOOL_KINDS.has(kind)) {
+    if (toolName && SKILL_TOOL_NAMES.has(toolName)) return "skill";
+    return "tool";
+  }
+
   if (kind === "item_started") {
     if (toolName && SKILL_TOOL_NAMES.has(toolName)) return "skill";
     if (toolName) return "tool";
@@ -86,10 +158,58 @@ export function classifyProviderEventCategory(
 
   if (RESULT_KINDS.has(kind)) return "result";
   if (ACTION_KINDS.has(kind)) return "action";
-  if (kind === "session_failed") return "error";
+  if (ERROR_KINDS.has(kind)) return "error";
   if (SYSTEM_KINDS.has(kind)) return "system";
+  if (TEXT_KINDS.has(kind)) return "text";
 
   return "text";
+}
+
+function getProviderEventTitle(raw: RawEntry, category: ProviderLiveCategory): string {
+  if (raw.kind === "session_id") return "Session ID";
+  if (raw.toolName) return raw.toolName;
+  if (category === "result") return "Result";
+  if (category === "error") return "Error";
+  if (category === "system") return "System";
+  if (category === "text") return "Response";
+  return raw.kind;
+}
+
+function getProviderEventBody(
+  raw: RawEntry,
+  category: ProviderLiveCategory,
+  title: string,
+): string {
+  if (raw.kind === "session_id") {
+    return normalizeText(raw.summary ?? raw.error ?? title);
+  }
+
+  const primary = normalizeText(raw.summary ?? raw.error);
+  if (primary) {
+    return primary;
+  }
+
+  if (category === "tool" || category === "skill" || category === "system") {
+    return "";
+  }
+
+  return title;
+}
+
+function dedupeProviderLiveEvents(events: ProviderLiveEvent[]): ProviderLiveEvent[] {
+  return events.filter((event, index, allEvents) => {
+    const nextEvent = allEvents[index + 1];
+    if (
+      event.category === "text" &&
+      nextEvent?.category === "result" &&
+      normalizeComparableText(event.body) !== "" &&
+      normalizeComparableText(event.body) === normalizeComparableText(nextEvent.body)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 /**
@@ -97,13 +217,8 @@ export function classifyProviderEventCategory(
  */
 export function buildProviderLiveEvent(raw: RawEntry): ProviderLiveEvent {
   const category = classifyProviderEventCategory(raw);
-
-  const title = raw.toolName ?? raw.kind;
-
-  const body =
-    raw.summary ??
-    raw.error ??
-    (category === "tool" || category === "skill" || category === "system" ? "" : title);
+  const title = getProviderEventTitle(raw, category);
+  const body = getProviderEventBody(raw, category, title);
 
   return {
     id: raw._id,
@@ -123,5 +238,7 @@ export function buildProviderLiveEvent(raw: RawEntry): ProviderLiveEvent {
  * Convert an array of raw sessionActivityLog entries into structured live events.
  */
 export function buildProviderLiveEvents(entries: RawEntry[]): ProviderLiveEvent[] {
-  return entries.map(buildProviderLiveEvent);
+  return dedupeProviderLiveEvents(
+    entries.filter((entry) => !shouldIgnoreProviderEntry(entry)).map(buildProviderLiveEvent),
+  );
 }

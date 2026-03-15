@@ -22,7 +22,6 @@ import { TaskDetailFilesTab } from "@/features/tasks/components/TaskDetailFilesT
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { TaskDetailHeader } from "@/features/tasks/components/TaskDetailHeader";
-import { AgentActivityFeed } from "@/features/interactive/components/AgentActivityFeed";
 import { ProviderLiveChatPanel } from "@/features/interactive/components/ProviderLiveChatPanel";
 import { useProviderSession } from "@/features/interactive/hooks/useProviderSession";
 import { useTaskInteractiveSession } from "@/features/interactive/hooks/useTaskInteractiveSession";
@@ -701,8 +700,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                   value="live"
                   className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
                 >
-                  <div className="grid min-h-0 flex-1 gap-4 px-6 py-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.9fr)]">
-                    <div className="min-h-0 overflow-hidden rounded-xl border border-border">
+                  <div className="min-h-0 flex-1 px-6 py-4">
+                    <div className="min-h-0 h-full overflow-hidden rounded-xl border border-border">
                       <ProviderLiveChatPanel
                         sessionId={providerSession.sessionId}
                         events={providerSession.events}
@@ -711,14 +710,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                         provider={providerSession.provider ?? liveSession.session.provider}
                         isLoading={providerSession.isLoading}
                         errorMessage={liveSession.session.lastError ?? undefined}
-                      />
-                    </div>
-                    <div className="min-h-0 overflow-hidden rounded-xl border border-border">
-                      <AgentActivityFeed
-                        sessionId={liveSession.session.sessionId}
-                        provider={liveSession.session.provider}
-                        agentName={liveSession.session.agentName}
-                        supervisionState={liveSession.session.supervisionState}
                       />
                     </div>
                   </div>

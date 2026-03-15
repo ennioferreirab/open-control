@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { ProviderLiveEventRow } from "@/features/interactive/components/ProviderLiveEventRow";
 import {
+  compareProviderLiveCategories,
   type ProviderLiveCategory,
   type ProviderLiveEvent,
 } from "@/features/interactive/lib/providerLiveEvents";
@@ -38,10 +39,16 @@ export function ProviderLiveChatPanel({
   isLoading,
   errorMessage,
 }: ProviderLiveChatPanelProps) {
-  const availableCategories = useMemo(
-    () => Array.from(new Set(events.map((event) => event.category))),
-    [events],
-  );
+  const availableCategories = useMemo(() => {
+    const counts = new Map<ProviderLiveCategory, number>();
+    for (const event of events) {
+      counts.set(event.category, (counts.get(event.category) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .sort(([left], [right]) => compareProviderLiveCategories(left, right))
+      .map(([category, count]) => ({ category, count }));
+  }, [events]);
   const [hiddenCategories, setHiddenCategories] = useState<Set<ProviderLiveCategory>>(new Set());
 
   const filteredEvents = useMemo(
@@ -121,7 +128,7 @@ export function ProviderLiveChatPanel({
           >
             All
           </button>
-          {availableCategories.map((category) => {
+          {availableCategories.map(({ category, count }) => {
             const selected = !hiddenCategories.has(category);
             return (
               <button
@@ -135,7 +142,7 @@ export function ProviderLiveChatPanel({
                 )}
                 onClick={() => toggleCategory(category)}
               >
-                {category}
+                {category} ({count})
               </button>
             );
           })}

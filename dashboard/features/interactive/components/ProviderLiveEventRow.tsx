@@ -61,7 +61,7 @@ export function ProviderLiveEventRow({ event }: { event: ProviderLiveEvent }) {
       </div>
 
       {event.toolInput && (
-        <div className="mt-2 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300">
+        <div className="mt-2 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300 whitespace-pre-wrap break-words">
           {event.toolInput}
         </div>
       )}
