@@ -17,6 +17,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.completion_status import resolve_completion_status
+from mc.application.execution.interactive_mode import resolve_task_runner_type
 from mc.contexts.execution.agent_runner import (  # noqa: F401
     AgentRunResult,
     _coerce_agent_run_result,
@@ -470,6 +471,7 @@ class TaskExecutor(CCExecutorMixin):
                         agent_data.model = req.model
                 req.agent = agent_data
                 req.is_cc = True
+                req.runner_type = resolve_task_runner_type(req)
             else:
                 req.runner_type = RunnerType.NANOBOT
 

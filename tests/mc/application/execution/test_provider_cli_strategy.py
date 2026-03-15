@@ -1050,6 +1050,53 @@ async def test_strategy_persists_bootstrap_prompt_to_convex_via_bridge() -> None
 
 
 @pytest.mark.asyncio
+async def test_strategy_omits_null_step_id_for_direct_task_session_persistence() -> None:
+    """Direct task sessions must omit step_id from the startup upsert payload."""
+    handle = _make_handle(mc_session_id="mc-direct-task-001")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"output"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    bridge = MagicMock()
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    request = ExecutionRequest(
+        entity_type=EntityType.TASK,
+        entity_id="task-direct-001",
+        task_id="task-direct-001",
+        agent_name="dev",
+        title="Do the work",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Run a direct interactive task.",
+    )
+    await strategy.execute(request)
+
+    upsert_calls = [
+        call[0][1]
+        for call in bridge.mutation.call_args_list
+        if call[0][0] == "interactiveSessions:upsert"
+    ]
+    assert upsert_calls
+    assert "step_id" not in upsert_calls[0]
+
+
+@pytest.mark.asyncio
 async def test_strategy_persists_provider_session_id_to_convex_via_bridge() -> None:
     """When a session_id event is discovered and bridge is set, providerSessionId is persisted."""
     handle = _make_handle(mc_session_id="mc-sid-persist-001")
@@ -1123,7 +1170,13 @@ async def test_strategy_appends_provider_cli_events_to_session_activity_log() ->
     parser.stop = AsyncMock()
     parser.parse_output = MagicMock(
         side_effect=[
-            [ParsedCliEvent(kind="tool_use", text="WebSearch", metadata={"tool_name": "WebSearch", "tool_input": "copy examples"})],
+            [
+                ParsedCliEvent(
+                    kind="tool_use",
+                    text="WebSearch",
+                    metadata={"tool_name": "WebSearch", "tool_input": "copy examples"},
+                )
+            ],
             [ParsedCliEvent(kind="result", text="Found examples")],
         ]
     )
@@ -1159,6 +1212,65 @@ async def test_strategy_appends_provider_cli_events_to_session_activity_log() ->
     assert activity_calls[0][0][1]["tool_input"] == "copy examples"
     assert activity_calls[1][0][1]["kind"] == "result"
     assert activity_calls[1][0][1]["summary"] == "Found examples"
+
+
+@pytest.mark.asyncio
+async def test_strategy_omits_null_step_id_from_direct_task_activity_log() -> None:
+    """Direct task activity log payloads must omit step_id."""
+    handle = _make_handle(mc_session_id="mc-activity-direct-001")
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+    parser.start_session = AsyncMock(return_value=handle)
+    parser.stop = AsyncMock()
+    parser.parse_output = MagicMock(
+        side_effect=[
+            [
+                ParsedCliEvent(
+                    kind="tool_use", text="WebSearch", metadata={"tool_name": "WebSearch"}
+                )
+            ],
+            [ParsedCliEvent(kind="result", text="Found examples")],
+        ]
+    )
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"chunk1"
+        yield b"chunk2"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    bridge = MagicMock()
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=ProviderSessionRegistry(),
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    request = ExecutionRequest(
+        entity_type=EntityType.TASK,
+        entity_id="task-direct-live-001",
+        task_id="task-direct-live-001",
+        agent_name="dev",
+        title="Direct live task",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Run a direct interactive task.",
+    )
+    result = await strategy.execute(request)
+
+    assert result.success is True
+    activity_calls = [
+        call[0][1]
+        for call in bridge.mutation.call_args_list
+        if call[0][0] == "sessionActivityLog:append"
+    ]
+    assert activity_calls
+    assert "step_id" not in activity_calls[0]
 
 
 @pytest.mark.asyncio

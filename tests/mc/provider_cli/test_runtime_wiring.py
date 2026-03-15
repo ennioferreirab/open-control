@@ -11,7 +11,10 @@ from unittest.mock import patch
 
 import pytest
 
-from mc.application.execution.interactive_mode import resolve_step_runner_type
+from mc.application.execution.interactive_mode import (
+    resolve_step_runner_type,
+    resolve_task_runner_type,
+)
 from mc.application.execution.request import EntityType, ExecutionRequest, RunnerType
 from mc.types import AgentData
 
@@ -49,6 +52,18 @@ def test_default_no_env_resolves_to_provider_cli_for_claude_code() -> None:
 
         os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
         runner = resolve_step_runner_type(_make_request(provider="claude-code"))
+
+    assert runner == RunnerType.PROVIDER_CLI
+
+
+def test_direct_task_defaults_to_provider_cli_for_claude_code() -> None:
+    with patch.dict("os.environ", {}, clear=False):
+        import os
+
+        os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
+        request = _make_request(provider="claude-code")
+        request.entity_type = EntityType.TASK
+        runner = resolve_task_runner_type(request)
 
     assert runner == RunnerType.PROVIDER_CLI
 

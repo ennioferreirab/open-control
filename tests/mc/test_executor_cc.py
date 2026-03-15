@@ -119,10 +119,10 @@ async def _drain_background_tasks() -> None:
 
 
 class TestBackendRouting:
-    """_execute_task routes Claude Code work through the ExecutionEngine."""
+    """_execute_task routes direct interactive work through the ExecutionEngine."""
 
     @pytest.mark.asyncio
-    async def test_claude_code_backend_routes_through_execution_engine(self):
+    async def test_claude_code_backend_routes_direct_task_through_provider_cli(self):
         executor = _make_executor()
         agent_data = _cc_agent(backend="claude-code")
 
@@ -172,7 +172,7 @@ class TestBackendRouting:
 
         engine.run.assert_awaited_once()
         request = engine.run.await_args.args[0]
-        assert request.runner_type == RunnerType.CLAUDE_CODE
+        assert request.runner_type == RunnerType.PROVIDER_CLI
         assert request.agent == agent_data
         assert request.agent_name == "my-cc-agent"
 
@@ -828,8 +828,8 @@ class TestCCModelRouting:
     """
 
     @pytest.mark.asyncio
-    async def test_cc_model_routes_through_execution_engine(self):
-        """When agent_model resolves to cc/*, the engine request should be CC."""
+    async def test_cc_model_routes_direct_task_through_provider_cli(self):
+        """When agent_model resolves to cc/*, direct tasks should use provider-cli."""
         bridge = _make_bridge()
         executor = _make_executor(bridge)
 
@@ -892,7 +892,7 @@ class TestCCModelRouting:
 
         engine.run.assert_awaited_once()
         request = engine.run.await_args.args[0]
-        assert request.runner_type == RunnerType.CLAUDE_CODE
+        assert request.runner_type == RunnerType.PROVIDER_CLI
         assert request.agent is nanobot_agent
         assert request.agent.model == "claude-sonnet-4-6"
         assert request.agent.backend == "claude-code"
@@ -952,7 +952,7 @@ class TestCCModelRouting:
 
         engine.run.assert_awaited_once()
         request = engine.run.await_args.args[0]
-        assert request.runner_type == RunnerType.CLAUDE_CODE
+        assert request.runner_type == RunnerType.PROVIDER_CLI
         assert request.agent is not None
         assert request.agent.model == "claude-opus-4-6"
         assert request.agent.backend == "claude-code"

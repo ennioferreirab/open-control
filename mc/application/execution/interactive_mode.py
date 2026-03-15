@@ -1,4 +1,4 @@
-"""Execution-mode resolution for interactive-capable step providers."""
+"""Execution-mode resolution for interactive-capable task/step providers."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from mc.application.execution.request import RunnerType
 INTERACTIVE_MODE_ENV = "MC_INTERACTIVE_EXECUTION_MODE"
 
 
-def resolve_step_runner_type(request: Any) -> RunnerType:
-    """Resolve step execution mode without silently falling back for interactive agents.
+def _resolve_interactive_runner_type(request: Any) -> RunnerType:
+    """Resolve execution mode without silently falling back for interactive agents.
 
     Production default (no env var, or ``interactive-first``) is now
     ``PROVIDER_CLI`` (Story 28.7).  The legacy PTY/tmux path
@@ -43,3 +43,13 @@ def resolve_step_runner_type(request: Any) -> RunnerType:
     # All other values (provider-cli, interactive-first, or unrecognised) default
     # to PROVIDER_CLI — the new production path.
     return RunnerType.PROVIDER_CLI
+
+
+def resolve_step_runner_type(request: Any) -> RunnerType:
+    """Resolve the execution mode for a materialized plan step."""
+    return _resolve_interactive_runner_type(request)
+
+
+def resolve_task_runner_type(request: Any) -> RunnerType:
+    """Resolve the execution mode for a direct task execution request."""
+    return _resolve_interactive_runner_type(request)
