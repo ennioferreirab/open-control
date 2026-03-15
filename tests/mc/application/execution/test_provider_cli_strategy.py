@@ -981,3 +981,160 @@ async def test_strategy_handles_mid_stream_crash_then_cleans_up() -> None:
 
     # Session must be cleaned up even after mid-stream crash
     assert registry.get(handle.mc_session_id) is None
+
+
+# ---------------------------------------------------------------------------
+# Story 28-29: Persist provider-cli metadata to Convex via bridge
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_strategy_persists_bootstrap_prompt_to_convex_via_bridge() -> None:
+    """When bridge is set, strategy must persist bootstrapPrompt to interactiveSessions."""
+    handle = _make_handle(mc_session_id="mc-bridge-001")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"output"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    bridge = MagicMock()
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-001",
+        task_id="task-bridge-001",
+        agent_name="dev",
+        title="Do the work",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Implement the bootstrap feature end-to-end.",
+    )
+    await strategy.execute(request)
+
+    # Verify bridge was called to persist bootstrapPrompt via interactiveSessions:upsert
+    upsert_calls = [
+        call
+        for call in bridge.mutation.call_args_list
+        if call[0][0] == "interactiveSessions:upsert"
+    ]
+    assert len(upsert_calls) >= 1, (
+        "bridge.mutation must be called with interactiveSessions:upsert on session startup"
+    )
+    # At least one call must include bootstrap_prompt
+    prompts_persisted = [
+        call[0][1].get("bootstrap_prompt")
+        for call in upsert_calls
+        if call[0][1].get("bootstrap_prompt")
+    ]
+    assert len(prompts_persisted) >= 1, "bootstrap_prompt must be persisted to Convex"
+    assert prompts_persisted[0] == "Implement the bootstrap feature end-to-end."
+
+
+@pytest.mark.asyncio
+async def test_strategy_persists_provider_session_id_to_convex_via_bridge() -> None:
+    """When a session_id event is discovered and bridge is set, providerSessionId is persisted."""
+    handle = _make_handle(mc_session_id="mc-sid-persist-001")
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+    parser.start_session = AsyncMock(return_value=handle)
+    parser.stop = AsyncMock()
+
+    session_id_event = ParsedCliEvent(
+        kind="session_id",
+        text="claude-sess-persist-xyz",
+        provider_session_id="claude-sess-persist-xyz",
+    )
+    result_event = ParsedCliEvent(kind="result", text="Done")
+    parser.parse_output = MagicMock(
+        side_effect=[
+            [session_id_event],
+            [result_event],
+        ]
+    )
+
+    registry = ProviderSessionRegistry()
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"chunk1"
+        yield b"chunk2"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    bridge = MagicMock()
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+    result = await strategy.execute(_make_request())
+
+    assert result.success is True
+
+    # Verify bridge was called to persist providerSessionId
+    mutation_calls = [
+        call
+        for call in bridge.mutation.call_args_list
+        if call[0][0] == "interactiveSessions:patchProviderCliMetadata"
+    ]
+    assert len(mutation_calls) >= 1, (
+        "bridge.mutation must be called with interactiveSessions:patchProviderCliMetadata"
+    )
+    session_ids_persisted = [
+        call[0][1].get("provider_session_id")
+        for call in mutation_calls
+        if call[0][1].get("provider_session_id")
+    ]
+    assert len(session_ids_persisted) >= 1, "provider_session_id must be persisted to Convex"
+    assert session_ids_persisted[0] == "claude-sess-persist-xyz"
+
+
+@pytest.mark.asyncio
+async def test_strategy_without_bridge_does_not_call_convex() -> None:
+    """When bridge is None (default), no Convex mutations are made."""
+    handle = _make_handle(mc_session_id="mc-nobr-001")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"output"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    # No bridge passed
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+    )
+    result = await strategy.execute(_make_request())
+
+    assert result.success is True
+    # No bridge calls should happen
+    assert strategy._bridge is None

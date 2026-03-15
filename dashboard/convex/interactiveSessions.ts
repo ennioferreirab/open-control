@@ -20,6 +20,35 @@ type InteractiveSessionDoc = Doc<"interactiveSessions">;
 type TaskDoc = Doc<"tasks">;
 type StepDoc = Doc<"steps">;
 
+export const patchProviderCliMetadata = internalMutation({
+  args: {
+    sessionId: v.string(),
+    bootstrapPrompt: v.optional(v.string()),
+    providerSessionId: v.optional(v.string()),
+    lastControlCommand: v.optional(v.string()),
+    lastControlOutcome: v.optional(v.string()),
+    lastControlError: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("interactiveSessions")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+      .first();
+    if (!existing) {
+      return;
+    }
+    const patch: Record<string, string | undefined> = {};
+    if (args.bootstrapPrompt !== undefined) patch.bootstrapPrompt = args.bootstrapPrompt;
+    if (args.providerSessionId !== undefined) patch.providerSessionId = args.providerSessionId;
+    if (args.lastControlCommand !== undefined) patch.lastControlCommand = args.lastControlCommand;
+    if (args.lastControlOutcome !== undefined) patch.lastControlOutcome = args.lastControlOutcome;
+    if (args.lastControlError !== undefined) patch.lastControlError = args.lastControlError;
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(existing._id, patch);
+    }
+  },
+});
+
 export const upsert = internalMutation({
   args: {
     sessionId: v.string(),

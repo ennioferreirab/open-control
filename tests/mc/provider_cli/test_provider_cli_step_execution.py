@@ -815,3 +815,130 @@ class TestStrategySupervisionSinkIntegration:
         req = _make_interactive_request()
         result = await strategy.execute(req)
         assert result.success is True
+
+
+# ---------------------------------------------------------------------------
+# Test 8: Story 28-29 — provider_session_id and bootstrap_prompt reach Convex
+# ---------------------------------------------------------------------------
+
+
+class TestProviderCliMetadataPersistenceToConvex:
+    """Prove that provider_session_id and bootstrap_prompt reach Convex from the real runtime path.
+
+    Story 28-29 — The ProviderCliRunnerStrategy must persist provider-cli metadata to
+    interactiveSessions via the bridge when bridge is injected.
+    """
+
+    @pytest.mark.asyncio
+    async def test_provider_session_id_persisted_to_convex_on_discovery(self) -> None:
+        """When a session_id event is parsed, provider_session_id must be persisted to Convex."""
+        registry = ProviderSessionRegistry()
+        mock_supervisor = MagicMock()
+        mock_parser = MagicMock()
+        mock_parser.provider_name = "claude-code"
+
+        handle = _make_mock_handle("task-persist-001-step-001")
+        mock_parser.start_session = AsyncMock(return_value=handle)
+
+        session_id_event = ParsedCliEvent(
+            kind="session_id",
+            text="claude-sess-29-abc",
+            provider_session_id="claude-sess-29-abc",
+        )
+        result_event = ParsedCliEvent(kind="result", text="Done")
+        mock_parser.parse_output = MagicMock(side_effect=[[session_id_event], [result_event]])
+
+        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+            yield b"chunk1"
+            yield b"chunk2"
+
+        mock_supervisor.stream_output = _stream
+        mock_supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+        bridge = MagicMock()
+
+        strategy = ProviderCliRunnerStrategy(
+            parser=mock_parser,
+            registry=registry,
+            supervisor=mock_supervisor,
+            command=["claude", "--output-format", "stream-json", "--print"],
+            cwd=".",
+            bridge=bridge,
+        )
+
+        req = _make_interactive_request(task_id="task-persist-001", step_id="step-001")
+        result = await strategy.execute(req)
+
+        assert result.success is True
+        assert result.session_id == "claude-sess-29-abc"
+
+        # Verify bridge was called to persist provider_session_id to Convex
+        patch_calls = [
+            call
+            for call in bridge.mutation.call_args_list
+            if call[0][0] == "interactiveSessions:patchProviderCliMetadata"
+        ]
+        assert len(patch_calls) >= 1, (
+            "interactiveSessions:patchProviderCliMetadata must be called when provider_session_id "
+            "is discovered"
+        )
+        # At least one call must include provider_session_id
+        sid_calls = [c for c in patch_calls if c[0][1].get("provider_session_id")]
+        assert len(sid_calls) >= 1, "provider_session_id must be persisted"
+        assert sid_calls[0][0][1]["provider_session_id"] == "claude-sess-29-abc"
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_prompt_persisted_to_convex_on_session_create(self) -> None:
+        """On session startup, bootstrap_prompt must be persisted to Convex via bridge."""
+        registry = ProviderSessionRegistry()
+        mock_supervisor = MagicMock()
+        mock_parser = MagicMock()
+        mock_parser.provider_name = "claude-code"
+
+        handle = _make_mock_handle("task-bp-001-step-001")
+        mock_parser.start_session = AsyncMock(return_value=handle)
+        mock_parser.parse_output = MagicMock(
+            return_value=[ParsedCliEvent(kind="result", text="Done")]
+        )
+
+        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+            yield b"result"
+
+        mock_supervisor.stream_output = _stream
+        mock_supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+        bridge = MagicMock()
+
+        strategy = ProviderCliRunnerStrategy(
+            parser=mock_parser,
+            registry=registry,
+            supervisor=mock_supervisor,
+            command=["claude", "--output-format", "stream-json", "--print"],
+            cwd=".",
+            bridge=bridge,
+        )
+
+        req = _make_interactive_request(
+            task_id="task-bp-001",
+            step_id="step-001",
+            prompt="Write comprehensive tests for the authentication module.",
+        )
+        result = await strategy.execute(req)
+
+        assert result.success is True
+
+        # Verify bridge was called with bootstrap_prompt via interactiveSessions:upsert
+        upsert_calls = [
+            call
+            for call in bridge.mutation.call_args_list
+            if call[0][0] == "interactiveSessions:upsert"
+        ]
+        assert len(upsert_calls) >= 1, (
+            "interactiveSessions:upsert must be called on session startup"
+        )
+        bp_calls = [c for c in upsert_calls if c[0][1].get("bootstrap_prompt")]
+        assert len(bp_calls) >= 1, "bootstrap_prompt must be persisted to Convex"
+        assert (
+            bp_calls[0][0][1]["bootstrap_prompt"]
+            == "Write comprehensive tests for the authentication module."
+        )

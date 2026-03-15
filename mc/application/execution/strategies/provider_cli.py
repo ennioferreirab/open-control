@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.request import (
@@ -164,6 +165,70 @@ class ProviderCliRunnerStrategy:
             self._control_plane.unregister_parser(mc_session_id)
         self._registry.remove(mc_session_id)
 
+    def _persist_session_to_convex(
+        self,
+        mc_session_id: str,
+        *,
+        agent_name: str,
+        provider: str,
+        bootstrap_prompt: str | None,
+    ) -> None:
+        """Persist a new provider-cli session record to interactiveSessions in Convex.
+
+        Called at session startup (Story 28-29, AC #1).  Uses the minimal
+        mandatory field set required by interactiveSessions:upsert, treating
+        mc_session_id as the Convex session_id and 'step' as the scope_kind.
+        """
+        if self._bridge is None:
+            return
+        timestamp = datetime.now(timezone.utc).isoformat()
+        metadata: dict[str, Any] = {
+            "session_id": mc_session_id,
+            "agent_name": agent_name,
+            "provider": provider,
+            "scope_kind": "step",
+            "surface": "provider-cli",
+            "tmux_session": mc_session_id,
+            "status": "running",
+            "capabilities": [],
+            "updated_at": timestamp,
+        }
+        if bootstrap_prompt is not None:
+            metadata["bootstrap_prompt"] = bootstrap_prompt
+        try:
+            self._bridge.mutation("interactiveSessions:upsert", metadata)
+        except Exception as exc:
+            logger.warning(
+                "[provider-cli-strategy] Failed to persist session to Convex for '%s': %s",
+                mc_session_id,
+                exc,
+            )
+
+    def _patch_provider_cli_metadata(
+        self,
+        mc_session_id: str,
+        **fields: Any,
+    ) -> None:
+        """Patch provider-cli specific fields on an existing interactiveSessions record.
+
+        Called when providerSessionId is discovered (AC #2) and on cleanup (AC #4).
+        No-op when bridge is None or when no fields are provided.
+        """
+        if self._bridge is None:
+            return
+        if not fields:
+            return
+        payload: dict[str, Any] = {"session_id": mc_session_id}
+        payload.update(fields)
+        try:
+            self._bridge.mutation("interactiveSessions:patchProviderCliMetadata", payload)
+        except Exception as exc:
+            logger.warning(
+                "[provider-cli-strategy] Failed to patch Convex metadata for '%s': %s",
+                mc_session_id,
+                exc,
+            )
+
     async def _run(self, request: ExecutionRequest) -> ExecutionResult:
         """Core execution — raises on failure for the outer handler."""
         mc_session_id = f"{request.task_id}-{request.entity_id}"
@@ -192,6 +257,14 @@ class ProviderCliRunnerStrategy:
             bootstrap_prompt=bootstrap_prompt,
         )
 
+        # 3b. Persist session metadata to Convex (Story 28-29, AC #1)
+        self._persist_session_to_convex(
+            handle.mc_session_id,
+            agent_name=request.agent_name,
+            provider=self._parser.provider_name,
+            bootstrap_prompt=bootstrap_prompt,
+        )
+
         # 4. Transition to RUNNING
         self._registry.update_status(handle.mc_session_id, SessionStatus.RUNNING)
 
@@ -216,6 +289,11 @@ class ProviderCliRunnerStrategy:
                             handle.mc_session_id, event.provider_session_id
                         )
                         record.provider_session_id = event.provider_session_id
+                        # Persist provider_session_id to Convex (Story 28-29, AC #2)
+                        self._patch_provider_cli_metadata(
+                            handle.mc_session_id,
+                            provider_session_id=event.provider_session_id,
+                        )
                     # Project the event through the live stream projector (Story 28-18)
                     if self._projector is not None:
                         projected = self._projector.project(event, session_id=mc_session_id)

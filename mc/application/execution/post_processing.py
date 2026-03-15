@@ -428,6 +428,7 @@ def build_execution_engine(
                 projector=provider_cli_projector,
                 supervision_sink=provider_cli_supervision_sink,
                 control_plane=provider_cli_control_plane,
+                bridge=bridge,
             ),
         },
         post_execution_hooks=[

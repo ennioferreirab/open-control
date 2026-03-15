@@ -274,6 +274,12 @@ class InteractiveSessionRegistry:
             "final_result",
             "final_result_source",
             "final_result_at",
+            # Provider-CLI metadata (Story 28-29)
+            "bootstrap_prompt",
+            "provider_session_id",
+            "last_control_command",
+            "last_control_outcome",
+            "last_control_error",
         ):
             if existing.get(key) is not None:
                 metadata[key] = existing[key]

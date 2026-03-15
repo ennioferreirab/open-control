@@ -213,7 +213,10 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     provider_cli_registry = ProviderSessionRegistry()
     provider_cli_supervisor = ProviderProcessSupervisor()
     provider_cli_projector = LiveStreamProjector()
-    provider_cli_control_plane = ProviderCliControlPlane(registry=provider_cli_registry)
+    provider_cli_control_plane = ProviderCliControlPlane(
+        registry=provider_cli_registry,
+        bridge=bridge,
+    )
     runtime_ctx.services["provider_cli_registry"] = provider_cli_registry
     runtime_ctx.services["provider_cli_supervisor"] = provider_cli_supervisor
     runtime_ctx.services["provider_cli_projector"] = provider_cli_projector

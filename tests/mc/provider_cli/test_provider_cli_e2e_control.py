@@ -323,3 +323,113 @@ async def test_crashed_bad_command_is_terminal() -> None:
         if not targets
     }
     assert SessionStatus.CRASHED in valid_terminal_statuses
+
+
+# ---------------------------------------------------------------------------
+# Story 28-29: Control-plane diagnostics persist to Convex via bridge
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_control_plane_persist_diagnostic_calls_convex_via_bridge() -> None:
+    """When bridge is injected, _persist_diagnostic must call interactiveSessions:patchProviderCliMetadata."""
+    registry = ProviderSessionRegistry()
+    bridge = MagicMock()
+
+    control_plane = ProviderCliControlPlane(registry=registry, bridge=bridge)
+
+    mc_session_id = "diag-test-001"
+    registry.create(
+        mc_session_id=mc_session_id,
+        provider="claude-code",
+        pid=99999,
+        pgid=99999,
+        mode="provider-native",
+        supports_resume=True,
+        supports_interrupt=True,
+        supports_stop=True,
+    )
+    registry.update_status(mc_session_id, SessionStatus.RUNNING)
+
+    # Call _persist_diagnostic directly (simulating control plane after interrupt)
+    control_plane._persist_diagnostic(mc_session_id, "interrupt", "applied")
+
+    # Verify bridge was called
+    bridge.mutation.assert_called_once_with(
+        "interactiveSessions:patchProviderCliMetadata",
+        {
+            "session_id": mc_session_id,
+            "last_control_command": "interrupt",
+            "last_control_outcome": "applied",
+        },
+    )
+
+    # Also verify in-memory record was updated
+    record = registry.get(mc_session_id)
+    assert record is not None
+    assert record.last_control_command == "interrupt"
+    assert record.last_control_outcome == "applied"
+
+
+@pytest.mark.asyncio
+async def test_control_plane_persist_diagnostic_includes_error_when_present() -> None:
+    """When error is provided, it must be included in the Convex payload."""
+    registry = ProviderSessionRegistry()
+    bridge = MagicMock()
+
+    control_plane = ProviderCliControlPlane(registry=registry, bridge=bridge)
+
+    mc_session_id = "diag-err-001"
+    registry.create(
+        mc_session_id=mc_session_id,
+        provider="claude-code",
+        pid=99998,
+        pgid=99998,
+        mode="provider-native",
+        supports_resume=True,
+        supports_interrupt=True,
+        supports_stop=True,
+    )
+    registry.update_status(mc_session_id, SessionStatus.RUNNING)
+
+    control_plane._persist_diagnostic(mc_session_id, "stop", "failed", "Process not found")
+
+    bridge.mutation.assert_called_once_with(
+        "interactiveSessions:patchProviderCliMetadata",
+        {
+            "session_id": mc_session_id,
+            "last_control_command": "stop",
+            "last_control_outcome": "failed",
+            "last_control_error": "Process not found",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_control_plane_persist_diagnostic_no_bridge_does_not_raise() -> None:
+    """Without a bridge, _persist_diagnostic must update in-memory only and not raise."""
+    registry = ProviderSessionRegistry()
+    # No bridge injected
+    control_plane = ProviderCliControlPlane(registry=registry)
+
+    mc_session_id = "diag-nobr-001"
+    registry.create(
+        mc_session_id=mc_session_id,
+        provider="claude-code",
+        pid=99997,
+        pgid=99997,
+        mode="provider-native",
+        supports_resume=True,
+        supports_interrupt=True,
+        supports_stop=True,
+    )
+    registry.update_status(mc_session_id, SessionStatus.RUNNING)
+
+    # Must not raise
+    control_plane._persist_diagnostic(mc_session_id, "resume", "applied")
+
+    # In-memory record updated
+    record = registry.get(mc_session_id)
+    assert record is not None
+    assert record.last_control_command == "resume"
+    assert record.last_control_outcome == "applied"
