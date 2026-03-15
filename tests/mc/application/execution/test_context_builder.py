@@ -159,6 +159,35 @@ class TestBuildTaskContext:
 
     @pytest.mark.asyncio
     @patch(
+        "mc.application.execution.context_builder.load_agent_config",
+        return_value=("agent system prompt", "gpt-4", ["code"]),
+    )
+    @patch(
+        "mc.application.execution.context_builder.inject_orientation",
+        side_effect=lambda _name, prompt, **_kwargs: prompt,
+    )
+    @patch("mc.application.execution.context_builder.resolve_tier", return_value=("gpt-4", None))
+    async def test_task_prompt_preserves_agent_prompt_and_operational_context(
+        self,
+        mock_tier: MagicMock,
+        mock_orientation: MagicMock,
+        mock_config: MagicMock,
+        bridge: MagicMock,
+    ) -> None:
+        builder = ContextBuilder(bridge)
+        req = await builder.build_task_context(
+            task_id="task_123",
+            title="Test Task",
+            description="Do the mission",
+            agent_name="test-agent",
+        )
+
+        assert req.agent_prompt == "agent system prompt"
+        assert req.prompt.startswith("agent system prompt\n\n---\n\n")
+        assert "Do the mission" in req.prompt
+
+    @pytest.mark.asyncio
+    @patch(
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
@@ -620,6 +649,38 @@ class TestBuildStepContext:
         assert 'You are executing step: "Write report"' in req.description
         assert "Step description: Write the final report" in req.description
         assert "Task workspace:" in req.description
+
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.context_builder.load_agent_config",
+        return_value=("step agent prompt", None, None),
+    )
+    @patch(
+        "mc.application.execution.context_builder.inject_orientation",
+        side_effect=lambda _name, prompt, **_kwargs: prompt,
+    )
+    @patch("mc.application.execution.context_builder.resolve_tier", return_value=(None, None))
+    async def test_step_prompt_preserves_agent_prompt_and_execution_description(
+        self,
+        mock_tier: MagicMock,
+        mock_orientation: MagicMock,
+        mock_config: MagicMock,
+    ) -> None:
+        bridge = _make_mock_bridge()
+        builder = ContextBuilder(bridge)
+        step = {
+            "id": "step_1",
+            "title": "Write report",
+            "description": "Write the final report",
+            "assigned_agent": "writer",
+            "blocked_by": [],
+        }
+
+        req = await builder.build_step_context("task_123", step)
+
+        assert req.agent_prompt == "step agent prompt"
+        assert req.prompt.startswith("step agent prompt\n\n---\n\n")
+        assert 'You are executing step: "Write report"' in req.prompt
 
     @pytest.mark.asyncio
     @patch(
