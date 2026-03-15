@@ -15,7 +15,7 @@ export const createDraft = internalMutation({
           id: v.string(),
           title: v.string(),
           type: workflowStepTypeValidator,
-          agentSpecId: v.optional(v.id("agentSpecs")),
+          agentId: v.optional(v.id("agents")),
           inputs: v.optional(v.array(v.string())),
           outputs: v.optional(v.array(v.string())),
           dependsOn: v.optional(v.array(v.string())),

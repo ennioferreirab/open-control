@@ -171,7 +171,7 @@ class TestExecutionPlanFromDict:
                     "order": 1,
                     "workflowStepId": "analyze-step",
                     "workflowStepType": "agent",
-                    "agentSpecId": "agent-spec-123",
+                    "agentId": "agent-123",
                 }
             ],
             "generatedAt": "2026-03-14T10:00:00Z",
@@ -182,7 +182,7 @@ class TestExecutionPlanFromDict:
         step = plan.steps[0]
         assert step.workflow_step_id == "analyze-step"
         assert step.workflow_step_type == "agent"
-        assert step.agent_spec_id == "agent-spec-123"
+        assert step.agent_id == "agent-123"
 
     def test_from_dict_preserves_review_spec_id_and_on_reject(self) -> None:
         data = {
@@ -247,7 +247,7 @@ class TestExecutionPlanFromDict:
                     "order": 1,
                     "workflow_step_id": "analyze",
                     "workflow_step_type": "agent",
-                    "agent_spec_id": "spec-1",
+                    "agent_id": "agent-1",
                     "on_reject_step_id": "step_0",
                 }
             ],
@@ -258,7 +258,7 @@ class TestExecutionPlanFromDict:
         step = plan.steps[0]
         assert step.workflow_step_id == "analyze"
         assert step.workflow_step_type == "agent"
-        assert step.agent_spec_id == "spec-1"
+        assert step.agent_id == "agent-1"
         assert step.on_reject_step_id == "step_0"
 
 
@@ -277,7 +277,7 @@ class TestExecutionPlanRoundTrip:
             order=0,
             workflow_step_id="analyze-step",
             workflow_step_type="agent",
-            agent_spec_id="agent-spec-123",
+            agent_id="agent-123",
             on_reject_step_id=None,
             review_spec_id=None,
         )
@@ -291,7 +291,7 @@ class TestExecutionPlanRoundTrip:
         s = restored.steps[0]
         assert s.workflow_step_id == "analyze-step"
         assert s.workflow_step_type == "agent"
-        assert s.agent_spec_id == "agent-spec-123"
+        assert s.agent_id == "agent-123"
         assert s.review_spec_id is None
         assert s.on_reject_step_id is None
 
@@ -345,6 +345,7 @@ class TestExecutionPlanRoundTrip:
         step_dict = d["steps"][0]
         assert "workflowStepId" not in step_dict
         assert "workflowStepType" not in step_dict
+        assert "agentId" not in step_dict
         assert "agentSpecId" not in step_dict
         assert "reviewSpecId" not in step_dict
         assert "onRejectStepId" not in step_dict

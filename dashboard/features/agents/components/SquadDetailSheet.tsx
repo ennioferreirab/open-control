@@ -50,21 +50,15 @@ interface SquadDetailSheetProps {
   onMissionLaunched?: (taskId: Id<"tasks">) => void;
 }
 
-function AgentDetailView({ agent, onBack }: { agent: Doc<"agentSpecs">; onBack: () => void }) {
+function AgentDetailView({ agent, onBack }: { agent: Doc<"agents">; onBack: () => void }) {
   const fields: { label: string; value: unknown }[] = [
     { label: "Name", value: agent.name },
     { label: "Role", value: agent.role },
-    { label: "Responsibilities", value: agent.responsibilities },
-    { label: "Non-Goals", value: agent.nonGoals },
-    { label: "Principles", value: agent.principles },
-    { label: "Working Style", value: agent.workingStyle },
-    { label: "Quality Rules", value: agent.qualityRules },
-    { label: "Anti-Patterns", value: agent.antiPatterns },
-    { label: "Output Contract", value: agent.outputContract },
-    { label: "Tool Policy", value: agent.toolPolicy },
-    { label: "Memory Policy", value: agent.memoryPolicy },
-    { label: "Execution Policy", value: agent.executionPolicy },
+    { label: "Prompt", value: agent.prompt },
+    { label: "Soul", value: agent.soul },
     { label: "Model", value: agent.model },
+    { label: "Provider", value: agent.interactiveProvider },
+    { label: "Status", value: agent.status },
     { label: "Skills", value: agent.skills },
   ];
 
@@ -118,7 +112,7 @@ function WorkflowStepsView({
   agents,
 }: {
   workflow: Doc<"workflowSpecs">;
-  agents: Doc<"agentSpecs">[];
+  agents: Doc<"agents">[];
 }) {
   const [expanded, setExpanded] = useState(true);
   const agentMap = new Map(agents.map((a) => [a._id, a]));
@@ -147,7 +141,7 @@ function WorkflowStepsView({
             {workflow.steps.map((step, idx) => {
               const Icon = STEP_TYPE_ICONS[step.type] ?? Cog;
               const colorClass = STEP_TYPE_COLORS[step.type] ?? STEP_TYPE_COLORS.system;
-              const assignedAgent = step.agentSpecId ? agentMap.get(step.agentSpecId) : null;
+              const assignedAgent = step.agentId ? agentMap.get(step.agentId) : null;
               const deps = step.dependsOn;
 
               return (
@@ -204,7 +198,7 @@ export function SquadDetailSheet({
 }: SquadDetailSheetProps) {
   const [missionDialogOpen, setMissionDialogOpen] = useState(false);
   const { squad, workflows, agents } = useSquadDetailData(squadId);
-  const [selectedAgent, setSelectedAgent] = useState<Doc<"agentSpecs"> | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<Doc<"agents"> | null>(null);
 
   const canRunMission = squad?.status === "published" && !!boardId;
 
@@ -268,7 +262,9 @@ export function SquadDetailSheet({
                                 <span className="text-sm font-medium">{agent.displayName}</span>
                                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1 ml-6">{agent.role}</p>
+                              <p className="text-xs text-muted-foreground mt-1 ml-6">
+                                {agent.role}
+                              </p>
                             </button>
                           ))}
                         </div>

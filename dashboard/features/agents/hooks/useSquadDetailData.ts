@@ -7,7 +7,7 @@ import type { Id, Doc } from "@/convex/_generated/dataModel";
 export interface SquadDetailData {
   squad: Doc<"squadSpecs"> | null | undefined;
   workflows: Doc<"workflowSpecs">[] | undefined;
-  agents: Doc<"agentSpecs">[] | undefined;
+  agents: Doc<"agents">[] | undefined;
   isLoading: boolean;
 }
 
@@ -17,22 +17,16 @@ export function useSquadDetailData(squadId: Id<"squadSpecs"> | null): SquadDetai
     api.workflowSpecs.listBySquad,
     squadId ? { squadSpecId: squadId } : "skip",
   );
-  const agentSpecIds = squad?.agentSpecIds ?? [];
-  const agents = useQuery(
-    api.agentSpecs.listByIds,
-    squadId && agentSpecIds.length > 0 ? { ids: agentSpecIds } : "skip",
-  );
+  const agentIds = squad?.agentIds ?? [];
+  const agents = useQuery(api.agents.listByIds, squadId ? { ids: agentIds } : "skip");
 
   const isLoading =
-    squadId !== null &&
-    (squad === undefined ||
-      workflows === undefined ||
-      (agentSpecIds.length > 0 && agents === undefined));
+    squadId !== null && (squad === undefined || workflows === undefined || agents === undefined);
 
   return {
     squad: squad ?? null,
     workflows,
-    agents: agentSpecIds.length === 0 ? [] : agents,
+    agents: agentIds.length === 0 ? [] : agents,
     isLoading,
   };
 }

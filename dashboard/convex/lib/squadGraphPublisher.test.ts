@@ -39,6 +39,7 @@ function makeCtx() {
   insertIdCounter = 0;
   const inserts: InsertCall[] = [];
   const patches: PatchCall[] = [];
+  const existingAgents = new Map<string, { _id: string; name: string }>();
 
   const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
     insertIdCounter++;
@@ -51,10 +52,40 @@ function makeCtx() {
     patches.push({ id, patch: p });
   });
 
+  const first = vi.fn(async () => {
+    const currentName = lastAgentQueryName;
+    if (!currentName) {
+      return null;
+    }
+    return existingAgents.get(currentName) ?? null;
+  });
+  let lastAgentQueryName: string | null = null;
+  const withIndex = vi.fn(
+    (
+      _indexName: string,
+      callback?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+    ) => {
+      callback?.({
+        eq: (_field: string, value: string) => {
+          lastAgentQueryName = value;
+          return undefined;
+        },
+      });
+      return { first };
+    },
+  );
+  const query = vi.fn((table: string) => {
+    if (table !== "agents") {
+      throw new Error(`Unexpected query table: ${table}`);
+    }
+    return { withIndex };
+  });
+
   return {
-    ctx: { db: { insert, patch } },
+    ctx: { db: { insert, patch, query } },
     inserts,
     patches,
+    existingAgents,
   };
 }
 
@@ -63,38 +94,38 @@ function makeCtx() {
 // ---------------------------------------------------------------------------
 
 describe("publishSquadGraph", () => {
-  it("creates child agentSpecs for each agent in the graph", async () => {
+  it("creates global agents for each graph agent that does not exist yet", async () => {
     const { ctx, inserts } = makeCtx();
 
     await publishSquadGraph(ctx, GRAPH_FIXTURE);
 
-    const agentInserts = inserts.filter((i) => i.table === "agentSpecs");
+    const agentInserts = inserts.filter((i) => i.table === "agents");
     expect(agentInserts).toHaveLength(2);
   });
 
-  it("stores each agent's name and role in the agentSpec", async () => {
+  it("stores each new global agent's name and role", async () => {
     const { ctx, inserts } = makeCtx();
 
     await publishSquadGraph(ctx, GRAPH_FIXTURE);
 
-    const agentInserts = inserts.filter((i) => i.table === "agentSpecs");
+    const agentInserts = inserts.filter((i) => i.table === "agents");
     const researcherInsert = agentInserts.find((i) => i.value.name === "audience-researcher");
     expect(researcherInsert).toBeDefined();
     expect(researcherInsert!.value.role).toBe("Researcher");
   });
 
-  it("creates child agentSpecs with status=published", async () => {
+  it("creates new global agents with idle status", async () => {
     const { ctx, inserts } = makeCtx();
 
     await publishSquadGraph(ctx, GRAPH_FIXTURE);
 
-    const agentInserts = inserts.filter((i) => i.table === "agentSpecs");
+    const agentInserts = inserts.filter((i) => i.table === "agents");
     for (const insert of agentInserts) {
-      expect(insert.value.status).toBe("published");
+      expect(insert.value.status).toBe("idle");
     }
   });
 
-  it("creates a squadSpec linking agentSpecIds", async () => {
+  it("creates a squadSpec linking agentIds", async () => {
     const { ctx, inserts } = makeCtx();
 
     await publishSquadGraph(ctx, GRAPH_FIXTURE);
@@ -103,18 +134,18 @@ describe("publishSquadGraph", () => {
     expect(squadInserts).toHaveLength(1);
 
     const squadInsert = squadInserts[0];
-    expect(Array.isArray(squadInsert.value.agentSpecIds)).toBe(true);
-    expect((squadInsert.value.agentSpecIds as unknown[]).length).toBe(2);
+    expect(Array.isArray(squadInsert.value.agentIds)).toBe(true);
+    expect((squadInsert.value.agentIds as unknown[]).length).toBe(2);
   });
 
-  it("never hardcodes agentSpecIds as empty array on the main publish path", async () => {
+  it("never hardcodes agentIds as empty array on the main publish path", async () => {
     const { ctx, inserts } = makeCtx();
 
     await publishSquadGraph(ctx, GRAPH_FIXTURE);
 
     const squadInserts = inserts.filter((i) => i.table === "squadSpecs");
-    const agentSpecIds = squadInserts[0].value.agentSpecIds as unknown[];
-    expect(agentSpecIds.length).toBeGreaterThan(0);
+    const agentIds = squadInserts[0].value.agentIds as unknown[];
+    expect(agentIds.length).toBeGreaterThan(0);
   });
 
   it("creates child workflowSpecs for each workflow in the graph", async () => {
@@ -126,7 +157,7 @@ describe("publishSquadGraph", () => {
     expect(workflowInserts).toHaveLength(1);
   });
 
-  it("stores workflow steps with resolved agentSpecId", async () => {
+  it("stores workflow steps with resolved agentId", async () => {
     const { ctx, inserts } = makeCtx();
 
     await publishSquadGraph(ctx, GRAPH_FIXTURE);
@@ -135,11 +166,24 @@ describe("publishSquadGraph", () => {
     const steps = workflowInserts[0].value.steps as Array<Record<string, unknown>>;
     expect(steps).toHaveLength(2);
 
-    // Steps with agentKey should have agentSpecId resolved
+    // Steps with agentKey should have agentId resolved
     const researchStep = steps.find((s) => s.id === "research" || s.key === "research");
     expect(researchStep).toBeDefined();
-    // agentSpecId should be a real id (not undefined)
-    expect(researchStep!.agentSpecId).toBeDefined();
+    expect(researchStep!.agentId).toBeDefined();
+  });
+
+  it("reuses an existing global agent instead of inserting a duplicate", async () => {
+    const { ctx, inserts, existingAgents } = makeCtx();
+    existingAgents.set("audience-researcher", {
+      _id: "agent-existing-1",
+      name: "audience-researcher",
+    });
+
+    await publishSquadGraph(ctx, GRAPH_FIXTURE);
+
+    const agentInserts = inserts.filter((i) => i.table === "agents");
+    expect(agentInserts).toHaveLength(1);
+    expect(agentInserts[0].value.name).toBe("post-writer");
   });
 
   it("sets defaultWorkflowSpecId on the squad after creating workflows", async () => {

@@ -12,8 +12,8 @@ vi.mock("@/convex/_generated/api", () => ({
     squadSpecs: {
       getById: "squadSpecs:getById",
     },
-    agentSpecs: {
-      listByIds: "agentSpecs:listByIds",
+    agents: {
+      listByIds: "agents:listByIds",
     },
     workflowSpecs: {
       listBySquad: "workflowSpecs:listBySquad",
@@ -49,7 +49,7 @@ describe("useSquadDetailData", () => {
       displayName: "Review Squad",
       description: "A squad",
       outcome: "Ship code",
-      agentSpecIds: [],
+      agentIds: [],
       defaultWorkflowSpecId: undefined,
       status: "published" as const,
       version: 1,
@@ -73,7 +73,7 @@ describe("useSquadDetailData", () => {
     mockUseQuery
       .mockReturnValueOnce(mockSquad) // squadSpecs.getById
       .mockReturnValueOnce(mockWorkflows) // workflowSpecs.listBySquad
-      .mockReturnValueOnce([]); // agentSpecs.listByIds
+      .mockReturnValueOnce([]); // agents.listByIds
 
     const { result } = renderHook(() => useSquadDetailData(MOCK_SQUAD_ID));
     expect(result.current.squad).toEqual(mockSquad);
@@ -95,7 +95,7 @@ describe("useSquadDetailData", () => {
       _creationTime: 1000,
       name: "review-squad",
       displayName: "Review Squad",
-      agentSpecIds: ["agent-1" as Id<"agentSpecs">],
+      agentIds: ["agent-1" as Id<"agents">],
       status: "published" as const,
       version: 1,
       createdAt: "2024-01-01",
@@ -103,22 +103,21 @@ describe("useSquadDetailData", () => {
     };
     const mockAgents = [
       {
-        _id: "agent-1" as Id<"agentSpecs">,
+        _id: "agent-1" as Id<"agents">,
         _creationTime: 1000,
         name: "developer",
         displayName: "Developer",
         role: "Developer",
-        status: "published" as const,
-        version: 1,
-        createdAt: "2024-01-01",
-        updatedAt: "2024-01-01",
+        skills: [],
+        status: "idle" as const,
+        lastActiveAt: "2024-01-01",
       },
     ];
 
     mockUseQuery
       .mockReturnValueOnce(mockSquad) // squadSpecs.getById
       .mockReturnValueOnce([]) // workflowSpecs.listBySquad
-      .mockReturnValueOnce(mockAgents); // agentSpecs.listByIds
+      .mockReturnValueOnce(mockAgents); // agents.listByIds
 
     const { result } = renderHook(() => useSquadDetailData(MOCK_SQUAD_ID));
     expect(result.current.agents).toEqual(mockAgents);
@@ -133,6 +132,7 @@ describe("useSquadDetailData", () => {
     expect(mockUseQuery).toHaveBeenCalledWith("workflowSpecs:listBySquad", {
       squadSpecId: MOCK_SQUAD_ID,
     });
+    expect(mockUseQuery).toHaveBeenCalledWith("agents:listByIds", { ids: [] });
   });
 
   it("skips queries when squadId is null", () => {

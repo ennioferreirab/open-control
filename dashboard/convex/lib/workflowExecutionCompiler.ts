@@ -12,7 +12,7 @@
  * - `generatedBy` is `"workflow"` (not `"lead-agent"`) so the runtime can
  *   distinguish plan sources.
  * - Optional workflow metadata fields (workflowStepId, workflowStepType,
- *   agentSpecId) are attached to each step for downstream use.
+ *   agentId) are attached to each step for downstream use.
  */
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ export interface WorkflowSpecStep {
   id: string;
   title: string;
   type: WorkflowStepType;
-  agentSpecId?: string;
+  agentId?: string;
   description?: string;
   inputs?: string[];
   outputs?: string[];
@@ -41,9 +41,9 @@ export interface WorkflowSpecInput {
   steps: WorkflowSpecStep[];
 }
 
-/** Resolved mapping of an agentSpec to its runtime agent name. */
-export interface AgentSpecRef {
-  specId: string;
+/** Resolved mapping of a canonical agent id to its runtime agent name. */
+export interface AgentRef {
+  agentId: string;
   agentName: string;
 }
 
@@ -73,8 +73,8 @@ export interface WorkflowExecutionPlanStep {
   workflowStepId: string;
   /** Original workflow step type. */
   workflowStepType: WorkflowStepType;
-  /** The agentSpec id this step was compiled from (agent steps only). */
-  agentSpecId?: string;
+  /** The canonical agent id this step was compiled from (agent steps only). */
+  agentId?: string;
   /** The step id to route to on rejection (review steps only). */
   onRejectStepId?: string;
 }
@@ -106,7 +106,7 @@ export interface WorkflowExecutionPlan {
  * @param generatedAt  - Optional ISO timestamp (injected for deterministic tests).
  * @returns A `WorkflowExecutionPlan` compatible with the execution pipeline.
  *
- * @throws If an agent-type step references an agentSpecId that is not in `agentRefs`.
+ * @throws If an agent-type step references an agentId that is not in `agentRefs`.
  */
 /**
  * Compute the parallel group (topological layer) for each step.
@@ -149,13 +149,13 @@ function computeParallelGroups(steps: WorkflowSpecStep[]): Map<string, number> {
 
 export function compileWorkflowExecutionPlan(
   workflow: WorkflowSpecInput,
-  agentRefs: AgentSpecRef[],
+  agentRefs: AgentRef[],
   generatedAt?: string,
 ): WorkflowExecutionPlan {
-  // Build a fast lookup: specId → agentName
+  // Build a fast lookup: agentId → agentName
   const agentLookup = new Map<string, string>();
   for (const ref of agentRefs) {
-    agentLookup.set(ref.specId, ref.agentName);
+    agentLookup.set(ref.agentId, ref.agentName);
   }
 
   // Compute topological layer groups for parallelGroup assignment
@@ -164,12 +164,12 @@ export function compileWorkflowExecutionPlan(
   const compiledSteps: WorkflowExecutionPlanStep[] = workflow.steps.map((step, index) => {
     // Resolve agent name
     let assignedAgent = "";
-    if (step.agentSpecId !== undefined) {
-      const resolvedName = agentLookup.get(step.agentSpecId);
+    if (step.agentId !== undefined) {
+      const resolvedName = agentLookup.get(step.agentId);
       if (resolvedName === undefined) {
         throw new Error(
-          `Cannot resolve agentSpecId "${step.agentSpecId}" for step "${step.id}". ` +
-            `Available spec ids: ${Array.from(agentLookup.keys()).join(", ") || "(none)"}`,
+          `Cannot resolve agentId "${step.agentId}" for step "${step.id}". ` +
+            `Available agent ids: ${Array.from(agentLookup.keys()).join(", ") || "(none)"}`,
         );
       }
       assignedAgent = resolvedName;
@@ -190,8 +190,8 @@ export function compileWorkflowExecutionPlan(
       workflowStepType: step.type,
     };
 
-    if (step.agentSpecId !== undefined) {
-      compiledStep.agentSpecId = step.agentSpecId;
+    if (step.agentId !== undefined) {
+      compiledStep.agentId = step.agentId;
     }
 
     if (step.onReject !== undefined) {

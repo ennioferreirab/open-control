@@ -75,17 +75,17 @@ describe("squadSpecs.createDraft", () => {
     expect(inserts[0].value.displayName).toBe("My Squad");
   });
 
-  it("stores agentSpecIds when provided", async () => {
+  it("stores agentIds when provided", async () => {
     const handler = getHandler(createDraft);
     const { ctx, inserts } = makeCtx();
 
     await handler(ctx, {
       name: "squad-with-agents",
       displayName: "Squad With Agents",
-      agentSpecIds: ["agent-spec-1", "agent-spec-2"],
+      agentIds: ["agent-1", "agent-2"],
     });
 
-    expect(inserts[0].value.agentSpecIds).toEqual(["agent-spec-1", "agent-spec-2"]);
+    expect(inserts[0].value.agentIds).toEqual(["agent-1", "agent-2"]);
   });
 
   it("supports an optional defaultWorkflowSpecId", async () => {
@@ -262,6 +262,8 @@ function makeGraphCtx() {
   insertIdCounter = 0;
   const inserts: InsertCall[] = [];
   const patches: PatchCall[] = [];
+  const existingAgents = new Map<string, { _id: string; name: string }>();
+  let lastAgentQueryName: string | null = null;
 
   const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
     insertIdCounter++;
@@ -274,21 +276,49 @@ function makeGraphCtx() {
     patches.push({ id, patch: p });
   });
 
+  const first = vi.fn(async () => {
+    if (!lastAgentQueryName) {
+      return null;
+    }
+    return existingAgents.get(lastAgentQueryName) ?? null;
+  });
+  const withIndex = vi.fn(
+    (
+      _indexName: string,
+      callback?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+    ) => {
+      callback?.({
+        eq: (_field: string, value: string) => {
+          lastAgentQueryName = value;
+          return undefined;
+        },
+      });
+      return { first };
+    },
+  );
+  const query = vi.fn((table: string) => {
+    if (table !== "agents") {
+      throw new Error(`Unexpected query table: ${table}`);
+    }
+    return { withIndex };
+  });
+
   return {
-    ctx: { db: { insert, patch } },
+    ctx: { db: { insert, patch, query } },
     inserts,
     patches,
+    existingAgents,
   };
 }
 
 describe("squadSpecs.publishGraph", () => {
-  it("creates child agentSpecs for each agent in the graph", async () => {
+  it("creates or reuses global agents for each agent in the graph", async () => {
     const handler = getHandler(publishGraph);
     const { ctx, inserts } = makeGraphCtx();
 
     await handler(ctx, { graph: GRAPH_FIXTURE });
 
-    const agentInserts = inserts.filter((i) => i.table === "agentSpecs");
+    const agentInserts = inserts.filter((i) => i.table === "agents");
     expect(agentInserts).toHaveLength(2);
   });
 
@@ -302,7 +332,7 @@ describe("squadSpecs.publishGraph", () => {
     expect(workflowInserts).toHaveLength(1);
   });
 
-  it("links agentSpecIds into the saved squadSpec", async () => {
+  it("links agentIds into the saved squadSpec", async () => {
     const handler = getHandler(publishGraph);
     const { ctx, inserts } = makeGraphCtx();
 
@@ -311,20 +341,20 @@ describe("squadSpecs.publishGraph", () => {
     const squadInserts = inserts.filter((i) => i.table === "squadSpecs");
     expect(squadInserts).toHaveLength(1);
 
-    const agentSpecIds = squadInserts[0].value.agentSpecIds as unknown[];
-    expect(Array.isArray(agentSpecIds)).toBe(true);
-    expect(agentSpecIds.length).toBe(2);
+    const agentIds = squadInserts[0].value.agentIds as unknown[];
+    expect(Array.isArray(agentIds)).toBe(true);
+    expect(agentIds.length).toBe(2);
   });
 
-  it("never hardcodes agentSpecIds as empty array", async () => {
+  it("never hardcodes agentIds as empty array", async () => {
     const handler = getHandler(publishGraph);
     const { ctx, inserts } = makeGraphCtx();
 
     await handler(ctx, { graph: GRAPH_FIXTURE });
 
     const squadInserts = inserts.filter((i) => i.table === "squadSpecs");
-    const agentSpecIds = squadInserts[0].value.agentSpecIds as unknown[];
-    expect(agentSpecIds.length).toBeGreaterThan(0);
+    const agentIds = squadInserts[0].value.agentIds as unknown[];
+    expect(agentIds.length).toBeGreaterThan(0);
   });
 
   it("sets defaultWorkflowSpecId on the squadSpec", async () => {

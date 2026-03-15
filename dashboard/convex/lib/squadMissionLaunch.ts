@@ -18,7 +18,7 @@ import type { MutationCtx } from "../_generated/server";
 
 import {
   compileWorkflowExecutionPlan,
-  type AgentSpecRef,
+  type AgentRef,
   type WorkflowSpecInput,
   type WorkflowExecutionPlan,
 } from "./workflowExecutionCompiler";
@@ -28,7 +28,7 @@ import { logTaskCreated } from "./taskLifecycle";
 // Types
 // ---------------------------------------------------------------------------
 
-export type { AgentSpecRef, WorkflowSpecInput, WorkflowExecutionPlan };
+export type { AgentRef, WorkflowSpecInput, WorkflowExecutionPlan };
 
 type LaunchMutationCtx = Pick<MutationCtx, "db">;
 
@@ -113,20 +113,20 @@ export async function launchSquadMission(
     timestamp: now,
   });
 
-  // Build agent refs from the squadSpec's agentSpecIds
-  const agentRefs: AgentSpecRef[] = [];
-  const agentSpecIds = (squadSpec.agentSpecIds ?? []) as Id<"agentSpecs">[];
-  const missingAgentSpecIds: string[] = [];
-  for (const agentSpecId of agentSpecIds) {
-    const agentSpec = await ctx.db.get(agentSpecId);
-    if (agentSpec) {
-      agentRefs.push({ specId: String(agentSpecId), agentName: agentSpec.name });
+  // Build agent refs from the squadSpec's canonical agentIds
+  const agentRefs: AgentRef[] = [];
+  const agentIds = (squadSpec.agentIds ?? []) as Id<"agents">[];
+  const missingAgentIds: string[] = [];
+  for (const agentId of agentIds) {
+    const agent = await ctx.db.get(agentId);
+    if (agent) {
+      agentRefs.push({ agentId: String(agentId), agentName: agent.name });
     } else {
-      missingAgentSpecIds.push(String(agentSpecId));
+      missingAgentIds.push(String(agentId));
     }
   }
-  if (missingAgentSpecIds.length > 0) {
-    throw new ConvexError(`Agent specs not found: ${missingAgentSpecIds.join(", ")}`);
+  if (missingAgentIds.length > 0) {
+    throw new ConvexError(`Agents not found: ${missingAgentIds.join(", ")}`);
   }
 
   // Compile the workflow spec into an execution plan and attach it
@@ -161,13 +161,13 @@ export async function launchSquadMission(
  * @returns The compiled plan that was saved.
  *
  * @throws If the task is not found.
- * @throws If an agent-type step references an unknown agentSpecId.
+ * @throws If an agent-type step references an unknown agentId.
  */
 export async function attachWorkflowExecutionPlan(
   ctx: LaunchMutationCtx,
   taskId: Id<"tasks">,
   workflow: WorkflowSpecInput,
-  agentRefs: AgentSpecRef[],
+  agentRefs: AgentRef[],
   generatedAt?: string,
 ): Promise<WorkflowExecutionPlan> {
   const task = await ctx.db.get(taskId);
@@ -196,7 +196,7 @@ export async function attachWorkflowExecutionPlan(
  */
 export function buildWorkflowExecutionPlan(
   workflow: WorkflowSpecInput,
-  agentRefs: AgentSpecRef[],
+  agentRefs: AgentRef[],
   generatedAt?: string,
 ): WorkflowExecutionPlan {
   return compileWorkflowExecutionPlan(workflow, agentRefs, generatedAt);

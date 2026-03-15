@@ -73,8 +73,8 @@ describe("workflowSpecs.createDraft", () => {
     const { ctx, inserts } = makeCtx();
 
     const steps = [
-      { stepId: "step-1", name: "Research", type: "agent", owner: "researcher" },
-      { stepId: "step-2", name: "Review", type: "review", owner: "reviewer" },
+      { id: "step-1", title: "Research", type: "agent", agentId: "agent-1" },
+      { id: "step-2", title: "Review", type: "review" },
     ];
 
     await handler(ctx, {

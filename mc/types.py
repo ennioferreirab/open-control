@@ -222,6 +222,7 @@ class ExecutionPlanStep:
     # Workflow metadata — present when step was compiled from a workflowSpec.
     workflow_step_id: str | None = None
     workflow_step_type: str | None = None  # WorkflowStepType value
+    agent_id: str | None = None
     agent_spec_id: str | None = None
     review_spec_id: str | None = None
     on_reject_step_id: str | None = None
@@ -265,6 +266,8 @@ class ExecutionPlan:
                 step["workflowStepId"] = s.workflow_step_id
             if s.workflow_step_type is not None:
                 step["workflowStepType"] = s.workflow_step_type
+            if s.agent_id is not None:
+                step["agentId"] = s.agent_id
             if s.agent_spec_id is not None:
                 step["agentSpecId"] = s.agent_spec_id
             if s.review_spec_id is not None:
@@ -329,6 +332,7 @@ class ExecutionPlan:
                     workflow_step_type=(
                         raw_step.get("workflow_step_type") or raw_step.get("workflowStepType")
                     ),
+                    agent_id=(raw_step.get("agent_id") or raw_step.get("agentId")),
                     agent_spec_id=(raw_step.get("agent_spec_id") or raw_step.get("agentSpecId")),
                     review_spec_id=(raw_step.get("review_spec_id") or raw_step.get("reviewSpecId")),
                     on_reject_step_id=(

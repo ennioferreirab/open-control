@@ -180,7 +180,7 @@ export default defineSchema({
     // Workflow metadata — set only when the step was materialized from a workflowSpec.
     workflowStepId: v.optional(v.string()),
     workflowStepType: v.optional(workflowStepTypeValidator),
-    agentSpecId: v.optional(v.id("agentSpecs")),
+    agentId: v.optional(v.id("agents")),
     reviewSpecId: v.optional(v.id("reviewSpecs")),
     onRejectStepId: v.optional(v.string()),
   })
@@ -431,7 +431,7 @@ export default defineSchema({
     displayName: v.string(),
     description: v.optional(v.string()),
     outcome: v.optional(v.string()),
-    agentSpecIds: v.array(v.id("agentSpecs")),
+    agentIds: v.array(v.id("agents")),
     defaultWorkflowSpecId: v.optional(v.id("workflowSpecs")),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
     version: v.number(),
@@ -458,7 +458,7 @@ export default defineSchema({
           v.literal("review"),
           v.literal("system"),
         ),
-        agentSpecId: v.optional(v.id("agentSpecs")),
+        agentId: v.optional(v.id("agents")),
         description: v.optional(v.string()),
         inputs: v.optional(v.array(v.string())),
         outputs: v.optional(v.array(v.string())),

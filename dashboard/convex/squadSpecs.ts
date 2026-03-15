@@ -10,7 +10,7 @@ export const createDraft = internalMutation({
     name: v.string(),
     displayName: v.string(),
     description: v.optional(v.string()),
-    agentSpecIds: v.optional(v.array(v.id("agentSpecs"))),
+    agentIds: v.optional(v.array(v.id("agents"))),
     defaultWorkflowSpecId: v.optional(v.id("workflowSpecs")),
     tags: v.optional(v.array(v.string())),
   },
@@ -20,7 +20,7 @@ export const createDraft = internalMutation({
       name: args.name,
       displayName: args.displayName,
       description: args.description,
-      agentSpecIds: args.agentSpecIds ?? [],
+      agentIds: args.agentIds ?? [],
       defaultWorkflowSpecId: args.defaultWorkflowSpecId,
       tags: args.tags,
       status: "draft",
@@ -104,8 +104,8 @@ export const getById = query({
  * in a single atomic mutation.
  *
  * Accepts a structured graph object and delegates to the squad graph
- * publisher, which orchestrates all child spec creation and wires up
- * the agentSpecIds and defaultWorkflowSpecId on the resulting squadSpec.
+ * publisher, which orchestrates all child/global record creation and wires up
+ * the agentIds and defaultWorkflowSpecId on the resulting squadSpec.
  *
  * This mutation does NOT create tasks or execute workflows.
  */

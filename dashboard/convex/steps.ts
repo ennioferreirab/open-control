@@ -261,7 +261,7 @@ export const batchCreate = internalMutation({
         // Optional workflow metadata
         workflowStepId: v.optional(v.string()),
         workflowStepType: v.optional(workflowStepTypeValidator),
-        agentSpecId: v.optional(v.id("agentSpecs")),
+        agentId: v.optional(v.id("agents")),
         reviewSpecId: v.optional(v.id("reviewSpecs")),
         onRejectStepId: v.optional(v.string()),
       }),
@@ -294,7 +294,7 @@ export const batchCreate = internalMutation({
         createdAt: now,
         ...(step.workflowStepId !== undefined ? { workflowStepId: step.workflowStepId } : {}),
         ...(step.workflowStepType !== undefined ? { workflowStepType: step.workflowStepType } : {}),
-        ...(step.agentSpecId !== undefined ? { agentSpecId: step.agentSpecId } : {}),
+        ...(step.agentId !== undefined ? { agentId: step.agentId } : {}),
         ...(step.reviewSpecId !== undefined ? { reviewSpecId: step.reviewSpecId } : {}),
         ...(step.onRejectStepId !== undefined ? { onRejectStepId: step.onRejectStepId } : {}),
       });

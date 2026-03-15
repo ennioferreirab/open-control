@@ -151,6 +151,16 @@ export const getByName = query({
   },
 });
 
+export const listByIds = query({
+  args: {
+    ids: v.array(v.id("agents")),
+  },
+  handler: async (ctx, args) => {
+    const results = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
+    return results.filter((doc) => doc !== null && !doc.deletedAt);
+  },
+});
+
 export const updateConfig = mutation({
   args: {
     name: v.string(),

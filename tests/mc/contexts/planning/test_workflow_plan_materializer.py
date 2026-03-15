@@ -14,6 +14,7 @@ def _make_workflow_step(
     description: str,
     workflow_step_type: str = WorkflowStepType.AGENT,
     workflow_step_id: str | None = None,
+    agent_id: str | None = None,
     agent_spec_id: str | None = None,
     review_spec_id: str | None = None,
     on_reject_step_id: str | None = None,
@@ -29,6 +30,7 @@ def _make_workflow_step(
         order=1,
         workflow_step_id=workflow_step_id or temp_id,
         workflow_step_type=workflow_step_type,
+        agent_id=agent_id,
         agent_spec_id=agent_spec_id,
         review_spec_id=review_spec_id,
         on_reject_step_id=on_reject_step_id,
@@ -48,7 +50,7 @@ def test_workflow_agent_step_metadata_preserved() -> None:
                 "Analyze requirements",
                 workflow_step_type=WorkflowStepType.AGENT,
                 workflow_step_id="analyze-step",
-                agent_spec_id="agent-spec-123",
+                agent_id="agent-123",
             )
         ]
     )
@@ -59,7 +61,7 @@ def test_workflow_agent_step_metadata_preserved() -> None:
     step_payload = payload[0]
     assert step_payload["workflow_step_id"] == "analyze-step"
     assert step_payload["workflow_step_type"] == "agent"
-    assert step_payload["agent_spec_id"] == "agent-spec-123"
+    assert step_payload["agent_id"] == "agent-123"
 
 
 def test_human_step_type_survives_materialization() -> None:
@@ -150,7 +152,7 @@ def test_dependency_mapping_still_works_with_workflow_metadata() -> None:
                 "Analyze data",
                 workflow_step_type=WorkflowStepType.AGENT,
                 workflow_step_id="analyze",
-                agent_spec_id="agent-spec-1",
+                agent_id="agent-1",
             ),
             _make_workflow_step(
                 "step_2",
@@ -207,5 +209,6 @@ def test_plain_steps_without_workflow_metadata_unaffected() -> None:
     # Workflow metadata fields should NOT be present for plain steps
     assert "workflow_step_id" not in payload[0]
     assert "workflow_step_type" not in payload[0]
+    assert "agent_id" not in payload[0]
     assert "agent_spec_id" not in payload[0]
     assert payload[1]["blocked_by_temp_ids"] == ["step_1"]

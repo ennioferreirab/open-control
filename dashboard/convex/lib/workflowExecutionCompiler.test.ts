@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   compileWorkflowExecutionPlan,
   type WorkflowSpecInput,
-  type AgentSpecRef,
+  type AgentRef,
   type WorkflowExecutionPlan,
   type WorkflowExecutionPlanStep,
 } from "./workflowExecutionCompiler";
@@ -12,10 +12,10 @@ import {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const AGENT_REFS: AgentSpecRef[] = [
-  { specId: "agentSpec-id-1", agentName: "audience-researcher" },
-  { specId: "agentSpec-id-2", agentName: "post-writer" },
-  { specId: "agentSpec-id-3", agentName: "content-reviewer" },
+const AGENT_REFS: AgentRef[] = [
+  { agentId: "agent-id-1", agentName: "audience-researcher" },
+  { agentId: "agent-id-2", agentName: "post-writer" },
+  { agentId: "agent-id-3", agentName: "content-reviewer" },
 ];
 
 const MINIMAL_WORKFLOW: WorkflowSpecInput = {
@@ -26,7 +26,7 @@ const MINIMAL_WORKFLOW: WorkflowSpecInput = {
       id: "step-research",
       title: "Research audience",
       type: "agent",
-      agentSpecId: "agentSpec-id-1",
+      agentId: "agent-id-1",
     },
   ],
 };
@@ -39,21 +39,21 @@ const MULTI_STEP_WORKFLOW: WorkflowSpecInput = {
       id: "step-research",
       title: "Research audience",
       type: "agent",
-      agentSpecId: "agentSpec-id-1",
+      agentId: "agent-id-1",
       description: "Research the target audience thoroughly",
     },
     {
       id: "step-write",
       title: "Write post",
       type: "agent",
-      agentSpecId: "agentSpec-id-2",
+      agentId: "agent-id-2",
       dependsOn: ["step-research"],
     },
     {
       id: "step-review",
       title: "Review content",
       type: "agent",
-      agentSpecId: "agentSpec-id-3",
+      agentId: "agent-id-3",
       dependsOn: ["step-write"],
     },
   ],
@@ -67,19 +67,19 @@ const PARALLEL_WORKFLOW: WorkflowSpecInput = {
       id: "step-research-a",
       title: "Research topic A",
       type: "agent",
-      agentSpecId: "agentSpec-id-1",
+      agentId: "agent-id-1",
     },
     {
       id: "step-research-b",
       title: "Research topic B",
       type: "agent",
-      agentSpecId: "agentSpec-id-2",
+      agentId: "agent-id-2",
     },
     {
       id: "step-merge",
       title: "Merge results",
       type: "agent",
-      agentSpecId: "agentSpec-id-3",
+      agentId: "agent-id-3",
       dependsOn: ["step-research-a", "step-research-b"],
     },
   ],
@@ -179,7 +179,7 @@ describe("step title and description", () => {
 // ---------------------------------------------------------------------------
 
 describe("agent resolution", () => {
-  it("resolves agentSpecId to an assignedAgent name", () => {
+  it("resolves agentId to an assignedAgent name", () => {
     const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
     expect(plan.steps[0].assignedAgent).toBe("audience-researcher");
   });
@@ -192,7 +192,7 @@ describe("agent resolution", () => {
     expect(writeStep!.assignedAgent).toBe("post-writer");
   });
 
-  it("assigns empty string for assignedAgent when agentSpecId is absent (human/checkpoint step)", () => {
+  it("assigns empty string for assignedAgent when agentId is absent (human/checkpoint step)", () => {
     const humanWorkflow: WorkflowSpecInput = {
       specId: "wf-human",
       name: "Human Review Workflow",
@@ -208,7 +208,7 @@ describe("agent resolution", () => {
     expect(plan.steps[0].assignedAgent).toBe("");
   });
 
-  it("throws when an agentSpecId cannot be resolved", () => {
+  it("throws when an agentId cannot be resolved", () => {
     const badWorkflow: WorkflowSpecInput = {
       specId: "wf-bad",
       name: "Bad Workflow",
@@ -217,7 +217,7 @@ describe("agent resolution", () => {
           id: "step-bad",
           title: "Bad step",
           type: "agent",
-          agentSpecId: "nonexistent-spec-id",
+          agentId: "nonexistent-agent-id",
         },
       ],
     };
@@ -328,19 +328,19 @@ describe("workflow metadata on steps", () => {
     }
   });
 
-  it("carries agentSpecId on agent-type steps", () => {
+  it("carries agentId on agent-type steps", () => {
     const plan = compileWorkflowExecutionPlan(MINIMAL_WORKFLOW, AGENT_REFS);
-    expect(plan.steps[0].agentSpecId).toBe("agentSpec-id-1");
+    expect(plan.steps[0].agentId).toBe("agent-id-1");
   });
 
-  it("does not carry agentSpecId on non-agent steps", () => {
+  it("does not carry agentId on non-agent steps", () => {
     const humanWorkflow: WorkflowSpecInput = {
       specId: "wf-human",
       name: "Human Workflow",
       steps: [{ id: "step-human", title: "Human step", type: "human" }],
     };
     const plan = compileWorkflowExecutionPlan(humanWorkflow, AGENT_REFS);
-    expect(plan.steps[0].agentSpecId).toBeUndefined();
+    expect(plan.steps[0].agentId).toBeUndefined();
   });
 
   it("maps onReject to onRejectStepId on the compiled step", () => {
@@ -352,7 +352,7 @@ describe("workflow metadata on steps", () => {
           id: "step-agent",
           title: "Agent step",
           type: "agent",
-          agentSpecId: "agentSpec-id-1",
+          agentId: "agent-id-1",
         },
         {
           id: "step-review",
