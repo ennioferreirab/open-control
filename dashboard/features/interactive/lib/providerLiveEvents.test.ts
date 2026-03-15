@@ -108,6 +108,7 @@ describe("buildProviderLiveEvent", () => {
       kind: "item_started",
       category: "tool",
       title: "Read",
+      body: "",
       toolName: "Read",
       toolInput: "/tmp/file.txt",
       requiresAction: false,

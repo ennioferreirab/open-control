@@ -1,12 +1,13 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { useMemo, useState } from "react";
 
-export type ProviderEvent = {
-  id: string;
-  text: string;
-  kind: string;
-};
+import { ProviderLiveEventRow } from "@/features/interactive/components/ProviderLiveEventRow";
+import {
+  type ProviderLiveCategory,
+  type ProviderLiveEvent,
+} from "@/features/interactive/lib/providerLiveEvents";
+import { cn } from "@/lib/utils";
 
 export type ProviderSessionStatus = "loading" | "idle" | "streaming" | "completed" | "error";
 
@@ -20,7 +21,7 @@ const STATUS_LABELS: Record<ProviderSessionStatus, string> = {
 
 interface ProviderLiveChatPanelProps {
   sessionId: string | null;
-  events: ProviderEvent[];
+  events: ProviderLiveEvent[];
   status: ProviderSessionStatus;
   agentName: string;
   provider: string;
@@ -37,6 +38,29 @@ export function ProviderLiveChatPanel({
   isLoading,
   errorMessage,
 }: ProviderLiveChatPanelProps) {
+  const availableCategories = useMemo(
+    () => Array.from(new Set(events.map((event) => event.category))),
+    [events],
+  );
+  const [hiddenCategories, setHiddenCategories] = useState<Set<ProviderLiveCategory>>(new Set());
+
+  const filteredEvents = useMemo(
+    () => events.filter((event) => !hiddenCategories.has(event.category)),
+    [events, hiddenCategories],
+  );
+
+  const toggleCategory = (category: ProviderLiveCategory) => {
+    setHiddenCategories((current) => {
+      const next = new Set(current);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-zinc-950 text-zinc-100">
       {/* Header */}
@@ -83,21 +107,53 @@ export function ProviderLiveChatPanel({
         </div>
       )}
 
+      {availableCategories.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-3 py-2">
+          <button
+            type="button"
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              hiddenCategories.size === 0
+                ? "border-zinc-500 bg-zinc-100 text-zinc-900"
+                : "border-zinc-700 bg-zinc-900 text-zinc-300",
+            )}
+            onClick={() => setHiddenCategories(new Set())}
+          >
+            All
+          </button>
+          {availableCategories.map((category) => {
+            const selected = !hiddenCategories.has(category);
+            return (
+              <button
+                key={category}
+                type="button"
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize",
+                  selected
+                    ? "border-zinc-500 bg-zinc-100 text-zinc-900"
+                    : "border-zinc-700 bg-zinc-900 text-zinc-300",
+                )}
+                onClick={() => toggleCategory(category)}
+              >
+                {category}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Content area */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {isLoading ? (
           <p className="text-xs text-zinc-500">Connecting to provider session…</p>
         ) : events.length === 0 ? (
           <p className="text-xs text-zinc-500">No output yet.</p>
+        ) : filteredEvents.length === 0 ? (
+          <p className="text-xs text-zinc-500">No live events for the selected categories.</p>
         ) : (
-          <div className="flex flex-col gap-1">
-            {events.map((event) => (
-              <pre
-                key={event.id}
-                className="whitespace-pre-wrap break-words font-mono text-xs text-zinc-200"
-              >
-                {event.text}
-              </pre>
+          <div className="flex flex-col gap-2">
+            {filteredEvents.map((event) => (
+              <ProviderLiveEventRow key={event.id} event={event} />
             ))}
           </div>
         )}

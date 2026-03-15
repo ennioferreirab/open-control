@@ -33,22 +33,71 @@ describe("normalizeProviderEvents", () => {
     expect(normalizeProviderEvents([])).toEqual([]);
   });
 
-  it("maps activity entries to normalized events with id, text, and kind", () => {
+  it("normalizes activity entries into structured live events", () => {
     const events = normalizeProviderEvents([
-      { _id: "act-1", kind: "text", summary: "Hello from provider" },
-      { _id: "act-2", kind: "result", summary: "Step completed" },
+      {
+        _id: "act-1",
+        kind: "approval_requested",
+        ts: "2026-03-15T10:00:00.000Z",
+        summary: "Need permission to run tests",
+        requiresAction: true,
+      },
     ]);
 
-    expect(events).toHaveLength(2);
-    expect(events[0]).toEqual({ id: "act-1", text: "Hello from provider", kind: "text" });
-    expect(events[1]).toEqual({ id: "act-2", text: "Step completed", kind: "result" });
+    expect(events[0]).toMatchObject({
+      id: "act-1",
+      kind: "approval_requested",
+      category: "action",
+      body: "Need permission to run tests",
+      requiresAction: true,
+    });
   });
 
-  it("uses tool name and input when summary is missing", () => {
+  it("includes category, body, toolName, toolInput fields", () => {
     const events = normalizeProviderEvents([
-      { _id: "act-1", kind: "tool_use", toolName: "Read", toolInput: "/tmp/file.txt" },
+      {
+        _id: "act-2",
+        kind: "item_started",
+        ts: "2026-03-15T10:01:00.000Z",
+        toolName: "Read",
+        toolInput: "/tmp/file.txt",
+      },
     ]);
 
-    expect(events[0].text).toBe("Read: /tmp/file.txt");
+    expect(events[0]).toMatchObject({
+      id: "act-2",
+      category: "tool",
+      toolName: "Read",
+      toolInput: "/tmp/file.txt",
+    });
+  });
+
+  it("classifies session_failed as error category", () => {
+    const events = normalizeProviderEvents([
+      {
+        _id: "act-3",
+        kind: "session_failed",
+        ts: "2026-03-15T10:02:00.000Z",
+        error: "Provider timed out",
+      },
+    ]);
+
+    expect(events[0]).toMatchObject({
+      id: "act-3",
+      category: "error",
+      body: "Provider timed out",
+    });
+  });
+
+  it("falls back safely when summary, error, and toolName are all absent", () => {
+    const events = normalizeProviderEvents([
+      { _id: "act-4", kind: "session_ready", ts: "2026-03-15T10:03:00.000Z" },
+    ]);
+
+    expect(events[0]).toMatchObject({
+      id: "act-4",
+      category: "system",
+      body: "",
+    });
   });
 });

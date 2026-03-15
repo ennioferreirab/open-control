@@ -5,20 +5,24 @@ import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
-import type {
-  ProviderEvent,
-  ProviderSessionStatus,
-} from "@/features/interactive/components/ProviderLiveChatPanel";
+import type { ProviderSessionStatus } from "@/features/interactive/components/ProviderLiveChatPanel";
+import {
+  buildProviderLiveEvents,
+  type ProviderLiveEvent,
+} from "@/features/interactive/lib/providerLiveEvents";
 
 type InteractiveSessionDoc = Doc<"interactiveSessions">;
 
 type RawActivityEntry = {
   _id: string;
   kind: string;
+  ts?: string;
   summary?: string;
   error?: string;
   toolName?: string;
   toolInput?: string;
+  filePath?: string;
+  requiresAction?: boolean;
 };
 
 /**
@@ -48,21 +52,14 @@ export function selectProviderSessionStatus(
 }
 
 /**
- * Normalize raw activity log entries into the flat ProviderEvent shape.
+ * Normalize raw activity log entries into structured live events.
  */
-export function normalizeProviderEvents(entries: RawActivityEntry[]): ProviderEvent[] {
-  return entries.map((entry) => ({
-    id: entry._id,
-    text:
-      entry.summary ??
-      entry.error ??
-      (entry.toolName ? `${entry.toolName}${entry.toolInput ? `: ${entry.toolInput}` : ""}` : ""),
-    kind: entry.kind ?? "text",
-  }));
+export function normalizeProviderEvents(entries: RawActivityEntry[]): ProviderLiveEvent[] {
+  return buildProviderLiveEvents(entries);
 }
 
 type UseProviderSessionResult = {
-  events: ProviderEvent[];
+  events: ProviderLiveEvent[];
   status: ProviderSessionStatus;
   sessionId: string | null;
   agentName: string | null;
@@ -94,7 +91,7 @@ export function useProviderSession(
     return selectProviderSessionStatus(session.status);
   }, [session]);
 
-  const events = useMemo<ProviderEvent[]>(
+  const events = useMemo<ProviderLiveEvent[]>(
     () => normalizeProviderEvents(activityEntries ?? []),
     [activityEntries],
   );

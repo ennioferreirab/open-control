@@ -103,11 +103,7 @@ export function buildProviderLiveEvent(raw: RawEntry): ProviderLiveEvent {
   const body =
     raw.summary ??
     raw.error ??
-    (raw.toolName
-      ? raw.toolInput
-        ? `${raw.toolName}: ${raw.toolInput}`
-        : raw.toolName
-      : "");
+    (category === "tool" || category === "skill" || category === "system" ? "" : title);
 
   return {
     id: raw._id,
