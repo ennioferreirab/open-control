@@ -4,12 +4,9 @@ import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import type { GatewaySleepRuntime } from "@/lib/gatewaySleepRuntime";
 
-const AUTO_SLEEP_AFTER_SECONDS = 300;
+const DEFAULT_AUTO_SLEEP_AFTER_SECONDS = 300;
 
-export function useGatewaySleepRuntime():
-  | GatewaySleepRuntime
-  | null
-  | undefined {
+export function useGatewaySleepRuntime(): GatewaySleepRuntime | null | undefined {
   return useQuery(api.settings.getGatewaySleepRuntime);
 }
 
@@ -36,8 +33,7 @@ export function useGatewaySleepCountdown(
     const transitionMs = new Date(runtime.lastTransitionAt).getTime();
     const intervalMs = runtime.pollIntervalSeconds * 1000;
     const elapsed = now - transitionMs;
-    const nextSyncMs =
-      transitionMs + Math.ceil(Math.max(elapsed, 0) / intervalMs) * intervalMs;
+    const nextSyncMs = transitionMs + Math.ceil(Math.max(elapsed, 0) / intervalMs) * intervalMs;
     const remaining = (nextSyncMs - now) / 1000;
     return formatCountdown(remaining);
   }
@@ -49,7 +45,9 @@ export function useGatewaySleepCountdown(
     const anchor = runtime.lastWorkFoundAt
       ? new Date(runtime.lastWorkFoundAt).getTime()
       : new Date(runtime.lastTransitionAt).getTime();
-    const autoSleepAt = anchor + AUTO_SLEEP_AFTER_SECONDS * 1000;
+    const autoSleepAfterSeconds =
+      runtime.configuredAutoSleepAfterSeconds ?? DEFAULT_AUTO_SLEEP_AFTER_SECONDS;
+    const autoSleepAt = anchor + autoSleepAfterSeconds * 1000;
     const remaining = (autoSleepAt - now) / 1000;
     return formatCountdown(remaining);
   }

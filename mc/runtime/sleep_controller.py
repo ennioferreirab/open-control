@@ -86,6 +86,8 @@ class RuntimeSleepController:
     async def apply_manual_mode(self, mode: GatewaySleepMode) -> None:
         async with self._lock:
             manual_requested = mode == "sleep"
+            if mode == "active":
+                self._last_actionable_at = self._time_fn()
             await self._transition_locked(mode, reason="manual", manual_requested=manual_requested)
 
     async def wait_for_next_cycle(self, active_interval_seconds: float) -> None:
@@ -138,6 +140,7 @@ class RuntimeSleepController:
                 if self._mode == "sleep"
                 else self._active_poll_interval_seconds
             ),
+            "configuredAutoSleepAfterSeconds": self._auto_sleep_after_seconds,
             "manualRequested": self._manual_requested,
             "reason": self._reason,
             "lastTransitionAt": self._last_transition_at,
@@ -155,9 +158,7 @@ class RuntimeSleepController:
     ) -> None:
         should_notify = self._mode != mode
         should_persist = (
-            should_notify
-            or self._manual_requested != manual_requested
-            or self._reason != reason
+            should_notify or self._manual_requested != manual_requested or self._reason != reason
         )
         prev_mode = self._mode
         self._mode = mode
@@ -169,7 +170,10 @@ class RuntimeSleepController:
         if should_notify:
             logger.info(
                 "[sleep] %s → %s (reason=%s, manual=%s)",
-                prev_mode, mode, reason, manual_requested,
+                prev_mode,
+                mode,
+                reason,
+                manual_requested,
             )
             old_event = self._state_event
             self._state_event = asyncio.Event()

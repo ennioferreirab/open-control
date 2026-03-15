@@ -52,7 +52,7 @@ describe("useGatewaySleepCountdown", () => {
     const now = new Date("2026-03-10T12:00:00Z").getTime();
     vi.setSystemTime(now);
 
-    // Work found 60s ago → auto-sleep at +300s from work, remaining 240s
+    // Work found 60s ago → auto-sleep at +120s from work, remaining 60s
     const runtime: GatewaySleepRuntime = {
       mode: "active",
       pollIntervalSeconds: 5,
@@ -60,10 +60,11 @@ describe("useGatewaySleepCountdown", () => {
       reason: "work_found",
       lastTransitionAt: new Date(now - 120_000).toISOString(),
       lastWorkFoundAt: new Date(now - 60_000).toISOString(),
-    };
+      configuredAutoSleepAfterSeconds: 120,
+    } as GatewaySleepRuntime;
 
     const { result } = renderHook(() => useGatewaySleepCountdown(runtime));
-    expect(result.current).toBe("4:00");
+    expect(result.current).toBe("1:00");
   });
 
   it("returns countdown to auto-sleep using lastTransitionAt when no lastWorkFoundAt", () => {

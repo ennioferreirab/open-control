@@ -40,6 +40,7 @@ async def test_initialize_persists_active_runtime_state() -> None:
     assert payload["pollIntervalSeconds"] == 5
     assert payload["manualRequested"] is False
     assert payload["reason"] == "startup"
+    assert payload["configuredAutoSleepAfterSeconds"] == 300
 
 
 @pytest.mark.asyncio
@@ -100,3 +101,23 @@ async def test_manual_wake_interrupts_sleep_wait_immediately() -> None:
     await controller.apply_manual_mode("active")
     await asyncio.wait_for(waiter, timeout=1.0)
 
+
+@pytest.mark.asyncio
+async def test_manual_wake_resets_idle_deadline() -> None:
+    from mc.runtime.sleep_controller import RuntimeSleepController
+
+    clock = _FakeClock()
+    bridge = MagicMock()
+    controller = RuntimeSleepController(bridge, time_fn=clock)
+
+    await controller.initialize()
+    await controller.apply_manual_mode("sleep")
+
+    clock.advance(300)
+    await controller.apply_manual_mode("active")
+    await controller.record_idle()
+
+    payload = _mutation_payloads(bridge)[-1]
+    assert payload["mode"] == "active"
+    assert payload["manualRequested"] is False
+    assert payload["reason"] == "manual"
