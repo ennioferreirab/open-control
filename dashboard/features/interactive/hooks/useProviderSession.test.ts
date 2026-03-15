@@ -35,18 +35,20 @@ describe("normalizeProviderEvents", () => {
 
   it("maps activity entries to normalized events with id, text, and kind", () => {
     const events = normalizeProviderEvents([
-      { _id: "act-1", content: "Hello from provider", type: "text" },
-      { _id: "act-2", content: "Step completed", type: "step" },
+      { _id: "act-1", kind: "text", summary: "Hello from provider" },
+      { _id: "act-2", kind: "result", summary: "Step completed" },
     ]);
 
     expect(events).toHaveLength(2);
     expect(events[0]).toEqual({ id: "act-1", text: "Hello from provider", kind: "text" });
-    expect(events[1]).toEqual({ id: "act-2", text: "Step completed", kind: "step" });
+    expect(events[1]).toEqual({ id: "act-2", text: "Step completed", kind: "result" });
   });
 
-  it("uses fallback text when content is missing", () => {
-    const events = normalizeProviderEvents([{ _id: "act-1", content: undefined, type: "text" }]);
+  it("uses tool name and input when summary is missing", () => {
+    const events = normalizeProviderEvents([
+      { _id: "act-1", kind: "tool_use", toolName: "Read", toolInput: "/tmp/file.txt" },
+    ]);
 
-    expect(events[0].text).toBe("");
+    expect(events[0].text).toBe("Read: /tmp/file.txt");
   });
 });

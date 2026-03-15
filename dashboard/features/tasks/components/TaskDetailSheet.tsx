@@ -22,6 +22,9 @@ import { TaskDetailFilesTab } from "@/features/tasks/components/TaskDetailFilesT
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
 import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { TaskDetailHeader } from "@/features/tasks/components/TaskDetailHeader";
+import { AgentActivityFeed } from "@/features/interactive/components/AgentActivityFeed";
+import { ProviderLiveChatPanel } from "@/features/interactive/components/ProviderLiveChatPanel";
+import { useProviderSession } from "@/features/interactive/hooks/useProviderSession";
 import { useTaskInteractiveSession } from "@/features/interactive/hooks/useTaskInteractiveSession";
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
@@ -66,9 +69,11 @@ interface TaskDetailSheetProps {
 
 export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheetProps) {
   const [mergeQuery, setMergeQuery] = useState("");
+  const [selectedLiveStepId, setSelectedLiveStepId] = useState<string | null>(null);
   // --- Feature hooks ---
   const view = useTaskDetailView(taskId, { mergeQuery });
-  const liveSession = useTaskInteractiveSession(taskId);
+  const liveSession = useTaskInteractiveSession(taskId, selectedLiveStepId);
+  const providerSession = useProviderSession(liveSession.session);
   const actions = useTaskDetailActions();
   const planState = usePlanEditorState(view.taskExecutionPlan, view.isAwaitingKickoff);
 
@@ -138,7 +143,15 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   } = actions;
 
   const { activePlan, localPlan, setLocalPlan, activeTab, setActiveTab } = planState;
-  const handleOpenLive = useCallback(() => setActiveTab("live"), [setActiveTab]);
+  const handleOpenLive = useCallback(
+    (stepId?: string) => {
+      if (stepId) {
+        setSelectedLiveStepId(stepId);
+      }
+      setActiveTab("live");
+    },
+    [setActiveTab],
+  );
   const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("both");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [filterStepIds, setFilterStepIds] = useState<Set<string>>(new Set());
@@ -195,6 +208,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   useEffect(() => {
     setPlanViewMode("both");
     setFilterStepIds(new Set());
+    setSelectedLiveStepId(null);
   }, [taskId]);
 
   useEffect(() => {
@@ -572,7 +586,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               onSavePlan={handleSavePlan}
               onStartInbox={handleStartInbox}
               onDeleteTask={handleDeleteTask}
-              onOpenLive={liveSession.session ? () => setActiveTab("live") : null}
+              onOpenLive={liveSession.session ? () => handleOpenLive() : null}
               onOpenMergedTask={(mergedTaskId) => onTaskOpen?.(mergedTaskId)}
               onToggleRejection={() => setShowRejection((current) => !current)}
               onDeleteConfirmOpen={() => setShowDeleteConfirm(true)}
@@ -656,8 +670,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                         setFilterStepIds(new Set([stepId]));
                         setActiveTab("thread");
                       }}
-                      onOpenLive={liveSession.session ? handleOpenLive : undefined}
-                      liveStepId={liveSession.activeStep?._id}
+                      onOpenLive={liveSession.liveStepIds.length > 0 ? handleOpenLive : undefined}
+                      liveStepIds={liveSession.liveStepIds}
                     />
                   </div>
                   {task && messages && !isMergeLockedSource && planViewMode !== "canvas" && (
@@ -687,18 +701,26 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                   value="live"
                   className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
                 >
-                  {/* Provider CLI live-share panel — replaces the legacy TUI terminal.
-                      ProviderLiveChatPanel (Story 28-5) will be mounted here once
-                      it lands. The PTY/xterm InteractiveTerminalPanel is retired
-                      from this surface as of Story 28.7. */}
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-4 text-sm text-muted-foreground">
-                    <p>
-                      Live session active for{" "}
-                      <span className="font-medium text-foreground">
-                        @{liveSession.session.agentName}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-xs">Provider: {liveSession.session.provider}</p>
+                  <div className="grid min-h-0 flex-1 gap-4 px-6 py-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.9fr)]">
+                    <div className="min-h-0 overflow-hidden rounded-xl border border-border">
+                      <ProviderLiveChatPanel
+                        sessionId={providerSession.sessionId}
+                        events={providerSession.events}
+                        status={providerSession.status}
+                        agentName={providerSession.agentName ?? liveSession.session.agentName}
+                        provider={providerSession.provider ?? liveSession.session.provider}
+                        isLoading={providerSession.isLoading}
+                        errorMessage={liveSession.session.lastError ?? undefined}
+                      />
+                    </div>
+                    <div className="min-h-0 overflow-hidden rounded-xl border border-border">
+                      <AgentActivityFeed
+                        sessionId={liveSession.session.sessionId}
+                        provider={liveSession.session.provider}
+                        agentName={liveSession.session.agentName}
+                        supervisionState={liveSession.session.supervisionState}
+                      />
+                    </div>
                   </div>
                 </TabsContent>
               )}

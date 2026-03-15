@@ -46,6 +46,8 @@ vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
     onViewModeChange,
     onClearPlan,
     isClearingPlan,
+    onOpenLive,
+    liveStepIds,
   }: {
     executionPlan?: unknown;
     liveSteps?: unknown;
@@ -58,6 +60,8 @@ vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
     onViewModeChange?: (mode: "both" | "canvas" | "conversation") => void;
     onClearPlan?: () => void;
     isClearingPlan?: boolean;
+    onOpenLive?: (stepId: string) => void;
+    liveStepIds?: string[];
   }) => (
     <div
       data-testid="execution-plan-tab"
@@ -89,6 +93,16 @@ vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
           {isClearingPlan ? "Cleaning..." : "Clean"}
         </button>
       )}
+      {liveStepIds?.map((stepId) => (
+        <button
+          key={stepId}
+          type="button"
+          data-testid={`mock-open-live-${stepId}`}
+          onClick={() => onOpenLive?.(stepId)}
+        >
+          Open live {stepId}
+        </button>
+      ))}
       {(() => {
         const firstStepTitle =
           executionPlan &&
@@ -124,14 +138,6 @@ vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
           Mock local plan change
         </button>
       )}
-    </div>
-  ),
-}));
-
-vi.mock("@/features/interactive/components/InteractiveTerminalPanel", () => ({
-  InteractiveTerminalPanel: ({ agentName, provider }: { agentName: string; provider: string }) => (
-    <div data-testid="interactive-terminal">
-      live:{agentName}:{provider}
     </div>
   ),
 }));
@@ -350,6 +356,37 @@ describe("TaskDetailSheet", () => {
           },
         ];
       }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "sessionId" in (args as Record<string, unknown>)
+      ) {
+        return [
+          {
+            _id: "activity-1",
+            sessionId: "interactive_session:claude",
+            seq: 1,
+            kind: "tool_use",
+            ts: "2026-03-13T09:03:00.000Z",
+            toolName: "WebSearch",
+            toolInput: "landing page copy examples",
+            stepId: "step1",
+            agentName: "agent-alpha",
+            provider: "claude-code",
+          },
+          {
+            _id: "activity-2",
+            sessionId: "interactive_session:claude",
+            seq: 2,
+            kind: "result",
+            ts: "2026-03-13T09:04:00.000Z",
+            summary: "Found strong examples.",
+            stepId: "step1",
+            agentName: "agent-alpha",
+            provider: "claude-code",
+          },
+        ];
+      }
       return [];
     });
 
@@ -364,10 +401,133 @@ describe("TaskDetailSheet", () => {
 
     await user.click(screen.getByTestId("live-button"));
 
-    expect(screen.getByTestId("interactive-terminal")).toBeInTheDocument();
-    expect(screen.getByTestId("interactive-terminal")).toHaveTextContent(
-      "live:agent-alpha:claude-code",
-    );
+    expect(screen.getAllByText(/@agent-alpha/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/WebSearch: landing page copy examples/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Found strong examples./i).length).toBeGreaterThan(0);
+  });
+
+  it("opens historical live output for a completed step from the execution plan", async () => {
+    const user = userEvent.setup();
+    const completedTask: TaskDoc = { ...baseTask, status: "done" as const };
+    const completedStep: StepDoc = {
+      _id: "step-completed" as never,
+      _creationTime: 1,
+      taskId: "task1" as never,
+      title: "Completed interactive step",
+      description: "Research copy references",
+      assignedAgent: "agent-alpha",
+      status: "completed",
+      parallelGroup: 1,
+      order: 1,
+      createdAt: "2026-03-13T09:00:00.000Z",
+      startedAt: "2026-03-13T09:02:00.000Z",
+      completedAt: "2026-03-13T09:10:00.000Z",
+    };
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return buildDetailView(
+          completedTask,
+          [{ ...baseMessage, content: "Historical output posted to thread" }],
+          [completedStep],
+        );
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "name" in (args as Record<string, unknown>)
+      ) {
+        return {
+          _id: "agent-doc",
+          _creationTime: 1,
+          name: "agent-alpha",
+          displayName: "Agent Alpha",
+          role: "Engineer",
+          prompt: "",
+          soul: "",
+          skills: [],
+          status: "active",
+          model: "cc/claude-sonnet-4-6",
+          interactiveProvider: "claude-code",
+        };
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        Object.keys(args as Record<string, unknown>).length === 0
+      ) {
+        return [
+          {
+            _id: "session-doc",
+            _creationTime: 1,
+            sessionId: "interactive_session:completed",
+            agentName: "agent-alpha",
+            provider: "claude-code",
+            scopeKind: "task",
+            scopeId: "task1",
+            surface: "provider-cli",
+            tmuxSession: "mc-int-123",
+            status: "ended",
+            capabilities: [],
+            createdAt: "2026-03-13T09:00:00.000Z",
+            updatedAt: "2026-03-13T09:10:00.000Z",
+            endedAt: "2026-03-13T09:10:00.000Z",
+            taskId: "task1",
+            stepId: "step-completed",
+            supervisionState: "completed",
+            finalResult: "Historical answer",
+          },
+        ];
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "sessionId" in (args as Record<string, unknown>)
+      ) {
+        return [
+          {
+            _id: "activity-1",
+            sessionId: "interactive_session:completed",
+            seq: 1,
+            kind: "tool_use",
+            ts: "2026-03-13T09:03:00.000Z",
+            toolName: "WebSearch",
+            toolInput: "best landing page copy",
+            stepId: "step-completed",
+            agentName: "agent-alpha",
+            provider: "claude-code",
+          },
+          {
+            _id: "activity-2",
+            sessionId: "interactive_session:completed",
+            seq: 2,
+            kind: "result",
+            ts: "2026-03-13T09:04:00.000Z",
+            summary: "Completed historical result",
+            stepId: "step-completed",
+            agentName: "agent-alpha",
+            provider: "claude-code",
+          },
+        ];
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+    await user.click(screen.getByTestId("mock-open-live-step-completed"));
+
+    expect(screen.getByRole("tab", { name: "Live" })).toBeInTheDocument();
+    expect(screen.getAllByText(/@agent-alpha/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.getByText(/WebSearch: best landing page copy/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Completed historical result/i).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("live-session-badge")).toHaveTextContent("Live • Completed");
   });
 
   it("shows empty thread placeholder when no messages", () => {

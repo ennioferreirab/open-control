@@ -375,6 +375,7 @@ class ContextBuilder:
             entity_type=EntityType.STEP,
             entity_id=step_id,
             task_id=task_id,
+            step_id=step_id,
             step_title=step_title,
             step_description=step_description,
             agent_name=agent_name,

@@ -4,6 +4,7 @@ import {
   selectActiveTaskLiveStep,
   describeTaskInteractiveSession,
   selectTaskInteractiveSession,
+  collectTaskLiveStepIds,
 } from "./useTaskInteractiveSession";
 
 const sessionBase = {
@@ -53,6 +54,23 @@ describe("selectActiveTaskLiveStep", () => {
     const step = selectActiveTaskLiveStep([{ ...stepBase, _id: "step-done", status: "completed" }]);
 
     expect(step).toBeNull();
+  });
+});
+
+describe("collectTaskLiveStepIds", () => {
+  it("collects all step ids that have persisted task sessions, including ended/error history", () => {
+    const ids = collectTaskLiveStepIds(
+      [
+        { ...sessionBase, stepId: "step1", status: "detached" },
+        { ...sessionBase, sessionId: "ended", stepId: "step2", status: "ended" },
+        { ...sessionBase, sessionId: "error", stepId: "step3", status: "error" },
+        { ...sessionBase, sessionId: "no-step", stepId: undefined },
+        { ...sessionBase, sessionId: "other-task", taskId: "task2", stepId: "step4" },
+      ],
+      "task1" as never,
+    );
+
+    expect(ids).toEqual(["step1", "step2", "step3"]);
   });
 });
 
@@ -111,7 +129,40 @@ describe("selectTaskInteractiveSession", () => {
       provider: "claude-code",
     });
 
-    expect(session).toBeNull();
+    expect(session?.status).toBe("ended");
+  });
+
+  it("prefers an attachable session over historical ended/error sessions for the same step", () => {
+    const session = selectTaskInteractiveSession(
+      [
+        {
+          ...sessionBase,
+          sessionId: "ended",
+          status: "ended",
+          updatedAt: "2026-03-13T09:20:00.000Z",
+        },
+        {
+          ...sessionBase,
+          sessionId: "error",
+          status: "error",
+          updatedAt: "2026-03-13T09:25:00.000Z",
+        },
+        {
+          ...sessionBase,
+          sessionId: "detached",
+          status: "detached",
+          updatedAt: "2026-03-13T09:15:00.000Z",
+        },
+      ],
+      {
+        taskId: "task1" as never,
+        stepId: "step1" as never,
+        agentName: "claude-pair",
+        provider: "claude-code",
+      },
+    );
+
+    expect(session?.sessionId).toBe("detached");
   });
 });
 
@@ -140,5 +191,17 @@ describe("describeTaskInteractiveSession", () => {
         controlMode: "human",
       }),
     ).toBe("Live • Human");
+  });
+
+  it("surfaces completed historical sessions explicitly", () => {
+    expect(describeTaskInteractiveSession({ ...sessionBase, status: "ended" })).toBe(
+      "Live • Completed",
+    );
+  });
+
+  it("surfaces failed historical sessions explicitly", () => {
+    expect(describeTaskInteractiveSession({ ...sessionBase, status: "error" })).toBe(
+      "Live • Failed",
+    );
   });
 });
