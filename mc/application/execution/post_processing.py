@@ -400,7 +400,7 @@ def build_execution_engine(
         "--verbose",
         "--output-format",
         "stream-json",
-        "--print",
+        "-p",
     ]
     _parser = ClaudeCodeCLIParser(supervisor=_supervisor)
 

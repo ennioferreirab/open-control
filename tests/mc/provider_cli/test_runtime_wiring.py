@@ -151,7 +151,12 @@ def test_engine_default_strategies_include_provider_cli() -> None:
 
 
 def test_build_execution_engine_wires_provider_cli_strategy() -> None:
-    """build_execution_engine() wires a ProviderCliRunnerStrategy for PROVIDER_CLI."""
+    """build_execution_engine() wires a ProviderCliRunnerStrategy for PROVIDER_CLI.
+
+    The base command stored in the strategy uses ``-p`` (not ``--print``) so that
+    _build_command can append the prompt text as the next positional argument
+    matching the real Claude CLI invocation contract.
+    """
     from mc.application.execution.post_processing import build_execution_engine
     from mc.application.execution.strategies.provider_cli import ProviderCliRunnerStrategy
 
@@ -163,7 +168,7 @@ def test_build_execution_engine_wires_provider_cli_strategy() -> None:
         "--verbose",
         "--output-format",
         "stream-json",
-        "--print",
+        "-p",
     ]
 
 

@@ -361,7 +361,12 @@ class TestPromptPresenceFromCanonicalPath:
         )
 
     def test_build_command_appends_prompt_as_print_argument(self) -> None:
-        """ProviderCliRunnerStrategy._build_command appends prompt using `-p`."""
+        """ProviderCliRunnerStrategy._build_command places prompt after the binary with `-p`.
+
+        The Claude CLI does not have a ``--prompt`` flag.  The correct invocation is:
+            claude -p "prompt text" [flags...]
+        where ``-p`` is equivalent to ``--print`` and the prompt is a positional argument.
+        """
         registry = ProviderSessionRegistry()
         mock_supervisor = MagicMock()
         mock_parser = MagicMock()
@@ -379,9 +384,8 @@ class TestPromptPresenceFromCanonicalPath:
         req = _make_interactive_request(prompt="Implement the feature end-to-end")
         command = strategy._build_command(req)
 
-        assert "--prompt" in command
-        prompt_idx = command.index("--prompt")
-        assert command[prompt_idx + 1] == "Implement the feature end-to-end"
+        assert "--prompt" not in command
+        assert command[1:3] == ["-p", "Implement the feature end-to-end"]
 
     def test_build_command_without_prompt_does_not_append_argument(self) -> None:
         """When request.prompt is empty, no `-p` prompt is added to the command."""

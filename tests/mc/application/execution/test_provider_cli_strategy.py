@@ -411,7 +411,11 @@ async def test_strategy_appends_prompt_to_command_when_prompt_present() -> None:
 
 
 def test_default_provider_cli_command_supports_stream_json_contract() -> None:
-    """Default command must satisfy Claude CLI's stream-json contract."""
+    """Default command must satisfy Claude CLI's stream-json contract.
+
+    The base command stored in the strategy ends with ``-p`` so that
+    _build_command can append the prompt text as the next positional argument.
+    """
     from mc.application.execution.post_processing import build_execution_engine
 
     engine = build_execution_engine()
@@ -421,7 +425,7 @@ def test_default_provider_cli_command_supports_stream_json_contract() -> None:
         "--verbose",
         "--output-format",
         "stream-json",
-        "--print",
+        "-p",
     ]
 
 
