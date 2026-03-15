@@ -411,22 +411,59 @@ async def test_strategy_appends_prompt_to_command_when_prompt_present() -> None:
 
 
 def test_default_provider_cli_command_supports_stream_json_contract() -> None:
-    """Default command must satisfy Claude CLI's stream-json contract.
+    """Default base command must NOT contain a trailing ``-p``.
 
-    The base command stored in the strategy ends with ``-p`` so that
-    _build_command can append the prompt text as the next positional argument.
+    ``_build_command()`` is the sole authority for injecting ``-p <prompt>``.
+    Having ``-p`` in the base command AND in _build_command produces a duplicate
+    flag that breaks the real Claude CLI invocation.
+
+    Correct base command shape: ``["claude", "--verbose", "--output-format", "stream-json"]``
+    Effective command with prompt: ``claude -p "<prompt>" --verbose --output-format stream-json``
     """
     from mc.application.execution.post_processing import build_execution_engine
 
     engine = build_execution_engine()
     strategy = engine.get_strategy(RunnerType.PROVIDER_CLI)
-    assert strategy._command[:5] == [
+    # Base command must NOT end with -p (that would cause duplication)
+    assert strategy._command == [
         "claude",
         "--verbose",
         "--output-format",
         "stream-json",
-        "-p",
     ]
+    assert "-p" not in strategy._command
+
+
+def test_effective_command_has_exactly_one_prompt_flag() -> None:
+    """When a prompt is present, the effective command must have exactly one ``-p`` pair.
+
+    AC1: The final command emitted by _build_command() contains exactly one
+    prompt flag pair: ``-p <prompt>``. The base command must not contribute a
+    second ``-p`` that would create a duplicate.
+    """
+    from mc.application.execution.post_processing import build_execution_engine
+    from mc.application.execution.request import EntityType, ExecutionRequest
+
+    engine = build_execution_engine()
+    strategy = engine.get_strategy(RunnerType.PROVIDER_CLI)
+
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-001",
+        task_id="task-001",
+        agent_name="dev",
+        title="Test",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Hello world",
+    )
+    command = strategy._build_command(request)
+
+    # Exactly one -p flag in the full command
+    assert command.count("-p") == 1
+    # The prompt appears right after the binary
+    assert command[1:3] == ["-p", "Hello world"]
+    # Full shape: claude -p <prompt> --verbose --output-format stream-json
+    assert command[:5] == ["claude", "-p", "Hello world", "--verbose", "--output-format"]
 
 
 def test_build_command_includes_claude_agent_runtime_flags(tmp_path: Path) -> None:
