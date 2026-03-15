@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -16,6 +17,7 @@ from mc.application.execution.request import (
 from mc.application.execution.strategies.provider_cli import ProviderCliRunnerStrategy
 from mc.contexts.provider_cli.registry import ProviderSessionRegistry
 from mc.contexts.provider_cli.types import ParsedCliEvent, ProviderProcessHandle
+from mc.types import AgentData, ClaudeCodeOpts
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -230,6 +232,33 @@ async def test_strategy_returns_failure_on_nonzero_exit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_strategy_prefers_text_output_for_nonzero_exit_error_message() -> None:
+    handle = _make_handle()
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="text", text="Not logged in")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"Not logged in"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=1)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--verbose", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+    result = await strategy.execute(_make_request())
+    assert result.success is False
+    assert result.error_message == "Not logged in"
+
+
+@pytest.mark.asyncio
 async def test_strategy_captures_output_text() -> None:
     handle = _make_handle()
     parser = _make_parser(handle)
@@ -340,7 +369,7 @@ async def test_strategy_updates_registry_with_discovered_session_id() -> None:
 
 @pytest.mark.asyncio
 async def test_strategy_appends_prompt_to_command_when_prompt_present() -> None:
-    """The bootstrap prompt from ExecutionRequest must be forwarded to the CLI."""
+    """The bootstrap prompt from ExecutionRequest must be forwarded using `-p`."""
     handle = _make_handle()
     parser = _make_parser(handle)
     registry = ProviderSessionRegistry()
@@ -377,14 +406,89 @@ async def test_strategy_appends_prompt_to_command_when_prompt_present() -> None:
     call_kwargs = parser.start_session.call_args
     assert call_kwargs is not None
     launched_command = call_kwargs.kwargs.get("command") or call_kwargs.args[1]
-    assert "--prompt" in launched_command
-    prompt_idx = launched_command.index("--prompt")
-    assert launched_command[prompt_idx + 1] == "Implement the feature per the spec."
+    assert "--prompt" not in launched_command
+    assert launched_command[1:3] == ["-p", "Implement the feature per the spec."]
+
+
+def test_default_provider_cli_command_supports_stream_json_contract() -> None:
+    """Default command must satisfy Claude CLI's stream-json contract."""
+    from mc.application.execution.post_processing import build_execution_engine
+
+    engine = build_execution_engine()
+    strategy = engine.get_strategy(RunnerType.PROVIDER_CLI)
+    assert strategy._command[:5] == [
+        "claude",
+        "--verbose",
+        "--output-format",
+        "stream-json",
+        "--print",
+    ]
+
+
+def test_build_command_includes_claude_agent_runtime_flags(tmp_path: Path) -> None:
+    registry = ProviderSessionRegistry()
+    supervisor = MagicMock()
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+
+    agent_root = tmp_path / "boards" / "default" / "agents" / "marketing-copy"
+    memory_workspace = agent_root / "memory"
+    memory_workspace.mkdir(parents=True)
+    mcp_config = agent_root / ".mcp.json"
+    mcp_config.write_text("{}", encoding="utf-8")
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--verbose", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-001",
+        task_id="task-001",
+        agent_name="marketing-copy",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Analyze copy examples",
+        model="claude-sonnet-4-6",
+        memory_workspace=memory_workspace,
+        agent=AgentData(
+            name="marketing-copy",
+            display_name="Marketing Copy",
+            role="Copywriter",
+            model="cc/claude-sonnet-4-6",
+            backend="claude-code",
+            claude_code_opts=ClaudeCodeOpts(
+                permission_mode="bypassPermissions",
+                allowed_tools=["WebSearch"],
+                disallowed_tools=["Bash"],
+                effort_level="high",
+            ),
+        ),
+    )
+
+    command = strategy._build_command(request)
+
+    assert "--mcp-config" in command
+    assert str(mcp_config) in command
+    assert "--model" in command
+    assert "claude-sonnet-4-6" in command
+    assert "--permission-mode" in command
+    assert "bypassPermissions" in command
+    assert command.count("--allowedTools") >= 2
+    assert "WebSearch" in command
+    assert "mcp__mc__*" in command
+    assert "--disallowedTools" in command
+    assert "Bash" in command
+    assert "--effort" in command
+    assert "high" in command
+    assert command[1:3] == ["-p", "Analyze copy examples"]
 
 
 @pytest.mark.asyncio
 async def test_strategy_does_not_append_prompt_when_prompt_is_empty() -> None:
-    """When request.prompt is empty, no --prompt argument should be appended."""
+    """When request.prompt is empty, no `-p` prompt argument should be appended."""
     handle = _make_handle()
     parser = _make_parser(handle)
     registry = ProviderSessionRegistry()
@@ -422,6 +526,7 @@ async def test_strategy_does_not_append_prompt_when_prompt_is_empty() -> None:
     assert call_kwargs is not None
     launched_command = call_kwargs.kwargs.get("command") or call_kwargs.args[1]
     assert "--prompt" not in launched_command
+    assert "-p" not in launched_command
 
 
 @pytest.mark.asyncio
@@ -515,10 +620,11 @@ async def test_strategy_end_to_end_with_prompt_result_and_session_id() -> None:
     )
     result = await strategy.execute(request)
 
-    # Verify command was built with the prompt
+    # Verify command was built with the prompt using Claude CLI's -p contract
     call_kwargs = parser.start_session.call_args
     launched_command = call_kwargs.kwargs.get("command") or call_kwargs.args[1]
-    assert "--prompt" in launched_command
+    assert "--prompt" not in launched_command
+    assert launched_command[1:3] == ["-p", "Execute the E2E test scenario."]
     assert "Execute the E2E test scenario." in launched_command
 
     # Verify result

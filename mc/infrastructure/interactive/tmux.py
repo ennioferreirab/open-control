@@ -80,13 +80,22 @@ class TmuxSessionManager:
         return result.returncode == 0
 
     def send_keys(self, session_name: str, text: str) -> bool:
-        result = self._run(
-            ["tmux", "send-keys", "-t", session_name, "-l", text, "Enter"],
+        text_result = self._run(
+            ["tmux", "send-keys", "-t", session_name, "-l", text],
             capture_output=True,
             text=True,
             check=False,
         )
-        return result.returncode == 0
+        if text_result.returncode != 0:
+            return False
+
+        enter_result = self._run(
+            ["tmux", "send-keys", "-t", session_name, "Enter"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return enter_result.returncode == 0
 
     def cleanup_orphans(self, *, active_session_names: set[str]) -> list[str]:
         removed: list[str] = []

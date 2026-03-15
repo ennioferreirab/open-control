@@ -60,6 +60,7 @@ class ProviderCliRunnerStrategy:
         cwd: str,
         projector: "LiveStreamProjector | None" = None,
         supervision_sink: Callable[[dict[str, Any]], None] | None = None,
+        control_plane: Any | None = None,
     ) -> None:
         self._parser = parser
         self._registry = registry
@@ -67,6 +68,7 @@ class ProviderCliRunnerStrategy:
         self._command = command
         self._cwd = cwd
         self._projector = projector
+        self._control_plane = control_plane
         self._supervision_sink = supervision_sink
 
     async def execute(self, request: ExecutionRequest) -> ExecutionResult:
@@ -103,6 +105,8 @@ class ProviderCliRunnerStrategy:
 
     def _cleanup(self, mc_session_id: str) -> None:
         """Remove the session record from the registry after execution completes."""
+        if self._control_plane is not None:
+            self._control_plane.unregister_parser(mc_session_id)
         self._registry.remove(mc_session_id)
 
     async def _run(self, request: ExecutionRequest) -> ExecutionResult:
@@ -133,6 +137,12 @@ class ProviderCliRunnerStrategy:
 
         # 4. Transition to RUNNING
         self._registry.update_status(handle.mc_session_id, SessionStatus.RUNNING)
+
+        # 4b. Register parser/handle in control plane for intervention routing
+        if self._control_plane is not None:
+            self._control_plane.register_parser(
+                handle.mc_session_id, parser=self._parser, handle=handle
+            )
 
         # 5. Stream and parse output
         collected_events: list[ParsedCliEvent] = []

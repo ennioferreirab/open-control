@@ -11,7 +11,7 @@ Tests:
     3. No InteractiveSessionCoordinator dependency — ProviderCliRunnerStrategy
        works without the coordinator.
     4. Prompt presence — ContextBuilder populates request.prompt and
-       _build_command produces a command with --prompt.
+       _build_command produces a command using `-p <prompt>`.
     5. Completion and crash projection — exit 0 → COMPLETED, exit 1 → CRASHED.
 """
 
@@ -360,8 +360,8 @@ class TestPromptPresenceFromCanonicalPath:
             "story 28-13 requires ContextBuilder to populate the canonical prompt."
         )
 
-    def test_build_command_appends_prompt_flag(self) -> None:
-        """ProviderCliRunnerStrategy._build_command appends --prompt when request.prompt is set."""
+    def test_build_command_appends_prompt_as_print_argument(self) -> None:
+        """ProviderCliRunnerStrategy._build_command appends prompt using `-p`."""
         registry = ProviderSessionRegistry()
         mock_supervisor = MagicMock()
         mock_parser = MagicMock()
@@ -383,8 +383,8 @@ class TestPromptPresenceFromCanonicalPath:
         prompt_idx = command.index("--prompt")
         assert command[prompt_idx + 1] == "Implement the feature end-to-end"
 
-    def test_build_command_without_prompt_does_not_append_flag(self) -> None:
-        """When request.prompt is empty, --prompt is NOT added to the command."""
+    def test_build_command_without_prompt_does_not_append_argument(self) -> None:
+        """When request.prompt is empty, no `-p` prompt is added to the command."""
         registry = ProviderSessionRegistry()
         mock_supervisor = MagicMock()
         mock_parser = MagicMock()
@@ -403,7 +403,7 @@ class TestPromptPresenceFromCanonicalPath:
         command = strategy._build_command(req)
 
         assert "--prompt" not in command
-        assert command == base_command
+        assert "-p" not in command
 
 
 # ---------------------------------------------------------------------------

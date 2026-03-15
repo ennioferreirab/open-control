@@ -154,8 +154,35 @@ def test_send_keys_writes_bootstrap_input_into_existing_session() -> None:
     sent = manager.send_keys("mc-int-123", "Investigate failing test")
 
     assert sent is True
+    assert runner.call_args_list == [
+        call(
+            ["tmux", "send-keys", "-t", "mc-int-123", "-l", "Investigate failing test"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ),
+        call(
+            ["tmux", "send-keys", "-t", "mc-int-123", "Enter"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ),
+    ]
+
+
+def test_send_keys_returns_false_when_text_write_fails() -> None:
+    runner = MagicMock(
+        side_effect=[
+            _completed(["tmux", "send-keys", "-t", "mc-int-123", "-l", "Investigate"], returncode=1)
+        ]
+    )
+    manager = TmuxSessionManager(run=runner)
+
+    sent = manager.send_keys("mc-int-123", "Investigate")
+
+    assert sent is False
     runner.assert_called_once_with(
-        ["tmux", "send-keys", "-t", "mc-int-123", "-l", "Investigate failing test", "Enter"],
+        ["tmux", "send-keys", "-t", "mc-int-123", "-l", "Investigate"],
         capture_output=True,
         text=True,
         check=False,

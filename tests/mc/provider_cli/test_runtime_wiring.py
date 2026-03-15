@@ -158,6 +158,13 @@ def test_build_execution_engine_wires_provider_cli_strategy() -> None:
     engine = build_execution_engine()
     strategy = engine.get_strategy(RunnerType.PROVIDER_CLI)
     assert isinstance(strategy, ProviderCliRunnerStrategy)
+    assert strategy._command[:5] == [
+        "claude",
+        "--verbose",
+        "--output-format",
+        "stream-json",
+        "--print",
+    ]
 
 
 def test_build_execution_engine_keeps_interactive_tui_separate() -> None:

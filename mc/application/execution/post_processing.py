@@ -395,7 +395,13 @@ def build_execution_engine(
         if provider_cli_supervisor is not None
         else ProviderProcessSupervisor()
     )
-    _command = provider_cli_command or ["claude", "--output-format", "stream-json", "--print"]
+    _command = provider_cli_command or [
+        "claude",
+        "--verbose",
+        "--output-format",
+        "stream-json",
+        "--print",
+    ]
     _parser = ClaudeCodeCLIParser(supervisor=_supervisor)
 
     return ExecutionEngine(
