@@ -23,8 +23,10 @@ class ProviderCliControlPlane:
         self,
         *,
         registry: ProviderSessionRegistry,
+        bridge: Any | None = None,
     ) -> None:
         self._registry = registry
+        self._bridge = bridge
         self._intervention = HumanInterventionController(registry=registry)
         self._parsers: dict[str, dict[str, Any]] = {}
 
@@ -67,9 +69,7 @@ class ProviderCliControlPlane:
 
         entry = self._parsers[mc_session_id]
         try:
-            await self._intervention.interrupt(
-                mc_session_id, entry["handle"], entry["parser"]
-            )
+            await self._intervention.interrupt(mc_session_id, entry["handle"], entry["parser"])
             self._persist_diagnostic(mc_session_id, "interrupt", "applied")
             return {"mc_session_id": mc_session_id, "action": "interrupt", "outcome": "applied"}
         except Exception as exc:
@@ -89,9 +89,7 @@ class ProviderCliControlPlane:
 
         entry = self._parsers[mc_session_id]
         try:
-            await self._intervention.stop(
-                mc_session_id, entry["handle"], entry["parser"]
-            )
+            await self._intervention.stop(mc_session_id, entry["handle"], entry["parser"])
             self._persist_diagnostic(mc_session_id, "stop", "applied")
             return {"mc_session_id": mc_session_id, "action": "stop", "outcome": "applied"}
         except Exception as exc:
@@ -140,7 +138,12 @@ class ProviderCliControlPlane:
         outcome: str,
         error: str | None = None,
     ) -> None:
-        """Persist command-effect diagnostics to the session record."""
+        """Persist command-effect diagnostics to the session record and Convex.
+
+        Updates the in-memory record unconditionally.  Also persists to the
+        interactiveSessions table via bridge when bridge is injected
+        (Story 28-29, AC #3).
+        """
         record = self._registry.get(mc_session_id)
         if record is not None:
             record.update_metadata(
@@ -148,3 +151,24 @@ class ProviderCliControlPlane:
                 last_control_outcome=outcome,
                 last_control_error=error,
             )
+        # Persist control-plane diagnostics to Convex (Story 28-29, AC #3)
+        if self._bridge is not None:
+            payload: dict[str, Any] = {
+                "session_id": mc_session_id,
+                "last_control_command": command,
+                "last_control_outcome": outcome,
+            }
+            if error is not None:
+                payload["last_control_error"] = error
+            try:
+                self._bridge.mutation(
+                    "interactiveSessions:patchProviderCliMetadata",
+                    payload,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "[provider-cli-control-plane] Failed to persist diagnostic to Convex "
+                    "for '%s': %s",
+                    mc_session_id,
+                    exc,
+                )

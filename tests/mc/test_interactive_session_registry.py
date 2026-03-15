@@ -213,6 +213,47 @@ def test_mark_detached_updates_last_active_timestamp_and_activity() -> None:
     )
 
 
+def test_metadata_from_existing_preserves_provider_cli_fields() -> None:
+    """_metadata_from_existing must round-trip provider-cli metadata fields.
+
+    Story 28-29: bootstrapPrompt, providerSessionId, lastControlCommand,
+    lastControlOutcome, and lastControlError stored in an existing Convex record
+    must survive when the registry rebuilds metadata from that record.
+    """
+    bridge = MagicMock()
+    existing = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "provider": "claude-code",
+        "scope_kind": "chat",
+        "scope_id": "chat/claude-pair",
+        "surface": "chat",
+        "tmux_session": "mc-int-123",
+        "status": "attached",
+        "capabilities": ["tui"],
+        "attach_token": "tok-abc",
+        # Provider-CLI metadata (Story 28-29)
+        "bootstrap_prompt": "Implement feature X end-to-end",
+        "provider_session_id": "claude-sess-abc123",
+        "last_control_command": "interrupt",
+        "last_control_outcome": "applied",
+        "last_control_error": None,
+    }
+    bridge.query.return_value = existing
+    registry = InteractiveSessionRegistry(bridge)
+
+    metadata = registry.mark_detached(
+        "interactive_session:claude",
+        timestamp="2026-03-15T10:00:00.000Z",
+    )
+
+    assert metadata["bootstrap_prompt"] == "Implement feature X end-to-end"
+    assert metadata["provider_session_id"] == "claude-sess-abc123"
+    assert metadata["last_control_command"] == "interrupt"
+    assert metadata["last_control_outcome"] == "applied"
+    bridge.mutation.assert_called_once_with("interactiveSessions:upsert", metadata)
+
+
 def test_terminate_marks_session_ended_without_touching_headless_settings() -> None:
     bridge = MagicMock()
     bridge.query.return_value = None
