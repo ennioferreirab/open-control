@@ -205,8 +205,9 @@ class ProviderCliRunnerStrategy:
             "capabilities": [],
             "updated_at": timestamp,
             "task_id": task_id,
-            "step_id": step_id,
         }
+        if step_id is not None:
+            metadata["step_id"] = step_id
         if bootstrap_prompt is not None:
             metadata["bootstrap_prompt"] = bootstrap_prompt
         if provider_session_id is not None:
@@ -257,10 +258,11 @@ class ProviderCliRunnerStrategy:
             "session_id": session_id,
             "kind": event.kind,
             "ts": timestamp,
-            "step_id": step_id,
             "agent_name": agent_name,
             "provider": provider,
         }
+        if step_id is not None:
+            payload["step_id"] = step_id
 
         if event.kind == "tool_use":
             metadata = event.metadata or {}
@@ -270,7 +272,9 @@ class ProviderCliRunnerStrategy:
                 if isinstance(tool_input, str):
                     payload["tool_input"] = tool_input
                 else:
-                    payload["tool_input"] = json.dumps(tool_input, ensure_ascii=True, sort_keys=True)
+                    payload["tool_input"] = json.dumps(
+                        tool_input, ensure_ascii=True, sort_keys=True
+                    )
             payload["summary"] = payload["tool_name"]
         elif event.kind == "error":
             payload["error"] = event.text or "Provider CLI error"
