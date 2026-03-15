@@ -153,9 +153,12 @@ def test_engine_default_strategies_include_provider_cli() -> None:
 def test_build_execution_engine_wires_provider_cli_strategy() -> None:
     """build_execution_engine() wires a ProviderCliRunnerStrategy for PROVIDER_CLI.
 
-    The base command stored in the strategy uses ``-p`` (not ``--print``) so that
-    _build_command can append the prompt text as the next positional argument
-    matching the real Claude CLI invocation contract.
+    The base command stored in the strategy must NOT include a trailing ``-p``.
+    ``_build_command()`` is the sole authority that injects ``-p <prompt>``,
+    so the base command only contains the binary and its stream-json flags.
+
+    Correct base: ``["claude", "--verbose", "--output-format", "stream-json"]``
+    Effective command with prompt: ``claude -p "<prompt>" --verbose --output-format stream-json``
     """
     from mc.application.execution.post_processing import build_execution_engine
     from mc.application.execution.strategies.provider_cli import ProviderCliRunnerStrategy
@@ -163,13 +166,13 @@ def test_build_execution_engine_wires_provider_cli_strategy() -> None:
     engine = build_execution_engine()
     strategy = engine.get_strategy(RunnerType.PROVIDER_CLI)
     assert isinstance(strategy, ProviderCliRunnerStrategy)
-    assert strategy._command[:5] == [
+    assert strategy._command == [
         "claude",
         "--verbose",
         "--output-format",
         "stream-json",
-        "-p",
     ]
+    assert "-p" not in strategy._command
 
 
 def test_build_execution_engine_keeps_interactive_tui_separate() -> None:
@@ -214,7 +217,11 @@ class TestBackendCutoverGates:
 
         strategy_path = (
             pathlib.Path(__file__).parents[3]
-            / "mc" / "application" / "execution" / "strategies" / "provider_cli.py"
+            / "mc"
+            / "application"
+            / "execution"
+            / "strategies"
+            / "provider_cli.py"
         )
         source = strategy_path.read_text(encoding="utf-8")
         assert "InteractiveSessionCoordinator" not in source
@@ -224,7 +231,10 @@ class TestBackendCutoverGates:
 
         supervisor_path = (
             pathlib.Path(__file__).parents[3]
-            / "mc" / "runtime" / "provider_cli" / "process_supervisor.py"
+            / "mc"
+            / "runtime"
+            / "provider_cli"
+            / "process_supervisor.py"
         )
         source = supervisor_path.read_text(encoding="utf-8")
         assert "TmuxSessionManager" not in source
