@@ -38,10 +38,11 @@ export function getAvatarColor(name: string): string {
 
 export function getInitials(displayName: string): string {
   const words = displayName.trim().split(/\s+/);
+  const first = (s: string) => [...s][0] ?? "";
   if (words.length >= 2) {
-    return (words[0][0] + words[1][0]).toUpperCase();
+    return (first(words[0]) + first(words[1])).toUpperCase();
   }
-  return displayName.slice(0, 2).toUpperCase();
+  return [...displayName].slice(0, 2).join("").toUpperCase();
 }
 
 interface AgentSidebarItemProps {
