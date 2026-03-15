@@ -329,6 +329,11 @@ class ContextBuilder:
         if req.is_cc:
             req.agent = load_agent_data(agent_name)
 
+        # Assemble the canonical prompt (user-facing instruction for the CLI).
+        # description holds the full enriched context (files, threads, tags, etc.)
+        # prompt is the concise instruction passed via --prompt to the CLI.
+        req.prompt = req.description or req.title
+
         return req
 
     async def build_step_context(
@@ -479,6 +484,11 @@ class ContextBuilder:
         # Load full AgentData if needed (for CC routing)
         if req.is_cc:
             req.agent = load_agent_data(agent_name)
+
+        # Assemble the canonical prompt (user-facing instruction for the CLI).
+        # description holds the full enriched context (file paths, thread history, etc.)
+        # prompt is the concise step instruction passed via --prompt to the CLI.
+        req.prompt = req.description or f"{req.step_title}: {req.step_description}"
 
         return req
 
