@@ -2,9 +2,9 @@
  * Squad Graph Publisher
  *
  * Orchestrates the full persistence of a squad blueprint:
- * 1. Creates child agentSpecs (status=published)
- * 2. Creates the squadSpec linking agentSpecIds
- * 3. Creates workflowSpecs with resolved agentSpecId per step
+ * 1. Reuses or creates global agents
+ * 2. Creates the squadSpec linking agentIds
+ * 3. Creates workflowSpecs with resolved agentId per step
  * 4. Links the defaultWorkflowSpecId onto the squadSpec
  *
  * This module is intentionally Convex-only — no React, no task creation,
@@ -19,13 +19,13 @@
 export interface SquadGraphAgentInput {
   /** Short key used to reference this agent in workflow steps. */
   key: string;
-  /** Unique slug name stored in the agentSpecs table. */
+  /** Unique slug name stored in the global agents table. */
   name: string;
   /** Human-readable role description. */
   role: string;
   /** Optional display name — defaults to name if absent. */
   displayName?: string;
-  /** Additional optional fields forwarded to agentSpecs. */
+  /** Additional optional fields forwarded to the global agent record. */
   [key: string]: unknown;
 }
 
@@ -86,9 +86,9 @@ type DbContext = { db: any };
 /**
  * Persist a full squad graph to Convex in the correct order:
  *
- * 1. Insert one agentSpec per agent (status=published, version=1).
- * 2. Insert the squadSpec with the collected agentSpecIds.
- * 3. Insert workflowSpecs, resolving agentKey → agentSpecId in each step.
+ * 1. Reuse or insert one global agent per agent.
+ * 2. Insert the squadSpec with the collected agentIds.
+ * 3. Insert workflowSpecs, resolving agentKey → agentId in each step.
  * 4. Patch the squadSpec with the first workflow's ID as defaultWorkflowSpecId.
  *
  * Returns the created squadSpecId.
@@ -98,38 +98,50 @@ type DbContext = { db: any };
 export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput): Promise<string> {
   const now = new Date().toISOString();
 
-  // Step 1 — Create agentSpecs and build key → id map
-  const agentKeyToSpecId = new Map<string, string>();
+  // Step 1 — Reuse or create global agents and build key → id map
+  const agentKeyToId = new Map<string, string>();
 
   for (const agent of graph.agents) {
-    const agentSpecId = await ctx.db.insert("agentSpecs", {
-      name: agent.name,
-      displayName: agent.displayName ?? agent.name,
-      role: agent.role,
-      status: "published",
-      version: 1,
-      createdAt: now,
-      updatedAt: now,
-    });
-    agentKeyToSpecId.set(agent.key, agentSpecId);
+    const existingAgent = await ctx.db
+      .query("agents")
+      .withIndex("by_name", (q: { eq: (field: string, value: string) => unknown }) =>
+        q.eq("name", agent.name),
+      )
+      .first();
+
+    const agentId =
+      existingAgent?._id ??
+      (await ctx.db.insert("agents", {
+        name: agent.name,
+        displayName: agent.displayName ?? agent.name,
+        role: agent.role,
+        skills: [],
+        status: "idle",
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+        lastActiveAt: now,
+      }));
+
+    agentKeyToId.set(agent.key, agentId);
   }
 
-  const agentSpecIds = Array.from(agentKeyToSpecId.values());
+  const agentIds = Array.from(agentKeyToId.values());
 
-  // Step 2 — Create the squadSpec with the collected agentSpecIds
+  // Step 2 — Create the squadSpec with the collected agentIds
   const squadSpecId = await ctx.db.insert("squadSpecs", {
     name: graph.squad.name,
     displayName: graph.squad.displayName,
     description: graph.squad.description,
     outcome: graph.squad.outcome,
-    agentSpecIds,
+    agentIds,
     status: "published",
     version: 1,
     createdAt: now,
     updatedAt: now,
   });
 
-  // Step 3 — Create workflowSpecs with resolved agentSpecIds in steps
+  // Step 3 — Create workflowSpecs with resolved agentIds in steps
   const workflowSpecIds: string[] = [];
 
   for (const workflow of graph.workflows) {
@@ -141,9 +153,9 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
       };
 
       if (step.agentKey !== undefined) {
-        const resolvedAgentSpecId = agentKeyToSpecId.get(step.agentKey);
-        if (resolvedAgentSpecId !== undefined) {
-          resolvedStep.agentSpecId = resolvedAgentSpecId;
+        const resolvedAgentId = agentKeyToId.get(step.agentKey);
+        if (resolvedAgentId !== undefined) {
+          resolvedStep.agentId = resolvedAgentId;
         }
       }
 

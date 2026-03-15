@@ -5,16 +5,16 @@ import {
   buildWorkflowExecutionPlan,
   launchSquadMission,
   type WorkflowSpecInput,
-  type AgentSpecRef,
+  type AgentRef,
 } from "./squadMissionLaunch";
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const AGENT_REFS: AgentSpecRef[] = [
-  { specId: "agent-spec-1", agentName: "audience-researcher" },
-  { specId: "agent-spec-2", agentName: "post-writer" },
+const AGENT_REFS: AgentRef[] = [
+  { agentId: "agent-1", agentName: "audience-researcher" },
+  { agentId: "agent-2", agentName: "post-writer" },
 ];
 
 const WORKFLOW: WorkflowSpecInput = {
@@ -25,13 +25,13 @@ const WORKFLOW: WorkflowSpecInput = {
       id: "step-research",
       title: "Research audience",
       type: "agent",
-      agentSpecId: "agent-spec-1",
+      agentId: "agent-1",
     },
     {
       id: "step-write",
       title: "Write post",
       type: "agent",
-      agentSpecId: "agent-spec-2",
+      agentId: "agent-2",
       dependsOn: ["step-research"],
     },
   ],
@@ -68,7 +68,7 @@ describe("launchSquadMission", () => {
     displayName: "Review Squad",
     status: "published",
     version: 1,
-    agentSpecIds: ["agent-spec-1", "agent-spec-2"],
+    agentIds: ["agent-1", "agent-2"],
     createdAt: "2024-01-01",
     updatedAt: "2024-01-01",
   };
@@ -82,7 +82,7 @@ describe("launchSquadMission", () => {
         id: "step-research",
         title: "Research audience",
         type: "agent",
-        agentSpecId: "agent-spec-1",
+        agentId: "agent-1",
       },
     ],
     status: "published",
@@ -91,22 +91,24 @@ describe("launchSquadMission", () => {
     updatedAt: "2024-01-01",
   };
 
-  const mockAgentSpec1 = {
-    _id: "agent-spec-1",
+  const mockAgent1 = {
+    _id: "agent-1",
     name: "audience-researcher",
     displayName: "Audience Researcher",
-    status: "published",
-    version: 1,
+    status: "idle",
     role: "researcher",
+    skills: [],
+    lastActiveAt: "2024-01-01",
   };
 
-  const mockAgentSpec2 = {
-    _id: "agent-spec-2",
+  const mockAgent2 = {
+    _id: "agent-2",
     name: "post-writer",
     displayName: "Post Writer",
-    status: "published",
-    version: 1,
+    status: "idle",
     role: "writer",
+    skills: [],
+    lastActiveAt: "2024-01-01",
   };
 
   const mockBoard = {
@@ -121,20 +123,20 @@ describe("launchSquadMission", () => {
   function makeLaunchCtx(opts: {
     squadSpec?: Record<string, unknown> | null;
     workflowSpec?: Record<string, unknown> | null;
-    agentSpecs?: Record<string, unknown>[];
+    agents?: Record<string, unknown>[];
     board?: Record<string, unknown> | null;
   }) {
     const inserts: { table: string; value: Record<string, unknown> }[] = [];
     const patches: { id: string; patch: Record<string, unknown> }[] = [];
 
-    const agentsBySpecId = new Map((opts.agentSpecs ?? []).map((a) => [String(a._id), a]));
+    const agentsById = new Map((opts.agents ?? []).map((a) => [String(a._id), a]));
     const board = "board" in opts ? opts.board : mockBoard;
 
     const get = vi.fn(async (id: string) => {
       if (id === "board-id-1") return board;
       if (opts.squadSpec && id === opts.squadSpec._id) return opts.squadSpec;
       if (opts.workflowSpec && id === opts.workflowSpec._id) return opts.workflowSpec;
-      if (agentsBySpecId.has(id)) return agentsBySpecId.get(id);
+      if (agentsById.has(id)) return agentsById.get(id);
       return null;
     });
 
@@ -162,15 +164,20 @@ describe("launchSquadMission", () => {
     const { ctx, inserts } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
-      agentSpecs: [mockAgentSpec1, mockAgentSpec2],
+      agents: [mockAgent1, mockAgent2],
     });
 
-    const taskId = await launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
-      squadSpecId: "squad-id-1" as Parameters<typeof launchSquadMission>[1]["squadSpecId"],
-      workflowSpecId: "workflow-id-1" as Parameters<typeof launchSquadMission>[1]["workflowSpecId"],
-      boardId: "board-id-1" as Parameters<typeof launchSquadMission>[1]["boardId"],
-      title: "Mission: review release",
-    });
+    const taskId = await launchSquadMission(
+      ctx as unknown as Parameters<typeof launchSquadMission>[0],
+      {
+        squadSpecId: "squad-id-1" as Parameters<typeof launchSquadMission>[1]["squadSpecId"],
+        workflowSpecId: "workflow-id-1" as Parameters<
+          typeof launchSquadMission
+        >[1]["workflowSpecId"],
+        boardId: "board-id-1" as Parameters<typeof launchSquadMission>[1]["boardId"],
+        title: "Mission: review release",
+      },
+    );
 
     expect(taskId).toBe("task-mission-id-1");
     const taskInsert = inserts.find((i) => i.table === "tasks");
@@ -184,7 +191,7 @@ describe("launchSquadMission", () => {
     const { ctx, patches } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
-      agentSpecs: [mockAgentSpec1, mockAgentSpec2],
+      agents: [mockAgent1, mockAgent2],
     });
 
     await launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
@@ -240,7 +247,7 @@ describe("launchSquadMission", () => {
     const { ctx, inserts } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
-      agentSpecs: [mockAgentSpec1, mockAgentSpec2],
+      agents: [mockAgent1, mockAgent2],
     });
 
     await launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
@@ -264,7 +271,7 @@ describe("launchSquadMission", () => {
     const { ctx, inserts } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
-      agentSpecs: [mockAgentSpec1, mockAgentSpec2],
+      agents: [mockAgent1, mockAgent2],
     });
 
     await launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
@@ -282,14 +289,16 @@ describe("launchSquadMission", () => {
     const { ctx } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
-      agentSpecs: [mockAgentSpec1, mockAgentSpec2],
+      agents: [mockAgent1, mockAgent2],
       board: null,
     });
 
     await expect(
       launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
         squadSpecId: "squad-id-1" as Parameters<typeof launchSquadMission>[1]["squadSpecId"],
-        workflowSpecId: "workflow-id-1" as Parameters<typeof launchSquadMission>[1]["workflowSpecId"],
+        workflowSpecId: "workflow-id-1" as Parameters<
+          typeof launchSquadMission
+        >[1]["workflowSpecId"],
         boardId: "board-id-1" as Parameters<typeof launchSquadMission>[1]["boardId"],
         title: "Mission",
       }),
@@ -300,34 +309,38 @@ describe("launchSquadMission", () => {
     const { ctx } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: { ...mockWorkflowSpec, squadSpecId: "other-squad-id" },
-      agentSpecs: [mockAgentSpec1, mockAgentSpec2],
+      agents: [mockAgent1, mockAgent2],
     });
 
     await expect(
       launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
         squadSpecId: "squad-id-1" as Parameters<typeof launchSquadMission>[1]["squadSpecId"],
-        workflowSpecId: "workflow-id-1" as Parameters<typeof launchSquadMission>[1]["workflowSpecId"],
+        workflowSpecId: "workflow-id-1" as Parameters<
+          typeof launchSquadMission
+        >[1]["workflowSpecId"],
         boardId: "board-id-1" as Parameters<typeof launchSquadMission>[1]["boardId"],
         title: "Mission",
       }),
     ).rejects.toThrow("Workflow does not belong to the selected squad");
   });
 
-  it("throws with list of missing agent spec ids when agent specs are not found", async () => {
+  it("throws with list of missing agent ids when agents are not found", async () => {
     const { ctx } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
-      agentSpecs: [], // no agents resolved
+      agents: [], // no agents resolved
     });
 
     await expect(
       launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
         squadSpecId: "squad-id-1" as Parameters<typeof launchSquadMission>[1]["squadSpecId"],
-        workflowSpecId: "workflow-id-1" as Parameters<typeof launchSquadMission>[1]["workflowSpecId"],
+        workflowSpecId: "workflow-id-1" as Parameters<
+          typeof launchSquadMission
+        >[1]["workflowSpecId"],
         boardId: "board-id-1" as Parameters<typeof launchSquadMission>[1]["boardId"],
         title: "Mission",
       }),
-    ).rejects.toThrow("Agent specs not found");
+    ).rejects.toThrow("Agents not found");
   });
 });
 

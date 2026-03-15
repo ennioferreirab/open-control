@@ -107,6 +107,8 @@ class PlanMaterializer:
                 entry["workflow_step_id"] = step.workflow_step_id
             if step.workflow_step_type is not None:
                 entry["workflow_step_type"] = step.workflow_step_type
+            if step.agent_id is not None:
+                entry["agent_id"] = step.agent_id
             if step.agent_spec_id is not None:
                 entry["agent_spec_id"] = step.agent_spec_id
             if step.review_spec_id is not None:
