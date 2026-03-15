@@ -200,3 +200,49 @@ class TestProviderProcessSupervisor:
         combined = b"".join(chunks)
         # HOME should be present (non-empty output)
         assert len(combined.strip()) > 0
+
+    # ---------------------------------------------------------------------------
+    # Process lifecycle (Story 28-9 coverage)
+    # ---------------------------------------------------------------------------
+
+    async def test_launch_creates_subprocess_handle(self) -> None:
+        """launch() must return a real ProviderProcessHandle with a live process."""
+        supervisor = ProviderProcessSupervisor()
+        handle = await supervisor.launch(
+            mc_session_id="s14-lifecycle",
+            provider="claude-code",
+            command=["echo", "process-lifecycle"],
+            cwd="/tmp",
+        )
+        # Handle must carry a valid PID (real process was started)
+        assert handle.pid > 0
+        # The handle must reference the correct session and provider
+        assert handle.mc_session_id == "s14-lifecycle"
+        assert handle.provider == "claude-code"
+        # Drain output and confirm the process exits cleanly
+        async for _ in supervisor.stream_output(handle):
+            pass
+        exit_code = await supervisor.wait_for_exit(handle)
+        assert exit_code == 0
+
+    async def test_stream_output_yields_bytes(self) -> None:
+        """stream_output must yield raw bytes from the subprocess stdout."""
+        supervisor = ProviderProcessSupervisor()
+        handle = await supervisor.launch(
+            mc_session_id="s15-bytes",
+            provider="test",
+            command=["echo", "raw-bytes-check"],
+            cwd="/tmp",
+        )
+        first_chunk: bytes | None = None
+        async for chunk in supervisor.stream_output(handle):
+            first_chunk = chunk
+            break  # only need the first chunk
+
+        # At least one chunk must be bytes
+        assert isinstance(first_chunk, bytes)
+
+        # Drain remaining output
+        async for _ in supervisor.stream_output(handle):
+            pass
+        await supervisor.wait_for_exit(handle)

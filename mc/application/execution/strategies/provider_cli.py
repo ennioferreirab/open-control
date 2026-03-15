@@ -73,14 +73,29 @@ class ProviderCliRunnerStrategy:
                 error_exception=exc,
             )
 
+    def _build_command(self, request: ExecutionRequest) -> list[str]:
+        """Build the full command for the provider CLI process.
+
+        Appends ``--prompt <request.prompt>`` to the base command when the
+        request carries a non-empty prompt.  The base command list stored in
+        ``self._command`` is never mutated — a new list is always returned.
+        """
+        command = list(self._command)
+        if request.prompt:
+            command.extend(["--prompt", request.prompt])
+        return command
+
     async def _run(self, request: ExecutionRequest) -> ExecutionResult:
         """Core execution — raises on failure for the outer handler."""
         mc_session_id = f"{request.task_id}-{request.entity_id}"
 
-        # 1. Launch the provider CLI process
+        # 1. Build the full command, injecting the bootstrap prompt
+        command = self._build_command(request)
+
+        # 2. Launch the provider CLI process
         handle = await self._parser.start_session(
             mc_session_id=mc_session_id,
-            command=self._command,
+            command=command,
             cwd=self._cwd,
         )
 

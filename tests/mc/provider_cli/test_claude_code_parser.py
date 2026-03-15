@@ -345,3 +345,54 @@ def test_resume_builds_command_with_resume_flag() -> None:
         "--resume",
         "sess-abc",
     ]
+
+
+# ---------------------------------------------------------------------------
+# start_session delegation (Story 28-9)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_start_session_passes_command_to_supervisor() -> None:
+    """start_session must delegate the full command to supervisor.launch()."""
+    supervisor = _make_supervisor()
+    mock_handle = _make_handle()
+    supervisor.launch.return_value = mock_handle
+
+    parser = ClaudeCodeCLIParser(supervisor=supervisor)
+    command = ["claude", "--output-format", "stream-json", "--print", "--prompt", "Do the work"]
+    result = await parser.start_session(
+        mc_session_id="mc-session-prompt",
+        command=command,
+        cwd="/tmp/workspace",
+    )
+
+    call_kwargs = supervisor.launch.call_args.kwargs
+    assert call_kwargs["command"] == command
+    assert call_kwargs["mc_session_id"] == "mc-session-prompt"
+    assert call_kwargs["cwd"] == "/tmp/workspace"
+    assert result == mock_handle
+
+
+@pytest.mark.asyncio
+async def test_start_session_includes_bootstrap_prompt_in_command() -> None:
+    """The bootstrap prompt passed in the command must reach the supervisor unchanged."""
+    supervisor = _make_supervisor()
+    mock_handle = _make_handle()
+    supervisor.launch.return_value = mock_handle
+
+    parser = ClaudeCodeCLIParser(supervisor=supervisor)
+    bootstrap_prompt = "Bootstrap: implement the authentication module."
+    command = ["claude", "--output-format", "stream-json", "--print", "--prompt", bootstrap_prompt]
+
+    await parser.start_session(
+        mc_session_id="mc-bootstrap-test",
+        command=command,
+        cwd="/tmp/workspace",
+    )
+
+    call_kwargs = supervisor.launch.call_args.kwargs
+    launched_command = call_kwargs["command"]
+    assert "--prompt" in launched_command
+    prompt_idx = launched_command.index("--prompt")
+    assert launched_command[prompt_idx + 1] == bootstrap_prompt
