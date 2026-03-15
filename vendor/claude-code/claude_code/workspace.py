@@ -14,6 +14,7 @@ import logging
 import platform
 import shlex
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -111,7 +112,7 @@ class CCWorkspaceManager:
         self,
         agent_name: str,
         agent_config: AgentData,
-        task_id: str,
+        task_id: str | None = None,
         orientation: str | None = None,
         task_prompt: str | None = None,
         board_name: str | None = None,
@@ -199,7 +200,8 @@ class CCWorkspaceManager:
         # H3: Validate socket path length (macOS limit ~104 chars)
         # Include first 8 chars of task_id to prevent socket clobber when the
         # same agent runs concurrent tasks (HIGH-2 fix).
-        socket_path = f"/tmp/mc-{agent_name}-{task_id[:8]}.sock"
+        socket_suffix = task_id[:8] if task_id else uuid.uuid4().hex[:8]
+        socket_path = f"/tmp/mc-{agent_name}-{socket_suffix}.sock"
         if len(socket_path) > _MAX_SOCKET_PATH_LEN:
             raise ValueError(
                 f"Socket path too long ({len(socket_path)} chars, max {_MAX_SOCKET_PATH_LEN}): {socket_path}"
@@ -594,7 +596,7 @@ class CCWorkspaceManager:
         self,
         workspace: Path,
         agent_name: str,
-        task_id: str,
+        task_id: str | None,
         socket_path: str,
         *,
         board_name: str | None = None,
@@ -608,11 +610,12 @@ class CCWorkspaceManager:
             **resolve_secret_env(),
             "MC_SOCKET_PATH": socket_path,
             "AGENT_NAME": agent_name,
-            "TASK_ID": task_id,
             # search_memory must use the exact workspace chosen by execution,
             # not reconstruct a parallel path from board metadata.
             "MEMORY_WORKSPACE": str(memory_workspace or workspace),
         }
+        if task_id:
+            env["TASK_ID"] = task_id
         if interactive_session_id:
             env["MC_INTERACTIVE_SESSION_ID"] = interactive_session_id
         if board_name:
@@ -633,7 +636,7 @@ class CCWorkspaceManager:
         workspace: Path,
         *,
         agent_name: str,
-        task_id: str,
+        task_id: str | None,
         socket_path: str,
         interactive_session_id: str | None,
     ) -> None:
@@ -670,13 +673,14 @@ class CCWorkspaceManager:
         *,
         socket_path: str,
         agent_name: str,
-        task_id: str,
+        task_id: str | None,
         interactive_session_id: str,
     ) -> str:
         env_parts = [
             f"MC_SOCKET_PATH={shlex.quote(socket_path)}",
             f"MC_INTERACTIVE_SESSION_ID={shlex.quote(interactive_session_id)}",
             f"AGENT_NAME={shlex.quote(agent_name)}",
-            f"TASK_ID={shlex.quote(task_id)}",
         ]
+        if task_id:
+            env_parts.append(f"TASK_ID={shlex.quote(task_id)}")
         return " ".join([*env_parts, "uv run python -m claude_code.hook_bridge"])

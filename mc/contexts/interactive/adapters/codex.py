@@ -78,7 +78,7 @@ class CodexInteractiveAdapter:
         *,
         identity: InteractiveSessionIdentity,
         agent: AgentData,
-        task_id: str,
+        task_id: str | None = None,
         orientation: str | None = None,
         task_prompt: str | None = None,
         board_name: str | None = None,

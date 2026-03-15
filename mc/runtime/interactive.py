@@ -125,7 +125,7 @@ class InteractiveSocketServer:
                 scope_kind = params.get("scopeKind", ["chat"])[0]
                 scope_id = params.get("scopeId", [f"chat:{agent_name}"])[0]
                 surface = params.get("surface", ["chat"])[0]
-                task_id = params.get("taskId", [scope_id])[0]
+                task_id = params.get("taskId", [None])[0]
                 prompt = params.get("prompt", [None])[0]
 
                 identity = InteractiveSessionIdentity(

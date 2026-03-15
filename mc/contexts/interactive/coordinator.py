@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -41,7 +42,7 @@ class InteractiveSessionCoordinator:
         *,
         identity: InteractiveSessionIdentity,
         agent: AgentData,
-        task_id: str,
+        task_id: str | None = None,
         step_id: str | None = None,
         timestamp: str,
         orientation: str | None = None,
@@ -85,6 +86,8 @@ class InteractiveSessionCoordinator:
                 env=launch.environment,
             )
             if launch.bootstrap_input:
+                if launch.bootstrap_delay > 0:
+                    await asyncio.sleep(launch.bootstrap_delay)
                 self._tmux.send_keys(identity.tmux_session_name, launch.bootstrap_input)
         except Exception as exc:
             await adapter.stop_session(identity.session_key)

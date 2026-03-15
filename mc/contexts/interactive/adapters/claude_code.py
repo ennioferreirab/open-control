@@ -64,7 +64,7 @@ class ClaudeCodeInteractiveAdapter:
         *,
         identity: InteractiveSessionIdentity,
         agent: AgentData,
-        task_id: str,
+        task_id: str | None = None,
         orientation: str | None = None,
         task_prompt: str | None = None,
         board_name: str | None = None,
@@ -100,11 +100,17 @@ class ClaudeCodeInteractiveAdapter:
         await socket_server.start(workspace_ctx.socket_path)
         self._socket_servers[identity.session_key] = socket_server
 
+        bootstrap = _normalize_bootstrap_input(task_prompt)
         return InteractiveLaunchSpec(
             cwd=workspace_ctx.cwd,
-            command=self._build_command(agent, workspace_ctx, resume_session_id=resume_session_id),
+            command=self._build_command(
+                agent,
+                workspace_ctx,
+                resume_session_id=resume_session_id,
+            ),
             capabilities=list(self.capabilities),
-            bootstrap_input=_normalize_bootstrap_input(task_prompt),
+            bootstrap_input=bootstrap,
+            bootstrap_delay=2.0 if bootstrap else 0.0,
         )
 
     async def stop_session(self, session_key: str) -> None:
@@ -120,12 +126,6 @@ class ClaudeCodeInteractiveAdapter:
         resume_session_id: str | None,
     ) -> list[str]:
         cmd = [self._cli_path, "--mcp-config", str(workspace_ctx.mcp_config)]
-
-        model = agent.model
-        if model and model.startswith("cc/"):
-            model = model[3:]
-        if model:
-            cmd.extend(["--model", model])
 
         cc = agent.claude_code_opts
         permission_mode = (cc and cc.permission_mode) or "acceptEdits"

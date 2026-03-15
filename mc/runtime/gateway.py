@@ -180,29 +180,29 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         admin_key=os.environ.get("CONVEX_ADMIN_KEY", ""),
         admin_url=os.environ.get("CONVEX_URL", ""),
     )
-    # DEPRECATED: The interactive TUI runtime is the legacy step-execution path.
-    # The supported step-execution path is now PROVIDER_CLI (ProviderCliRunnerStrategy).
-    # The interactive runtime is still started here for two retained uses:
-    #   1. Dashboard live terminal (websocket server for PTY-backed chat sessions).
-    #   2. INTERACTIVE_TUI escape hatch for agents not yet migrated.
+    # The interactive runtime provides the WebSocket server (port 8765) that
+    # backs two features:
+    #   1. Dashboard live terminal (PTY-backed chat sessions — always needed).
+    #   2. INTERACTIVE_TUI escape hatch for step execution (legacy, opt-in).
+    # The WebSocket server is always started so the dashboard terminal works.
+    # Only the step-execution services are registered when the escape hatch is active.
     # Do NOT add new callers of build_interactive_runtime for step execution.
+    interactive_runtime = build_interactive_runtime(
+        bridge,
+        cron_service=cron,
+    )
+    await interactive_runtime.server.start()
+    runtime_ctx.services["interactive_runtime"] = interactive_runtime
+    runtime_ctx.services["interactive_session_service"] = interactive_runtime.service
+    runtime_ctx.services["interactive_session_coordinator"] = interactive_runtime.service
+    runtime_ctx.services["interactive_socket_transport"] = interactive_runtime.transport
+    runtime_ctx.services["interactive_execution_supervisor"] = interactive_runtime.supervisor
+    logger.info("[gateway] Interactive WebSocket server started on port 8765")
+
     _exec_mode = os.environ.get(INTERACTIVE_MODE_ENV, "provider-cli").strip().lower()
     _tui_escape_hatch = _exec_mode == "interactive-tui"
     if _tui_escape_hatch:
-        interactive_runtime = build_interactive_runtime(
-            bridge,
-            cron_service=cron,
-        )
-        runtime_ctx.services["interactive_runtime"] = interactive_runtime
-        runtime_ctx.services["interactive_session_service"] = interactive_runtime.service
-        runtime_ctx.services["interactive_session_coordinator"] = interactive_runtime.service
-        runtime_ctx.services["interactive_socket_transport"] = interactive_runtime.transport
-        runtime_ctx.services["interactive_execution_supervisor"] = interactive_runtime.supervisor
-        await interactive_runtime.server.start()
-        logger.info("[gateway] Legacy TUI runtime started (escape hatch active)")
-    else:
-        interactive_runtime = None
-        logger.info("[gateway] Provider-CLI path active — TUI runtime not started")
+        logger.info("[gateway] Legacy TUI step-execution escape hatch active")
 
     # Provider CLI runtime services — composition root for all provider-native CLI sessions.
     from mc.contexts.provider_cli.control_plane import ProviderCliControlPlane

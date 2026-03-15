@@ -101,6 +101,7 @@ async def test_prepare_launch_reuses_cc_workspace_bootstrap_without_headless_fla
     assert "interactive-prompts" in launch.capabilities
     assert launch.environment is None
     assert launch.bootstrap_input == "Investigate failing test"
+    assert launch.bootstrap_delay == 2.0
 
 
 @pytest.mark.asyncio
@@ -257,12 +258,11 @@ async def test_stop_session_stops_socket_server_when_present() -> None:
 
 
 @pytest.mark.asyncio
-async def test_prepare_launch_with_task_prompt_produces_bootstrap_input() -> None:
-    """A Claude step session must start with an execution turn, not sit at the CLI prompt.
+async def test_prepare_launch_with_task_prompt_uses_bootstrap_input() -> None:
+    """A Claude interactive session delivers the prompt via bootstrap_input.
 
-    When a task_prompt is provided, bootstrap_input must be set so the coordinator
-    sends it immediately via send_keys — this is the startup contract that prevents
-    the session from stalling indefinitely at the interactive CLI prompt.
+    The prompt is typed into the TUI after startup via tmux send_keys, rather than
+    passed via ``-p`` which would force headless (print-and-exit) mode.
     """
     workspace_manager = MagicMock()
     workspace_manager.prepare.return_value = _workspace()
@@ -283,10 +283,9 @@ async def test_prepare_launch_with_task_prompt_produces_bootstrap_input() -> Non
         task_prompt="Implement the login feature",
     )
 
-    assert launch.bootstrap_input == "Implement the login feature", (
-        "bootstrap_input must equal task_prompt so the session starts executing immediately "
-        "rather than waiting at the initial CLI prompt."
-    )
+    assert "-p" not in launch.command
+    assert launch.bootstrap_input == "Implement the login feature"
+    assert launch.bootstrap_delay == 2.0
 
 
 @pytest.mark.asyncio
@@ -316,6 +315,7 @@ async def test_prepare_launch_without_task_prompt_produces_no_bootstrap_input() 
     )
 
     assert launch.bootstrap_input is None
+    assert launch.bootstrap_delay == 0.0
 
 
 @pytest.mark.asyncio
@@ -374,8 +374,8 @@ async def test_socket_server_is_started_for_ipc_observability() -> None:
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_input_is_stripped_of_leading_trailing_whitespace() -> None:
-    """task_prompt whitespace is stripped before being used as bootstrap_input."""
+async def test_task_prompt_is_stripped_before_bootstrap_input() -> None:
+    """task_prompt whitespace is stripped before being set as bootstrap_input."""
     workspace_manager = MagicMock()
     workspace_manager.prepare.return_value = _workspace()
     socket_server = MagicMock()
@@ -396,3 +396,4 @@ async def test_bootstrap_input_is_stripped_of_leading_trailing_whitespace() -> N
     )
 
     assert launch.bootstrap_input == "Implement the login feature"
+    assert "-p" not in launch.command

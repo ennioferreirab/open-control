@@ -21,6 +21,7 @@ class InteractiveLaunchSpec:
     capabilities: list[str]
     environment: dict[str, str] | None = None
     bootstrap_input: str | None = None
+    bootstrap_delay: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -45,7 +46,7 @@ class InteractiveProviderAdapter(Protocol):
         *,
         identity: InteractiveSessionIdentity,
         agent: AgentData,
-        task_id: str,
+        task_id: str | None = None,
         orientation: str | None = None,
         task_prompt: str | None = None,
         board_name: str | None = None,
