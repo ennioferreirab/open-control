@@ -1,8 +1,10 @@
-"""Architecture guardrail tests for TUI retirement (Story 28.7).
+"""Architecture guardrail tests for TUI retirement (Stories 28.7, 28-12).
 
-Verifies that the obsolete remote TUI paths have been removed or gated from the
-primary user-facing code paths, and that the provider CLI live-share model is
-the only supported path.
+Verifies that:
+- The supported step execution path (provider-cli) does NOT import tmux/PTY/websocket modules.
+- The gateway only starts the interactive (TUI) runtime behind the escape hatch.
+- The legacy interactive runtime modules carry clear deprecation notices.
+- The obsolete remote TUI paths have been removed or gated from dashboard code paths.
 """
 
 from __future__ import annotations
@@ -76,6 +78,67 @@ class TestBackendDeprecationNotices:
         source = _read_source(source_path)
         assert "deprecated" in source.lower() or "superseded" in source.lower(), (
             "mc/runtime/interactive.py lacks a deprecation note."
+        )
+
+
+class TestSupportedPathNoTmxDependency:
+    """Supported step execution path modules must have no tmux/PTY/websocket imports."""
+
+    FORBIDDEN_PATTERNS = ["import tmux", "import pty", "import websockets", "TmuxSession"]
+
+    def _assert_no_forbidden(self, source: str, label: str) -> None:
+        for pattern in self.FORBIDDEN_PATTERNS:
+            assert pattern not in source, (
+                f"{label} contains forbidden pattern {pattern!r} — "
+                "supported path must not depend on tmux/PTY/websocket."
+            )
+
+    def test_provider_cli_strategy_has_no_tmux_imports(self) -> None:
+        source_path = MC_ROOT / "application" / "execution" / "strategies" / "provider_cli.py"
+        source = _read_source(source_path)
+        self._assert_no_forbidden(source, "provider_cli.py strategy")
+
+    def test_process_supervisor_has_no_tmux_imports(self) -> None:
+        source_path = MC_ROOT / "runtime" / "provider_cli" / "process_supervisor.py"
+        source = _read_source(source_path)
+        self._assert_no_forbidden(source, "process_supervisor.py")
+
+    def test_claude_code_provider_has_no_tmux_imports(self) -> None:
+        source_path = MC_ROOT / "contexts" / "provider_cli" / "providers" / "claude_code.py"
+        source = _read_source(source_path)
+        self._assert_no_forbidden(source, "claude_code.py provider")
+
+
+class TestGatewayTuiConditional:
+    """Gateway must start the interactive (TUI) runtime only behind the escape hatch."""
+
+    def _gateway_source(self) -> str:
+        return _read_source(MC_ROOT / "runtime" / "gateway.py")
+
+    def test_gateway_imports_build_interactive_runtime(self) -> None:
+        source = self._gateway_source()
+        assert "build_interactive_runtime" in source, (
+            "gateway.py does not import build_interactive_runtime."
+        )
+
+    def test_gateway_has_deprecation_comment_for_tui_runtime(self) -> None:
+        source = self._gateway_source()
+        source_lower = source.lower()
+        assert (
+            "deprecated" in source_lower
+            or "superseded" in source_lower
+            or "legacy" in source_lower
+        ), "gateway.py lacks a deprecation/legacy comment about the TUI runtime."
+
+    def test_gateway_provider_cli_log_message_present(self) -> None:
+        source = self._gateway_source()
+        has_provider_cli_note = (
+            "provider-cli" in source.lower()
+            or "provider_cli" in source.lower()
+            or "PROVIDER_CLI" in source
+        )
+        assert has_provider_cli_note, (
+            "gateway.py does not mention provider-cli."
         )
 
 

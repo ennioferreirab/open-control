@@ -405,6 +405,8 @@ def build_execution_engine(
                 ask_user_registry=ask_user_registry,
             ),
             RunnerType.HUMAN: HumanRunnerStrategy(),
+            # DEPRECATED: INTERACTIVE_TUI is the legacy escape hatch.
+            # The supported path for new step execution is PROVIDER_CLI.
             RunnerType.INTERACTIVE_TUI: InteractiveTuiRunnerStrategy(
                 bridge=bridge,
                 session_coordinator=interactive_session_coordinator,

@@ -180,10 +180,12 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
         admin_key=os.environ.get("CONVEX_ADMIN_KEY", ""),
         admin_url=os.environ.get("CONVEX_URL", ""),
     )
-    # Build the legacy PTY/tmux interactive runtime ONLY when the explicit escape
-    # hatch is active (MC_INTERACTIVE_EXECUTION_MODE=interactive-tui).
-    # The production default (PROVIDER_CLI) does not need the TmuxSessionManager
-    # or the websocket server. (Story 28.7)
+    # DEPRECATED: The interactive TUI runtime is the legacy step-execution path.
+    # The supported step-execution path is now PROVIDER_CLI (ProviderCliRunnerStrategy).
+    # The interactive runtime is still started here for two retained uses:
+    #   1. Dashboard live terminal (websocket server for PTY-backed chat sessions).
+    #   2. INTERACTIVE_TUI escape hatch for agents not yet migrated.
+    # Do NOT add new callers of build_interactive_runtime for step execution.
     _exec_mode = os.environ.get(INTERACTIVE_MODE_ENV, "provider-cli").strip().lower()
     _tui_escape_hatch = _exec_mode == "interactive-tui"
     if _tui_escape_hatch:
