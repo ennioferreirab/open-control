@@ -148,6 +148,7 @@ class TaskExecutor(CCExecutorMixin):
         provider_cli_supervisor: Any | None = None,
         provider_cli_projector: Any | None = None,
         provider_cli_supervision_sink: Any | None = None,
+        provider_cli_control_plane: Any | None = None,
     ) -> None:
         self._bridge = bridge
         self._agent_gateway = AgentGateway(bridge)
@@ -161,6 +162,7 @@ class TaskExecutor(CCExecutorMixin):
         self._provider_cli_supervisor = provider_cli_supervisor
         self._provider_cli_projector = provider_cli_projector
         self._provider_cli_supervision_sink = provider_cli_supervision_sink
+        self._provider_cli_control_plane = provider_cli_control_plane
 
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance."""
@@ -182,6 +184,7 @@ class TaskExecutor(CCExecutorMixin):
             provider_cli_supervisor=self._provider_cli_supervisor,
             provider_cli_projector=self._provider_cli_projector,
             provider_cli_supervision_sink=self._provider_cli_supervision_sink,
+            provider_cli_control_plane=self._provider_cli_control_plane,
         )
 
     async def _handle_tier_error(

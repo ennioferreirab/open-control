@@ -90,6 +90,7 @@ async def _run_step_agent(
     provider_cli_supervisor: Any | None = None,
     provider_cli_projector: Any | None = None,
     provider_cli_supervision_sink: Any | None = None,
+    provider_cli_control_plane: Any | None = None,
 ) -> Any:
     """Execute a step through the shared execution engine."""
     from mc.application.execution.post_processing import build_execution_engine
@@ -128,6 +129,7 @@ async def _run_step_agent(
             provider_cli_supervisor=provider_cli_supervisor,
             provider_cli_projector=provider_cli_projector,
             provider_cli_supervision_sink=provider_cli_supervision_sink,
+            provider_cli_control_plane=provider_cli_control_plane,
         )
     else:
         engine = engine_builder()
@@ -147,6 +149,7 @@ class StepDispatcher:
         provider_cli_supervisor: Any | None = None,
         provider_cli_projector: Any | None = None,
         provider_cli_supervision_sink: Any | None = None,
+        provider_cli_control_plane: Any | None = None,
     ) -> None:
         self._bridge = bridge
         self._cron_service = cron_service
@@ -157,6 +160,7 @@ class StepDispatcher:
         self._provider_cli_supervisor = provider_cli_supervisor
         self._provider_cli_projector = provider_cli_projector
         self._provider_cli_supervision_sink = provider_cli_supervision_sink
+        self._provider_cli_control_plane = provider_cli_control_plane
 
     def _get_tier_resolver(self) -> Any:
         """Lazily create and return a TierResolver instance (shared across steps)."""
@@ -179,6 +183,7 @@ class StepDispatcher:
             provider_cli_supervisor=self._provider_cli_supervisor,
             provider_cli_projector=self._provider_cli_projector,
             provider_cli_supervision_sink=self._provider_cli_supervision_sink,
+            provider_cli_control_plane=self._provider_cli_control_plane,
         )
 
     async def dispatch_steps(self, task_id: str, step_ids: list[str]) -> None:
