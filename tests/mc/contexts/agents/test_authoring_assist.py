@@ -14,7 +14,6 @@ from mc.contexts.agents.authoring_assist import (
     AuthoringMode,
     AuthoringResponse,
     build_agent_authoring_response,
-    build_squad_authoring_response,
 )
 
 
@@ -29,14 +28,10 @@ class TestCanonicalPhases:
 
 
 class TestAuthoringMode:
-    """AuthoringMode enum covers agent and squad modes."""
+    """AuthoringMode enum covers the remaining agent mode."""
 
     def test_agent_mode(self) -> None:
         assert AuthoringMode.AGENT == "agent"
-
-    def test_squad_mode(self) -> None:
-        assert AuthoringMode.SQUAD == "squad"
-
 
 class TestAuthoringResponseModel:
     """AuthoringResponse dataclass contract."""
@@ -58,26 +53,6 @@ class TestAuthoringResponseModel:
         assert resp.preview == {"agents_count": 1}
         assert resp.readiness == 0.4
         assert resp.mode == AuthoringMode.AGENT
-
-    def test_squad_response_fields(self) -> None:
-        resp = AuthoringResponse(
-            assistant_message="Here is your squad proposal.",
-            phase="proposal",
-            draft_graph_patch={
-                "squad": {"outcome": "Grow an expert personal brand"},
-                "agents": [{"key": "researcher", "role": "Researcher"}],
-                "workflows": [{"key": "default", "steps": []}],
-            },
-            unresolved_questions=[],
-            preview={"squad_name": "brand-squad"},
-            readiness=0.6,
-            mode=AuthoringMode.SQUAD,
-        )
-        assert resp.phase == "proposal"
-        assert "squad" in resp.draft_graph_patch
-        assert "agents" in resp.draft_graph_patch
-        assert "workflows" in resp.draft_graph_patch
-        assert resp.mode == AuthoringMode.SQUAD
 
     def test_invalid_phase_raises(self) -> None:
         with pytest.raises(ValueError, match="phase"):
@@ -190,84 +165,3 @@ class TestBuildAgentAuthoringResponse:
         assert isinstance(result, AuthoringResponse)
         assert result.phase in CANONICAL_PHASES
         assert result.mode == AuthoringMode.AGENT
-
-
-class TestBuildSquadAuthoringResponse:
-    """build_squad_authoring_response uses graph patches not flat strings."""
-
-    @pytest.mark.asyncio
-    async def test_returns_squad_authoring_response(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = (
-            '{"assistant_message": "Here is a squad proposal.", '
-            '"phase": "proposal", '
-            '"draft_graph_patch": {'
-            '  "squad": {"outcome": "Grow an expert personal brand"}, '
-            '  "agents": [{"key": "researcher", "role": "Researcher"}], '
-            '  "workflows": [{"key": "default", "steps": []}]'
-            "}, "
-            '"unresolved_questions": [], '
-            '"preview": {"squad_name": "brand-squad"}, '
-            '"readiness": 0.6}'
-        )
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await build_squad_authoring_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "Create a brand squad"}],
-            current_phase="proposal",
-        )
-
-        assert isinstance(result, AuthoringResponse)
-        assert result.phase == "proposal"
-        assert result.mode == AuthoringMode.SQUAD
-        # Must be structured graph patch, not flat strings
-        assert "squad" in result.draft_graph_patch
-        assert "agents" in result.draft_graph_patch
-        assert "workflows" in result.draft_graph_patch
-
-    @pytest.mark.asyncio
-    async def test_no_flat_team_design_key(self) -> None:
-        """Squad response must NOT contain old flat team_design key."""
-        mock_response = MagicMock()
-        mock_response.content = (
-            '{"assistant_message": "Squad designed.", '
-            '"phase": "refinement", '
-            '"draft_graph_patch": {'
-            '  "squad": {"outcome": "Build a content engine"}, '
-            '  "agents": [], '
-            '  "workflows": []'
-            "}, "
-            '"unresolved_questions": [], '
-            '"preview": {}, '
-            '"readiness": 0.7}'
-        )
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await build_squad_authoring_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "Refine squad"}],
-            current_phase="refinement",
-        )
-
-        assert "team_design" not in result.draft_graph_patch
-        assert "workflow_design" not in result.draft_graph_patch
-
-    @pytest.mark.asyncio
-    async def test_fallback_on_invalid_llm_response(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = ""
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await build_squad_authoring_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "Create a squad"}],
-            current_phase="discovery",
-        )
-
-        assert isinstance(result, AuthoringResponse)
-        assert result.phase in CANONICAL_PHASES
-        assert result.mode == AuthoringMode.SQUAD

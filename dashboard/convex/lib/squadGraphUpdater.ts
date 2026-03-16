@@ -17,6 +17,7 @@ export interface EditableSquadGraphInput {
   };
   agents: SquadGraphAgentInput[];
   workflows: EditableSquadGraphWorkflowInput[];
+  reviewPolicy?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,6 +171,7 @@ export async function updatePublishedSquadGraph(
     displayName: graph.squad.displayName,
     description: graph.squad.description,
     outcome: graph.squad.outcome,
+    reviewPolicy: graph.reviewPolicy,
     agentIds: Array.from(agentKeyToId.values()),
     defaultWorkflowSpecId: nextDefaultWorkflowId,
     updatedAt: now,

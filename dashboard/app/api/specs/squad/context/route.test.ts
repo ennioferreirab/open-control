@@ -19,8 +19,8 @@ beforeEach(() => {
 });
 
 describe("GET /api/specs/squad/context", () => {
-  it("returns active reusable agents with their active skills, available skills catalog, and available models", async () => {
-    mockQuery.mockImplementation((name: string) => {
+  it("returns active reusable agents plus full skill catalog metadata for skills-first discovery", async () => {
+    mockQuery.mockImplementation((name: string, args?: Record<string, unknown>) => {
       if (name === "agents:list") {
         return Promise.resolve([
           {
@@ -58,12 +58,33 @@ describe("GET /api/specs/squad/context", () => {
           {
             name: "writing",
             description: "Create clear written content",
+            source: "workspace",
+            always: false,
             available: true,
+            supportedProviders: ["claude-code", "nanobot"],
+            requires: "OPENAI_API_KEY",
+            metadata: '{"categories":["content","writing"]}',
           },
           {
             name: "private-skill",
             description: "Not available",
+            source: "builtin",
             available: false,
+            supportedProviders: ["claude-code", "codex", "nanobot"],
+          },
+        ]);
+      }
+
+      if (name === "reviewSpecs:listByStatus") {
+        expect(args).toEqual({ status: "published" });
+        return Promise.resolve([
+          {
+            _id: "review-spec-1",
+            name: "brief-quality-check",
+            scope: "task_output",
+            approvalThreshold: 0.8,
+            reviewerPolicy: "Senior reviewer",
+            rejectionRoutingPolicy: "Return to drafter",
           },
         ]);
       }
@@ -96,10 +117,107 @@ describe("GET /api/specs/squad/context", () => {
         {
           name: "writing",
           description: "Create clear written content",
+          source: "workspace",
+          always: false,
+          supportedProviders: ["claude-code", "nanobot"],
+          requires: "OPENAI_API_KEY",
+          metadata: { categories: ["content", "writing"] },
+        },
+      ],
+      knownSkills: [
+        {
+          name: "writing",
+          description: "Create clear written content",
+          source: "workspace",
+          always: false,
+          available: true,
+          supportedProviders: ["claude-code", "nanobot"],
+          requires: "OPENAI_API_KEY",
+          metadata: { categories: ["content", "writing"] },
+        },
+        {
+          name: "private-skill",
+          description: "Not available",
+          source: "builtin",
+          always: false,
+          available: false,
+          supportedProviders: ["claude-code", "codex", "nanobot"],
+          requires: null,
+          metadata: null,
+        },
+      ],
+      availableReviewSpecs: [
+        {
+          id: "review-spec-1",
+          name: "brief-quality-check",
+          scope: "task_output",
+          approvalThreshold: 0.8,
+          reviewerPolicy: "Senior reviewer",
+          rejectionRoutingPolicy: "Return to drafter",
         },
       ],
       availableModels: ["claude-sonnet-4-6", "claude-opus-4-6"],
     });
+  });
+
+  it("falls back to raw metadata string when skill metadata is not valid JSON", async () => {
+    mockQuery.mockImplementation((name: string) => {
+      if (name === "agents:list") {
+        return Promise.resolve([]);
+      }
+
+      if (name === "skills:list") {
+        return Promise.resolve([
+          {
+            name: "skill-creator",
+            description: "Create new skills",
+            source: "builtin",
+            available: true,
+            supportedProviders: ["claude-code", "codex", "nanobot"],
+            metadata: "not-json",
+          },
+        ]);
+      }
+
+      if (name === "reviewSpecs:listByStatus") {
+        return Promise.resolve([]);
+      }
+
+      if (name === "settings:get") {
+        return Promise.resolve(null);
+      }
+
+      throw new Error(`Unexpected query ${name}`);
+    });
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.availableSkills).toEqual([
+      {
+        name: "skill-creator",
+        description: "Create new skills",
+        source: "builtin",
+        always: false,
+        supportedProviders: ["claude-code", "codex", "nanobot"],
+        requires: null,
+        metadata: "not-json",
+      },
+    ]);
+    expect(body.knownSkills).toEqual([
+      {
+        name: "skill-creator",
+        description: "Create new skills",
+        source: "builtin",
+        always: false,
+        available: true,
+        supportedProviders: ["claude-code", "codex", "nanobot"],
+        requires: null,
+        metadata: "not-json",
+      },
+    ]);
+    expect(body.availableReviewSpecs).toEqual([]);
   });
 
   it("returns 500 when the context query fails", async () => {

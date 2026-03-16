@@ -240,6 +240,7 @@ export const updatePublishedGraph = mutation({
           exitCriteria: v.optional(v.string()),
         }),
       ),
+      reviewPolicy: v.optional(v.string()),
     }),
   },
   handler: async (ctx, args) => {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { FlowStepNode, type FlowStepNodeType } from "./FlowStepNode";
@@ -12,7 +12,8 @@ vi.mock("@xyflow/react", () => ({
 function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
   const onRetry = vi.fn();
   const onOpenParentTask = vi.fn();
-  const props = {
+  const onStepClick = vi.fn();
+  const props: ComponentProps<typeof FlowStepNode> = {
     id: "step-1",
     selected: false,
     type: "flowStep",
@@ -36,12 +37,13 @@ function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
       onRetry,
       parentTaskId: "task-123",
       onOpenParentTask,
+      onStepClick,
       ...overrides,
-    } as any,
+    } as FlowStepNodeType["data"],
   };
 
-  render(<FlowStepNode {...(props as any)} />);
-  return { onRetry, onOpenParentTask };
+  render(<FlowStepNode {...props} />);
+  return { onRetry, onOpenParentTask, onStepClick };
 }
 
 describe("FlowStepNode", () => {
@@ -77,6 +79,14 @@ describe("FlowStepNode", () => {
     fireEvent.click(screen.getByRole("button", { name: "Task Parent link" }));
 
     expect(onOpenParentTask).toHaveBeenCalledWith("task-123");
+  });
+
+  it("calls onStepClick when the step card is clicked", () => {
+    const { onStepClick } = renderNode();
+
+    fireEvent.click(screen.getByTestId("flow-step-node-step-1"));
+
+    expect(onStepClick).toHaveBeenCalledWith("step-1");
   });
 
   describe("Live button", () => {

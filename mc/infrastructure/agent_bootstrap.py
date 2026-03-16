@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 NANOBOT_AGENT_NAME = "nanobot"  # Re-exported for backward compat; canonical in types.py
+_SKILL_PROVIDER_ORDER = ("claude-code", "codex", "nanobot")
 _NANOBOT_AGENT_CONFIG = """\
 name: nanobot
 role: "{role}"
@@ -55,6 +56,37 @@ prompt: |
   Focus on completing the delegated task using your tools and knowledge.
 skills: []
 """
+
+
+def _parse_skill_metadata_json(raw: str | None) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _detect_supported_providers(skill_info: dict[str, Any], metadata_str: str | None) -> list[str]:
+    providers: set[str] = {"claude-code", "nanobot"}
+    skill_md_path = Path(str(skill_info["path"]))
+    skill_dir = skill_md_path.parent
+
+    if (skill_dir / "agents" / "openai.yaml").exists():
+        providers.add("codex")
+
+    metadata = _parse_skill_metadata_json(metadata_str)
+    adapters = metadata.get("adapters")
+    if isinstance(adapters, dict):
+        configured = adapters.get("providers")
+        if isinstance(configured, list):
+            providers = {str(value) for value in configured if str(value) in _SKILL_PROVIDER_ORDER}
+            providers.update({"claude-code", "nanobot"})
+            if (skill_dir / "agents" / "openai.yaml").exists():
+                providers.add("codex")
+
+    return [provider for provider in _SKILL_PROVIDER_ORDER if provider in providers]
 
 
 def _fetch_bot_identity() -> dict[str, str]:
@@ -88,9 +120,7 @@ def _fetch_bot_identity() -> dict[str, str]:
             resp.raise_for_status()
             data = resp.json()
             if not data.get("ok") or "result" not in data:
-                raise RuntimeError(
-                    f"Telegram getMe returned unexpected response: {data}"
-                )
+                raise RuntimeError(f"Telegram getMe returned unexpected response: {data}")
             first_name = data["result"].get("first_name")
             if not first_name:
                 raise RuntimeError("Telegram bot has no first_name set")
@@ -99,9 +129,7 @@ def _fetch_bot_identity() -> dict[str, str]:
                 "role": "Personal Assistant and Task Delegation Fallback",
             }
     except httpx.HTTPError as e:
-        raise RuntimeError(
-            f"Failed to fetch Telegram bot identity: {e}"
-        ) from e
+        raise RuntimeError(f"Failed to fetch Telegram bot identity: {e}") from e
 
 
 def ensure_nanobot_agent(agents_dir: Path) -> None:
@@ -153,24 +181,16 @@ def ensure_nanobot_agent(agents_dir: Path) -> None:
                 global_path.mkdir(parents=True, exist_ok=True)
 
         # If the local item is an empty directory (from older versions), remove it
-        if (
-            agent_path.is_dir()
-            and not agent_path.is_symlink()
-            and not any(agent_path.iterdir())
-        ):
+        if agent_path.is_dir() and not agent_path.is_symlink() and not any(agent_path.iterdir()):
             shutil.rmtree(agent_path)
 
         # Create symlink if missing
         if not agent_path.exists():
             try:
                 os.symlink(global_path, agent_path)
-                logger.info(
-                    "Symlinked %s to global workspace for %s", item, bot_name
-                )
+                logger.info("Symlinked %s to global workspace for %s", item, bot_name)
             except Exception as e:
-                logger.warning(
-                    "Failed to symlink %s for nanobot agent: %s", item, e
-                )
+                logger.warning("Failed to symlink %s for nanobot agent: %s", item, e)
 
 
 def ensure_low_agent(bridge: "ConvexBridge") -> None:
@@ -220,9 +240,7 @@ def _restore_archived_files(agent_dir: Path, archive: dict) -> None:
     if session_data:
         sessions_dir.mkdir(parents=True, exist_ok=True)
         name = agent_dir.name
-        (sessions_dir / f"mc_task_{name}.jsonl").write_text(
-            session_data, encoding="utf-8"
-        )
+        (sessions_dir / f"mc_task_{name}.jsonl").write_text(session_data, encoding="utf-8")
 
 
 def _cleanup_deleted_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
@@ -256,8 +274,7 @@ def _cleanup_deleted_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
 
         if memory is None and history is None and session is None:
             logger.info(
-                "No archive data for agent '%s' — skipping archive call, "
-                "proceeding to cleanup",
+                "No archive data for agent '%s' — skipping archive call, proceeding to cleanup",
                 name,
             )
         else:
@@ -265,9 +282,7 @@ def _cleanup_deleted_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
                 bridge.archive_agent_data(name, memory, history, session)
                 logger.info("Archived agent data for '%s'", name)
             except Exception:
-                logger.exception(
-                    "Failed to archive agent '%s' — skipping cleanup", name
-                )
+                logger.exception("Failed to archive agent '%s' — skipping cleanup", name)
                 continue  # Don't delete if archive failed
 
         try:
@@ -275,8 +290,7 @@ def _cleanup_deleted_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
             logger.info("Removed local folder for deleted agent '%s'", name)
         except OSError:
             logger.exception(
-                "Failed to remove local folder for agent '%s' — "
-                "will retry on next sync",
+                "Failed to remove local folder for agent '%s' — will retry on next sync",
                 name,
             )
 
@@ -327,28 +341,20 @@ def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
             continue
 
         if config_path.is_file():
-            local_mtime = datetime.fromtimestamp(
-                config_path.stat().st_mtime, tz=timezone.utc
-            )
+            local_mtime = datetime.fromtimestamp(config_path.stat().st_mtime, tz=timezone.utc)
             if convex_ts > local_mtime:
                 try:
                     bridge.write_agent_config(agent_data, agents_dir)
-                    logger.info(
-                        "Write-back: updated local config for agent '%s'", name
-                    )
+                    logger.info("Write-back: updated local config for agent '%s'", name)
                 except Exception:
                     logger.exception("Write-back failed for agent '%s'", name)
         else:
             # Agent exists in Convex but has no local YAML — create it
             try:
                 bridge.write_agent_config(agent_data, agents_dir)
-                logger.info(
-                    "Write-back: created local config for agent '%s'", name
-                )
+                logger.info("Write-back: created local config for agent '%s'", name)
             except Exception:
-                logger.exception(
-                    "Write-back failed for new agent '%s'", name
-                )
+                logger.exception("Write-back failed for new agent '%s'", name)
                 continue
 
             # Restore archived memory/history/session data if present (restore flow).
@@ -358,9 +364,7 @@ def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
                 archive = bridge.get_agent_archive(name)
                 if archive:
                     _restore_archived_files(agents_dir / name, archive)
-                    logger.info(
-                        "Restored archived data for agent '%s'", name
-                    )
+                    logger.info("Restored archived data for agent '%s'", name)
                     try:
                         bridge.clear_agent_archive(name)
                     except Exception:
@@ -370,9 +374,7 @@ def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
                             name,
                         )
             except Exception:
-                logger.exception(
-                    "Failed to restore archive for agent '%s'", name
-                )
+                logger.exception("Failed to restore archive for agent '%s'", name)
 
 
 def _sync_model_tiers(bridge: "ConvexBridge") -> None:
@@ -443,21 +445,15 @@ def _sync_model_tiers(bridge: "ConvexBridge") -> None:
                 {"key": "model_tiers", "value": json.dumps(updated)},
             )
         else:
-            logger.info(
-                "[gateway] Model tiers up to date — no migration needed"
-            )
+            logger.info("[gateway] Model tiers up to date — no migration needed")
 
 
 def _sync_embedding_model(bridge: "ConvexBridge") -> None:
     """Sync the memory embedding model setting from Convex to env/disk."""
     try:
-        model = bridge.query(
-            "settings:get", {"key": "memory_embedding_model"}
-        )
+        model = bridge.query("settings:get", {"key": "memory_embedding_model"})
     except Exception:
-        logger.warning(
-            "[gateway] Failed to read memory_embedding_model setting"
-        )
+        logger.warning("[gateway] Failed to read memory_embedding_model setting")
         return
     if model:
         os.environ["NANOBOT_MEMORY_EMBEDDING_MODEL"] = model
@@ -478,9 +474,7 @@ def _sync_embedding_model(bridge: "ConvexBridge") -> None:
             encoding="utf-8",
         )
     except Exception:
-        logger.debug(
-            "[gateway] Failed to persist embedding model to memory_settings.json"
-        )
+        logger.debug("[gateway] Failed to persist embedding model to memory_settings.json")
 
 
 def sync_agent_registry(
@@ -519,7 +513,7 @@ def sync_agent_registry(
     errors: dict[str, list[str]] = {}
 
     # Roles that represent non-delegatable sessions (e.g. tmux terminals)
-    _NON_AGENT_ROLES = {"remote-terminal"}
+    non_agent_roles = {"remote-terminal"}
 
     if agents_dir.is_dir():
         for child in sorted(agents_dir.iterdir()):
@@ -527,13 +521,8 @@ def sync_agent_registry(
             if child.is_dir() and config_file.is_file():
                 # Quick-check: skip non-agent roles (tmux sessions, etc.)
                 try:
-                    raw = yaml.safe_load(
-                        config_file.read_text(encoding="utf-8")
-                    )
-                    if (
-                        isinstance(raw, dict)
-                        and raw.get("role") in _NON_AGENT_ROLES
-                    ):
+                    raw = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+                    if isinstance(raw, dict) and raw.get("role") in non_agent_roles:
                         logger.debug(
                             "Skipping non-agent directory %s (role=%s)",
                             child.name,
@@ -547,9 +536,7 @@ def sync_agent_registry(
                 if isinstance(result, list):
                     errors[child.name] = result
                     for msg in result:
-                        logger.error(
-                            "Skipping invalid agent %s: %s", child.name, msg
-                        )
+                        logger.error("Skipping invalid agent %s: %s", child.name, msg)
                 else:
                     valid_agents.append(result)
 
@@ -557,10 +544,7 @@ def sync_agent_registry(
     for agent in valid_agents:
         if not agent.model:
             agent.model = resolved_default
-        elif (
-            "/" not in agent.model
-            and resolved_default.endswith("/" + agent.model)
-        ):
+        elif "/" not in agent.model and resolved_default.endswith("/" + agent.model):
             # Bare model name matches config default — use full name with prefix
             agent.model = resolved_default
 
@@ -580,9 +564,7 @@ def sync_agent_registry(
     return valid_agents, errors
 
 
-def _distribute_builtin_skills(
-    workspace_skills_dir: Path, *source_dirs: Path
-) -> None:
+def _distribute_builtin_skills(workspace_skills_dir: Path, *source_dirs: Path) -> None:
     """Copy builtin skill directories to the workspace if not already present.
 
     For each *source_dir*, iterates its subdirectories looking for those that
@@ -596,9 +578,7 @@ def _distribute_builtin_skills(
 
     for source_dir in source_dirs:
         if not source_dir.is_dir():
-            logger.debug(
-                "Skipping missing builtin skills source: %s", source_dir
-            )
+            logger.debug("Skipping missing builtin skills source: %s", source_dir)
             continue
 
         for entry in sorted(source_dir.iterdir()):
@@ -616,9 +596,7 @@ def _distribute_builtin_skills(
                 continue
 
             shutil.copytree(entry, target)
-            logger.info(
-                "Distributed builtin skill '%s' to workspace", entry.name
-            )
+            logger.info("Distributed builtin skill '%s' to workspace", entry.name)
 
 
 def sync_skills(
@@ -640,12 +618,10 @@ def sync_skills(
         / "agent"
         / "skills.py"
     )
-    spec = importlib.util.spec_from_file_location(
-        "_nanobot_skills", str(_skills_path)
-    )
+    spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
     skills_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(skills_mod)  # type: ignore[union-attr]
-    SkillsLoader = skills_mod.SkillsLoader
+    skills_loader_cls = skills_mod.SkillsLoader
     default_dir = skills_mod.BUILTIN_SKILLS_DIR
 
     resolved_dir = builtin_skills_dir or default_dir
@@ -653,7 +629,7 @@ def sync_skills(
     from nanobot.config.loader import load_config
 
     workspace = load_config().workspace_path
-    loader = SkillsLoader(workspace, builtin_skills_dir=resolved_dir)
+    loader = skills_loader_cls(workspace, builtin_skills_dir=resolved_dir)
 
     all_skills = loader.list_skills(filter_unavailable=False)
     synced_names: list[str] = []
@@ -672,17 +648,11 @@ def sync_skills(
             meta = loader.get_skill_metadata(name) or {}
             description = meta.get("description", name)
             metadata_str = meta.get("metadata")  # raw JSON string
-            always = (
-                meta.get("always", "").lower() == "true"
-                if meta.get("always")
-                else False
-            )
+            always = meta.get("always", "").lower() == "true" if meta.get("always") else False
 
             # Check requirements via public API
             available = loader.is_skill_available(name)
-            requires_str = (
-                loader.get_missing_requirements(name) if not available else None
-            )
+            requires_str = loader.get_missing_requirements(name) if not available else None
 
             # Upsert to Convex
             args: dict[str, Any] = {
@@ -690,6 +660,7 @@ def sync_skills(
                 "description": description,
                 "content": content_body,
                 "source": source,
+                "supportedProviders": _detect_supported_providers(skill_info, metadata_str),
                 "available": available,
             }
             if metadata_str:
@@ -708,9 +679,7 @@ def sync_skills(
 
     # Deactivate skills no longer on disk
     try:
-        bridge.mutation(
-            "skills:deactivateExcept", {"active_names": synced_names}
-        )
+        bridge.mutation("skills:deactivateExcept", {"active_names": synced_names})
     except Exception:
         logger.exception("Failed to deactivate removed skills")
 

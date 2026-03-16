@@ -242,9 +242,28 @@ describe("squadSpecs.listByStatus", () => {
 
 const GRAPH_FIXTURE = {
   squad: { name: "personal-brand-squad", displayName: "Personal Brand Squad" },
+  reviewPolicy: "All review steps must pass",
   agents: [
-    { key: "researcher", name: "audience-researcher", role: "Researcher" },
-    { key: "writer", name: "post-writer", role: "Writer" },
+    {
+      key: "researcher",
+      name: "audience-researcher",
+      displayName: "Rafa Researcher",
+      role: "Researcher",
+      prompt: "Research the audience and extract concrete insights.",
+      model: "cc/claude-sonnet-4-6",
+      skills: ["skill1"],
+      soul: "Curious, evidence-driven, and concise.",
+    },
+    {
+      key: "writer",
+      name: "post-writer",
+      displayName: "Wanda Writer",
+      role: "Writer",
+      prompt: "Turn approved insights into publishable drafts.",
+      model: "cc/claude-sonnet-4-6",
+      skills: ["writing"],
+      soul: "Clear, persuasive, and audience-aware.",
+    },
   ],
   workflows: [
     {
@@ -264,6 +283,7 @@ function makeGraphCtx() {
   const inserts: InsertCall[] = [];
   const patches: PatchCall[] = [];
   const existingAgents = new Map<string, { _id: string; name: string }>();
+  const availableSkills = new Set<string>(["skill1", "writing"]);
   let lastAgentQueryName: string | null = null;
 
   const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
@@ -298,10 +318,21 @@ function makeGraphCtx() {
     },
   );
   const query = vi.fn((table: string) => {
-    if (table !== "agents") {
-      throw new Error(`Unexpected query table: ${table}`);
+    if (table === "agents") {
+      return { withIndex };
     }
-    return { withIndex };
+    if (table === "skills") {
+      return {
+        collect: vi.fn(async () =>
+          Array.from(availableSkills).map((name) => ({
+            _id: `skill-${name}`,
+            name,
+            available: true,
+          })),
+        ),
+      };
+    }
+    throw new Error(`Unexpected query table: ${table}`);
   });
 
   return {
@@ -345,6 +376,16 @@ describe("squadSpecs.publishGraph", () => {
     const agentIds = squadInserts[0].value.agentIds as unknown[];
     expect(Array.isArray(agentIds)).toBe(true);
     expect(agentIds.length).toBe(2);
+  });
+
+  it("stores the review policy on the saved squadSpec", async () => {
+    const handler = getHandler(publishGraph);
+    const { ctx, inserts } = makeGraphCtx();
+
+    await handler(ctx, { graph: GRAPH_FIXTURE });
+
+    const squadInserts = inserts.filter((i) => i.table === "squadSpecs");
+    expect(squadInserts[0].value.reviewPolicy).toBe("All review steps must pass");
   });
 
   it("never hardcodes agentIds as empty array", async () => {
@@ -509,6 +550,7 @@ describe("squadSpecs.updatePublishedGraph", () => {
           outcome: "Ship a better workflow",
         },
         agents: [{ key: "researcher", name: "audience-researcher", role: "Researcher" }],
+        reviewPolicy: "Lead review plus QA sign-off",
         workflows: [
           {
             id: "workflow-default",
@@ -544,6 +586,7 @@ describe("squadSpecs.updatePublishedGraph", () => {
           patch: expect.objectContaining({
             description: "Updated description",
             outcome: "Ship a better workflow",
+            reviewPolicy: "Lead review plus QA sign-off",
             defaultWorkflowSpecId: "workflow-default",
           }),
         }),

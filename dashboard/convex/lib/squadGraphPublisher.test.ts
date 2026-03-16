@@ -8,9 +8,28 @@ import { publishSquadGraph, type SquadGraphInput } from "./squadGraphPublisher";
 
 const GRAPH_FIXTURE: SquadGraphInput = {
   squad: { name: "personal-brand-squad", displayName: "Personal Brand Squad" },
+  reviewPolicy: "All review steps must pass",
   agents: [
-    { key: "researcher", name: "audience-researcher", role: "Researcher" },
-    { key: "writer", name: "post-writer", role: "Writer" },
+    {
+      key: "researcher",
+      name: "audience-researcher",
+      displayName: "Rafa Researcher",
+      role: "Researcher",
+      prompt: "Research the audience and extract concrete insights.",
+      model: "cc/claude-sonnet-4-6",
+      skills: ["skill1"],
+      soul: "Curious, evidence-driven, and concise.",
+    },
+    {
+      key: "writer",
+      name: "post-writer",
+      displayName: "Wanda Writer",
+      role: "Writer",
+      prompt: "Turn approved insights into publishable drafts.",
+      model: "cc/claude-sonnet-4-6",
+      skills: ["writing"],
+      soul: "Clear, persuasive, and audience-aware.",
+    },
   ],
   workflows: [
     {
@@ -40,6 +59,10 @@ function makeCtx() {
   const inserts: InsertCall[] = [];
   const patches: PatchCall[] = [];
   const existingAgents = new Map<string, { _id: string; name: string }>();
+  const availableSkills = new Set<string>(["skill1", "skill2", "writing", "editing"]);
+  const reviewSpecs = new Map<string, { _id: string; status: string }>([
+    ["review-spec-1", { _id: "review-spec-1", status: "published" }],
+  ]);
 
   const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
     insertIdCounter++;
@@ -51,6 +74,8 @@ function makeCtx() {
   const patch = vi.fn(async (id: string, p: Record<string, unknown>) => {
     patches.push({ id, patch: p });
   });
+
+  const get = vi.fn(async (id: string) => reviewSpecs.get(id) ?? null);
 
   const first = vi.fn(async () => {
     const currentName = lastAgentQueryName;
@@ -75,17 +100,30 @@ function makeCtx() {
     },
   );
   const query = vi.fn((table: string) => {
-    if (table !== "agents") {
-      throw new Error(`Unexpected query table: ${table}`);
+    if (table === "agents") {
+      return { withIndex };
     }
-    return { withIndex };
+    if (table === "skills") {
+      return {
+        collect: vi.fn(async () =>
+          Array.from(availableSkills).map((name) => ({
+            _id: `skill-${name}`,
+            name,
+            available: true,
+          })),
+        ),
+      };
+    }
+    throw new Error(`Unexpected query table: ${table}`);
   });
 
   return {
-    ctx: { db: { insert, patch, query } },
+    ctx: { db: { get, insert, patch, query } },
     inserts,
     patches,
     existingAgents,
+    availableSkills,
+    reviewSpecs,
   };
 }
 
@@ -136,6 +174,15 @@ describe("publishSquadGraph", () => {
     const squadInsert = squadInserts[0];
     expect(Array.isArray(squadInsert.value.agentIds)).toBe(true);
     expect((squadInsert.value.agentIds as unknown[]).length).toBe(2);
+  });
+
+  it("persists review policy on the squadSpec", async () => {
+    const { ctx, inserts } = makeCtx();
+
+    await publishSquadGraph(ctx, GRAPH_FIXTURE);
+
+    const squadInserts = inserts.filter((i) => i.table === "squadSpecs");
+    expect(squadInserts[0].value.reviewPolicy).toBe("All review steps must pass");
   });
 
   it("never hardcodes agentIds as empty array on the main publish path", async () => {
@@ -226,6 +273,35 @@ describe("publishSquadGraph", () => {
     ).rejects.toThrow('Review step "review" requires reviewSpecId');
   });
 
+  it("rejects review steps that reference an unknown review spec", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [
+              { key: "draft", type: "agent", agentKey: "writer" },
+              {
+                key: "review",
+                type: "review",
+                agentKey: "researcher",
+                reviewSpecId: "missing-review-spec",
+                onReject: "draft",
+                dependsOn: ["draft"],
+              },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      'Workflow step "review" references unknown reviewSpecId "missing-review-spec"',
+    );
+  });
+
   it("reuses an existing global agent instead of inserting a duplicate", async () => {
     const { ctx, inserts, existingAgents } = makeCtx();
     existingAgents.set("audience-researcher", {
@@ -306,7 +382,25 @@ describe("publishSquadGraph - canonical agent fields", () => {
     const { ctx, inserts } = makeCtx();
     await publishSquadGraph(ctx, {
       ...GRAPH_FIXTURE,
-      agents: [{ key: "writer", name: "post-writer", role: "Writer", prompt: "You are a writer." }],
+      agents: [
+        {
+          key: "writer",
+          name: "post-writer",
+          displayName: "Wanda Writer",
+          role: "Writer",
+          prompt: "You are a writer.",
+          model: "cc/claude-sonnet-4-6",
+          skills: ["writing"],
+          soul: "Clear and direct.",
+        },
+      ],
+      workflows: [
+        {
+          key: "default",
+          name: "Default Workflow",
+          steps: [{ key: "write", type: "agent", agentKey: "writer" }],
+        },
+      ],
     });
     const agentInserts = inserts.filter((i) => i.table === "agents");
     expect(agentInserts[0].value.prompt).toBe("You are a writer.");
@@ -320,8 +414,19 @@ describe("publishSquadGraph - canonical agent fields", () => {
         {
           key: "writer",
           name: "post-writer",
+          displayName: "Wanda Writer",
           role: "Writer",
+          prompt: "You are a writer.",
           model: "cc/claude-sonnet-4-6",
+          skills: ["writing"],
+          soul: "Clear and direct.",
+        },
+      ],
+      workflows: [
+        {
+          key: "default",
+          name: "Default Workflow",
+          steps: [{ key: "write", type: "agent", agentKey: "writer" }],
         },
       ],
     });
@@ -337,8 +442,19 @@ describe("publishSquadGraph - canonical agent fields", () => {
         {
           key: "writer",
           name: "post-writer",
+          displayName: "Wanda Writer",
           role: "Writer",
+          prompt: "You are a writer.",
+          model: "cc/claude-sonnet-4-6",
           skills: ["skill1", "skill2"],
+          soul: "Clear and direct.",
+        },
+      ],
+      workflows: [
+        {
+          key: "default",
+          name: "Default Workflow",
+          steps: [{ key: "write", type: "agent", agentKey: "writer" }],
         },
       ],
     });
@@ -354,8 +470,19 @@ describe("publishSquadGraph - canonical agent fields", () => {
         {
           key: "writer",
           name: "post-writer",
+          displayName: "Wanda Writer",
           role: "Writer",
+          prompt: "You are a writer.",
+          model: "cc/claude-sonnet-4-6",
+          skills: ["writing"],
           soul: "SOUL.md",
+        },
+      ],
+      workflows: [
+        {
+          key: "default",
+          name: "Default Workflow",
+          steps: [{ key: "write", type: "agent", agentKey: "writer" }],
         },
       ],
     });
@@ -376,8 +503,233 @@ describe("publishSquadGraph - canonical agent fields", () => {
           reuseName: "post-writer",
         },
       ],
+      workflows: [
+        {
+          key: "default",
+          name: "Default Workflow",
+          steps: [{ key: "write", type: "agent", agentKey: "writer" }],
+        },
+      ],
     });
     const agentInserts = inserts.filter((i) => i.table === "agents");
     expect(agentInserts).toHaveLength(0);
+  });
+});
+
+describe("publishSquadGraph - skills-first validation", () => {
+  it("rejects a new agent without displayName", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        agents: [
+          {
+            key: "writer",
+            name: "post-writer",
+            role: "Writer",
+            prompt: "Write",
+            model: "sonnet",
+            skills: [],
+            soul: "Soul",
+          },
+        ],
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [{ key: "draft", type: "agent", agentKey: "writer" }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('New agent "post-writer" requires displayName');
+  });
+
+  it("rejects a new agent without prompt", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        agents: [
+          {
+            key: "writer",
+            name: "post-writer",
+            displayName: "Wanda Writer",
+            role: "Writer",
+            model: "sonnet",
+            skills: [],
+            soul: "Soul",
+          },
+        ],
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [{ key: "draft", type: "agent", agentKey: "writer" }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('New agent "post-writer" requires prompt');
+  });
+
+  it("rejects a new agent without model", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        agents: [
+          {
+            key: "writer",
+            name: "post-writer",
+            displayName: "Wanda Writer",
+            role: "Writer",
+            prompt: "Write",
+            skills: [],
+            soul: "Soul",
+          },
+        ],
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [{ key: "draft", type: "agent", agentKey: "writer" }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('New agent "post-writer" requires model');
+  });
+
+  it("rejects a new agent without an explicit skills array", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        agents: [
+          {
+            key: "writer",
+            name: "post-writer",
+            displayName: "Wanda Writer",
+            role: "Writer",
+            prompt: "Write",
+            model: "sonnet",
+            soul: "Soul",
+          },
+        ],
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [{ key: "draft", type: "agent", agentKey: "writer" }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('New agent "post-writer" requires explicit skills');
+  });
+
+  it("rejects a new agent without soul", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        agents: [
+          {
+            key: "writer",
+            name: "post-writer",
+            displayName: "Wanda Writer",
+            role: "Writer",
+            prompt: "Write",
+            model: "sonnet",
+            skills: [],
+          },
+        ],
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [{ key: "draft", type: "agent", agentKey: "writer" }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('New agent "post-writer" requires soul');
+  });
+
+  it("rejects agent skills that are not available", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        agents: [
+          {
+            key: "writer",
+            name: "post-writer",
+            displayName: "Wanda Writer",
+            role: "Writer",
+            prompt: "Write",
+            model: "sonnet",
+            skills: ["missing-skill"],
+            soul: "Soul",
+          },
+        ],
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [{ key: "draft", type: "agent", agentKey: "writer" }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('Agent "post-writer" references unavailable skill "missing-skill"');
+  });
+
+  it("rejects a reuseName that does not resolve to an existing agent", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        agents: [{ key: "writer", name: "post-writer", role: "Writer", reuseName: "ghost-writer" }],
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [{ key: "draft", type: "agent", agentKey: "writer" }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('Reused agent "ghost-writer" was not found');
+  });
+
+  it("rejects workflow steps that reference an unknown agentKey", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        agents: [
+          {
+            key: "writer",
+            name: "post-writer",
+            displayName: "Wanda Writer",
+            role: "Writer",
+            prompt: "Write",
+            model: "sonnet",
+            skills: [],
+            soul: "Soul",
+          },
+        ],
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [{ key: "draft", type: "agent", agentKey: "ghost" }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('Workflow step "draft" references unknown agentKey "ghost"');
   });
 });

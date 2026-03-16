@@ -12,15 +12,33 @@ function getClient(): AdminConvexClient {
   return client;
 }
 
+function parseSkillMetadata(raw: unknown): unknown {
+  if (typeof raw !== "string") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export async function GET() {
   try {
     const convex = getClient();
 
-    const [agents, skills, connectedModelsRaw] = (await Promise.all([
+    const [agents, skills, reviewSpecs, connectedModelsRaw] = (await Promise.all([
       convex.query("agents:list", {}),
       convex.query("skills:list", {}),
+      convex.query("reviewSpecs:listByStatus", { status: "published" }),
       convex.query("settings:get", { key: "connected_models" }),
-    ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>, string | null];
+    ])) as [
+      Array<Record<string, unknown>>,
+      Array<Record<string, unknown>>,
+      Array<Record<string, unknown>>,
+      string | null,
+    ];
 
     const activeAgents = (agents as Array<Record<string, unknown>>)
       .filter(
@@ -40,11 +58,29 @@ export async function GET() {
         soul: agent.soul,
       }));
 
-    const availableSkills = (skills as Array<Record<string, unknown>>)
+    const knownSkills = (skills as Array<Record<string, unknown>>).map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      source: skill.source,
+      always: skill.always === true,
+      available: skill.available === true,
+      supportedProviders: Array.isArray(skill.supportedProviders)
+        ? skill.supportedProviders.filter((value) => typeof value === "string")
+        : [],
+      requires: typeof skill.requires === "string" ? skill.requires : null,
+      metadata: parseSkillMetadata(skill.metadata),
+    }));
+
+    const availableSkills = knownSkills
       .filter((skill) => skill.available === true)
       .map((skill) => ({
         name: skill.name,
         description: skill.description,
+        source: skill.source,
+        always: skill.always,
+        supportedProviders: skill.supportedProviders,
+        requires: skill.requires,
+        metadata: skill.metadata,
       }));
 
     let availableModels: string[] = [];
@@ -59,7 +95,23 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ activeAgents, availableSkills, availableModels });
+    const availableReviewSpecs = reviewSpecs.map((spec) => ({
+      id: spec._id,
+      name: spec.name,
+      scope: spec.scope,
+      approvalThreshold: spec.approvalThreshold,
+      reviewerPolicy: typeof spec.reviewerPolicy === "string" ? spec.reviewerPolicy : null,
+      rejectionRoutingPolicy:
+        typeof spec.rejectionRoutingPolicy === "string" ? spec.rejectionRoutingPolicy : null,
+    }));
+
+    return NextResponse.json({
+      activeAgents,
+      availableSkills,
+      knownSkills,
+      availableReviewSpecs,
+      availableModels,
+    });
   } catch (error) {
     console.error("Failed to build squad authoring context:", error);
     return NextResponse.json(

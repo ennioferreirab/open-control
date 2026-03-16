@@ -1,3 +1,5 @@
+import { validateSquadGraph } from "./squadGraphValidator";
+
 /**
  * Squad Graph Publisher
  *
@@ -128,6 +130,8 @@ function validateReviewStep(step: SquadGraphWorkflowStepInput): void {
 export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput): Promise<string> {
   const now = new Date().toISOString();
 
+  await validateSquadGraph(ctx, graph);
+
   // Step 1 — Reuse or create global agents and build key → id map
   const agentKeyToId = new Map<string, string>();
 
@@ -165,6 +169,7 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
     displayName: graph.squad.displayName,
     description: graph.squad.description,
     outcome: graph.squad.outcome,
+    reviewPolicy: graph.reviewPolicy,
     agentIds,
     status: "published",
     version: 1,

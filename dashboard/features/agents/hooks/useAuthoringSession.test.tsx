@@ -18,27 +18,13 @@ const AGENT_RESPONSE = {
   mode: "agent",
 };
 
-const SQUAD_RESPONSE = {
-  assistant_message: "Here is your squad.",
-  phase: "proposal",
-  draft_graph_patch: {
-    squad: { outcome: "Build a brand" },
-    agents: [{ key: "researcher", role: "Researcher" }],
-    workflows: [{ key: "default", steps: [] }],
-  },
-  unresolved_questions: [],
-  preview: {},
-  readiness: 0.6,
-  mode: "squad",
-};
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe("useAuthoringSession - agent mode", () => {
   it("initializes with discovery phase and empty transcript", () => {
-    const { result } = renderHook(() => useAuthoringSession("agent"));
+    const { result } = renderHook(() => useAuthoringSession());
 
     expect(result.current.phase).toBe("discovery");
     expect(result.current.transcript).toEqual([]);
@@ -52,7 +38,7 @@ describe("useAuthoringSession - agent mode", () => {
       json: vi.fn().mockResolvedValue(AGENT_RESPONSE),
     });
 
-    const { result } = renderHook(() => useAuthoringSession("agent"));
+    const { result } = renderHook(() => useAuthoringSession());
 
     await act(async () => {
       await result.current.sendMessage("Create a researcher agent");
@@ -75,7 +61,7 @@ describe("useAuthoringSession - agent mode", () => {
       json: vi.fn().mockResolvedValue(AGENT_RESPONSE),
     });
 
-    const { result } = renderHook(() => useAuthoringSession("agent"));
+    const { result } = renderHook(() => useAuthoringSession());
 
     await act(async () => {
       await result.current.sendMessage("Create a researcher agent");
@@ -96,7 +82,7 @@ describe("useAuthoringSession - agent mode", () => {
       json: vi.fn().mockResolvedValue(AGENT_RESPONSE),
     });
 
-    const { result } = renderHook(() => useAuthoringSession("agent"));
+    const { result } = renderHook(() => useAuthoringSession());
 
     await act(async () => {
       await result.current.sendMessage("Create a researcher agent");
@@ -108,56 +94,6 @@ describe("useAuthoringSession - agent mode", () => {
     const assistantMessages = result.current.transcript.filter((m) => m.role === "assistant");
     expect(userMessages.length).toBeGreaterThanOrEqual(1);
     expect(assistantMessages.length).toBeGreaterThanOrEqual(1);
-  });
-});
-
-describe("useAuthoringSession - squad mode", () => {
-  it("initializes with discovery phase and empty transcript", () => {
-    const { result } = renderHook(() => useAuthoringSession("squad"));
-
-    expect(result.current.phase).toBe("discovery");
-    expect(result.current.transcript).toEqual([]);
-    expect(result.current.isLoading).toBe(false);
-  });
-
-  it("sends user message and updates state from squad-wizard response", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue(SQUAD_RESPONSE),
-    });
-
-    const { result } = renderHook(() => useAuthoringSession("squad"));
-
-    await act(async () => {
-      await result.current.sendMessage("Create a brand squad");
-    });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    expect(result.current.phase).toBe("proposal");
-    expect(result.current.draftGraph).toHaveProperty("squad");
-    expect(result.current.draftGraph).toHaveProperty("agents");
-    expect(result.current.draftGraph).toHaveProperty("workflows");
-  });
-
-  it("calls the squad-wizard endpoint", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue(SQUAD_RESPONSE),
-    });
-
-    const { result } = renderHook(() => useAuthoringSession("squad"));
-
-    await act(async () => {
-      await result.current.sendMessage("Build a content squad");
-    });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/authoring/squad-wizard",
-      expect.objectContaining({ method: "POST" }),
-    );
   });
 });
 
@@ -177,7 +113,7 @@ describe("useAuthoringSession - merging draft graph", () => {
       .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(firstResponse) })
       .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(secondResponse) });
 
-    const { result } = renderHook(() => useAuthoringSession("agent"));
+    const { result } = renderHook(() => useAuthoringSession());
 
     await act(async () => {
       await result.current.sendMessage("Create a researcher agent");
@@ -197,41 +133,6 @@ describe("useAuthoringSession - merging draft graph", () => {
   });
 });
 
-describe("useAuthoringSession - squad reuse candidates", () => {
-  it("includes active_agents in the squad-wizard request when activeAgents option is provided", async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(SQUAD_RESPONSE) });
-    const activeAgents = [{ name: "post-writer", displayName: "Post Writer", role: "Writer" }];
-    const { result } = renderHook(() => useAuthoringSession("squad", { activeAgents }));
-    await act(async () => {
-      await result.current.sendMessage("Create a brand squad");
-    });
-    const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string) as Record<
-      string,
-      unknown
-    >;
-    expect(callBody.active_agents).toEqual(activeAgents);
-  });
-
-  it("preserves reuseCandidateAgentName in draftGraph agents from response", async () => {
-    const responseWithReuse = {
-      ...SQUAD_RESPONSE,
-      draft_graph_patch: {
-        squad: { outcome: "Build a brand" },
-        agents: [{ key: "writer", role: "Writer", reuseCandidateAgentName: "post-writer" }],
-        workflows: [{ key: "default", steps: [] }],
-      },
-    };
-    mockFetch.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(responseWithReuse) });
-    const { result } = renderHook(() => useAuthoringSession("squad"));
-    await act(async () => {
-      await result.current.sendMessage("Create a brand squad");
-    });
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    const agents = result.current.draftGraph.agents as Array<Record<string, unknown>>;
-    expect(agents[0]).toMatchObject({ reuseCandidateAgentName: "post-writer" });
-  });
-});
-
 describe("useAuthoringSession - reset", () => {
   it("resets state to initial values", async () => {
     mockFetch.mockResolvedValue({
@@ -239,7 +140,7 @@ describe("useAuthoringSession - reset", () => {
       json: vi.fn().mockResolvedValue(AGENT_RESPONSE),
     });
 
-    const { result } = renderHook(() => useAuthoringSession("agent"));
+    const { result } = renderHook(() => useAuthoringSession());
 
     await act(async () => {
       await result.current.sendMessage("Create a researcher agent");

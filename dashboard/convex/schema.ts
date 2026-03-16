@@ -69,6 +69,11 @@ export const interactiveProviderValidator = v.union(
   v.literal("codex"),
   v.literal("mc"),
 );
+export const skillProviderValidator = v.union(
+  v.literal("claude-code"),
+  v.literal("codex"),
+  v.literal("nanobot"),
+);
 
 export default defineSchema({
   boards: defineTable({
@@ -338,6 +343,7 @@ export default defineSchema({
     content: v.string(),
     metadata: v.optional(v.string()),
     source: v.union(v.literal("builtin"), v.literal("workspace")),
+    supportedProviders: v.optional(v.array(skillProviderValidator)),
     always: v.optional(v.boolean()),
     available: v.boolean(),
     requires: v.optional(v.string()),
@@ -431,6 +437,7 @@ export default defineSchema({
     displayName: v.string(),
     description: v.optional(v.string()),
     outcome: v.optional(v.string()),
+    reviewPolicy: v.optional(v.string()),
     // Legacy published squads may still carry agentSpecIds until they are republished.
     agentIds: v.optional(v.array(v.id("agents"))),
     agentSpecIds: v.optional(v.array(v.id("agentSpecs"))),

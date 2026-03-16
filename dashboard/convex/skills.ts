@@ -1,6 +1,8 @@
 import { internalMutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+import { skillProviderValidator } from "./schema";
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -15,6 +17,7 @@ export const upsertByName = internalMutation({
     content: v.string(),
     metadata: v.optional(v.string()),
     source: v.union(v.literal("builtin"), v.literal("workspace")),
+    supportedProviders: v.array(skillProviderValidator),
     always: v.optional(v.boolean()),
     available: v.boolean(),
     requires: v.optional(v.string()),
@@ -31,6 +34,7 @@ export const upsertByName = internalMutation({
         content: args.content,
         metadata: args.metadata,
         source: args.source,
+        supportedProviders: args.supportedProviders,
         always: args.always,
         available: args.available,
         requires: args.requires,
@@ -42,6 +46,7 @@ export const upsertByName = internalMutation({
         content: args.content,
         metadata: args.metadata,
         source: args.source,
+        supportedProviders: args.supportedProviders,
         always: args.always,
         available: args.available,
         requires: args.requires,

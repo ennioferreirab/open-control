@@ -28,7 +28,7 @@ export function SquadAuthoringWizard({ open, onClose }: SquadAuthoringWizardProp
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-4xl p-0 h-[600px] flex flex-col" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-4xl p-0 h-[600px] flex flex-col" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <DialogHeader className="border-b px-6 py-4">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-semibold">Create Squad</DialogTitle>
