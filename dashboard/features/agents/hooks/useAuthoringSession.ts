@@ -35,6 +35,10 @@ const ENDPOINT_MAP: Record<AuthoringMode, string> = {
   squad: "/api/authoring/squad-wizard",
 };
 
+export interface UseAuthoringSessionOptions {
+  activeAgents?: Array<{ name: string; displayName: string; role: string; prompt?: string }>;
+}
+
 /**
  * Shared hook for managing an authoring session (agent or squad).
  *
@@ -42,7 +46,10 @@ const ENDPOINT_MAP: Record<AuthoringMode, string> = {
  * Calls the appropriate backend endpoint and updates state from
  * the structured AuthoringResponse.
  */
-export function useAuthoringSession(mode: AuthoringMode): UseAuthoringSessionReturn {
+export function useAuthoringSession(
+  mode: AuthoringMode,
+  options?: UseAuthoringSessionOptions,
+): UseAuthoringSessionReturn {
   const [phase, setPhase] = useState<AuthoringPhase>("discovery");
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
   const [draftGraph, setDraftGraph] = useState<Record<string, unknown>>({});
@@ -66,6 +73,9 @@ export function useAuthoringSession(mode: AuthoringMode): UseAuthoringSessionRet
           body: JSON.stringify({
             messages: updatedTranscript.map((m) => ({ role: m.role, content: m.content })),
             phase,
+            ...(mode === "squad" && options?.activeAgents
+              ? { active_agents: options.activeAgents }
+              : {}),
           }),
         });
 
@@ -99,7 +109,7 @@ export function useAuthoringSession(mode: AuthoringMode): UseAuthoringSessionRet
         setIsLoading(false);
       }
     },
-    [mode, phase, transcript],
+    [mode, phase, transcript, options],
   );
 
   const patchDraftGraph = useCallback((patch: Record<string, unknown>) => {

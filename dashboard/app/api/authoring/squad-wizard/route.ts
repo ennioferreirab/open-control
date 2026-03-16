@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const messages: ChatMessage[] = body.messages ?? [];
     const phase: string = body.phase ?? "discovery";
+    const activeAgents: unknown[] = body.active_agents ?? [];
 
     const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUserMessage) {
@@ -39,7 +40,11 @@ export async function POST(request: NextRequest) {
     }
 
     const projectRoot = join(process.cwd(), "..");
-    await writeFile(tmpInput, JSON.stringify({ messages, phase }), "utf-8");
+    await writeFile(
+      tmpInput,
+      JSON.stringify({ messages, phase, active_agents: activeAgents }),
+      "utf-8",
+    );
 
     const pythonScript = `
 import json
@@ -57,6 +62,7 @@ async def main():
 
     messages = payload["messages"]
     phase = payload["phase"]
+    active_agents = payload.get("active_agents", [])
 
     try:
         provider, _model = create_provider()
@@ -64,6 +70,7 @@ async def main():
             provider=provider,
             messages=messages,
             current_phase=phase,
+            active_agents=active_agents if active_agents else None,
         )
         print(json.dumps(result.to_dict()))
     except Exception as e:

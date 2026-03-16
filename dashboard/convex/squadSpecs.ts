@@ -150,6 +150,11 @@ export const publishGraph = mutation({
           name: v.string(),
           role: v.string(),
           displayName: v.optional(v.string()),
+          prompt: v.optional(v.string()),
+          model: v.optional(v.string()),
+          skills: v.optional(v.array(v.string())),
+          soul: v.optional(v.string()),
+          reuseName: v.optional(v.string()),
         }),
       ),
       workflows: v.array(

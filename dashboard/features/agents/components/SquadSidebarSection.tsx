@@ -17,6 +17,7 @@ interface SquadSidebarSectionProps {
   deleteMode?: boolean;
   selectedSquadIds?: Set<string>;
   onToggleSquadSelect?: (squadId: Id<"squadSpecs">, displayName: string) => void;
+  filterQuery?: string;
 }
 
 function getSquadInitials(displayName: string): string {
@@ -32,8 +33,16 @@ export function SquadSidebarSection({
   deleteMode,
   selectedSquadIds,
   onToggleSquadSelect,
+  filterQuery,
 }: SquadSidebarSectionProps) {
   const { squads, isLoading } = useSquadSidebarData();
+
+  const filteredSquads = filterQuery
+    ? squads.filter((s) => {
+        const lower = filterQuery.toLowerCase();
+        return s.displayName.toLowerCase().includes(lower) || s.name.toLowerCase().includes(lower);
+      })
+    : squads;
 
   return (
     <SidebarGroup>
@@ -41,50 +50,52 @@ export function SquadSidebarSection({
         <Users className="h-3.5 w-3.5" />
         Squads
       </SidebarGroupLabel>
-      {!isLoading && squads.length === 0 && (
+      {!isLoading && filteredSquads.length === 0 && (
         <p className="px-2 py-3 text-xs text-muted-foreground">
           No squads yet. Create one to get started.
         </p>
       )}
-      <SidebarMenu>
-        {squads.map((squad) => (
-          <SidebarMenuItem key={squad._id} className="flex items-center">
-            <SidebarMenuButton
-              size="lg"
-              onClick={() =>
-                deleteMode
-                  ? onToggleSquadSelect?.(squad._id, squad.displayName)
-                  : onSelectSquad(squad._id)
-              }
-              className="!h-auto cursor-pointer"
-              tooltip={`${squad.displayName}${squad.description ? ` — ${squad.description}` : ""}`}
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500 text-xs font-medium text-white">
-                {getSquadInitials(squad.displayName)}
-              </div>
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <span className="truncate text-sm font-medium text-sidebar-foreground">
-                  {squad.displayName}
-                </span>
-                {squad.description && (
-                  <span className="truncate text-xs text-sidebar-foreground/70">
-                    {squad.description}
+      <div className="overflow-y-auto max-h-[560px]">
+        <SidebarMenu>
+          {filteredSquads.map((squad) => (
+            <SidebarMenuItem key={squad._id} className="flex items-center">
+              <SidebarMenuButton
+                size="lg"
+                onClick={() =>
+                  deleteMode
+                    ? onToggleSquadSelect?.(squad._id, squad.displayName)
+                    : onSelectSquad(squad._id)
+                }
+                className="!h-auto cursor-pointer"
+                tooltip={`${squad.displayName}${squad.description ? ` — ${squad.description}` : ""}`}
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500 text-xs font-medium text-white">
+                  {getSquadInitials(squad.displayName)}
+                </div>
+                <div className="flex flex-1 flex-col overflow-hidden">
+                  <span className="truncate text-sm font-medium text-sidebar-foreground">
+                    {squad.displayName}
                   </span>
-                )}
-              </div>
-            </SidebarMenuButton>
-            {deleteMode && (
-              <div className="shrink-0 px-2">
-                <Checkbox
-                  checked={selectedSquadIds?.has(squad._id)}
-                  onCheckedChange={() => onToggleSquadSelect?.(squad._id, squad.displayName)}
-                  aria-label={`Select ${squad.displayName}`}
-                />
-              </div>
-            )}
-          </SidebarMenuItem>
-        ))}
-      </SidebarMenu>
+                  {squad.description && (
+                    <span className="truncate text-xs text-sidebar-foreground/70">
+                      {squad.description}
+                    </span>
+                  )}
+                </div>
+              </SidebarMenuButton>
+              {deleteMode && (
+                <div className="shrink-0 px-2">
+                  <Checkbox
+                    checked={selectedSquadIds?.has(squad._id)}
+                    onCheckedChange={() => onToggleSquadSelect?.(squad._id, squad.displayName)}
+                    aria-label={`Select ${squad.displayName}`}
+                  />
+                </div>
+              )}
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </div>
     </SidebarGroup>
   );
 }

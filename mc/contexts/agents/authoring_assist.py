@@ -206,6 +206,7 @@ async def build_squad_authoring_response(
     provider: Any,
     messages: list[dict[str, str]],
     current_phase: str,
+    active_agents: list[dict[str, Any]] | None = None,
 ) -> AuthoringResponse:
     """Call the LLM and return a structured squad authoring response.
 
@@ -213,12 +214,31 @@ async def build_squad_authoring_response(
         provider: LLM provider with a .chat() coroutine.
         messages: Conversation history (user/assistant turns).
         current_phase: The current canonical phase for context.
+        active_agents: Optional list of active registered agents for reuse candidates.
 
     Returns:
         AuthoringResponse with mode=SQUAD and graph patch (squad/agents/workflows).
     """
+    system_prompt = AUTHORING_SYSTEM_PROMPT_SQUAD
+    if active_agents:
+        agent_list = "\n".join(
+            f"- name: {a.get('name', '')}, displayName: {a.get('displayName', '')}, "
+            f"role: {a.get('role', '')}"
+            + (f", prompt: {a.get('prompt', '')}" if a.get("prompt") else "")
+            for a in active_agents
+        )
+        system_prompt = (
+            system_prompt
+            + f"\n\nThe following agents are already registered and available for reuse:\n"
+            f"{agent_list}\n\n"
+            "When designing the squad, consider whether any of these existing agents can "
+            "fill the required roles instead of creating new ones. If an existing agent is "
+            "a good fit, include 'reuseCandidateAgentName' in that agent's entry in the "
+            "draft_graph_patch.agents array with the value set to the existing agent's name."
+        )
+
     llm_messages = [
-        {"role": "system", "content": AUTHORING_SYSTEM_PROMPT_SQUAD},
+        {"role": "system", "content": system_prompt},
         *messages,
     ]
     try:

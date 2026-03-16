@@ -246,3 +246,84 @@ describe("publishSquadGraph", () => {
     expect(taskInserts).toHaveLength(0);
   });
 });
+
+describe("publishSquadGraph - canonical agent fields", () => {
+  it("persists prompt when provided on new agent insert", async () => {
+    const { ctx, inserts } = makeCtx();
+    await publishSquadGraph(ctx, {
+      ...GRAPH_FIXTURE,
+      agents: [{ key: "writer", name: "post-writer", role: "Writer", prompt: "You are a writer." }],
+    });
+    const agentInserts = inserts.filter((i) => i.table === "agents");
+    expect(agentInserts[0].value.prompt).toBe("You are a writer.");
+  });
+
+  it("persists model when provided on new agent insert", async () => {
+    const { ctx, inserts } = makeCtx();
+    await publishSquadGraph(ctx, {
+      ...GRAPH_FIXTURE,
+      agents: [
+        {
+          key: "writer",
+          name: "post-writer",
+          role: "Writer",
+          model: "cc/claude-sonnet-4-6",
+        },
+      ],
+    });
+    const agentInserts = inserts.filter((i) => i.table === "agents");
+    expect(agentInserts[0].value.model).toBe("cc/claude-sonnet-4-6");
+  });
+
+  it("persists skills array when provided on new agent insert", async () => {
+    const { ctx, inserts } = makeCtx();
+    await publishSquadGraph(ctx, {
+      ...GRAPH_FIXTURE,
+      agents: [
+        {
+          key: "writer",
+          name: "post-writer",
+          role: "Writer",
+          skills: ["skill1", "skill2"],
+        },
+      ],
+    });
+    const agentInserts = inserts.filter((i) => i.table === "agents");
+    expect(agentInserts[0].value.skills).toEqual(["skill1", "skill2"]);
+  });
+
+  it("persists soul when provided on new agent insert", async () => {
+    const { ctx, inserts } = makeCtx();
+    await publishSquadGraph(ctx, {
+      ...GRAPH_FIXTURE,
+      agents: [
+        {
+          key: "writer",
+          name: "post-writer",
+          role: "Writer",
+          soul: "SOUL.md",
+        },
+      ],
+    });
+    const agentInserts = inserts.filter((i) => i.table === "agents");
+    expect(agentInserts[0].value.soul).toBe("SOUL.md");
+  });
+
+  it("does not create duplicate when reuseName matches existing agent", async () => {
+    const { ctx, inserts, existingAgents } = makeCtx();
+    existingAgents.set("post-writer", { _id: "agent-existing-1", name: "post-writer" });
+    await publishSquadGraph(ctx, {
+      ...GRAPH_FIXTURE,
+      agents: [
+        {
+          key: "writer",
+          name: "post-writer",
+          role: "Writer",
+          reuseName: "post-writer",
+        },
+      ],
+    });
+    const agentInserts = inserts.filter((i) => i.table === "agents");
+    expect(agentInserts).toHaveLength(0);
+  });
+});

@@ -25,6 +25,16 @@ export interface SquadGraphAgentInput {
   role: string;
   /** Optional display name — defaults to name if absent. */
   displayName?: string;
+  /** Optional prompt for the agent. */
+  prompt?: string;
+  /** Optional model string. */
+  model?: string;
+  /** Optional skills list. */
+  skills?: string[];
+  /** Optional soul file reference. */
+  soul?: string;
+  /** Optional name to look up an existing agent for reuse. */
+  reuseName?: string;
   /** Additional optional fields forwarded to the global agent record. */
   [key: string]: unknown;
 }
@@ -102,10 +112,11 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
   const agentKeyToId = new Map<string, string>();
 
   for (const agent of graph.agents) {
+    const lookupName = agent.reuseName ?? agent.name;
     const existingAgent = await ctx.db
       .query("agents")
       .withIndex("by_name", (q: { eq: (field: string, value: string) => unknown }) =>
-        q.eq("name", agent.name),
+        q.eq("name", lookupName),
       )
       .first();
 
@@ -115,9 +126,12 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
         name: agent.name,
         displayName: agent.displayName ?? agent.name,
         role: agent.role,
-        skills: [],
+        skills: agent.skills ?? [],
         status: "idle",
         enabled: true,
+        ...(agent.prompt !== undefined ? { prompt: agent.prompt } : {}),
+        ...(agent.model !== undefined ? { model: agent.model } : {}),
+        ...(agent.soul !== undefined ? { soul: agent.soul } : {}),
       }));
 
     agentKeyToId.set(agent.key, agentId);
