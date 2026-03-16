@@ -185,7 +185,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
   const [isEditingDescription, setIsEditingDescription] = useState(false);
-  const [editDescriptionValue, setEditDescriptionValue] = useState("");
   const [selectedMergeTaskId, setSelectedMergeTaskId] = useState<Id<"tasks"> | "">("");
   const [isMergedSourceGroupCollapsed, setIsMergedSourceGroupCollapsed] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
@@ -280,14 +279,11 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     }
   };
 
-  const handleSaveDescription = async () => {
+  const handleSaveDescription = async (content: string) => {
     if (!task || !isTaskLoaded) return;
-    const trimmed = editDescriptionValue.trim() || undefined;
-    try {
-      await updateDescription(task._id, trimmed);
-    } finally {
-      setIsEditingDescription(false);
-    }
+    const trimmed = content.trim() || undefined;
+    await updateDescription(task._id, trimmed);
+    setIsEditingDescription(false);
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
@@ -527,7 +523,10 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
 
   return (
     <Sheet open={!!taskId} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-[90vw] sm:w-[50vw] sm:max-w-none flex flex-col p-0">
+      <SheetContent
+        side="right"
+        className="w-[90vw] sm:w-[50vw] sm:max-w-none flex flex-col overflow-hidden p-0"
+      >
         {isTaskLoaded ? (
           <>
             <TaskDetailHeader
@@ -563,7 +562,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               isEditingTitle={isEditingTitle}
               editTitleValue={editTitleValue}
               isEditingDescription={isEditingDescription}
-              editDescriptionValue={editDescriptionValue}
               manualPlanPrimaryAction={
                 manualPlanPrimaryAction
                   ? {
@@ -597,11 +595,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               onTitleValueChange={setEditTitleValue}
               onSaveTitle={handleSaveTitle}
               onCancelEditingTitle={() => setIsEditingTitle(false)}
-              onStartEditingDescription={() => {
-                setEditDescriptionValue(task!.description ?? "");
-                setIsEditingDescription(true);
-              }}
-              onDescriptionValueChange={setEditDescriptionValue}
+              onStartEditingDescription={() => setIsEditingDescription(true)}
               onSaveDescription={handleSaveDescription}
               onCancelEditingDescription={() => setIsEditingDescription(false)}
             />
@@ -646,7 +640,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 value="plan"
                 className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
               >
-                <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4">
                   <div
                     data-testid="plan-canvas-shell"
                     className="w-full self-center lg:max-w-5xl xl:max-w-[60rem]"
