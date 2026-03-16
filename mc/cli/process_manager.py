@@ -293,6 +293,7 @@ class ProcessManager:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=env,
+            start_new_session=True,
         )
 
         logger.info(f"[MC] Started {config.label} (PID: {process.pid})")
@@ -346,8 +347,8 @@ class ProcessManager:
         logger.info(f"[MC] Stopping {label} (PID: {process.pid})...")
 
         try:
-            process.terminate()
-        except ProcessLookupError:
+            os.killpg(process.pid, signal.SIGTERM)
+        except (ProcessLookupError, OSError):
             return "stopped"
 
         try:
@@ -359,9 +360,9 @@ class ProcessManager:
                 f"[MC] Force-killing {label} (PID: {process.pid}) after {timeout}s timeout"
             )
             try:
-                process.kill()
+                os.killpg(process.pid, signal.SIGKILL)
                 await asyncio.wait_for(process.wait(), timeout=5.0)
-            except ProcessLookupError:
+            except (ProcessLookupError, OSError):
                 pass
             except asyncio.TimeoutError:
                 logger.error(
@@ -394,6 +395,13 @@ class ProcessManager:
 
                     if managed.config.restart_on_crash:
                         logger.info(f"[MC] Restarting {label}...")
+                        # Kill orphaned child processes (e.g. convex local backend)
+                        try:
+                            os.killpg(process.pid, signal.SIGTERM)
+                        except (ProcessLookupError, OSError):
+                            pass
+                        # Wait for ports to be released
+                        await asyncio.sleep(2)
                         try:
                             restarted = await self._spawn_process(managed.config)
                             self._processes[i] = restarted

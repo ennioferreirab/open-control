@@ -145,21 +145,25 @@ async def test_shutdown_reverse_order(dashboard_dir, project_root):
     """Processes are terminated in reverse startup order."""
     terminate_order = []
     pids = iter([100, 200, 300, 400])
+    pid_to_proc = {}
 
     async def mock_create_subprocess(*args, **kwargs):
         pid = next(pids)
         proc = _make_mock_process(pid=pid)
-
-        def tracked_terminate():
-            terminate_order.append(pid)
-            proc.returncode = 0
-
-        proc.terminate = MagicMock(side_effect=tracked_terminate)
+        pid_to_proc[pid] = proc
         return proc
 
-    with patch(
-        "mc.cli.process_manager.asyncio.create_subprocess_exec",
-        side_effect=mock_create_subprocess,
+    def mock_killpg(pgid, sig):
+        if pgid in pid_to_proc:
+            terminate_order.append(pgid)
+            pid_to_proc[pgid].returncode = 0
+
+    with (
+        patch(
+            "mc.cli.process_manager.asyncio.create_subprocess_exec",
+            side_effect=mock_create_subprocess,
+        ),
+        patch("mc.cli.process_manager.os.killpg", side_effect=mock_killpg),
     ):
         pm = ProcessManager(dashboard_dir, project_root)
         await pm.start()
@@ -173,10 +177,12 @@ async def test_shutdown_reverse_order(dashboard_dir, project_root):
 async def test_force_kill_after_timeout(dashboard_dir, project_root):
     """Process that doesn't exit within timeout is force-killed."""
     killed = []
+    pid_to_proc = {}
 
     async def mock_create_subprocess(*args, **kwargs):
         proc = _make_mock_process()
         proc._was_killed = False
+        pid_to_proc[proc.pid] = proc
 
         async def stubborn_wait():
             if not proc._was_killed:
@@ -185,19 +191,18 @@ async def test_force_kill_after_timeout(dashboard_dir, project_root):
             return proc.returncode
 
         proc.wait = AsyncMock(side_effect=stubborn_wait)
-
-        def track_terminate():
-            pass  # Process doesn't actually terminate
-
-        proc.terminate = MagicMock(side_effect=track_terminate)
-
-        def track_kill():
-            killed.append(True)
-            proc.returncode = -9
-            proc._was_killed = True
-
-        proc.kill = MagicMock(side_effect=track_kill)
         return proc
+
+    import signal
+
+    def mock_killpg(pgid, sig):
+        if pgid in pid_to_proc:
+            proc = pid_to_proc[pgid]
+            if sig == signal.SIGKILL:
+                killed.append(True)
+                proc.returncode = -9
+                proc._was_killed = True
+            # SIGTERM: process doesn't actually terminate
 
     with (
         patch(
@@ -205,6 +210,7 @@ async def test_force_kill_after_timeout(dashboard_dir, project_root):
             side_effect=mock_create_subprocess,
         ),
         patch("mc.cli.process_manager.SHUTDOWN_TIMEOUT_SECONDS", 0.3),
+        patch("mc.cli.process_manager.os.killpg", side_effect=mock_killpg),
     ):
         pm = ProcessManager(dashboard_dir, project_root)
         await pm.start()
@@ -230,9 +236,12 @@ async def test_crash_callback(dashboard_dir, project_root):
         procs.append(proc)
         return proc
 
-    with patch(
-        "mc.cli.process_manager.asyncio.create_subprocess_exec",
-        side_effect=mock_create_subprocess,
+    with (
+        patch(
+            "mc.cli.process_manager.asyncio.create_subprocess_exec",
+            side_effect=mock_create_subprocess,
+        ),
+        patch("mc.cli.process_manager.os.killpg", side_effect=lambda *a: None),
     ):
         pm = ProcessManager(dashboard_dir, project_root, on_crash=on_crash)
         await pm.start()
