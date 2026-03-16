@@ -118,9 +118,6 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
         skills: [],
         status: "idle",
         enabled: true,
-        createdAt: now,
-        updatedAt: now,
-        lastActiveAt: now,
       }));
 
     agentKeyToId.set(agent.key, agentId);
