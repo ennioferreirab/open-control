@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { AuthoringMode, AuthoringPhase } from "@/features/agents/lib/authoringContract";
+import type { AuthoringPhase } from "@/features/agents/lib/authoringContract";
 import { parseAuthoringResponse } from "@/features/agents/lib/authoringContract";
 
 export interface TranscriptMessage {
@@ -30,26 +30,14 @@ export interface UseAuthoringSessionReturn {
   reset: () => void;
 }
 
-const ENDPOINT_MAP: Record<AuthoringMode, string> = {
-  agent: "/api/authoring/agent-wizard",
-  squad: "/api/authoring/squad-wizard",
-};
-
-export interface UseAuthoringSessionOptions {
-  activeAgents?: Array<{ name: string; displayName: string; role: string; prompt?: string }>;
-}
-
 /**
- * Shared hook for managing an authoring session (agent or squad).
+ * Shared hook for managing the agent authoring session.
  *
  * Stores transcript, current phase, and merged draft graph.
- * Calls the appropriate backend endpoint and updates state from
- * the structured AuthoringResponse.
+ * Calls the agent authoring backend endpoint and updates state from the
+ * structured AuthoringResponse.
  */
-export function useAuthoringSession(
-  mode: AuthoringMode,
-  options?: UseAuthoringSessionOptions,
-): UseAuthoringSessionReturn {
+export function useAuthoringSession(): UseAuthoringSessionReturn {
   const [phase, setPhase] = useState<AuthoringPhase>("discovery");
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
   const [draftGraph, setDraftGraph] = useState<Record<string, unknown>>({});
@@ -67,15 +55,12 @@ export function useAuthoringSession(
       setTranscript(updatedTranscript);
 
       try {
-        const response = await fetch(ENDPOINT_MAP[mode], {
+        const response = await fetch("/api/authoring/agent-wizard", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: updatedTranscript.map((m) => ({ role: m.role, content: m.content })),
             phase,
-            ...(mode === "squad" && options?.activeAgents
-              ? { active_agents: options.activeAgents }
-              : {}),
           }),
         });
 
@@ -109,7 +94,7 @@ export function useAuthoringSession(
         setIsLoading(false);
       }
     },
-    [mode, phase, transcript, options],
+    [phase, transcript],
   );
 
   const patchDraftGraph = useCallback((patch: Record<string, unknown>) => {

@@ -17,12 +17,17 @@ def _isolate_workspace(tmp_path, monkeypatch):
     empty_ws.mkdir()
     fake_config = MagicMock()
     fake_config.workspace_path = empty_ws
-    monkeypatch.setattr(
-        "nanobot.config.loader.load_config", lambda: fake_config
-    )
+    monkeypatch.setattr("nanobot.config.loader.load_config", lambda: fake_config)
 
 
-def _make_skill_md(name: str, description: str, *, always: bool = False, metadata: Optional[dict] = None, body: str = "# Skill content") -> str:
+def _make_skill_md(
+    name: str,
+    description: str,
+    *,
+    always: bool = False,
+    metadata: Optional[dict] = None,
+    body: str = "# Skill content",
+) -> str:
     """Build a SKILL.md string with frontmatter."""
     lines = ["---"]
     lines.append(f"name: {name}")
@@ -53,22 +58,31 @@ class TestSyncSkills:
         from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
-        _create_skill_dir(skills_dir, "github", _make_skill_md(
-            "github", "GitHub CLI integration",
-            metadata={"nanobot": {"emoji": "\U0001f419", "requires": {"bins": ["gh"]}}},
-        ))
-        _create_skill_dir(skills_dir, "memory", _make_skill_md(
-            "memory", "Two-layer memory system",
-            always=True,
-        ))
+        _create_skill_dir(
+            skills_dir,
+            "github",
+            _make_skill_md(
+                "github",
+                "GitHub CLI integration",
+                metadata={"nanobot": {"emoji": "\U0001f419", "requires": {"bins": ["gh"]}}},
+            ),
+        )
+        _create_skill_dir(
+            skills_dir,
+            "memory",
+            _make_skill_md(
+                "memory",
+                "Two-layer memory system",
+                always=True,
+            ),
+        )
 
         mock_bridge = MagicMock()
         sync_skills(mock_bridge, builtin_skills_dir=skills_dir)
 
         # Should have called mutation for each skill + deactivateExcept
         upsert_calls = [
-            c for c in mock_bridge.mutation.call_args_list
-            if c[0][0] == "skills:upsertByName"
+            c for c in mock_bridge.mutation.call_args_list if c[0][0] == "skills:upsertByName"
         ]
         assert len(upsert_calls) == 2
 
@@ -82,9 +96,15 @@ class TestSyncSkills:
 
         body = "# GitHub Skill\n\nUse `gh` CLI."
         skills_dir = tmp_path / "skills"
-        _create_skill_dir(skills_dir, "github", _make_skill_md(
-            "github", "GitHub CLI", body=body,
-        ))
+        _create_skill_dir(
+            skills_dir,
+            "github",
+            _make_skill_md(
+                "github",
+                "GitHub CLI",
+                body=body,
+            ),
+        )
 
         mock_bridge = MagicMock()
         sync_skills(mock_bridge, builtin_skills_dir=skills_dir)
@@ -99,9 +119,15 @@ class TestSyncSkills:
         from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
-        _create_skill_dir(skills_dir, "memory", _make_skill_md(
-            "memory", "Memory system", always=True,
-        ))
+        _create_skill_dir(
+            skills_dir,
+            "memory",
+            _make_skill_md(
+                "memory",
+                "Memory system",
+                always=True,
+            ),
+        )
 
         mock_bridge = MagicMock()
         sync_skills(mock_bridge, builtin_skills_dir=skills_dir)
@@ -115,9 +141,14 @@ class TestSyncSkills:
         from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
-        _create_skill_dir(skills_dir, "weather", _make_skill_md(
-            "weather", "Weather data",
-        ))
+        _create_skill_dir(
+            skills_dir,
+            "weather",
+            _make_skill_md(
+                "weather",
+                "Weather data",
+            ),
+        )
 
         mock_bridge = MagicMock()
         sync_skills(mock_bridge, builtin_skills_dir=skills_dir)
@@ -138,8 +169,7 @@ class TestSyncSkills:
         sync_skills(mock_bridge, builtin_skills_dir=skills_dir)
 
         deactivate_calls = [
-            c for c in mock_bridge.mutation.call_args_list
-            if c[0][0] == "skills:deactivateExcept"
+            c for c in mock_bridge.mutation.call_args_list if c[0][0] == "skills:deactivateExcept"
         ]
         assert len(deactivate_calls) == 1
         active_names = set(deactivate_calls[0][0][1]["active_names"])
@@ -150,10 +180,15 @@ class TestSyncSkills:
         from mc.runtime.gateway import sync_skills
 
         skills_dir = tmp_path / "skills"
-        _create_skill_dir(skills_dir, "github", _make_skill_md(
-            "github", "GitHub CLI",
-            metadata={"nanobot": {"requires": {"bins": ["nonexistent-binary-xyz"]}}},
-        ))
+        _create_skill_dir(
+            skills_dir,
+            "github",
+            _make_skill_md(
+                "github",
+                "GitHub CLI",
+                metadata={"nanobot": {"requires": {"bins": ["nonexistent-binary-xyz"]}}},
+            ),
+        )
 
         mock_bridge = MagicMock()
         sync_skills(mock_bridge, builtin_skills_dir=skills_dir)
@@ -175,8 +210,7 @@ class TestSyncSkills:
 
         # Should call deactivateExcept with empty list
         deactivate_calls = [
-            c for c in mock_bridge.mutation.call_args_list
-            if c[0][0] == "skills:deactivateExcept"
+            c for c in mock_bridge.mutation.call_args_list if c[0][0] == "skills:deactivateExcept"
         ]
         assert len(deactivate_calls) == 1
         assert deactivate_calls[0][0][1]["active_names"] == []
@@ -187,9 +221,15 @@ class TestSyncSkills:
 
         meta = {"nanobot": {"emoji": "\U0001f419", "requires": {"bins": ["gh"]}}}
         skills_dir = tmp_path / "skills"
-        _create_skill_dir(skills_dir, "github", _make_skill_md(
-            "github", "GitHub", metadata=meta,
-        ))
+        _create_skill_dir(
+            skills_dir,
+            "github",
+            _make_skill_md(
+                "github",
+                "GitHub",
+                metadata=meta,
+            ),
+        )
 
         mock_bridge = MagicMock()
         sync_skills(mock_bridge, builtin_skills_dir=skills_dir)
@@ -199,3 +239,27 @@ class TestSyncSkills:
         assert args["metadata"] is not None
         # metadata should be the raw JSON string from frontmatter
         assert isinstance(args["metadata"], str)
+
+    def test_detects_supported_providers_from_skill_layout(self, tmp_path):
+        """Registered skills should include the adapted providers metadata."""
+        from mc.runtime.gateway import sync_skills
+
+        skills_dir = tmp_path / "skills"
+        skill_dir = _create_skill_dir(
+            skills_dir,
+            "github",
+            _make_skill_md("github", "GitHub"),
+        )
+        agents_dir = skill_dir / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        (agents_dir / "openai.yaml").write_text(
+            'interface:\n  display_name: "GitHub"\n  short_description: "GitHub helper skill"\n',
+            encoding="utf-8",
+        )
+
+        mock_bridge = MagicMock()
+        sync_skills(mock_bridge, builtin_skills_dir=skills_dir)
+
+        upsert_call = mock_bridge.mutation.call_args_list[0]
+        args = upsert_call[0][1]
+        assert args["supportedProviders"] == ["claude-code", "codex", "nanobot"]

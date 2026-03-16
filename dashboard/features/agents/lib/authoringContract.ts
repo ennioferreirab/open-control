@@ -7,8 +7,6 @@
 
 export type AuthoringPhase = "discovery" | "proposal" | "refinement" | "approval";
 
-export type AuthoringMode = "agent" | "squad";
-
 /** Canonical phases accepted by both agent and squad wizards. */
 export const CANONICAL_PHASES: readonly AuthoringPhase[] = [
   "discovery",
@@ -26,13 +24,6 @@ export function isCanonicalPhase(value: unknown): value is AuthoringPhase {
 export interface AgentGraphPatch {
   agents?: Array<Record<string, unknown>>;
   [key: string]: unknown;
-}
-
-/** Squad graph patch — structured with squad, agents, and workflows keys. */
-export interface SquadGraphPatch {
-  squad: { outcome: string; [key: string]: unknown };
-  agents: Array<{ key: string; role: string; [key: string]: unknown }>;
-  workflows: Array<{ key: string; steps: unknown[]; [key: string]: unknown }>;
 }
 
 /** Frontend-facing authoring response (camelCase). */
