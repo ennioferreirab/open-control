@@ -3,6 +3,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SquadDetailSheet } from "./SquadDetailSheet";
 
+vi.mock("@/features/agents/components/AgentConfigSheet", () => ({
+  AgentConfigSheet: ({ agentName }: { agentName: string | null }) =>
+    agentName ? <div data-testid="agent-config-overlay">Agent overlay: {agentName}</div> : null,
+}));
+
 vi.mock("@/features/agents/hooks/useUpdatePublishedSquad", () => ({
   useUpdatePublishedSquad: vi.fn(),
 }));
@@ -192,6 +197,7 @@ describe("SquadDetailSheet", () => {
     // Should show agent display names, not "No agents defined yet"
     expect(screen.getByText("Senior Developer")).toBeInTheDocument();
     expect(screen.getByText("Code Reviewer")).toBeInTheDocument();
+    expect(screen.getByTestId("squad-agent-grid")).toHaveClass("grid");
     expect(screen.queryByText(/no agents defined/i)).not.toBeInTheDocument();
   });
 
@@ -356,15 +362,14 @@ describe("SquadDetailSheet", () => {
     );
   });
 
-  it("switches to the selected agent tab when clicking an agent in squad context", async () => {
+  it("opens the agent as an overlay while keeping the squad visible underneath", async () => {
     mockUseSquadDetailData.mockReturnValue(makeLoadedState());
     render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
 
     await userEvent.click(screen.getByRole("button", { name: /code reviewer/i }));
 
-    expect(screen.getByRole("tab", { name: /agent/i })).toHaveAttribute("data-state", "active");
-    expect(screen.getByText("Back to squad")).toBeInTheDocument();
-    expect(screen.getByText("Code Reviewer")).toBeInTheDocument();
-    expect(screen.getByText("reviewer")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-config-overlay")).toHaveTextContent("reviewer");
+    expect(screen.getByText("Review Squad")).toBeInTheDocument();
+    expect(screen.getByText("Default Workflow")).toBeInTheDocument();
   });
 });
