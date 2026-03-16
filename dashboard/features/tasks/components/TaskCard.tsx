@@ -22,6 +22,7 @@ import { Doc } from "@/convex/_generated/dataModel";
 import { STATUS_COLORS, TAG_COLORS, type TaskStatus } from "@/lib/constants";
 import { InlineRejection } from "@/components/InlineRejection";
 import { useTaskCardActions } from "@/features/tasks/hooks/useTaskCardActions";
+import { badgeVariants } from "@/components/ui/badge";
 
 type TaskProgressStep = {
   status?: string;
@@ -42,7 +43,8 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress }: TaskCardProps) {
   const shouldReduceMotion = useReducedMotion();
-  const { approveTask, softDeleteTask, toggleFavoriteTask } = useTaskCardActions();
+  const { approveTask, approveAndKickOffTask, softDeleteTask, toggleFavoriteTask } =
+    useTaskCardActions();
   const [showRejection, setShowRejection] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -223,12 +225,17 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress 
             </div>
             <div className="ml-auto flex items-center gap-1">
               {task.status === "review" && awaitingKickoff && (
-                <Badge
-                  className="h-5 rounded-full bg-amber-400 px-2 text-[10px] text-amber-900 font-medium"
+                <button
+                  type="button"
+                  className={`${badgeVariants({ variant: "secondary" })} h-5 rounded-full border-0 bg-amber-400 px-2 text-[10px] font-medium text-amber-900 hover:bg-amber-500`}
                   data-testid="awaiting-kickoff-badge"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void approveAndKickOffTask(task._id, task.executionPlan);
+                  }}
                 >
                   Awaiting Kick-off
-                </Badge>
+                </button>
               )}
               {task.status === "review" && !awaitingKickoff && (
                 <Badge

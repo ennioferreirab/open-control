@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
-import { useBoardColumns, stepStatusToColumnStatus, ColumnData } from "./useBoardColumns";
+import { useBoardColumns, stepStatusToColumnStatus } from "./useBoardColumns";
 import { Doc, Id } from "../convex/_generated/dataModel";
 
 type Task = Doc<"tasks">;
@@ -47,6 +47,12 @@ describe("stepStatusToColumnStatus", () => {
 
   it("maps human assigned steps to assigned even when parent task is in_progress", () => {
     expect(stepStatusToColumnStatus("assigned", "in_progress", "human")).toBe("assigned");
+  });
+
+  it("maps ai_workflow assigned steps to assigned while the parent task is in_progress", () => {
+    expect(stepStatusToColumnStatus("assigned", "in_progress", "nanobot", "ai_workflow")).toBe(
+      "assigned",
+    );
   });
 
   it("maps blocked steps to assigned column by default", () => {
@@ -266,6 +272,28 @@ describe("useBoardColumns", () => {
     expect(assignedCol.stepGroups).toHaveLength(1);
     expect(assignedCol.stepGroups[0].steps).toHaveLength(1);
     expect(assignedCol.stepGroups[0].steps[0].assignedAgent).toBe("human");
+
+    const inProgressCol = columns[2];
+    expect(inProgressCol.stepGroups).toHaveLength(0);
+    expect(inProgressCol.tasks).toHaveLength(0);
+  });
+
+  it("keeps ai_workflow assigned steps in the Assigned column before they start running", () => {
+    const tasks = [makeTask({ _id: "task_1", status: "in_progress", workMode: "ai_workflow" })];
+    const steps = [
+      makeStep({
+        taskId: "task_1",
+        status: "assigned",
+        assignedAgent: "nanobot",
+        order: 1,
+      }),
+    ];
+    const { result } = renderHook(() => useBoardColumns(tasks, steps));
+    const columns = result.current!;
+
+    const assignedCol = columns[1];
+    expect(assignedCol.stepGroups).toHaveLength(1);
+    expect(assignedCol.stepGroups[0].steps).toHaveLength(1);
 
     const inProgressCol = columns[2];
     expect(inProgressCol.stepGroups).toHaveLength(0);

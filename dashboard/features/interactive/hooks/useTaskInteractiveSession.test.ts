@@ -181,6 +181,35 @@ describe("selectTaskInteractiveSession", () => {
 
     expect(session?.sessionId).toBe("task-session");
   });
+
+  it("falls back to the most recent task step session when the active workflow gate step has no live session", () => {
+    const session = selectTaskInteractiveSession(
+      [
+        {
+          ...sessionBase,
+          sessionId: "completed-step",
+          stepId: "step-completed",
+          status: "ended",
+          updatedAt: "2026-03-13T09:20:00.000Z",
+        },
+        {
+          ...sessionBase,
+          sessionId: "older-step",
+          stepId: "step-old",
+          status: "ended",
+          updatedAt: "2026-03-13T09:10:00.000Z",
+        },
+      ],
+      {
+        taskId: "task1" as never,
+        stepId: "step-human-gate" as never,
+        agentName: "human",
+        provider: null,
+      },
+    );
+
+    expect(session?.sessionId).toBe("completed-step");
+  });
 });
 
 describe("describeTaskInteractiveSession", () => {

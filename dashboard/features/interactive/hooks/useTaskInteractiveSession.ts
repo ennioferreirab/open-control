@@ -54,23 +54,39 @@ export function selectTaskInteractiveSession(
   sessions: InteractiveSessionDoc[] | null | undefined,
   target: TaskLiveTarget | null,
 ): InteractiveSessionDoc | null {
-  if (!target || !sessions?.length) {
+  if (!sessions?.length) {
     return null;
   }
 
-  const candidates = sessions.filter(
+  if (target) {
+    const candidates = sessions.filter(
+      (session) =>
+        session.taskId === target.taskId &&
+        (target.stepId == null ? session.stepId == null : session.stepId === target.stepId) &&
+        session.agentName === target.agentName &&
+        (ATTACHABLE_STATUSES.has(session.status) || HISTORICAL_STATUSES.has(session.status)) &&
+        (target.provider == null || session.provider === target.provider),
+    );
+    if (candidates.length > 0) {
+      return [...candidates].sort(compareInteractiveSessions)[0] ?? null;
+    }
+  }
+
+  const fallbackTaskId = target?.taskId ?? null;
+  if (!fallbackTaskId) {
+    return null;
+  }
+
+  const fallbackCandidates = sessions.filter(
     (session) =>
-      session.taskId === target.taskId &&
-      (target.stepId == null ? session.stepId == null : session.stepId === target.stepId) &&
-      session.agentName === target.agentName &&
-      (ATTACHABLE_STATUSES.has(session.status) || HISTORICAL_STATUSES.has(session.status)) &&
-      (target.provider == null || session.provider === target.provider),
+      session.taskId === fallbackTaskId &&
+      (ATTACHABLE_STATUSES.has(session.status) || HISTORICAL_STATUSES.has(session.status)),
   );
-  if (candidates.length === 0) {
+  if (fallbackCandidates.length === 0) {
     return null;
   }
 
-  return [...candidates].sort(compareInteractiveSessions)[0] ?? null;
+  return [...fallbackCandidates].sort(compareInteractiveSessions)[0] ?? null;
 }
 
 export function collectTaskLiveStepIds(
@@ -162,7 +178,24 @@ export function useTaskInteractiveSession(
       provider: getInteractiveAgentProvider(activeAgent),
     };
   }, [activeAgent, focusedStep, targetAgentName, taskId]);
-  const session = useMemo(() => selectTaskInteractiveSession(sessions, target), [sessions, target]);
+  const sessionTarget = useMemo<TaskLiveTarget | null>(() => {
+    if (target) {
+      return target;
+    }
+    if (!taskId) {
+      return null;
+    }
+    return {
+      taskId,
+      stepId: null,
+      agentName: "",
+      provider: null,
+    };
+  }, [target, taskId]);
+  const session = useMemo(
+    () => selectTaskInteractiveSession(sessions, sessionTarget),
+    [sessions, sessionTarget],
+  );
   const liveStepIds = useMemo(() => collectTaskLiveStepIds(sessions, taskId), [sessions, taskId]);
   const stateLabel = useMemo(() => describeTaskInteractiveSession(session), [session]);
   const identityLabel = useMemo(() => {

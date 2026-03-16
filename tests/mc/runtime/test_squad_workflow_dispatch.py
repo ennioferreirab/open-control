@@ -302,7 +302,7 @@ async def test_review_step_type_runs_as_agent_step() -> None:
     review_step = {
         "id": "step-3",
         "title": "Review output",
-        "assigned_agent": "nanobot",
+        "assigned_agent": "reviewer",
         "workflow_step_type": "review",
         "review_spec_id": "review-spec-1",
         "parallel_group": 1,
@@ -333,20 +333,64 @@ async def test_review_step_type_runs_as_agent_step() -> None:
     run_agent.assert_awaited_once()
 
 
-def test_agent_step_type_is_not_treated_as_gate() -> None:
-    """Agent-type workflow steps are not identified as gate steps.
+@pytest.mark.asyncio
+async def test_review_step_with_human_agent_sets_waiting_human() -> None:
+    """Review steps assigned to 'human' are set to waiting_human by dispatcher."""
+    bridge = MagicMock()
+    bridge.update_step_status = MagicMock()
+    bridge.create_activity = MagicMock()
+
+    dispatcher = StepDispatcher(bridge)
+
+    review_step = {
+        "id": "step-3",
+        "title": "Review output",
+        "assigned_agent": "human",
+        "workflow_step_type": "review",
+        "review_spec_id": "review-spec-1",
+        "parallel_group": 1,
+        "order": 3,
+        "status": "assigned",
+    }
+
+    await dispatcher._execute_step("task-1", review_step)
+
+    update_calls = bridge.update_step_status.call_args_list
+    assert any(c[0][1] == StepStatus.WAITING_HUMAN for c in update_calls), (
+        "Review step assigned to human should wait for manual action"
+    )
+    assert not any(c[0][1] == StepStatus.RUNNING for c in update_calls), (
+        "Review step assigned to human should not start running"
+    )
+
+
+def test_gate_logic_depends_on_step_type_and_human_assignment() -> None:
+    """Only gate step types or human-assigned steps are routed to waiting_human.
 
     This is a pure logic test verifying the dispatcher logic without needing
     to actually run an agent.
     """
-    # Verify that only human/checkpoint are treated as gate steps
-    gate_types = {"human", "checkpoint"}
-    non_gate_types = {"agent", "review", "system", None, ""}
 
-    for step_type in gate_types:
-        is_gate = step_type in ("human", "checkpoint")
-        assert is_gate, f"Expected {step_type!r} to be a gate step type"
+    def is_gate(step_type: str | None, agent_name: str) -> bool:
+        """Mirror the dispatcher's gate logic."""
+        return agent_name == "human" or step_type in ("human", "checkpoint")
 
-    for step_type in non_gate_types:
-        is_gate = step_type in ("human", "checkpoint")
-        assert not is_gate, f"Expected {step_type!r} to NOT be a gate step type"
+    # Always-gate types (regardless of agent)
+    assert is_gate("human", "nanobot")
+    assert is_gate("human", "human")
+    assert is_gate("checkpoint", "nanobot")
+    assert is_gate("checkpoint", "human")
+
+    # Review gates only when explicitly assigned to a human.
+    assert is_gate("review", "human")
+    assert not is_gate("review", "reviewer")
+    assert not is_gate("review", "nanobot")
+
+    # Non-gate types
+    for step_type in ("agent", "system", None, ""):
+        assert not is_gate(step_type, "nanobot"), (
+            f"Expected {step_type!r} to NOT be a gate step type"
+        )
+        assert is_gate(step_type, "human"), (
+            f"Expected {step_type!r} to gate when explicitly assigned to a human"
+        )

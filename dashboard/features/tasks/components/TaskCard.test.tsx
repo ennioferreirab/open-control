@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { TaskCard } from "./TaskCard";
 
+const approveTaskMock = vi.hoisted(() => vi.fn());
+const approveAndKickOffTaskMock = vi.hoisted(() => vi.fn());
+const softDeleteTaskMock = vi.hoisted(() => vi.fn());
+const toggleFavoriteTaskMock = vi.hoisted(() => vi.fn());
+
 vi.mock("@/features/tasks/hooks/useTaskCardActions", () => ({
   useTaskCardActions: () => ({
-    approveTask: vi.fn(),
-    softDeleteTask: vi.fn(),
-    toggleFavoriteTask: vi.fn(),
+    approveTask: approveTaskMock,
+    approveAndKickOffTask: approveAndKickOffTaskMock,
+    softDeleteTask: softDeleteTaskMock,
+    toggleFavoriteTask: toggleFavoriteTaskMock,
   }),
 }));
 
@@ -72,5 +79,41 @@ describe("TaskCard — showApproveButton logic", () => {
     const task = makeTask({ status: "in_progress" });
     render(<TaskCard task={task} />);
     expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
+  });
+
+  it("kicks off awaitingKickoff tasks directly from the badge without opening the card", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const executionPlan = {
+      generatedAt: "2026-03-15T00:00:00Z",
+      generatedBy: "workflow" as const,
+      steps: [
+        {
+          tempId: "step_1",
+          title: "Workflow step",
+          description: "Execute workflow",
+          assignedAgent: "nanobot",
+          blockedBy: [],
+          parallelGroup: 0,
+          order: 0,
+        },
+      ],
+    };
+
+    render(
+      <TaskCard
+        task={makeTask({
+          awaitingKickoff: true,
+          executionPlan,
+          workMode: "ai_workflow",
+        })}
+        onClick={onClick}
+      />,
+    );
+
+    await user.click(screen.getByTestId("awaiting-kickoff-badge"));
+
+    expect(approveAndKickOffTaskMock).toHaveBeenCalledWith("task-1", executionPlan);
+    expect(onClick).not.toHaveBeenCalled();
   });
 });

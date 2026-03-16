@@ -42,12 +42,18 @@ export function stepStatusToColumnStatus(
   stepStatus: Doc<"steps">["status"],
   taskStatus?: Doc<"tasks">["status"],
   assignedAgent?: Doc<"steps">["assignedAgent"],
+  workMode?: Doc<"tasks">["workMode"],
 ): ColumnStatus | null {
   switch (stepStatus) {
     case "assigned":
     case "blocked":
       // Human steps stay in Assigned until a person explicitly moves them forward.
       if (assignedAgent === "human" && stepStatus === "assigned") {
+        return "assigned";
+      }
+      // Workflow tasks should surface newly-materialized assigned work in the
+      // Assigned column before the step dispatcher advances it to running.
+      if (workMode === "ai_workflow") {
         return "assigned";
       }
       // Non-human work follows task progress and surfaces in In Progress once execution has begun.
@@ -92,6 +98,7 @@ export function useBoardColumns(
       tasks.map((task) => [task._id, task._creationTime] as const),
     );
     const taskStatusMap = new Map(tasks.map((task) => [task._id, task.status] as const));
+    const taskWorkModeMap = new Map(tasks.map((task) => [task._id, task.workMode] as const));
 
     // Group steps by taskId, skipping done tasks and most review tasks.
     // waiting_human is a special case: keep rendering it as a step group in
@@ -105,7 +112,12 @@ export function useBoardColumns(
       if (taskStatus === "review" && step.status !== "waiting_human") {
         continue;
       }
-      const mappedColumn = stepStatusToColumnStatus(step.status, taskStatus, step.assignedAgent);
+      const mappedColumn = stepStatusToColumnStatus(
+        step.status,
+        taskStatus,
+        step.assignedAgent,
+        taskWorkModeMap.get(step.taskId),
+      );
       if (!mappedColumn) {
         continue;
       }
@@ -175,8 +187,12 @@ export function useBoardColumns(
           const steps = taskSteps
             .filter(
               (step) =>
-                stepStatusToColumnStatus(step.status, taskStatus, step.assignedAgent) ===
-                col.status,
+                stepStatusToColumnStatus(
+                  step.status,
+                  taskStatus,
+                  step.assignedAgent,
+                  taskWorkModeMap.get(taskId),
+                ) === col.status,
             )
             .sort((a, b) => a.order - b.order);
           return {

@@ -502,6 +502,131 @@ describe("TaskDetailSheet", () => {
     expect(screen.getAllByText(/Direct task output/i).length).toBeGreaterThan(0);
   });
 
+  it("keeps the Live tab available for workflow tasks paused on a human gate after prior live steps ran", () => {
+    const workflowTask: TaskDoc = {
+      ...baseTask,
+      assignedAgent: undefined,
+      workMode: "ai_workflow" as const,
+    };
+    const completedWorkflowStep: StepDoc = {
+      _id: "step-completed" as never,
+      _creationTime: 1,
+      taskId: "task1" as never,
+      title: "Draft the post",
+      description: "Write the Instagram copy",
+      assignedAgent: "agent-alpha",
+      status: "completed",
+      parallelGroup: 1,
+      order: 1,
+      createdAt: "2026-03-13T09:00:00.000Z",
+      startedAt: "2026-03-13T09:02:00.000Z",
+      completedAt: "2026-03-13T09:10:00.000Z",
+    };
+    const waitingHumanStep: StepDoc = {
+      _id: "step-human" as never,
+      _creationTime: 2,
+      taskId: "task1" as never,
+      title: "Approve the draft",
+      description: "Human review gate",
+      assignedAgent: "human",
+      status: "waiting_human",
+      parallelGroup: 2,
+      order: 2,
+      createdAt: "2026-03-13T09:11:00.000Z",
+    };
+
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return buildDetailView(
+          workflowTask,
+          [baseMessage],
+          [completedWorkflowStep, waitingHumanStep],
+        );
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "name" in (args as Record<string, unknown>)
+      ) {
+        const name = (args as { name: string }).name;
+        if (name === "human") {
+          return null;
+        }
+        return {
+          _id: "agent-doc",
+          _creationTime: 1,
+          name: "agent-alpha",
+          displayName: "Agent Alpha",
+          role: "Engineer",
+          prompt: "",
+          soul: "",
+          skills: [],
+          status: "active",
+          model: "cc/claude-sonnet-4-6",
+          interactiveProvider: "claude-code",
+        };
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        Object.keys(args as Record<string, unknown>).length === 0
+      ) {
+        return [
+          {
+            _id: "session-doc",
+            _creationTime: 1,
+            sessionId: "interactive_session:workflow-completed",
+            agentName: "agent-alpha",
+            provider: "claude-code",
+            scopeKind: "task",
+            scopeId: "task1",
+            surface: "step",
+            tmuxSession: "mc-int-123",
+            status: "ended",
+            capabilities: ["tui"],
+            createdAt: "2026-03-13T09:00:00.000Z",
+            updatedAt: "2026-03-13T09:10:00.000Z",
+            endedAt: "2026-03-13T09:10:00.000Z",
+            taskId: "task1",
+            stepId: "step-completed",
+            supervisionState: "completed",
+            finalResult: "Instagram draft ready",
+          },
+        ];
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "sessionId" in (args as Record<string, unknown>)
+      ) {
+        return [
+          {
+            _id: "activity-1",
+            sessionId: "interactive_session:workflow-completed",
+            seq: 1,
+            kind: "result",
+            ts: "2026-03-13T09:09:00.000Z",
+            summary: "Instagram draft ready",
+            stepId: "step-completed",
+            agentName: "agent-alpha",
+            provider: "claude-code",
+          },
+        ];
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    expect(screen.getByRole("tab", { name: "Live" })).toBeInTheDocument();
+    expect(screen.getByTestId("live-session-badge")).toHaveTextContent("Live • Completed");
+  });
+
   it("opens historical live output for a completed step from the execution plan", async () => {
     const user = userEvent.setup();
     const completedTask: TaskDoc = { ...baseTask, status: "done" as const };
