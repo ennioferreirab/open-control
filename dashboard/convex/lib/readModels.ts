@@ -83,10 +83,11 @@ const BOARD_COLUMNS: readonly BoardColumn[] = [
  */
 export function computeUiFlags(task: TaskForFlags, steps: StepForFlags[]): UiFlags {
   const hasNonCompletedSteps = steps.some((s) => s.status !== "completed");
+  const isAwaitingKickoff = task.awaitingKickoff === true;
 
   return {
-    isAwaitingKickoff: task.awaitingKickoff === true,
-    isPaused: task.status === "review" && hasNonCompletedSteps,
+    isAwaitingKickoff,
+    isPaused: task.status === "review" && !isAwaitingKickoff && hasNonCompletedSteps,
     isManual: task.isManual === true,
     isPlanEditable: PLAN_EDITABLE_STATUSES.has(task.status),
   };
@@ -98,14 +99,16 @@ export function computeUiFlags(task: TaskForFlags, steps: StepForFlags[]): UiFla
 export function computeAllowedActions(task: TaskForFlags, uiFlags: UiFlags): AllowedActions {
   const status = task.status;
   const hasExecutionPlan = task.executionPlan != null;
+  const canKickOffFromReview =
+    status === "review" && hasExecutionPlan && (uiFlags.isAwaitingKickoff || uiFlags.isManual);
   const isMergeLocked =
     typeof task.mergedIntoTaskId === "string" && task.mergedIntoTaskId.length > 0;
 
   return {
-    approve: status === "review" && !uiFlags.isManual,
-    kickoff: status === "ready" || (status === "review" && hasExecutionPlan),
+    approve: status === "review" && !uiFlags.isManual && !uiFlags.isAwaitingKickoff,
+    kickoff: status === "ready" || canKickOffFromReview,
     pause: status === "in_progress",
-    resume: status === "review" && uiFlags.isPaused,
+    resume: status === "review" && uiFlags.isPaused && !uiFlags.isAwaitingKickoff,
     retry: status === "crashed" || status === "failed",
     savePlan: uiFlags.isPlanEditable,
     startInbox: status === "inbox",
