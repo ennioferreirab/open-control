@@ -132,4 +132,16 @@ describe("PlanReviewPanel", () => {
       });
     }
   });
+
+  it("shows review copy when reviewPhase=plan_review", () => {
+    const { getByText } = render(
+      <PlanReviewPanel
+        isPrimaryActionPending={false}
+        messages={[firstConversationMessage]}
+        task={{ ...baseTask, reviewPhase: "plan_review" } as never}
+      />,
+    );
+
+    expect(getByText("Lead Agent Review")).toBeInTheDocument();
+  });
 });

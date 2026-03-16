@@ -13,10 +13,13 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mc.application.execution.completion_status import resolve_completion_status
 from mc.application.execution.background_tasks import (
     create_background_task,
     get_background_tasks,
+)
+from mc.application.execution.completion_status import (
+    resolve_completion_review_phase,
+    resolve_completion_status,
 )
 from mc.application.execution.file_enricher import (
     build_merged_source_context,
@@ -35,7 +38,6 @@ from mc.types import (
     AuthorType,
     MessageType,
     TaskStatus,
-    TrustLevel,
     extract_cc_model_name,
     is_cc_model,
     task_safe_id,
@@ -539,6 +541,8 @@ class CCExecutorMixin:
             final_status,
             agent_name,
             f"Agent {agent_name} completed task '{title}'",
+            None,
+            resolve_completion_review_phase(task_data),
         )
 
         # Write completion to global HEARTBEAT.md

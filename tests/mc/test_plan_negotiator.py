@@ -888,12 +888,12 @@ class TestHandlePlanNegotiationExecutionContext:
 
         mock_handle.assert_not_called()
 
-    def test_loop_bootstraps_first_plan_for_manual_review_without_execution_plan(self):
-        """Manual review tasks without a plan should route the first user message into planning."""
+    def test_loop_ignores_manual_planning_without_execution_plan(self):
+        """Manual tasks without a plan should no longer bootstrap from review semantics."""
         import asyncio as _asyncio
 
         task_data = {
-            "status": "review",
+            "status": "planning",
             "awaiting_kickoff": False,
             "is_manual": True,
             "title": "Manual review task",
@@ -943,18 +943,14 @@ class TestHandlePlanNegotiationExecutionContext:
                 _asyncio.run(
                     start_plan_negotiation_loop(
                         bridge,
-                        "task_manual_review",
+                        "task_manual_planning",
                         poll_interval=0.01,
                     )
                 )
             except _asyncio.CancelledError:
                 pass
 
-        mock_initial_plan.assert_called_once()
-        bootstrap_call = mock_initial_plan.call_args
-        assert bootstrap_call.args[1] == "task_manual_review"
-        assert bootstrap_call.args[2] == user_message["content"]
-        assert bootstrap_call.kwargs["task_data"]["is_manual"] is True
+        mock_initial_plan.assert_not_called()
         mock_handle.assert_not_called()
 
     def test_loop_backfills_missing_plan_review_request_for_existing_review_plan(self):

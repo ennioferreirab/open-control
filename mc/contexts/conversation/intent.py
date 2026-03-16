@@ -58,22 +58,25 @@ def _is_negotiable_status(task_data: dict[str, Any]) -> bool:
     - "in_progress" with an execution_plan (during planned execution)
     """
     status = task_data.get("status", "")
+    review_phase = task_data.get("review_phase") or task_data.get("reviewPhase")
     if status == "in_progress":
         plan = task_data.get("execution_plan") or task_data.get("executionPlan")
         return bool(plan and isinstance(plan, dict) and plan.get("steps"))
-    if status == "review" and task_data.get("awaiting_kickoff"):
+    if status == "review" and (review_phase == "plan_review" or task_data.get("awaiting_kickoff")):
         return True
     return False
 
 
 # Statuses where a non-mention message is treated as a follow-up to the
 # assigned agent (rather than a plain comment).
-_ACTIVE_TASK_STATUSES = frozenset({
-    "assigned",
-    "in_progress",
-    "review",
-    "retrying",
-})
+_ACTIVE_TASK_STATUSES = frozenset(
+    {
+        "assigned",
+        "in_progress",
+        "review",
+        "retrying",
+    }
+)
 
 
 class ConversationIntentResolver:

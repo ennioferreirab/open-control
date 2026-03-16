@@ -193,6 +193,13 @@ describe("TaskCard", () => {
     expect(screen.getByText("Awaiting Kick-off")).toBeInTheDocument();
   });
 
+  it("shows Awaiting Kick-off badge when reviewPhase=plan_review", () => {
+    render(
+      <TaskCard task={{ ...baseTask, status: "review", reviewPhase: "plan_review" } as never} />,
+    );
+    expect(screen.getByTestId("awaiting-kickoff-badge")).toBeInTheDocument();
+  });
+
   it("does not show Awaiting Kick-off badge for review tasks without awaitingKickoff", () => {
     render(<TaskCard task={{ ...baseTask, status: "review" }} />);
     expect(screen.queryByTestId("awaiting-kickoff-badge")).not.toBeInTheDocument();
@@ -211,6 +218,15 @@ describe("TaskCard", () => {
     render(<TaskCard task={{ ...baseTask, status: "review" }} />);
     expect(screen.getByTestId("paused-badge")).toBeInTheDocument();
     expect(screen.getByText("Paused")).toBeInTheDocument();
+  });
+
+  it("shows Paused badge when reviewPhase=execution_pause", () => {
+    render(
+      <TaskCard
+        task={{ ...baseTask, status: "review", reviewPhase: "execution_pause" } as never}
+      />,
+    );
+    expect(screen.getByTestId("paused-badge")).toBeInTheDocument();
   });
 
   it("does NOT show Paused badge when task has awaitingKickoff=true (AC 6)", () => {

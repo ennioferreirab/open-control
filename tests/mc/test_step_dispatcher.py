@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mc.contexts.execution.step_dispatcher import StepDispatcher
-from mc.types import ActivityEventType, AuthorType, MessageType, StepStatus, TaskStatus
+from mc.types import ActivityEventType, AuthorType, MessageType, ReviewPhase, StepStatus, TaskStatus
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -285,11 +285,15 @@ class TestStepDispatcher:
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert state["step-1"]["status"] == StepStatus.COMPLETED
-        bridge.update_task_status.assert_called_once_with(
+        bridge.update_task_status.assert_called_once()
+        status_call = bridge.update_task_status.call_args
+        assert status_call.args == (
             "task-1",
             TaskStatus.REVIEW,
             None,
             "All 1 steps completed",
+            None,
+            ReviewPhase.FINAL_APPROVAL,
         )
         bridge.create_activity.assert_any_call(
             ActivityEventType.TASK_DISPATCH_STARTED,
@@ -338,11 +342,15 @@ class TestStepDispatcher:
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert state["step-1"]["status"] == StepStatus.COMPLETED
-        bridge.update_task_status.assert_called_once_with(
+        bridge.update_task_status.assert_called_once()
+        status_call = bridge.update_task_status.call_args
+        assert status_call.args == (
             "task-1",
             TaskStatus.DONE,
             None,
             "All 1 steps completed",
+            None,
+            None,
         )
         assert not any(
             call.args[0] == ActivityEventType.REVIEW_REQUESTED
@@ -632,11 +640,15 @@ class TestStepDispatcher:
         ):
             await dispatcher.dispatch_steps("task-1", ["step-1", "step-2"])
 
-        bridge.update_task_status.assert_called_once_with(
+        bridge.update_task_status.assert_called_once()
+        status_call = bridge.update_task_status.call_args
+        assert status_call.args == (
             "task-1",
             TaskStatus.REVIEW,
             None,
             "All 2 steps completed",
+            None,
+            ReviewPhase.FINAL_APPROVAL,
         )
 
     @pytest.mark.asyncio
@@ -1021,11 +1033,15 @@ class TestStepOutputFileSync:
         # Step must complete successfully despite the sync failure
         assert state["step-1"]["status"] == StepStatus.COMPLETED
         # Task must also complete
-        bridge.update_task_status.assert_called_once_with(
+        bridge.update_task_status.assert_called_once()
+        status_call = bridge.update_task_status.call_args
+        assert status_call.args == (
             "task-1",
             TaskStatus.REVIEW,
             None,
             "All 1 steps completed",
+            None,
+            ReviewPhase.FINAL_APPROVAL,
         )
 
     @pytest.mark.asyncio

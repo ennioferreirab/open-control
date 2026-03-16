@@ -12,6 +12,7 @@ import { cascadeMergeSourceTasksToDone } from "./taskMerge";
 import { logActivity } from "./workflowHelpers";
 
 type ReviewMutationCtx = Pick<MutationCtx, "db">;
+type ReviewPhase = "plan_review" | "execution_pause" | "final_approval";
 
 export async function retryTask(ctx: ReviewMutationCtx, taskId: Id<"tasks">): Promise<void> {
   const task = await ctx.db.get(taskId);
@@ -190,6 +191,7 @@ export async function updateTaskStatusInternal(
     status: string;
     agentName?: string;
     awaitingKickoff?: boolean;
+    reviewPhase?: ReviewPhase;
   },
 ): Promise<void> {
   const task = await ctx.db.get(args.taskId);
@@ -201,11 +203,13 @@ export async function updateTaskStatusInternal(
   const newStatus = args.status;
   const currentAwaitingKickoff = task.awaitingKickoff === true;
   const nextAwaitingKickoff = args.awaitingKickoff === true;
+  const currentReviewPhase = task.reviewPhase;
+  const nextReviewPhase = args.reviewPhase;
   const isReviewKickoffToggle =
     currentStatus === "review" &&
     newStatus === "review" &&
-    args.awaitingKickoff !== undefined &&
-    currentAwaitingKickoff !== nextAwaitingKickoff;
+    ((args.awaitingKickoff !== undefined && currentAwaitingKickoff !== nextAwaitingKickoff) ||
+      (args.reviewPhase !== undefined && currentReviewPhase !== nextReviewPhase));
 
   if (!isReviewKickoffToggle && !isValidTaskTransition(currentStatus, newStatus)) {
     throw new ConvexError(`Cannot transition from '${currentStatus}' to '${newStatus}'`);
@@ -221,6 +225,9 @@ export async function updateTaskStatusInternal(
   }
   if (args.awaitingKickoff !== undefined) {
     patch.awaitingKickoff = args.awaitingKickoff || undefined;
+  }
+  if (args.reviewPhase !== undefined) {
+    patch.reviewPhase = args.reviewPhase;
   }
   if (["done", "review", "crashed", "failed", "deleted"].includes(newStatus)) {
     patch.activeCronJobId = undefined;

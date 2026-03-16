@@ -16,10 +16,11 @@ class BridgeRepositoryFacadeMixin:
         agent_name: str | None = None,
         description: str | None = None,
         awaiting_kickoff: bool | None = None,
+        review_phase: str | None = None,
     ) -> Any:
         self._ensure_repos()
         return self._tasks.update_task_status(
-            task_id, status, agent_name, description, awaiting_kickoff
+            task_id, status, agent_name, description, awaiting_kickoff, review_phase
         )
 
     def update_execution_plan(self, task_id: str, plan: dict[str, Any]) -> Any:

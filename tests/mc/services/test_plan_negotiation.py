@@ -88,6 +88,7 @@ class TestProcessBatch:
             {
                 "id": "task-paused",
                 "status": "review",
+                "review_phase": "execution_pause",
                 "awaiting_kickoff": False,
                 "execution_plan": {"steps": [{"title": "Resume with edits"}]},
             },
@@ -99,14 +100,14 @@ class TestProcessBatch:
             mock_spawn.assert_called_once_with("task-paused")
 
     @pytest.mark.asyncio
-    async def test_spawns_for_manual_review_without_execution_plan(
+    async def test_does_not_spawn_for_manual_planning_without_execution_plan(
         self, supervisor: PlanNegotiationSupervisor
     ) -> None:
-        """Manual review tasks without a plan stay negotiable for first-plan creation."""
+        """Manual tasks without a plan should no longer bootstrap from review."""
         batch = [
             {
-                "id": "task-manual-review",
-                "status": "review",
+                "id": "task-manual-planning",
+                "status": "planning",
                 "awaiting_kickoff": False,
                 "is_manual": True,
             },
@@ -115,7 +116,7 @@ class TestProcessBatch:
             supervisor, "_spawn_loop_if_needed", new_callable=AsyncMock
         ) as mock_spawn:
             await supervisor.process_batch(batch)
-            mock_spawn.assert_called_once_with("task-manual-review")
+            mock_spawn.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_spawns_for_in_progress(self, supervisor: PlanNegotiationSupervisor) -> None:

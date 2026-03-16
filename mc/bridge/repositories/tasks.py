@@ -30,6 +30,7 @@ class TaskRepository:
         agent_name: str | None = None,
         description: str | None = None,
         awaiting_kickoff: bool | None = None,
+        review_phase: str | None = None,
     ) -> Any:
         """Update a task's status with retry and logging."""
         mutation_args: dict[str, Any] = {"task_id": task_id, "status": status}
@@ -37,6 +38,8 @@ class TaskRepository:
             mutation_args["agent_name"] = agent_name
         if awaiting_kickoff is not None:
             mutation_args["awaiting_kickoff"] = awaiting_kickoff
+        if review_phase is not None:
+            mutation_args["review_phase"] = review_phase
         result = self._client.mutation(
             "tasks:updateStatus",
             mutation_args,
@@ -70,9 +73,7 @@ class TaskRepository:
             "tasks:kickOff",
             {"task_id": task_id, "step_count": step_count},
         )
-        self._log_state_transition(
-            "task", f"Task {task_id} kicked off with {step_count} steps"
-        )
+        self._log_state_transition("task", f"Task {task_id} kicked off with {step_count} steps")
         return result
 
     def approve_and_kick_off(
@@ -88,9 +89,7 @@ class TaskRepository:
         if execution_plan is not None:
             args["execution_plan"] = execution_plan
         result = self._client.mutation("tasks:approveAndKickOff", args)
-        self._log_state_transition(
-            "task", f"Task {task_id} approved and kicked off"
-        )
+        self._log_state_transition("task", f"Task {task_id} approved and kicked off")
         return result
 
     def get_task(self, task_id: str) -> dict[str, Any] | None:
@@ -146,13 +145,26 @@ class TaskRepository:
         - Creates activity event if new files were found
         """
         ext_mime: dict[str, str] = {
-            "pdf": "application/pdf", "md": "text/markdown", "markdown": "text/markdown",
-            "html": "text/html", "htm": "text/html", "txt": "text/plain",
-            "csv": "text/csv", "json": "application/json", "yaml": "text/yaml",
-            "yml": "text/yaml", "xml": "application/xml", "py": "text/x-python",
-            "ts": "text/typescript", "tsx": "text/typescript", "js": "text/javascript",
-            "jsx": "text/javascript", "go": "text/x-go", "rs": "text/x-rust",
-            "sh": "text/x-sh", "bash": "text/x-sh",
+            "pdf": "application/pdf",
+            "md": "text/markdown",
+            "markdown": "text/markdown",
+            "html": "text/html",
+            "htm": "text/html",
+            "txt": "text/plain",
+            "csv": "text/csv",
+            "json": "application/json",
+            "yaml": "text/yaml",
+            "yml": "text/yaml",
+            "xml": "application/xml",
+            "py": "text/x-python",
+            "ts": "text/typescript",
+            "tsx": "text/typescript",
+            "js": "text/javascript",
+            "jsx": "text/javascript",
+            "go": "text/x-go",
+            "rs": "text/x-rust",
+            "sh": "text/x-sh",
+            "bash": "text/x-sh",
         }
 
         safe_id = task_safe_id(task_id)
@@ -169,21 +181,22 @@ class TaskRepository:
                 if entry.is_file():
                     ext = entry.suffix.lstrip(".").lower()
                     mime = ext_mime.get(ext, "application/octet-stream")
-                    fs_files.append({
-                        "name": entry.name,
-                        "type": mime,
-                        "size": entry.stat().st_size,
-                        "subfolder": "output",
-                        "uploaded_at": now,
-                    })
+                    fs_files.append(
+                        {
+                            "name": entry.name,
+                            "type": mime,
+                            "size": entry.stat().st_size,
+                            "subfolder": "output",
+                            "uploaded_at": now,
+                        }
+                    )
         except OSError as exc:
             logger.error("[bridge] Failed to scan output dir %s: %s", output_dir, exc)
             return
 
         # Compare with existing manifest
         existing_output = {
-            f["name"] for f in (task_data.get("files") or [])
-            if f.get("subfolder") == "output"
+            f["name"] for f in (task_data.get("files") or []) if f.get("subfolder") == "output"
         }
         fs_names = {f["name"] for f in fs_files}
 
@@ -195,23 +208,23 @@ class TaskRepository:
 
         # Update Convex -- replace full output section
         try:
-            self._client.mutation("tasks:updateTaskOutputFiles", {
-                "task_id": task_id,
-                "output_files": fs_files,
-            })
-            logger.info(
-                "[bridge] Synced %d output file(s) for task %s", len(fs_files), task_id
+            self._client.mutation(
+                "tasks:updateTaskOutputFiles",
+                {
+                    "task_id": task_id,
+                    "output_files": fs_files,
+                },
             )
+            logger.info("[bridge] Synced %d output file(s) for task %s", len(fs_files), task_id)
         except Exception as exc:
-            logger.error(
-                "[bridge] Failed to sync output files for task %s: %s", task_id, exc
-            )
+            logger.error("[bridge] Failed to sync output files for task %s: %s", task_id, exc)
             return
 
         if stale_names:
             logger.warning(
                 "[bridge] Manifest reconciliation: removed %d orphaned entries for task %s",
-                len(stale_names), task_id,
+                len(stale_names),
+                task_id,
             )
 
         # Activity event for new files
@@ -240,13 +253,26 @@ class TaskRepository:
         any new filenames (append-only) to the parent task's output section.
         """
         ext_mime: dict[str, str] = {
-            "pdf": "application/pdf", "md": "text/markdown", "markdown": "text/markdown",
-            "html": "text/html", "htm": "text/html", "txt": "text/plain",
-            "csv": "text/csv", "json": "application/json", "yaml": "text/yaml",
-            "yml": "text/yaml", "xml": "application/xml", "py": "text/x-python",
-            "ts": "text/typescript", "tsx": "text/typescript", "js": "text/javascript",
-            "jsx": "text/javascript", "go": "text/x-go", "rs": "text/x-rust",
-            "sh": "text/x-sh", "bash": "text/x-sh",
+            "pdf": "application/pdf",
+            "md": "text/markdown",
+            "markdown": "text/markdown",
+            "html": "text/html",
+            "htm": "text/html",
+            "txt": "text/plain",
+            "csv": "text/csv",
+            "json": "application/json",
+            "yaml": "text/yaml",
+            "yml": "text/yaml",
+            "xml": "application/xml",
+            "py": "text/x-python",
+            "ts": "text/typescript",
+            "tsx": "text/typescript",
+            "js": "text/javascript",
+            "jsx": "text/javascript",
+            "go": "text/x-go",
+            "rs": "text/x-rust",
+            "sh": "text/x-sh",
+            "bash": "text/x-sh",
         }
         safe_source_id = re.sub(r"[^\w\-]", "_", source_task_id)
         source_output_dir = Path.home() / ".nanobot" / "tasks" / safe_source_id / "output"
@@ -259,22 +285,22 @@ class TaskRepository:
                 if entry.is_file():
                     ext = entry.suffix.lstrip(".").lower()
                     mime = ext_mime.get(ext, "application/octet-stream")
-                    source_files.append({
-                        "name": entry.name, "type": mime,
-                        "size": entry.stat().st_size, "subfolder": "output",
-                        "uploaded_at": now,
-                    })
+                    source_files.append(
+                        {
+                            "name": entry.name,
+                            "type": mime,
+                            "size": entry.stat().st_size,
+                            "subfolder": "output",
+                            "uploaded_at": now,
+                        }
+                    )
         except OSError as exc:
-            logger.error(
-                "[bridge] Failed to scan source output dir %s: %s", source_output_dir, exc
-            )
+            logger.error("[bridge] Failed to scan source output dir %s: %s", source_output_dir, exc)
             return
         if not source_files:
             return
         try:
-            parent_task = self._client.query(
-                "tasks:getById", {"task_id": parent_task_id}
-            )
+            parent_task = self._client.query("tasks:getById", {"task_id": parent_task_id})
             parent_files = (parent_task or {}).get("files") or []
         except Exception:
             logger.warning("[bridge] Could not fetch parent task %s", parent_task_id)
@@ -286,17 +312,21 @@ class TaskRepository:
             return
         merged_output = existing_output + truly_new
         try:
-            self._client.mutation("tasks:updateTaskOutputFiles", {
-                "task_id": parent_task_id, "output_files": merged_output,
-            })
+            self._client.mutation(
+                "tasks:updateTaskOutputFiles",
+                {
+                    "task_id": parent_task_id,
+                    "output_files": merged_output,
+                },
+            )
             logger.info(
                 "[bridge] Synced %d file(s) from cron task %s to parent %s",
-                len(truly_new), source_task_id, parent_task_id,
+                len(truly_new),
+                source_task_id,
+                parent_task_id,
             )
         except Exception as exc:
-            logger.error(
-                "[bridge] Failed to sync to parent %s: %s", parent_task_id, exc
-            )
+            logger.error("[bridge] Failed to sync to parent %s: %s", parent_task_id, exc)
             return
         if truly_new:
             file_names = ", ".join(f["name"] for f in truly_new)
@@ -306,8 +336,7 @@ class TaskRepository:
                     {
                         "event_type": "agent_output",
                         "description": (
-                            f"{agent_name} produced {len(truly_new)} file(s)"
-                            f" via cron: {file_names}"
+                            f"{agent_name} produced {len(truly_new)} file(s) via cron: {file_names}"
                         ),
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                         "task_id": parent_task_id,

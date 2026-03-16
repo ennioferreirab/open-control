@@ -283,7 +283,7 @@ describe("tasks.createMergedTask", () => {
     );
   });
 
-  it("creates task C in manual review without persisting the visual merge alias", async () => {
+  it("creates task C in manual planning without persisting the visual merge alias", async () => {
     const handler = getCreateMergedTaskHandler();
     const patch = vi.fn(async () => undefined);
     const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
@@ -320,7 +320,7 @@ describe("tasks.createMergedTask", () => {
     expect(insert).toHaveBeenCalledWith(
       "tasks",
       expect.objectContaining({
-        status: "review",
+        status: "planning",
         isManual: true,
         awaitingKickoff: undefined,
         executionPlan: undefined,

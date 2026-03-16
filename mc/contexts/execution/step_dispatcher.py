@@ -13,7 +13,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mc.application.execution.completion_status import resolve_completion_status
+from mc.application.execution.completion_status import (
+    resolve_completion_review_phase,
+    resolve_completion_status,
+)
 from mc.application.execution.interactive_mode import resolve_step_runner_type
 from mc.types import (
     NANOBOT_AGENT_NAME,
@@ -282,6 +285,8 @@ class StepDispatcher:
                     final_status,
                     None,
                     f"All {step_count} steps completed",
+                    None,
+                    resolve_completion_review_phase(task_data),
                 )
                 if final_status == TaskStatus.REVIEW:
                     await asyncio.to_thread(

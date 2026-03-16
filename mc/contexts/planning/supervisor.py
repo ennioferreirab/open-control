@@ -20,16 +20,6 @@ def _has_execution_plan(task_data: dict[str, Any]) -> bool:
     return bool(isinstance(plan, dict) and plan.get("steps"))
 
 
-def _is_manual_review_without_plan(task_data: dict[str, Any]) -> bool:
-    """Return True when a manual review task is waiting for its first plan."""
-    return (
-        task_data.get("status", "") == "review"
-        and bool(task_data.get("is_manual") or task_data.get("isManual"))
-        and not bool(task_data.get("awaiting_kickoff") or task_data.get("awaitingKickoff"))
-        and not _has_execution_plan(task_data)
-    )
-
-
 class PlanNegotiationSupervisor:
     """Manage per-task plan negotiation loops."""
 
@@ -95,15 +85,12 @@ class PlanNegotiationSupervisor:
 
             task_status = task_data.get("status", "")
             awaiting_kickoff = task_data.get("awaiting_kickoff", False)
+            review_phase = task_data.get("review_phase") or task_data.get("reviewPhase")
             has_execution_plan = _has_execution_plan(task_data)
 
             if task_status == "in_progress" or (
                 task_status == "review"
-                and (
-                    awaiting_kickoff
-                    or has_execution_plan
-                    or _is_manual_review_without_plan(task_data)
-                )
+                and (review_phase == "plan_review" or awaiting_kickoff or has_execution_plan)
             ):
                 if task_id in self._cron_requeued_ids:
                     self._cron_requeued_ids.discard(task_id)

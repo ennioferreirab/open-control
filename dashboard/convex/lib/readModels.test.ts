@@ -22,6 +22,12 @@ describe("computeUiFlags", () => {
     expect(flags.isAwaitingKickoff).toBe(true);
   });
 
+  it("detects awaitingKickoff from reviewPhase before falling back to awaitingKickoff", () => {
+    const task: TaskForFlags = { status: "review", reviewPhase: "plan_review" };
+    const flags = computeUiFlags(task, []);
+    expect(flags.isAwaitingKickoff).toBe(true);
+  });
+
   it("isAwaitingKickoff is false when not set", () => {
     const task: TaskForFlags = { status: "review" };
     const flags = computeUiFlags(task, []);
@@ -29,10 +35,17 @@ describe("computeUiFlags", () => {
   });
 
   it("detects isPaused when review + non-completed steps exist", () => {
-    const task: TaskForFlags = { status: "review" };
+    const task: TaskForFlags = { status: "review", reviewPhase: "execution_pause" };
     const steps: StepForFlags[] = [{ status: "completed" }, { status: "assigned" }];
     const flags = computeUiFlags(task, steps);
     expect(flags.isPaused).toBe(true);
+  });
+
+  it("does not infer paused from steps alone when reviewPhase says plan_review", () => {
+    const task: TaskForFlags = { status: "review", reviewPhase: "plan_review" };
+    const steps: StepForFlags[] = [{ status: "assigned" }];
+    const flags = computeUiFlags(task, steps);
+    expect(flags.isPaused).toBe(false);
   });
 
   it("isPaused is false when review but all steps completed", () => {
@@ -106,7 +119,8 @@ describe("computeAllowedActions", () => {
     return computeAllowedActions(task, uiFlags);
   }
 
-  it("approve is true only for standard review tasks", () => {
+  it("approve is true for final approval and legacy review fallback tasks", () => {
+    expect(getActions("review", { reviewPhase: "final_approval" }).approve).toBe(true);
     expect(getActions("review").approve).toBe(true);
     expect(getActions("in_progress").approve).toBe(false);
     expect(getActions("done").approve).toBe(false);
@@ -119,6 +133,7 @@ describe("computeAllowedActions", () => {
   it("approve is false for pre-kickoff review tasks", () => {
     expect(
       getActions("review", {
+        reviewPhase: "plan_review",
         awaitingKickoff: true,
         executionPlan: { steps: [{ title: "step-1" }] },
       }).approve,
@@ -132,6 +147,7 @@ describe("computeAllowedActions", () => {
   it("kickoff is true for review only when awaiting kickoff", () => {
     expect(
       getActions("review", {
+        reviewPhase: "plan_review",
         awaitingKickoff: true,
         executionPlan: { steps: [] },
       }).kickoff,
@@ -155,7 +171,7 @@ describe("computeAllowedActions", () => {
   it("resume is true when review and isPaused", () => {
     // isPaused = review + non-completed steps
     const steps: StepForFlags[] = [{ status: "running" }];
-    expect(getActions("review", {}, steps).resume).toBe(true);
+    expect(getActions("review", { reviewPhase: "execution_pause" }, steps).resume).toBe(true);
   });
 
   it("resume is false when awaiting kickoff even if review already has steps", () => {

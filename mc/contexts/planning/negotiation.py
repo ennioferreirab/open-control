@@ -136,16 +136,6 @@ def _has_execution_plan(task: dict[str, Any]) -> bool:
     return bool(isinstance(plan, dict) and plan.get("steps"))
 
 
-def _is_manual_review_without_plan(task: dict[str, Any]) -> bool:
-    """Return True when a manual task is paused in review before first plan creation."""
-    return (
-        task.get("status", "") == "review"
-        and bool(task.get("is_manual") or task.get("isManual"))
-        and not bool(task.get("awaiting_kickoff") or task.get("awaitingKickoff"))
-        and not _has_execution_plan(task)
-    )
-
-
 def _extract_plan_review(message: dict[str, Any]) -> dict[str, Any] | None:
     """Return plan-review metadata from either snake_case or camelCase payloads."""
     plan_review = message.get("plan_review")
@@ -580,6 +570,7 @@ def _is_negotiable_status(task: dict[str, Any]) -> bool:
     negotiable — lead-agent should not intercept direct agent assignments.
     """
     status = task.get("status", "")
+    review_phase = task.get("review_phase") or task.get("reviewPhase")
     has_execution_plan = _has_execution_plan(task)
     if status == "in_progress":
         # Only negotiable if there's an execution plan to negotiate.
@@ -587,10 +578,10 @@ def _is_negotiable_status(task: dict[str, Any]) -> bool:
         return has_execution_plan
     if status == "review":
         return bool(
-            task.get("awaiting_kickoff")
+            review_phase == "plan_review"
+            or task.get("awaiting_kickoff")
             or task.get("awaitingKickoff")
             or has_execution_plan
-            or _is_manual_review_without_plan(task)
         )
     return False
 
@@ -677,10 +668,10 @@ async def start_plan_negotiation_loop(
 
         task_status = task.get("status", "")
         awaiting_kickoff = bool(task.get("awaiting_kickoff") or task.get("awaitingKickoff"))
+        review_phase = task.get("review_phase") or task.get("reviewPhase")
 
         # Get current plan from task
         current_plan = task.get("execution_plan") or task.get("executionPlan") or {}
-        bootstrap_initial_plan = _is_manual_review_without_plan(task)
         current_plan_generated_at = (
             current_plan.get("generated_at") or current_plan.get("generatedAt")
             if isinstance(current_plan, dict)
@@ -689,7 +680,7 @@ async def start_plan_negotiation_loop(
 
         if (
             task_status == "review"
-            and awaiting_kickoff
+            and (review_phase == "plan_review" or awaiting_kickoff)
             and _has_execution_plan(task)
             and not _has_current_plan_review_request(
                 messages,
@@ -799,18 +790,6 @@ async def start_plan_negotiation_loop(
                 mention_task.add_done_callback(_log_task_exception)
                 # Skip plan negotiation for @mention messages
                 continue
-
-            if bootstrap_initial_plan:
-                bg_task = asyncio.create_task(
-                    create_initial_plan_from_message(
-                        bridge,
-                        task_id,
-                        content,
-                        task_data=task,
-                    )
-                )
-                bg_task.add_done_callback(_log_task_exception)
-                break
 
             is_lead_agent_conversation = bool(
                 msg.get("lead_agent_conversation") or msg.get("leadAgentConversation")

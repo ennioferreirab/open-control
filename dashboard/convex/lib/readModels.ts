@@ -9,6 +9,7 @@
 export type TaskForFlags = {
   status: string;
   awaitingKickoff?: boolean;
+  reviewPhase?: "plan_review" | "execution_pause" | "final_approval";
   isManual?: boolean;
   executionPlan?: unknown;
   mergedIntoTaskId?: string;
@@ -83,11 +84,19 @@ const BOARD_COLUMNS: readonly BoardColumn[] = [
  */
 export function computeUiFlags(task: TaskForFlags, steps: StepForFlags[]): UiFlags {
   const hasNonCompletedSteps = steps.some((s) => s.status !== "completed");
-  const isAwaitingKickoff = task.awaitingKickoff === true;
+  const reviewPhase = task.reviewPhase;
+  const isAwaitingKickoff =
+    reviewPhase === "plan_review" || (reviewPhase === undefined && task.awaitingKickoff === true);
+  const isPaused =
+    reviewPhase === "execution_pause" ||
+    (task.status === "review" &&
+      reviewPhase === undefined &&
+      !isAwaitingKickoff &&
+      hasNonCompletedSteps);
 
   return {
     isAwaitingKickoff,
-    isPaused: task.status === "review" && !isAwaitingKickoff && hasNonCompletedSteps,
+    isPaused,
     isManual: task.isManual === true,
     isPlanEditable: PLAN_EDITABLE_STATUSES.has(task.status),
   };
@@ -98,17 +107,29 @@ export function computeUiFlags(task: TaskForFlags, steps: StepForFlags[]): UiFla
  */
 export function computeAllowedActions(task: TaskForFlags, uiFlags: UiFlags): AllowedActions {
   const status = task.status;
+  const reviewPhase = task.reviewPhase;
   const hasExecutionPlan = task.executionPlan != null;
   const canKickOffFromReview =
-    status === "review" && hasExecutionPlan && (uiFlags.isAwaitingKickoff || uiFlags.isManual);
+    status === "review" &&
+    hasExecutionPlan &&
+    (reviewPhase === "plan_review" ||
+      (reviewPhase === undefined && (uiFlags.isAwaitingKickoff || uiFlags.isManual)));
   const isMergeLocked =
     typeof task.mergedIntoTaskId === "string" && task.mergedIntoTaskId.length > 0;
 
   return {
-    approve: status === "review" && !uiFlags.isManual && !uiFlags.isAwaitingKickoff,
+    approve:
+      status === "review" &&
+      !uiFlags.isManual &&
+      (reviewPhase === "final_approval" ||
+        (reviewPhase === undefined && !uiFlags.isAwaitingKickoff)),
     kickoff: status === "ready" || canKickOffFromReview,
     pause: status === "in_progress",
-    resume: status === "review" && uiFlags.isPaused && !uiFlags.isAwaitingKickoff,
+    resume:
+      status === "review" &&
+      uiFlags.isPaused &&
+      !uiFlags.isAwaitingKickoff &&
+      (reviewPhase === "execution_pause" || reviewPhase === undefined),
     retry: status === "crashed" || status === "failed",
     savePlan: uiFlags.isPlanEditable,
     startInbox: status === "inbox",

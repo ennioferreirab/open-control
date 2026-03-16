@@ -24,7 +24,10 @@ function isPlanTimelineMessage(message: Doc<"messages">): boolean {
   if (message.type === "lead_agent_plan" || message.type === "lead_agent_chat") {
     return true;
   }
-  if ((message as Doc<"messages"> & { leadAgentConversation?: boolean }).leadAgentConversation === true) {
+  if (
+    (message as Doc<"messages"> & { leadAgentConversation?: boolean }).leadAgentConversation ===
+    true
+  ) {
     return true;
   }
   return Boolean(message.planReview);
@@ -49,12 +52,15 @@ export function PlanReviewPanel({
   const previousTimelineCountRef = useRef(0);
   const hasInitializedScrollRef = useRef(false);
 
+  const reviewPhase = (task as Doc<"tasks"> & { reviewPhase?: string }).reviewPhase;
+  const isPlanReview =
+    reviewPhase === "plan_review" || (reviewPhase == null && task.awaitingKickoff === true);
+
   const currentPlanGeneratedAt =
-    typeof task.executionPlan?.generatedAt === "string" ? task.executionPlan.generatedAt : undefined;
-  const timelineMessages = useMemo(
-    () => messages.filter(isPlanTimelineMessage),
-    [messages],
-  );
+    typeof task.executionPlan?.generatedAt === "string"
+      ? task.executionPlan.generatedAt
+      : undefined;
+  const timelineMessages = useMemo(() => messages.filter(isPlanTimelineMessage), [messages]);
   const actionableMessageId = useMemo(() => {
     if (!currentPlanGeneratedAt || task.status !== "review" || !onPrimaryAction) {
       return null;
@@ -117,19 +123,16 @@ export function PlanReviewPanel({
     >
       <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold text-foreground">
-          {task.awaitingKickoff === true ? "Lead Agent Review" : "Lead Agent Conversation"}
+          {isPlanReview ? "Lead Agent Review" : "Lead Agent Conversation"}
         </h3>
         <p className="text-xs text-muted-foreground">
-          {task.awaitingKickoff === true
+          {isPlanReview
             ? "Review the latest plan request, approve it, reject it with feedback, or reply below."
             : "Discuss plan changes with the Lead Agent from inside the execution view."}
         </p>
       </div>
 
-      <ScrollArea
-        data-testid="plan-review-scroll-area"
-        className="min-h-0 flex-1 px-4 py-3"
-      >
+      <ScrollArea data-testid="plan-review-scroll-area" className="min-h-0 flex-1 px-4 py-3">
         {timelineMessages.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {task.status === "review" && task.isManual && !currentPlanGeneratedAt

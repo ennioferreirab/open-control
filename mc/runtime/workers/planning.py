@@ -19,6 +19,7 @@ from mc.types import (
     AuthorType,
     ExecutionPlan,
     MessageType,
+    ReviewPhase,
     TaskStatus,
 )
 
@@ -263,6 +264,7 @@ class PlanningWorker:
                 None,
                 f"Plan ready for review: '{title}'",
                 True,  # awaiting_kickoff
+                ReviewPhase.PLAN_REVIEW,
             )
             await asyncio.to_thread(
                 self._bridge.create_activity,
@@ -357,6 +359,7 @@ class PlanningWorker:
                 None,
                 f"Workflow plan ready for review: '{title}'",
                 True,  # awaiting_kickoff
+                ReviewPhase.PLAN_REVIEW,
             )
             logger.info(
                 "[planning] Workflow task '%s' transitioned to review (awaitingKickoff).",

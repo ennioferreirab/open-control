@@ -96,6 +96,14 @@ class TaskStatus(StrEnum):
     CRASHED = "crashed"
 
 
+class ReviewPhase(StrEnum):
+    """Semantic discriminator for task.status='review'."""
+
+    PLAN_REVIEW = "plan_review"
+    EXECUTION_PAUSE = "execution_pause"
+    FINAL_APPROVAL = "final_approval"
+
+
 class StepStatus(StrEnum):
     """Step lifecycle states. Matches Convex steps.status union type."""
 

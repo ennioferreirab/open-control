@@ -16,7 +16,10 @@ import logging
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from mc.application.execution.completion_status import resolve_completion_status
+from mc.application.execution.completion_status import (
+    resolve_completion_review_phase,
+    resolve_completion_status,
+)
 from mc.application.execution.interactive_mode import resolve_task_runner_type
 from mc.contexts.execution.agent_runner import (  # noqa: F401
     AgentRunResult,
@@ -633,6 +636,8 @@ class TaskExecutor(CCExecutorMixin):
                 final_status,
                 agent_name,
                 f"Agent {agent_name} completed task '{title}'",
+                None,
+                resolve_completion_review_phase(task_data),
             )
 
             # Clear retry count on success

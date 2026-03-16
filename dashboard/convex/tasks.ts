@@ -1,5 +1,5 @@
 import { internalMutation, mutation, query } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 
 import { taskFileMetadataValidator, taskFilesValidator } from "./schema";
@@ -20,17 +20,11 @@ import {
   updateTaskTitle,
 } from "./lib/taskMetadata";
 import { appendTaskFiles, removeAttachmentTaskFile, replaceTaskOutputFiles } from "./lib/taskFiles";
-import {
-  isValidTaskTransition,
-  logTaskCreated,
-  logTaskStatusChange,
-  markPlanStepsCompleted,
-} from "./lib/taskLifecycle";
+import { isValidTaskTransition } from "./lib/taskLifecycle";
 import {
   assertExistingMergeTask,
   assertMergeableSourceTask,
   buildContiguousMergeSourceLabels,
-  cascadeMergeSourceTasksToDone,
   collectMergeLineageTaskIds,
   dedupeTags,
   hasLineageOverlap,
@@ -251,8 +245,9 @@ export const createMergedTask = mutation({
     const mergedTaskId = await ctx.db.insert("tasks", {
       title: `Merge: ${String(primaryTask.title)} + ${String(secondaryTask.title)}`,
       description: `Merged from "${String(primaryTask.title)}" and "${String(secondaryTask.title)}". Continue work in this task.`,
-      status: args.mode === "plan" ? "planning" : "review",
+      status: "planning",
       awaitingKickoff: undefined,
+      reviewPhase: undefined,
       isManual: args.mode === "manual" ? true : undefined,
       trustLevel,
       supervisionMode:
@@ -578,6 +573,9 @@ export const updateStatus = internalMutation({
     status: v.string(),
     agentName: v.optional(v.string()),
     awaitingKickoff: v.optional(v.boolean()),
+    reviewPhase: v.optional(
+      v.union(v.literal("plan_review"), v.literal("execution_pause"), v.literal("final_approval")),
+    ),
   },
   handler: async (ctx, args) => {
     await updateTaskStatusInternal(ctx, args);

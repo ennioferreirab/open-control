@@ -50,8 +50,16 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress 
   const [isDragging, setIsDragging] = useState(false);
   const [titleExpanded, setTitleExpanded] = useState(false);
   const colors = STATUS_COLORS[task.status as TaskStatus] ?? STATUS_COLORS.inbox;
-  const awaitingKickoff = task.awaitingKickoff === true;
-  const showApproveButton = task.status === "review" && !task.isManual && !awaitingKickoff;
+  const reviewPhase = (task as Doc<"tasks"> & { reviewPhase?: string }).reviewPhase;
+  const awaitingKickoff =
+    reviewPhase === "plan_review" || (reviewPhase == null && task.awaitingKickoff === true);
+  const isExecutionPause =
+    reviewPhase === "execution_pause" ||
+    (reviewPhase == null && task.status === "review" && !awaitingKickoff);
+  const showApproveButton =
+    task.status === "review" &&
+    !task.isManual &&
+    (reviewPhase === "final_approval" || (reviewPhase == null && !awaitingKickoff));
   const showDenyButton =
     task.status === "review" && task.trustLevel === "human_approved" && !task.isManual;
   const isManual = task.isManual === true;
@@ -237,7 +245,7 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress 
                   Awaiting Kick-off
                 </button>
               )}
-              {task.status === "review" && !awaitingKickoff && (
+              {task.status === "review" && isExecutionPause && (
                 <Badge
                   className="h-5 rounded-full bg-orange-100 px-2 text-[10px] text-orange-700 font-medium"
                   data-testid="paused-badge"
