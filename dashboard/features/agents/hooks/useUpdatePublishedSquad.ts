@@ -42,6 +42,7 @@ export interface UpdatePublishedSquadArgs {
       exitCriteria?: string;
       steps: UpdatePublishedSquadStep[];
     }>;
+    reviewPolicy?: string;
   };
 }
 

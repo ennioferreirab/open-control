@@ -11,8 +11,10 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Bot, Pencil } from "lucide-react";
 import { useSquadDetailData } from "@/features/agents/hooks/useSquadDetailData";
 import { useUpdatePublishedSquad } from "@/features/agents/hooks/useUpdatePublishedSquad";
 import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
@@ -34,6 +36,7 @@ type EditableSquadDraft = {
     description: string;
     outcome: string;
   };
+  reviewPolicy: string;
   workflows: EditableWorkflow[];
 };
 
@@ -42,6 +45,7 @@ function buildDraft(
   workflows: Doc<"workflowSpecs">[],
   agents: Doc<"agents">[],
 ): EditableSquadDraft {
+  const squadWithReviewPolicy = squad as Doc<"squadSpecs"> & { reviewPolicy?: string };
   const agentIdToName = new Map(agents.map((agent) => [agent._id, agent.name]));
   return {
     squad: {
@@ -50,6 +54,7 @@ function buildDraft(
       description: squad.description ?? "",
       outcome: squad.outcome ?? "",
     },
+    reviewPolicy: squadWithReviewPolicy.reviewPolicy ?? "",
     workflows: workflows.map((workflow, workflowIndex) => ({
       id: String(workflow._id),
       key: `workflow-${workflowIndex + 1}`,
@@ -80,6 +85,7 @@ export function SquadDetailSheet({
   const [isEditing, setIsEditing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EditableSquadDraft | null>(null);
+  const [editingWorkflowNameId, setEditingWorkflowNameId] = useState<string | null>(null);
   const [selectedOverlayAgentName, setSelectedOverlayAgentName] = useState<string | null>(null);
   const { isPublishing, publish } = useUpdatePublishedSquad();
 
@@ -94,6 +100,7 @@ export function SquadDetailSheet({
   const handleClose = () => {
     setIsEditing(false);
     setDraft(null);
+    setEditingWorkflowNameId(null);
     setSelectedOverlayAgentName(null);
     onClose();
   };
@@ -140,10 +147,12 @@ export function SquadDetailSheet({
               dependsOn: step.dependsOn.length ? step.dependsOn : undefined,
             })),
           })),
+          reviewPolicy: draft.reviewPolicy || undefined,
         },
       });
       setIsEditing(false);
       setDraft(null);
+      setEditingWorkflowNameId(null);
     } catch {
       setPublishError("Failed to publish squad changes.");
     }
@@ -151,6 +160,21 @@ export function SquadDetailSheet({
 
   const openAgentOverlay = (agentName: string) => {
     setSelectedOverlayAgentName(agentName);
+  };
+
+  const visibleWorkflows = (draft ?? initialDraft)?.workflows ?? [];
+
+  const updateWorkflowDraft = (nextWorkflow: EditableWorkflow) => {
+    setDraft((current) => {
+      const source = current ?? initialDraft;
+      if (!source) return current;
+      return {
+        ...source,
+        workflows: source.workflows.map((candidate) =>
+          candidate.id === nextWorkflow.id ? nextWorkflow : candidate,
+        ),
+      };
+    });
   };
 
   return (
@@ -197,6 +221,7 @@ export function SquadDetailSheet({
                           variant="outline"
                           onClick={() => {
                             setDraft(null);
+                            setEditingWorkflowNameId(null);
                             setIsEditing(false);
                           }}
                         >
@@ -228,6 +253,35 @@ export function SquadDetailSheet({
                     <div>
                       <h4 className="text-sm font-semibold mb-1">Outcome</h4>
                       <p className="text-sm text-muted-foreground">{squad.outcome}</p>
+                    </div>
+                  )}
+
+                  {((draft ?? initialDraft)?.reviewPolicy || isEditing) && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-1">Review Policy</h4>
+                      {isEditing ? (
+                        <Textarea
+                          aria-label="Review Policy"
+                          className="min-h-24"
+                          value={(draft ?? initialDraft)?.reviewPolicy ?? ""}
+                          onChange={(event) =>
+                            setDraft((current) => {
+                              const source = current ?? initialDraft;
+                              if (!source) {
+                                return current;
+                              }
+                              return {
+                                ...source,
+                                reviewPolicy: event.target.value,
+                              };
+                            })
+                          }
+                        />
+                      ) : (
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {(draft ?? initialDraft)?.reviewPolicy}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -265,30 +319,99 @@ export function SquadDetailSheet({
                   </div>
 
                   <div>
-                    <h4 className="text-sm font-semibold mb-2">Workflows</h4>
+                    <div className="mb-2 flex items-center gap-3">
+                      <h4 className="text-sm font-semibold">Workflows</h4>
+                      {visibleWorkflows.length === 1 && (
+                        <>
+                          {isEditing && editingWorkflowNameId === visibleWorkflows[0]?.id ? (
+                            <Input
+                              aria-label="Workflow name"
+                              className="h-8 max-w-xs"
+                              autoFocus
+                              value={visibleWorkflows[0].name}
+                              onBlur={() => setEditingWorkflowNameId(null)}
+                              onChange={(event) =>
+                                updateWorkflowDraft({
+                                  ...visibleWorkflows[0],
+                                  name: event.target.value,
+                                })
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  setEditingWorkflowNameId(null);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <p className="text-sm font-medium text-muted-foreground">
+                              {visibleWorkflows[0]?.name}
+                            </p>
+                          )}
+                          {isEditing && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              aria-label="Edit workflow name"
+                              onClick={() => setEditingWorkflowNameId(visibleWorkflows[0].id)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
                     {loadedWorkflows.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No workflows defined yet.</p>
                     ) : (
                       <div className="space-y-4">
-                        {(draft ?? initialDraft)?.workflows.map((workflow) => (
+                        {visibleWorkflows.map((workflow) => (
                           <div key={workflow.id} className="space-y-2">
-                            <p className="text-sm font-medium">{workflow.name}</p>
+                            {visibleWorkflows.length > 1 && (
+                              <div className="flex items-center gap-2">
+                                {isEditing && editingWorkflowNameId === workflow.id ? (
+                                  <Input
+                                    aria-label="Workflow name"
+                                    className="h-8 max-w-xs"
+                                    autoFocus
+                                    value={workflow.name}
+                                    onBlur={() => setEditingWorkflowNameId(null)}
+                                    onChange={(event) =>
+                                      updateWorkflowDraft({
+                                        ...workflow,
+                                        name: event.target.value,
+                                      })
+                                    }
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") {
+                                        setEditingWorkflowNameId(null);
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <p className="text-sm font-medium">{workflow.name}</p>
+                                )}
+                                {isEditing && (
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    aria-label="Edit workflow name"
+                                    onClick={() => setEditingWorkflowNameId(workflow.id)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                             <SquadWorkflowCanvas
                               workflow={workflow}
                               agents={loadedAgents}
                               isEditing={isEditing}
-                              onChange={(nextWorkflow) =>
-                                setDraft((current) => {
-                                  const source = current ?? initialDraft;
-                                  if (!source) return current;
-                                  return {
-                                    ...source,
-                                    workflows: source.workflows.map((candidate) =>
-                                      candidate.id === nextWorkflow.id ? nextWorkflow : candidate,
-                                    ),
-                                  };
-                                })
-                              }
+                              showWorkflowNameField={false}
+                              onChange={updateWorkflowDraft}
                               onSelectAgent={openAgentOverlay}
                             />
                           </div>

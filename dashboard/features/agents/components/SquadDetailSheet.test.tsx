@@ -45,6 +45,7 @@ function makeLoadedState() {
       defaultWorkflowSpecId: "wf-1" as Id<"workflowSpecs">,
       status: "published" as const,
       version: 1,
+      reviewPolicy: "Every review step must pass before publish",
       createdAt: "2024-01-01",
       updatedAt: "2024-01-01",
     },
@@ -55,6 +56,7 @@ function makeLoadedState() {
         squadSpecId: MOCK_SQUAD_ID,
         name: "Default Workflow",
         description: "The main workflow",
+        exitCriteria: "All review comments resolved",
         steps: [
           {
             id: "step-1",
@@ -295,14 +297,18 @@ describe("SquadDetailSheet", () => {
     render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
 
     await userEvent.click(screen.getByRole("button", { name: /edit squad/i }));
+    await userEvent.click(screen.getByRole("button", { name: /edit workflow name/i }));
 
-    const workflowNameInput = screen.getByLabelText(/workflow name/i);
+    const workflowNameInput = screen.getByRole("textbox", { name: /workflow name/i });
     const firstStepTitleInput = screen.getByLabelText(/step 1 title/i);
+    const reviewPolicyInput = screen.getByLabelText(/review policy/i);
 
     await userEvent.clear(workflowNameInput);
     await userEvent.type(workflowNameInput, "Edited Workflow");
     await userEvent.clear(firstStepTitleInput);
     await userEvent.type(firstStepTitleInput, "Edited Review");
+    await userEvent.clear(reviewPolicyInput);
+    await userEvent.type(reviewPolicyInput, "Lead review and QA sign-off required");
 
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
 
@@ -312,6 +318,7 @@ describe("SquadDetailSheet", () => {
       expect.objectContaining({
         squadSpecId: MOCK_SQUAD_ID,
         graph: expect.objectContaining({
+          reviewPolicy: "Lead review and QA sign-off required",
           workflows: [
             expect.objectContaining({
               id: "wf-1",
@@ -328,6 +335,27 @@ describe("SquadDetailSheet", () => {
         }),
       }),
     );
+  });
+
+  it("shows the squad review policy above workflows and keeps it visible in read mode", () => {
+    mockUseSquadDetailData.mockReturnValue(makeLoadedState());
+    render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
+
+    expect(screen.getByText("Review Policy")).toBeInTheDocument();
+    expect(screen.getByText("Every review step must pass before publish")).toBeInTheDocument();
+  });
+
+  it("shows the workflow name inline with the workflows header and exposes a pencil action in edit mode", async () => {
+    mockUseSquadDetailData.mockReturnValue(makeLoadedState());
+    render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
+
+    expect(screen.getByText("Workflows")).toBeInTheDocument();
+    expect(screen.getByText("Default Workflow")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit workflow name/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /edit squad/i }));
+
+    expect(screen.getByRole("button", { name: /edit workflow name/i })).toBeInTheDocument();
   });
 
   it("allows inserting a checkpoint step from squad editing", async () => {

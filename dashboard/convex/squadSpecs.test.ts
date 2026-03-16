@@ -242,6 +242,7 @@ describe("squadSpecs.listByStatus", () => {
 
 const GRAPH_FIXTURE = {
   squad: { name: "personal-brand-squad", displayName: "Personal Brand Squad" },
+  reviewPolicy: "All review steps must pass",
   agents: [
     { key: "researcher", name: "audience-researcher", role: "Researcher" },
     { key: "writer", name: "post-writer", role: "Writer" },
@@ -345,6 +346,16 @@ describe("squadSpecs.publishGraph", () => {
     const agentIds = squadInserts[0].value.agentIds as unknown[];
     expect(Array.isArray(agentIds)).toBe(true);
     expect(agentIds.length).toBe(2);
+  });
+
+  it("stores the review policy on the saved squadSpec", async () => {
+    const handler = getHandler(publishGraph);
+    const { ctx, inserts } = makeGraphCtx();
+
+    await handler(ctx, { graph: GRAPH_FIXTURE });
+
+    const squadInserts = inserts.filter((i) => i.table === "squadSpecs");
+    expect(squadInserts[0].value.reviewPolicy).toBe("All review steps must pass");
   });
 
   it("never hardcodes agentIds as empty array", async () => {
@@ -509,6 +520,7 @@ describe("squadSpecs.updatePublishedGraph", () => {
           outcome: "Ship a better workflow",
         },
         agents: [{ key: "researcher", name: "audience-researcher", role: "Researcher" }],
+        reviewPolicy: "Lead review plus QA sign-off",
         workflows: [
           {
             id: "workflow-default",
@@ -544,6 +556,7 @@ describe("squadSpecs.updatePublishedGraph", () => {
           patch: expect.objectContaining({
             description: "Updated description",
             outcome: "Ship a better workflow",
+            reviewPolicy: "Lead review plus QA sign-off",
             defaultWorkflowSpecId: "workflow-default",
           }),
         }),

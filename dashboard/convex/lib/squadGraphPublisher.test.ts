@@ -8,6 +8,7 @@ import { publishSquadGraph, type SquadGraphInput } from "./squadGraphPublisher";
 
 const GRAPH_FIXTURE: SquadGraphInput = {
   squad: { name: "personal-brand-squad", displayName: "Personal Brand Squad" },
+  reviewPolicy: "All review steps must pass",
   agents: [
     { key: "researcher", name: "audience-researcher", role: "Researcher" },
     { key: "writer", name: "post-writer", role: "Writer" },
@@ -136,6 +137,15 @@ describe("publishSquadGraph", () => {
     const squadInsert = squadInserts[0];
     expect(Array.isArray(squadInsert.value.agentIds)).toBe(true);
     expect((squadInsert.value.agentIds as unknown[]).length).toBe(2);
+  });
+
+  it("persists review policy on the squadSpec", async () => {
+    const { ctx, inserts } = makeCtx();
+
+    await publishSquadGraph(ctx, GRAPH_FIXTURE);
+
+    const squadInserts = inserts.filter((i) => i.table === "squadSpecs");
+    expect(squadInserts[0].value.reviewPolicy).toBe("All review steps must pass");
   });
 
   it("never hardcodes agentIds as empty array on the main publish path", async () => {

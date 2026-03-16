@@ -48,6 +48,7 @@ describe("useUpdatePublishedSquad", () => {
           },
           agents: [],
           workflows: [],
+          reviewPolicy: "Lead review required",
         },
       });
     });
@@ -61,6 +62,7 @@ describe("useUpdatePublishedSquad", () => {
         },
         agents: [],
         workflows: [],
+        reviewPolicy: "Lead review required",
       },
     });
   });

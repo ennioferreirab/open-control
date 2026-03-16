@@ -19,6 +19,7 @@ import type * as lib_readModels from "../lib/readModels.js";
 import type * as lib_specCompiler from "../lib/specCompiler.js";
 import type * as lib_squadGraphPublisher from "../lib/squadGraphPublisher.js";
 import type * as lib_squadGraphUpdater from "../lib/squadGraphUpdater.js";
+import type * as lib_squadGraphValidator from "../lib/squadGraphValidator.js";
 import type * as lib_squadMissionLaunch from "../lib/squadMissionLaunch.js";
 import type * as lib_stepLifecycle from "../lib/stepLifecycle.js";
 import type * as lib_taskArchive from "../lib/taskArchive.js";
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   "lib/specCompiler": typeof lib_specCompiler;
   "lib/squadGraphPublisher": typeof lib_squadGraphPublisher;
   "lib/squadGraphUpdater": typeof lib_squadGraphUpdater;
+  "lib/squadGraphValidator": typeof lib_squadGraphValidator;
   "lib/squadMissionLaunch": typeof lib_squadMissionLaunch;
   "lib/stepLifecycle": typeof lib_stepLifecycle;
   "lib/taskArchive": typeof lib_taskArchive;

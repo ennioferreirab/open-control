@@ -221,6 +221,16 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
           meta.runningPulse && "motion-safe:animate-pulse",
           onStepClick && "cursor-pointer hover:border-primary/50 transition-colors",
         )}
+        role={onStepClick ? "button" : undefined}
+        tabIndex={onStepClick ? 0 : undefined}
+        onClick={() => onStepClick?.(step.tempId)}
+        onKeyDown={(event) => {
+          if (!onStepClick) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onStepClick(step.tempId);
+          }
+        }}
       >
         <Handle
           type="target"

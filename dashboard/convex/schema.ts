@@ -431,6 +431,7 @@ export default defineSchema({
     displayName: v.string(),
     description: v.optional(v.string()),
     outcome: v.optional(v.string()),
+    reviewPolicy: v.optional(v.string()),
     // Legacy published squads may still carry agentSpecIds until they are republished.
     agentIds: v.optional(v.array(v.id("agents"))),
     agentSpecIds: v.optional(v.array(v.id("agentSpecs"))),

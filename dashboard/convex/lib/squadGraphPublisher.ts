@@ -165,6 +165,7 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
     displayName: graph.squad.displayName,
     description: graph.squad.description,
     outcome: graph.squad.outcome,
+    reviewPolicy: graph.reviewPolicy,
     agentIds,
     status: "published",
     version: 1,
