@@ -45,8 +45,8 @@ export interface LaunchSquadMissionArgs {
 }
 
 /**
- * Create a task bound to a published squadSpec and workflowSpec,
- * compile the workflow into an execution plan, and attach it to the task.
+ * Create a task bound to a published squadSpec and workflowSpec with a
+ * workflow-generated execution plan already persisted on the task document.
  *
  * The task is created in `planning` so workflow missions use the normal
  * lifecycle, while still preserving the precompiled workflow execution plan.
@@ -83,30 +83,6 @@ export async function launchSquadMission(
 
   const now = new Date().toISOString();
 
-  const taskId = await ctx.db.insert("tasks", {
-    title: args.title,
-    description: args.description,
-    status: "planning",
-    trustLevel: "autonomous",
-    supervisionMode: "autonomous",
-    workMode: "ai_workflow",
-    squadSpecId: args.squadSpecId,
-    workflowSpecId: args.workflowSpecId,
-    boardId: args.boardId,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  await logTaskCreated(ctx, {
-    taskId,
-    title: args.title,
-    isManual: false,
-    assignedAgent: undefined,
-    trustLevel: "autonomous",
-    supervisionMode: "autonomous",
-    timestamp: now,
-  });
-
   // Build agent refs from the squadSpec's canonical agentIds
   const agentRefs: AgentRef[] = [];
   const agentIds = (squadSpec.agentIds ?? []) as Id<"agents">[];
@@ -132,9 +108,29 @@ export async function launchSquadMission(
 
   const plan = compileWorkflowExecutionPlan(workflowInput, agentRefs, now);
 
-  await ctx.db.patch(taskId, {
+  const taskId = await ctx.db.insert("tasks", {
+    title: args.title,
+    description: args.description,
+    status: "planning",
+    trustLevel: "autonomous",
+    supervisionMode: "autonomous",
+    workMode: "ai_workflow",
+    squadSpecId: args.squadSpecId,
+    workflowSpecId: args.workflowSpecId,
+    boardId: args.boardId,
     executionPlan: plan,
+    createdAt: now,
     updatedAt: now,
+  });
+
+  await logTaskCreated(ctx, {
+    taskId,
+    title: args.title,
+    isManual: false,
+    assignedAgent: undefined,
+    trustLevel: "autonomous",
+    supervisionMode: "autonomous",
+    timestamp: now,
   });
 
   return taskId;

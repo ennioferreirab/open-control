@@ -187,8 +187,8 @@ describe("launchSquadMission", () => {
     expect(taskInsert!.value.workflowSpecId).toBe("workflow-id-1");
   });
 
-  it("attaches a compiled execution plan to the task", async () => {
-    const { ctx, patches } = makeLaunchCtx({
+  it("creates the task with the compiled execution plan already attached", async () => {
+    const { ctx, inserts, patches } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
       agents: [mockAgent1, mockAgent2],
@@ -201,10 +201,11 @@ describe("launchSquadMission", () => {
       title: "Mission",
     });
 
-    const planPatch = patches.find((p) => "executionPlan" in p.patch);
-    expect(planPatch).toBeDefined();
-    const plan = planPatch!.patch.executionPlan as Record<string, unknown>;
+    const taskInsert = inserts.find((entry) => entry.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    const plan = taskInsert!.value.executionPlan as Record<string, unknown>;
     expect(plan.generatedBy).toBe("workflow");
+    expect(patches.find((patch) => "executionPlan" in patch.patch)).toBeUndefined();
   });
 
   it("throws if squad spec is not published", async () => {
