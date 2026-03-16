@@ -120,6 +120,21 @@ class TestAskUserTool:
         assert len(result) == 1
         assert "Mission Control not reachable" in result[0].text
 
+    async def test_ask_user_prefers_convex_interaction_service(self):
+        import claude_code.mcp_bridge as bridge_mod
+
+        service = MagicMock()
+        service.ask_user = MagicMock(return_value="Blue")
+
+        with (
+            patch.object(bridge_mod, "_get_interaction_service", return_value=service),
+            patch.object(bridge_mod, "_build_interaction_context", return_value=object()),
+        ):
+            result = await bridge_mod.call_tool("ask_user", {"question": "Ready?"})
+
+        assert result[0].text == "Blue"
+        service.ask_user.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Test send_message tool
@@ -158,6 +173,21 @@ class TestSendMessageTool:
             )
 
         assert received["channel"] == "telegram"
+
+    async def test_send_message_prefers_convex_interaction_service(self):
+        import claude_code.mcp_bridge as bridge_mod
+
+        service = MagicMock()
+        service.post_message = MagicMock(return_value=None)
+
+        with (
+            patch.object(bridge_mod, "_get_interaction_service", return_value=service),
+            patch.object(bridge_mod, "_build_interaction_context", return_value=object()),
+        ):
+            result = await bridge_mod.call_tool("send_message", {"content": "hello"})
+
+        assert result[0].text == "Message sent"
+        service.post_message.assert_called_once()
 
 
 class TestRecordFinalResultTool:
@@ -203,6 +233,24 @@ class TestRecordFinalResultTool:
         assert received["session_id"] == "interactive_session:claude"
         assert received["source"] == "claude-mcp"
         assert received["content"] == "Implemented the requested step."
+
+    async def test_record_final_result_prefers_convex_interaction_service(self):
+        import claude_code.mcp_bridge as bridge_mod
+
+        service = MagicMock()
+        service.record_final_result = MagicMock(return_value=None)
+
+        with (
+            patch.object(bridge_mod, "_get_interaction_service", return_value=service),
+            patch.object(bridge_mod, "_build_interaction_context", return_value=object()),
+        ):
+            result = await bridge_mod.call_tool(
+                "record_final_result",
+                {"content": "Implemented the requested step."},
+            )
+
+        assert result[0].text == "Final result recorded"
+        service.record_final_result.assert_called_once()
 
     async def test_send_message_passes_media(self):
         """send_message includes media paths in IPC params when given."""
@@ -400,6 +448,24 @@ class TestReportProgressTool:
 
         assert result[0].text == "Progress reported"
 
+    async def test_report_progress_prefers_convex_interaction_service(self):
+        import claude_code.mcp_bridge as bridge_mod
+
+        service = MagicMock()
+        service.report_progress = MagicMock(return_value=None)
+
+        with (
+            patch.object(bridge_mod, "_get_interaction_service", return_value=service),
+            patch.object(bridge_mod, "_build_interaction_context", return_value=object()),
+        ):
+            result = await bridge_mod.call_tool(
+                "report_progress",
+                {"message": "starting", "percentage": 10},
+            )
+
+        assert result[0].text == "Progress reported"
+        service.report_progress.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Test list_tools
@@ -446,6 +512,15 @@ class TestListTools:
         assert questions_schema["type"] == "array"
         item_properties = questions_schema["items"]["properties"]
         assert set(item_properties) >= {"header", "id", "question", "options"}
+
+    async def test_ask_user_schema_has_no_top_level_one_of(self):
+        """ask_user must not expose top-level oneOf because Claude rejects it."""
+        import claude_code.mcp_bridge as bridge_mod
+
+        tools = await bridge_mod.list_tools()
+        ask_user = next(tool for tool in tools if tool.name == "ask_user")
+
+        assert "oneOf" not in ask_user.inputSchema
 
     async def test_unknown_tool_returns_error_text(self):
         """Calling an unregistered tool name returns an error text content."""

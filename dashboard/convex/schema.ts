@@ -69,6 +69,14 @@ export const interactiveProviderValidator = v.union(
   v.literal("codex"),
   v.literal("mc"),
 );
+export const executionInteractionStateValidator = v.union(
+  v.literal("running"),
+  v.literal("waiting_user_input"),
+  v.literal("ready_to_resume"),
+  v.literal("paused"),
+  v.literal("completed"),
+  v.literal("crashed"),
+);
 export const skillProviderValidator = v.union(
   v.literal("claude-code"),
   v.literal("codex"),
@@ -537,6 +545,65 @@ export default defineSchema({
   })
     .index("by_taskId", ["taskId"])
     .index("by_status", ["status"]),
+
+  executionSessions: defineTable({
+    sessionId: v.string(),
+    taskId: v.id("tasks"),
+    stepId: v.optional(v.id("steps")),
+    agentName: v.string(),
+    provider: v.string(),
+    state: executionInteractionStateValidator,
+    lastProgressMessage: v.optional(v.string()),
+    lastProgressPercentage: v.optional(v.number()),
+    finalResult: v.optional(v.string()),
+    finalResultSource: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+    completedAt: v.optional(v.string()),
+    crashedAt: v.optional(v.string()),
+  })
+    .index("by_sessionId", ["sessionId"])
+    .index("by_taskId", ["taskId"])
+    .index("by_stepId", ["stepId"])
+    .index("by_taskId_state", ["taskId", "state"]),
+
+  executionInteractions: defineTable({
+    sessionId: v.string(),
+    taskId: v.id("tasks"),
+    stepId: v.optional(v.id("steps")),
+    seq: v.number(),
+    kind: v.string(),
+    payload: v.optional(v.any()),
+    createdAt: v.string(),
+    agentName: v.optional(v.string()),
+    provider: v.optional(v.string()),
+  })
+    .index("by_sessionId_seq", ["sessionId", "seq"])
+    .index("by_taskId", ["taskId"]),
+
+  executionQuestions: defineTable({
+    questionId: v.string(),
+    sessionId: v.string(),
+    taskId: v.id("tasks"),
+    stepId: v.optional(v.id("steps")),
+    agentName: v.string(),
+    provider: v.string(),
+    question: v.optional(v.string()),
+    options: v.optional(v.array(v.string())),
+    questions: v.optional(v.any()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("answered"),
+      v.literal("cancelled"),
+      v.literal("expired"),
+    ),
+    answer: v.optional(v.string()),
+    createdAt: v.string(),
+    answeredAt: v.optional(v.string()),
+  })
+    .index("by_questionId", ["questionId"])
+    .index("by_taskId_status", ["taskId", "status"])
+    .index("by_sessionId_status", ["sessionId", "status"]),
 
   boardSquadBindings: defineTable({
     boardId: v.id("boards"),

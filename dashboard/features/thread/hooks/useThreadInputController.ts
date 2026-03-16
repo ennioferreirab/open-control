@@ -28,7 +28,6 @@ export interface ThreadInputController {
   handleTextBlur: () => void;
   handleTextChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
   handleTextFocus: () => void;
-  inputMode: "agent" | "comment";
   isBlocked: boolean;
   isHumanDelegationThread: boolean;
   isLeadAgentMode: boolean;
@@ -45,7 +44,6 @@ export interface ThreadInputController {
   pendingFiles: Array<{ name: string; size: number; type: string }>;
   removePendingFile: (name: string) => void;
   selectedAgent: string;
-  setInputMode: (mode: "agent" | "comment") => void;
   setSelectedAgent: (agentName: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }
@@ -61,7 +59,7 @@ export function useThreadInputController({
   task,
   onMessageSent,
 }: UseThreadInputControllerArgs): ThreadInputController {
-  const initialSelectedAgent = task.assignedAgent === "human" ? "" : (task.assignedAgent ?? "");
+  const initialSelectedAgent = "";
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -69,7 +67,6 @@ export function useThreadInputController({
   const [selectedAgent, setSelectedAgent] = useState(initialSelectedAgent);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionStartIndex, setMentionStartIndex] = useState(0);
-  const [inputMode, setInputMode] = useState<"agent" | "comment">("agent");
   const [isDragOver, setIsDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef(content);
@@ -78,8 +75,8 @@ export function useThreadInputController({
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const sendMessage = useMutation(api.messages.sendThreadMessage);
+  const postUserReply = useMutation(api.messages.postUserReply);
   const postPlanMessage = useMutation(api.messages.postUserPlanMessage);
-  const postComment = useMutation(api.messages.postComment);
   const postMentionMessage = useMutation(api.messages.postMentionMessage);
   const restoreTask = useMutation(api.tasks.restore);
   const board = useQuery(api.boards.getById, task.boardId ? { boardId: task.boardId } : "skip");
@@ -112,7 +109,7 @@ export function useThreadInputController({
 
   useEffect(() => {
     if (!isSubmitting) {
-      setSelectedAgent(task.assignedAgent === "human" ? "" : (task.assignedAgent ?? ""));
+      setSelectedAgent("");
     }
   }, [task.assignedAgent, isSubmitting]);
 
@@ -153,16 +150,7 @@ export function useThreadInputController({
   }, [content, filteredAgents, isLeadAgentMode]);
 
   const canSend =
-    (content.trim().length > 0 || pendingFiles.length > 0) &&
-    !isSubmitting &&
-    !isUploading &&
-    (
-      inputMode === "comment"
-      || isPlanChatMode
-      || isReplyOnlyThread
-      || !!selectedAgent
-      || hasMention
-    );
+    (content.trim().length > 0 || pendingFiles.length > 0) && !isSubmitting && !isUploading;
 
   const handleTextChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = event.target.value;
@@ -224,16 +212,6 @@ export function useThreadInputController({
       setSelectedAgent(firstMentionedAgentName);
     }
 
-    if (
-      inputMode !== "comment" &&
-      !isPlanChatMode &&
-      !isReplyOnlyThread &&
-      !hasMention &&
-      !agentForSubmit
-    ) {
-      return;
-    }
-
     setIsSubmitting(true);
     setError("");
 
@@ -251,13 +229,7 @@ export function useThreadInputController({
 
       const messageContent = trimmed || "(files attached)";
 
-      if (inputMode === "comment") {
-        await postComment({
-          content: messageContent,
-          fileAttachments,
-          taskId: task._id,
-        });
-      } else if (isPlanChatMode || isReplyOnlyThread) {
+      if (isPlanChatMode) {
         await postPlanMessage({
           content: messageContent,
           fileAttachments,
@@ -270,9 +242,15 @@ export function useThreadInputController({
           mentionedAgent: firstMentionedAgentName,
           taskId: task._id,
         });
-      } else {
+      } else if (agentForSubmit) {
         await sendMessage({
           agentName: agentForSubmit,
+          content: messageContent,
+          fileAttachments,
+          taskId: task._id,
+        });
+      } else {
+        await postUserReply({
           content: messageContent,
           fileAttachments,
           taskId: task._id,
@@ -292,15 +270,12 @@ export function useThreadInputController({
     content,
     firstMentionedAgentName,
     hasMention,
-    inputMode,
-    isLeadAgentMode,
     isPlanChatMode,
-    isReplyOnlyThread,
     onMessageSent,
     pendingFiles.length,
-    postComment,
     postMentionMessage,
     postPlanMessage,
+    postUserReply,
     selectedAgent,
     sendMessage,
     task._id,
@@ -448,7 +423,6 @@ export function useThreadInputController({
     handleTextBlur,
     handleTextChange,
     handleTextFocus,
-    inputMode,
     isBlocked,
     isHumanDelegationThread,
     isLeadAgentMode,
@@ -465,7 +439,6 @@ export function useThreadInputController({
     pendingFiles,
     removePendingFile,
     selectedAgent,
-    setInputMode,
     setSelectedAgent,
     textareaRef,
   };

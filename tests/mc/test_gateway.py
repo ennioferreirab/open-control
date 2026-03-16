@@ -143,6 +143,12 @@ class TestRunGateway:
 
         mock_channel_manager_cls = MagicMock(return_value=mock_channels_instance)
         mock_mc_channel = MagicMock()
+        mock_interactive_runtime = MagicMock()
+        mock_interactive_runtime.service = MagicMock()
+        mock_interactive_runtime.transport = MagicMock()
+        mock_interactive_runtime.supervisor = MagicMock()
+        mock_interactive_runtime.server.start = AsyncMock()
+        mock_interactive_runtime.server.stop = AsyncMock()
 
         with (
             patch("mc.runtime.gateway.TaskOrchestrator") as mock_orch_cls,
@@ -159,6 +165,10 @@ class TestRunGateway:
                 return_value=mock_mc_channel,
             ),
             patch("mc.contexts.conversation.mentions.watcher.MentionWatcher") as mock_mw_cls,
+            patch(
+                "mc.runtime.gateway.build_interactive_runtime",
+                return_value=mock_interactive_runtime,
+            ),
         ):
             mock_orch_instance = mock_orch_cls.return_value
             mock_orch_instance.start_routing_loop = AsyncMock()
@@ -213,6 +223,7 @@ class TestRunGateway:
             assert "interactive_session_service" in ctx_arg.services
             assert "interactive_session_coordinator" in ctx_arg.services
             assert "interactive_socket_transport" in ctx_arg.services
+            assert "provider_cli_supervision_sink" in ctx_arg.services
             assert mock_tc_cls.call_args.kwargs["sleep_controller"] is not None
             assert mock_exec_cls.call_args.kwargs["sleep_controller"] is not None
             assert mock_ch_cls.call_args.kwargs["sleep_controller"] is not None

@@ -95,6 +95,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     isAwaitingKickoff,
     isPaused,
     taskStatus,
+    pendingExecutionQuestion,
   } = view;
 
   const {
@@ -395,6 +396,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     Boolean(task?.isManual) &&
     (taskStatus === "review" || taskStatus === "inbox" || taskStatus === "in_progress") &&
     (hasExecutablePlanSteps(localPlan ?? taskExecutionPlan) || hasMaterializedLiveSteps);
+  const shouldShowPlanReviewPanel = pendingExecutionQuestion === null;
 
   const handleAttachFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!task || !isTaskLoaded) return;
@@ -667,25 +669,29 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       liveStepIds={liveSession.liveStepIds}
                     />
                   </div>
-                  {task && messages && !isMergeLockedSource && planViewMode !== "canvas" && (
-                    <PlanReviewPanel
-                      className={planViewMode === "conversation" ? "mt-2 min-h-0" : undefined}
-                      primaryActionLabel={planPanelPrimaryAction?.label}
-                      primaryActionPendingLabel={planPanelPrimaryAction?.pendingLabel}
-                      isPrimaryActionPending={
-                        planPanelPrimaryAction == null
-                          ? false
-                          : planPanelPrimaryAction.label === "Resume"
-                            ? isResuming
-                            : isKickingOff
-                      }
-                      liveSteps={liveSteps ?? undefined}
-                      messages={messages}
-                      onPrimaryAction={planPanelPrimaryAction?.onClick}
-                      onRejectPlan={(content) => submitPlanReviewFeedback(task._id, content)}
-                      task={task}
-                    />
-                  )}
+                  {task &&
+                    messages &&
+                    !isMergeLockedSource &&
+                    planViewMode !== "canvas" &&
+                    shouldShowPlanReviewPanel && (
+                      <PlanReviewPanel
+                        className={planViewMode === "conversation" ? "mt-2 min-h-0" : undefined}
+                        primaryActionLabel={planPanelPrimaryAction?.label}
+                        primaryActionPendingLabel={planPanelPrimaryAction?.pendingLabel}
+                        isPrimaryActionPending={
+                          planPanelPrimaryAction == null
+                            ? false
+                            : planPanelPrimaryAction.label === "Resume"
+                              ? isResuming
+                              : isKickingOff
+                        }
+                        liveSteps={liveSteps ?? undefined}
+                        messages={messages}
+                        onPrimaryAction={planPanelPrimaryAction?.onClick}
+                        onRejectPlan={(content) => submitPlanReviewFeedback(task._id, content)}
+                        task={task}
+                      />
+                    )}
                 </div>
               </TabsContent>
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import platform
 import shlex
 import time
@@ -620,6 +621,10 @@ class CCWorkspaceManager:
             env["MC_INTERACTIVE_SESSION_ID"] = interactive_session_id
         if board_name:
             env["BOARD_NAME"] = board_name
+        if os.environ.get("CONVEX_URL"):
+            env["CONVEX_URL"] = os.environ["CONVEX_URL"]
+        if os.environ.get("CONVEX_ADMIN_KEY"):
+            env["CONVEX_ADMIN_KEY"] = os.environ["CONVEX_ADMIN_KEY"]
         config: dict = {
             "mcpServers": {
                 "nanobot": {

@@ -55,6 +55,7 @@ class ClaudeCodeCLIParser:
             command=command,
             cwd=cwd,
             env=env,
+            stdin_mode="devnull",
         )
 
     def parse_output(self, chunk: bytes) -> list[ParsedCliEvent]:
@@ -148,6 +149,8 @@ class ClaudeCodeCLIParser:
             events.extend(self._parse_system_message(data))
         elif msg_type == "assistant":
             events.extend(self._parse_assistant_message(data))
+        elif msg_type == "user":
+            events.extend(self._parse_user_message(data))
         elif msg_type == "result":
             events.extend(self._parse_result_message(data))
         else:
@@ -202,6 +205,14 @@ class ClaudeCodeCLIParser:
             elif block_type == "tool_use":
                 tool_name = block.get("name", "unknown_tool")
                 tool_input = block.get("input", {})
+                ask_user_event = self._parse_ask_user_tool_use(
+                    tool_name=tool_name,
+                    tool_input=tool_input,
+                    tool_id=block.get("id"),
+                )
+                if ask_user_event is not None:
+                    events.append(ask_user_event)
+                    continue
                 events.append(
                     ParsedCliEvent(
                         kind="tool_use",
@@ -215,17 +226,11 @@ class ClaudeCodeCLIParser:
                     )
                 )
 
-        if not events:
-            events.append(
-                ParsedCliEvent(
-                    kind="text",
-                    text="",
-                    provider_session_id=self._discovered_session_id,
-                    metadata={"raw_type": "assistant"},
-                )
-            )
-
         return events
+
+    def _parse_user_message(self, data: dict[str, Any]) -> list[ParsedCliEvent]:
+        """Ignore echoed user/tool-result messages from Claude's stream."""
+        return []
 
     def _parse_result_message(self, data: dict[str, Any]) -> list[ParsedCliEvent]:
         """Handle ``result`` messages."""
@@ -251,3 +256,30 @@ class ClaudeCodeCLIParser:
                 metadata={"subtype": subtype},
             )
         ]
+
+    def _parse_ask_user_tool_use(
+        self,
+        *,
+        tool_name: str,
+        tool_input: dict[str, Any],
+        tool_id: str | None,
+    ) -> ParsedCliEvent | None:
+        normalized = tool_name.strip().lower()
+        if normalized not in {
+            "mcp__nanobot__ask_user",
+            "mcp__mc__ask_user",
+            "askuserquestion",
+        }:
+            return None
+
+        summary = str(tool_input.get("question") or "Agent requested user input").strip()
+        return ParsedCliEvent(
+            kind="ask_user_requested",
+            text=summary,
+            provider_session_id=self._discovered_session_id,
+            metadata={
+                "tool_id": tool_id,
+                "tool_name": tool_name,
+                "tool_input": tool_input,
+            },
+        )

@@ -225,14 +225,27 @@ class InteractiveExecutionSupervisor:
     ) -> None:
         description = event.summary or "Interactive session is waiting for user input."
         if event.task_id:
-            self._bridge.update_task_status(
-                event.task_id,
-                "review",
-                agent_name=event.agent_name,
-                description=description,
-            )
+            try:
+                self._bridge.update_task_status(
+                    event.task_id,
+                    "review",
+                    agent_name=event.agent_name,
+                    description=description,
+                    awaiting_kickoff=False,
+                )
+            except Exception as exc:
+                if _is_same_status_error(exc, "review"):
+                    logger.debug("Task %s already review — idempotent, skipping", event.task_id)
+                else:
+                    raise
         if event.step_id:
-            self._bridge.update_step_status(event.step_id, "review")
+            try:
+                self._bridge.update_step_status(event.step_id, "review")
+            except Exception as exc:
+                if _is_same_status_error(exc, "review"):
+                    logger.debug("Step %s already review — idempotent, skipping", event.step_id)
+                else:
+                    raise
         if event.task_id and event.agent_name:
             action = (
                 "paused for review"
@@ -297,7 +310,12 @@ def _is_same_status_error(exc: Exception, status: str) -> bool:
     """Return True if *exc* represents a no-op same-status transition for *status*.
 
     Convex validators raise when the current status equals the requested status.
-    The message contains a pattern like "<status> -> <status>".
+    The message may contain patterns like "<status> -> <status>" or
+    "from '<status>' to '<status>'".
     """
     msg = str(exc)
-    return f"{status} -> {status}" in msg
+    return (
+        f"{status} -> {status}" in msg
+        or f"from '{status}' to '{status}'" in msg
+        or f'from "{status}" to "{status}"' in msg
+    )

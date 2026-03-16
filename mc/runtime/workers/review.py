@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from mc.contexts.interaction.service import has_pending_execution_question
 from mc.types import (
     ActivityEventType,
     AuthorType,
@@ -62,7 +63,9 @@ class ReviewWorker:
             )
             return
 
-        if self._ask_user_registry is not None and self._ask_user_registry.has_pending_ask(task_id):
+        if (
+            self._ask_user_registry is not None and self._ask_user_registry.has_pending_ask(task_id)
+        ) or has_pending_execution_question(self._bridge, task_id):
             logger.info(
                 "[review] Task '%s' has a pending ask_user -- skipping review routing.",
                 title,
@@ -183,7 +186,9 @@ class ReviewWorker:
         )
         task = await asyncio.to_thread(self._bridge.query, "tasks:getById", {"task_id": task_id})
         title = task.get("title", "Untitled") if task else "Untitled"
-        trust_level = task.get("trust_level", TrustLevel.AUTONOMOUS) if task else TrustLevel.AUTONOMOUS
+        trust_level = (
+            task.get("trust_level", TrustLevel.AUTONOMOUS) if task else TrustLevel.AUTONOMOUS
+        )
 
         await asyncio.to_thread(
             self._bridge.create_activity,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -110,6 +111,45 @@ async def test_strategy_calls_parser_start_session() -> None:
 
     parser.start_session.assert_awaited_once()
     assert result.success is True
+
+
+@pytest.mark.asyncio
+async def test_strategy_passes_runtime_context_env_to_provider_process(monkeypatch) -> None:
+    handle = _make_handle(mc_session_id="mc-runtime")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"done"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    monkeypatch.setenv("CONVEX_URL", "http://127.0.0.1:3210")
+    monkeypatch.setenv("CONVEX_ADMIN_KEY", "dev:key")
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+    )
+
+    result = await strategy.execute(_make_request(task_id="task-ctx", step_id="step-ctx"))
+
+    assert result.success is True
+    parser.start_session.assert_awaited_once()
+    call = parser.start_session.await_args
+    assert call.kwargs["env"]["TASK_ID"] == "task-ctx"
+    assert call.kwargs["env"]["STEP_ID"] == "step-ctx"
+    assert call.kwargs["env"]["AGENT_NAME"] == "dev"
+    assert call.kwargs["env"]["MC_INTERACTIVE_SESSION_ID"] == "task-ctx-step-ctx"
+    assert call.kwargs["env"]["CONVEX_URL"] == "http://127.0.0.1:3210"
+    assert call.kwargs["env"]["CONVEX_ADMIN_KEY"] == "dev:key"
 
 
 @pytest.mark.asyncio
@@ -307,6 +347,111 @@ async def test_strategy_returns_error_result_on_exception() -> None:
     result = await strategy.execute(_make_request())
     assert result.success is False
     assert result.error_category == ErrorCategory.RUNNER
+
+
+@pytest.mark.asyncio
+async def test_strategy_returns_failure_when_stream_output_times_out() -> None:
+    handle = _make_handle(mc_session_id="mc-timeout-stream-001")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    async def fake_stream(h: ProviderProcessHandle):
+        await asyncio.sleep(60)
+        yield b"late output"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        stream_idle_timeout_seconds=0.01,
+    )
+
+    result = await strategy.execute(_make_request())
+
+    assert result.success is False
+    assert result.error_category == ErrorCategory.RUNNER
+    assert "stream output timed out" in (result.error_message or "").lower()
+    parser.stop.assert_awaited_once_with(handle)
+    assert registry.get(handle.mc_session_id) is None
+
+
+@pytest.mark.asyncio
+async def test_strategy_returns_failure_when_process_exit_times_out() -> None:
+    handle = _make_handle(mc_session_id="mc-timeout-exit-001")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"chunk"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+
+    async def fake_wait_for_exit(h: ProviderProcessHandle):
+        await asyncio.sleep(60)
+        return 0
+
+    supervisor.wait_for_exit = fake_wait_for_exit
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        exit_timeout_seconds=0.01,
+    )
+
+    result = await strategy.execute(_make_request())
+
+    assert result.success is False
+    assert result.error_category == ErrorCategory.RUNNER
+    assert "process exit timed out" in (result.error_message or "").lower()
+    parser.stop.assert_awaited_once_with(handle)
+    assert registry.get(handle.mc_session_id) is None
+
+
+@pytest.mark.asyncio
+async def test_strategy_returns_failure_when_start_session_times_out() -> None:
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+
+    async def fake_start_session(*args, **kwargs):
+        await asyncio.sleep(60)
+        return _make_handle("mc-timeout-start-001")
+
+    parser.start_session = fake_start_session
+    parser.parse_output = MagicMock(return_value=[])
+    parser.stop = AsyncMock()
+    parser.interrupt = AsyncMock()
+
+    registry = ProviderSessionRegistry()
+    supervisor = MagicMock()
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        startup_timeout_seconds=0.01,
+    )
+
+    result = await strategy.execute(_make_request())
+
+    assert result.success is False
+    assert result.error_category == ErrorCategory.RUNNER
+    assert "start session timed out" in (result.error_message or "").lower()
+    parser.stop.assert_not_called()
+    assert registry.get("mc-timeout-start-001") is None
 
 
 # ---------------------------------------------------------------------------
@@ -527,6 +672,136 @@ def test_build_command_includes_claude_agent_runtime_flags(tmp_path: Path) -> No
     assert "--effort" in command
     assert "high" in command
     assert command[1:3] == ["-p", "Analyze copy examples"]
+
+
+def test_build_command_uses_agent_workspace_root_for_mcp_config(tmp_path: Path) -> None:
+    registry = ProviderSessionRegistry()
+    supervisor = MagicMock()
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+
+    agent_workspace = tmp_path / "boards" / "default" / "agents" / "offer-strategist"
+    (agent_workspace / "memory").mkdir(parents=True)
+    mcp_config = agent_workspace / ".mcp.json"
+    mcp_config.write_text("{}", encoding="utf-8")
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--verbose", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-001",
+        task_id="task-001",
+        agent_name="offer-strategist",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Design the proof-of-value offer",
+        memory_workspace=agent_workspace,
+        agent=AgentData(
+            name="offer-strategist",
+            display_name="Offer Strategist",
+            role="Strategist",
+            model="cc/claude-opus-4-6",
+            backend="claude-code",
+            claude_code_opts=ClaudeCodeOpts(permission_mode="bypassPermissions"),
+        ),
+    )
+
+    command = strategy._build_command(request)
+
+    assert "--mcp-config" in command
+    assert str(mcp_config) in command
+
+
+@pytest.mark.asyncio
+async def test_strategy_uses_session_specific_mcp_config_copy(tmp_path: Path) -> None:
+    handle = _make_handle(mc_session_id="mc-runtime-copy")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    shared_workspace = tmp_path / "boards" / "default" / "agents" / "offer-strategist"
+    shared_memory = shared_workspace / "memory"
+    shared_memory.mkdir(parents=True)
+    shared_mcp_config = shared_workspace / ".mcp.json"
+    shared_mcp_config.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "nanobot": {
+                        "command": "uv",
+                        "args": ["run", "python", "-m", "claude_code.mcp_bridge"],
+                        "env": {
+                            "TASK_ID": "shared-task",
+                            "MC_SOCKET_PATH": "/tmp/shared.sock",
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"done"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-runtime-copy",
+        task_id="task-runtime-copy",
+        step_id="step-runtime-copy",
+        agent_name="offer-strategist",
+        title="Test runtime MCP config copy",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Design the proof-of-value offer",
+        memory_workspace=shared_memory,
+        agent=AgentData(
+            name="offer-strategist",
+            display_name="Offer Strategist",
+            role="Strategist",
+            model="cc/claude-opus-4-6",
+            backend="claude-code",
+            claude_code_opts=ClaudeCodeOpts(permission_mode="bypassPermissions"),
+        ),
+    )
+
+    result = await strategy.execute(request)
+
+    assert result.success is True
+    start_call = parser.start_session.await_args
+    launched_command = start_call.kwargs["command"]
+    config_index = launched_command.index("--mcp-config")
+    session_config_path = Path(launched_command[config_index + 1])
+
+    assert session_config_path != shared_mcp_config
+    assert session_config_path.exists()
+
+    shared_data = json.loads(shared_mcp_config.read_text(encoding="utf-8"))
+    shared_env = shared_data["mcpServers"]["nanobot"]["env"]
+    assert shared_env["TASK_ID"] == "shared-task"
+    assert shared_env["MC_SOCKET_PATH"] == "/tmp/shared.sock"
+
+    session_data = json.loads(session_config_path.read_text(encoding="utf-8"))
+    session_env = session_data["mcpServers"]["nanobot"]["env"]
+    assert session_env["TASK_ID"] == "task-runtime-copy"
+    assert session_env["STEP_ID"] == "step-runtime-copy"
+    assert session_env["AGENT_NAME"] == "offer-strategist"
+    assert session_env["MC_INTERACTIVE_SESSION_ID"] == "task-runtime-copy-step-runtime-copy"
 
 
 @pytest.mark.asyncio

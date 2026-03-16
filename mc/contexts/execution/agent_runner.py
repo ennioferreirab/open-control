@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,6 +45,12 @@ def _build_mc_mcp_servers(
         env["TASK_ID"] = task_id
     if agent_name:
         env["AGENT_NAME"] = agent_name
+    convex_url = os.environ.get("CONVEX_URL")
+    convex_admin_key = os.environ.get("CONVEX_ADMIN_KEY")
+    if convex_url:
+        env["CONVEX_URL"] = convex_url
+    if convex_admin_key:
+        env["CONVEX_ADMIN_KEY"] = convex_admin_key
 
     config: dict[str, Any] = {
         "command": sys.executable,

@@ -47,6 +47,24 @@ def _get_interactive_session_id() -> str | None:
     return os.environ.get("MC_INTERACTIVE_SESSION_ID") or None
 
 
+def _get_step_id() -> str | None:
+    return os.environ.get("STEP_ID") or None
+
+
+def _get_convex_url() -> str | None:
+    return os.environ.get("CONVEX_URL") or None
+
+
+def _get_convex_admin_key() -> str | None:
+    return os.environ.get("CONVEX_ADMIN_KEY") or None
+
+
+def _get_interaction_session_id() -> str | None:
+    return _get_interactive_session_id() or (
+        f"mc:{_get_task_id()}:{_get_agent_name()}" if _get_task_id() else None
+    )
+
+
 # Module-level aliases kept for backward compatibility with tests that patch them.
 MC_SOCKET_PATH: str = os.environ.get("MC_SOCKET_PATH", "/tmp/mc-agent.sock")
 AGENT_NAME: str = os.environ.get("AGENT_NAME", "agent")
@@ -56,6 +74,7 @@ server: Server = Server("mc")
 
 # Lazy IPC client — created once in _get_ipc()
 _ipc_client = None
+_convex_client = None
 
 
 def _get_ipc():
@@ -66,6 +85,44 @@ def _get_ipc():
 
         _ipc_client = MCSocketClient(_get_socket_path())
     return _ipc_client
+
+
+def _get_convex():
+    """Return a lightweight Convex client when runtime credentials are available."""
+    global _convex_client
+    if _convex_client is None:
+        url = _get_convex_url()
+        if not url:
+            return None
+        from mc.bridge.client import BridgeClient
+
+        _convex_client = BridgeClient(url, _get_convex_admin_key())
+    return _convex_client
+
+
+def _get_interaction_service():
+    convex = _get_convex()
+    if convex is None:
+        return None
+    from mc.contexts.interaction.service import InteractionService
+
+    return InteractionService(convex)
+
+
+def _build_interaction_context(provider: str = "mc"):
+    session_id = _get_interaction_session_id()
+    task_id = _get_task_id()
+    if not session_id or not task_id:
+        return None
+    from mc.contexts.interaction.types import InteractionContext
+
+    return InteractionContext(
+        session_id=session_id,
+        task_id=task_id,
+        step_id=_get_step_id(),
+        agent_name=_get_agent_name(),
+        provider=provider,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +147,17 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     ipc = _get_ipc()
 
     if name == "ask_user":
+        service = _get_interaction_service()
+        context = _build_interaction_context("mc")
+        if service is not None and context is not None:
+            answer = await asyncio.to_thread(
+                service.ask_user,
+                context=context,
+                question=arguments.get("question"),
+                options=arguments.get("options"),
+                questions=arguments.get("questions"),
+            )
+            return [TextContent(type="text", text=answer)]
         try:
             request: dict[str, object] = {
                 "agent_name": AGENT_NAME,
@@ -161,6 +229,18 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         ]
 
     elif name == "send_message":
+        service = _get_interaction_service()
+        context = _build_interaction_context("mc")
+        if service is not None and context is not None and not arguments.get("chat_id"):
+            await asyncio.to_thread(
+                service.post_message,
+                context=context,
+                content=arguments["content"],
+                channel=arguments.get("channel"),
+                chat_id=arguments.get("chat_id"),
+                media=arguments.get("media"),
+            )
+            return [TextContent(type="text", text="Message sent")]
         try:
             result = await ipc.request(
                 "send_message",
@@ -210,6 +290,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=result.get("result", "Done"))]
 
     elif name == "report_progress":
+        service = _get_interaction_service()
+        context = _build_interaction_context("mc")
+        if service is not None and context is not None:
+            await asyncio.to_thread(
+                service.report_progress,
+                context=context,
+                message=arguments["message"],
+                percentage=arguments.get("percentage"),
+            )
+            return [TextContent(type="text", text="Progress reported")]
         try:
             result = await ipc.request(
                 "report_progress",
@@ -230,6 +320,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=result.get("status", "Progress reported"))]
 
     elif name == "record_final_result":
+        service = _get_interaction_service()
+        context = _build_interaction_context("mc")
+        if service is not None and context is not None:
+            await asyncio.to_thread(
+                service.record_final_result,
+                context=context,
+                content=arguments["content"],
+                source="mc-mcp",
+            )
+            return [TextContent(type="text", text="Final result recorded")]
         try:
             result = await ipc.request(
                 "record_final_result",

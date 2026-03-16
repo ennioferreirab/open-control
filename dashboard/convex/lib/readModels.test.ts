@@ -321,14 +321,18 @@ describe("getDetailView", () => {
           });
           return {
             collect,
-            withIndex: vi.fn((_idx: string, _fn: unknown) => ({
-              collect: vi.fn(async () => {
-                if (table === "messages") return messages;
-                if (table === "steps") return steps;
-                if (table === "tagAttributeValues") return tagAttributeValues;
-                return [];
-              }),
-            })),
+            withIndex: vi.fn((idx: string, fn: unknown) => {
+              void idx;
+              void fn;
+              return {
+                collect: vi.fn(async () => {
+                  if (table === "messages") return messages;
+                  if (table === "steps") return steps;
+                  if (table === "tagAttributeValues") return tagAttributeValues;
+                  return [];
+                }),
+              };
+            }),
           };
         }),
       },
@@ -368,7 +372,16 @@ describe("getDetailView", () => {
       {
         _id: "msg-1",
         taskId: "task-1",
+        timestamp: "2026-01-01T12:02:00Z",
         content: "Hello",
+        authorName: "User",
+        messageType: "user_message",
+      },
+      {
+        _id: "msg-0",
+        taskId: "task-1",
+        timestamp: "2026-01-01T12:01:00Z",
+        content: "Earlier",
         authorName: "User",
         messageType: "user_message",
       },
@@ -397,7 +410,10 @@ describe("getDetailView", () => {
     expect(result).not.toBeNull();
     expect(result.task).toEqual(task);
     expect(result.board).toEqual(board);
-    expect(result.messages).toEqual(messages);
+    expect((result.messages as Array<{ _id: string }>).map((msg) => msg._id)).toEqual([
+      "msg-0",
+      "msg-1",
+    ]);
     // Steps should be sorted by order
     expect((result.steps as Array<{ order: number }>)[0].order).toBe(1);
     expect((result.steps as Array<{ order: number }>)[1].order).toBe(2);
@@ -594,30 +610,36 @@ describe("getBoardView", () => {
           });
           return {
             collect,
-            withIndex: vi.fn((_idx: string, fn: unknown) => ({
-              collect: vi.fn(async () => {
-                if (table === "tasks") return tasks;
-                if (table === "tagAttributeValues") return [];
-                if (table === "steps") {
-                  const mockEqBuilder = { _eqValue: "" as string };
-                  const eqFn = (_field: string) => ({
-                    eq: (_f: string, val: string) => {
-                      mockEqBuilder._eqValue = val;
-                      return mockEqBuilder;
-                    },
-                  });
-                  if (typeof fn === "function") {
-                    try {
-                      fn(eqFn);
-                    } catch {
-                      // ignore
+            withIndex: vi.fn((idx: string, fn: unknown) => {
+              void idx;
+              return {
+                collect: vi.fn(async () => {
+                  if (table === "tasks") return tasks;
+                  if (table === "tagAttributeValues") return [];
+                  if (table === "steps") {
+                    const mockEqBuilder = { _eqValue: "" as string };
+                    const eqFn = (field: string) => {
+                      void field;
+                      return {
+                        eq: (_f: string, val: string) => {
+                          mockEqBuilder._eqValue = val;
+                          return mockEqBuilder;
+                        },
+                      };
+                    };
+                    if (typeof fn === "function") {
+                      try {
+                        fn(eqFn);
+                      } catch {
+                        // ignore
+                      }
                     }
+                    return stepsByTaskId[mockEqBuilder._eqValue] ?? [];
                   }
-                  return stepsByTaskId[mockEqBuilder._eqValue] ?? [];
-                }
-                return [];
-              }),
-            })),
+                  return [];
+                }),
+              };
+            }),
           };
         }),
       },

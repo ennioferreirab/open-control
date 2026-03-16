@@ -25,6 +25,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from mc.contexts.interaction.service import has_pending_execution_question
 from mc.contexts.planning.parser import parse_plan_payload
 from mc.contexts.planning.planner import TaskPlanner
 from mc.contexts.planning.review_messages import (
@@ -675,6 +676,7 @@ async def start_plan_negotiation_loop(
             break
 
         task_status = task.get("status", "")
+        awaiting_kickoff = bool(task.get("awaiting_kickoff") or task.get("awaitingKickoff"))
 
         # Get current plan from task
         current_plan = task.get("execution_plan") or task.get("executionPlan") or {}
@@ -687,6 +689,7 @@ async def start_plan_negotiation_loop(
 
         if (
             task_status == "review"
+            and awaiting_kickoff
             and _has_execution_plan(task)
             and not _has_current_plan_review_request(
                 messages,
@@ -738,7 +741,9 @@ async def start_plan_negotiation_loop(
 
             # Skip if an ask_user call is pending — that reply belongs to the
             # AskUserReplyWatcher, not to the plan negotiator.
-            if ask_user_registry is not None and ask_user_registry.has_pending_ask(task_id):
+            if (
+                ask_user_registry is not None and ask_user_registry.has_pending_ask(task_id)
+            ) or has_pending_execution_question(bridge, task_id):
                 logger.debug(
                     "[plan_negotiator] Skipping user message for task %s — ask_user pending",
                     task_id,
@@ -806,6 +811,22 @@ async def start_plan_negotiation_loop(
                 )
                 bg_task.add_done_callback(_log_task_exception)
                 break
+
+            is_lead_agent_conversation = bool(
+                msg.get("lead_agent_conversation") or msg.get("leadAgentConversation")
+            )
+
+            # Plain thread replies belong to the task thread only. The plan negotiator
+            # should run exclusively for explicit Lead Agent conversations, otherwise
+            # ask_user answers and normal comments can be hijacked after the task
+            # resumes to in_progress.
+            if not is_lead_agent_conversation:
+                logger.debug(
+                    "[plan_negotiator] Skipping plain thread reply for task %s (status=%s)",
+                    task_id,
+                    task_status,
+                )
+                continue
 
             # Dispatch to plan negotiation handler as a background task with error logging
             bg_task = asyncio.create_task(

@@ -74,6 +74,7 @@ def test_supervisor_marks_task_review_and_step_review_when_paused() -> None:
         "review",
         agent_name="claude-pair",
         description="Need user confirmation before continuing.",
+        awaiting_kickoff=False,
     )
     bridge.update_step_status.assert_called_once_with("step-1", "review")
     bridge.create_activity.assert_called_once_with(
@@ -553,6 +554,45 @@ def test_supervisor_item_started_is_idempotent_when_step_already_running() -> No
             session_id="interactive_session:claude",
             provider="claude-code",
         )
+    )
+
+
+def test_supervisor_paused_for_review_is_idempotent_when_task_and_step_already_review() -> None:
+    """Repeated pause events must not fail when ask_user already moved workflow to review."""
+    bridge = MagicMock()
+
+    def _update_task_status(*args: object, **kwargs: object) -> None:
+        raise Exception("Cannot transition from 'review' to 'review'")
+
+    def _update_step_status(*args: object, **kwargs: object) -> None:
+        raise Exception("Cannot transition review -> review")
+
+    bridge.update_task_status.side_effect = _update_task_status
+    bridge.update_step_status.side_effect = _update_step_status
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="ask_user_requested",
+            session_id="interactive_session:claude",
+            provider="claude-code",
+            summary="Need user input before continuing.",
+        )
+    )
+
+    bridge.create_activity.assert_called_once_with(
+        ActivityEventType.REVIEW_REQUESTED,
+        "Interactive session paused for review for @claude-pair.",
+        task_id="task-1",
+        agent_name="claude-pair",
     )
 
 

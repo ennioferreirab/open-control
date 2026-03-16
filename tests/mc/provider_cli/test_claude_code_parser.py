@@ -138,6 +138,30 @@ def test_parse_output_returns_tool_use_event() -> None:
     assert "Bash" in tool_events[0].text
 
 
+def test_parse_output_returns_ask_user_requested_for_nanobot_mcp_tool() -> None:
+    parser = ClaudeCodeCLIParser()
+    line = json.dumps(
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "tu_ask_001",
+                        "name": "mcp__nanobot__ask_user",
+                        "input": {"question": "What does Easy do?"},
+                    }
+                ],
+                "role": "assistant",
+            },
+        }
+    ).encode()
+    events = parser.parse_output(line)
+    ask_events = [e for e in events if e.kind == "ask_user_requested"]
+    assert ask_events
+    assert "What does Easy do?" in (ask_events[0].text or "")
+
+
 def test_parse_output_handles_plain_text_line() -> None:
     parser = ClaudeCodeCLIParser()
     events = parser.parse_output(b"Some plain text output from Claude")
@@ -169,6 +193,56 @@ def test_parse_output_handles_malformed_json() -> None:
     events = parser.parse_output(b'{"type": "broken')
     assert len(events) == 1
     assert events[0].kind == "text"
+
+
+def test_parse_output_ignores_hook_response_system_events() -> None:
+    parser = ClaudeCodeCLIParser()
+    line = json.dumps(
+        {
+            "type": "system",
+            "subtype": "hook_response",
+            "hook_event": "SessionStart",
+            "output": '{"hookSpecificOutput": {"additionalContext": "huge"}}',
+        }
+    ).encode()
+    events = parser.parse_output(line)
+    assert events == []
+
+
+def test_parse_output_ignores_user_tool_result_messages() -> None:
+    parser = ClaudeCodeCLIParser()
+    line = json.dumps(
+        {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_123",
+                        "content": "verbose output that should stay internal",
+                    }
+                ],
+            },
+        }
+    ).encode()
+    events = parser.parse_output(line)
+    assert events == []
+
+
+def test_parse_output_ignores_thinking_only_assistant_messages() -> None:
+    parser = ClaudeCodeCLIParser()
+    line = json.dumps(
+        {
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "thinking", "thinking": "internal reasoning"}],
+            },
+        }
+    ).encode()
+    events = parser.parse_output(line)
+    assert events == []
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +396,7 @@ async def test_start_session_launches_via_supervisor() -> None:
     )
 
     supervisor.launch.assert_awaited_once()
+    assert supervisor.launch.call_args.kwargs["stdin_mode"] == "devnull"
     assert result == mock_handle
 
 
@@ -371,6 +446,7 @@ async def test_start_session_passes_command_to_supervisor() -> None:
     assert call_kwargs["command"] == command
     assert call_kwargs["mc_session_id"] == "mc-session-prompt"
     assert call_kwargs["cwd"] == "/tmp/workspace"
+    assert call_kwargs["stdin_mode"] == "devnull"
     assert result == mock_handle
 
 

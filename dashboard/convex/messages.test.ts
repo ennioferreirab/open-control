@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { postMentionMessage, postUserPlanMessage, sendThreadMessage } from "./messages";
+import {
+  postMentionMessage,
+  postUserPlanMessage,
+  postUserReply,
+  sendThreadMessage,
+} from "./messages";
 
 type InsertCall = {
   table: string;
@@ -8,21 +13,35 @@ type InsertCall = {
 };
 
 function getMentionHandler() {
-  return (postMentionMessage as unknown as {
-    _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
-  })._handler;
+  return (
+    postMentionMessage as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
 }
 
 function getSendHandler() {
-  return (sendThreadMessage as unknown as {
-    _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string | void>;
-  })._handler;
+  return (
+    sendThreadMessage as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string | void>;
+    }
+  )._handler;
 }
 
 function getPlanHandler() {
-  return (postUserPlanMessage as unknown as {
-    _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
-  })._handler;
+  return (
+    postUserPlanMessage as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
+}
+
+function getReplyHandler() {
+  return (
+    postUserReply as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
 }
 
 function makeCtx(task: Record<string, unknown> | null) {
@@ -30,15 +49,21 @@ function makeCtx(task: Record<string, unknown> | null) {
 
   const get = vi.fn(async () => task);
   const patch = vi.fn(async () => undefined);
+  const query = vi.fn((table: string) => ({
+    withIndex: vi.fn(() => ({
+      first: vi.fn(async () => null),
+      collect: vi.fn(async () => (table === "messages" ? [] : [])),
+    })),
+  }));
   const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
     inserts.push({ table, value });
     return table === "messages" ? "msg-id-123" : "activity-id-123";
   });
 
   return {
-    ctx: { db: { get, patch, insert } },
+    ctx: { db: { get, patch, insert, query } },
     inserts,
-    mocks: { get, patch, insert },
+    mocks: { get, patch, insert, query },
   };
 }
 
@@ -102,7 +127,7 @@ describe("messages.postMentionMessage", () => {
       handler(ctx, {
         taskId: "task-1",
         content: "Hey @coder",
-      })
+      }),
     ).rejects.toThrow(/Task not found/);
   });
 
@@ -114,7 +139,7 @@ describe("messages.postMentionMessage", () => {
       handler(ctx, {
         taskId: "task-1",
         content: "Hey @coder",
-      })
+      }),
     ).rejects.toThrow(/Cannot send messages on deleted tasks/);
   });
 
@@ -126,7 +151,7 @@ describe("messages.postMentionMessage", () => {
       handler(ctx, {
         taskId: "task-1",
         content: "Hey @coder",
-      })
+      }),
     ).rejects.toThrow(/merged into another task/i);
   });
 
@@ -167,6 +192,31 @@ describe("messages.postMentionMessage", () => {
     });
 
     expect(result).toBe("msg-id-123");
+  });
+});
+
+describe("messages.postUserReply", () => {
+  it("stores a plain user_message without lead-agent routing metadata", async () => {
+    const handler = getReplyHandler();
+    const { ctx, inserts, mocks } = makeCtx({
+      _id: "task-1",
+      status: "review",
+      title: "Paused task",
+      isManual: false,
+    });
+
+    const result = await handler(ctx, {
+      taskId: "task-1",
+      content: "isso e apenas um teste",
+    });
+
+    expect(result).toBe("msg-id-123");
+    const msgInsert = inserts.find((e) => e.table === "messages");
+    expect(msgInsert?.value.authorType).toBe("user");
+    expect(msgInsert?.value.messageType).toBe("user_message");
+    expect(msgInsert?.value.type).toBe("user_message");
+    expect(msgInsert?.value.leadAgentConversation).toBeUndefined();
+    expect(mocks.patch).not.toHaveBeenCalled();
   });
 });
 

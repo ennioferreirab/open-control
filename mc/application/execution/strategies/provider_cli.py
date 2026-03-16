@@ -11,10 +11,15 @@ Story 28.18 adds LiveStreamProjector and supervision_sink wiring.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import logging
+import os
+import shutil
 from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.request import (
@@ -29,6 +34,10 @@ if TYPE_CHECKING:
     from mc.runtime.provider_cli.live_stream import LiveStreamProjector
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_STREAM_IDLE_TIMEOUT_SECONDS = 300.0
+DEFAULT_EXIT_TIMEOUT_SECONDS = 30.0
+DEFAULT_STARTUP_TIMEOUT_SECONDS = 30.0
 
 
 class ProviderCliRunnerStrategy:
@@ -64,6 +73,9 @@ class ProviderCliRunnerStrategy:
         supervision_sink: Callable[[dict[str, Any]], None] | None = None,
         control_plane: Any | None = None,
         bridge: Any | None = None,
+        startup_timeout_seconds: float = DEFAULT_STARTUP_TIMEOUT_SECONDS,
+        stream_idle_timeout_seconds: float = DEFAULT_STREAM_IDLE_TIMEOUT_SECONDS,
+        exit_timeout_seconds: float = DEFAULT_EXIT_TIMEOUT_SECONDS,
     ) -> None:
         self._parser = parser
         self._registry = registry
@@ -74,6 +86,9 @@ class ProviderCliRunnerStrategy:
         self._control_plane = control_plane
         self._supervision_sink = supervision_sink
         self._bridge = bridge
+        self._startup_timeout_seconds = startup_timeout_seconds
+        self._stream_idle_timeout_seconds = stream_idle_timeout_seconds
+        self._exit_timeout_seconds = exit_timeout_seconds
 
     async def execute(self, request: ExecutionRequest) -> ExecutionResult:
         """Execute a task via the provider CLI backend.
@@ -124,13 +139,9 @@ class ProviderCliRunnerStrategy:
         agent = request.agent
         if agent is not None:
             # MCP config — derived from memory workspace if available
-            memory_ws = request.memory_workspace
-            if memory_ws is not None:
-                # Look for .mcp.json in the agent root (one level up from memory/)
-                agent_root = memory_ws.parent
-                mcp_config = agent_root / ".mcp.json"
-                if mcp_config.exists():
-                    command.extend(["--mcp-config", str(mcp_config)])
+            mcp_config = self._resolve_mcp_config_path(request)
+            if mcp_config is not None:
+                command.extend(["--mcp-config", str(mcp_config)])
 
             # Model — strip cc/ prefix if present
             model = request.model or (agent.model if agent.model else None)
@@ -160,11 +171,193 @@ class ProviderCliRunnerStrategy:
 
         return command
 
+    def _resolve_mcp_config_path(self, request: ExecutionRequest) -> Path | None:
+        """Resolve the most specific .mcp.json for this execution request.
+
+        `memory_workspace` may already point at the agent workspace root
+        (`.../agents/{agent}`) or at its `memory/` child. Prefer the board-scoped
+        workspace when present, then fall back to the global agent workspace.
+        """
+        candidates: list[Path] = []
+
+        memory_workspace = request.memory_workspace
+        if memory_workspace is not None:
+            workspace = memory_workspace
+            candidates.append(workspace)
+            if workspace.name == "memory":
+                candidates.append(workspace.parent)
+            else:
+                candidates.append(workspace / "memory")
+
+        agent_name = request.agent_name or (request.agent.name if request.agent else "")
+        if agent_name:
+            from mc.infrastructure.config import AGENTS_DIR
+
+            candidates.append(AGENTS_DIR / agent_name)
+
+        seen: set[Path] = set()
+        for candidate in candidates:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            mcp_config = candidate / ".mcp.json"
+            if mcp_config.exists():
+                self._ensure_convex_env_in_mcp_config(mcp_config)
+                return mcp_config
+        return None
+
+    def _ensure_convex_env_in_mcp_config(self, mcp_config: Path) -> None:
+        """Patch the resolved MCP config so bridge subprocesses can use Convex directly."""
+        self._patch_mcp_config_env(
+            mcp_config,
+            {
+                "CONVEX_URL": os.environ.get("CONVEX_URL"),
+                "CONVEX_ADMIN_KEY": os.environ.get("CONVEX_ADMIN_KEY"),
+            },
+        )
+
+    def _patch_mcp_config_env(
+        self,
+        mcp_config: Path,
+        env_overrides: dict[str, str | None],
+    ) -> None:
+        """Patch env vars into the resolved MCP config, omitting ``None`` values."""
+        filtered_overrides = {
+            key: value for key, value in env_overrides.items() if value is not None and value != ""
+        }
+        if not filtered_overrides:
+            return
+        try:
+            raw = json.loads(mcp_config.read_text(encoding="utf-8"))
+        except Exception:
+            logger.debug(
+                "[provider-cli-strategy] Failed to read MCP config %s for env patch",
+                mcp_config,
+                exc_info=True,
+            )
+            return
+        servers = raw.get("mcpServers")
+        if not isinstance(servers, dict):
+            return
+        changed = False
+        for server in servers.values():
+            if not isinstance(server, dict):
+                continue
+            env = server.setdefault("env", {})
+            if not isinstance(env, dict):
+                continue
+            for key, value in filtered_overrides.items():
+                if env.get(key) != value:
+                    env[key] = value
+                    changed = True
+        if changed:
+            mcp_config.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+
+    def _materialize_session_mcp_config(
+        self,
+        *,
+        command: list[str],
+        runtime_env: dict[str, str],
+        mc_session_id: str,
+    ) -> Path | None:
+        try:
+            config_index = command.index("--mcp-config")
+        except ValueError:
+            return None
+        if config_index + 1 >= len(command):
+            return None
+
+        shared_config = Path(command[config_index + 1])
+        if not shared_config.exists():
+            return None
+
+        runtime_dir = shared_config.parent / ".mc-runtime"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        session_hash = hashlib.sha1(mc_session_id.encode("utf-8")).hexdigest()[:10]
+        session_config = runtime_dir / f"{session_hash}.mcp.json"
+        shutil.copyfile(shared_config, session_config)
+        self._patch_mcp_config_env(session_config, runtime_env)
+        command[config_index + 1] = str(session_config)
+        return session_config
+
     def _cleanup(self, mc_session_id: str) -> None:
         """Remove the session record from the registry after execution completes."""
         if self._control_plane is not None:
             self._control_plane.unregister_parser(mc_session_id)
         self._registry.remove(mc_session_id)
+
+    async def _stop_and_cleanup(self, handle: Any) -> None:
+        """Best-effort process stop followed by registry/control-plane cleanup."""
+        try:
+            await self._parser.stop(handle)
+        except Exception:
+            logger.warning(
+                "[provider-cli-strategy] Failed to stop session '%s' during cleanup",
+                handle.mc_session_id,
+                exc_info=True,
+            )
+        self._cleanup(handle.mc_session_id)
+
+    async def _read_stream_chunk(
+        self,
+        stream_iter: Any,
+    ) -> bytes:
+        try:
+            return await asyncio.wait_for(
+                anext(stream_iter),
+                timeout=self._stream_idle_timeout_seconds,
+            )
+        except StopAsyncIteration:
+            raise
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError(
+                "Provider CLI stream output timed out after "
+                f"{self._stream_idle_timeout_seconds} seconds"
+            ) from exc
+
+    async def _wait_for_exit(self, handle: Any) -> int | None:
+        try:
+            return await asyncio.wait_for(
+                self._supervisor.wait_for_exit(handle),
+                timeout=self._exit_timeout_seconds,
+            )
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError(
+                f"Provider CLI process exit timed out after {self._exit_timeout_seconds} seconds"
+            ) from exc
+
+    async def _start_session(
+        self,
+        *,
+        mc_session_id: str,
+        command: list[str],
+        env: dict[str, str] | None = None,
+    ) -> Any:
+        logger.info(
+            "[provider-cli-strategy] Starting provider session '%s' (provider=%s)",
+            mc_session_id,
+            self._parser.provider_name,
+        )
+        try:
+            handle = await asyncio.wait_for(
+                self._parser.start_session(
+                    mc_session_id=mc_session_id,
+                    command=command,
+                    cwd=self._cwd,
+                    env=env,
+                ),
+                timeout=self._startup_timeout_seconds,
+            )
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError(
+                f"Provider CLI start session timed out after {self._startup_timeout_seconds} seconds"
+            ) from exc
+        logger.info(
+            "[provider-cli-strategy] Provider session '%s' started (pid=%s)",
+            mc_session_id,
+            getattr(handle, "pid", None),
+        )
+        return handle
 
     def _persist_session_to_convex(
         self,
@@ -290,12 +483,18 @@ class ProviderCliRunnerStrategy:
 
         # 1. Build the full command, injecting the bootstrap prompt
         command = self._build_command(request)
+        runtime_env = self._build_runtime_env(request=request, mc_session_id=mc_session_id)
+        self._materialize_session_mcp_config(
+            command=command,
+            runtime_env=runtime_env,
+            mc_session_id=mc_session_id,
+        )
 
         # 2. Launch the provider CLI process
-        handle = await self._parser.start_session(
+        handle = await self._start_session(
             mc_session_id=mc_session_id,
             command=command,
-            cwd=self._cwd,
+            env=runtime_env,
         )
 
         # 3. Register the session with bootstrap prompt metadata
@@ -347,7 +546,12 @@ class ProviderCliRunnerStrategy:
         # 5. Stream and parse output
         collected_events: list[ParsedCliEvent] = []
         try:
-            async for chunk in self._supervisor.stream_output(handle):
+            stream_iter = self._supervisor.stream_output(handle).__aiter__()
+            while True:
+                try:
+                    chunk = await self._read_stream_chunk(stream_iter)
+                except StopAsyncIteration:
+                    break
                 if not chunk:
                     continue
                 events = self._parser.parse_output(chunk)
@@ -374,6 +578,10 @@ class ProviderCliRunnerStrategy:
                             self._supervision_sink(
                                 {
                                     "session_id": mc_session_id,
+                                    "provider": self._parser.provider_name,
+                                    "task_id": request.task_id,
+                                    "step_id": request.step_id,
+                                    "agent_name": request.agent_name,
                                     "kind": event.kind,
                                     "text": event.text,
                                     "provider_session_id": event.provider_session_id,
@@ -391,20 +599,15 @@ class ProviderCliRunnerStrategy:
                         provider=self._parser.provider_name,
                     )
         except Exception:
-            try:
-                await self._parser.stop(handle)
-            except Exception:
-                logger.warning(
-                    "[provider-cli-strategy] Failed to stop session '%s' after stream/supervision "
-                    "error",
-                    handle.mc_session_id,
-                    exc_info=True,
-                )
-            self._cleanup(handle.mc_session_id)
+            await self._stop_and_cleanup(handle)
             raise
 
         # 6. Wait for exit
-        exit_code = await self._supervisor.wait_for_exit(handle)
+        try:
+            exit_code = await self._wait_for_exit(handle)
+        except Exception:
+            await self._stop_and_cleanup(handle)
+            raise
 
         # 7. Evaluate result
         error_events = [e for e in collected_events if e.kind == "error"]
@@ -508,3 +711,24 @@ class ProviderCliRunnerStrategy:
             output=output_text,
             session_id=session_id,
         )
+
+    def _build_runtime_env(
+        self,
+        *,
+        request: ExecutionRequest,
+        mc_session_id: str,
+    ) -> dict[str, str]:
+        env: dict[str, str] = {
+            "AGENT_NAME": request.agent_name,
+            "TASK_ID": request.task_id,
+            "MC_INTERACTIVE_SESSION_ID": mc_session_id,
+        }
+        if request.step_id:
+            env["STEP_ID"] = request.step_id
+        convex_url = os.environ.get("CONVEX_URL")
+        convex_admin_key = os.environ.get("CONVEX_ADMIN_KEY")
+        if convex_url:
+            env["CONVEX_URL"] = convex_url
+        if convex_admin_key:
+            env["CONVEX_ADMIN_KEY"] = convex_admin_key
+        return env

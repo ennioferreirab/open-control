@@ -71,6 +71,7 @@ export interface TaskDetailViewData {
   task: Doc<"tasks"> | null;
   messages: Doc<"messages">[] | undefined;
   liveSteps: Doc<"steps">[] | undefined;
+  pendingExecutionQuestion: Doc<"executionQuestions"> | null | undefined;
   tagsList: Doc<"taskTags">[] | undefined;
   tagAttributesList: Doc<"tagAttributes">[] | undefined;
   tagAttrValues: Doc<"tagAttributeValues">[] | undefined;
@@ -102,6 +103,10 @@ export function useTaskDetailView(
     | TaskDetailReadModel
     | null
     | undefined;
+  const pendingExecutionQuestion = useQuery(
+    api.executionQuestions.getPendingForTask,
+    taskId ? { taskId } : "skip",
+  ) as Doc<"executionQuestions"> | null | undefined;
 
   const task = detailView?.task ?? null;
   const mergeCandidates = useQuery(
@@ -151,6 +156,7 @@ export function useTaskDetailView(
     task,
     messages,
     liveSteps,
+    pendingExecutionQuestion,
     tagsList,
     tagAttributesList,
     tagAttrValues,

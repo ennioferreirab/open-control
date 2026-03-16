@@ -1,50 +1,58 @@
 import { internalMutation, mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { isValidTransition } from "./tasks";
 
+import { canPostComment, logThreadMessageSent } from "./lib/threadRules";
 import {
-  canPostComment,
-  logThreadMessageSent,
-} from "./lib/threadRules";
+  answerPendingExecutionQuestionForTask,
+  appendExecutionInteraction,
+  upsertExecutionSession,
+} from "./lib/executionInteractionState";
 
 /** Validator for the unified thread message type (new field). */
-const threadMessageTypeValidator = v.optional(v.union(
-  v.literal("step_completion"),
-  v.literal("user_message"),
-  v.literal("system_error"),
-  v.literal("lead_agent_plan"),
-  v.literal("lead_agent_chat"),
-  v.literal("comment"),
-));
+const threadMessageTypeValidator = v.optional(
+  v.union(
+    v.literal("step_completion"),
+    v.literal("user_message"),
+    v.literal("system_error"),
+    v.literal("lead_agent_plan"),
+    v.literal("lead_agent_chat"),
+    v.literal("comment"),
+  ),
+);
 
 /** Validator for artifact objects stored on step-completion messages. */
-const artifactsValidator = v.optional(v.array(v.object({
-  path: v.string(),
-  action: v.union(
-    v.literal("created"),
-    v.literal("modified"),
-    v.literal("deleted"),
+const artifactsValidator = v.optional(
+  v.array(
+    v.object({
+      path: v.string(),
+      action: v.union(v.literal("created"), v.literal("modified"), v.literal("deleted")),
+      description: v.optional(v.string()),
+      diff: v.optional(v.string()),
+    }),
   ),
-  description: v.optional(v.string()),
-  diff: v.optional(v.string()),
-})));
+);
 
 /** Validator for file attachments on user messages. */
-const fileAttachmentsValidator = v.optional(v.array(v.object({
-  name: v.string(),
-  type: v.string(),
-  size: v.number(),
-})));
-
-const planReviewValidator = v.optional(v.object({
-  kind: v.union(
-    v.literal("request"),
-    v.literal("feedback"),
-    v.literal("decision"),
+const fileAttachmentsValidator = v.optional(
+  v.array(
+    v.object({
+      name: v.string(),
+      type: v.string(),
+      size: v.number(),
+    }),
   ),
-  planGeneratedAt: v.string(),
-  decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
-}));
+);
+
+const planReviewValidator = v.optional(
+  v.object({
+    kind: v.union(v.literal("request"), v.literal("feedback"), v.literal("decision")),
+    planGeneratedAt: v.string(),
+    decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
+  }),
+);
 
 const leadAgentConversationValidator = v.optional(v.boolean());
 
@@ -57,13 +65,48 @@ function assertTaskThreadWritable(task: { status: string; mergedIntoTaskId?: str
   }
 }
 
+async function maybeAnswerPendingExecutionQuestion(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+  content: string,
+  timestamp: string,
+): Promise<void> {
+  const answered = await answerPendingExecutionQuestionForTask(ctx, {
+    taskId,
+    answer: content,
+    answeredAt: timestamp,
+  });
+  if (!answered) {
+    return;
+  }
+  await upsertExecutionSession(ctx, {
+    sessionId: answered.sessionId,
+    taskId: answered.taskId,
+    stepId: answered.stepId,
+    agentName: answered.agentName,
+    provider: answered.provider,
+    state: "ready_to_resume",
+    updatedAt: timestamp,
+  });
+  await appendExecutionInteraction(ctx, {
+    sessionId: answered.sessionId,
+    taskId: answered.taskId,
+    stepId: answered.stepId,
+    kind: "question_answered",
+    payload: { questionId: answered.questionId, answer: content, source: "thread_message" },
+    createdAt: timestamp,
+    agentName: answered.agentName,
+    provider: answered.provider,
+  });
+}
+
 export const listRecentUserMessages = query({
   args: { sinceTimestamp: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("messages")
       .withIndex("by_authorType_timestamp", (q) =>
-        q.eq("authorType", "user").gte("timestamp", args.sinceTimestamp)
+        q.eq("authorType", "user").gte("timestamp", args.sinceTimestamp),
       )
       .collect();
   },
@@ -83,11 +126,7 @@ export const create = internalMutation({
   args: {
     taskId: v.id("tasks"),
     authorName: v.string(),
-    authorType: v.union(
-      v.literal("agent"),
-      v.literal("user"),
-      v.literal("system"),
-    ),
+    authorType: v.union(v.literal("agent"), v.literal("user"), v.literal("system")),
     content: v.string(),
     messageType: v.union(
       v.literal("work"),
@@ -145,8 +184,8 @@ export const postStepCompletion = internalMutation({
       authorName: args.agentName,
       authorType: "agent",
       content: args.content,
-      messageType: "work",       // Legacy field for existing UI styling
-      type: "step_completion",   // New unified thread type
+      messageType: "work", // Legacy field for existing UI styling
+      type: "step_completion", // New unified thread type
       artifacts: args.artifacts,
       timestamp,
     });
@@ -182,7 +221,7 @@ export const postSystemError = internalMutation({
       authorType: "system",
       content: args.content,
       messageType: "system_event", // Legacy field
-      type: "system_error",        // New unified thread type
+      type: "system_error", // New unified thread type
       timestamp,
     });
 
@@ -205,10 +244,7 @@ export const postLeadAgentMessage = internalMutation({
   args: {
     taskId: v.id("tasks"),
     content: v.string(),
-    type: v.union(
-      v.literal("lead_agent_plan"),
-      v.literal("lead_agent_chat"),
-    ),
+    type: v.union(v.literal("lead_agent_plan"), v.literal("lead_agent_chat")),
     planReview: planReviewValidator,
   },
   handler: async (ctx, args) => {
@@ -219,7 +255,7 @@ export const postLeadAgentMessage = internalMutation({
       authorType: "system",
       content: args.content,
       messageType: "system_event", // Legacy field
-      type: args.type,             // New unified thread type
+      type: args.type, // New unified thread type
       planReview: args.planReview,
       leadAgentConversation: true,
       timestamp,
@@ -273,7 +309,7 @@ export const postUserPlanMessage = mutation({
     }
     if (!allowedStatuses.includes(task.status)) {
       throw new ConvexError(
-        `postUserPlanMessage is only allowed when task is ${allowedStatuses.join(" or ")} (current: ${task.status})`
+        `postUserPlanMessage is only allowed when task is ${allowedStatuses.join(" or ")} (current: ${task.status})`,
       );
     }
 
@@ -321,6 +357,8 @@ export const postUserPlanMessage = mutation({
       description: "User sent plan-chat message to Lead Agent",
       timestamp,
     });
+
+    await maybeAnswerPendingExecutionQuestion(ctx, args.taskId, args.content, timestamp);
 
     return messageId;
   },
@@ -371,6 +409,53 @@ export const postComment = mutation({
       timestamp,
     });
 
+    await maybeAnswerPendingExecutionQuestion(ctx, args.taskId, args.content, timestamp);
+
+    return messageId;
+  },
+});
+
+/**
+ * Post a plain user reply to the thread without routing it to the Lead Agent
+ * or changing task assignment/status. Used by the default Reply composer.
+ */
+export const postUserReply = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    content: v.string(),
+    fileAttachments: fileAttachmentsValidator,
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    assertTaskThreadWritable(task);
+
+    if (!canPostComment(task.status)) {
+      throw new ConvexError("Cannot reply on deleted tasks");
+    }
+
+    const timestamp = new Date().toISOString();
+    const messageId = await ctx.db.insert("messages", {
+      taskId: args.taskId,
+      authorName: "User",
+      authorType: "user",
+      content: args.content,
+      messageType: "user_message",
+      type: "user_message",
+      fileAttachments: args.fileAttachments,
+      timestamp,
+    });
+
+    await logThreadMessageSent(ctx, {
+      taskId: args.taskId,
+      description: "User replied in thread",
+      timestamp,
+    });
+
+    await maybeAnswerPendingExecutionQuestion(ctx, args.taskId, args.content, timestamp);
+
     return messageId;
   },
 });
@@ -389,11 +474,15 @@ export const postMentionMessage = mutation({
     taskId: v.id("tasks"),
     content: v.string(),
     mentionedAgent: v.optional(v.string()),
-    fileAttachments: v.optional(v.array(v.object({
-      name: v.string(),
-      type: v.string(),
-      size: v.number(),
-    }))),
+    fileAttachments: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          type: v.string(),
+          size: v.number(),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -427,6 +516,8 @@ export const postMentionMessage = mutation({
       timestamp,
     });
 
+    await maybeAnswerPendingExecutionQuestion(ctx, args.taskId, args.content, timestamp);
+
     return messageId;
   },
 });
@@ -453,15 +544,9 @@ export const sendThreadMessage = mutation({
       !task.isManual && task.status === "in_progress" && task.assignedAgent === "human";
     const blockedStatuses = task.isManual
       ? ["retrying", "deleted"]
-      : [
-          ...(allowHumanInProgressReassignment ? [] : ["in_progress"]),
-          "retrying",
-          "deleted",
-        ];
+      : [...(allowHumanInProgressReassignment ? [] : ["in_progress"]), "retrying", "deleted"];
     if (blockedStatuses.includes(task.status)) {
-      throw new ConvexError(
-        `Cannot send messages while task is ${task.status}`
-      );
+      throw new ConvexError(`Cannot send messages while task is ${task.status}`);
     }
 
     const timestamp = new Date().toISOString();
@@ -473,7 +558,7 @@ export const sendThreadMessage = mutation({
       authorType: "user",
       content: args.content,
       messageType: "user_message",
-      type: "user_message",  // Unified thread type (AC: 2)
+      type: "user_message", // Unified thread type (AC: 2)
       fileAttachments: args.fileAttachments,
       timestamp,
     });
@@ -483,9 +568,7 @@ export const sendThreadMessage = mutation({
     if (!task.isManual) {
       if (task.status !== "assigned") {
         if (!isValidTransition(task.status, "assigned")) {
-          throw new ConvexError(
-            `Invalid transition: ${task.status} -> assigned`
-          );
+          throw new ConvexError(`Invalid transition: ${task.status} -> assigned`);
         }
         await ctx.db.patch(args.taskId, {
           status: "assigned",
@@ -513,5 +596,7 @@ export const sendThreadMessage = mutation({
       description: `User sent follow-up message to ${args.agentName}`,
       timestamp,
     });
+
+    await maybeAnswerPendingExecutionQuestion(ctx, args.taskId, args.content, timestamp);
   },
 });

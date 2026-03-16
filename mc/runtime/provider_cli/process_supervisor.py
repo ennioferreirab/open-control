@@ -6,7 +6,7 @@ import asyncio
 import os
 import signal
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 
 from mc.contexts.provider_cli.types import ProviderProcessHandle
 
@@ -32,6 +32,7 @@ class ProviderProcessSupervisor:
         command: list[str],
         cwd: str,
         env: dict[str, str] | None = None,
+        stdin_mode: Literal["pipe", "devnull", "inherit"] = "pipe",
     ) -> ProviderProcessHandle:
         """Launch *command* as a subprocess and return a ProviderProcessHandle.
 
@@ -41,6 +42,7 @@ class ProviderProcessSupervisor:
             command: Executable and arguments.
             cwd: Working directory for the subprocess.
             env: Optional environment override.  If None, inherits current env.
+            stdin_mode: How stdin should be wired for the subprocess.
 
         Returns:
             A ProviderProcessHandle with pid, pgid, and metadata.
@@ -53,9 +55,19 @@ class ProviderProcessSupervisor:
         else:
             effective_env = None  # inherit from parent
 
+        stdin: int | None
+        if stdin_mode == "pipe":
+            stdin = asyncio.subprocess.PIPE
+        elif stdin_mode == "devnull":
+            stdin = asyncio.subprocess.DEVNULL
+        elif stdin_mode == "inherit":
+            stdin = None
+        else:
+            raise ValueError(f"Unsupported stdin_mode: {stdin_mode}")
+
         proc = await asyncio.create_subprocess_exec(
             *command,
-            stdin=asyncio.subprocess.PIPE,
+            stdin=stdin,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,  # merge stderr into stdout
             cwd=cwd,

@@ -17,6 +17,59 @@ vi.mock("convex/react", () => ({
   useMutation: () => mockMutationFn,
 }));
 
+vi.mock("@/convex/_generated/api", () => ({
+  api: {
+    tasks: {
+      getDetailView: "tasks:getDetailView",
+      searchMergeCandidates: "tasks:searchMergeCandidates",
+      approve: "tasks:approve",
+      approveAndKickOff: "tasks:approveAndKickOff",
+      pauseTask: "tasks:pauseTask",
+      resumeTask: "tasks:resumeTask",
+      saveExecutionPlan: "tasks:saveExecutionPlan",
+      clearExecutionPlan: "tasks:clearExecutionPlan",
+      startInboxTask: "tasks:startInboxTask",
+      retry: "tasks:retry",
+      updateTags: "tasks:updateTags",
+      updateTitle: "tasks:updateTitle",
+      updateDescription: "tasks:updateDescription",
+      addTaskFiles: "tasks:addTaskFiles",
+      removeTaskFile: "tasks:removeTaskFile",
+      softDelete: "tasks:softDelete",
+      createMergedTask: "tasks:createMergedTask",
+      addMergeSource: "tasks:addMergeSource",
+      removeMergeSource: "tasks:removeMergeSource",
+    },
+    boards: {
+      getById: "boards:getById",
+    },
+    agents: {
+      getByName: "agents:getByName",
+    },
+    interactiveSessions: {
+      listSessions: "interactiveSessions:listSessions",
+    },
+    sessionActivityLog: {
+      listForSession: "sessionActivityLog:listForSession",
+    },
+    executionQuestions: {
+      getPendingForTask: "executionQuestions:getPendingForTask",
+    },
+    messages: {
+      postUserPlanMessage: "messages:postUserPlanMessage",
+      postUserReply: "messages:postUserReply",
+      postMentionMessage: "messages:postMentionMessage",
+      sendThreadMessage: "messages:sendThreadMessage",
+    },
+    activities: {
+      create: "activities:create",
+    },
+    tagAttributeValues: {
+      removeByTaskAndTag: "tagAttributeValues:removeByTaskAndTag",
+    },
+  },
+}));
+
 vi.mock("./DocumentViewerModal", () => ({
   DocumentViewerModal: ({
     taskId,
@@ -217,32 +270,59 @@ describe("TaskDetailSheet", () => {
     mockDocumentViewerModal.mockReset();
   });
 
-  function oneRenderPass(task: TaskDoc, messages: unknown[] = [], steps: StepDoc[] = []) {
-    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+  function oneRenderPass(
+    task: TaskDoc,
+    messages: unknown[] = [],
+    steps: StepDoc[] = [],
+    pendingExecutionQuestion: unknown = null,
+  ) {
+    mockUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
+      const name = queryRef;
       if (args === "skip") return undefined;
       if (args === undefined) return [];
+      if (name === "executionQuestions:getPendingForTask") return pendingExecutionQuestion;
+      if (name === "interactiveSessions:listSessions") return [];
+      if (name === "sessionActivityLog:listForSession") return [];
+      if (name === "agents:getByName") return null;
+      if (name === "boards:getById") return null;
       if (
         typeof args === "object" &&
         args !== null &&
+        name === "tasks:getDetailView" &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return buildDetailView(task, messages, steps);
+      }
+      if (name === "tasks:searchMergeCandidates") return [];
+      return [];
+    });
+  }
+
+  function stableQueryMock(
+    task: TaskDoc,
+    messages: unknown[] = [],
+    steps: StepDoc[] = [],
+    pendingExecutionQuestion: unknown = null,
+  ) {
+    mockUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
+      const name = queryRef;
+      if (args === "skip") return undefined;
+      if (args === undefined) return [];
+      if (name === "executionQuestions:getPendingForTask") return pendingExecutionQuestion;
+      if (name === "interactiveSessions:listSessions") return [];
+      if (name === "sessionActivityLog:listForSession") return [];
+      if (name === "agents:getByName") return null;
+      if (name === "boards:getById") return null;
+      if (name === "tasks:searchMergeCandidates") return [];
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        name === "tasks:getDetailView" &&
         "taskId" in (args as Record<string, unknown>)
       ) {
         return buildDetailView(task, messages, steps);
       }
       return [];
-    });
-  }
-
-  function stableQueryMock(task: TaskDoc, messages: unknown[] = [], steps: StepDoc[] = []) {
-    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
-      if (args === "skip") return undefined;
-      if (args === undefined) return [];
-      if (
-        typeof args === "object" &&
-        args !== null &&
-        !("taskId" in (args as Record<string, unknown>))
-      )
-        return [];
-      return buildDetailView(task, messages, steps);
     });
   }
 
@@ -808,9 +888,16 @@ describe("TaskDetailSheet", () => {
       mergedIntoTaskId: "task-c" as never,
     };
 
-    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+    mockUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
+      const name = queryRef;
       if (args === "skip") return undefined;
       if (args === undefined) return [];
+      if (name === "executionQuestions:getPendingForTask") return null;
+      if (name === "interactiveSessions:listSessions") return [];
+      if (name === "sessionActivityLog:listForSession") return [];
+      if (name === "agents:getByName") return null;
+      if (name === "boards:getById") return null;
+      if (name === "tasks:searchMergeCandidates") return [];
       if (
         typeof args === "object" &&
         args !== null &&
@@ -2600,7 +2687,7 @@ describe("TaskDetailSheet", () => {
     await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
 
     expect(screen.getByTestId("resume-manual-plan-button")).toHaveTextContent("Resume");
-    expect(screen.getByTestId("plan-primary-button")).toHaveTextContent("Resume");
+    expect(screen.queryByTestId("plan-primary-button")).not.toBeInTheDocument();
   });
 
   it("hides plan approval actions while a manual task is already in progress", async () => {
@@ -2736,6 +2823,55 @@ describe("TaskDetailSheet", () => {
     expect(
       screen.queryByText("This should stay out of the lead agent panel."),
     ).not.toBeInTheDocument();
+  });
+
+  it("hides the lead-agent plan panel while a pending execution question exists", async () => {
+    const user = userEvent.setup();
+    const pausedTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: false,
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Plan step",
+            description: "Do the work",
+            assignedAgent: "nanobot",
+            blockedBy: [],
+            parallelGroup: 0,
+            order: 1,
+          },
+        ],
+        generatedAt: "2026-03-16T18:20:00Z",
+        generatedBy: "lead-agent" as const,
+      },
+    };
+    const planRequestMessage = {
+      ...baseMessage,
+      _id: "plan-msg-hidden-during-question" as never,
+      authorName: "lead-agent",
+      authorType: "system" as const,
+      content: "Plan ready for approval",
+      messageType: "system_event" as const,
+      type: "lead_agent_plan" as const,
+      planReview: {
+        kind: "request" as const,
+        planGeneratedAt: "2026-03-16T18:20:00Z",
+      },
+    };
+    oneRenderPass(pausedTask, [planRequestMessage], [], {
+      _id: "question-1",
+      questionId: "question-1",
+      taskId: "task1",
+      status: "pending",
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: /Execution Plan/i }));
+
+    expect(screen.queryByTestId("plan-review-panel")).not.toBeInTheDocument();
   });
 
   it("does not auto-switch to plan tab for non-awaitingKickoff tasks (thread tab is active by default)", () => {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+import sys
 
 from mc.contexts.provider_cli.types import ProviderProcessHandle
 from mc.runtime.provider_cli.process_supervisor import ProviderProcessSupervisor
@@ -181,6 +182,26 @@ class TestProviderProcessSupervisor:
             chunks.append(chunk)
         combined = b"".join(chunks)
         assert b"custom-value" in combined
+
+    async def test_launch_with_devnull_stdin_allows_process_waiting_for_eof_to_run(self) -> None:
+        """A headless provider launch must be able to close stdin at startup."""
+        supervisor = ProviderProcessSupervisor()
+        handle = await supervisor.launch(
+            mc_session_id="s12-devnull",
+            provider="test",
+            command=[
+                sys.executable,
+                "-c",
+                "import sys; sys.stdin.read(); print('stdin-closed')",
+            ],
+            cwd="/tmp",
+            stdin_mode="devnull",
+        )
+        chunks: list[bytes] = []
+        async for chunk in supervisor.stream_output(handle):
+            chunks.append(chunk)
+        combined = b"".join(chunks)
+        assert b"stdin-closed" in combined
 
     async def test_launch_inherits_env_when_none(self) -> None:
         """When env=None, inherit the current process environment."""

@@ -161,6 +161,7 @@ class TaskOrchestrator:
             provider_cli_registry=self._ctx.services.get("provider_cli_registry"),
             provider_cli_supervisor=self._ctx.services.get("provider_cli_supervisor"),
             provider_cli_projector=self._ctx.services.get("provider_cli_projector"),
+            provider_cli_supervision_sink=self._ctx.services.get("provider_cli_supervision_sink"),
             provider_cli_control_plane=self._ctx.services.get("provider_cli_control_plane"),
         )
 

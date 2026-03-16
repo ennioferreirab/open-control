@@ -69,6 +69,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def _build_provider_cli_supervision_sink(supervisor):
+    """Adapt provider-cli raw event payloads into the interactive supervision contract."""
+    from mc.contexts.interactive import normalize_provider_event
+
+    def _sink(raw_event: dict[str, object]) -> None:
+        provider = str(raw_event.get("provider") or "").strip()
+        if not provider:
+            return
+        try:
+            event = normalize_provider_event(provider=provider, raw_event=raw_event)
+        except ValueError:
+            return
+        supervisor.handle_event(event)
+
+    return _sink
+
+
 # ---------------------------------------------------------------------------
 # Plan negotiation manager
 # ---------------------------------------------------------------------------
@@ -197,6 +215,9 @@ async def run_gateway(bridge: "ConvexBridge") -> None:
     runtime_ctx.services["interactive_session_coordinator"] = interactive_runtime.service
     runtime_ctx.services["interactive_socket_transport"] = interactive_runtime.transport
     runtime_ctx.services["interactive_execution_supervisor"] = interactive_runtime.supervisor
+    runtime_ctx.services["provider_cli_supervision_sink"] = _build_provider_cli_supervision_sink(
+        interactive_runtime.supervisor
+    )
     logger.info("[gateway] Interactive WebSocket server started on port 8765")
 
     _exec_mode = os.environ.get(INTERACTIVE_MODE_ENV, "provider-cli").strip().lower()

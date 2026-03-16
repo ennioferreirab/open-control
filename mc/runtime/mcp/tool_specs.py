@@ -95,10 +95,6 @@ PHASE1_TOOLS: list[Tool] = [
                     },
                 },
             },
-            "oneOf": [
-                {"required": ["question"]},
-                {"required": ["questions"]},
-            ],
             "additionalProperties": False,
         },
     ),

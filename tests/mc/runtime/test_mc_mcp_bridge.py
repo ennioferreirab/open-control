@@ -129,6 +129,15 @@ class TestMCMcpBridgeListTools:
         canonical_names = {t.name for t in PHASE1_TOOLS}
         assert bridge_names == canonical_names
 
+    async def test_ask_user_schema_has_no_top_level_one_of(self):
+        """ask_user must not expose top-level oneOf in the public MCP surface."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        tools = await bridge_mod.list_tools()
+        ask_user = next(tool for tool in tools if tool.name == "ask_user")
+
+        assert "oneOf" not in ask_user.inputSchema
+
 
 class TestMCMcpBridgeCallTool:
     """AC5: Bridge forwards tool calls correctly through the existing IPC path."""
@@ -158,6 +167,21 @@ class TestMCMcpBridgeCallTool:
 
         assert len(result) == 1
         assert result[0].text == "Yes!"
+
+    async def test_ask_user_prefers_convex_interaction_service(self):
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        service = MagicMock()
+        service.ask_user = MagicMock(return_value="Yes!")
+
+        with (
+            patch.object(bridge_mod, "_get_interaction_service", return_value=service),
+            patch.object(bridge_mod, "_build_interaction_context", return_value=object()),
+        ):
+            result = await bridge_mod.call_tool("ask_user", {"question": "Ready?"})
+
+        assert result[0].text == "Yes!"
+        service.ask_user.assert_called_once()
 
     async def test_delegate_task_forwarded(self):
         """delegate_task is forwarded to IPC."""
@@ -198,6 +222,23 @@ class TestMCMcpBridgeCallTool:
 
         assert len(result) == 1
         assert result[0].text
+
+    async def test_report_progress_prefers_convex_interaction_service(self):
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        service = MagicMock()
+        service.report_progress = MagicMock(return_value=None)
+
+        with (
+            patch.object(bridge_mod, "_get_interaction_service", return_value=service),
+            patch.object(bridge_mod, "_build_interaction_context", return_value=object()),
+        ):
+            result = await bridge_mod.call_tool(
+                "report_progress", {"message": "50% done", "percentage": 50}
+            )
+
+        assert result[0].text == "Progress reported"
+        service.report_progress.assert_called_once()
 
     async def test_cron_forwarded(self):
         """cron is forwarded to IPC."""

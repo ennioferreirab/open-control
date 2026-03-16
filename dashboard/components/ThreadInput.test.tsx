@@ -140,7 +140,6 @@ vi.mock("@/components/ui/select", () => ({
 vi.mock("lucide-react", () => ({
   SendHorizontal: () => <span>Send</span>,
   RotateCcw: () => <span>Rotate</span>,
-  MessageCircle: () => <span>Comment</span>,
   Paperclip: () => <span>Attach</span>,
   Loader2: () => <span>Loading</span>,
 }));
@@ -187,7 +186,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     });
   });
 
-  it("calls sendThreadMessage when content does NOT contain @mention (AC 4)", async () => {
+  it("posts a plain reply when content has no @mention and no selected agent", async () => {
     render(<ThreadInput task={baseTask} />);
 
     const textarea = screen.getByTestId("thread-textarea");
@@ -196,14 +195,15 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     await waitFor(() => {
+      const replyMock = getMutationMock(api.messages.postUserReply);
       const sendMock = getMutationMock(api.messages.sendThreadMessage);
-      expect(sendMock).toHaveBeenCalledWith(
+      expect(replyMock).toHaveBeenCalledWith(
         expect.objectContaining({
           taskId: "task1",
           content: "please fix the bug",
-          agentName: "coder",
         }),
       );
+      expect(sendMock).not.toHaveBeenCalled();
     });
   });
 
@@ -244,7 +244,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
   it("still renders input for manual tasks", () => {
     const manualTask = { ...baseTask, isManual: true };
     render(<ThreadInput task={manualTask} />);
-    expect(screen.getByPlaceholderText("Send a message to the agent...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Reply to the thread...")).toBeInTheDocument();
   });
 
   it("renders restore UI for deleted tasks", () => {
@@ -317,19 +317,22 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     render(<ThreadInput task={baseTask} />);
 
     const textarea = screen.getByTestId("thread-textarea");
-    // @unknown is NOT a known agent — should fall through to sendThreadMessage
+    // @unknown is NOT a known agent — should fall through to plain thread reply
     fireEvent.change(textarea, { target: { value: "@unknown do something" } });
 
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     await waitFor(() => {
+      const replyMock = getMutationMock(api.messages.postUserReply);
       const sendMock = getMutationMock(api.messages.sendThreadMessage);
       const mentionMock = getMutationMock(api.messages.postMentionMessage);
-      expect(sendMock).toHaveBeenCalledWith(
+      expect(replyMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          agentName: "coder",
+          taskId: "task1",
+          content: "@unknown do something",
         }),
       );
+      expect(sendMock).not.toHaveBeenCalled();
       expect(mentionMock).not.toHaveBeenCalled();
     });
   });
@@ -344,7 +347,7 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
     render(<ThreadInput task={humanTask} />);
 
     expect(screen.getByTestId("agent-select")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Send a message to the agent...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Reply to the thread...")).toBeInTheDocument();
   });
 
   it("routes plain messages from human in-progress tasks to sendThreadMessage", async () => {
@@ -417,6 +420,64 @@ describe("ThreadInput @mention routing (Story 13.1)", () => {
 
     expect(screen.queryByTestId("agent-select")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("Reply to the thread...")).toBeInTheDocument();
+  });
+
+  it("sends to an agent only when the dropdown target is selected explicitly", async () => {
+    render(<ThreadInput task={baseTask} />);
+
+    fireEvent.change(screen.getByTestId("agent-select-control"), {
+      target: { value: "reviewer" },
+    });
+    fireEvent.change(screen.getByTestId("thread-textarea"), {
+      target: { value: "please take this" },
+    });
+    fireEvent.keyDown(screen.getByTestId("thread-textarea"), { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      const sendMock = getMutationMock(api.messages.sendThreadMessage);
+      const replyMock = getMutationMock(api.messages.postUserReply);
+      expect(sendMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task1",
+          content: "please take this",
+          agentName: "reviewer",
+        }),
+      );
+      expect(replyMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("does not render the Comment toggle in the default thread composer", () => {
+    render(<ThreadInput task={baseTask} />);
+
+    expect(screen.queryByText("Comment")).not.toBeInTheDocument();
+  });
+
+  it("keeps paused review tasks in plain reply mode by default", async () => {
+    const pausedReviewTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: false,
+    };
+
+    render(<ThreadInput task={pausedReviewTask} />);
+
+    fireEvent.change(screen.getByTestId("thread-textarea"), {
+      target: { value: "isso e apenas um teste" },
+    });
+    fireEvent.keyDown(screen.getByTestId("thread-textarea"), { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      const replyMock = getMutationMock(api.messages.postUserReply);
+      const planMock = getMutationMock(api.messages.postUserPlanMessage);
+      expect(replyMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task1",
+          content: "isso e apenas um teste",
+        }),
+      );
+      expect(planMock).not.toHaveBeenCalled();
+    });
   });
 
   it("uses direct lead-agent chat mode without agent selection or mention routing", async () => {

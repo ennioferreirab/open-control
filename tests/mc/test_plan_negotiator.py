@@ -668,11 +668,10 @@ class TestHandlePlanNegotiationExecutionContext:
 
     # 6.3: start_plan_negotiation_loop handles in_progress tasks
 
-    def test_loop_continues_for_in_progress_task(self):
-        """start_plan_negotiation_loop does NOT stop immediately for in_progress tasks."""
+    def test_loop_continues_for_explicit_lead_agent_message_in_progress_task(self):
+        """In-progress tasks should only reach the negotiator for explicit lead-agent chat."""
         import asyncio as _asyncio
 
-        # Task is in_progress — loop should NOT stop on first poll
         task_data = {
             "status": "in_progress",
             "awaiting_kickoff": False,
@@ -683,6 +682,7 @@ class TestHandlePlanNegotiationExecutionContext:
             "_id": "msg_001",
             "author_type": "user",
             "content": "Please add a step",
+            "lead_agent_conversation": True,
         }
 
         call_count = 0
@@ -696,7 +696,11 @@ class TestHandlePlanNegotiationExecutionContext:
             raise _asyncio.CancelledError
 
         bridge = MagicMock()
-        bridge.query = MagicMock(return_value=task_data)
+        bridge.query = MagicMock(
+            side_effect=lambda function_name, *_args, **_kwargs: (
+                False if function_name == "executionQuestions:hasPendingForTask" else task_data
+            )
+        )
         bridge.get_steps_by_task = MagicMock(return_value=[])
         bridge.post_lead_agent_message = MagicMock()
         bridge.update_execution_plan = MagicMock()
@@ -705,9 +709,6 @@ class TestHandlePlanNegotiationExecutionContext:
         mock_queue.get = AsyncMock(side_effect=_fake_queue_get)
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
-        # The loop should process the user_message without stopping for in_progress
-        # We verify by checking that query was called (status check happened) and
-        # that the loop didn't stop before the first message was processed.
         with (
             patch(
                 "mc.contexts.planning.negotiation.asyncio.to_thread",
@@ -725,12 +726,57 @@ class TestHandlePlanNegotiationExecutionContext:
             except _asyncio.CancelledError:
                 pass
 
-        # The loop should have seen the in_progress task and NOT stopped
-        # (i.e., it called handle_plan_negotiation for the user message)
         mock_handle.assert_called_once()
         call_args = mock_handle.call_args
-        # Verify that task_status="in_progress" was passed as a keyword argument
         assert call_args[1]["task_status"] == "in_progress"
+
+    def test_loop_skips_plain_thread_reply_for_in_progress_task(self):
+        """Plain thread replies on in-progress tasks must not be routed to the lead agent."""
+        import asyncio as _asyncio
+
+        task_data = {
+            "status": "in_progress",
+            "awaiting_kickoff": False,
+            "execution_plan": SAMPLE_PLAN,
+        }
+
+        user_message = {
+            "_id": "msg_001_plain",
+            "author_type": "user",
+            "content": "pode preencher como achar melhor",
+            "lead_agent_conversation": False,
+            "type": "user_message",
+        }
+
+        bridge = MagicMock()
+        bridge.query = MagicMock(
+            side_effect=lambda function_name, *_args, **_kwargs: (
+                False if function_name == "executionQuestions:hasPendingForTask" else task_data
+            )
+        )
+        bridge.get_steps_by_task = MagicMock(return_value=[])
+        mock_queue = MagicMock()
+        mock_queue.get = AsyncMock(side_effect=[[user_message], _asyncio.CancelledError()])
+        bridge.async_subscribe = MagicMock(return_value=mock_queue)
+
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
+            try:
+                _asyncio.run(
+                    start_plan_negotiation_loop(bridge, "task_inprogress", poll_interval=0.01)
+                )
+            except _asyncio.CancelledError:
+                pass
+
+        mock_handle.assert_not_called()
 
     def test_loop_continues_for_paused_review_task_with_plan(self):
         """Paused review tasks with an execution plan should still route plan chat."""
@@ -746,6 +792,7 @@ class TestHandlePlanNegotiationExecutionContext:
             "_id": "msg_paused",
             "author_type": "user",
             "content": "Please revise the plan before resuming",
+            "lead_agent_conversation": True,
         }
 
         call_count = 0
@@ -758,7 +805,11 @@ class TestHandlePlanNegotiationExecutionContext:
             raise _asyncio.CancelledError
 
         bridge = MagicMock()
-        bridge.query = MagicMock(return_value=task_data)
+        bridge.query = MagicMock(
+            side_effect=lambda function_name, *_args, **_kwargs: (
+                False if function_name == "executionQuestions:hasPendingForTask" else task_data
+            )
+        )
         bridge.get_steps_by_task = MagicMock(return_value=[])
         bridge.post_lead_agent_message = MagicMock()
         bridge.update_execution_plan = MagicMock()
@@ -786,6 +837,57 @@ class TestHandlePlanNegotiationExecutionContext:
         call_args = mock_handle.call_args
         assert call_args[1]["task_status"] == "review"
 
+    def test_loop_skips_plain_thread_reply_for_paused_review_task(self):
+        """Plain thread replies should not be routed to the lead agent during paused execution."""
+        import asyncio as _asyncio
+
+        task_data = {
+            "status": "review",
+            "awaiting_kickoff": False,
+            "execution_plan": SAMPLE_PLAN,
+        }
+
+        user_message = {
+            "_id": "msg_plain_reply",
+            "author_type": "user",
+            "content": "isso e apenas um teste",
+            "lead_agent_conversation": False,
+            "type": "user_message",
+        }
+
+        async def _fake_queue_get():
+            return [user_message]
+
+        bridge = MagicMock()
+
+        def _query(function_name, *_args, **_kwargs):
+            if function_name == "executionQuestions:hasPendingForTask":
+                return False
+            return task_data
+
+        bridge.query = MagicMock(side_effect=_query)
+        bridge.get_steps_by_task = MagicMock(return_value=[])
+        mock_queue = MagicMock()
+        mock_queue.get = AsyncMock(side_effect=[[user_message], _asyncio.CancelledError()])
+        bridge.async_subscribe = MagicMock(return_value=mock_queue)
+
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
+            try:
+                _asyncio.run(start_plan_negotiation_loop(bridge, "task_paused", poll_interval=0.01))
+            except _asyncio.CancelledError:
+                pass
+
+        mock_handle.assert_not_called()
+
     def test_loop_bootstraps_first_plan_for_manual_review_without_execution_plan(self):
         """Manual review tasks without a plan should route the first user message into planning."""
         import asyncio as _asyncio
@@ -808,7 +910,15 @@ class TestHandlePlanNegotiationExecutionContext:
             return [user_message]
 
         bridge = MagicMock()
-        bridge.query = MagicMock(side_effect=[task_data, {"status": "done"}])
+
+        def _query(function_name, *_args, **_kwargs):
+            if function_name == "executionQuestions:hasPendingForTask":
+                return False
+            if function_name == "tasks:getById":
+                return task_data
+            return {"status": "done"}
+
+        bridge.query = MagicMock(side_effect=_query)
         bridge.post_lead_agent_message = MagicMock()
         bridge.update_execution_plan = MagicMock()
         mock_queue = MagicMock()
@@ -853,7 +963,7 @@ class TestHandlePlanNegotiationExecutionContext:
 
         task_data = {
             "status": "review",
-            "awaiting_kickoff": False,
+            "awaiting_kickoff": True,
             "is_manual": True,
             "execution_plan": SAMPLE_PLAN,
         }
@@ -900,6 +1010,52 @@ class TestHandlePlanNegotiationExecutionContext:
             "kind": "request",
             "plan_generated_at": SAMPLE_PLAN["generatedAt"],
         }
+
+    def test_loop_does_not_backfill_plan_review_request_for_paused_execution_review(self):
+        """Paused execution review should not recreate a lead-agent plan request."""
+        import asyncio as _asyncio
+
+        task_data = {
+            "status": "review",
+            "awaiting_kickoff": False,
+            "execution_plan": SAMPLE_PLAN,
+        }
+        system_message = {
+            "_id": "msg_system",
+            "author_type": "system",
+            "content": "Existing thread history",
+        }
+
+        bridge = MagicMock()
+        bridge.query = MagicMock(side_effect=[task_data, {"status": "done"}])
+        bridge.post_lead_agent_message = MagicMock()
+        bridge.update_execution_plan = MagicMock()
+        mock_queue = MagicMock()
+        mock_queue.get = AsyncMock(side_effect=[[system_message], _asyncio.CancelledError()])
+        bridge.async_subscribe = MagicMock(return_value=mock_queue)
+
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
+            ),
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            try:
+                _asyncio.run(
+                    start_plan_negotiation_loop(
+                        bridge,
+                        "task_paused_no_backfill",
+                        poll_interval=0.01,
+                    )
+                )
+            except _asyncio.CancelledError:
+                pass
+
+        bridge.post_lead_agent_message.assert_not_called()
 
     def test_loop_stops_for_non_negotiable_status(self):
         """start_plan_negotiation_loop stops when task is in a non-negotiable status."""

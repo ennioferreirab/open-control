@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, MessageCircle, Paperclip, RotateCcw, SendHorizontal } from "lucide-react";
+import { Loader2, Paperclip, RotateCcw, SendHorizontal } from "lucide-react";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { AgentMentionAutocomplete } from "@/components/AgentMentionAutocomplete";
 import { FileChip } from "@/components/FileChip";
@@ -41,12 +41,10 @@ export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInp
     handleTextBlur,
     handleTextChange,
     handleTextFocus,
-    inputMode,
     isBlocked,
     isHumanDelegationThread,
     isLeadAgentMode,
     isDragOver,
-    isInProgress,
     isPlanChatMode,
     isReplyOnlyThread,
     isRestoring,
@@ -58,38 +56,9 @@ export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInp
     pendingFiles,
     removePendingFile,
     selectedAgent,
-    setInputMode,
     setSelectedAgent,
     textareaRef,
   } = useThreadInputController({ mode, onMessageSent, task });
-
-  const modePill = (primaryLabel: string) => (
-    <div className="inline-flex rounded-full bg-muted p-0.5 text-xs">
-      <button
-        type="button"
-        className={`rounded-full px-3 py-1 transition-colors ${
-          inputMode === "agent"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
-        onClick={() => setInputMode("agent")}
-      >
-        {primaryLabel}
-      </button>
-      <button
-        type="button"
-        className={`rounded-full px-3 py-1 transition-colors flex items-center gap-1 ${
-          inputMode === "comment"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
-        onClick={() => setInputMode("comment")}
-      >
-        <MessageCircle className="h-3 w-3" />
-        Comment
-      </button>
-    </div>
-  );
   const shellClass = "mx-auto w-full min-w-0 max-w-5xl";
 
   if (task.status === "deleted") {
@@ -145,16 +114,9 @@ export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInp
             </>
           ) : (
             <>
-              <div className="flex items-center gap-2">{modePill("Plan Chat")}</div>
-              {inputMode === "comment" ? (
-                <p className="text-xs text-muted-foreground">
-                  Add a note without triggering agents...
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Ask the Lead Agent to modify the plan...
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Ask the Lead Agent to modify the plan...
+              </p>
             </>
           )}
           {fileUploadError && <p className="text-xs text-red-500">{fileUploadError}</p>}
@@ -180,9 +142,7 @@ export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInp
               placeholder={
                 isLeadAgentMode
                   ? "Ask the Lead Agent to change the plan..."
-                  : inputMode === "comment"
-                    ? "Add a comment..."
-                    : "e.g. Add a step to write tests, or remove the deployment step..."
+                  : "e.g. Add a step to write tests, or remove the deployment step..."
               }
               value={content}
               onChange={(event) => onDirectContentChange(event.target.value)}
@@ -234,11 +194,13 @@ export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInp
       <div className={`${shellClass} space-y-2`}>
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div className="flex items-center gap-2">
-          {modePill(isReplyOnlyThread ? "Reply" : "Message Agent")}
-          {inputMode === "agent" && !isReplyOnlyThread && (
+          <span className="inline-flex rounded-full bg-muted px-3 py-1 text-xs font-medium">
+            Reply
+          </span>
+          {!isReplyOnlyThread && (
             <Select value={selectedAgent} onValueChange={setSelectedAgent}>
               <SelectTrigger className="w-[180px] h-7 text-xs">
-                <SelectValue placeholder="Select agent" />
+                <SelectValue placeholder="Optional agent target" />
               </SelectTrigger>
               <SelectContent>
                 {filteredAgents?.map((agent) => (
@@ -271,19 +233,9 @@ export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInp
         >
           <Textarea
             ref={textareaRef}
-            placeholder={
-              inputMode === "comment"
-                ? "Add a comment..."
-                : isReplyOnlyThread
-                  ? "Reply to the thread..."
-                  : "Send a message to the agent..."
-            }
+            placeholder="Reply to the thread..."
             value={content}
-            onChange={
-              inputMode === "comment"
-                ? (event) => onDirectContentChange(event.target.value)
-                : handleTextChange
-            }
+            onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             onFocus={handleTextFocus}
             onBlur={handleTextBlur}
@@ -315,28 +267,24 @@ export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInp
               )}
             </Button>
           </div>
-          {inputMode === "agent" &&
-            mentionQuery !== null &&
-            !isPlanChatMode &&
-            !isReplyOnlyThread &&
-            filteredAgents && (
-              <AgentMentionAutocomplete
-                agents={filteredAgents.map((agent) => ({
-                  displayName: agent.displayName ?? undefined,
-                  name: agent.name,
-                  role: agent.role ?? undefined,
-                }))}
-                query={mentionQuery}
-                onSelect={handleMentionSelect}
-                onClose={closeMentionAutocomplete}
-                anchorRef={textareaRef}
-              />
-            )}
+          {mentionQuery !== null && !isPlanChatMode && !isReplyOnlyThread && filteredAgents && (
+            <AgentMentionAutocomplete
+              agents={filteredAgents.map((agent) => ({
+                displayName: agent.displayName ?? undefined,
+                name: agent.name,
+                role: agent.role ?? undefined,
+              }))}
+              query={mentionQuery}
+              onSelect={handleMentionSelect}
+              onClose={closeMentionAutocomplete}
+              anchorRef={textareaRef}
+            />
+          )}
         </div>
         {isHumanDelegationThread && (
           <p className="text-xs text-muted-foreground">
-            This thread is waiting on a human. Pick an agent or use <code>@mention</code> to hand it
-            back off.
+            This thread is waiting on a human. Use <code>@mention</code> or pick an optional agent
+            target to hand it off.
           </p>
         )}
         <input

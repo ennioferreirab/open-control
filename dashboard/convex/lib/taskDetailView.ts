@@ -44,8 +44,14 @@ export async function buildTaskDetailView(
   const [board, messages, steps, tagCatalog, tagAttributes, tagAttributeValues, mergedIntoTask] =
     await Promise.all([
       task.boardId ? ctx.db.get(task.boardId) : Promise.resolve(null),
-      ctx.db.query("messages").withIndex("by_taskId", (q) => q.eq("taskId", taskId)).collect(),
-      ctx.db.query("steps").withIndex("by_taskId", (q) => q.eq("taskId", taskId)).collect(),
+      ctx.db
+        .query("messages")
+        .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+        .collect(),
+      ctx.db
+        .query("steps")
+        .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+        .collect(),
       ctx.db.query("taskTags").collect(),
       ctx.db.query("tagAttributes").collect(),
       ctx.db
@@ -68,8 +74,9 @@ export async function buildTaskDetailView(
             };
           }),
         )
-      ).filter((source): source is { taskId: Id<"tasks">; taskTitle: string; label: string } =>
-        source !== null,
+      ).filter(
+        (source): source is { taskId: Id<"tasks">; taskTitle: string; label: string } =>
+          source !== null,
       )
     : [];
 
@@ -88,6 +95,12 @@ export async function buildTaskDetailView(
     })),
   );
 
+  const sortedMessages = messages.sort((a, b) => {
+    const left = new Date(a.timestamp).getTime();
+    const right = new Date(b.timestamp).getTime();
+    if (left !== right) return left - right;
+    return a._creationTime - b._creationTime;
+  });
   const sortedSteps = steps.sort((a, b) => a.order - b.order);
   const uiFlags = computeUiFlags(task, steps);
   const allowedActions = computeAllowedActions(task, uiFlags);
@@ -95,7 +108,7 @@ export async function buildTaskDetailView(
   return {
     task,
     board,
-    messages,
+    messages: sortedMessages,
     steps: sortedSteps,
     files: task.files ?? [],
     mergedIntoTask,

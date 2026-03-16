@@ -12,6 +12,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from mc.contexts.interaction.service import has_pending_execution_question
 from mc.types import (
     ActivityEventType,
     AuthorType,
@@ -38,9 +39,7 @@ class ReviewHandler:
         self._ask_user_registry = ask_user_registry
         self._known_review_task_ids: set[str] = set()
 
-    async def _handle_review_transition(
-        self, task_id: str, task: dict[str, Any]
-    ) -> None:
+    async def _handle_review_transition(self, task_id: str, task: dict[str, Any]) -> None:
         """Handle a task entering review state (FR27)."""
         title = task.get("title", "Untitled")
         logger.info(
@@ -64,7 +63,9 @@ class ReviewHandler:
 
         # Skip tasks with a pending ask_user — the review state was set by the
         # ask_user handler to surface the question in the UI. Do NOT auto-complete.
-        if self._ask_user_registry is not None and self._ask_user_registry.has_pending_ask(task_id):
+        if (
+            self._ask_user_registry is not None and self._ask_user_registry.has_pending_ask(task_id)
+        ) or has_pending_execution_question(self._bridge, task_id):
             logger.info(
                 "[orchestrator] Task '%s' has a pending ask_user — skipping review routing.",
                 title,
@@ -153,9 +154,7 @@ class ReviewHandler:
         )
         return result
 
-    async def handle_review_feedback(
-        self, task_id: str, reviewer_name: str, feedback: str
-    ) -> None:
+    async def handle_review_feedback(self, task_id: str, reviewer_name: str, feedback: str) -> None:
         """Handle reviewer feedback on a task (FR28)."""
         logger.info(
             "[orchestrator] Reviewer '%s' providing feedback on task %s",
@@ -170,9 +169,7 @@ class ReviewHandler:
             feedback,
             MessageType.REVIEW_FEEDBACK,
         )
-        task = await asyncio.to_thread(
-            self._bridge.query, "tasks:getById", {"task_id": task_id}
-        )
+        task = await asyncio.to_thread(self._bridge.query, "tasks:getById", {"task_id": task_id})
         title = task.get("title", "Untitled") if task else "Untitled"
         await asyncio.to_thread(
             self._bridge.create_activity,
@@ -182,9 +179,7 @@ class ReviewHandler:
             reviewer_name,
         )
 
-    async def handle_agent_revision(
-        self, task_id: str, agent_name: str, content: str
-    ) -> None:
+    async def handle_agent_revision(self, task_id: str, agent_name: str, content: str) -> None:
         """Handle an agent's revision in response to review feedback (FR29)."""
         logger.info(
             "[orchestrator] Agent '%s' submitting revision on task %s",
@@ -200,9 +195,7 @@ class ReviewHandler:
             MessageType.WORK,
         )
 
-    async def handle_review_approval(
-        self, task_id: str, reviewer_name: str
-    ) -> None:
+    async def handle_review_approval(self, task_id: str, reviewer_name: str) -> None:
         """Handle reviewer approval of a task (FR30)."""
         logger.info(
             "[orchestrator] Reviewer '%s' approving task %s",
@@ -217,14 +210,10 @@ class ReviewHandler:
             f"Approved by {reviewer_name}",
             MessageType.APPROVAL,
         )
-        task = await asyncio.to_thread(
-            self._bridge.query, "tasks:getById", {"task_id": task_id}
-        )
+        task = await asyncio.to_thread(self._bridge.query, "tasks:getById", {"task_id": task_id})
         title = task.get("title", "Untitled") if task else "Untitled"
         trust_level = (
-            task.get("trust_level", TrustLevel.AUTONOMOUS)
-            if task
-            else TrustLevel.AUTONOMOUS
+            task.get("trust_level", TrustLevel.AUTONOMOUS) if task else TrustLevel.AUTONOMOUS
         )
 
         await asyncio.to_thread(
