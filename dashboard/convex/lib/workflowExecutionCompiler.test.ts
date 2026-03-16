@@ -223,6 +223,64 @@ describe("agent resolution", () => {
     };
     expect(() => compileWorkflowExecutionPlan(badWorkflow, AGENT_REFS)).toThrow();
   });
+
+  it("rejects review steps that are missing agentId", () => {
+    const badWorkflow: WorkflowSpecInput = {
+      specId: "wf-review-missing-agent",
+      name: "Bad Review Workflow",
+      steps: [
+        {
+          id: "step-review",
+          title: "Review output",
+          type: "review",
+          reviewSpecId: "review-spec-1",
+          onReject: "step-write",
+        },
+      ],
+    };
+
+    expect(() => compileWorkflowExecutionPlan(badWorkflow, AGENT_REFS)).toThrow(/requires agentId/);
+  });
+
+  it("rejects review steps that are missing reviewSpecId", () => {
+    const badWorkflow: WorkflowSpecInput = {
+      specId: "wf-review-missing-spec",
+      name: "Bad Review Workflow",
+      steps: [
+        {
+          id: "step-review",
+          title: "Review output",
+          type: "review",
+          agentId: "agent-id-3",
+          onReject: "step-write",
+        },
+      ],
+    };
+
+    expect(() => compileWorkflowExecutionPlan(badWorkflow, AGENT_REFS)).toThrow(
+      /requires reviewSpecId/,
+    );
+  });
+
+  it("rejects review steps that are missing onReject", () => {
+    const badWorkflow: WorkflowSpecInput = {
+      specId: "wf-review-missing-onreject",
+      name: "Bad Review Workflow",
+      steps: [
+        {
+          id: "step-review",
+          title: "Review output",
+          type: "review",
+          agentId: "agent-id-3",
+          reviewSpecId: "review-spec-1",
+        },
+      ],
+    };
+
+    expect(() => compileWorkflowExecutionPlan(badWorkflow, AGENT_REFS)).toThrow(
+      /requires onReject/,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -358,6 +416,8 @@ describe("workflow metadata on steps", () => {
           id: "step-review",
           title: "Review step",
           type: "review",
+          agentId: "agent-id-3",
+          reviewSpecId: "review-spec-1",
           dependsOn: ["step-agent"],
           onReject: "step-agent",
         },
@@ -366,6 +426,35 @@ describe("workflow metadata on steps", () => {
     const plan = compileWorkflowExecutionPlan(workflowWithReject, AGENT_REFS);
     const reviewStep = plan.steps.find((s) => s.tempId === "step-review");
     expect(reviewStep!.onRejectStepId).toBe("step-agent");
+  });
+
+  it("maps reviewSpecId to the compiled review step", () => {
+    const workflowWithReviewSpec: WorkflowSpecInput = {
+      specId: "wf-review-spec",
+      name: "Review Workflow",
+      steps: [
+        {
+          id: "step-write",
+          title: "Write step",
+          type: "agent",
+          agentId: "agent-id-2",
+        },
+        {
+          id: "step-review",
+          title: "Review step",
+          type: "review",
+          agentId: "agent-id-3",
+          reviewSpecId: "review-spec-1",
+          dependsOn: ["step-write"],
+          onReject: "step-write",
+        },
+      ],
+    };
+
+    const plan = compileWorkflowExecutionPlan(workflowWithReviewSpec, AGENT_REFS);
+    const reviewStep = plan.steps.find((s) => s.tempId === "step-review");
+
+    expect(reviewStep!.reviewSpecId).toBe("review-spec-1");
   });
 
   it("does not set onRejectStepId when onReject is absent", () => {

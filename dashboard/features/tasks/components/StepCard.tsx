@@ -37,8 +37,10 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
   const colors = STEP_STATUS_COLORS[step.status as StepStatus] ?? STEP_STATUS_COLORS.assigned;
   const assignedAgentName = step.assignedAgent ?? "Unassigned";
   const isHuman = step.assignedAgent === "human";
+  const isWorkflowGate =
+    step.workflowStepType === "human" || step.workflowStepType === "checkpoint";
   const isWaitingHuman = step.status === "waiting_human";
-  const isRunningHuman = isHuman && step.status === "running";
+  const isRunningGateStep = step.status === "running" && (isHuman || isWorkflowGate);
   const assignedAgentInitials = step.assignedAgent
     ? step.assignedAgent
         .split(/[\s-_]+/)
@@ -190,7 +192,7 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
               </Button>
             </div>
           )}
-          {isRunningHuman && (
+          {isRunningGateStep && (
             <div className="mt-2" onClick={(e) => e.stopPropagation()}>
               <Button
                 size="sm"

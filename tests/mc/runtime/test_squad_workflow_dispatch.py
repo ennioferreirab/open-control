@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -68,6 +69,62 @@ def _make_task_data(
         },
         "updated_at": "2026-03-14T10:00:00Z",
     }
+
+
+async def _sync_to_thread(func, *args, **kwargs):
+    """Run to_thread payloads synchronously in tests."""
+    return func(*args, **kwargs)
+
+
+def _make_step_execution_request(step: dict[str, Any]) -> Any:
+    """Build a minimal ExecutionRequest for dispatcher review-step tests."""
+    from mc.application.execution.file_enricher import build_file_context, resolve_task_dirs
+    from mc.application.execution.request import EntityType, ExecutionRequest
+
+    task_id = "task-1"
+    files_dir, output_dir = resolve_task_dirs(task_id)
+
+    return ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id=step["id"],
+        task_id=task_id,
+        step_id=step["id"],
+        title="Main Task",
+        step_title=step["title"],
+        step_description=step.get("description", ""),
+        agent_name=step.get("assigned_agent", "nanobot"),
+        agent_prompt=None,
+        agent_model=None,
+        agent_skills=None,
+        reasoning_level=None,
+        description=build_file_context(
+            [],
+            files_dir,
+            output_dir,
+            is_step=True,
+            step_title=step["title"],
+            step_description=step.get("description", ""),
+            task_title="Main Task",
+        ),
+        board_name=None,
+        memory_workspace=None,
+        files_dir=files_dir,
+        output_dir=output_dir,
+        file_manifest=[],
+        task_data={"title": "Main Task", "status": "in_progress"},
+        predecessor_step_ids=[],
+        is_cc=False,
+    )
+
+
+def _patch_context_builder():
+    async def _mock_build_step_context(self, task_id, step):
+        return _make_step_execution_request(step)
+
+    return patch(
+        "mc.application.execution.context_builder.ContextBuilder.build_step_context",
+        new=_mock_build_step_context,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -227,11 +284,18 @@ async def test_checkpoint_step_type_sets_waiting_human() -> None:
 
 
 @pytest.mark.asyncio
-async def test_review_step_type_sets_waiting_human() -> None:
-    """Workflow steps with type=review are set to waiting_human by dispatcher."""
+async def test_review_step_type_runs_as_agent_step() -> None:
+    """Workflow review steps should dispatch to the reviewer agent, not human gating."""
     bridge = MagicMock()
     bridge.update_step_status = MagicMock()
     bridge.create_activity = MagicMock()
+    bridge.query.return_value = {"title": "Main Task", "status": "in_progress", "files": []}
+    bridge.get_task_messages.return_value = []
+    bridge.get_agent_by_name.return_value = None
+    bridge.get_board_by_id.return_value = None
+    bridge.sync_task_output_files.return_value = None
+    bridge.post_step_completion.return_value = None
+    bridge.check_and_unblock_dependents.return_value = []
 
     dispatcher = StepDispatcher(bridge)
 
@@ -246,12 +310,27 @@ async def test_review_step_type_sets_waiting_human() -> None:
         "status": "assigned",
     }
 
-    await dispatcher._execute_step("task-1", review_step)
+    run_agent = AsyncMock(
+        return_value=(
+            '{"verdict":"approved","issues":[],"strengths":[],"scores":{},'
+            '"vetoesTriggered":[],"recommendedReturnStep":null}'
+        )
+    )
+
+    with (
+        patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+        _patch_context_builder(),
+        patch("mc.contexts.execution.step_dispatcher._run_step_agent", new=run_agent),
+        patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+        patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+    ):
+        await dispatcher._execute_step("task-1", review_step)
 
     update_calls = bridge.update_step_status.call_args_list
-    assert any(c[0][1] == StepStatus.WAITING_HUMAN for c in update_calls), (
-        "Review step should be set to waiting_human"
+    assert not any(c[0][1] == StepStatus.WAITING_HUMAN for c in update_calls), (
+        "Review steps should not be treated as human gates"
     )
+    run_agent.assert_awaited_once()
 
 
 def test_agent_step_type_is_not_treated_as_gate() -> None:
@@ -260,14 +339,14 @@ def test_agent_step_type_is_not_treated_as_gate() -> None:
     This is a pure logic test verifying the dispatcher logic without needing
     to actually run an agent.
     """
-    # Verify that only human/checkpoint/review are treated as gate steps
-    gate_types = {"human", "checkpoint", "review"}
-    non_gate_types = {"agent", "system", None, ""}
+    # Verify that only human/checkpoint are treated as gate steps
+    gate_types = {"human", "checkpoint"}
+    non_gate_types = {"agent", "review", "system", None, ""}
 
     for step_type in gate_types:
-        is_gate = step_type in ("human", "checkpoint", "review")
+        is_gate = step_type in ("human", "checkpoint")
         assert is_gate, f"Expected {step_type!r} to be a gate step type"
 
     for step_type in non_gate_types:
-        is_gate = step_type in ("human", "checkpoint", "review")
+        is_gate = step_type in ("human", "checkpoint")
         assert not is_gate, f"Expected {step_type!r} to NOT be a gate step type"

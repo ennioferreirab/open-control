@@ -55,6 +55,7 @@ class ProviderProcessSupervisor:
 
         proc = await asyncio.create_subprocess_exec(
             *command,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,  # merge stderr into stdout
             cwd=cwd,
@@ -143,6 +144,15 @@ class ProviderProcessSupervisor:
     async def terminate(self, handle: ProviderProcessHandle) -> None:
         """Send SIGTERM to the process group."""
         await self.send_signal(handle, signal.SIGTERM)
+
+    async def write_stdin(self, handle: ProviderProcessHandle, data: str) -> None:
+        """Write raw text to the subprocess stdin and flush it."""
+        proc = self._processes.get(handle.mc_session_id)
+        if proc is None or proc.stdin is None:
+            raise RuntimeError(f"stdin unavailable for provider session '{handle.mc_session_id}'")
+
+        proc.stdin.write(data.encode("utf-8"))
+        await proc.stdin.drain()
 
     async def kill(self, handle: ProviderProcessHandle) -> None:
         """Send SIGKILL to the process group (unconditional termination)."""

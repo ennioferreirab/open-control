@@ -53,6 +53,10 @@ def _coerce_step_run_result(value: Any) -> tuple[str, bool, str | None]:
     return content, is_error, error_message
 
 
+def _is_workflow_gate_step(step_type: str | None) -> bool:
+    return step_type in ("human", "checkpoint")
+
+
 def _maybe_inject_orientation(
     agent_name: str,
     agent_prompt: str | None,
@@ -367,10 +371,8 @@ class StepDispatcher:
             task_id,
             agent_name,
         )
-        # Workflow gate steps (human, checkpoint, review) transition directly to
-        # waiting_human so the dashboard can surface them for human action.
         workflow_step_type = step.get("workflow_step_type")
-        is_gate_step = workflow_step_type in ("human", "checkpoint", "review")
+        is_gate_step = _is_workflow_gate_step(workflow_step_type)
 
         if agent_name == "human" or is_gate_step:
             # Gate steps and human-assigned steps go to waiting_human immediately.
@@ -477,6 +479,12 @@ class StepDispatcher:
                 )
                 return []
 
+            review_result = None
+            if workflow_step_type == "review":
+                from mc.domain.workflow.review_result import parse_review_result
+
+                review_result = parse_review_result(result_content)
+
             # Collect artifacts and post structured completion message (Story 2.5).
             artifacts = await asyncio.to_thread(collect_output_artifacts, task_id, pre_snapshot)
 
@@ -502,6 +510,35 @@ class StepDispatcher:
                 result_content,
                 artifacts or None,
             )
+
+            if review_result is not None and review_result.verdict == "rejected":
+                reject_target_id = (
+                    step.get("on_reject_step_id") or review_result.recommended_return_step
+                )
+                if not reject_target_id:
+                    raise ValueError(
+                        f"Review step '{step_title}' rejected without an onReject target"
+                    )
+
+                await asyncio.to_thread(
+                    self._bridge.update_step_status,
+                    step_id,
+                    StepStatus.BLOCKED,
+                )
+                await asyncio.to_thread(
+                    self._bridge.update_step_status,
+                    str(reject_target_id),
+                    StepStatus.ASSIGNED,
+                )
+                await asyncio.to_thread(
+                    self._bridge.create_activity,
+                    ActivityEventType.REVIEW_FEEDBACK,
+                    f"Review step '{step_title}' rejected; rerouting to {reject_target_id}",
+                    task_id,
+                    agent_name,
+                )
+                return []
+
             await asyncio.to_thread(
                 self._bridge.update_step_status,
                 step_id,
@@ -509,8 +546,16 @@ class StepDispatcher:
             )
             await asyncio.to_thread(
                 self._bridge.create_activity,
-                ActivityEventType.STEP_COMPLETED,
-                f"Agent {agent_name} completed step: {step_title}",
+                (
+                    ActivityEventType.REVIEW_APPROVED
+                    if review_result is not None
+                    else ActivityEventType.STEP_COMPLETED
+                ),
+                (
+                    f"Review step approved: {step_title}"
+                    if review_result is not None
+                    else f"Agent {agent_name} completed step: {step_title}"
+                ),
                 task_id,
                 agent_name,
             )

@@ -55,6 +55,61 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_review_feedback_message(message: dict[str, Any]) -> bool:
+    content = str(message.get("content") or "").strip()
+    author_name = str(message.get("author_name") or "").lower()
+    message_type = str(message.get("message_type") or message.get("type") or "").lower()
+    return bool(
+        content
+        and (
+            message_type == "review_feedback"
+            or content.lower().startswith("rejected:")
+            or "reviewer" in author_name
+        )
+    )
+
+
+def build_review_feedback_context(messages: list[dict[str, Any]], step_id: str) -> str:
+    """Build an explicit rerun block for the latest rejected attempt and reviewer feedback."""
+    latest_attempt_output: str | None = None
+    latest_review_feedback: str | None = None
+
+    for message in reversed(messages):
+        if latest_attempt_output is None and (
+            message.get("step_id") == step_id and message.get("type") == "step_completion"
+        ):
+            latest_attempt_output = str(message.get("content") or "").strip() or None
+
+        if latest_review_feedback is None and _is_review_feedback_message(message):
+            latest_review_feedback = str(message.get("content") or "").strip() or None
+
+        if latest_attempt_output and latest_review_feedback:
+            break
+
+    if not latest_attempt_output and not latest_review_feedback:
+        return ""
+
+    lines = ["[Previous Review Feedback]"]
+    if latest_attempt_output:
+        lines.extend(
+            [
+                "Latest rejected attempt output:",
+                latest_attempt_output,
+            ]
+        )
+    if latest_review_feedback:
+        if latest_attempt_output:
+            lines.append("")
+        lines.extend(
+            [
+                "Latest reviewer feedback:",
+                latest_review_feedback,
+            ]
+        )
+
+    return "\n".join(lines)
+
+
 def build_tag_attributes_context(
     tags: list[str],
     attr_values: list[dict[str, Any]],
@@ -475,8 +530,12 @@ class ContextBuilder:
         )
         req.thread_context = thread_context
 
+        review_feedback_context = build_review_feedback_context(thread_messages, step_id)
+
         # Assemble the execution description
         execution_description = file_context
+        if review_feedback_context:
+            execution_description += f"\n\n{review_feedback_context}"
         if thread_context:
             execution_description += f"\n{thread_context}"
         req.description = execution_description

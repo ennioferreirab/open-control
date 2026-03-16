@@ -138,12 +138,9 @@ class CodexCLIParser:
         await self._get_supervisor().send_signal(handle, signal.SIGINT)
 
     async def resume(self, handle: ProviderProcessHandle, message: str) -> None:
-        """Resume a waiting Codex session.
-
-        Codex supports provider-native resume. The actual stdin routing is
-        left to callers who hold the raw process reference.
-        """
-        del message  # used by callers via stdin/protocol
+        """Resume a waiting Codex session by sending the approval text to stdin."""
+        resume_message = message.rstrip("\n")
+        await self._get_supervisor().write_stdin(handle, f"{resume_message}\n")
 
     async def stop(self, handle: ProviderProcessHandle) -> None:
         """Send SIGTERM to the Codex process group via the supervisor."""

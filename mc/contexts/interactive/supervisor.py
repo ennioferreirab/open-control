@@ -172,7 +172,7 @@ class InteractiveExecutionSupervisor:
             self._pause_for_review(event, activity_type=ActivityEventType.REVIEW_REQUESTED)
             return
         if event.kind == "approval_requested":
-            self._pause_for_review(event, activity_type=ActivityEventType.HITL_REQUESTED)
+            self._request_human_intervention(event)
             return
         if event.kind == "session_ready":
             self._mark_supervision_ready(event)
@@ -242,6 +242,16 @@ class InteractiveExecutionSupervisor:
             self._bridge.create_activity(
                 activity_type,
                 f"Interactive session {action} for @{event.agent_name}.",
+                task_id=event.task_id,
+                agent_name=event.agent_name,
+            )
+
+    def _request_human_intervention(self, event: InteractiveSupervisionEvent) -> None:
+        """Record provider approval requests without projecting workflow review state."""
+        if event.task_id and event.agent_name:
+            self._bridge.create_activity(
+                ActivityEventType.HITL_REQUESTED,
+                f"Interactive session requested approval for @{event.agent_name}.",
                 task_id=event.task_id,
                 agent_name=event.agent_name,
             )

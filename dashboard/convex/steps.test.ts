@@ -398,6 +398,68 @@ describe("manualMoveStep", () => {
     )._handler;
   }
 
+  it("allows completing a workflow checkpoint gate even when assigned to a non-human agent", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const task = {
+      _id: "task-1",
+      title: "Workflow gate task",
+      status: "in_progress",
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Final approval gate",
+            description: "Wait for the workflow owner to approve",
+            assignedAgent: "nanobot",
+            workflowStepType: "checkpoint",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+            status: "running",
+          },
+        ],
+      },
+    };
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Final approval gate",
+      status: "running",
+      assignedAgent: "nanobot",
+      workflowStepType: "checkpoint",
+      order: 1,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: (_table: string) => ({
+          withIndex: (_idx: string, _fn: unknown) => ({
+            collect: async () => [step],
+          }),
+        }),
+      },
+    };
+
+    await expect(handler(ctx, { stepId: "step-1", newStatus: "completed" })).resolves.toBe(
+      "task-1",
+    );
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "completed",
+    });
+  });
+
   it("allows completing a human step directly from assigned", async () => {
     const handler = getHandler();
     const patchedById: Record<string, Record<string, unknown>> = {};

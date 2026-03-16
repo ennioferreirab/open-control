@@ -27,6 +27,7 @@ export interface WorkflowSpecStep {
   title: string;
   type: WorkflowStepType;
   agentId?: string;
+  reviewSpecId?: string;
   description?: string;
   inputs?: string[];
   outputs?: string[];
@@ -75,6 +76,8 @@ export interface WorkflowExecutionPlanStep {
   workflowStepType: WorkflowStepType;
   /** The canonical agent id this step was compiled from (agent steps only). */
   agentId?: string;
+  /** The review spec that governs the reviewer contract (review steps only). */
+  reviewSpecId?: string;
   /** The step id to route to on rejection (review steps only). */
   onRejectStepId?: string;
 }
@@ -147,6 +150,22 @@ function computeParallelGroups(steps: WorkflowSpecStep[]): Map<string, number> {
   return groups;
 }
 
+function validateWorkflowStep(step: WorkflowSpecStep): void {
+  if (step.type !== "review") {
+    return;
+  }
+
+  if (!step.agentId) {
+    throw new Error(`Review step "${step.id}" requires agentId`);
+  }
+  if (!step.reviewSpecId) {
+    throw new Error(`Review step "${step.id}" requires reviewSpecId`);
+  }
+  if (!step.onReject) {
+    throw new Error(`Review step "${step.id}" requires onReject`);
+  }
+}
+
 export function compileWorkflowExecutionPlan(
   workflow: WorkflowSpecInput,
   agentRefs: AgentRef[],
@@ -162,6 +181,8 @@ export function compileWorkflowExecutionPlan(
   const parallelGroups = computeParallelGroups(workflow.steps);
 
   const compiledSteps: WorkflowExecutionPlanStep[] = workflow.steps.map((step, index) => {
+    validateWorkflowStep(step);
+
     // Resolve agent name
     let assignedAgent = "";
     if (step.agentId !== undefined) {
@@ -192,6 +213,9 @@ export function compileWorkflowExecutionPlan(
 
     if (step.agentId !== undefined) {
       compiledStep.agentId = step.agentId;
+    }
+    if (step.reviewSpecId !== undefined) {
+      compiledStep.reviewSpecId = step.reviewSpecId;
     }
 
     if (step.onReject !== undefined) {

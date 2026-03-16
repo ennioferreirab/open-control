@@ -37,6 +37,7 @@ def _make_supervisor() -> MagicMock:
     supervisor = MagicMock()
     supervisor.launch = AsyncMock()
     supervisor.send_signal = AsyncMock()
+    supervisor.write_stdin = AsyncMock()
     supervisor.terminate = AsyncMock()
     supervisor.kill = AsyncMock()
     supervisor.inspect_process_tree = AsyncMock(return_value={"pid": 12345, "children": []})
@@ -225,9 +226,14 @@ class TestCodexCLIParserStop:
 
 class TestCodexCLIParserResume:
     @pytest.mark.asyncio
-    async def test_resume_is_awaitable(self) -> None:
-        parser = CodexCLIParser(supervisor=_make_supervisor())
-        await parser.resume(_make_handle(), "continue please")
+    async def test_resume_writes_to_process_stdin(self) -> None:
+        supervisor = _make_supervisor()
+        parser = CodexCLIParser(supervisor=supervisor)
+        handle = _make_handle()
+
+        await parser.resume(handle, "continue please")
+
+        supervisor.write_stdin.assert_awaited_once_with(handle, "continue please\n")
 
 
 class TestCodexCLIParserInspectProcessTree:

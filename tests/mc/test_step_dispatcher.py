@@ -27,8 +27,9 @@ def _step(
     order: int = 1,
     blocked_by: list[str] | None = None,
     assigned_agent: str = "nanobot",
+    **extra_fields: Any,
 ) -> dict[str, Any]:
-    return {
+    step = {
         "id": step_id,
         "task_id": "task-1",
         "title": title,
@@ -39,6 +40,8 @@ def _step(
         "order": order,
         "blocked_by": blocked_by or [],
     }
+    step.update(extra_fields)
+    return step
 
 
 def _make_stateful_bridge(
@@ -383,6 +386,83 @@ class TestStepDispatcher:
         assert not any(
             call.args[1] == TaskStatus.REVIEW for call in bridge.update_task_status.call_args_list
         )
+
+    @pytest.mark.asyncio
+    async def test_review_step_approved_verdict_completes_normally(self) -> None:
+        bridge, state = _make_stateful_bridge(
+            [
+                _step(
+                    "step-review-1",
+                    "Review draft",
+                    workflow_step_type="review",
+                    review_spec_id="review-spec-1",
+                    on_reject_step_id="step-write-1",
+                )
+            ]
+        )
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            _patch_context_builder(),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                new=AsyncMock(
+                    return_value=(
+                        '{"verdict":"approved","issues":[],"strengths":["Looks good"],'
+                        '"scores":{"overall":0.98},"vetoesTriggered":[],'
+                        '"recommendedReturnStep":null}'
+                    )
+                ),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-review-1"])
+
+        assert state["step-review-1"]["status"] == StepStatus.COMPLETED
+        bridge.post_step_completion.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_review_step_rejection_blocks_review_and_reassigns_target(self) -> None:
+        bridge, state = _make_stateful_bridge(
+            [
+                _step("step-write-1", "Rewrite draft", status=StepStatus.COMPLETED, order=1),
+                _step(
+                    "step-review-1",
+                    "Review draft",
+                    order=2,
+                    workflow_step_type="review",
+                    review_spec_id="review-spec-1",
+                    on_reject_step_id="step-write-1",
+                ),
+            ]
+        )
+        dispatcher = StepDispatcher(bridge)
+
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            _patch_context_builder(),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                new=AsyncMock(
+                    return_value=(
+                        '{"verdict":"rejected","issues":["Fix alignment"],'
+                        '"strengths":[],"scores":{"overall":0.41},'
+                        '"vetoesTriggered":["alignment"],'
+                        '"recommendedReturnStep":"step-write-1"}'
+                    )
+                ),
+            ),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-review-1"])
+
+        assert state["step-review-1"]["status"] == StepStatus.BLOCKED
+        bridge.update_step_status.assert_any_call("step-write-1", StepStatus.ASSIGNED)
 
     @pytest.mark.asyncio
     async def test_dispatch_parallel_group_runs_concurrently(self) -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -81,6 +81,36 @@ def test_supervisor_marks_task_review_and_step_review_when_paused() -> None:
         "Interactive session paused for review for @claude-pair.",
         task_id="task-1",
         agent_name="claude-pair",
+    )
+
+
+def test_supervisor_does_not_project_approval_requested_as_workflow_review() -> None:
+    bridge = MagicMock()
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:codex",
+        "agent_name": "codex-reviewer",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="approval_requested",
+            provider="codex",
+            session_id="interactive_session:codex",
+            summary="Approve the shell command?",
+        )
+    )
+
+    bridge.update_task_status.assert_not_called()
+    bridge.update_step_status.assert_not_called()
+    bridge.create_activity.assert_called_once_with(
+        ActivityEventType.HITL_REQUESTED,
+        "Interactive session requested approval for @codex-reviewer.",
+        task_id="task-1",
+        agent_name="codex-reviewer",
     )
 
 

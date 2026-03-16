@@ -637,6 +637,42 @@ class TestBuildStepContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
+    async def test_rerun_context_explicitly_surfaces_review_feedback(
+        self, mock_config: MagicMock
+    ) -> None:
+        bridge = _make_mock_bridge(
+            messages=[
+                _step_completion("step_1", "Attempt 1 draft output"),
+                {
+                    "author_name": "reviewer",
+                    "author_type": "agent",
+                    "type": "comment",
+                    "timestamp": "2026-01-01T10:03:00Z",
+                    "content": "Rejected: fix alignment and strengthen CTA contrast.",
+                },
+                _user_msg("Please rework this with the latest reviewer feedback."),
+            ]
+        )
+        builder = ContextBuilder(bridge)
+        step = {
+            "id": "step_1",
+            "title": "Revise draft",
+            "description": "Apply reviewer feedback",
+            "assigned_agent": "writer",
+            "blocked_by": [],
+        }
+
+        req = await builder.build_step_context("task_123", step)
+
+        assert "[Previous Review Feedback]" in req.description
+        assert "Rejected: fix alignment and strengthen CTA contrast." in req.description
+        assert "Attempt 1 draft output" in req.description
+
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.roster_builder.load_agent_config",
+        return_value=(None, None, None),
+    )
     async def test_step_execution_description_format(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge()
         builder = ContextBuilder(bridge)
