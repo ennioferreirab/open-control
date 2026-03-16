@@ -35,6 +35,8 @@ class ProcessConfig:
     env: dict[str, str] | None = None
     critical: bool = True  # If False, crash won't bring down other processes
     restart_on_crash: bool = False  # If True, auto-restart on unexpected exit
+    max_restart_attempts: int = 5  # Max consecutive restart failures before giving up
+    port: int | None = None  # Port to clean up before restarting
 
 
 @dataclass
@@ -83,6 +85,7 @@ class ProcessManager:
         self._running = False
         self._monitor_task: asyncio.Task | None = None
         self._stopping = False
+        self._restart_failures: dict[str, int] = {}  # label -> consecutive failure count
 
     async def start(self) -> None:
         """
@@ -235,6 +238,7 @@ class ProcessManager:
                 env={"NODE_OPTIONS": "--max-old-space-size=1536"},
                 critical=False,
                 restart_on_crash=True,
+                port=3210,
             ),
             ProcessConfig(
                 label="dashboard",
@@ -370,11 +374,35 @@ class ProcessManager:
                 )
             return "killed"
 
+    async def _kill_port(self, port: int) -> None:
+        """Kill processes listening on the given port."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "lsof",
+                "-ti",
+                f":{port}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout_data, _ = await proc.communicate()
+            if stdout_data:
+                for pid_str in stdout_data.decode().strip().split("\n"):
+                    pid_str = pid_str.strip()
+                    if pid_str.isdigit():
+                        try:
+                            os.kill(int(pid_str), signal.SIGTERM)
+                            logger.info(f"[MC] Killed process {pid_str} on port {port}")
+                        except (ProcessLookupError, OSError):
+                            pass
+        except Exception:
+            logger.warning(f"[MC] Could not clean up port {port}")
+
     async def _monitor(self) -> None:
         """
         Monitor all child processes for unexpected termination.
         Runs as a background task after startup.
-        Processes with restart_on_crash=True are restarted automatically.
+        Processes with restart_on_crash=True are restarted automatically,
+        up to max_restart_attempts consecutive failures.
         """
         while self._running:
             for i, managed in enumerate(self._processes):
@@ -394,17 +422,39 @@ class ProcessManager:
                         )
 
                     if managed.config.restart_on_crash:
-                        logger.info(f"[MC] Restarting {label}...")
+                        failures = self._restart_failures.get(label, 0) + 1
+                        self._restart_failures[label] = failures
+
+                        if failures > managed.config.max_restart_attempts:
+                            logger.error(
+                                f"[MC] {label} exceeded max restart attempts "
+                                f"({managed.config.max_restart_attempts}), giving up"
+                            )
+                            if self._on_crash:
+                                await self._on_crash(label, exit_code)
+                            continue
+
+                        logger.info(
+                            f"[MC] Restarting {label} "
+                            f"(attempt {failures}/{managed.config.max_restart_attempts})..."
+                        )
                         # Kill orphaned child processes (e.g. convex local backend)
                         try:
                             os.killpg(process.pid, signal.SIGTERM)
                         except (ProcessLookupError, OSError):
                             pass
-                        # Wait for ports to be released
-                        await asyncio.sleep(2)
+                        # Kill processes on the configured port
+                        if managed.config.port:
+                            await self._kill_port(managed.config.port)
+                        # Exponential backoff: 2, 4, 8, 16, 32s
+                        backoff = min(2**failures, 32)
+                        await asyncio.sleep(backoff)
                         try:
                             restarted = await self._spawn_process(managed.config)
                             self._processes[i] = restarted
+                            # Reset counter if process stays alive briefly
+                            if restarted.process.returncode is None:
+                                self._restart_failures[label] = 0
                             logger.info(f"[MC] Restarted {label} (PID: {restarted.process.pid})")
                         except Exception as exc:
                             logger.error(f"[MC] Failed to restart {label}: {exc}")
