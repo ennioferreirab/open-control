@@ -273,6 +273,7 @@ class InteractionService:
                     "status": "review",
                     "agent_name": context.agent_name,
                     "awaiting_kickoff": False,
+                    "review_phase": "execution_pause",
                 },
             )
         except Exception as exc:

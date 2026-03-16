@@ -926,6 +926,7 @@ describe("tasks.pauseTask", () => {
     // awaitingKickoff must NOT be set (paused state has no awaitingKickoff)
     const patchArg = (patch as ReturnType<typeof vi.fn>).mock.calls[0][1];
     expect(patchArg.awaitingKickoff).toBeUndefined();
+    expect(patchArg.reviewPhase).toBe("execution_pause");
     expect(insert).toHaveBeenCalledWith(
       "activities",
       expect.objectContaining({
@@ -978,6 +979,7 @@ describe("tasks.resumeTask", () => {
       _id: "task-1",
       status: "review",
       title: "Paused Task",
+      reviewPhase: "execution_pause",
       // awaitingKickoff is NOT set — this is the paused state
     }));
 
@@ -988,6 +990,8 @@ describe("tasks.resumeTask", () => {
       "task-1",
       expect.objectContaining({ status: "in_progress" }),
     );
+    const patchArg = (patch as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(patchArg.reviewPhase).toBeUndefined();
     expect(insert).toHaveBeenCalledWith(
       "activities",
       expect.objectContaining({
@@ -1016,6 +1020,23 @@ describe("tasks.resumeTask", () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
+  it("throws when reviewPhase is final_approval", async () => {
+    const handler = getResumeTaskHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async () => ({
+      _id: "task-1",
+      status: "review",
+      title: "Final Approval Task",
+      reviewPhase: "final_approval",
+    }));
+
+    await expect(handler({ db: { get, patch, insert } }, { taskId: "task-1" })).rejects.toThrow(
+      /Cannot use resumeTask on a non-paused review task/,
+    );
+    expect(patch).not.toHaveBeenCalled();
+  });
+
   it("throws ConvexError when task is not in review status (error path)", async () => {
     const handler = getResumeTaskHandler();
     const get = vi.fn(async () => ({
@@ -1040,6 +1061,7 @@ describe("tasks.resumeTask", () => {
       _id: "task-1",
       status: "review",
       title: "Paused Task",
+      reviewPhase: "execution_pause",
     }));
 
     const updatedPlan = { steps: [{ tempId: "s1", title: "Step A" }] };

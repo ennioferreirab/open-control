@@ -75,6 +75,7 @@ def test_supervisor_marks_task_review_and_step_review_when_paused() -> None:
         agent_name="claude-pair",
         description="Need user confirmation before continuing.",
         awaiting_kickoff=False,
+        review_phase="execution_pause",
     )
     bridge.update_step_status.assert_called_once_with("step-1", "review")
     bridge.create_activity.assert_called_once_with(

@@ -11,6 +11,7 @@ from mc.types import (
     ActivityEventType,
     AuthorType,
     MessageType,
+    ReviewPhase,
     TaskStatus,
     TrustLevel,
 )
@@ -47,16 +48,18 @@ class ReviewWorker:
 
     async def handle_review_transition(self, task_id: str, task: dict[str, Any]) -> None:
         title = task.get("title", "Untitled")
+        review_phase = task.get("review_phase") or task.get("reviewPhase")
         logger.info(
-            "[review] _handle_review_transition called for task '%s' (%s) -- awaiting_kickoff=%s, supervision_mode=%s, trust_level=%s",
+            "[review] _handle_review_transition called for task '%s' (%s) -- awaiting_kickoff=%s, review_phase=%s, supervision_mode=%s, trust_level=%s",
             title,
             task_id,
             task.get("awaiting_kickoff"),
+            review_phase,
             task.get("supervision_mode"),
             task.get("trust_level"),
         )
 
-        if task.get("awaiting_kickoff"):
+        if task.get("awaiting_kickoff") or review_phase == ReviewPhase.PLAN_REVIEW:
             logger.info(
                 "[review] Task '%s' is awaiting kick-off; skipping review routing.",
                 title,
@@ -73,7 +76,7 @@ class ReviewWorker:
             return
 
         steps = await asyncio.to_thread(self._bridge.get_steps_by_task, task_id)
-        if steps:
+        if steps and review_phase != ReviewPhase.FINAL_APPROVAL:
             logger.info(
                 "[review] Task '%s' entered review with %d materialized steps -- treating as paused task; skipping auto-completion.",
                 title,

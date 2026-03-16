@@ -18,6 +18,7 @@ export async function pauseTaskExecution(
 
   await ctx.db.patch(taskId, {
     status: "review",
+    reviewPhase: "execution_pause",
     updatedAt: now,
   });
 
@@ -45,11 +46,17 @@ export async function resumeTaskExecution(
       "Cannot use resumeTask on a pre-kickoff task. Use approveAndKickOff instead.",
     );
   }
+  if (task.reviewPhase !== "execution_pause") {
+    throw new ConvexError(
+      "Cannot use resumeTask on a non-paused review task. Expected reviewPhase=execution_pause.",
+    );
+  }
 
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = {
     status: "in_progress",
     awaitingKickoff: undefined,
+    reviewPhase: undefined,
     updatedAt: now,
   };
   if (executionPlan !== undefined) {
@@ -76,7 +83,11 @@ export async function approveKickOffTask(
   if (task.status !== "review") {
     throw new ConvexError(`Cannot kick off task in status '${task.status}'. Expected: review`);
   }
-  if (task.awaitingKickoff !== true && task.isManual !== true) {
+  if (
+    task.reviewPhase !== "plan_review" &&
+    task.awaitingKickoff !== true &&
+    task.isManual !== true
+  ) {
     throw new ConvexError("Cannot kick off task: requires awaitingKickoff or isManual");
   }
 
@@ -93,6 +104,7 @@ export async function approveKickOffTask(
   const patch: Record<string, unknown> = {
     status: "in_progress",
     awaitingKickoff: undefined,
+    reviewPhase: undefined,
     updatedAt: now,
   };
   if (executionPlan !== undefined) {
@@ -117,10 +129,7 @@ export async function approveKickOffTask(
   }
 
   const stepCount =
-    typeof plan === "object" &&
-    plan !== null &&
-    "steps" in plan &&
-    Array.isArray(plan.steps)
+    typeof plan === "object" && plan !== null && "steps" in plan && Array.isArray(plan.steps)
       ? plan.steps.length
       : 0;
 

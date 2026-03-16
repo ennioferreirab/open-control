@@ -174,6 +174,17 @@ describe("computeAllowedActions", () => {
     expect(getActions("review", { reviewPhase: "execution_pause" }, steps).resume).toBe(true);
   });
 
+  it("approve and resume are never both true for the same reviewPhase", () => {
+    const pausedSteps: StepForFlags[] = [{ status: "running" }];
+    const finalApproval = getActions("review", { reviewPhase: "final_approval" }, pausedSteps);
+    const executionPause = getActions("review", { reviewPhase: "execution_pause" }, pausedSteps);
+
+    expect(finalApproval.approve).toBe(true);
+    expect(finalApproval.resume).toBe(false);
+    expect(executionPause.approve).toBe(false);
+    expect(executionPause.resume).toBe(true);
+  });
+
   it("resume is false when awaiting kickoff even if review already has steps", () => {
     const steps: StepForFlags[] = [{ status: "running" }];
     expect(
