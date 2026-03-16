@@ -24,6 +24,9 @@ class ThreadContextBuilder:
         messages: list[dict[str, Any]],
         max_messages: int = MAX_THREAD_MESSAGES,
         predecessor_step_ids: list[str] | None = None,
+        compacted_summary: str = "",
+        thread_journal_path: str | None = None,
+        recent_window_messages: int | None = None,
     ) -> str:
         """Build thread context string for agent injection.
 
@@ -38,7 +41,27 @@ class ThreadContextBuilder:
             Formatted context string, or "" if no relevant context.
         """
         if not messages:
+            if compacted_summary or thread_journal_path:
+                return self._format_enriched_context(
+                    compacted_summary=compacted_summary,
+                    recent_context="",
+                    thread_journal_path=thread_journal_path,
+                )
             return ""
+
+        if compacted_summary or thread_journal_path:
+            recent_count = recent_window_messages or max_messages
+            recent_messages = messages[-recent_count:] if recent_count > 0 else []
+            recent_context = self.build(
+                recent_messages,
+                max_messages=recent_count,
+                predecessor_step_ids=predecessor_step_ids,
+            )
+            return self._format_enriched_context(
+                compacted_summary=compacted_summary,
+                recent_context=recent_context,
+                thread_journal_path=thread_journal_path,
+            )
 
         predecessor_ids = set(predecessor_step_ids or [])
 
@@ -51,9 +74,7 @@ class ThreadContextBuilder:
         # even without user messages (AC #3).
         return self._build_step_aware(messages, max_messages, predecessor_ids)
 
-    def _build_legacy(
-        self, messages: list[dict[str, Any]], max_messages: int
-    ) -> str:
+    def _build_legacy(self, messages: list[dict[str, Any]], max_messages: int) -> str:
         """Legacy context building — mirrors original _build_thread_context().
 
         Returns empty string if no user messages exist (backward compat).
@@ -83,8 +104,7 @@ class ThreadContextBuilder:
         predecessor_msgs = [
             m
             for m in messages
-            if m.get("step_id") in predecessor_ids
-            and m.get("type") == "step_completion"
+            if m.get("step_id") in predecessor_ids and m.get("type") == "step_completion"
         ]
 
         has_user_messages = any(
@@ -171,15 +191,27 @@ class ThreadContextBuilder:
             file_attachments = latest.get("file_attachments") or []
             attachment_suffix = ""
             if file_attachments:
-                names = ", ".join(
-                    fa.get("name", "unknown") for fa in file_attachments
-                )
+                names = ", ".join(fa.get("name", "unknown") for fa in file_attachments)
                 attachment_suffix = f" (attached: {names})"
-            result_parts.append(
-                f"[Latest Follow-up]\nUser: {latest_content}{attachment_suffix}"
-            )
+            result_parts.append(f"[Latest Follow-up]\nUser: {latest_content}{attachment_suffix}")
 
         return "\n\n".join(result_parts)
+
+    def _format_enriched_context(
+        self,
+        *,
+        compacted_summary: str,
+        recent_context: str,
+        thread_journal_path: str | None,
+    ) -> str:
+        parts: list[str] = []
+        if compacted_summary:
+            parts.append(f"[Compacted Thread Summary]\n{compacted_summary}")
+        if recent_context:
+            parts.append(f"[Recent Thread Window]\n{recent_context}")
+        if thread_journal_path:
+            parts.append(f"[Thread Journal]\nFull history: {thread_journal_path}")
+        return "\n\n".join(parts)
 
     def _format_message(self, message: dict[str, Any]) -> str:
         """Render a single message including artifacts and file attachments."""

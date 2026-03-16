@@ -22,6 +22,7 @@ from mc.application.execution.file_enricher import (
     build_merged_source_context,
     load_merged_source_payloads,
 )
+from mc.application.execution.thread_journal_service import ThreadJournalService
 from mc.types import (
     NANOBOT_AGENT_NAME,
     ActivityEventType,
@@ -63,6 +64,9 @@ class ThreadContextBuilder:
             messages,
             max_messages=max_messages,
             predecessor_step_ids=predecessor_step_ids,
+            compacted_summary=kwargs.get("compacted_summary", ""),
+            thread_journal_path=kwargs.get("thread_journal_path"),
+            recent_window_messages=kwargs.get("recent_window_messages"),
         )
 
 
@@ -72,9 +76,7 @@ def _known_agent_names() -> set[str]:
     if not agents_dir.is_dir():
         return set()
     return {
-        d.name.lower()
-        for d in agents_dir.iterdir()
-        if d.is_dir() and (d / "config.yaml").exists()
+        d.name.lower() for d in agents_dir.iterdir() if d.is_dir() and (d / "config.yaml").exists()
     }
 
 
@@ -170,8 +172,8 @@ async def handle_mention(
         return
 
     # Load agent config
-    from mc.infrastructure.config import AGENTS_DIR
     from mc.infrastructure.agents.yaml_validator import validate_agent_file
+    from mc.infrastructure.config import AGENTS_DIR
 
     config_file = AGENTS_DIR / agent_name / "config.yaml"
     if not config_file.exists():
@@ -182,10 +184,7 @@ async def handle_mention(
             task_id,
             "System",
             AuthorType.SYSTEM,
-            (
-                f"Agent @{agent_name} not found.\n"
-                f"Available agents: {available}"
-            ),
+            (f"Agent @{agent_name} not found.\nAvailable agents: {available}"),
             MessageType.SYSTEM_EVENT,
         )
         return
@@ -209,21 +208,25 @@ async def handle_mention(
 
     # Resolve tier references
     from mc.types import is_tier_reference
+
     if agent_model and is_tier_reference(agent_model):
         try:
             from mc.infrastructure.providers.tier_resolver import TierResolver
+
             resolver = TierResolver(bridge)
             agent_model = resolver.resolve_model(agent_model)
         except ValueError as exc:
             logger.warning(
                 "[mention_handler] Tier resolution failed for @%s: %s",
-                agent_name, exc,
+                agent_name,
+                exc,
             )
             # Continue with None model (will use default)
             agent_model = None
 
     # Inject global orientation for non-lead agents
     from mc.infrastructure.orientation import load_orientation
+
     orientation = load_orientation(agent_name, bridge=bridge)
     if orientation:
         agent_prompt = f"{orientation}\n\n---\n\n{agent_prompt}" if agent_prompt else orientation
@@ -235,14 +238,9 @@ async def handle_mention(
     # Fetch thread context and task data for the agent (shared pipeline -- AC2 of 16.1)
     thread_context = ""
     task_data: dict[str, Any] | None = None
+    thread_messages: list[dict[str, Any]] = []
     try:
-        thread_messages = await asyncio.to_thread(
-            bridge.get_task_messages, task_id
-        )
-        thread_context = ThreadContextBuilder().build(
-            thread_messages,
-            max_messages=20,
-        )
+        thread_messages = await asyncio.to_thread(bridge.get_task_messages, task_id)
     except Exception:
         logger.warning(
             "[mention_handler] Failed to fetch thread context for task %s",
@@ -255,6 +253,34 @@ async def handle_mention(
     except Exception:
         logger.warning(
             "[mention_handler] Failed to fetch task data for task %s",
+            task_id,
+            exc_info=True,
+        )
+
+    try:
+        journal_service = ThreadJournalService(bridge=bridge)
+        snapshot = journal_service.sync_task_thread(
+            task_id=task_id,
+            task_title=str((task_data or {}).get("title") or task_title or task_id),
+            task_data=task_data or {},
+            messages=thread_messages,
+        )
+        journal_service.schedule_background_compaction(
+            task_id=task_id,
+            task_title=str((task_data or {}).get("title") or task_title or task_id),
+            task_data=task_data or {},
+            messages=thread_messages,
+        )
+        thread_context = ThreadContextBuilder().build(
+            thread_messages,
+            max_messages=20,
+            compacted_summary=snapshot.state.compacted_summary,
+            thread_journal_path=snapshot.journal_path,
+            recent_window_messages=snapshot.state.recent_window_messages,
+        )
+    except Exception:
+        logger.warning(
+            "[mention_handler] Failed to build journal-aware thread context for task %s",
             task_id,
             exc_info=True,
         )
@@ -354,6 +380,7 @@ async def handle_mention(
         # Set MC context on ask_agent tool
         if ask_tool := loop.tools.get("ask_agent"):
             from nanobot.agent.tools.ask_agent import AskAgentTool
+
             if isinstance(ask_tool, AskAgentTool):
                 ask_tool.set_context(
                     caller_agent=agent_name,
@@ -384,13 +411,16 @@ async def handle_mention(
         )
         logger.error(
             "[mention_handler] @%s timed out on task %s",
-            agent_name, task_id,
+            agent_name,
+            task_id,
         )
     except Exception as exc:
         response = f"@{agent_name} encountered an error: {type(exc).__name__}: {exc}"
         logger.exception(
             "[mention_handler] @%s failed on task %s: %s",
-            agent_name, task_id, exc,
+            agent_name,
+            task_id,
+            exc,
         )
 
     # Post the agent's response to the task thread
@@ -405,7 +435,8 @@ async def handle_mention(
 
     logger.info(
         "[mention_handler] @%s responded to mention in task %s",
-        agent_name, task_id,
+        agent_name,
+        task_id,
     )
 
 
@@ -460,7 +491,9 @@ async def handle_all_mentions(
         if isinstance(result, Exception):
             logger.error(
                 "[mention_handler] Failed to handle mention @%s on task %s: %s",
-                agent_name, task_id, result,
+                agent_name,
+                task_id,
+                result,
             )
 
     return True
@@ -553,9 +586,7 @@ def _build_task_files_section(task_data: dict[str, Any] | None) -> str:
         return ""
 
     files = (
-        task_data.get("files")
-        or task_data.get("file_manifest")
-        or task_data.get("fileManifest")
+        task_data.get("files") or task_data.get("file_manifest") or task_data.get("fileManifest")
     )
     if not files or not isinstance(files, list):
         return ""
@@ -583,8 +614,6 @@ def _list_available_agents(agents_dir: Path) -> str:
     if not agents_dir.is_dir():
         return "(none)"
     names = sorted(
-        d.name
-        for d in agents_dir.iterdir()
-        if d.is_dir() and (d / "config.yaml").exists()
+        d.name for d in agents_dir.iterdir() if d.is_dir() and (d / "config.yaml").exists()
     )
     return ", ".join(f"@{n}" for n in names) if names else "(none)"

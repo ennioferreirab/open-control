@@ -7,6 +7,7 @@ from mc.application.execution.file_enricher import (
     build_file_context,
     build_file_manifest,
     resolve_task_dirs,
+    resolve_thread_journal_paths,
 )
 
 
@@ -83,6 +84,26 @@ class TestResolveTaskDirs:
     def test_uses_nanobot_tasks_dir(self) -> None:
         files_dir, _ = resolve_task_dirs("task_123")
         assert ".nanobot/tasks/" in files_dir
+
+
+class TestResolveThreadJournalPaths:
+    """Tests for task-scoped thread journal path helpers."""
+
+    def test_returns_absolute_journal_and_state_paths(self) -> None:
+        journal_path, state_path = resolve_thread_journal_paths("task_123")
+        assert journal_path.startswith("/")
+        assert state_path.startswith("/")
+
+    def test_paths_live_inside_task_output_dir(self) -> None:
+        _, output_dir = resolve_task_dirs("task_123")
+        journal_path, state_path = resolve_thread_journal_paths("task_123")
+        assert journal_path.startswith(output_dir)
+        assert state_path.startswith(output_dir)
+
+    def test_uses_expected_file_names(self) -> None:
+        journal_path, state_path = resolve_thread_journal_paths("task_123")
+        assert journal_path.endswith("/THREAD_JOURNAL.md")
+        assert state_path.endswith("/THREAD_COMPACTION_STATE.json")
 
 
 class TestBuildFileContextTask:

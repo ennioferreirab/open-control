@@ -17,6 +17,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from mc.application.execution.thread_journal_service import ThreadJournalService
 from mc.contexts.conversation.intent import (
     ConversationIntent,
     ConversationIntentResolver,
@@ -35,6 +36,9 @@ def build_thread_context(
     messages: list[dict[str, Any]],
     *,
     max_messages: int = 20,
+    compacted_summary: str = "",
+    thread_journal_path: str | None = None,
+    recent_window_messages: int | None = None,
 ) -> str:
     """Build thread context using the shared ThreadContextBuilder.
 
@@ -45,7 +49,13 @@ def build_thread_context(
         build_thread_context as _build,
     )
 
-    return _build(messages, max_messages=max_messages)
+    return _build(
+        messages,
+        max_messages=max_messages,
+        compacted_summary=compacted_summary,
+        thread_journal_path=thread_journal_path,
+        recent_window_messages=recent_window_messages,
+    )
 
 
 class ConversationService:
@@ -118,9 +128,7 @@ class ConversationService:
             Formatted context string, or "" if no relevant context.
         """
         try:
-            messages = await asyncio.to_thread(
-                self._bridge.get_task_messages, task_id
-            )
+            messages = await asyncio.to_thread(self._bridge.get_task_messages, task_id)
         except Exception:
             logger.warning(
                 "[conversation] Failed to fetch messages for task %s",
@@ -131,8 +139,33 @@ class ConversationService:
 
         if not messages:
             return ""
+        try:
+            task_data = await asyncio.to_thread(
+                self._bridge.query, "tasks:getById", {"task_id": task_id}
+            )
+        except Exception:
+            task_data = {}
 
-        return build_thread_context(messages, max_messages=max_messages)
+        journal_service = ThreadJournalService(bridge=self._bridge)
+        snapshot = journal_service.sync_task_thread(
+            task_id=task_id,
+            task_title=str((task_data or {}).get("title") or task_id),
+            task_data=task_data if isinstance(task_data, dict) else {},
+            messages=messages,
+        )
+        journal_service.schedule_background_compaction(
+            task_id=task_id,
+            task_title=str((task_data or {}).get("title") or task_id),
+            task_data=task_data if isinstance(task_data, dict) else {},
+            messages=messages,
+        )
+        return build_thread_context(
+            messages,
+            max_messages=max_messages,
+            compacted_summary=snapshot.state.compacted_summary,
+            thread_journal_path=snapshot.journal_path,
+            recent_window_messages=snapshot.state.recent_window_messages,
+        )
 
     async def handle_message(
         self,
@@ -223,13 +256,9 @@ class ConversationService:
 
     # ── Private dispatch methods ─────────────────────────────────────
 
-    async def _dispatch_mention(
-        self, task_id: str, content: str, task_title: str
-    ) -> None:
+    async def _dispatch_mention(self, task_id: str, content: str, task_title: str) -> None:
         """Dispatch @mention handling. Does NOT change task status."""
-        logger.info(
-            "[conversation] Dispatching mention for task %s", task_id
-        )
+        logger.info("[conversation] Dispatching mention for task %s", task_id)
         await handle_all_mentions(
             bridge=self._bridge,
             task_id=task_id,
@@ -241,11 +270,7 @@ class ConversationService:
         self, task_id: str, content: str, task_data: dict[str, Any]
     ) -> None:
         """Dispatch plan negotiation chat."""
-        current_plan = (
-            task_data.get("execution_plan")
-            or task_data.get("executionPlan")
-            or {}
-        )
+        current_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
         task_status = task_data.get("status", "review")
 
         logger.info(

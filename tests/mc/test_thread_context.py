@@ -14,10 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
-from mc.application.execution.thread_context import ThreadContextBuilder, MAX_THREAD_MESSAGES
-
+from mc.application.execution.thread_context import ThreadContextBuilder
 
 # ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -254,6 +251,27 @@ class TestLatestUserMessageSeparation:
         assert "[Latest Follow-up]\nUser: The only user message." in ctx
 
 
+class TestJournalAwareContext:
+    def test_compacted_summary_and_journal_hint_are_rendered(self):
+        messages = [
+            _agent_msg("Earlier work"),
+            _user_msg("Latest request"),
+        ]
+        builder = ThreadContextBuilder()
+        ctx = builder.build(
+            messages,
+            compacted_summary="Older thread facts kept here.",
+            thread_journal_path="/abs/tasks/task-1/output/THREAD_JOURNAL.md",
+            recent_window_messages=2,
+        )
+
+        assert "[Compacted Thread Summary]" in ctx
+        assert "Older thread facts kept here." in ctx
+        assert "[Recent Thread Window]" in ctx
+        assert "[Thread Journal]" in ctx
+        assert "/abs/tasks/task-1/output/THREAD_JOURNAL.md" in ctx
+
+
 # ── AC3: Predecessor completion messages always included ──────────────────────
 
 
@@ -370,9 +388,7 @@ class TestPredecessorMessages:
 
     def test_with_predecessors_no_user_messages_still_builds_context(self):
         """Step-aware mode builds context even with no user messages."""
-        pred_msg = _step_completion_msg(
-            "Predecessor complete.", step_id="step-1"
-        )
+        pred_msg = _step_completion_msg("Predecessor complete.", step_id="step-1")
         messages = [pred_msg]
         builder = ThreadContextBuilder()
         ctx = builder.build(messages, predecessor_step_ids=["step-1"])
@@ -402,11 +418,13 @@ class TestArtifactFormatting:
             _step_completion_msg(
                 "Generated report.",
                 step_id="step-1",
-                artifacts=[{
-                    "path": "output/report.pdf",
-                    "action": "created",
-                    "description": "PDF, 245 KB",
-                }],
+                artifacts=[
+                    {
+                        "path": "output/report.pdf",
+                        "action": "created",
+                        "description": "PDF, 245 KB",
+                    }
+                ],
             ),
             _user_msg("Review it."),
         ]
@@ -420,11 +438,13 @@ class TestArtifactFormatting:
             _step_completion_msg(
                 "Updated data.",
                 step_id="step-1",
-                artifacts=[{
-                    "path": "output/data.json",
-                    "action": "modified",
-                    "diff": "File updated (12 KB)",
-                }],
+                artifacts=[
+                    {
+                        "path": "output/data.json",
+                        "action": "modified",
+                        "diff": "File updated (12 KB)",
+                    }
+                ],
             ),
             _user_msg("Thanks."),
         ]
@@ -498,7 +518,13 @@ class TestArtifactFormatting:
         pred = _step_completion_msg(
             "Step 1 done.",
             step_id="step-1",
-            artifacts=[{"path": "output/step1_report.pdf", "action": "created", "description": "PDF, 50 KB"}],
+            artifacts=[
+                {
+                    "path": "output/step1_report.pdf",
+                    "action": "created",
+                    "description": "PDF, 50 KB",
+                }
+            ],
         )
         later_messages = [_agent_msg(f"Msg {i}") for i in range(19)]
         later_messages.append(_user_msg("Continue"))
@@ -556,9 +582,9 @@ class TestFormatArtifacts:
 
     def test_single_created_artifact(self):
         builder = ThreadContextBuilder()
-        result = builder._format_artifacts([
-            {"path": "output/report.pdf", "action": "created", "description": "PDF, 47 pages"}
-        ])
+        result = builder._format_artifacts(
+            [{"path": "output/report.pdf", "action": "created", "description": "PDF, 47 pages"}]
+        )
         assert "CREATED: output/report.pdf" in result
         assert "PDF, 47 pages" in result
         assert "Files:" in result
@@ -566,23 +592,31 @@ class TestFormatArtifacts:
     def test_description_takes_precedence_over_diff(self):
         """When both description and diff present, description is shown."""
         builder = ThreadContextBuilder()
-        result = builder._format_artifacts([{
-            "path": "output/x.txt",
-            "action": "modified",
-            "description": "Updated file",
-            "diff": "+5 lines",
-        }])
+        result = builder._format_artifacts(
+            [
+                {
+                    "path": "output/x.txt",
+                    "action": "modified",
+                    "description": "Updated file",
+                    "diff": "+5 lines",
+                }
+            ]
+        )
         assert "Updated file" in result
         # diff should not appear when description is present
         assert "diff:" not in result
 
     def test_diff_shown_when_no_description(self):
         builder = ThreadContextBuilder()
-        result = builder._format_artifacts([{
-            "path": "output/x.txt",
-            "action": "modified",
-            "diff": "+5 lines",
-        }])
+        result = builder._format_artifacts(
+            [
+                {
+                    "path": "output/x.txt",
+                    "action": "modified",
+                    "diff": "+5 lines",
+                }
+            ]
+        )
         assert "diff: +5 lines" in result
 
     def test_no_description_or_diff_no_separator(self):
@@ -634,7 +668,9 @@ class TestExecutorShim:
         messages = [
             _step_completion_msg(
                 "Analysis done.",
-                artifacts=[{"path": "output/report.pdf", "action": "created", "description": "PDF, 245 KB"}],
+                artifacts=[
+                    {"path": "output/report.pdf", "action": "created", "description": "PDF, 245 KB"}
+                ],
             ),
             _user_msg("Good."),
         ]

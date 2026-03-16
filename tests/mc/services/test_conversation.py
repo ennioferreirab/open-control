@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.contexts.conversation.service import ConversationService
 from mc.contexts.conversation.intent import ConversationIntent
-
+from mc.contexts.conversation.service import ConversationService
 
 # All agent names used across tests
 _ALL_TEST_AGENTS = {"researcher", "alice", "bob", "nanobot"}
@@ -122,9 +120,11 @@ class TestContextAssembly:
         self, service: ConversationService, bridge: MagicMock
     ) -> None:
         """build_context calls build_thread_context with messages."""
-        bridge.get_task_messages = MagicMock(return_value=[
-            {"author_name": "User", "author_type": "user", "content": "hello"},
-        ])
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {"author_name": "User", "author_type": "user", "content": "hello"},
+            ]
+        )
         with patch(
             "mc.contexts.conversation.service.build_thread_context",
             return_value="[Thread History]\nUser [user]: hello",
@@ -140,6 +140,30 @@ class TestContextAssembly:
         bridge.get_task_messages = MagicMock(return_value=[])
         ctx = await service.build_context(task_id="task-1")
         assert ctx == ""
+
+    @pytest.mark.asyncio
+    async def test_build_context_includes_thread_journal_hint(
+        self, service: ConversationService, bridge: MagicMock
+    ) -> None:
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {
+                    "_id": "msg-1",
+                    "author_name": "User",
+                    "author_type": "user",
+                    "message_type": "user_message",
+                    "content": "hello",
+                },
+            ]
+        )
+        bridge.query = MagicMock(
+            return_value={"title": "Task title", "status": "in_progress", "execution_plan": {}}
+        )
+
+        ctx = await service.build_context(task_id="task-1")
+
+        assert "[Thread Journal]" in ctx
+        assert "THREAD_JOURNAL.md" in ctx
 
 
 # ── AC4: Mention behavior preserved ─────────────────────────────────
@@ -382,9 +406,7 @@ class TestEdgeCases:
     """Edge case handling."""
 
     @pytest.mark.asyncio
-    async def test_empty_content(
-        self, service: ConversationService, bridge: MagicMock
-    ) -> None:
+    async def test_empty_content(self, service: ConversationService, bridge: MagicMock) -> None:
         task_data: dict[str, Any] = {"status": "in_progress", "assigned_agent": "alice"}
         result = await service.handle_message(
             task_id="task-1",
@@ -416,4 +438,5 @@ class TestEdgeCases:
             task_data=task_data,
         )
         from mc.contexts.conversation.intent import ResolveResult
+
         assert isinstance(result, ResolveResult)

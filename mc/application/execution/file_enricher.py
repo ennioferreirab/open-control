@@ -57,6 +57,16 @@ def resolve_task_dirs(task_id: str) -> tuple[str, str]:
     return str(base), str(base / "output")
 
 
+def resolve_thread_journal_paths(task_id: str) -> tuple[str, str]:
+    """Resolve task-scoped thread journal and compaction-state file paths."""
+    _, output_dir = resolve_task_dirs(task_id)
+    output_path = Path(output_dir)
+    return (
+        str(output_path / "THREAD_JOURNAL.md"),
+        str(output_path / "THREAD_COMPACTION_STATE.json"),
+    )
+
+
 def build_file_context(
     file_manifest: list[dict[str, Any]],
     files_dir: str,

@@ -42,6 +42,7 @@ from mc.application.execution.roster_builder import (
     sync_agent_from_convex,
 )
 from mc.application.execution.thread_context_builder import build_thread_context
+from mc.application.execution.thread_journal_service import ThreadJournalService
 from mc.types import (
     NANOBOT_AGENT_NAME,
     extract_cc_model_name,
@@ -364,7 +365,21 @@ class ContextBuilder:
         try:
             thread_messages = await asyncio.to_thread(self._bridge.get_task_messages, task_id)
             req.thread_messages = thread_messages
-            thread_context = build_thread_context(thread_messages)
+            journal_service = ThreadJournalService(bridge=self._bridge)
+            journal_snapshot = journal_service.sync_task_thread(
+                task_id=task_id,
+                task_title=title,
+                task_data=fresh_task if isinstance(fresh_task, dict) else (task_data or {}),
+                messages=thread_messages,
+            )
+            req.thread_journal_path = journal_snapshot.journal_path
+            req.compacted_thread_summary = journal_snapshot.state.compacted_summary
+            thread_context = build_thread_context(
+                thread_messages,
+                compacted_summary=journal_snapshot.state.compacted_summary,
+                thread_journal_path=journal_snapshot.journal_path,
+                recent_window_messages=journal_snapshot.state.recent_window_messages,
+            )
             if thread_context:
                 req.thread_context = thread_context
                 req.description = (req.description or "") + f"\n{thread_context}"
@@ -373,6 +388,12 @@ class ContextBuilder:
                     title,
                     len(thread_messages),
                 )
+            journal_service.schedule_background_compaction(
+                task_id=task_id,
+                task_title=title,
+                task_data=fresh_task if isinstance(fresh_task, dict) else (task_data or {}),
+                messages=thread_messages,
+            )
         except Exception:
             logger.warning(
                 "[context] Thread context failed for '%s'",
@@ -563,11 +584,29 @@ class ContextBuilder:
         # 7. Build thread context with predecessor awareness
         thread_messages = await asyncio.to_thread(self._bridge.get_task_messages, task_id)
         req.thread_messages = thread_messages
+        journal_service = ThreadJournalService(bridge=self._bridge)
+        journal_snapshot = journal_service.sync_task_thread(
+            task_id=task_id,
+            task_title=task_title,
+            task_data=task_data,
+            messages=thread_messages,
+        )
+        req.thread_journal_path = journal_snapshot.journal_path
+        req.compacted_thread_summary = journal_snapshot.state.compacted_summary
         thread_context = build_thread_context(
             thread_messages,
             predecessor_step_ids=req.predecessor_step_ids,
+            compacted_summary=journal_snapshot.state.compacted_summary,
+            thread_journal_path=journal_snapshot.journal_path,
+            recent_window_messages=journal_snapshot.state.recent_window_messages,
         )
         req.thread_context = thread_context
+        journal_service.schedule_background_compaction(
+            task_id=task_id,
+            task_title=task_title,
+            task_data=task_data,
+            messages=thread_messages,
+        )
 
         review_feedback_context = build_review_feedback_context(thread_messages, step_id)
         review_output_contract_context = build_review_output_contract_context(step)

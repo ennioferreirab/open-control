@@ -447,6 +447,8 @@ class TestBuildTaskContext:
         )
         assert req.thread_context != ""
         assert "help me" in req.thread_context
+        assert "[Thread Journal]" in req.thread_context
+        assert req.thread_journal_path.endswith("/THREAD_JOURNAL.md")
 
     @pytest.mark.asyncio
     @patch(

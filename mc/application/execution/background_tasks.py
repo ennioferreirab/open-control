@@ -12,6 +12,7 @@ from collections.abc import Coroutine
 from typing import Any
 
 _background_tasks_ref: set[asyncio.Task[Any]] | None = None
+_deduplicated_background_tasks: dict[str, asyncio.Task[Any]] = {}
 
 
 def get_background_tasks() -> set[asyncio.Task[Any]]:
@@ -42,3 +43,25 @@ def track_background_task(task: asyncio.Task[Any]) -> asyncio.Task[Any]:
 def create_background_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
     """Create and track a background task in one call."""
     return track_background_task(asyncio.create_task(coro))
+
+
+def create_deduplicated_background_task(
+    key: str,
+    coro: Coroutine[Any, Any, Any],
+) -> asyncio.Task[Any]:
+    """Create one tracked background task per logical key."""
+    existing = _deduplicated_background_tasks.get(key)
+    if existing is not None and not existing.done():
+        coro.close()
+        return existing
+
+    task = create_background_task(coro)
+    _deduplicated_background_tasks[key] = task
+
+    def _cleanup(done_task: asyncio.Task[Any]) -> None:
+        current = _deduplicated_background_tasks.get(key)
+        if current is done_task:
+            _deduplicated_background_tasks.pop(key, None)
+
+    task.add_done_callback(_cleanup)
+    return task

@@ -103,6 +103,8 @@ class ExecutionRequest:
     # Thread context
     thread_context: str = ""
     thread_messages: list[dict[str, Any]] = field(default_factory=list)
+    thread_journal_path: str = ""
+    compacted_thread_summary: str = ""
 
     # Predecessor context (steps only)
     predecessor_context: str = ""

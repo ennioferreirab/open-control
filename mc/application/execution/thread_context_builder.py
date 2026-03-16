@@ -18,6 +18,9 @@ def build_thread_context(
     *,
     max_messages: int = 20,
     predecessor_step_ids: list[str] | None = None,
+    compacted_summary: str = "",
+    thread_journal_path: str | None = None,
+    recent_window_messages: int | None = None,
 ) -> str:
     """Build thread context string using the shared ThreadContextBuilder.
 
@@ -42,4 +45,7 @@ def build_thread_context(
         messages,
         max_messages=max_messages,
         predecessor_step_ids=predecessor_step_ids,
+        compacted_summary=compacted_summary,
+        thread_journal_path=thread_journal_path,
+        recent_window_messages=recent_window_messages,
     )

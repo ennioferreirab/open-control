@@ -187,12 +187,22 @@ class TestHandleMentionThreadContext:
             def build(self, messages, max_messages=20, **kwargs):
                 captured_args["messages"] = messages
                 captured_args["max_messages"] = max_messages
+                captured_args["kwargs"] = kwargs
                 return "[Thread History]\nUser: test message"
 
-        with patch("mc.contexts.conversation.mentions.handler.ThreadContextBuilder", CapturingBuilder):
+        with patch(
+            "mc.contexts.conversation.mentions.handler.ThreadContextBuilder", CapturingBuilder
+        ):
             await run_mention()
 
         assert captured_args["max_messages"] == 20
+
+    @pytest.mark.asyncio
+    async def test_includes_thread_journal_hint(self, run_mention):
+        result = await run_mention()
+
+        assert "[Thread Journal]" in result.content
+        assert "THREAD_JOURNAL.md" in result.content
 
 
 class TestHandleMentionExecutionPlan:
@@ -283,37 +293,47 @@ class TestHandleMentionTaskFiles:
 
         def message_side_effect(task_id: str):
             if task_id == "task_a":
-                return [{
-                    "author_name": "agent-a",
-                    "author_type": "agent",
-                    "timestamp": "2026-01-01T10:00:00Z",
-                    "content": "Source A complete",
-                    "type": "step_completion",
-                    "artifacts": [{"path": "output/report-a.md", "action": "created"}],
-                }]
+                return [
+                    {
+                        "author_name": "agent-a",
+                        "author_type": "agent",
+                        "timestamp": "2026-01-01T10:00:00Z",
+                        "content": "Source A complete",
+                        "type": "step_completion",
+                        "artifacts": [{"path": "output/report-a.md", "action": "created"}],
+                    }
+                ]
             if task_id == "task_b":
-                return [{
-                    "author_name": "agent-b",
-                    "author_type": "agent",
-                    "timestamp": "2026-01-01T10:05:00Z",
-                    "content": "Source B complete",
-                    "type": "step_completion",
-                    "artifacts": [{"path": "output/report-b.md", "action": "created"}],
-                }]
-            return [{
-                "author_name": "User",
-                "author_type": "user",
-                "message_type": "user_message",
-                "content": "Please continue",
-            }]
+                return [
+                    {
+                        "author_name": "agent-b",
+                        "author_type": "agent",
+                        "timestamp": "2026-01-01T10:05:00Z",
+                        "content": "Source B complete",
+                        "type": "step_completion",
+                        "artifacts": [{"path": "output/report-b.md", "action": "created"}],
+                    }
+                ]
+            return [
+                {
+                    "author_name": "User",
+                    "author_type": "user",
+                    "message_type": "user_message",
+                    "content": "Please continue",
+                }
+            ]
 
         mock_bridge.query.side_effect = query_side_effect
         mock_bridge.get_task_messages.side_effect = message_side_effect
 
         result = await run_mention(task_title="Merged Task C")
 
-        source_a_path = str(Path.home() / ".nanobot" / "tasks" / "task_a" / "attachments" / "source-a.pdf")
-        source_b_path = str(Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "source-b.md")
+        source_a_path = str(
+            Path.home() / ".nanobot" / "tasks" / "task_a" / "attachments" / "source-a.pdf"
+        )
+        source_b_path = str(
+            Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "source-b.md"
+        )
 
         assert "[Merged Task Origins]" in result.content
         assert "[Source Task A Files]" in result.content
@@ -322,8 +342,14 @@ class TestHandleMentionTaskFiles:
         assert "[Source Thread B]" in result.content
         assert source_a_path in result.content
         assert source_b_path in result.content
-        assert str(Path.home() / ".nanobot" / "tasks" / "task_a" / "output" / "report-a.md") in result.content
-        assert str(Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "report-b.md") in result.content
+        assert (
+            str(Path.home() / ".nanobot" / "tasks" / "task_a" / "output" / "report-a.md")
+            in result.content
+        )
+        assert (
+            str(Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "report-b.md")
+            in result.content
+        )
 
 
 class TestBuildMentionContextRemoved:
@@ -361,9 +387,7 @@ class TestHandleMentionPromptStructure:
         assert sys_idx < mention_idx < task_idx < plan_idx < files_idx
 
     @pytest.mark.asyncio
-    async def test_no_system_instructions_when_prompt_none(
-        self, _mock_agent_env, run_mention
-    ):
+    async def test_no_system_instructions_when_prompt_none(self, _mock_agent_env, run_mention):
         """Verifies [System instructions] section is omitted when agent prompt is None."""
         _mock_agent_env.prompt = None
 
