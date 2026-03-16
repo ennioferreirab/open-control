@@ -1,8 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-
-import { AgentSidebar } from "./AgentSidebar";
+import type { Id } from "@/convex/_generated/dataModel";
 
 vi.mock("@/components/ui/sidebar", () => ({
   Sidebar: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -23,10 +22,11 @@ vi.mock("@/components/ui/sidebar", () => ({
   ),
   SidebarMenuItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   SidebarTrigger: () => <button type="button">Trigger</button>,
+  useSidebar: () => ({ state: "expanded", isMobile: false }),
 }));
 
 vi.mock("@/features/agents/hooks/useAgentSidebarData", () => ({
-  useAgentSidebarData: () => ({
+  useAgentSidebarData: vi.fn().mockReturnValue({
     deletedAgents: [],
     isAgentsLoading: false,
     regularAgents: [],
@@ -57,6 +57,20 @@ vi.mock("@/features/agents/components/AgentConfigSheet", () => ({
   AgentConfigSheet: () => null,
 }));
 
+vi.mock("@/features/agents/components/AgentSidebarItem", () => ({
+  AgentSidebarItem: ({
+    agent,
+    onClick,
+  }: {
+    agent: { _id: string; displayName: string; name: string };
+    onClick?: () => void;
+  }) => (
+    <button onClick={onClick} data-testid={`agent-item-${agent._id}`}>
+      {agent.displayName}
+    </button>
+  ),
+}));
+
 vi.mock("@/features/agents/components/AgentAuthoringWizard", () => ({
   AgentAuthoringWizard: ({ open }: { open: boolean }) =>
     open ? <div data-testid="agent-authoring-wizard" /> : null,
@@ -67,7 +81,9 @@ vi.mock("@/features/agents/components/SquadDetailSheet", () => ({
 }));
 
 vi.mock("@/features/agents/components/SquadSidebarSection", () => ({
-  SquadSidebarSection: () => null,
+  SquadSidebarSection: ({ filterQuery }: { filterQuery?: string }) => (
+    <div data-testid="squad-sidebar-section" data-filter-query={filterQuery ?? ""} />
+  ),
 }));
 
 vi.mock("@/features/agents/hooks/useNanobotProvider", () => ({
@@ -78,7 +94,22 @@ vi.mock("@/features/agents/components/AgentTerminal", () => ({
   AgentTerminal: () => <div data-testid="agent-terminal-container" />,
 }));
 
+import { useAgentSidebarData } from "@/features/agents/hooks/useAgentSidebarData";
+import { AgentSidebar } from "./AgentSidebar";
+
 describe("AgentSidebar", () => {
+  beforeEach(() => {
+    vi.mocked(useAgentSidebarData).mockReturnValue({
+      deletedAgents: [],
+      isAgentsLoading: false,
+      regularAgents: [],
+      remoteAgents: [],
+      restoreAgent: vi.fn(),
+      softDeleteAgent: vi.fn(),
+      systemAgents: [],
+    });
+  });
+
   it("opens the squad authoring wizard when Create Squad is clicked", async () => {
     render(<AgentSidebar />);
 
@@ -87,5 +118,116 @@ describe("AgentSidebar", () => {
 
     expect(screen.getByText("Create Squad")).toBeInTheDocument();
     expect(screen.getByTestId("agent-terminal-container")).toBeInTheDocument();
+  });
+
+  it("renders a global search input for filtering agents and squads", () => {
+    render(<AgentSidebar />);
+    expect(screen.getByPlaceholderText(/search agents/i)).toBeInTheDocument();
+  });
+
+  it("filters regularAgents by displayName", async () => {
+    vi.mocked(useAgentSidebarData).mockReturnValue({
+      deletedAgents: [],
+      isAgentsLoading: false,
+      regularAgents: [
+        {
+          _id: "a1" as Id<"agents">,
+          _creationTime: 0,
+          name: "post-writer",
+          displayName: "Post Writer",
+          role: "Writer",
+          skills: [],
+          status: "idle" as const,
+          enabled: true,
+          isSystem: false,
+        },
+        {
+          _id: "a2" as Id<"agents">,
+          _creationTime: 0,
+          name: "research-agent",
+          displayName: "Research Agent",
+          role: "Researcher",
+          skills: [],
+          status: "idle" as const,
+          enabled: true,
+          isSystem: false,
+        },
+      ],
+      remoteAgents: [],
+      restoreAgent: vi.fn(),
+      softDeleteAgent: vi.fn(),
+      systemAgents: [],
+    });
+
+    render(<AgentSidebar />);
+
+    const input = screen.getByPlaceholderText(/search agents/i);
+    await userEvent.type(input, "Post");
+
+    expect(screen.getByText("Post Writer")).toBeInTheDocument();
+    expect(screen.queryByText("Research Agent")).not.toBeInTheDocument();
+  });
+
+  it("filters regularAgents by @name", async () => {
+    vi.mocked(useAgentSidebarData).mockReturnValue({
+      deletedAgents: [],
+      isAgentsLoading: false,
+      regularAgents: [
+        {
+          _id: "a1" as Id<"agents">,
+          _creationTime: 0,
+          name: "post-writer",
+          displayName: "Post Writer",
+          role: "Writer",
+          skills: [],
+          status: "idle" as const,
+          enabled: true,
+          isSystem: false,
+        },
+        {
+          _id: "a2" as Id<"agents">,
+          _creationTime: 0,
+          name: "research-agent",
+          displayName: "Research Agent",
+          role: "Researcher",
+          skills: [],
+          status: "idle" as const,
+          enabled: true,
+          isSystem: false,
+        },
+      ],
+      remoteAgents: [],
+      restoreAgent: vi.fn(),
+      softDeleteAgent: vi.fn(),
+      systemAgents: [],
+    });
+
+    render(<AgentSidebar />);
+
+    const input = screen.getByPlaceholderText(/search agents/i);
+    await userEvent.type(input, "@post-writer");
+
+    expect(screen.getByText("Post Writer")).toBeInTheDocument();
+    expect(screen.queryByText("Research Agent")).not.toBeInTheDocument();
+  });
+
+  it("passes filterQuery to SquadSidebarSection", async () => {
+    render(<AgentSidebar />);
+
+    const input = screen.getByPlaceholderText(/search agents/i);
+    await userEvent.type(input, "content");
+
+    const squadSection = screen.getByTestId("squad-sidebar-section");
+    expect(squadSection).toHaveAttribute("data-filter-query", "content");
+  });
+
+  it("Registered section is collapsible", () => {
+    render(<AgentSidebar />);
+    // The collapsible trigger for Registered should be present
+    const registeredElements = screen.getAllByText(/registered/i);
+    expect(registeredElements.length).toBeGreaterThan(0);
+    // Radix Collapsible root renders a div with data-state="open" or data-state="closed"
+    const collapsibleRoot = document.querySelector("[data-state]");
+    expect(collapsibleRoot).not.toBeNull();
   });
 });

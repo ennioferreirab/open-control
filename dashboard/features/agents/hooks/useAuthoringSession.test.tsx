@@ -197,6 +197,41 @@ describe("useAuthoringSession - merging draft graph", () => {
   });
 });
 
+describe("useAuthoringSession - squad reuse candidates", () => {
+  it("includes active_agents in the squad-wizard request when activeAgents option is provided", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(SQUAD_RESPONSE) });
+    const activeAgents = [{ name: "post-writer", displayName: "Post Writer", role: "Writer" }];
+    const { result } = renderHook(() => useAuthoringSession("squad", { activeAgents }));
+    await act(async () => {
+      await result.current.sendMessage("Create a brand squad");
+    });
+    const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(callBody.active_agents).toEqual(activeAgents);
+  });
+
+  it("preserves reuseCandidateAgentName in draftGraph agents from response", async () => {
+    const responseWithReuse = {
+      ...SQUAD_RESPONSE,
+      draft_graph_patch: {
+        squad: { outcome: "Build a brand" },
+        agents: [{ key: "writer", role: "Writer", reuseCandidateAgentName: "post-writer" }],
+        workflows: [{ key: "default", steps: [] }],
+      },
+    };
+    mockFetch.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(responseWithReuse) });
+    const { result } = renderHook(() => useAuthoringSession("squad"));
+    await act(async () => {
+      await result.current.sendMessage("Create a brand squad");
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const agents = result.current.draftGraph.agents as Array<Record<string, unknown>>;
+    expect(agents[0]).toMatchObject({ reuseCandidateAgentName: "post-writer" });
+  });
+});
+
 describe("useAuthoringSession - reset", () => {
   it("resets state to initial values", async () => {
     mockFetch.mockResolvedValue({

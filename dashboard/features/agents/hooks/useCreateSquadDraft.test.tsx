@@ -176,6 +176,38 @@ describe("useCreateSquadDraft", () => {
     expect(returnVal).toBeNull();
   });
 
+  it("publishDraft from draftGraph preserves prompt, model, skills, soul on agents", async () => {
+    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    mockUseMutation.mockReturnValue(mockMutate);
+    const { result } = renderHook(() => useCreateSquadDraft());
+    const draftGraph = {
+      squad: { name: "my-squad", displayName: "My Squad" },
+      agents: [
+        {
+          key: "writer",
+          name: "post-writer",
+          role: "Writer",
+          prompt: "Write things.",
+          model: "cc/claude-sonnet-4-6",
+          skills: ["skill1"],
+          soul: "SOUL.md",
+        },
+      ],
+      workflows: [],
+    };
+    await act(async () => {
+      await result.current.publishDraft(draftGraph);
+    });
+    const callArg = mockMutate.mock.calls[0]?.[0] as Record<string, unknown>;
+    const agents = (callArg.graph as Record<string, unknown>).agents as Array<
+      Record<string, unknown>
+    >;
+    expect(agents[0].prompt).toBe("Write things.");
+    expect(agents[0].model).toBe("cc/claude-sonnet-4-6");
+    expect(agents[0].skills).toEqual(["skill1"]);
+    expect(agents[0].soul).toBe("SOUL.md");
+  });
+
   it("sets isSaving to true during the mutation and false after", async () => {
     let resolveMutation!: (value: string) => void;
     const pendingPromise = new Promise<string>((resolve) => {

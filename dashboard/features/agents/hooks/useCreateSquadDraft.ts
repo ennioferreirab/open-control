@@ -68,6 +68,12 @@ function extractGraphFromDraft(draftGraph: Record<string, unknown>) {
     name: typeof a.name === "string" ? a.name : typeof a.key === "string" ? a.key : "agent",
     role: typeof a.role === "string" ? a.role : "Agent",
     displayName: typeof a.displayName === "string" ? a.displayName : undefined,
+    prompt: typeof a.prompt === "string" ? a.prompt : undefined,
+    model: typeof a.model === "string" ? a.model : undefined,
+    skills: Array.isArray(a.skills) ? (a.skills as string[]) : undefined,
+    soul: typeof a.soul === "string" ? a.soul : undefined,
+    reuseName:
+      typeof a.reuseCandidateAgentName === "string" ? a.reuseCandidateAgentName : undefined,
   }));
 
   const rawWorkflows = Array.isArray(draftGraph.workflows)

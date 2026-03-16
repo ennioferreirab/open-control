@@ -41,8 +41,10 @@ import { PromptEditModal, type PromptVariable } from "@/components/PromptEditMod
 import { AgentTextViewerModal } from "@/components/AgentTextViewerModal";
 import { getAvatarColor, getInitials } from "@/features/agents/components/AgentSidebarItem";
 import { useAgentConfigSheetData } from "@/features/agents/hooks/useAgentConfigSheetData";
+import { useActiveSquadsForAgent } from "@/features/agents/hooks/useActiveSquadsForAgent";
 import type { AgentStatus } from "@/lib/constants";
 import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
+import type { Id } from "@/convex/_generated/dataModel";
 
 const STATUS_DOT_STYLES: Record<string, string> = {
   active: "bg-blue-500",
@@ -112,6 +114,7 @@ function parseModelValue(model: string): {
 interface AgentConfigSheetProps {
   agentName: string | null;
   onClose: () => void;
+  onOpenSquad?: (squadId: Id<"squadSpecs">) => void;
 }
 
 interface FormErrors {
@@ -119,9 +122,10 @@ interface FormErrors {
   prompt?: string;
 }
 
-export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) {
+export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfigSheetProps) {
   const { agent, updateConfig, setEnabled, connectedModels, modelTiers } =
     useAgentConfigSheetData(agentName);
+  const activeSquads = useActiveSquadsForAgent(agent?._id ?? null);
 
   // Form state
   const [displayName, setDisplayName] = useState("");
@@ -806,6 +810,24 @@ export function AgentConfigSheet({ agentName, onClose }: AgentConfigSheetProps) 
 
                 {/* Skills */}
                 <SkillsSelector selected={skills} onChange={setSkills} />
+
+                {/* Active Squads */}
+                {activeSquads.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Active Squads</label>
+                    <div className="space-y-1">
+                      {activeSquads.map((squad) => (
+                        <button
+                          key={squad._id}
+                          onClick={() => onOpenSquad?.(squad._id)}
+                          className="w-full text-left rounded-md border bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                        >
+                          {squad.displayName}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Memory */}
                 <div className="space-y-1">

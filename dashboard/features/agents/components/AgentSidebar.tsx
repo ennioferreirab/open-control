@@ -59,7 +59,9 @@ export function AgentSidebar() {
   const [showAgentWizard, setShowAgentWizard] = useState(false);
   const [showSquadWizard, setShowSquadWizard] = useState(false);
   const [selectedSquadId, setSelectedSquadId] = useState<Id<"squadSpecs"> | null>(null);
+  const [filterQuery, setFilterQuery] = useState("");
   const [systemOpen, setSystemOpen] = useState(true);
+  const [registeredOpen, setRegisteredOpen] = useState(true);
   const [deletedOpen, setDeletedOpen] = useState(false);
   const [remoteOpen, setRemoteOpen] = useState(true);
   const [deleteMode, setDeleteMode] = useState(false);
@@ -72,6 +74,26 @@ export function AgentSidebar() {
   >(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+
+  function matchesAgentFilter(q: string, displayName: string, name: string): boolean {
+    if (!q) return true;
+    const lower = q.toLowerCase();
+    return (
+      displayName.toLowerCase().includes(lower) ||
+      name.toLowerCase().includes(lower) ||
+      `@${name}`.toLowerCase().includes(lower)
+    );
+  }
+
+  const filteredRegularAgents = regularAgents.filter((a) =>
+    matchesAgentFilter(filterQuery, a.displayName, a.name),
+  );
+  const filteredSystemAgents = systemAgents.filter((a) =>
+    matchesAgentFilter(filterQuery, a.displayName, a.name),
+  );
+  const filteredRemoteAgents = remoteAgents.filter((a) =>
+    matchesAgentFilter(filterQuery, a.displayName, a.name),
+  );
 
   const toggleDeleteMode = useCallback(() => {
     setDeleteMode((current) => {
@@ -147,10 +169,21 @@ export function AgentSidebar() {
           </div>
         </SidebarHeader>
         <SidebarContent>
+          {/* Global search filter */}
+          <div className="px-3 py-2 group-data-[collapsible=icon]:hidden">
+            <input
+              type="text"
+              placeholder="Search agents…"
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
           <SquadSidebarSection
             onSelectSquad={(id) => setSelectedSquadId(id)}
             deleteMode={deleteMode}
             selectedSquadIds={selectedSquadIds}
+            filterQuery={filterQuery}
             onToggleSquadSelect={(squadId, displayName) =>
               toggleItemSelection(`squad:${squadId}`, {
                 type: "squad",
@@ -161,90 +194,27 @@ export function AgentSidebar() {
           />
 
           <SidebarGroup>
-            <SidebarGroupLabel>Registered</SidebarGroupLabel>
-            {!isAgentsLoading && regularAgents.length === 0 && (
-              <p className="px-2 py-4 text-xs text-muted-foreground">
-                No agents found. Add a YAML config to{" "}
-                <code className="rounded bg-muted px-1 py-0.5 text-[11px]">~/.nanobot/agents/</code>
-              </p>
-            )}
-            <SidebarMenu>
-              {regularAgents.map((agent) => (
-                <AgentSidebarItem
-                  key={agent._id}
-                  agent={agent}
-                  onClick={() => setSelectedAgent(agent.name)}
-                  selectable={deleteMode}
-                  selected={selectedItems.has(`agent:${agent.name}`)}
-                  onToggleSelect={() =>
-                    toggleItemSelection(`agent:${agent.name}`, {
-                      type: "agent",
-                      name: agent.name,
-                      displayName: agent.displayName,
-                    })
-                  }
-                />
-              ))}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  size="lg"
-                  tooltip="Create Agent or Squad"
-                  onClick={() => setShowCreateChooser(true)}
-                  className="!h-auto cursor-pointer"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40">
-                    <Plus className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <span className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-                    Create
-                  </span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-
-          {systemAgents.length > 0 && (
-            <SidebarGroup>
-              <Collapsible open={systemOpen} onOpenChange={setSystemOpen}>
-                <CollapsibleTrigger asChild>
-                  <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
-                    <Shield className="mr-1 h-3 w-3" />
-                    System
-                    <ChevronDown
-                      className={`ml-auto h-3 w-3 transition-transform ${systemOpen ? "" : "-rotate-90"}`}
-                    />
-                  </SidebarGroupLabel>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
+            <Collapsible open={registeredOpen} onOpenChange={setRegisteredOpen}>
+              <CollapsibleTrigger asChild>
+                <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
+                  Registered
+                  <ChevronDown
+                    className={`ml-auto h-3 w-3 transition-transform ${registeredOpen ? "" : "-rotate-90"}`}
+                  />
+                </SidebarGroupLabel>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                {!isAgentsLoading && filteredRegularAgents.length === 0 && !filterQuery && (
+                  <p className="px-2 py-4 text-xs text-muted-foreground">
+                    No agents found. Add a YAML config to{" "}
+                    <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
+                      ~/.nanobot/agents/
+                    </code>
+                  </p>
+                )}
+                <div className="overflow-y-auto max-h-[560px]">
                   <SidebarMenu>
-                    {systemAgents.map((agent) => (
-                      <AgentSidebarItem
-                        key={agent._id}
-                        agent={agent}
-                        onClick={() => setSelectedAgent(agent.name)}
-                      />
-                    ))}
-                  </SidebarMenu>
-                </CollapsibleContent>
-              </Collapsible>
-            </SidebarGroup>
-          )}
-
-          {remoteAgents.length > 0 && (
-            <SidebarGroup>
-              <Collapsible open={remoteOpen} onOpenChange={setRemoteOpen}>
-                <CollapsibleTrigger asChild>
-                  <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
-                    <Terminal className="mr-1 h-3 w-3" />
-                    Remoto
-                    <ChevronDown
-                      className={`ml-auto h-3 w-3 transition-transform ${remoteOpen ? "" : "-rotate-90"}`}
-                    />
-                  </SidebarGroupLabel>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarMenu>
-                    {remoteAgents.map((agent) => (
+                    {filteredRegularAgents.map((agent) => (
                       <AgentSidebarItem
                         key={agent._id}
                         agent={agent}
@@ -260,7 +230,89 @@ export function AgentSidebar() {
                         }
                       />
                     ))}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        size="lg"
+                        tooltip="Create Agent or Squad"
+                        onClick={() => setShowCreateChooser(true)}
+                        className="!h-auto cursor-pointer"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40">
+                          <Plus className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <span className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                          Create
+                        </span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
                   </SidebarMenu>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+
+          {filteredSystemAgents.length > 0 && (
+            <SidebarGroup>
+              <Collapsible open={systemOpen} onOpenChange={setSystemOpen}>
+                <CollapsibleTrigger asChild>
+                  <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
+                    <Shield className="mr-1 h-3 w-3" />
+                    System
+                    <ChevronDown
+                      className={`ml-auto h-3 w-3 transition-transform ${systemOpen ? "" : "-rotate-90"}`}
+                    />
+                  </SidebarGroupLabel>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="overflow-y-auto max-h-[560px]">
+                    <SidebarMenu>
+                      {filteredSystemAgents.map((agent) => (
+                        <AgentSidebarItem
+                          key={agent._id}
+                          agent={agent}
+                          onClick={() => setSelectedAgent(agent.name)}
+                        />
+                      ))}
+                    </SidebarMenu>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </SidebarGroup>
+          )}
+
+          {filteredRemoteAgents.length > 0 && (
+            <SidebarGroup>
+              <Collapsible open={remoteOpen} onOpenChange={setRemoteOpen}>
+                <CollapsibleTrigger asChild>
+                  <SidebarGroupLabel className="cursor-pointer hover:text-sidebar-foreground/80">
+                    <Terminal className="mr-1 h-3 w-3" />
+                    Remoto
+                    <ChevronDown
+                      className={`ml-auto h-3 w-3 transition-transform ${remoteOpen ? "" : "-rotate-90"}`}
+                    />
+                  </SidebarGroupLabel>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="overflow-y-auto max-h-[560px]">
+                    <SidebarMenu>
+                      {filteredRemoteAgents.map((agent) => (
+                        <AgentSidebarItem
+                          key={agent._id}
+                          agent={agent}
+                          onClick={() => setSelectedAgent(agent.name)}
+                          selectable={deleteMode}
+                          selected={selectedItems.has(`agent:${agent.name}`)}
+                          onToggleSelect={() =>
+                            toggleItemSelection(`agent:${agent.name}`, {
+                              type: "agent",
+                              name: agent.name,
+                              displayName: agent.displayName,
+                            })
+                          }
+                        />
+                      ))}
+                    </SidebarMenu>
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
             </SidebarGroup>
@@ -343,7 +395,11 @@ export function AgentSidebar() {
           </SidebarFooter>
         )}
       </Sidebar>
-      <AgentConfigSheet agentName={selectedAgent} onClose={() => setSelectedAgent(null)} />
+      <AgentConfigSheet
+        agentName={selectedAgent}
+        onClose={() => setSelectedAgent(null)}
+        onOpenSquad={(id) => setSelectedSquadId(id)}
+      />
       <CreateAuthoringDialog
         open={showCreateChooser}
         onClose={() => setShowCreateChooser(false)}
