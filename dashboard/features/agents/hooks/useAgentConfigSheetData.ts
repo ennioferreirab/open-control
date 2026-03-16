@@ -12,6 +12,7 @@ export interface UpdateConfigArgs {
   displayName?: string;
   role?: string;
   prompt?: string;
+  soul?: string;
   skills?: string[];
   model?: string;
   reasoningLevel?: string;

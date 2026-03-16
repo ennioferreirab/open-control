@@ -19,7 +19,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/specs/squad/context", () => {
-  it("returns active reusable agents with their active skills and available skills catalog", async () => {
+  it("returns active reusable agents with their active skills, available skills catalog, and available models", async () => {
     mockQuery.mockImplementation((name: string) => {
       if (name === "agents:list") {
         return Promise.resolve([
@@ -68,6 +68,10 @@ describe("GET /api/specs/squad/context", () => {
         ]);
       }
 
+      if (name === "settings:get") {
+        return Promise.resolve(JSON.stringify(["claude-sonnet-4-6", "claude-opus-4-6"]));
+      }
+
       throw new Error(`Unexpected query ${name}`);
     });
 
@@ -94,6 +98,7 @@ describe("GET /api/specs/squad/context", () => {
           description: "Create clear written content",
         },
       ],
+      availableModels: ["claude-sonnet-4-6", "claude-opus-4-6"],
     });
   });
 

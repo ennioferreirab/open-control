@@ -16,10 +16,11 @@ export async function GET() {
   try {
     const convex = getClient();
 
-    const [agents, skills] = (await Promise.all([
+    const [agents, skills, connectedModelsRaw] = (await Promise.all([
       convex.query("agents:list", {}),
       convex.query("skills:list", {}),
-    ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>];
+      convex.query("settings:get", { key: "connected_models" }),
+    ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>, string | null];
 
     const activeAgents = (agents as Array<Record<string, unknown>>)
       .filter(
@@ -46,7 +47,19 @@ export async function GET() {
         description: skill.description,
       }));
 
-    return NextResponse.json({ activeAgents, availableSkills });
+    let availableModels: string[] = [];
+    if (connectedModelsRaw) {
+      try {
+        const parsed = JSON.parse(connectedModelsRaw);
+        availableModels = Array.isArray(parsed)
+          ? parsed.filter((value) => typeof value === "string")
+          : [];
+      } catch {
+        availableModels = [];
+      }
+    }
+
+    return NextResponse.json({ activeAgents, availableSkills, availableModels });
   } catch (error) {
     console.error("Failed to build squad authoring context:", error);
     return NextResponse.json(

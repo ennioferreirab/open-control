@@ -131,6 +131,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [soul, setSoul] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [modelMode, setModelMode] = useState<ModelMode>("default");
   const [tierLevel, setTierLevel] = useState("");
@@ -148,6 +149,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [variables, setVariables] = useState<PromptVariable[]>([]);
   const [showPromptModal, setShowPromptModal] = useState(false);
+  const [showSoulModal, setShowSoulModal] = useState(false);
 
   // Memory/history state (read-only, not part of form dirty state)
   const [memory, setMemory] = useState<string | null>(null);
@@ -156,6 +158,18 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  const agentId = agent?._id ?? null;
+  const agentDisplayName = agent?.displayName ?? "";
+  const agentRole = agent?.role ?? "";
+  const agentPrompt = agent?.prompt ?? "";
+  const agentSoul = agent?.soul ?? "";
+  const agentModel = agent?.model ?? "";
+  const agentEnabled = agent?.enabled !== false;
+  const agentReasoningLevel = readOptionalStringField(agent, "reasoningLevel");
+  const agentSkillsSignature = JSON.stringify(agent?.skills ?? []);
+  const agentVariablesSignature = JSON.stringify(agent?.variables ?? []);
+  const agentClaudeCodeSignature = JSON.stringify(agent?.claudeCodeOpts ?? null);
 
   // Compute the model string from the current mode
   const computedModel = useMemo(() => {
@@ -174,30 +188,49 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
   // Initialize local draft state from the persisted agent record.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (agent) {
-      setDisplayName(agent.displayName);
-      setRole(agent.role);
-      setPrompt(agent.prompt || "");
-      setSkills(agent.skills);
-      const parsed = parseModelValue(agent.model || "");
+    if (agentId) {
+      const nextSkills = JSON.parse(agentSkillsSignature) as string[];
+      const nextVariables = JSON.parse(agentVariablesSignature) as PromptVariable[];
+      const nextClaudeCodeOpts = JSON.parse(agentClaudeCodeSignature) as {
+        permissionMode?: string;
+        maxBudgetUsd?: number;
+        maxTurns?: number;
+      } | null;
+
+      setDisplayName(agentDisplayName);
+      setRole(agentRole);
+      setPrompt(agentPrompt);
+      setSoul(agentSoul);
+      setSkills(nextSkills);
+      const parsed = parseModelValue(agentModel);
       setModelMode(parsed.modelMode);
       setTierLevel(parsed.tierLevel);
       // Reasoning only applies to custom mode; tier uses global settings
-      setReasoningLevel(
-        parsed.modelMode === "custom" ? readOptionalStringField(agent, "reasoningLevel") : "",
-      );
+      setReasoningLevel(parsed.modelMode === "custom" ? agentReasoningLevel : "");
       setCustomModel(parsed.customModel);
-      const ccOpts = agent.claudeCodeOpts;
+      const ccOpts = nextClaudeCodeOpts;
       setCcPermissionMode(ccOpts?.permissionMode ?? "bypassPermissions");
       setCcMaxBudget(ccOpts?.maxBudgetUsd != null ? String(ccOpts.maxBudgetUsd) : "");
       setCcMaxTurns(ccOpts?.maxTurns != null ? String(ccOpts.maxTurns) : "");
-      setEnabledState(agent.enabled !== false);
+      setEnabledState(agentEnabled);
       setErrors({});
       setSaveError(null);
       setShowSuccess(false);
-      setVariables(agent.variables || []);
+      setVariables(nextVariables);
     }
-  }, [agent]);
+  }, [
+    agentId,
+    agentDisplayName,
+    agentRole,
+    agentPrompt,
+    agentSoul,
+    agentModel,
+    agentSkillsSignature,
+    agentReasoningLevel,
+    agentClaudeCodeSignature,
+    agentEnabled,
+    agentVariablesSignature,
+  ]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Fetch memory/history files (read-only, does NOT affect isDirty)
@@ -287,6 +320,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
       displayName !== agent.displayName ||
       role !== agent.role ||
       prompt !== (agent.prompt || "") ||
+      soul !== (agent.soul || "") ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills) ||
       computedModel !== (agent.model || "") ||
       (reasoningLevel || "") !== readOptionalStringField(agent, "reasoningLevel") ||
@@ -299,6 +333,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
     displayName,
     role,
     prompt,
+    soul,
     skills,
     computedModel,
     reasoningLevel,
@@ -343,6 +378,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
           displayName,
           role,
           prompt,
+          soul,
           skills,
           model: computedModel || undefined,
           variables,
@@ -356,6 +392,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
           body: JSON.stringify({
             role,
             prompt,
+            soul: soul || null,
             model: computedModel || null,
             display_name: displayName,
             skills,
@@ -387,6 +424,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
     displayName,
     role,
     prompt,
+    soul,
     skills,
     computedModel,
     modelMode,
@@ -424,6 +462,10 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
     },
     [errors.prompt],
   );
+
+  const handleSoulModalSave = useCallback(async (newSoul: string) => {
+    setSoul(newSoul);
+  }, []);
 
   const isLoaded = agent != null && typeof agent === "object" && "name" in agent;
   const isSystemAgent = isLoaded && SYSTEM_AGENT_NAMES.has(agent.name);
@@ -577,6 +619,32 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                         ))}
                       </div>
                     </TooltipProvider>
+                  )}
+                </div>
+
+                {/* Soul */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Soul</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Edit soul"
+                      className="h-6 px-2 text-xs gap-1"
+                      onClick={() => setShowSoulModal(true)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </Button>
+                  </div>
+                  {soul ? (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 max-h-[96px] overflow-hidden">
+                      <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap line-clamp-4">
+                        {soul}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">No soul configured.</p>
                   )}
                 </div>
 
@@ -1005,6 +1073,14 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
             content={history || ""}
             editable
             onSave={handleSaveHistory}
+          />
+          <AgentTextViewerModal
+            open={showSoulModal}
+            onClose={() => setShowSoulModal(false)}
+            title="Soul"
+            content={soul}
+            editable
+            onSave={handleSoulModalSave}
           />
         </>
       )}
