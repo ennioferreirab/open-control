@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { Bot, Pencil } from "lucide-react";
+import { Bot, Pencil, X } from "lucide-react";
 import { useSquadDetailData } from "@/features/agents/hooks/useSquadDetailData";
 import { useUpdatePublishedSquad } from "@/features/agents/hooks/useUpdatePublishedSquad";
 import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
@@ -180,7 +180,7 @@ export function SquadDetailSheet({
   return (
     <>
       <Sheet open={!!squadId} onOpenChange={(open) => !open && handleClose()}>
-        <SheetContent side="right" className="w-[96vw] sm:max-w-6xl flex flex-col p-0">
+        <SheetContent side="right" className="w-[96vw] sm:max-w-6xl flex flex-col p-0" hideClose>
           {squad ? (
             <>
               <SheetHeader className="px-6 pt-6 pb-4 border-b">
@@ -237,6 +237,15 @@ export function SquadDetailSheet({
                         Run Mission
                       </Button>
                     )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      onClick={handleClose}
+                      aria-label="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </SheetHeader>
