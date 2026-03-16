@@ -172,6 +172,60 @@ describe("publishSquadGraph", () => {
     expect(researchStep!.agentId).toBeDefined();
   });
 
+  it("persists review step contract fields on workflow specs", async () => {
+    const { ctx, inserts } = makeCtx();
+
+    await publishSquadGraph(ctx, {
+      ...GRAPH_FIXTURE,
+      workflows: [
+        {
+          key: "default",
+          name: "Default Workflow",
+          steps: [
+            { key: "draft", type: "agent", agentKey: "writer" },
+            {
+              key: "review",
+              type: "review",
+              agentKey: "researcher",
+              reviewSpecId: "review-spec-1",
+              onReject: "draft",
+              dependsOn: ["draft"],
+            },
+          ],
+        },
+      ],
+    });
+
+    const workflowInserts = inserts.filter((i) => i.table === "workflowSpecs");
+    const steps = workflowInserts[0].value.steps as Array<Record<string, unknown>>;
+    const reviewStep = steps.find((s) => s.id === "review");
+
+    expect(reviewStep).toBeDefined();
+    expect(reviewStep!.agentId).toBeDefined();
+    expect(reviewStep!.reviewSpecId).toBe("review-spec-1");
+    expect(reviewStep!.onReject).toBe("draft");
+  });
+
+  it("rejects published graphs with invalid review steps", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      publishSquadGraph(ctx, {
+        ...GRAPH_FIXTURE,
+        workflows: [
+          {
+            key: "default",
+            name: "Default Workflow",
+            steps: [
+              { key: "draft", type: "agent", agentKey: "writer" },
+              { key: "review", type: "review", agentKey: "researcher" },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow('Review step "review" requires reviewSpecId');
+  });
+
   it("reuses an existing global agent instead of inserting a duplicate", async () => {
     const { ctx, inserts, existingAgents } = makeCtx();
     existingAgents.set("audience-researcher", {

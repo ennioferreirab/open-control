@@ -4,6 +4,31 @@ import { v } from "convex/values";
 
 import { specStatusValidator, workflowStepTypeValidator } from "./schema";
 
+type WorkflowStepRecord = {
+  id: string;
+  type: "agent" | "human" | "checkpoint" | "review" | "system";
+  agentId?: string;
+  reviewSpecId?: string;
+  onReject?: string;
+};
+
+function validateReviewSteps(steps: WorkflowStepRecord[] | undefined): void {
+  for (const step of steps ?? []) {
+    if (step.type !== "review") {
+      continue;
+    }
+    if (!step.agentId) {
+      throw new Error(`Review step "${step.id}" requires agentId`);
+    }
+    if (!step.reviewSpecId) {
+      throw new Error(`Review step "${step.id}" requires reviewSpecId`);
+    }
+    if (!step.onReject) {
+      throw new Error(`Review step "${step.id}" requires onReject`);
+    }
+  }
+}
+
 export const createDraft = internalMutation({
   args: {
     squadSpecId: v.id("squadSpecs"),
@@ -16,6 +41,7 @@ export const createDraft = internalMutation({
           title: v.string(),
           type: workflowStepTypeValidator,
           agentId: v.optional(v.id("agents")),
+          reviewSpecId: v.optional(v.id("reviewSpecs")),
           inputs: v.optional(v.array(v.string())),
           outputs: v.optional(v.array(v.string())),
           dependsOn: v.optional(v.array(v.string())),
@@ -65,6 +91,7 @@ export const publish = internalMutation({
     if (spec.status !== "draft") {
       throw new Error("Can only publish specs in draft status");
     }
+    validateReviewSteps(spec.steps as WorkflowStepRecord[] | undefined);
     const now = new Date().toISOString();
     await ctx.db.patch(args.specId as Id<"workflowSpecs">, {
       status: "published",

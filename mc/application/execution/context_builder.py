@@ -110,6 +110,45 @@ def build_review_feedback_context(messages: list[dict[str, Any]], step_id: str) 
     return "\n".join(lines)
 
 
+def build_review_output_contract_context(step: dict[str, Any]) -> str:
+    """Build the explicit JSON-only output contract for workflow review steps."""
+    if str(step.get("workflow_step_type") or "").lower() != "review":
+        return ""
+
+    review_spec_id = step.get("review_spec_id") or step.get("reviewSpecId")
+    on_reject_step_id = step.get("on_reject_step_id") or step.get("onRejectStepId")
+    recommended_return = on_reject_step_id or "null"
+    if on_reject_step_id:
+        recommended_return = f'"{on_reject_step_id}" | null'
+
+    lines = [
+        "[Review Output Contract]",
+        "This is a workflow review step.",
+        "Evaluate the deliverable against the review criteria available in the task context.",
+        "Return ONLY a single JSON object in your final response.",
+        "Do not wrap the JSON in markdown fences.",
+        "Do not write a separate review file unless the task explicitly requires it.",
+    ]
+    if review_spec_id:
+        lines.append(f"reviewSpecId: {review_spec_id}")
+    lines.extend(
+        [
+            "Required JSON shape:",
+            "{",
+            '  "verdict": "approved" | "rejected",',
+            '  "issues": ["..."],',
+            '  "strengths": ["..."],',
+            '  "scores": { "criterion": number },',
+            '  "vetoesTriggered": ["..."],',
+            f'  "recommendedReturnStep": {recommended_return}',
+            "}",
+            "If the work passes, set verdict to approved and recommendedReturnStep to null.",
+            "If the work fails, set verdict to rejected and include concrete issues.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_tag_attributes_context(
     tags: list[str],
     attr_values: list[dict[str, Any]],
@@ -531,11 +570,14 @@ class ContextBuilder:
         req.thread_context = thread_context
 
         review_feedback_context = build_review_feedback_context(thread_messages, step_id)
+        review_output_contract_context = build_review_output_contract_context(step)
 
         # Assemble the execution description
         execution_description = file_context
         if review_feedback_context:
             execution_description += f"\n\n{review_feedback_context}"
+        if review_output_contract_context:
+            execution_description += f"\n\n{review_output_contract_context}"
         if thread_context:
             execution_description += f"\n{thread_context}"
         req.description = execution_description

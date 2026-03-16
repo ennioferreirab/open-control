@@ -673,6 +673,34 @@ class TestBuildStepContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
+    async def test_review_step_description_requires_structured_json_output(
+        self, mock_config: MagicMock
+    ) -> None:
+        bridge = _make_mock_bridge()
+        builder = ContextBuilder(bridge)
+        step = {
+            "id": "step_review",
+            "title": "Review package",
+            "description": "Validate the final package",
+            "assigned_agent": "reviewer",
+            "workflow_step_type": "review",
+            "review_spec_id": "review-spec-1",
+            "on_reject_step_id": "step_package",
+        }
+
+        req = await builder.build_step_context("task_123", step)
+
+        assert "[Review Output Contract]" in req.description
+        assert '"verdict": "approved" | "rejected"' in req.description
+        assert '"recommendedReturnStep": "step_package" | null' in req.description
+        assert "Return ONLY a single JSON object" in req.description
+        assert "Do not write a separate review file" in req.description
+
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.roster_builder.load_agent_config",
+        return_value=(None, None, None),
+    )
     async def test_step_execution_description_format(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge()
         builder = ContextBuilder(bridge)

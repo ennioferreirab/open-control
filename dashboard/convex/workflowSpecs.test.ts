@@ -74,7 +74,14 @@ describe("workflowSpecs.createDraft", () => {
 
     const steps = [
       { id: "step-1", title: "Research", type: "agent", agentId: "agent-1" },
-      { id: "step-2", title: "Review", type: "review" },
+      {
+        id: "step-2",
+        title: "Review",
+        type: "review",
+        agentId: "agent-2",
+        reviewSpecId: "review-spec-1",
+        onReject: "step-1",
+      },
     ];
 
     await handler(ctx, {
@@ -177,6 +184,29 @@ describe("workflowSpecs.publish", () => {
 
     await expect(handler(ctx, { specId: "workflow-spec-id-pub" })).rejects.toThrow(
       "Can only publish specs in draft status",
+    );
+  });
+
+  it("rejects publish when a review step is missing reviewSpecId", async () => {
+    const handler = getHandler(publish);
+    const { ctx } = makeCtx({
+      _id: "workflow-spec-id-review-missing-spec",
+      squadSpecId: "squad-spec-id-1",
+      status: "draft",
+      version: 1,
+      steps: [
+        {
+          id: "review",
+          title: "Review",
+          type: "review",
+          agentId: "agent-1",
+          onReject: "draft",
+        },
+      ],
+    });
+
+    await expect(handler(ctx, { specId: "workflow-spec-id-review-missing-spec" })).rejects.toThrow(
+      'Review step "review" requires reviewSpecId',
     );
   });
 });

@@ -55,6 +55,10 @@ export interface SquadGraphWorkflowStepInput {
   title?: string;
   /** Optional description. */
   description?: string;
+  /** Review contract reference, required for review steps. */
+  reviewSpecId?: string;
+  /** Return step when the review rejects. */
+  onReject?: string;
 }
 
 export interface SquadGraphWorkflowInput {
@@ -88,6 +92,22 @@ export interface SquadGraphInput {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbContext = { db: any };
+
+function validateReviewStep(step: SquadGraphWorkflowStepInput): void {
+  if (step.type !== "review") {
+    return;
+  }
+
+  if (!step.agentKey) {
+    throw new Error(`Review step "${step.key}" requires agentKey`);
+  }
+  if (!step.reviewSpecId) {
+    throw new Error(`Review step "${step.key}" requires reviewSpecId`);
+  }
+  if (!step.onReject) {
+    throw new Error(`Review step "${step.key}" requires onReject`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // publishSquadGraph
@@ -157,6 +177,8 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
 
   for (const workflow of graph.workflows) {
     const resolvedSteps = workflow.steps.map((step) => {
+      validateReviewStep(step);
+
       const resolvedStep: Record<string, unknown> = {
         id: step.key,
         title: step.title ?? step.key,
@@ -176,6 +198,12 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
 
       if (step.description !== undefined) {
         resolvedStep.description = step.description;
+      }
+      if (step.reviewSpecId !== undefined) {
+        resolvedStep.reviewSpecId = step.reviewSpecId;
+      }
+      if (step.onReject !== undefined) {
+        resolvedStep.onReject = step.onReject;
       }
 
       return resolvedStep;

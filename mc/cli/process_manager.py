@@ -202,6 +202,8 @@ class ProcessManager:
     async def _start_all(self, configs: list[ProcessConfig]) -> None:
         """Spawn all processes sequentially."""
         for config in configs:
+            if config.port is not None:
+                await self._kill_port(config.port)
             managed = await self._spawn_process(config)
             self._processes.append(managed)
             # Brief pause to let the process initialize

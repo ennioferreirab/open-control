@@ -172,6 +172,8 @@ export const publishGraph = mutation({
                 v.literal("system"),
               ),
               agentKey: v.optional(v.string()),
+              reviewSpecId: v.optional(v.string()),
+              onReject: v.optional(v.string()),
               dependsOn: v.optional(v.array(v.string())),
               title: v.optional(v.string()),
               description: v.optional(v.string()),

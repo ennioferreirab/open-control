@@ -55,6 +55,7 @@ async def test_startup_order(dashboard_dir, project_root):
         side_effect=mock_create_subprocess,
     ):
         pm = ProcessManager(dashboard_dir, project_root)
+        pm._kill_port = AsyncMock()
         await pm.start()
 
         assert len(spawn_order) == 4
@@ -104,6 +105,33 @@ async def test_process_configs_cloud_mode(dashboard_dir, project_root):
     assert configs[0].label == "convex"
     assert configs[0].command == "npm"
     assert configs[0].args == ["run", "dev:backend"]
+
+
+@pytest.mark.asyncio
+async def test_startup_cleans_port_before_spawning_port_bound_process(dashboard_dir, project_root):
+    """Startup proactively clears configured ports before spawning the process."""
+    spawn_order = []
+    killed_ports = []
+
+    async def mock_create_subprocess(*args, **kwargs):
+        spawn_order.append(tuple(args))
+        return _make_mock_process()
+
+    async def mock_kill_port(port: int):
+        killed_ports.append(port)
+
+    with patch(
+        "mc.cli.process_manager.asyncio.create_subprocess_exec",
+        side_effect=mock_create_subprocess,
+    ):
+        pm = ProcessManager(dashboard_dir, project_root)
+        pm._kill_port = mock_kill_port
+
+        await pm.start()
+        await pm.stop()
+
+    assert killed_ports == [3210]
+    assert spawn_order[0][:3] == ("npm", "run", "dev:backend")
 
 
 @pytest.mark.asyncio
@@ -166,6 +194,7 @@ async def test_shutdown_reverse_order(dashboard_dir, project_root):
         patch("mc.cli.process_manager.os.killpg", side_effect=mock_killpg),
     ):
         pm = ProcessManager(dashboard_dir, project_root)
+        pm._kill_port = AsyncMock()
         await pm.start()
         await pm.stop()
 
@@ -244,6 +273,7 @@ async def test_crash_callback(dashboard_dir, project_root):
         patch("mc.cli.process_manager.os.killpg", side_effect=lambda *a: None),
     ):
         pm = ProcessManager(dashboard_dir, project_root, on_crash=on_crash)
+        pm._kill_port = AsyncMock()
         await pm.start()
 
         # Simulate the third process (gateway) crashing — it is critical
@@ -300,6 +330,7 @@ async def test_output_forwarding(dashboard_dir, project_root, capsys):
         side_effect=mock_create_subprocess,
     ):
         pm = ProcessManager(dashboard_dir, project_root)
+        pm._kill_port = AsyncMock()
         await pm.start()
 
         # Give time for output forwarding tasks to process
