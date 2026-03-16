@@ -106,7 +106,7 @@ describe("computeAllowedActions", () => {
     return computeAllowedActions(task, uiFlags);
   }
 
-  it("approve is true only when status is review", () => {
+  it("approve is true only for standard review tasks", () => {
     expect(getActions("review").approve).toBe(true);
     expect(getActions("in_progress").approve).toBe(false);
     expect(getActions("done").approve).toBe(false);
@@ -116,12 +116,30 @@ describe("computeAllowedActions", () => {
     expect(getActions("review", { isManual: true }).approve).toBe(false);
   });
 
+  it("approve is false for pre-kickoff review tasks", () => {
+    expect(
+      getActions("review", {
+        awaitingKickoff: true,
+        executionPlan: { steps: [{ title: "step-1" }] },
+      }).approve,
+    ).toBe(false);
+  });
+
   it("kickoff is true for ready status", () => {
     expect(getActions("ready").kickoff).toBe(true);
   });
 
-  it("kickoff is true for review with execution plan", () => {
-    expect(getActions("review", { executionPlan: { steps: [] } }).kickoff).toBe(true);
+  it("kickoff is true for review only when awaiting kickoff", () => {
+    expect(
+      getActions("review", {
+        awaitingKickoff: true,
+        executionPlan: { steps: [] },
+      }).kickoff,
+    ).toBe(true);
+  });
+
+  it("kickoff is false for standard review tasks even when they still have a plan", () => {
+    expect(getActions("review", { executionPlan: { steps: [] } }).kickoff).toBe(false);
   });
 
   it("kickoff is false for review without execution plan", () => {
@@ -138,6 +156,13 @@ describe("computeAllowedActions", () => {
     // isPaused = review + non-completed steps
     const steps: StepForFlags[] = [{ status: "running" }];
     expect(getActions("review", {}, steps).resume).toBe(true);
+  });
+
+  it("resume is false when awaiting kickoff even if review already has steps", () => {
+    const steps: StepForFlags[] = [{ status: "running" }];
+    expect(
+      getActions("review", { awaitingKickoff: true, executionPlan: { steps: [] } }, steps).resume,
+    ).toBe(false);
   });
 
   it("resume is false when review but not paused", () => {
@@ -426,14 +451,14 @@ describe("getDetailView", () => {
     // uiFlags
     const uiFlags = result.uiFlags as Record<string, boolean>;
     expect(uiFlags.isAwaitingKickoff).toBe(true);
-    expect(uiFlags.isPaused).toBe(true); // review + non-completed step
+    expect(uiFlags.isPaused).toBe(false);
     expect(uiFlags.isPlanEditable).toBe(true);
 
     // allowedActions
     const actions = result.allowedActions as Record<string, boolean>;
-    expect(actions.approve).toBe(true);
-    expect(actions.kickoff).toBe(true); // review + has execution plan
-    expect(actions.resume).toBe(true); // isPaused
+    expect(actions.approve).toBe(false);
+    expect(actions.kickoff).toBe(true);
+    expect(actions.resume).toBe(false);
   });
 
   it("returns empty files and tags when task has none", async () => {

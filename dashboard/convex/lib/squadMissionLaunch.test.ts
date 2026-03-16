@@ -243,7 +243,7 @@ describe("launchSquadMission", () => {
     ).rejects.toThrow("Workflow must be published");
   });
 
-  it("creates task in review status with awaitingKickoff=true (Layer 1 defense)", async () => {
+  it("creates task in planning status so workflow missions re-enter the normal flow", async () => {
     const { ctx, inserts } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
@@ -259,10 +259,8 @@ describe("launchSquadMission", () => {
     });
 
     const taskInsert = inserts.find((i) => i.table === "tasks");
-    // Layer 1: task must start in "review" to skip the inbox→planning pipeline
-    expect(taskInsert!.value.status).toBe("review");
-    // Layer 1: awaitingKickoff=true so dashboard shows kick-off UI
-    expect(taskInsert!.value.awaitingKickoff).toBe(true);
+    expect(taskInsert!.value.status).toBe("planning");
+    expect(taskInsert!.value.awaitingKickoff).toBeUndefined();
     expect(taskInsert!.value.trustLevel).toBe("autonomous");
     expect(taskInsert!.value.description).toBe("A test mission");
   });
