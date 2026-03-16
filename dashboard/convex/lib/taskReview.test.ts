@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { ConvexError } from "convex/values";
 
 import { approveTask } from "./taskReview";
 
@@ -29,19 +28,19 @@ function makeCtx(task: object | null) {
 describe("approveTask", () => {
   it("throws when the task is not found", async () => {
     const { db } = makeCtx(null);
-    await expect(approveTask({ db }, "task-1" as any)).rejects.toThrow("Task not found");
+    await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow("Task not found");
   });
 
   it("throws when the task is not in review state", async () => {
     const { db } = makeCtx({ _id: "task-1", status: "in_progress", isManual: false });
-    await expect(approveTask({ db }, "task-1" as any)).rejects.toThrow(
+    await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow(
       "Task is not in review state",
     );
   });
 
   it("throws when the task is a manual task", async () => {
     const { db } = makeCtx({ _id: "task-1", status: "review", isManual: true });
-    await expect(approveTask({ db }, "task-1" as any)).rejects.toThrow(
+    await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow(
       "Cannot approve a manual task",
     );
   });
@@ -54,8 +53,22 @@ describe("approveTask", () => {
       awaitingKickoff: true,
       title: "Squad mission",
     });
-    await expect(approveTask({ db }, "task-1" as any)).rejects.toThrow(
+    await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow(
       "Cannot approve a pre-kickoff task directly",
+    );
+  });
+
+  it("throws when reviewPhase is execution_pause", async () => {
+    const { db } = makeCtx({
+      _id: "task-1",
+      status: "review",
+      isManual: false,
+      reviewPhase: "execution_pause",
+      title: "Paused task",
+    });
+
+    await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow(
+      "Cannot approve a paused execution review",
     );
   });
 
@@ -64,12 +77,13 @@ describe("approveTask", () => {
       _id: "task-1",
       status: "review",
       isManual: false,
+      reviewPhase: "final_approval",
       title: "Normal task",
       trustLevel: "autonomous",
       isMergeTask: false,
     });
 
-    await approveTask({ db }, "task-1" as any, "Alice");
+    await approveTask({ db }, "task-1" as never, "Alice");
 
     expect(patch).toHaveBeenCalledWith("task-1", expect.objectContaining({ status: "done" }));
     expect(insert).toHaveBeenCalledWith(
@@ -84,11 +98,12 @@ describe("approveTask", () => {
       status: "review",
       isManual: false,
       awaitingKickoff: false,
+      reviewPhase: "final_approval",
       title: "Normal task",
       trustLevel: "autonomous",
     });
 
-    await approveTask({ db }, "task-1" as any);
+    await approveTask({ db }, "task-1" as never);
 
     expect(patch).toHaveBeenCalledWith("task-1", expect.objectContaining({ status: "done" }));
   });

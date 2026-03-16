@@ -103,9 +103,11 @@ def test_ask_user_creates_question_posts_message_and_waits(monkeypatch) -> None:
     assert bridge.mutations[1][0] == "messages:create"
     assert bridge.mutations[2][0] == "tasks:updateStatus"
     assert bridge.mutations[2][1]["awaiting_kickoff"] is False
+    assert bridge.mutations[2][1]["review_phase"] == "execution_pause"
     assert bridge.mutations[3][0] == "steps:updateStatus"
     assert bridge.mutations[-2][0] == "tasks:updateStatus"
     assert bridge.mutations[-2][1]["awaiting_kickoff"] is False
+    assert "review_phase" not in bridge.mutations[-2][1]
     assert bridge.mutations[-1][0] == "steps:updateStatus"
 
 

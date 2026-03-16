@@ -232,6 +232,7 @@ class InteractiveExecutionSupervisor:
                     agent_name=event.agent_name,
                     description=description,
                     awaiting_kickoff=False,
+                    review_phase="execution_pause",
                 )
             except Exception as exc:
                 if _is_same_status_error(exc, "review"):

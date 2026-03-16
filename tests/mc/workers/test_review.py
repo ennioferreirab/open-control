@@ -8,14 +8,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mc.infrastructure.runtime_context import RuntimeContext
+from mc.runtime.workers.review import ReviewWorker
 from mc.types import (
     ActivityEventType,
     AuthorType,
     MessageType,
+    ReviewPhase,
     TaskStatus,
     TrustLevel,
 )
-from mc.runtime.workers.review import ReviewWorker
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -29,7 +30,13 @@ def _make_bridge() -> MagicMock:
     bridge.create_activity.return_value = None
     bridge.send_message.return_value = None
     bridge.get_steps_by_task.return_value = []
-    bridge.query.return_value = {"title": "Test Task", "trust_level": "autonomous"}
+
+    def _query(name: str, *_args, **_kwargs):
+        if name == "executionQuestions:hasPendingForTask":
+            return False
+        return {"title": "Test Task", "trust_level": "autonomous"}
+
+    bridge.query.side_effect = _query
     return bridge
 
 
@@ -112,12 +119,37 @@ class TestHandleReviewTransition:
             "trust_level": TrustLevel.AUTONOMOUS,
             "reviewers": [],
             "awaiting_kickoff": None,
+            "review_phase": ReviewPhase.EXECUTION_PAUSE,
         }
 
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
         bridge.update_task_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_final_approval_with_steps_still_routes_to_reviewers(self) -> None:
+        bridge = _make_bridge()
+        bridge.get_steps_by_task.return_value = [
+            {"id": "step-1", "status": "completed"},
+            {"id": "step-2", "status": "completed"},
+        ]
+        worker = ReviewWorker(_make_ctx(bridge))
+
+        task = {
+            "id": "task-1",
+            "title": "Final Approval Task",
+            "trust_level": TrustLevel.AUTONOMOUS,
+            "reviewers": ["reviewer-bot"],
+            "awaiting_kickoff": None,
+            "review_phase": ReviewPhase.FINAL_APPROVAL,
+        }
+
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
+            await worker.handle_review_transition("task-1", task)
+
+        bridge.send_message.assert_called_once()
+        bridge.create_activity.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_manual_review_task_not_auto_completed(self) -> None:
@@ -242,10 +274,11 @@ class TestHandleReviewApproval:
     @pytest.mark.asyncio
     async def test_human_approved_requests_hitl(self) -> None:
         bridge = _make_bridge()
-        bridge.query.return_value = {
-            "title": "Test",
-            "trust_level": TrustLevel.HUMAN_APPROVED,
-        }
+        bridge.query.side_effect = lambda name, *_args, **_kwargs: (
+            False
+            if name == "executionQuestions:hasPendingForTask"
+            else {"title": "Test", "trust_level": TrustLevel.HUMAN_APPROVED}
+        )
         worker = ReviewWorker(_make_ctx(bridge))
 
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):

@@ -118,11 +118,17 @@ export async function approveTask(
       "Cannot approve a pre-kickoff task directly. Use Approve & Kick Off instead.",
     );
   }
+  if (task.reviewPhase !== "final_approval") {
+    if (task.reviewPhase === "execution_pause") {
+      throw new ConvexError("Cannot approve a paused execution review. Resume the task instead.");
+    }
+    throw new ConvexError("Cannot approve a review task without reviewPhase=final_approval.");
+  }
 
   const now = new Date().toISOString();
   const approver = userName || "User";
 
-  await ctx.db.patch(taskId, { status: "done", updatedAt: now });
+  await ctx.db.patch(taskId, { status: "done", reviewPhase: undefined, updatedAt: now });
   await cascadeMergeSourceTasksToDone(
     ctx,
     task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
@@ -220,6 +226,9 @@ export async function updateTaskStatusInternal(
     status: newStatus,
     updatedAt: now,
   };
+  if (newStatus !== "review" && args.reviewPhase === undefined) {
+    patch.reviewPhase = undefined;
+  }
   if (newStatus === "assigned" && args.agentName) {
     patch.assignedAgent = args.agentName;
   }
