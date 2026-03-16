@@ -6,6 +6,7 @@ import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AgentTextViewerModal } from "@/components/AgentTextViewerModal";
 import { Loader2, Pause, Pencil, Play, Trash2 } from "lucide-react";
 import { TAG_COLORS } from "@/lib/constants";
 import type { MergedTaskRef, TaskDetailViewData } from "@/features/tasks/hooks/useTaskDetailView";
@@ -54,7 +55,6 @@ interface TaskDetailHeaderProps {
   isEditingTitle: boolean;
   editTitleValue: string;
   isEditingDescription: boolean;
-  editDescriptionValue: string;
   manualPlanPrimaryAction: ManualPrimaryAction;
   onApprove: () => void;
   onRetry: () => void | Promise<void>;
@@ -73,8 +73,7 @@ interface TaskDetailHeaderProps {
   onSaveTitle: () => void | Promise<void>;
   onCancelEditingTitle: () => void;
   onStartEditingDescription: () => void;
-  onDescriptionValueChange: (value: string) => void;
-  onSaveDescription: () => void | Promise<void>;
+  onSaveDescription: (content: string) => Promise<void>;
   onCancelEditingDescription: () => void;
 }
 
@@ -90,15 +89,6 @@ function renderTitleKeyDown(
 
   if (event.key === "Escape") {
     onCancelEditingTitle();
-  }
-}
-
-function renderDescriptionKeyDown(
-  event: KeyboardEvent<HTMLTextAreaElement>,
-  onCancelEditingDescription: () => void,
-): void {
-  if (event.key === "Escape") {
-    onCancelEditingDescription();
   }
 }
 
@@ -135,7 +125,6 @@ export function TaskDetailHeader({
   isEditingTitle,
   editTitleValue,
   isEditingDescription,
-  editDescriptionValue,
   manualPlanPrimaryAction,
   onApprove,
   onRetry,
@@ -154,12 +143,11 @@ export function TaskDetailHeader({
   onSaveTitle,
   onCancelEditingTitle,
   onStartEditingDescription,
-  onDescriptionValueChange,
   onSaveDescription,
   onCancelEditingDescription,
 }: TaskDetailHeaderProps) {
   return (
-    <SheetHeader className="px-6 pt-6 pb-4">
+    <SheetHeader className="px-6 pt-6 pb-4 flex-shrink-0 overflow-hidden">
       <SheetTitle className="text-lg font-semibold pr-6">
         {isEditingTitle ? (
           <Input
@@ -554,45 +542,42 @@ export function TaskDetailHeader({
           . Continue the thread and edits there.
         </div>
       )}
-      <div className="mt-3 group/desc">
-        {isEditingDescription ? (
-          <textarea
-            value={editDescriptionValue}
-            onChange={(event) => onDescriptionValueChange(event.target.value)}
-            onBlur={() => void onSaveDescription()}
-            onKeyDown={(event) => renderDescriptionKeyDown(event, onCancelEditingDescription)}
-            className="w-full text-sm text-foreground resize-none rounded-md border border-input bg-background px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring min-h-[60px]"
-            placeholder="Describe this task..."
-            autoFocus
-            rows={3}
-          />
-        ) : (
-          <div className="flex items-start gap-1.5">
-            {task.description ? (
-              <p className="text-sm text-muted-foreground flex-1 whitespace-pre-wrap">
+      <div className="mt-3 group/desc rounded-md border border-border bg-muted/30 px-3 py-2">
+        <div className="flex items-start gap-1.5">
+          {task.description ? (
+            <div className="flex-1 max-h-[120px] overflow-y-auto">
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
                 {task.description}
               </p>
-            ) : (
-              <p
-                className="text-sm text-muted-foreground/50 italic flex-1 cursor-text"
-                onClick={onStartEditingDescription}
-              >
-                Add description...
-              </p>
-            )}
-            {!isMergeLockedSource && (
-              <button
-                type="button"
-                onClick={onStartEditingDescription}
-                className="opacity-0 group-hover/desc:opacity-100 transition-opacity mt-0.5 flex-shrink-0 p-0.5 rounded hover:bg-accent"
-                aria-label="Edit description"
-              >
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            )}
-          </div>
-        )}
+            </div>
+          ) : (
+            <p
+              className="text-sm text-muted-foreground/50 italic flex-1 cursor-text"
+              onClick={onStartEditingDescription}
+            >
+              Add description...
+            </p>
+          )}
+          {!isMergeLockedSource && (
+            <button
+              type="button"
+              onClick={onStartEditingDescription}
+              className="opacity-0 group-hover/desc:opacity-100 transition-opacity mt-0.5 flex-shrink-0 p-0.5 rounded hover:bg-accent"
+              aria-label="Edit description"
+            >
+              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
+        </div>
       </div>
+      <AgentTextViewerModal
+        open={isEditingDescription}
+        onClose={onCancelEditingDescription}
+        title="Edit Description"
+        content={task.description ?? ""}
+        editable
+        onSave={onSaveDescription}
+      />
     </SheetHeader>
   );
 }

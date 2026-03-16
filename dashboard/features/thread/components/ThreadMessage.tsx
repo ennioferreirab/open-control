@@ -31,9 +31,9 @@ function areArtifactsEqual(
   return (previous ?? []).every((artifact, index) => {
     const candidate = next?.[index];
     return (
-      candidate?.path === artifact.path
-      && candidate?.action === artifact.action
-      && candidate?.description === artifact.description
+      candidate?.path === artifact.path &&
+      candidate?.action === artifact.action &&
+      candidate?.description === artifact.description
     );
   });
 }
@@ -47,26 +47,23 @@ function areFileAttachmentsEqual(
 
   return (previous ?? []).every((attachment, index) => {
     const candidate = next?.[index];
-    return (
-      candidate?.name === attachment.name
-      && candidate?.size === attachment.size
-    );
+    return candidate?.name === attachment.name && candidate?.size === attachment.size;
   });
 }
 
 function areMessagesRenderEquivalent(previous: Doc<"messages">, next: Doc<"messages">): boolean {
   return (
-    previous._id === next._id
-    && previous.authorName === next.authorName
-    && previous.authorType === next.authorType
-    && previous.content === next.content
-    && previous.messageType === next.messageType
-    && previous.type === next.type
-    && previous.timestamp === next.timestamp
-    && previous.taskId === next.taskId
-    && previous.stepId === next.stepId
-    && areArtifactsEqual(previous.artifacts, next.artifacts)
-    && areFileAttachmentsEqual(previous.fileAttachments, next.fileAttachments)
+    previous._id === next._id &&
+    previous.authorName === next.authorName &&
+    previous.authorType === next.authorType &&
+    previous.content === next.content &&
+    previous.messageType === next.messageType &&
+    previous.type === next.type &&
+    previous.timestamp === next.timestamp &&
+    previous.taskId === next.taskId &&
+    previous.stepId === next.stepId &&
+    areArtifactsEqual(previous.artifacts, next.artifacts) &&
+    areFileAttachmentsEqual(previous.fileAttachments, next.fileAttachments)
   );
 }
 
@@ -75,10 +72,11 @@ function areThreadMessagePropsEqual(
   next: ThreadMessageProps,
 ): boolean {
   return (
-    previous.onArtifactClick === next.onArtifactClick
-    && previous.taskIdOverride === next.taskIdOverride
-    && areMessagesRenderEquivalent(previous.message, next.message)
-    && resolveStepTitle(previous.message, previous.steps) === resolveStepTitle(next.message, next.steps)
+    previous.onArtifactClick === next.onArtifactClick &&
+    previous.taskIdOverride === next.taskIdOverride &&
+    areMessagesRenderEquivalent(previous.message, next.message) &&
+    resolveStepTitle(previous.message, previous.steps) ===
+      resolveStepTitle(next.message, next.steps)
   );
 }
 
@@ -183,7 +181,7 @@ function ThreadMessageComponent({
           {isDenial && <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />}
           {isSystem || message.authorType === "user" ? (
             <p
-              className={`text-sm text-muted-foreground break-words ${isSystem || isSystemError ? "italic" : ""}`}
+              className={`text-sm text-muted-foreground break-words [overflow-wrap:anywhere] ${isSystem || isSystemError ? "italic" : ""}`}
             >
               {message.content}
             </p>
@@ -197,7 +195,9 @@ function ThreadMessageComponent({
           <ArtifactRenderer
             artifacts={message.artifacts}
             onArtifactClick={
-              onArtifactClick ? (artifact) => onArtifactClick(artifact.path, resolvedTaskId) : undefined
+              onArtifactClick
+                ? (artifact) => onArtifactClick(artifact.path, resolvedTaskId)
+                : undefined
             }
           />
         )}
