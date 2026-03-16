@@ -7,6 +7,7 @@ import {
   publish,
   publishGraph,
   setDefaultWorkflow,
+  updatePublishedGraph,
 } from "./squadSpecs";
 
 type InsertCall = {
@@ -378,5 +379,234 @@ describe("squadSpecs.publishGraph", () => {
 
     const taskInserts = inserts.filter((i) => i.table === "tasks");
     expect(taskInserts).toHaveLength(0);
+  });
+});
+
+function makeUpdateGraphCtx() {
+  const patches: PatchCall[] = [];
+  const deletes: string[] = [];
+  const existingAgents = new Map<string, { _id: string; name: string }>();
+  const workflowsBySquad = [
+    {
+      _id: "workflow-default",
+      squadSpecId: "squad-spec-id",
+      name: "Default Workflow",
+      steps: [],
+      status: "published",
+      version: 3,
+      createdAt: "2024-01-01T00:00:00.000Z",
+      updatedAt: "2024-01-01T00:00:00.000Z",
+    },
+    {
+      _id: "workflow-stale",
+      squadSpecId: "squad-spec-id",
+      name: "Legacy Workflow",
+      steps: [],
+      status: "published",
+      version: 1,
+      createdAt: "2024-01-01T00:00:00.000Z",
+      updatedAt: "2024-01-01T00:00:00.000Z",
+    },
+  ];
+  let lastAgentQueryName: string | null = null;
+  let requestedSquadId: string | null = null;
+
+  const get = vi.fn(async (id: string) => {
+    if (id === "squad-spec-id") {
+      return {
+        _id: "squad-spec-id",
+        name: "personal-brand-squad",
+        displayName: "Personal Brand Squad",
+        status: "published",
+        version: 3,
+        defaultWorkflowSpecId: "workflow-default",
+      };
+    }
+    return null;
+  });
+
+  const patch = vi.fn(async (id: string, p: Record<string, unknown>) => {
+    patches.push({ id, patch: p });
+  });
+
+  const deleteFn = vi.fn(async (id: string) => {
+    deletes.push(id);
+  });
+
+  const first = vi.fn(async () => {
+    if (!lastAgentQueryName) {
+      return null;
+    }
+    return existingAgents.get(lastAgentQueryName) ?? null;
+  });
+
+  const collect = vi.fn(async () => {
+    if (requestedSquadId === "squad-spec-id") {
+      return workflowsBySquad;
+    }
+    return [];
+  });
+
+  const query = vi.fn((table: string) => {
+    if (table === "agents") {
+      return {
+        withIndex: (
+          _indexName: string,
+          callback?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+        ) => {
+          callback?.({
+            eq: (_field: string, value: string) => {
+              lastAgentQueryName = value;
+              return undefined;
+            },
+          });
+          return { first };
+        },
+      };
+    }
+
+    if (table === "workflowSpecs") {
+      return {
+        withIndex: (
+          _indexName: string,
+          callback?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+        ) => {
+          callback?.({
+            eq: (_field: string, value: string) => {
+              requestedSquadId = value;
+              return undefined;
+            },
+          });
+          return { collect };
+        },
+      };
+    }
+
+    throw new Error(`Unexpected query table: ${table}`);
+  });
+
+  return {
+    ctx: { db: { get, patch, delete: deleteFn, query } },
+    patches,
+    deletes,
+    existingAgents,
+  };
+}
+
+describe("squadSpecs.updatePublishedGraph", () => {
+  it("updates the current squad and workflow specs in place", async () => {
+    const handler = getHandler(updatePublishedGraph);
+    const { ctx, patches, deletes, existingAgents } = makeUpdateGraphCtx();
+    existingAgents.set("audience-researcher", { _id: "agent-1", name: "audience-researcher" });
+
+    await handler(ctx, {
+      squadSpecId: "squad-spec-id",
+      graph: {
+        squad: {
+          name: "personal-brand-squad",
+          displayName: "Personal Brand Squad",
+          description: "Updated description",
+          outcome: "Ship a better workflow",
+        },
+        agents: [{ key: "researcher", name: "audience-researcher", role: "Researcher" }],
+        workflows: [
+          {
+            id: "workflow-default",
+            key: "default",
+            name: "Default Workflow",
+            steps: [
+              {
+                key: "research",
+                type: "agent",
+                agentKey: "researcher",
+                title: "Research",
+              },
+              {
+                key: "review",
+                type: "review",
+                agentKey: "researcher",
+                title: "Review",
+                reviewSpecId: "review-spec-1",
+                onReject: "research",
+                dependsOn: ["research"],
+              },
+            ],
+            exitCriteria: "Approved",
+          },
+        ],
+      },
+    });
+
+    expect(patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "squad-spec-id",
+          patch: expect.objectContaining({
+            description: "Updated description",
+            outcome: "Ship a better workflow",
+            defaultWorkflowSpecId: "workflow-default",
+          }),
+        }),
+        expect.objectContaining({
+          id: "workflow-default",
+          patch: expect.objectContaining({
+            name: "Default Workflow",
+            exitCriteria: "Approved",
+            steps: expect.arrayContaining([
+              expect.objectContaining({
+                id: "research",
+                type: "agent",
+                agentId: "agent-1",
+              }),
+              expect.objectContaining({
+                id: "review",
+                type: "review",
+                reviewSpecId: "review-spec-1",
+                onReject: "research",
+                dependsOn: ["research"],
+              }),
+            ]),
+          }),
+        }),
+      ]),
+    );
+    expect(deletes).toContain("workflow-stale");
+  });
+
+  it("rejects invalid review routing before patching data", async () => {
+    const handler = getHandler(updatePublishedGraph);
+    const { ctx, patches, existingAgents } = makeUpdateGraphCtx();
+    existingAgents.set("audience-researcher", { _id: "agent-1", name: "audience-researcher" });
+
+    await expect(
+      handler(ctx, {
+        squadSpecId: "squad-spec-id",
+        graph: {
+          squad: {
+            name: "personal-brand-squad",
+            displayName: "Personal Brand Squad",
+          },
+          agents: [{ key: "researcher", name: "audience-researcher", role: "Researcher" }],
+          workflows: [
+            {
+              id: "workflow-default",
+              key: "default",
+              name: "Default Workflow",
+              steps: [
+                {
+                  key: "review",
+                  type: "review",
+                  agentKey: "researcher",
+                  reviewSpecId: "review-spec-1",
+                  onReject: "missing-step",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow('Review step "review" has invalid onReject target "missing-step"');
+
+    expect(patches).toHaveLength(0);
   });
 });

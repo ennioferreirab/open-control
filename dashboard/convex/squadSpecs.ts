@@ -4,6 +4,7 @@ import { v } from "convex/values";
 
 import { specStatusValidator } from "./schema";
 import { publishSquadGraph } from "./lib/squadGraphPublisher";
+import { updatePublishedSquadGraph } from "./lib/squadGraphUpdater";
 
 export const createDraft = internalMutation({
   args: {
@@ -187,5 +188,61 @@ export const publishGraph = mutation({
   },
   handler: async (ctx, args) => {
     return await publishSquadGraph(ctx, args.graph);
+  },
+});
+
+export const updatePublishedGraph = mutation({
+  args: {
+    squadSpecId: v.id("squadSpecs"),
+    graph: v.object({
+      squad: v.object({
+        name: v.string(),
+        displayName: v.string(),
+        description: v.optional(v.string()),
+        outcome: v.optional(v.string()),
+      }),
+      agents: v.array(
+        v.object({
+          key: v.string(),
+          name: v.string(),
+          role: v.string(),
+          displayName: v.optional(v.string()),
+          prompt: v.optional(v.string()),
+          model: v.optional(v.string()),
+          skills: v.optional(v.array(v.string())),
+          soul: v.optional(v.string()),
+          reuseName: v.optional(v.string()),
+        }),
+      ),
+      workflows: v.array(
+        v.object({
+          id: v.optional(v.id("workflowSpecs")),
+          key: v.string(),
+          name: v.string(),
+          steps: v.array(
+            v.object({
+              key: v.string(),
+              type: v.union(
+                v.literal("agent"),
+                v.literal("human"),
+                v.literal("checkpoint"),
+                v.literal("review"),
+                v.literal("system"),
+              ),
+              agentKey: v.optional(v.string()),
+              reviewSpecId: v.optional(v.string()),
+              onReject: v.optional(v.string()),
+              dependsOn: v.optional(v.array(v.string())),
+              title: v.optional(v.string()),
+              description: v.optional(v.string()),
+            }),
+          ),
+          exitCriteria: v.optional(v.string()),
+        }),
+      ),
+    }),
+  },
+  handler: async (ctx, args) => {
+    return await updatePublishedSquadGraph(ctx, args.squadSpecId, args.graph);
   },
 });
