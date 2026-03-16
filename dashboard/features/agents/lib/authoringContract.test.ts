@@ -6,7 +6,6 @@ import {
   type AgentGraphPatch,
   type AuthoringPhase,
   type AuthoringResponse,
-  type SquadGraphPatch,
 } from "./authoringContract";
 
 describe("authoringContract", () => {
@@ -83,34 +82,6 @@ describe("authoringContract", () => {
     });
   });
 
-  describe("parseAuthoringResponse - squad mode", () => {
-    it("parses squad payload with graph patch keys", () => {
-      const raw = {
-        assistant_message: "Here is your squad proposal.",
-        phase: "proposal",
-        draft_graph_patch: {
-          squad: { outcome: "Grow an expert personal brand" },
-          agents: [{ key: "researcher", role: "Researcher" }],
-          workflows: [{ key: "default", steps: [] }],
-        },
-        unresolved_questions: [],
-        preview: { squad_name: "brand-squad" },
-        readiness: 0.6,
-        mode: "squad",
-      };
-
-      const result = parseAuthoringResponse<SquadGraphPatch>(raw);
-
-      expect(result.phase).toBe("proposal");
-      expect(result.draftGraphPatch).toHaveProperty("squad");
-      expect(result.draftGraphPatch).toHaveProperty("agents");
-      expect(result.draftGraphPatch).toHaveProperty("workflows");
-      // Must not have old flat keys
-      expect(result.draftGraphPatch).not.toHaveProperty("team_design");
-      expect(result.draftGraphPatch).not.toHaveProperty("workflow_design");
-    });
-  });
-
   describe("parseAuthoringResponse - error handling", () => {
     it("throws when phase is not canonical", () => {
       const raw = {
@@ -153,13 +124,5 @@ describe("authoringContract", () => {
       expect(resp.phase).toBe("discovery");
     });
 
-    it("SquadGraphPatch has required keys", () => {
-      const patch: SquadGraphPatch = {
-        squad: { outcome: "Test" },
-        agents: [],
-        workflows: [],
-      };
-      expect(patch.squad.outcome).toBe("Test");
-    });
   });
 });
