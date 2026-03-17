@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X, Trash2, ExternalLink } from "lucide-react";
-import { parseCronToTable } from "@/lib/cron-parser";
+import { parseCronToTable } from "@/lib/cronParser";
 
 interface CronSchedule {
   kind: "at" | "every" | "cron";

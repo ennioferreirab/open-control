@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { ActivityFeed } from "./ActivityFeed";
 import { FeedItem } from "./FeedItem";
-import type { Doc } from "../convex/_generated/dataModel";
+import type { Doc } from "@/convex/_generated/dataModel";
 
 // Stub scrollTo for jsdom
 beforeEach(() => {

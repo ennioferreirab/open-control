@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS } from "@/lib/constants";
-import type { PlanStep } from "@/lib/types";
+import type { EditablePlanStep } from "@/lib/types";
 
 /* ── Status helpers (shared with ExecutionPlanTab) ── */
 
@@ -137,7 +137,7 @@ function StepStatusIcon({ meta }: { meta: StepStatusMeta }) {
 /* ── Node data type ── */
 
 export type FlowStepNodeData = {
-  step: PlanStep;
+  step: EditablePlanStep;
   status?: string;
   isEditMode?: boolean;
   isVisualOnly?: boolean;

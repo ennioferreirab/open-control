@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
+import { useUpsertTagAttributeValue } from "@/hooks/useUpsertTagAttributeValue";
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
-import type { Id } from "../convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 
 interface TagAttributeEditorProps {
   taskId: Id<"tasks">;
@@ -25,7 +24,7 @@ export function TagAttributeEditor({
   attribute,
   currentValue,
 }: TagAttributeEditorProps) {
-  const upsert = useMutation(api.tagAttributeValues.upsert);
+  const upsert = useUpsertTagAttributeValue();
   const [localValue, setLocalValue] = useState(currentValue);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -1,5 +1,7 @@
+"use client";
+
 import { useMemo } from "react";
-import { Doc, Id } from "../convex/_generated/dataModel";
+import { Doc, Id } from "@/convex/_generated/dataModel";
 
 export const COLUMNS = [
   { title: "Inbox", status: "inbox", accentColor: "bg-violet-500" },

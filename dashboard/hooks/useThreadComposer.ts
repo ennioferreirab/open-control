@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
-import type { Doc } from "../convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 
 // Statuses where the user cannot interact with the task thread at all.

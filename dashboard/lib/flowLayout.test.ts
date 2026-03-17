@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { stepsToNodesAndEdges, layoutWithDagre } from "./flowLayout";
-import type { PlanStep } from "./types";
+import type { EditablePlanStep } from "./types";
 
-function makeStep(overrides: Partial<PlanStep> & { tempId: string }): PlanStep {
+function makeStep(overrides: Partial<EditablePlanStep> & { tempId: string }): EditablePlanStep {
   return {
     title: overrides.tempId,
     description: overrides.tempId,
@@ -60,7 +60,7 @@ describe("stepsToNodesAndEdges", () => {
     const steps = [makeStep({ tempId: "A", title: "My Step" })];
     const { nodes } = stepsToNodesAndEdges(steps);
     const stepNode = nodes.find((n) => n.id === "A")!;
-    const data = stepNode.data as { step: PlanStep };
+    const data = stepNode.data as { step: EditablePlanStep };
     expect(data.step.title).toBe("My Step");
     expect(data.step.tempId).toBe("A");
   });

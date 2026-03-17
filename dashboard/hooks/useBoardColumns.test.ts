@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
 import { useBoardColumns, stepStatusToColumnStatus } from "./useBoardColumns";
-import { Doc, Id } from "../convex/_generated/dataModel";
+import { Doc, Id } from "@/convex/_generated/dataModel";
 
 type Task = Doc<"tasks">;
 type Step = Doc<"steps">;

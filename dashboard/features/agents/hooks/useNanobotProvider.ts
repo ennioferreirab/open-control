@@ -1,3 +1,5 @@
+"use client";
+
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { getInteractiveAgentProvider } from "@/features/interactive/hooks/useInteractiveAgentProvider";

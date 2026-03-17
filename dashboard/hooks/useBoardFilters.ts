@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { ParsedSearch, ParsedAttributeFilter } from "@/lib/searchParser";
 

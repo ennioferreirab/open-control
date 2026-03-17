@@ -1,10 +1,10 @@
 /**
- * Converts PlanStep[] into React Flow nodes/edges and applies dagre layout.
+ * Converts EditablePlanStep[] into React Flow nodes/edges and applies dagre layout.
  */
 
 import dagre from "@dagrejs/dagre";
 import type { Node, Edge } from "@xyflow/react";
-import type { PlanStep } from "./types";
+import type { EditablePlanStep } from "./types";
 
 export interface FlowLayoutOptions {
   nodeWidth?: number;
@@ -28,11 +28,11 @@ const START_END_WIDTH = 120;
 const START_END_HEIGHT = 50;
 
 /**
- * Convert PlanStep[] into React Flow nodes and edges.
+ * Convert EditablePlanStep[] into React Flow nodes and edges.
  * Injects START and END terminal nodes connected to root/leaf steps.
  */
 export function stepsToNodesAndEdges(
-  steps: PlanStep[],
+  steps: EditablePlanStep[],
   options?: FlowLayoutOptions,
 ): { nodes: Node[]; edges: Edge[] } {
   const opts = { ...DEFAULTS, ...options };
