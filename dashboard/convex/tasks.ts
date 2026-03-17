@@ -79,6 +79,9 @@ export const create = mutation({
     autoTitle: v.optional(v.boolean()),
     supervisionMode: v.optional(v.union(v.literal("autonomous"), v.literal("supervised"))),
     files: taskFilesValidator,
+    routingMode: v.optional(
+      v.union(v.literal("lead_agent"), v.literal("workflow"), v.literal("human")),
+    ),
   },
   handler: async (ctx, args) => {
     return await createTask(ctx, args);

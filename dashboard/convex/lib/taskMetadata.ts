@@ -22,6 +22,7 @@ export interface CreateTaskArgs {
   autoTitle?: boolean;
   supervisionMode?: "autonomous" | "supervised";
   files?: Doc<"tasks">["files"];
+  routingMode?: "lead_agent" | "workflow" | "human";
 }
 
 export async function createTask(
@@ -47,6 +48,12 @@ export async function createTask(
     }
   }
 
+  // Determine routing mode:
+  // - explicit routingMode from caller wins
+  // - assignedAgent without isManual → human routing (operator-directed)
+  // - otherwise undefined (runtime decides)
+  const routingMode = args.routingMode ?? (assignedAgent ? "human" : undefined);
+
   const taskId = await ctx.db.insert("tasks", {
     title: args.title,
     description: args.description,
@@ -57,6 +64,7 @@ export async function createTask(
     reviewers: isManual ? undefined : args.reviewers,
     tags: args.tags,
     workMode: "direct_delegate",
+    ...(routingMode ? { routingMode } : {}),
     ...(isManual ? { isManual: true } : {}),
     ...(boardId ? { boardId } : {}),
     ...(args.cronParentTaskId !== undefined ? { cronParentTaskId: args.cronParentTaskId } : {}),
