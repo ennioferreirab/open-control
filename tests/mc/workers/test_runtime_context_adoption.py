@@ -174,17 +174,17 @@ class TestKickoffResumeWorkerAcceptsRuntimeContext:
         plan_dict = {
             "steps": [
                 {
-                    "tempId": "step_1",
+                    "temp_id": "step_1",
                     "title": "Do something",
                     "description": "Do something useful",
-                    "assignedAgent": "nanobot",
-                    "blockedBy": [],
-                    "parallelGroup": 1,
+                    "assigned_agent": "nanobot",
+                    "blocked_by": [],
+                    "parallel_group": 1,
                     "order": 1,
                 }
             ],
-            "generatedAt": "2024-01-01T00:00:00Z",
-            "generatedBy": "lead-agent",
+            "generated_at": "2024-01-01T00:00:00Z",
+            "generated_by": "lead-agent",
         }
 
         task_data = {

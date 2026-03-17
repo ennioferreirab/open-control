@@ -8,21 +8,10 @@ String values MUST match exactly — any mismatch will cause runtime errors.
 from __future__ import annotations
 
 import re
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Any
-
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        """Backport of StrEnum for Python < 3.11."""
-
-        pass
-
 
 LEAD_AGENT_NAME = "lead-agent"
 NANOBOT_AGENT_NAME = "nanobot"
@@ -94,6 +83,7 @@ class TaskStatus(StrEnum):
     DONE = "done"
     RETRYING = "retrying"
     CRASHED = "crashed"
+    DELETED = "deleted"
 
 
 class StepStatus(StrEnum):
@@ -159,6 +149,18 @@ class ActivityEventType(StrEnum):
     BULK_CLEAR_DONE = "bulk_clear_done"
     MANUAL_TASK_STATUS_CHANGED = "manual_task_status_changed"
     THREAD_MESSAGE_SENT = "thread_message_sent"
+    TASK_REASSIGNED = "task_reassigned"
+    AGENT_DELETED = "agent_deleted"
+    AGENT_RESTORED = "agent_restored"
+    FILE_ATTACHED = "file_attached"
+    TASK_MERGED = "task_merged"
+    AGENT_OUTPUT = "agent_output"
+    BOARD_CREATED = "board_created"
+    BOARD_UPDATED = "board_updated"
+    BOARD_DELETED = "board_deleted"
+    STEP_CREATED = "step_created"
+    STEP_STATUS_CHANGED = "step_status_changed"
+    STEP_UNBLOCKED = "step_unblocked"
 
 
 class MessageType(StrEnum):
@@ -170,6 +172,7 @@ class MessageType(StrEnum):
     DENIAL = "denial"
     SYSTEM_EVENT = "system_event"
     USER_MESSAGE = "user_message"
+    COMMENT = "comment"
 
 
 class ThreadMessageType(StrEnum):
@@ -250,63 +253,47 @@ class ExecutionPlan:
             self.generated_at = datetime.now(timezone.utc).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize to a dict with camelCase keys for Convex storage."""
+        """Serialize to a dict with snake_case keys; bridge converts to camelCase for Convex."""
         step_dicts = []
         for s in self.steps:
             step: dict[str, Any] = {
-                "tempId": s.temp_id,
+                "temp_id": s.temp_id,
                 "title": s.title,
                 "description": s.description,
-                "assignedAgent": s.assigned_agent,
-                "blockedBy": s.blocked_by,
-                "parallelGroup": s.parallel_group,
+                "assigned_agent": s.assigned_agent,
+                "blocked_by": s.blocked_by,
+                "parallel_group": s.parallel_group,
                 "order": s.order,
             }
             if s.workflow_step_id is not None:
-                step["workflowStepId"] = s.workflow_step_id
+                step["workflow_step_id"] = s.workflow_step_id
             if s.workflow_step_type is not None:
-                step["workflowStepType"] = s.workflow_step_type
+                step["workflow_step_type"] = s.workflow_step_type
             if s.agent_id is not None:
-                step["agentId"] = s.agent_id
+                step["agent_id"] = s.agent_id
             if s.agent_spec_id is not None:
-                step["agentSpecId"] = s.agent_spec_id
+                step["agent_spec_id"] = s.agent_spec_id
             if s.review_spec_id is not None:
-                step["reviewSpecId"] = s.review_spec_id
+                step["review_spec_id"] = s.review_spec_id
             if s.on_reject_step_id is not None:
-                step["onRejectStepId"] = s.on_reject_step_id
+                step["on_reject_step_id"] = s.on_reject_step_id
             step_dicts.append(step)
         return {
             "steps": step_dicts,
-            "generatedAt": self.generated_at,
-            "generatedBy": self.generated_by,
+            "generated_at": self.generated_at,
+            "generated_by": self.generated_by,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ExecutionPlan:
-        """Deserialize from a Convex JSON dict (handles both snake and camel keys)."""
+        """Deserialize from a snake_case dict (bridge converts camelCase before calling this)."""
         steps: list[ExecutionPlanStep] = []
         for index, raw_step in enumerate(data.get("steps", []), start=1):
-            temp_id = (
-                raw_step.get("temp_id")
-                or raw_step.get("tempId")
-                or raw_step.get("step_id")
-                or raw_step.get("stepId")
-                or f"step_{index}"
-            )
+            temp_id = raw_step.get("temp_id") or raw_step.get("step_id") or f"step_{index}"
             title = raw_step.get("title") or raw_step.get("description") or temp_id
             description = raw_step.get("description") or title
-            assigned_agent = (
-                raw_step.get("assigned_agent")
-                or raw_step.get("assignedAgent")
-                or NANOBOT_AGENT_NAME
-            )
-            blocked_by = (
-                raw_step.get("blocked_by")
-                or raw_step.get("blockedBy")
-                or raw_step.get("depends_on")
-                or raw_step.get("dependsOn")
-                or []
-            )
+            assigned_agent = raw_step.get("assigned_agent") or NANOBOT_AGENT_NAME
+            blocked_by = raw_step.get("blocked_by") or raw_step.get("depends_on") or []
             if isinstance(blocked_by, str):
                 blocked_by_list = [blocked_by] if blocked_by else []
             elif isinstance(blocked_by, list):
@@ -321,35 +308,21 @@ class ExecutionPlan:
                     description=description,
                     assigned_agent=assigned_agent,
                     blocked_by=blocked_by_list,
-                    parallel_group=_as_int(
-                        raw_step.get("parallel_group", raw_step.get("parallelGroup")),
-                        1,
-                    ),
+                    parallel_group=_as_int(raw_step.get("parallel_group"), 1),
                     order=_as_int(raw_step.get("order"), index),
-                    workflow_step_id=(
-                        raw_step.get("workflow_step_id") or raw_step.get("workflowStepId")
-                    ),
-                    workflow_step_type=(
-                        raw_step.get("workflow_step_type") or raw_step.get("workflowStepType")
-                    ),
-                    agent_id=(raw_step.get("agent_id") or raw_step.get("agentId")),
-                    agent_spec_id=(raw_step.get("agent_spec_id") or raw_step.get("agentSpecId")),
-                    review_spec_id=(raw_step.get("review_spec_id") or raw_step.get("reviewSpecId")),
-                    on_reject_step_id=(
-                        raw_step.get("on_reject_step_id") or raw_step.get("onRejectStepId")
-                    ),
+                    workflow_step_id=raw_step.get("workflow_step_id"),
+                    workflow_step_type=raw_step.get("workflow_step_type"),
+                    agent_id=raw_step.get("agent_id"),
+                    agent_spec_id=raw_step.get("agent_spec_id"),
+                    review_spec_id=raw_step.get("review_spec_id"),
+                    on_reject_step_id=raw_step.get("on_reject_step_id"),
                 )
             )
 
         return cls(
             steps=steps,
-            generated_at=(
-                data.get("generatedAt")
-                or data.get("generated_at")
-                or data.get("createdAt")
-                or data.get("created_at", "")
-            ),
-            generated_by=(data.get("generatedBy") or data.get("generated_by") or LEAD_AGENT_NAME),
+            generated_at=(data.get("generated_at") or data.get("created_at", "")),
+            generated_by=(data.get("generated_by") or LEAD_AGENT_NAME),
         )
 
 

@@ -1,5 +1,7 @@
 """Planning-specific title generation helpers."""
 
+from __future__ import annotations
+
 from mc.infrastructure.providers.factory import create_provider
 from mc.runtime.orchestrator import (
     AUTO_TITLE_PROMPT,

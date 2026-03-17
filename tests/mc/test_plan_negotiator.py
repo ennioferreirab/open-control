@@ -56,42 +56,42 @@ def _make_bridge(
 SAMPLE_PLAN: dict = {
     "steps": [
         {
-            "tempId": "step_1",
+            "temp_id": "step_1",
             "title": "Extract data",
             "description": "Extract financial data",
-            "assignedAgent": "financial-agent",
-            "blockedBy": [],
-            "parallelGroup": 1,
+            "assigned_agent": "financial-agent",
+            "blocked_by": [],
+            "parallel_group": 1,
             "order": 1,
         }
     ],
-    "generatedAt": "2026-02-25T00:00:00Z",
-    "generatedBy": "lead-agent",
+    "generated_at": "2026-02-25T00:00:00Z",
+    "generated_by": "lead-agent",
 }
 
 UPDATED_PLAN: dict = {
     "steps": [
         {
-            "tempId": "step_1",
+            "temp_id": "step_1",
             "title": "Extract data",
             "description": "Extract financial data",
-            "assignedAgent": "financial-agent",
-            "blockedBy": [],
-            "parallelGroup": 1,
+            "assigned_agent": "financial-agent",
+            "blocked_by": [],
+            "parallel_group": 1,
             "order": 1,
         },
         {
-            "tempId": "step_2",
+            "temp_id": "step_2",
             "title": "Write summary",
             "description": "Write a final summary report",
-            "assignedAgent": "nanobot",
-            "blockedBy": ["step_1"],
-            "parallelGroup": 2,
+            "assigned_agent": "nanobot",
+            "blocked_by": ["step_1"],
+            "parallel_group": 2,
             "order": 2,
         },
     ],
-    "generatedAt": "2026-02-25T00:00:00Z",
-    "generatedBy": "lead-agent",
+    "generated_at": "2026-02-25T00:00:00Z",
+    "generated_by": "lead-agent",
 }
 
 
@@ -141,11 +141,11 @@ class TestCurrentPlanReviewRequestDetection:
                     "type": "lead_agent_plan",
                     "plan_review": {
                         "kind": "request",
-                        "plan_generated_at": SAMPLE_PLAN["generatedAt"],
+                        "plan_generated_at": SAMPLE_PLAN["generated_at"],
                     },
                 }
             ],
-            plan_generated_at=SAMPLE_PLAN["generatedAt"],
+            plan_generated_at=SAMPLE_PLAN["generated_at"],
         )
 
     def test_ignores_non_matching_messages(self):
@@ -155,11 +155,11 @@ class TestCurrentPlanReviewRequestDetection:
                     "type": "lead_agent_chat",
                     "plan_review": {
                         "kind": "request",
-                        "plan_generated_at": SAMPLE_PLAN["generatedAt"],
+                        "plan_generated_at": SAMPLE_PLAN["generated_at"],
                     },
                 }
             ],
-            plan_generated_at=SAMPLE_PLAN["generatedAt"],
+            plan_generated_at=SAMPLE_PLAN["generated_at"],
         )
 
 
@@ -258,7 +258,7 @@ class TestHandlePlanNegotiation:
         assert second_call.args[2] == "lead_agent_plan"
         assert second_call.kwargs["plan_review"] == {
             "kind": "request",
-            "plan_generated_at": updated_plan_dict["generatedAt"],
+            "plan_generated_at": updated_plan_dict["generated_at"],
         }
 
     # --- AC10: handler posts clarification without updating plan when action=clarify
@@ -898,7 +898,7 @@ class TestHandlePlanNegotiationExecutionContext:
         assert post_call.args[2] == "lead_agent_plan"
         assert post_call.kwargs["plan_review"] == {
             "kind": "request",
-            "plan_generated_at": SAMPLE_PLAN["generatedAt"],
+            "plan_generated_at": SAMPLE_PLAN["generated_at"],
         }
 
     def test_loop_stops_for_non_negotiable_status(self):
@@ -983,7 +983,7 @@ class TestHandlePlanNegotiationExecutionContext:
             "content": "Approved plan.",
             "plan_review": {
                 "kind": "decision",
-                "plan_generated_at": SAMPLE_PLAN["generatedAt"],
+                "plan_generated_at": SAMPLE_PLAN["generated_at"],
                 "decision": "approved",
             },
         }

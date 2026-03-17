@@ -156,20 +156,20 @@ async def test_kickoff_materializes_registered_agent_steps_end_to_end() -> None:
         "execution_plan": {
             "steps": [
                 {
-                    "tempId": "draft-plan",
+                    "temp_id": "draft-plan",
                     "title": "Draft execution plan",
                     "description": "Build the squad execution plan",
-                    "assignedAgent": "nanobot",
-                    "workflowStepId": "draft-plan",
-                    "workflowStepType": "agent",
-                    "agentId": "agent-registered-1",
-                    "blockedBy": [],
-                    "parallelGroup": 1,
+                    "assigned_agent": "nanobot",
+                    "workflow_step_id": "draft-plan",
+                    "workflow_step_type": "agent",
+                    "agent_id": "agent-registered-1",
+                    "blocked_by": [],
+                    "parallel_group": 1,
                     "order": 1,
                 }
             ],
-            "generatedAt": "2026-03-15T12:00:00Z",
-            "generatedBy": "lead-agent",
+            "generated_at": "2026-03-15T12:00:00Z",
+            "generated_by": "lead-agent",
         },
         "updated_at": "2026-03-15T12:00:00Z",
     }

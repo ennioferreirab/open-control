@@ -86,7 +86,7 @@ class TestTaskStatuses:
         assert "failed" in TASK_STATUSES
 
     def test_count(self) -> None:
-        assert len(TASK_STATUSES) == 10
+        assert len(TASK_STATUSES) == 11
 
 
 # ---------------------------------------------------------------------------

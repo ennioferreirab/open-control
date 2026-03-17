@@ -12,7 +12,8 @@
     "review",
     "done",
     "retrying",
-    "crashed"
+    "crashed",
+    "deleted"
   ],
 
   "taskTransitions": {

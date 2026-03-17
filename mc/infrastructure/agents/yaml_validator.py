@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
@@ -46,13 +45,13 @@ class AgentConfig(BaseModel):
     role: str
     prompt: str
     skills: list[str] = []
-    model: Optional[str] = None
-    display_name: Optional[str] = None
-    soul: Optional[str] = None
-    is_system: Optional[bool] = None
-    backend: Optional[str] = None
-    interactive_provider: Optional[str] = None
-    claude_code: Optional[dict] = None
+    model: str | None = None
+    display_name: str | None = None
+    soul: str | None = None
+    is_system: bool | None = None
+    backend: str | None = None
+    interactive_provider: str | None = None
+    claude_code: dict | None = None
 
     @field_validator("backend")
     @classmethod
