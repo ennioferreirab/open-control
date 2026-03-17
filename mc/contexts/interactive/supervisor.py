@@ -188,9 +188,9 @@ class InteractiveExecutionSupervisor:
         reason: str,
         awaiting_kickoff: bool | None = None,
         review_phase: str | None = None,
-    ) -> object | None:
+    ) -> bool:
         if not event.task_id:
-            return None
+            return True
         task_snapshot = self._bridge.get_task(event.task_id)
         if not isinstance(task_snapshot, dict):
             logger.warning(
@@ -198,7 +198,7 @@ class InteractiveExecutionSupervisor:
                 event.task_id,
                 to_status,
             )
-            return None
+            return False
         result = self._bridge.transition_task_from_snapshot(
             task_snapshot,
             to_status,
@@ -214,7 +214,8 @@ class InteractiveExecutionSupervisor:
                 to_status,
                 result.get("reason"),
             )
-        return result
+            return False
+        return True
 
     def _mark_running(self, event: InteractiveSupervisionEvent) -> None:
         if event.task_id:
@@ -223,11 +224,13 @@ class InteractiveExecutionSupervisor:
                 if event.step_id
                 else "Interactive turn started"
             )
-            self._transition_task(
+            transitioned = self._transition_task(
                 event,
                 "in_progress",
                 reason=description,
             )
+            if not transitioned:
+                return
         if event.step_id:
             try:
                 self._bridge.update_step_status(event.step_id, "running")
@@ -252,13 +255,15 @@ class InteractiveExecutionSupervisor:
     ) -> None:
         description = event.summary or "Interactive session is waiting for user input."
         if event.task_id:
-            self._transition_task(
+            transitioned = self._transition_task(
                 event,
                 "review",
                 reason=description,
                 awaiting_kickoff=False,
                 review_phase="execution_pause",
             )
+            if not transitioned:
+                return
         if event.step_id:
             try:
                 self._bridge.update_step_status(event.step_id, "review")
@@ -294,11 +299,13 @@ class InteractiveExecutionSupervisor:
         description = event.error or "Interactive session failed."
         increment_interactive_metric("interactive_session_crash_total")
         if event.task_id:
-            self._transition_task(
+            transitioned = self._transition_task(
                 event,
                 "crashed",
                 reason=description,
             )
+            if not transitioned:
+                return
         if event.step_id:
             self._bridge.update_step_status(event.step_id, "crashed", description)
         if event.task_id and event.agent_name:

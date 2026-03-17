@@ -605,6 +605,61 @@ def test_supervisor_paused_for_review_is_idempotent_when_task_and_step_already_r
     )
 
 
+def test_supervisor_skips_step_and_activity_projection_when_task_snapshot_is_missing() -> None:
+    bridge = MagicMock()
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    bridge.get_task.return_value = None
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="turn_started",
+            session_id="interactive_session:claude",
+            provider="claude-code",
+        )
+    )
+
+    bridge.transition_task_from_snapshot.assert_not_called()
+    bridge.update_step_status.assert_not_called()
+    bridge.create_activity.assert_not_called()
+
+
+def test_supervisor_skips_step_and_activity_projection_on_task_transition_conflict() -> None:
+    bridge = MagicMock()
+    registry = MagicMock()
+    registry.get.return_value = {
+        "session_id": "interactive_session:claude",
+        "agent_name": "claude-pair",
+        "task_id": "task-1",
+        "step_id": "step-1",
+    }
+    registry.record_supervision.return_value = {}
+    bridge.get_task.return_value = {"id": "task-1", "status": "review", "state_version": 4}
+    bridge.transition_task_from_snapshot.return_value = {
+        "kind": "conflict",
+        "reason": "stale_state",
+    }
+    supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
+
+    supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="turn_started",
+            session_id="interactive_session:claude",
+            provider="claude-code",
+        )
+    )
+
+    bridge.update_step_status.assert_not_called()
+    bridge.create_activity.assert_not_called()
+
+
 def test_supervisor_genuine_transition_failure_still_surfaces() -> None:
     """Unexpected transition failures must not be silently swallowed."""
     bridge = MagicMock()
