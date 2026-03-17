@@ -722,15 +722,22 @@ class TestConvenienceMethods:
     @patch("mc.bridge.ConvexClient")
     def test_update_step_status(self, MockClient):
         mock_client = MockClient.return_value
-        mock_client.mutation.return_value = None
+        mock_client.query.return_value = {
+            "_id": "step-123",
+            "status": "assigned",
+            "stateVersion": 2,
+        }
+        mock_client.mutation.return_value = {"kind": "applied"}
 
         bridge = ConvexBridge("https://test.convex.cloud")
         bridge.update_step_status("step-123", "running")
 
         call_args = mock_client.mutation.call_args[0]
-        assert call_args[0] == "steps:updateStatus"
+        assert call_args[0] == "steps:transition"
         assert call_args[1]["stepId"] == "step-123"
-        assert call_args[1]["status"] == "running"
+        assert call_args[1]["fromStatus"] == "assigned"
+        assert call_args[1]["toStatus"] == "running"
+        assert call_args[1]["expectedStateVersion"] == 2
         assert "errorMessage" not in call_args[1]
 
     @patch("mc.bridge.ConvexClient")
