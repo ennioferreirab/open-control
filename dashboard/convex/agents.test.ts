@@ -580,6 +580,39 @@ describe("agents.listActiveRegistryView", () => {
     expect(agent).toHaveProperty("status");
   });
 
+  it("excludes remote-terminal agents", async () => {
+    const handler = getRegistryHandler();
+    const ctx = makeRegistryCtx([
+      baseAgent,
+      {
+        ...baseAgent,
+        _id: "agent-id-terminal",
+        name: "remote-shell",
+        role: "remote-terminal",
+      },
+    ]);
+
+    const result = await handler(ctx, {});
+    expect(result).toHaveLength(1);
+    expect((result[0] as Record<string, unknown>).name).toBe("dev-agent");
+  });
+
+  it("excludes terminal agents", async () => {
+    const handler = getRegistryHandler();
+    const ctx = makeRegistryCtx([
+      baseAgent,
+      {
+        ...baseAgent,
+        _id: "agent-id-term2",
+        name: "sys-terminal",
+        role: "terminal",
+      },
+    ]);
+
+    const result = await handler(ctx, {});
+    expect(result).toHaveLength(1);
+  });
+
   it("defaults enabled to true when not set", async () => {
     const handler = getRegistryHandler();
     const agentWithoutEnabled: AgentRow = { ...baseAgent };

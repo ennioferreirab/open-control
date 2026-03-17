@@ -464,10 +464,7 @@ export const manualMoveStep = mutation({
     );
 
     if (args.newStatus === "completed") {
-      // Increment stepsExecuted for the executing agent (Story 31.7)
-      if (step.assignedAgent) {
-        await incrementAgentStepMetric(ctx.db as unknown as AgentMetricDb, step.assignedAgent);
-      }
+      // Note: step metric increment is handled by applyStepTransition (Story 31.11)
 
       const unblockedIds = findBlockedStepsReadyToUnblock(currentTaskSteps);
       const stepsById = new Map(allTaskSteps.map((s) => [s._id, s] as const));

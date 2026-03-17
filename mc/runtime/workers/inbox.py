@@ -167,17 +167,54 @@ class InboxWorker:
             )
             return
 
+        # Human routing: operator-directed assignment bypasses lead-agent routing.
+        routing_mode = task_data.get("routing_mode") or task_data.get("routingMode")
+        if routing_mode == "human" and assigned_agent:
+            result = await asyncio.to_thread(
+                self._bridge.transition_task_from_snapshot,
+                task_data,
+                "assigned",
+                reason=f"Human-routed task assigned to {assigned_agent}",
+                agent_name=assigned_agent,
+            )
+            if not _transition_applied_or_noop(task_id, "assigned", result):
+                return
+            logger.info(
+                "[inbox] Human-routed task %s ('%s') -> assigned to %s (operator-directed)",
+                task_id,
+                title,
+                assigned_agent,
+            )
+            return
+
         # Direct delegation: route through the DirectDelegationRouter
         if work_mode == "direct_delegate":
             router = DirectDelegationRouter(self._bridge)
             decision = await asyncio.to_thread(router.route, task_data)
 
             if decision is None:
-                # No suitable agent found — fall through to planning
+                # No suitable agent — fail explicitly (planning rejects direct_delegate)
                 logger.warning(
-                    "[inbox] No routing target for direct-delegate task %s; falling through to planning",
+                    "[inbox] No routing target for direct-delegate task %s; marking as failed",
                     task_id,
                 )
+                result = await asyncio.to_thread(
+                    self._bridge.transition_task_from_snapshot,
+                    task_data,
+                    "failed",
+                    reason="No delegatable agent available for direct delegation",
+                )
+                if _transition_applied_or_noop(task_id, "failed", result):
+                    try:
+                        await asyncio.to_thread(
+                            self._bridge.create_activity,
+                            "system_error",
+                            "No delegatable agent available. Check agent configuration and retry.",
+                            task_id,
+                        )
+                    except Exception:
+                        pass
+                return
             else:
                 # Persist routing metadata on the task document
                 routing_decision_payload = {

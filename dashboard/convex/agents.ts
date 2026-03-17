@@ -42,12 +42,21 @@ export const list = query({
   },
 });
 
+// Roles that represent runtime-only surfaces, not task-delegatable agents.
+const NON_DELEGATABLE_ROLES = new Set(["remote-terminal", "terminal", "system-terminal"]);
+
 export const listActiveRegistryView = query({
   args: {},
   handler: async (ctx) => {
     const allAgents = await ctx.db.query("agents").collect();
-    // Filter: not deleted, not system, enabled
-    const active = allAgents.filter((a) => !a.deletedAt && !a.isSystem && a.enabled !== false);
+    // Filter: not deleted, not system, enabled, and delegatable role
+    const active = allAgents.filter(
+      (a) =>
+        !a.deletedAt &&
+        !a.isSystem &&
+        a.enabled !== false &&
+        !NON_DELEGATABLE_ROLES.has(a.role),
+    );
 
     // Resolve squad memberships
     const allSquadSpecs = await ctx.db

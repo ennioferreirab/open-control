@@ -62,7 +62,17 @@ def _is_negotiable_status(task_data: dict[str, Any]) -> bool:
     - "in_progress" with an execution_plan (during planned execution)
     """
     work_mode = task_data.get("work_mode") or task_data.get("workMode")
-    if work_mode != "ai_workflow":
+    if work_mode == "direct_delegate":
+        return False
+    # Legacy compat: tasks without workMode that have a workflow-generated plan
+    # are treated as workflow (Story 31.12)
+    if work_mode is None:
+        plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
+        if isinstance(plan, dict) and plan.get("generatedBy") == "workflow":
+            pass  # treat as workflow — fall through to status checks
+        else:
+            return False
+    elif work_mode != "ai_workflow":
         return False
 
     status = task_data.get("status", "")

@@ -2,6 +2,7 @@ import { ConvexError } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { incrementAgentStepMetric, type AgentMetricDb } from "../agents";
 
 import { isValidStepStatus, isValidStepTransition, logStepStatusChange } from "./stepLifecycle";
 import { getRuntimeReceipt, storeRuntimeReceipt } from "../runtimeReceipts";
@@ -182,6 +183,11 @@ export async function applyStepTransition(
     args.stepId,
     buildStepTransitionPatch(step, args.toStatus, args.errorMessage, nextStateVersion, now),
   );
+
+  // Canonical step metric increment — runs at lifecycle truth (Story 31.11)
+  if (args.toStatus === "completed" && step.assignedAgent) {
+    await incrementAgentStepMetric(ctx.db as unknown as AgentMetricDb, step.assignedAgent);
+  }
 
   if (!args.suppressActivityLog) {
     await logStepStatusChange(ctx, {

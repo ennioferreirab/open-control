@@ -132,6 +132,13 @@ export async function buildTaskDetailView(
     tagAttributeValues,
     uiFlags,
     allowedActions,
-    isWorkflowTask: task.workMode === "ai_workflow",
+    // Legacy compat: tasks without workMode that have a workflow-generated plan
+    // are treated as workflow (Story 31.12)
+    isWorkflowTask:
+      task.workMode === "ai_workflow" ||
+      (task.workMode == null &&
+        typeof task.executionPlan === "object" &&
+        task.executionPlan !== null &&
+        (task.executionPlan as Record<string, unknown>).generatedBy === "workflow"),
   };
 }

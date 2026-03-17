@@ -116,8 +116,8 @@ class TestInboxWorkerDirectDelegation:
         )
 
     @pytest.mark.asyncio
-    async def test_direct_delegate_falls_through_to_planning_when_no_agent(self) -> None:
-        """When the router returns None, the task should fall through to planning."""
+    async def test_direct_delegate_fails_when_no_agent(self) -> None:
+        """When the router returns None, the task should transition to failed (not planning)."""
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
@@ -134,10 +134,10 @@ class TestInboxWorkerDirectDelegation:
         ):
             await worker.process_task(task)
 
-        # Falls through to planning via transition_task_from_snapshot
+        # Should transition to failed, not planning
         bridge.transition_task_from_snapshot.assert_called_once()
         call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "planning"
+        assert call_args[0][1] == "failed"
         bridge.patch_routing_decision.assert_not_called()
 
     @pytest.mark.asyncio
@@ -268,3 +268,53 @@ class TestPlanningWorkerDirectDelegateGuard:
 
         # Regular task should invoke planning machinery (list_agents is called)
         bridge.list_agents.assert_called_once()
+
+class TestInboxWorkerHumanRouting:
+    """Tests that human-routed tasks bypass the DirectDelegationRouter."""
+
+    @pytest.mark.asyncio
+    async def test_human_routed_task_bypasses_router(self) -> None:
+        bridge = _make_bridge()
+        worker = InboxWorker(_make_ctx(bridge))
+
+        task = {
+            "id": "task-human-1",
+            "title": "Operator-assigned task",
+            "workMode": "direct_delegate",
+            "routingMode": "human",
+            "assigned_agent": "coder-agent",
+            "is_manual": False,
+        }
+
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+            await worker.process_task(task)
+
+        # Should transition to assigned without invoking the router
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "assigned"
+        bridge.patch_routing_decision.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_human_routed_task_without_agent_falls_through(self) -> None:
+        bridge = _make_bridge()
+        worker = InboxWorker(_make_ctx(bridge))
+
+        task = {
+            "id": "task-human-2",
+            "title": "Human-routed but no agent",
+            "workMode": "direct_delegate",
+            "routingMode": "human",
+            "is_manual": False,
+        }
+
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch.object(DirectDelegationRouter, "route", return_value=None),
+        ):
+            await worker.process_task(task)
+
+        # Without assigned_agent, human routing doesn't activate — falls to router which fails
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "failed"
