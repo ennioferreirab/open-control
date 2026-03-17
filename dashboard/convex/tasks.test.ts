@@ -1751,7 +1751,13 @@ describe("tasks.transition", () => {
         stateVersion: 3,
       }),
     );
-    expect(insert).toHaveBeenCalled();
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
+      expect.objectContaining({
+        taskId: "task-assign",
+        eventType: "task_reassigned",
+      }),
+    );
   });
 });
 

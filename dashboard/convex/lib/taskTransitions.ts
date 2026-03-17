@@ -240,7 +240,10 @@ export async function applyTaskTransition(
         });
       }
     } else {
-      const eventType = getTaskEventType("in_progress", "review") as ActivityEventType;
+      const eventType =
+        task.status === "assigned"
+          ? (getTaskEventType("assigned", "assigned") as ActivityEventType)
+          : (getTaskEventType("in_progress", "review") as ActivityEventType);
       await logActivity(ctx, {
         taskId: args.taskId,
         agentName: args.agentName,
