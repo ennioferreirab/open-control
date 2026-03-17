@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ConvexError } from "convex/values";
+import { testId } from "@/tests/helpers/mockConvex";
 
 import { approveTask } from "./taskReview";
 
@@ -29,19 +29,19 @@ function makeCtx(task: object | null) {
 describe("approveTask", () => {
   it("throws when the task is not found", async () => {
     const { db } = makeCtx(null);
-    await expect(approveTask({ db }, "task-1" as any)).rejects.toThrow("Task not found");
+    await expect(approveTask({ db }, testId<"tasks">("task-1"))).rejects.toThrow("Task not found");
   });
 
   it("throws when the task is not in review state", async () => {
     const { db } = makeCtx({ _id: "task-1", status: "in_progress", isManual: false });
-    await expect(approveTask({ db }, "task-1" as any)).rejects.toThrow(
+    await expect(approveTask({ db }, testId<"tasks">("task-1"))).rejects.toThrow(
       "Task is not in review state",
     );
   });
 
   it("throws when the task is a manual task", async () => {
     const { db } = makeCtx({ _id: "task-1", status: "review", isManual: true });
-    await expect(approveTask({ db }, "task-1" as any)).rejects.toThrow(
+    await expect(approveTask({ db }, testId<"tasks">("task-1"))).rejects.toThrow(
       "Cannot approve a manual task",
     );
   });
@@ -54,7 +54,7 @@ describe("approveTask", () => {
       awaitingKickoff: true,
       title: "Squad mission",
     });
-    await expect(approveTask({ db }, "task-1" as any)).rejects.toThrow(
+    await expect(approveTask({ db }, testId<"tasks">("task-1"))).rejects.toThrow(
       "Cannot approve a pre-kickoff task directly",
     );
   });
@@ -69,7 +69,7 @@ describe("approveTask", () => {
       isMergeTask: false,
     });
 
-    await approveTask({ db }, "task-1" as any, "Alice");
+    await approveTask({ db }, testId<"tasks">("task-1"), "Alice");
 
     expect(patch).toHaveBeenCalledWith("task-1", expect.objectContaining({ status: "done" }));
     expect(insert).toHaveBeenCalledWith(
@@ -88,7 +88,7 @@ describe("approveTask", () => {
       trustLevel: "autonomous",
     });
 
-    await approveTask({ db }, "task-1" as any);
+    await approveTask({ db }, testId<"tasks">("task-1"));
 
     expect(patch).toHaveBeenCalledWith("task-1", expect.objectContaining({ status: "done" }));
   });

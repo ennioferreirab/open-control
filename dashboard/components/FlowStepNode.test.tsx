@@ -21,6 +21,8 @@ function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
     selectable: false,
     deletable: false,
     zIndex: 0,
+    position: { x: 0, y: 0 },
+    measured: { width: 0, height: 0 },
     data: {
       step: {
         tempId: "step-1",
@@ -37,9 +39,10 @@ function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
       parentTaskId: "task-123",
       onOpenParentTask,
       ...overrides,
-    } as any,
-  };
+    },
+  } as unknown as FlowStepNodeType;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   render(<FlowStepNode {...(props as any)} />);
   return { onRetry, onOpenParentTask };
 }

@@ -88,16 +88,8 @@ export const RESTORE_TARGET_MAP: Record<string, string> = {
 /**
  * Check if a task state transition is valid.
  */
-export function isValidTaskTransition(
-  currentStatus: string,
-  newStatus: string
-): boolean {
-  return isTransitionAllowed(
-    currentStatus,
-    newStatus,
-    TASK_TRANSITIONS,
-    TASK_UNIVERSAL_TARGETS
-  );
+export function isValidTaskTransition(currentStatus: string, newStatus: string): boolean {
+  return isTransitionAllowed(currentStatus, newStatus, TASK_TRANSITIONS, TASK_UNIVERSAL_TARGETS);
 }
 
 /**
@@ -108,9 +100,7 @@ export function getTaskEventType(from: string, to: string): string {
   if (to === "crashed") return "task_crashed";
   const eventType = TRANSITION_EVENT_MAP[`${from}->${to}`];
   if (!eventType) {
-    throw new Error(
-      `No event type mapping for transition '${from}' -> '${to}'`
-    );
+    throw new Error(`No event type mapping for transition '${from}' -> '${to}'`);
   }
   return eventType;
 }
@@ -132,7 +122,7 @@ export async function logTaskStatusChange(
     agentName?: string;
     taskTitle?: string;
     timestamp?: string;
-  }
+  },
 ): Promise<void> {
   const eventType = getTaskEventType(params.fromStatus, params.toStatus);
 
@@ -165,7 +155,7 @@ export async function logTaskCreated(
     trustLevel?: string;
     supervisionMode?: string;
     timestamp?: string;
-  }
+  },
 ): Promise<void> {
   let description = params.isManual
     ? `Manual task created: "${params.title}"`
@@ -174,8 +164,7 @@ export async function logTaskCreated(
       : `Task created: "${params.title}"`;
 
   if (!params.isManual && params.trustLevel && params.trustLevel !== "autonomous") {
-    const levelLabel =
-      params.trustLevel === "agent_reviewed" ? "agent reviewed" : "human approved";
+    const levelLabel = params.trustLevel === "agent_reviewed" ? "agent reviewed" : "human approved";
     description += ` (trust: ${levelLabel})`;
   }
   if (!params.isManual && params.supervisionMode === "supervised") {
@@ -200,14 +189,14 @@ export async function logTaskCreated(
  * Called when a task transitions to "done" to keep the plan UI in sync.
  */
 export async function markPlanStepsCompleted(
-  ctx: { db: { patch: (id: any, value: any) => Promise<void> } },
+  ctx: { db: { patch: (id: Id<"tasks">, value: Record<string, unknown>) => Promise<void> } },
   taskId: Id<"tasks">,
-  task: { executionPlan?: any }
+  task: { executionPlan?: { steps: Record<string, unknown>[] } & Record<string, unknown> },
 ): Promise<void> {
   const plan = task.executionPlan;
   if (!plan?.steps?.length) return;
 
-  const updatedSteps = plan.steps.map((step: any) => ({
+  const updatedSteps = plan.steps.map((step: Record<string, unknown>) => ({
     ...step,
     status: "completed",
   }));

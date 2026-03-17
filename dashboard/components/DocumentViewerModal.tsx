@@ -267,7 +267,7 @@ export function DocumentViewerModal({ taskId, source, file, onClose }: Props) {
             )}
             {file && (
               <span className="text-xs text-muted-foreground flex-shrink-0">
-                {formatSize(file.size)}
+                {formatSize(file.size ?? 0)}
               </span>
             )}
           </div>

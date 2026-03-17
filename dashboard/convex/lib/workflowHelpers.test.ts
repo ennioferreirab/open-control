@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { testId } from "@/tests/helpers/mockConvex";
 
 import {
   isTransitionAllowed,
@@ -29,9 +30,7 @@ describe("isTransitionAllowed", () => {
   });
 
   it("returns true for a universal target", () => {
-    expect(
-      isTransitionAllowed("done", "deleted", transitions, ["deleted"])
-    ).toBe(true);
+    expect(isTransitionAllowed("done", "deleted", transitions, ["deleted"])).toBe(true);
   });
 
   it("returns false when current status has no entry in the transition map", () => {
@@ -39,9 +38,7 @@ describe("isTransitionAllowed", () => {
   });
 
   it("returns false for universal targets when not in the universal list", () => {
-    expect(
-      isTransitionAllowed("inbox", "deleted", transitions, [])
-    ).toBe(false);
+    expect(isTransitionAllowed("inbox", "deleted", transitions, [])).toBe(false);
   });
 });
 
@@ -56,26 +53,24 @@ describe("assertValidTransition", () => {
   };
 
   it("does not throw for a valid transition", () => {
-    expect(() =>
-      assertValidTransition("inbox", "assigned", transitions)
-    ).not.toThrow();
+    expect(() => assertValidTransition("inbox", "assigned", transitions)).not.toThrow();
   });
 
   it("throws an Error for an invalid transition", () => {
-    expect(() =>
-      assertValidTransition("assigned", "inbox", transitions)
-    ).toThrow(/Cannot transition/);
+    expect(() => assertValidTransition("assigned", "inbox", transitions)).toThrow(
+      /Cannot transition/,
+    );
   });
 
   it("includes the entity label in the error message", () => {
-    expect(() =>
-      assertValidTransition("assigned", "inbox", transitions, [], "Task")
-    ).toThrow(/Cannot transition Task/);
+    expect(() => assertValidTransition("assigned", "inbox", transitions, [], "Task")).toThrow(
+      /Cannot transition Task/,
+    );
   });
 
   it("allows universal targets", () => {
     expect(() =>
-      assertValidTransition("assigned", "crashed", transitions, ["crashed"])
+      assertValidTransition("assigned", "crashed", transitions, ["crashed"]),
     ).not.toThrow();
   });
 });
@@ -90,7 +85,7 @@ describe("logActivity", () => {
     const ctx = { db: { insert } };
 
     await logActivity(ctx, {
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       agentName: "coder",
       eventType: "task_created",
       description: "Task was created",
@@ -120,7 +115,7 @@ describe("logActivity", () => {
       expect.objectContaining({
         eventType: "bulk_clear_done",
         timestamp: expect.any(String),
-      })
+      }),
     );
   });
 
@@ -153,16 +148,16 @@ describe("requireEntity", () => {
     const entity = { _id: "task-1", title: "Test" };
     const ctx = { db: { get: vi.fn(async () => entity) } };
 
-    const result = await requireEntity(ctx, "task-1" as any, "Task");
+    const result = await requireEntity(ctx, testId<"tasks">("task-1"), "Task");
     expect(result).toBe(entity);
   });
 
   it("throws when entity is not found", async () => {
     const ctx = { db: { get: vi.fn(async () => null) } };
 
-    await expect(
-      requireEntity(ctx, "task-missing" as any, "Task")
-    ).rejects.toThrow(/Task not found/);
+    await expect(requireEntity(ctx, testId<"tasks">("task-missing"), "Task")).rejects.toThrow(
+      /Task not found/,
+    );
   });
 });
 

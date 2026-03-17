@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockReactMutation } from "@/tests/helpers/mockConvex";
 
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
@@ -25,7 +26,7 @@ describe("useUpdatePublishedSquad", () => {
   });
 
   it("binds the published squad update mutation", () => {
-    const mockPublish = vi.fn().mockResolvedValue("squad-1");
+    const mockPublish = mockReactMutation(async () => "squad-1");
     mockUseMutation.mockReturnValue(mockPublish);
 
     renderHook(() => useUpdatePublishedSquad());
@@ -34,7 +35,7 @@ describe("useUpdatePublishedSquad", () => {
   });
 
   it("publishes the provided graph payload", async () => {
-    const mockPublish = vi.fn().mockResolvedValue("squad-1");
+    const mockPublish = mockReactMutation(async () => "squad-1");
     mockUseMutation.mockReturnValue(mockPublish);
     const { result } = renderHook(() => useUpdatePublishedSquad());
 
@@ -70,7 +71,7 @@ describe("useUpdatePublishedSquad", () => {
     const pendingPublish = new Promise<Id<"squadSpecs">>((resolve) => {
       resolvePublish = resolve;
     });
-    const mockPublish = vi.fn().mockReturnValue(pendingPublish);
+    const mockPublish = mockReactMutation(() => pendingPublish);
     mockUseMutation.mockReturnValue(mockPublish);
     const { result } = renderHook(() => useUpdatePublishedSquad());
 

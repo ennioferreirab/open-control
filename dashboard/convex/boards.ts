@@ -46,16 +46,18 @@ export const create = mutation({
     displayName: v.string(),
     description: v.optional(v.string()),
     enabledAgents: v.optional(v.array(v.string())),
-    agentMemoryModes: v.optional(v.array(v.object({
-      agentName: v.string(),
-      mode: v.union(v.literal("clean"), v.literal("with_history")),
-    }))),
+    agentMemoryModes: v.optional(
+      v.array(
+        v.object({
+          agentName: v.string(),
+          mode: v.union(v.literal("clean"), v.literal("with_history")),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     if (!KEBAB_CASE_RE.test(args.name)) {
-      throw new Error(
-        `Board name must be kebab-case (e.g. "project-alpha"): "${args.name}"`
-      );
+      throw new Error(`Board name must be kebab-case (e.g. "project-alpha"): "${args.name}"`);
     }
 
     const existing = await ctx.db
@@ -93,10 +95,14 @@ export const update = mutation({
     displayName: v.optional(v.string()),
     description: v.optional(v.string()),
     enabledAgents: v.optional(v.array(v.string())),
-    agentMemoryModes: v.optional(v.array(v.object({
-      agentName: v.string(),
-      mode: v.union(v.literal("clean"), v.literal("with_history")),
-    }))),
+    agentMemoryModes: v.optional(
+      v.array(
+        v.object({
+          agentName: v.string(),
+          mode: v.union(v.literal("clean"), v.literal("with_history")),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     const board = await ctx.db.get(args.boardId);
@@ -186,11 +192,15 @@ export const getBoardView = query({
     includeNoBoardId: v.optional(v.boolean()),
     freeText: v.optional(v.string()),
     tagFilters: v.optional(v.array(v.string())),
-    attributeFilters: v.optional(v.array(v.object({
-      tagName: v.string(),
-      attrName: v.string(),
-      value: v.string(),
-    }))),
+    attributeFilters: v.optional(
+      v.array(
+        v.object({
+          tagName: v.string(),
+          attrName: v.string(),
+          value: v.string(),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     const board = args.boardId ? await ctx.db.get(args.boardId) : null;
@@ -198,7 +208,7 @@ export const getBoardView = query({
       return null;
     }
 
-    let boardTasks = args.boardId
+    const boardTasks = args.boardId
       ? await ctx.db
           .query("tasks")
           .withIndex("by_boardId", (q) => q.eq("boardId", args.boardId!))
@@ -206,9 +216,7 @@ export const getBoardView = query({
       : await ctx.db.query("tasks").collect();
 
     if (args.boardId && args.includeNoBoardId) {
-      const unscopedTasks = (await ctx.db.query("tasks").collect()).filter(
-        (task) => !task.boardId
-      );
+      const unscopedTasks = (await ctx.db.query("tasks").collect()).filter((task) => !task.boardId);
       const seen = new Set(boardTasks.map((task) => task._id));
       for (const task of unscopedTasks) {
         if (!seen.has(task._id)) {
@@ -224,7 +232,7 @@ export const getBoardView = query({
     if (args.attributeFilters && args.attributeFilters.length > 0) {
       const tagAttributes = await ctx.db.query("tagAttributes").collect();
       const attrNameById = new Map(
-        tagAttributes.map((attr) => [attr._id, attr.name.toLowerCase()] as const)
+        tagAttributes.map((attr) => [attr._id, attr.name.toLowerCase()] as const),
       );
 
       const filteredByAttributes: typeof filteredTasks = [];
@@ -242,7 +250,7 @@ export const getBoardView = query({
               attrName === filter.attrName &&
               entry.value.toLowerCase().includes(filter.value)
             );
-          })
+          }),
         );
 
         if (matchesAllFilters) {
@@ -260,12 +268,12 @@ export const getBoardView = query({
         ctx.db
           .query("steps")
           .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
-          .collect()
-      )
+          .collect(),
+      ),
     );
 
     // Build step lookup: taskId -> steps[]
-    const stepsByTaskId = new Map<Id<"tasks">, typeof stepBatches[number]>();
+    const stepsByTaskId = new Map<Id<"tasks">, (typeof stepBatches)[number]>();
     for (const batch of stepBatches) {
       if (batch.length > 0) {
         stepsByTaskId.set(batch[0].taskId, batch);
@@ -279,13 +287,11 @@ export const getBoardView = query({
     const deletedTasks = boardTasks.filter((task) => task.status === "deleted");
     const deletedCount = deletedTasks.length;
     const hitlCount = filteredTasks.filter(
-      (task) => task.status === "review" && task.awaitingKickoff !== true
+      (task) => task.status === "review" && task.awaitingKickoff !== true,
     ).length;
     const allSteps = stepBatches.flat();
     const tagCatalog = await ctx.db.query("taskTags").collect();
-    const tagColorMap = Object.fromEntries(
-      tagCatalog.map((tag) => [tag.name, tag.color] as const)
-    );
+    const tagColorMap = Object.fromEntries(tagCatalog.map((tag) => [tag.name, tag.color] as const));
 
     const taskSummaries = filteredTasks.map((task) => {
       const steps = (stepsByTaskId.get(task._id) ?? []).filter((step) => step.status !== "deleted");

@@ -137,7 +137,7 @@ export function SquadDetailSheet({
               agentKey: step.agentKey || undefined,
               reviewSpecId: step.reviewSpecId || undefined,
               onReject: step.onReject || undefined,
-              dependsOn: step.dependsOn.length ? step.dependsOn : undefined,
+              dependsOn: step.dependsOn.length ? step.dependsOn : [],
             })),
           })),
         },

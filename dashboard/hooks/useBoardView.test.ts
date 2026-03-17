@@ -19,10 +19,7 @@ vi.mock("../convex/_generated/api", () => ({
 }));
 
 vi.mock("convex/react", () => ({
-  useQuery: (
-    queryRef: { name?: string },
-    args?: unknown
-  ) => mockUseQuery(queryRef, args),
+  useQuery: (queryRef: { name?: string }, args?: unknown) => mockUseQuery(queryRef, args),
   useMutation: () => mockClearAllDone,
 }));
 
@@ -82,12 +79,10 @@ describe("useBoardView", () => {
   beforeEach(() => {
     setDefaultQueryValues();
     mockUseQuery.mockReset();
-    mockUseQuery.mockImplementation(
-      (queryRef: { name?: string }, args?: unknown) => {
-        if (args === "skip") return undefined;
-        return mockQueryValues[queryRef?.name ?? ""];
-      }
-    );
+    mockUseQuery.mockImplementation((queryRef: { name?: string }, args?: unknown) => {
+      if (args === "skip") return undefined;
+      return mockQueryValues[queryRef?.name ?? ""];
+    });
     mockClearAllDone.mockReset();
   });
 
@@ -104,7 +99,7 @@ describe("useBoardView", () => {
 
   it("returns isLoading=true while steps query is pending", () => {
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [makeTask()],
       allSteps: undefined,
     };
@@ -115,7 +110,7 @@ describe("useBoardView", () => {
   it("returns tasks and isLoading=false when data is available", () => {
     const task = makeTask({ _id: "t1" });
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [task],
     };
     const { result } = renderHook(() => useBoardView(inactiveFilters()));
@@ -126,7 +121,7 @@ describe("useBoardView", () => {
 
   it("extracts favorites from tasks", () => {
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [
         makeTask({ _id: "t1", isFavorite: true }),
         makeTask({ _id: "t2", isFavorite: false }),
@@ -141,7 +136,7 @@ describe("useBoardView", () => {
 
   it("returns hitlCount from the countHitlPending query", () => {
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [makeTask()],
       hitlCount: 5,
     };
@@ -151,7 +146,7 @@ describe("useBoardView", () => {
 
   it("returns deletedTasks and count", () => {
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [makeTask()],
       deletedTasks: [makeTask(), makeTask()],
       deletedCount: 2,
@@ -163,7 +158,7 @@ describe("useBoardView", () => {
 
   it("builds tagColorMap from taskTags.list", () => {
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [makeTask()],
       tagColorMap: { bug: "red", feature: "blue" },
     };
@@ -173,7 +168,7 @@ describe("useBoardView", () => {
 
   it("uses tasks.search when hasFreeText is true", () => {
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [makeTask({ _id: "s1" })],
     };
     const filters: BoardFilters = {
@@ -191,7 +186,7 @@ describe("useBoardView", () => {
 
   it("applies tag filters to tasks", () => {
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [
         makeTask({ _id: "t1", tags: ["bug", "urgent"] }),
         makeTask({ _id: "t3", tags: ["bug"] }),
@@ -214,7 +209,7 @@ describe("useBoardView", () => {
 
   it("returns allSteps from the steps query", () => {
     mockQueryValues["boards.getBoardView"] = {
-      ...(mockQueryValues["boards.getBoardView"] as any),
+      ...(mockQueryValues["boards.getBoardView"] as Record<string, unknown>),
       tasks: [makeTask()],
       allSteps: [{ _id: "s1", taskId: "t1", status: "assigned" }],
     };

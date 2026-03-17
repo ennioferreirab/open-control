@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { testId } from "@/tests/helpers/mockConvex";
 
 import {
   canSendThreadMessage,
@@ -24,8 +25,14 @@ describe("canSendThreadMessage", () => {
 
   it("returns true for non-blocked statuses", () => {
     const allowedStatuses = [
-      "inbox", "assigned", "planning", "ready", "failed",
-      "review", "done", "crashed",
+      "inbox",
+      "assigned",
+      "planning",
+      "ready",
+      "failed",
+      "review",
+      "done",
+      "crashed",
     ];
     for (const status of allowedStatuses) {
       expect(canSendThreadMessage(status)).toBe(true);
@@ -46,8 +53,15 @@ describe("canPostPlanMessage", () => {
 
   it("returns false for non-allowed statuses", () => {
     const disallowedStatuses = [
-      "inbox", "assigned", "planning", "ready", "failed",
-      "done", "crashed", "retrying", "deleted",
+      "inbox",
+      "assigned",
+      "planning",
+      "ready",
+      "failed",
+      "done",
+      "crashed",
+      "retrying",
+      "deleted",
     ];
     for (const status of disallowedStatuses) {
       expect(canPostPlanMessage(status)).toBe(false);
@@ -66,8 +80,16 @@ describe("canPostComment", () => {
 
   it("returns true for all other statuses", () => {
     const statuses = [
-      "inbox", "assigned", "planning", "ready", "failed",
-      "in_progress", "review", "done", "crashed", "retrying",
+      "inbox",
+      "assigned",
+      "planning",
+      "ready",
+      "failed",
+      "in_progress",
+      "review",
+      "done",
+      "crashed",
+      "retrying",
     ];
     for (const status of statuses) {
       expect(canPostComment(status)).toBe(true);
@@ -85,7 +107,7 @@ describe("logThreadMessageSent", () => {
     const ctx = { db: { insert } };
 
     await logThreadMessageSent(ctx, {
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       agentName: "coder",
       description: "User sent message to coder",
       timestamp: "2026-01-01T00:00:00.000Z",
@@ -105,18 +127,19 @@ describe("logThreadMessageSent", () => {
     const ctx = { db: { insert } };
 
     await logThreadMessageSent(ctx, {
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       description: "User posted a comment",
     });
 
-    expect(insert).toHaveBeenCalledWith("activities",
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
       expect.objectContaining({
         taskId: "task-1",
         agentName: undefined,
         eventType: "thread_message_sent",
         description: "User posted a comment",
         timestamp: expect.any(String),
-      })
+      }),
     );
   });
 });
@@ -128,7 +151,7 @@ describe("logThreadMessageSent", () => {
 describe("buildUserMessage", () => {
   it("builds a user message with default author name", () => {
     const msg = buildUserMessage({
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       content: "Hello",
       messageType: "user_message",
       type: "user_message",
@@ -148,7 +171,7 @@ describe("buildUserMessage", () => {
 
   it("uses provided author name", () => {
     const msg = buildUserMessage({
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       content: "Hello",
       authorName: "Alice",
       messageType: "comment",
@@ -167,7 +190,7 @@ describe("buildUserMessage", () => {
 describe("buildSystemMessage", () => {
   it("builds a system message", () => {
     const msg = buildSystemMessage({
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       content: "Task moved to trash",
       timestamp: "2026-01-01T00:00:00.000Z",
     });
@@ -186,10 +209,10 @@ describe("buildSystemMessage", () => {
 
   it("includes optional type and stepId", () => {
     const msg = buildSystemMessage({
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       content: "System error",
       type: "system_error",
-      stepId: "step-1" as any,
+      stepId: testId<"steps">("step-1"),
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 

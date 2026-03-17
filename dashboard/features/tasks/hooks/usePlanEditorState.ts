@@ -25,24 +25,21 @@ export function usePlanEditorState(
   useEffect(() => {
     if (taskGeneratedAt !== prevPlanGeneratedAt.current) {
       prevPlanGeneratedAt.current = taskGeneratedAt;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional plan reset on new plan generation
       setLocalPlan(undefined);
     }
   }, [taskGeneratedAt]);
 
-  const [activeTab, setActiveTab] = useState<string>(() =>
-    isAwaitingKickoff ? "plan" : "thread",
-  );
+  const [activeTab, setActiveTab] = useState<string>(() => (isAwaitingKickoff ? "plan" : "thread"));
 
   useEffect(() => {
     if (isAwaitingKickoff) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional tab switch when awaiting kickoff
       setActiveTab("plan");
     }
   }, [isAwaitingKickoff]);
 
-  const activePlan = useMemo(
-    () => localPlan ?? taskExecutionPlan,
-    [localPlan, taskExecutionPlan],
-  );
+  const activePlan = useMemo(() => localPlan ?? taskExecutionPlan, [localPlan, taskExecutionPlan]);
 
   const isDirty = localPlan !== undefined;
 

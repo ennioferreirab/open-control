@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+// eslint-disable-next-line no-restricted-imports -- leaf component that directly binds mutations
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Input } from "@/components/ui/input";
@@ -43,7 +44,7 @@ export function TagAttributeEditor({
         value: val,
       });
     },
-    [upsert, taskId, tagName, attribute._id]
+    [upsert, taskId, tagName, attribute._id],
   );
 
   const handleDebouncedChange = useCallback(
@@ -52,7 +53,7 @@ export function TagAttributeEditor({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => save(val), 300);
     },
-    [save]
+    [save],
   );
 
   const handleImmediateChange = useCallback(
@@ -60,7 +61,7 @@ export function TagAttributeEditor({
       setLocalValue(val);
       save(val);
     },
-    [save]
+    [save],
   );
 
   const handleClear = useCallback(() => {

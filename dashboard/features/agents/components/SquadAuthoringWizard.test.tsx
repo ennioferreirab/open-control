@@ -46,6 +46,8 @@ describe("SquadAuthoringWizard — chat-first", () => {
       error: null,
       sendMessage: vi.fn(),
       reset: vi.fn(),
+      readiness: 0,
+      patchDraftGraph: vi.fn(),
     });
 
     mockUseCreateSquadDraft.mockReturnValue({
@@ -112,6 +114,8 @@ describe("SquadAuthoringWizard — chat-first", () => {
       error: null,
       sendMessage: vi.fn(),
       reset: vi.fn(),
+      readiness: 80,
+      patchDraftGraph: vi.fn(),
     });
 
     render(<SquadAuthoringWizard open={true} onClose={vi.fn()} onPublished={vi.fn()} />);
@@ -150,6 +154,8 @@ describe("SquadAuthoringWizard — chat-first", () => {
       error: null,
       sendMessage: vi.fn(),
       reset: vi.fn(),
+      readiness: 50,
+      patchDraftGraph: vi.fn(),
     });
 
     render(<SquadAuthoringWizard open={true} onClose={vi.fn()} onPublished={vi.fn()} />);
@@ -172,6 +178,8 @@ describe("SquadAuthoringWizard — chat-first", () => {
       error: null,
       sendMessage: vi.fn(),
       reset: vi.fn(),
+      readiness: 100,
+      patchDraftGraph: vi.fn(),
     });
     mockUseCreateSquadDraft.mockReturnValue({
       draft: {
@@ -210,6 +218,8 @@ describe("SquadAuthoringWizard — chat-first", () => {
       error: null,
       sendMessage: vi.fn(),
       reset: vi.fn(),
+      readiness: 0,
+      patchDraftGraph: vi.fn(),
     });
     mockUseCreateSquadDraft.mockReturnValue({
       draft: {

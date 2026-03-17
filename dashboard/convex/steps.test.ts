@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { testId } from "@/tests/helpers/mockConvex";
 
 import {
   acceptHumanStep,
@@ -139,14 +140,14 @@ describe("isValidStepTransition", () => {
 describe("resolveBlockedByIds", () => {
   it("maps blockedBy temp IDs to real step IDs", () => {
     const mapped = resolveBlockedByIds(["step_1", "step_2"], {
-      step_1: "real-1" as any,
-      step_2: "real-2" as any,
+      step_1: testId<"steps">("real-1"),
+      step_2: testId<"steps">("real-2"),
     });
     expect(mapped).toEqual(["real-1", "real-2"]);
   });
 
   it("throws when a dependency temp ID is unknown", () => {
-    expect(() => resolveBlockedByIds(["missing"], {} as any)).toThrow(
+    expect(() => resolveBlockedByIds(["missing"], {} as Record<string, never>)).toThrow(
       /Unknown blockedByTempId dependency/,
     );
   });
@@ -891,7 +892,7 @@ describe("batchCreate", () => {
   it("creates steps and patches blockedBy dependencies atomically", async () => {
     const handler = getHandler();
 
-    const records = new Map<string, any>();
+    const records = new Map<string, Record<string, unknown>>();
     let stepCounter = 0;
 
     const ctx = {
@@ -943,9 +944,12 @@ describe("batchCreate", () => {
     });
 
     expect(created).toEqual(["step-1", "step-2"]);
-    expect(records.get("step-1").status).toBe("assigned");
-    expect(records.get("step-2").status).toBe("blocked");
-    expect(records.get("step-2").blockedBy).toEqual(["step-1"]);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    expect(records.get("step-1")!.status).toBe("assigned");
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    expect(records.get("step-2")!.status).toBe("blocked");
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    expect(records.get("step-2")!.blockedBy).toEqual(["step-1"]);
   });
 
   it("rejects unknown dependency temp IDs", async () => {

@@ -1,5 +1,6 @@
 "use client";
 
+// eslint-disable-next-line no-restricted-imports -- this is a leaf UI component that directly binds a mutation
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Doc } from "../convex/_generated/dataModel";
@@ -34,9 +35,7 @@ export function CompactFavoriteCard({ task, onClick }: CompactFavoriteCardProps)
       <span className="flex h-5 w-5 items-center justify-center rounded bg-muted text-[9px] font-semibold">
         {initials}
       </span>
-      <span className="flex-1 min-w-0 text-sm font-medium truncate">
-        {task.title}
-      </span>
+      <span className="flex-1 min-w-0 text-sm font-medium truncate">{task.title}</span>
       <Badge
         variant="secondary"
         className={`h-5 rounded-full px-2 text-[10px] font-medium ${colors.bg} ${colors.text}`}
