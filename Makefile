@@ -17,7 +17,7 @@
 .PHONY: start up down status test validate takeover lint typecheck format \
         test-py test-ts lint-py lint-ts typecheck-py typecheck-ts format-py format-ts
 
-MC_CMD := uv run python -m boot mc start
+MC_CMD := uv run nanobot mc start
 
 # ─── Stack lifecycle ──────────────────────────────────────────────
 
@@ -28,10 +28,10 @@ up:
 	@nohup $(MC_CMD) > /tmp/mc.log 2>&1 & echo "Mission Control started in background. Logs: /tmp/mc.log"
 
 down:
-	@uv run python -m boot mc down
+	@uv run nanobot mc down
 
 status:
-	@uv run python -m boot mc status
+	@uv run nanobot mc status
 
 # Stop any running MC instance, then start from current directory.
 # Use this from a worktree to take over the Convex local backend.
