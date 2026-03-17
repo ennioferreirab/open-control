@@ -39,6 +39,7 @@ import type * as lib_taskReview from "../lib/taskReview.js";
 import type * as lib_taskStatus from "../lib/taskStatus.js";
 import type * as lib_taskTransitions from "../lib/taskTransitions.js";
 import type * as lib_threadRules from "../lib/threadRules.js";
+import type * as lib_types from "../lib/types.js";
 import type * as lib_workflowContract from "../lib/workflowContract.js";
 import type * as lib_workflowExecutionCompiler from "../lib/workflowExecutionCompiler.js";
 import type * as lib_workflowHelpers from "../lib/workflowHelpers.js";
@@ -97,6 +98,7 @@ declare const fullApi: ApiFromModules<{
   "lib/taskStatus": typeof lib_taskStatus;
   "lib/taskTransitions": typeof lib_taskTransitions;
   "lib/threadRules": typeof lib_threadRules;
+  "lib/types": typeof lib_types;
   "lib/workflowContract": typeof lib_workflowContract;
   "lib/workflowExecutionCompiler": typeof lib_workflowExecutionCompiler;
   "lib/workflowHelpers": typeof lib_workflowHelpers;
