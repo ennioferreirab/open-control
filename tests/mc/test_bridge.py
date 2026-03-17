@@ -1,7 +1,8 @@
+# ruff: noqa: N803
 """Unit tests for ConvexBridge: case conversion, query/mutation/subscribe, retry logic."""
 
 from pathlib import Path  # noqa: F401 - used by TestCreateTaskDirectory
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import call, patch
 
 import pytest
 
@@ -13,8 +14,8 @@ from mc.bridge import (
     _to_snake_case,
 )
 
-
 # ── _to_camel_case tests ──────────────────────────────────────────────
+
 
 class TestToCamelCase:
     def test_single_word(self):
@@ -57,6 +58,7 @@ class TestToCamelCase:
 
 # ── _to_snake_case tests ──────────────────────────────────────────────
 
+
 class TestToSnakeCase:
     def test_single_word(self):
         assert _to_snake_case("name") == "name"
@@ -96,6 +98,7 @@ class TestToSnakeCase:
 
 
 # ── _convert_keys_to_camel tests ──────────────────────────────────────
+
 
 class TestConvertKeysToCamel:
     def test_flat_dict(self):
@@ -142,6 +145,7 @@ class TestConvertKeysToCamel:
 
 # ── _convert_keys_to_snake tests ──────────────────────────────────────
 
+
 class TestConvertKeysToSnake:
     def test_flat_dict(self):
         result = _convert_keys_to_snake({"assignedAgent": "bob", "trustLevel": "autonomous"})
@@ -186,6 +190,7 @@ class TestConvertKeysToSnake:
 
 # ── ConvexBridge.query tests ──────────────────────────────────────────
 
+
 class TestBridgeQuery:
     @patch("mc.bridge.ConvexClient")
     def test_query_converts_result_keys(self, MockClient):
@@ -216,9 +221,7 @@ class TestBridgeQuery:
         bridge = ConvexBridge("https://test.convex.cloud")
         bridge.query("messages:listByTask", {"task_id": "abc123"})
 
-        mock_client.query.assert_called_once_with(
-            "messages:listByTask", {"taskId": "abc123"}
-        )
+        mock_client.query.assert_called_once_with("messages:listByTask", {"taskId": "abc123"})
 
     @patch("mc.bridge.ConvexClient")
     def test_query_with_no_args(self, MockClient):
@@ -244,6 +247,7 @@ class TestBridgeQuery:
 
 # ── ConvexBridge.mutation tests ───────────────────────────────────────
 
+
 class TestBridgeMutation:
     @patch("mc.bridge.ConvexClient")
     def test_mutation_converts_arg_keys(self, MockClient):
@@ -251,7 +255,7 @@ class TestBridgeMutation:
         mock_client.mutation.return_value = "new_id_123"
 
         bridge = ConvexBridge("https://test.convex.cloud")
-        result = bridge.mutation(
+        bridge.mutation(
             "tasks:create",
             {
                 "title": "Research AI",
@@ -293,14 +297,17 @@ class TestBridgeMutation:
 
 # ── ConvexBridge.subscribe tests ──────────────────────────────────────
 
+
 class TestBridgeSubscribe:
     @patch("mc.bridge.ConvexClient")
     def test_subscribe_converts_results(self, MockClient):
         mock_client = MockClient.return_value
-        mock_client.subscribe.return_value = iter([
-            [{"_id": "1", "assignedAgent": "bob"}],
-            [{"_id": "1", "assignedAgent": "alice"}],
-        ])
+        mock_client.subscribe.return_value = iter(
+            [
+                [{"_id": "1", "assignedAgent": "bob"}],
+                [{"_id": "1", "assignedAgent": "alice"}],
+            ]
+        )
 
         bridge = ConvexBridge("https://test.convex.cloud")
         results = list(bridge.subscribe("tasks:list"))
@@ -318,29 +325,28 @@ class TestBridgeSubscribe:
         bridge = ConvexBridge("https://test.convex.cloud")
         list(bridge.subscribe("messages:listByTask", {"task_id": "abc"}))
 
-        mock_client.subscribe.assert_called_once_with(
-            "messages:listByTask", {"taskId": "abc"}
-        )
+        mock_client.subscribe.assert_called_once_with("messages:listByTask", {"taskId": "abc"})
 
 
 # ── ConvexBridge initialization tests ─────────────────────────────────
 
+
 class TestBridgeInit:
     @patch("mc.bridge.ConvexClient")
     def test_init_creates_client(self, MockClient):
-        bridge = ConvexBridge("https://test.convex.cloud")
+        ConvexBridge("https://test.convex.cloud")
         MockClient.assert_called_once_with("https://test.convex.cloud")
 
     @patch("mc.bridge.ConvexClient")
     def test_init_with_admin_key(self, MockClient):
         mock_client = MockClient.return_value
-        bridge = ConvexBridge("https://test.convex.cloud", admin_key="test-admin-key")
+        ConvexBridge("https://test.convex.cloud", admin_key="test-admin-key")
         mock_client.set_admin_auth.assert_called_once_with("test-admin-key")
 
     @patch("mc.bridge.ConvexClient")
     def test_init_without_admin_key(self, MockClient):
         mock_client = MockClient.return_value
-        bridge = ConvexBridge("https://test.convex.cloud")
+        ConvexBridge("https://test.convex.cloud")
         mock_client.set_admin_auth.assert_not_called()
 
     @patch("mc.bridge.ConvexClient")
@@ -352,6 +358,7 @@ class TestBridgeInit:
 
 
 # ── Edge case tests ───────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     @patch("mc.bridge.ConvexClient")
@@ -378,6 +385,7 @@ class TestEdgeCases:
 
 
 # ── Retry logic tests (Story 1.4) ───────────────────────────────────
+
 
 class TestMutationRetry:
     @patch("mc.bridge.time.sleep")
@@ -533,6 +541,7 @@ class TestMutationRetry:
 
 # ── Dual logging tests (Story 1.4) ──────────────────────────────────
 
+
 class TestDualLogging:
     @patch("mc.bridge.time.sleep")
     @patch("mc.bridge.ConvexClient")
@@ -545,6 +554,7 @@ class TestDualLogging:
         ]
 
         import logging
+
         with caplog.at_level(logging.INFO, logger="mc.bridge"):
             bridge = ConvexBridge("https://test.convex.cloud")
             bridge.mutation("tasks:create", {"title": "Test"})
@@ -559,6 +569,7 @@ class TestDualLogging:
         mock_client.mutation.side_effect = Exception("Network error")
 
         import logging
+
         with caplog.at_level(logging.ERROR, logger="mc.bridge"):
             bridge = ConvexBridge("https://test.convex.cloud")
             with pytest.raises(Exception):
@@ -574,6 +585,7 @@ class TestDualLogging:
         mock_client.mutation.return_value = None
 
         import logging
+
         with caplog.at_level(logging.INFO, logger="mc.bridge"):
             bridge = ConvexBridge("https://test.convex.cloud")
             bridge.update_task_status("task123", "in_progress", agent_name="dev")
@@ -582,6 +594,7 @@ class TestDualLogging:
 
 
 # ── Convenience method tests (Story 1.4) ─────────────────────────────
+
 
 class TestConvenienceMethods:
     @patch("mc.bridge.ConvexClient")
@@ -617,9 +630,7 @@ class TestConvenienceMethods:
         mock_client.mutation.return_value = None
 
         bridge = ConvexBridge("https://test.convex.cloud")
-        bridge.create_activity(
-            "task_created", "Task created", task_id="t1", agent_name="lead"
-        )
+        bridge.create_activity("task_created", "Task created", task_id="t1", agent_name="lead")
 
         call_args = mock_client.mutation.call_args[0]
         assert call_args[0] == "activities:create"
@@ -652,15 +663,17 @@ class TestConvenienceMethods:
         mock_client.mutation.return_value = "step-123"
 
         bridge = ConvexBridge("https://test.convex.cloud")
-        step_id = bridge.create_step({
-            "task_id": "task-123",
-            "title": "Run checks",
-            "description": "Run validation checks",
-            "assigned_agent": "nanobot",
-            "blocked_by": [],
-            "parallel_group": 1,
-            "order": 1,
-        })
+        step_id = bridge.create_step(
+            {
+                "task_id": "task-123",
+                "title": "Run checks",
+                "description": "Run validation checks",
+                "assigned_agent": "nanobot",
+                "blocked_by": [],
+                "parallel_group": 1,
+                "order": 1,
+            }
+        )
 
         assert step_id == "step-123"
         call_args = mock_client.mutation.call_args[0]
@@ -749,9 +762,7 @@ class TestConvenienceMethods:
         result = bridge.get_steps_by_task("task-123")
 
         assert result == [{"id": "step-123", "task_id": "task-123"}]
-        mock_client.query.assert_called_once_with(
-            "steps:getByTask", {"taskId": "task-123"}
-        )
+        mock_client.query.assert_called_once_with("steps:getByTask", {"taskId": "task-123"})
 
     @patch("mc.bridge.ConvexClient")
     def test_get_task(self, MockClient):
@@ -762,9 +773,7 @@ class TestConvenienceMethods:
         result = bridge.get_task("task-123")
 
         assert result == {"id": "task-123", "assigned_agent": "nanobot"}
-        mock_client.query.assert_called_once_with(
-            "tasks:getById", {"taskId": "task-123"}
-        )
+        mock_client.query.assert_called_once_with("tasks:getById", {"taskId": "task-123"})
 
     @patch("mc.bridge.ConvexClient")
     def test_check_and_unblock_dependents(self, MockClient):
@@ -839,6 +848,7 @@ class TestConvenienceMethods:
 
 # ── Story 2.4: Unified Thread Bridge Methods ─────────────────────────
 
+
 class TestPostStepCompletion:
     @patch("mc.bridge.ConvexClient")
     def test_post_step_completion_basic(self, MockClient):
@@ -847,7 +857,7 @@ class TestPostStepCompletion:
         mock_client.mutation.return_value = "msg-123"
 
         bridge = ConvexBridge("https://test.convex.cloud")
-        result = bridge.post_step_completion(
+        bridge.post_step_completion(
             task_id="task-abc",
             step_id="step-xyz",
             agent_name="nanobot",
@@ -936,7 +946,7 @@ class TestPostLeadAgentMessage:
         mock_client.mutation.return_value = "msg-789"
 
         bridge = ConvexBridge("https://test.convex.cloud")
-        result = bridge.post_lead_agent_message(
+        bridge.post_lead_agent_message(
             task_id="task-abc",
             content="Here is the execution plan...",
             msg_type="lead_agent_plan",

@@ -202,6 +202,16 @@ function makeTakeoverCtx({
           return null;
         }),
         query: vi.fn((table: string) => {
+          if (table === "runtimeReceipts") {
+            return {
+              withIndex: vi.fn((indexName: string) => {
+                expect(indexName).toBe("by_idempotencyKey");
+                return {
+                  first: vi.fn(async () => null),
+                };
+              }),
+            };
+          }
           expect(table).toBe("interactiveSessions");
           return {
             withIndex: vi.fn((indexName: string) => {
