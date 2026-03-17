@@ -227,9 +227,12 @@ development_status:
   # documented in agent_docs/code_conventions/. Focuses on naming contracts,
   # type safety, error handling consistency, and formatting baseline.
   epic-33: in-progress
-  33-1-python-type-and-enum-alignment: ready-for-dev
-  33-2-convex-error-handling-and-validators: ready-for-dev
-  33-3-convex-boundary-and-event-alignment: ready-for-dev
-  33-4-typescript-import-and-naming-alignment: ready-for-dev
-  33-5-run-formatters-and-linters: ready-for-dev
+  33-1-python-type-and-enum-alignment: done
+  33-2-convex-error-handling-and-validators: done
+  33-3-convex-boundary-and-event-alignment: done
+  33-4-typescript-import-and-naming-alignment: done
+  33-5-run-formatters-and-linters: done
+  33-6-python-ruff-remaining-violations: ready-for-dev
+  33-7-python-pyright-type-errors: ready-for-dev
+  33-8-typescript-eslint-and-type-errors: ready-for-dev
   epic-33-retrospective: optional
