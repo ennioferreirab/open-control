@@ -191,6 +191,7 @@ export const listDoneHistory = query({
 export const updateExecutionPlan = internalMutation({
   args: {
     taskId: v.id("tasks"),
+    // v.any(): polymorphic plan shape from LLM generation
     executionPlan: v.any(),
   },
   handler: async (ctx, args) => {
@@ -479,6 +480,7 @@ export const pauseTask = mutation({
 export const resumeTask = mutation({
   args: {
     taskId: v.id("tasks"),
+    // v.any(): polymorphic plan shape from LLM generation
     executionPlan: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
@@ -498,6 +500,7 @@ export const resumeTask = mutation({
 export const approveAndKickOff = mutation({
   args: {
     taskId: v.id("tasks"),
+    // v.any(): polymorphic plan shape from LLM generation
     executionPlan: v.optional(v.any()),
   },
   handler: async (ctx, args) => {

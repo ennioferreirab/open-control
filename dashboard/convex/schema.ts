@@ -206,6 +206,7 @@ export default defineSchema({
     tags: v.optional(v.array(v.string())),
     taskTimeout: v.optional(v.number()),
     interAgentTimeout: v.optional(v.number()),
+    // v.any(): polymorphic plan shape from LLM generation
     executionPlan: v.optional(v.any()),
     supervisionMode: v.optional(v.union(v.literal("autonomous"), v.literal("supervised"))),
     stalledAt: v.optional(v.string()),
@@ -595,6 +596,7 @@ export default defineSchema({
     status: workflowRunStatusValidator,
     launchedAt: v.string(),
     completedAt: v.optional(v.string()),
+    // v.any(): dynamic step ID mapping between workflow spec and execution
     stepMapping: v.optional(v.any()),
   })
     .index("by_taskId", ["taskId"])
