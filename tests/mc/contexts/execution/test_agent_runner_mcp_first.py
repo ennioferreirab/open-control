@@ -226,7 +226,7 @@ class TestStructuredErrorPropagation:
                 _run_agent_on_task,
             )
 
-            result_raw, session_key, loop = await _run_agent_on_task(
+            result_raw, _session_key, _loop = await _run_agent_on_task(
                 agent_name="test-agent",
                 agent_prompt=None,
                 agent_model="gpt-4o",
@@ -256,7 +256,7 @@ class TestStructuredErrorPropagation:
                 _run_agent_on_task,
             )
 
-            result_raw, session_key, loop = await _run_agent_on_task(
+            result_raw, _session_key, _loop = await _run_agent_on_task(
                 agent_name="test-agent",
                 agent_prompt=None,
                 agent_model="gpt-4o",

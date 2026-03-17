@@ -202,7 +202,7 @@ class TestSendTelegramDirectGuard:
             if not chat_id.lstrip("-").isdigit():
                 return  # guard triggered — no exception
             int(chat_id)  # would raise ValueError without the guard
-            assert False, "Should not reach here"
+            raise AssertionError("Should not reach here")
         except ValueError:
             pytest.fail("ValueError raised — guard not working")
 

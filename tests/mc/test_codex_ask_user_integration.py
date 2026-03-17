@@ -124,7 +124,7 @@ class TestFactoryProducesAdaptedCodexProvider:
                 MagicMock(),
             ),
         ):
-            provider, model = create_provider()
+            provider, _model = create_provider()
 
         assert isinstance(provider, AdaptedProvider)
         assert isinstance(provider._tool_adapter, CodexToolAdapter)

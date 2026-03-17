@@ -487,7 +487,7 @@ async def handle_all_mentions(
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for (agent_name, _), result in zip(mentions, results):
+    for (agent_name, _), result in zip(mentions, results, strict=False):
         if isinstance(result, Exception):
             logger.error(
                 "[mention_handler] Failed to handle mention @%s on task %s: %s",

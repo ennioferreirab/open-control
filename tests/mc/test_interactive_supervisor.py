@@ -284,7 +284,7 @@ def test_activity_log_append_called_after_record_supervision_on_item_started() -
 
 
 def test_activity_log_payload_for_turn_completed_with_summary() -> None:
-    bridge, registry, supervisor = _make_supervisor()
+    bridge, _registry, supervisor = _make_supervisor()
 
     supervisor.handle_event(
         InteractiveSupervisionEvent(
@@ -306,7 +306,7 @@ def test_activity_log_payload_for_turn_completed_with_summary() -> None:
 
 
 def test_activity_log_missing_metadata_fields_result_in_none() -> None:
-    bridge, registry, supervisor = _make_supervisor()
+    bridge, _registry, supervisor = _make_supervisor()
 
     supervisor.handle_event(
         InteractiveSupervisionEvent(
@@ -326,7 +326,7 @@ def test_activity_log_missing_metadata_fields_result_in_none() -> None:
 
 
 def test_activity_log_requires_action_true_for_approval_requested() -> None:
-    bridge, registry, supervisor = _make_supervisor()
+    bridge, _registry, supervisor = _make_supervisor()
 
     supervisor.handle_event(
         InteractiveSupervisionEvent(
@@ -345,7 +345,7 @@ def test_activity_log_requires_action_true_for_approval_requested() -> None:
 
 
 def test_activity_log_requires_action_true_for_user_input_requested() -> None:
-    bridge, registry, supervisor = _make_supervisor()
+    bridge, _registry, supervisor = _make_supervisor()
 
     supervisor.handle_event(
         InteractiveSupervisionEvent(

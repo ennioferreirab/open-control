@@ -448,7 +448,6 @@ class TestDelegateTaskNotAvailableInMCSteps:
         captured_loop = {}
 
         # Patch AgentLoop to capture the instance and skip actual LLM execution
-        original_init = None
 
         class FakeAgentLoop:
             def __init__(self, **kwargs):

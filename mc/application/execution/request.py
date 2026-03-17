@@ -11,7 +11,7 @@ ErrorCategory) introduced by Story 16.2 for the ExecutionEngine.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +34,7 @@ class EntityType:
 # ---------------------------------------------------------------------------
 
 
-class RunnerType(str, Enum):
+class RunnerType(StrEnum):
     """Which backend runs the agent work."""
 
     NANOBOT = "nanobot"
@@ -46,7 +46,7 @@ class RunnerType(str, Enum):
     PROVIDER_CLI = "provider-cli"
 
 
-class ErrorCategory(str, Enum):
+class ErrorCategory(StrEnum):
     """Normalized error categories for centralized handling."""
 
     TIER = "tier"

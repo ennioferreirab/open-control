@@ -208,7 +208,7 @@ export const getBoardView = query({
       return null;
     }
 
-    let boardTasks = args.boardId
+    const boardTasks = args.boardId
       ? await ctx.db
           .query("tasks")
           .withIndex("by_boardId", (q) => q.eq("boardId", args.boardId!))

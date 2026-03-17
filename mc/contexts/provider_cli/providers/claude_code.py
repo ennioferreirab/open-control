@@ -120,7 +120,7 @@ class ClaudeCodeCLIParser:
         Returns the command list that should be passed to ``start_session`` to
         launch a new process resuming the given provider session.
         """
-        return command_prefix + ["--resume", provider_session_id]
+        return [*command_prefix, "--resume", provider_session_id]
 
     async def stop(self, handle: ProviderProcessHandle) -> None:
         """Send SIGTERM to the Claude Code process via the supervisor."""

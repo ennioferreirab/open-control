@@ -8,7 +8,7 @@ from mc.bridge.client import BridgeClient
 class TestBridgeClientInit:
     @patch("mc.bridge.client.ConvexClient")
     def test_creates_client(self, MockClient):
-        client = BridgeClient("https://test.convex.cloud")
+        BridgeClient("https://test.convex.cloud")
         MockClient.assert_called_once_with("https://test.convex.cloud")
 
     @patch("mc.bridge.client.ConvexClient")

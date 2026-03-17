@@ -372,7 +372,7 @@ class StepDispatcher:
             return_exceptions=True,
         )
 
-        for step, result in zip(steps, results):
+        for step, result in zip(steps, results, strict=False):
             if isinstance(result, Exception):
                 logger.error(
                     "[dispatcher] Step '%s' failed in parallel group: %s",

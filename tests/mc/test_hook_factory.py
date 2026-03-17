@@ -180,7 +180,7 @@ class TestContext:
         assert _safe_session_id("a/b\\c:d") == "a_b_c_d"
 
     def test_round_trip(self, hook_dirs):
-        root, _, state_dir, _ = hook_dirs
+        _root, _, _state_dir, _ = hook_dirs
         ctx = HookContext("test-rt")
         ctx.active_skill = "brainstorming"
         ctx.active_plan = "docs/plans/my-plan.md"
@@ -334,7 +334,7 @@ class TestPlanTracker:
         assert data["steps"][1]["status"] == "pending"
 
     def test_completing_all_blockers_unblocks_task(self, hook_dirs):
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "unblock.md", tasks=3, blocked=True)
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
 
@@ -371,7 +371,7 @@ class TestPlanTracker:
         assert data["steps"][1]["status"] == "pending"
 
     def test_already_completed_is_noop(self, hook_dirs):
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "noop.md", tasks=2, blocked=False)
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
 
@@ -386,7 +386,7 @@ class TestPlanTracker:
         assert result is None
 
     def test_absolute_path_matching(self, hook_dirs):
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "abspath.md", tasks=2, blocked=False)
         abs_path = str(root / "docs" / "plans" / "abspath.md")
 
@@ -400,7 +400,7 @@ class TestPlanTracker:
         assert "2 tasks" in result
 
     def test_no_match_task_returns_none(self, hook_dirs):
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "nomatch.md", tasks=2, blocked=False)
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
 
@@ -595,7 +595,7 @@ class TestDispatcher:
 
     def test_skill_then_completion_flow(self, hook_dirs):
         """Multi-event flow: skill → write plan → complete task."""
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "flow.md", tasks=2, blocked=False)
 
         from mc.hooks.dispatcher import _dispatch

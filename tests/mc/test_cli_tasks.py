@@ -175,7 +175,7 @@ class TestTasksCreate:
 
         with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
             with patch("mc.bridge.time.sleep"):
-                result = runner.invoke(mc_app, ["tasks", "create", "Test"])
+                runner.invoke(mc_app, ["tasks", "create", "Test"])
 
         mock_client.close.assert_called_once()
 

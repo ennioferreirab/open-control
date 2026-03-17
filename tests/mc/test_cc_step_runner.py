@@ -109,7 +109,7 @@ class TestCCStepRunnerEngineIntegration:
                 ),
             ),
         ):
-            unblocked = await execute_step_via_cc(
+            await execute_step_via_cc(
                 bridge=bridge,
                 step_id="step-1",
                 task_id="task-1",

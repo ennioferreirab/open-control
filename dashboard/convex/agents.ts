@@ -7,7 +7,7 @@ import { agentStatusValidator, interactiveProviderValidator } from "./schema";
 // Agent metric helpers — callable from lifecycle completion paths
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export type AgentMetricDb = {
   query: (table: string) => any;
   patch: (id: any, value: Record<string, unknown>) => Promise<void>;

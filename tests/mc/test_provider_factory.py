@@ -120,7 +120,7 @@ class TestCodexProviderWrappedWithAdapter:
                 mock_cls,
             ),
         ):
-            provider, model = create_provider()
+            provider, _model = create_provider()
             assert isinstance(provider, AdaptedProvider), (
                 f"Codex provider must be wrapped with AdaptedProvider, got {type(provider)}"
             )
@@ -253,7 +253,7 @@ class TestCreateProviderModelOverride:
                 mock_cls,
             ),
         ):
-            provider, model = create_provider("override-model")
+            _provider, model = create_provider("override-model")
             assert model == "override-model"
             # Verify the override model was passed to get_provider_name
             mock_config.get_provider_name.assert_called_with("override-model")

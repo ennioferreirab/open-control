@@ -239,7 +239,7 @@ class TestDispatch:
 
     def test_context_is_saved_after_dispatch(self, dispatch_env):
         """The dispatcher should call ctx.save() even with no matching handlers."""
-        tmp_path, _, state_dir, _ = dispatch_env
+        _tmp_path, _, state_dir, _ = dispatch_env
         payload = {
             "hook_event_name": "PostToolUse",
             "tool_name": "Bash",

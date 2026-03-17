@@ -54,7 +54,7 @@ def register_sessions_command(mc_app: typer.Typer) -> None:
                 key = entry.get("key", "")
                 parts = key.split(":", 2)
                 if len(parts) == 3:
-                    _, agent_name_part, task_id_part = parts
+                    _, _agent_name_part, task_id_part = parts
                     if task_id_part == "latest":
                         latest_sessions.append(entry)
                     else:

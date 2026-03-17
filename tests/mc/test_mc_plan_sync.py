@@ -343,7 +343,7 @@ class TestTaskCompletedSync:
 
     def test_reports_step_completion_to_mc(self, tracker_setup):
         """Completing a task reports progress via IPC."""
-        tmp_path, tracker_dir, tracker_path = tracker_setup
+        tmp_path, _tracker_dir, _tracker_path = tracker_setup
         payload = {
             "hook_event_name": "TaskCompleted",
             "session_id": "test-session",

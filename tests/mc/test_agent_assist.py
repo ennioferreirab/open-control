@@ -274,6 +274,6 @@ class TestCancellationFlow:
         assert parsed is not None
         assert errors == []
         # No workspace should exist — validation is in-memory only
-        agent_dir = Path.home() / ".nanobot" / "agents" / "temp-agent"
+        Path.home() / ".nanobot" / "agents" / "temp-agent"
         # We cannot assert non-existence absolutely (other tests may create it),
         # but the point is that validate_yaml_content itself creates nothing.

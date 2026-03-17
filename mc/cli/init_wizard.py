@@ -197,7 +197,7 @@ async def generate_custom_agent(description: str) -> tuple[str | None, list[str]
         return None, ["LLM returned an empty response."]
 
     yaml_text = extract_yaml_from_response(raw)
-    parsed, errors = validate_yaml_content(yaml_text)
+    _parsed, errors = validate_yaml_content(yaml_text)
     if errors:
         return None, errors
 

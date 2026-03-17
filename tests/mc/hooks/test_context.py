@@ -130,7 +130,7 @@ class TestHookContextInit:
 
 class TestHookContextPersistence:
     def test_save_and_load_round_trip(self, state_dirs):
-        tmp_path, state_dir = state_dirs
+        _tmp_path, _state_dir = state_dirs
         ctx = HookContext("persist-test")
         ctx.active_skill = "testing"
         ctx.active_plan = "docs/plans/persist.md"
@@ -150,7 +150,7 @@ class TestHookContextPersistence:
         assert ctx.active_agents == {}
 
     def test_save_creates_json_file(self, state_dirs):
-        tmp_path, state_dir = state_dirs
+        _tmp_path, state_dir = state_dirs
         ctx = HookContext("file-check")
         ctx.save()
 
@@ -161,7 +161,7 @@ class TestHookContextPersistence:
         assert data["session_id"] == "file-check"
 
     def test_save_overwrites_existing(self, state_dirs):
-        tmp_path, state_dir = state_dirs
+        _tmp_path, _state_dir = state_dirs
         ctx1 = HookContext("overwrite")
         ctx1.active_skill = "first"
         ctx1.save()
@@ -174,7 +174,7 @@ class TestHookContextPersistence:
         assert loaded.active_skill == "second"
 
     def test_load_with_corrupted_json(self, state_dirs):
-        tmp_path, state_dir = state_dirs
+        _tmp_path, state_dir = state_dirs
         state_file = state_dir / "corrupted.json"
         state_file.write_text("{invalid json")
 
@@ -200,7 +200,7 @@ class TestHookContextPersistence:
 
 class TestHookContextAutoPrune:
     def test_prunes_old_state_files(self, state_dirs):
-        tmp_path, state_dir = state_dirs
+        _tmp_path, state_dir = state_dirs
         # Create an old state file (2 days old)
         old_file = state_dir / "old-session.json"
         old_file.write_text('{"session_id":"old-session"}')
@@ -212,7 +212,7 @@ class TestHookContextAutoPrune:
         assert not old_file.exists()
 
     def test_keeps_recent_state_files(self, state_dirs):
-        tmp_path, state_dir = state_dirs
+        _tmp_path, state_dir = state_dirs
         # Create a recent state file
         recent_file = state_dir / "recent-session.json"
         recent_file.write_text('{"session_id":"recent-session"}')
@@ -221,7 +221,7 @@ class TestHookContextAutoPrune:
         assert recent_file.exists()
 
     def test_prune_handles_oserror_gracefully(self, state_dirs):
-        tmp_path, state_dir = state_dirs
+        _tmp_path, state_dir = state_dirs
         # Create an old file
         old_file = state_dir / "old-err.json"
         old_file.write_text('{"session_id":"old-err"}')
@@ -242,7 +242,7 @@ class TestHookContextAutoPrune:
             assert ctx.session_id == "safe-prune"
 
     def test_sanitized_session_id_used_for_filename(self, state_dirs):
-        tmp_path, state_dir = state_dirs
+        _tmp_path, state_dir = state_dirs
         raw_id = "unsafe/../../id"
         ctx = HookContext(raw_id)
         ctx.save()

@@ -338,7 +338,7 @@ class KickoffResumeWorker:
 
         # Build step mapping: workflow temp_id → real Convex step id
         step_mapping: dict[str, str] = {}
-        for plan_step, real_id in zip(plan.steps, created_step_ids):
+        for plan_step, real_id in zip(plan.steps, created_step_ids, strict=False):
             if plan_step.workflow_step_id:
                 step_mapping[plan_step.workflow_step_id] = real_id
 

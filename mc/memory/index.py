@@ -192,7 +192,7 @@ class MemoryIndex:
                     self._ensure_vec_table(self._conn, first_dim)
                     rows = [
                         (chunk_id, self._vector_literal(embedding))
-                        for chunk_id, embedding in zip(chunk_ids, embeddings)
+                        for chunk_id, embedding in zip(chunk_ids, embeddings, strict=False)
                         if len(embedding) == first_dim
                     ]
                     if rows:
