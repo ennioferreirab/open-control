@@ -73,7 +73,7 @@ from mc.types import (
     ActivityEventType,
     AgentData,
     AuthorType,
-    CCTaskResult,  # noqa: E402 -- needed at runtime for constructor
+    CCTaskResult,
     LeadAgentExecutionError,
     MessageType,
     TaskStatus,

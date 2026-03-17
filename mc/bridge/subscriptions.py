@@ -27,7 +27,7 @@ class SubscriptionManager:
     to all consumer queues.
     """
 
-    def __init__(self, client: "BridgeClientProtocol"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
         self._shared_polls: dict[tuple, tuple[asyncio.Task, list[asyncio.Queue]]] = {}  # type: ignore[type-arg]
 

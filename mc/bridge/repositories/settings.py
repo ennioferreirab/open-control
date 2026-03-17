@@ -20,5 +20,5 @@ logger = logging.getLogger(__name__)
 class SettingsRepository:
     """Data access methods for settings in Convex."""
 
-    def __init__(self, client: "BridgeClientProtocol"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client

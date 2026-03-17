@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class BoardRepository:
     """Data access methods for board entities in Convex."""
 
-    def __init__(self, client: "BridgeClientProtocol"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def get_board_by_id(self, board_id: str) -> dict[str, Any] | None:

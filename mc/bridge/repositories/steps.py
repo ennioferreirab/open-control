@@ -33,7 +33,7 @@ def _default_transition_idempotency_key(
 class StepRepository:
     """Data access methods for step entities in Convex."""
 
-    def __init__(self, client: "BridgeClientProtocol"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def create_step(self, step_data: dict[str, Any]) -> str:

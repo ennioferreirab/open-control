@@ -22,7 +22,7 @@ def _content_digest(*parts: Any) -> str:
 class MessageRepository:
     """Data access methods for message entities in Convex."""
 
-    def __init__(self, client: "BridgeClientProtocol"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def get_task_messages(self, task_id: str) -> list[dict[str, Any]]:

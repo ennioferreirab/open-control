@@ -19,6 +19,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -26,7 +27,6 @@ import pytest
 from mc.hooks.config import HookConfig, get_config, get_project_root
 from mc.hooks.context import HookContext, _safe_session_id
 from mc.hooks.handler import BaseHandler
-from typing import ClassVar
 
 # ---------------------------------------------------------------------------
 # Fixtures

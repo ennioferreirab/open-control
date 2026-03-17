@@ -165,7 +165,7 @@ Write detailed step descriptions that the executor agent can act on autonomously
 class TaskPlanner:
     """Plans task execution using LLM reasoning."""
 
-    def __init__(self, bridge: "ConvexBridge | None" = None) -> None:
+    def __init__(self, bridge: ConvexBridge | None = None) -> None:
         self._bridge = bridge
 
     async def plan_task(

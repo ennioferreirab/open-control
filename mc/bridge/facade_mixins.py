@@ -25,14 +25,14 @@ class BridgeRepositoryFacadeMixin:
     """
 
     # -- Type-checking stubs: provided by ConvexBridge at runtime --
-    _tasks: "TaskRepository"
-    _steps: "StepRepository"
-    _messages: "MessageRepository"
-    _agents: "AgentRepository"
-    _boards: "BoardRepository"
-    _chats: "ChatRepository"
-    _specs: "SpecsRepository"
-    _subscriptions: "SubscriptionManager"
+    _tasks: TaskRepository
+    _steps: StepRepository
+    _messages: MessageRepository
+    _agents: AgentRepository
+    _boards: BoardRepository
+    _chats: ChatRepository
+    _specs: SpecsRepository
+    _subscriptions: SubscriptionManager
 
     def _ensure_repos(self) -> None: ...
 
@@ -303,10 +303,6 @@ class BridgeRepositoryFacadeMixin:
     def get_agent_by_name(self, name: str) -> dict[str, Any] | None:
         self._ensure_repos()
         return self._agents.get_agent_by_name(name)
-
-    def list_active_registry_view(self) -> list[dict[str, Any]]:
-        self._ensure_repos()
-        return self._agents.list_active_registry_view()
 
     def list_deleted_agents(self) -> list[dict[str, Any]]:
         self._ensure_repos()
