@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { testId } from "@/tests/helpers/mockConvex";
 
 import {
   isTransitionAllowed,
@@ -84,7 +85,7 @@ describe("logActivity", () => {
     const ctx = { db: { insert } };
 
     await logActivity(ctx, {
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       agentName: "coder",
       eventType: "task_created",
       description: "Task was created",
@@ -147,14 +148,18 @@ describe("requireEntity", () => {
     const entity = { _id: "task-1", title: "Test" };
     const ctx = { db: { get: vi.fn(async () => entity) } };
 
-    const result = await requireEntity(ctx, "task-1" as any, "Task");
+    const result = await requireEntity(ctx, testId<"tasks">("task-1"), "Task");
     expect(result).toBe(entity);
   });
 
   it("throws when entity is not found", async () => {
     const ctx = { db: { get: vi.fn(async () => null) } };
 
+<<<<<<< HEAD
     await expect(requireEntity(ctx, "task-missing" as any, "Task")).rejects.toThrow(
+=======
+    await expect(requireEntity(ctx, testId<"tasks">("task-missing"), "Task")).rejects.toThrow(
+>>>>>>> worktree-agent-aacc91e7
       /Task not found/,
     );
   });

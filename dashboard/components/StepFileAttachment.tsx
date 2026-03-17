@@ -1,7 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
+<<<<<<< HEAD
 import { Id } from "@/convex/_generated/dataModel";
+=======
+// eslint-disable-next-line no-restricted-imports -- leaf component that directly binds a mutation
+import { useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { Id } from "../convex/_generated/dataModel";
+>>>>>>> worktree-agent-aacc91e7
 import { Button } from "@/components/ui/button";
 import { Loader2, Paperclip } from "lucide-react";
 import { FileChip } from "./FileChip";

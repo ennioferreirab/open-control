@@ -14,6 +14,8 @@ import { ProviderSelector, type WizardProvider } from "./ProviderSelector";
 interface SquadAuthoringWizardProps {
   open: boolean;
   onClose: () => void;
+  /** Called with the squad name when publishing succeeds */
+  onPublished?: (squadName: string) => void;
 }
 
 export function SquadAuthoringWizard({ open, onClose }: SquadAuthoringWizardProps) {
@@ -31,7 +33,10 @@ export function SquadAuthoringWizard({ open, onClose }: SquadAuthoringWizardProp
       <DialogContent
         className="max-w-4xl p-0 h-[600px] flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
+<<<<<<< HEAD
         onEscapeKeyDown={(e) => e.preventDefault()}
+=======
+>>>>>>> worktree-agent-aacc91e7
       >
         <DialogHeader className="border-b px-6 py-4">
           <div className="flex items-center justify-between">

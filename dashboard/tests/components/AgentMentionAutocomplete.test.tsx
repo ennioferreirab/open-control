@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mock convex/react hooks
+// eslint-disable-next-line no-restricted-imports
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("../../convex/_generated/api", () => ({
   },
 }));
 
+// eslint-disable-next-line no-restricted-imports
 import { useQuery, useMutation } from "convex/react";
 import { ThreadInput } from "../../features/thread/components/ThreadInput";
 
@@ -66,15 +68,24 @@ vi.mock("@/hooks/useFileUpload", () => ({
   }),
 }));
 
-function makeTask(overrides: Record<string, any> = {}) {
+import type { Doc } from "@/convex/_generated/dataModel";
+import { testId } from "@/tests/helpers/mockConvex";
+
+function makeTask(overrides: Record<string, unknown> = {}) {
   return {
-    _id: "t1",
+    _id: testId<"tasks">("t1"),
+    _creationTime: 1700000000000,
     boardId: "b1",
-    status: "open",
+    status: "in_progress" as const,
     assignedAgent: "",
     isManual: false,
+    title: "Test Task",
+    trustLevel: "autonomous" as const,
+    createdAt: "2024-01-01T00:00:00.000Z",
+    updatedAt: "2024-01-01T00:00:00.000Z",
+    tags: [],
     ...overrides,
-  } as any;
+  } as unknown as Doc<"tasks">;
 }
 
 describe("AgentMentionAutocomplete (via ThreadInput)", () => {
@@ -94,7 +105,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
       return vi.fn();
     });
 
-    mockUseQuery.mockImplementation((ref: any, args: any) => {
+    mockUseQuery.mockImplementation((ref: unknown, args: unknown) => {
       const s = String(ref);
       if (s.includes("boards") && args !== "skip") return MOCK_BOARD;
       return undefined;

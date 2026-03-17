@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { testId } from "@/tests/helpers/mockConvex";
 
 import {
   canSendThreadMessage,
@@ -106,7 +107,7 @@ describe("logThreadMessageSent", () => {
     const ctx = { db: { insert } };
 
     await logThreadMessageSent(ctx, {
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       agentName: "coder",
       description: "User sent message to coder",
       timestamp: "2026-01-01T00:00:00.000Z",
@@ -126,7 +127,7 @@ describe("logThreadMessageSent", () => {
     const ctx = { db: { insert } };
 
     await logThreadMessageSent(ctx, {
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       description: "User posted a comment",
     });
 
@@ -150,7 +151,7 @@ describe("logThreadMessageSent", () => {
 describe("buildUserMessage", () => {
   it("builds a user message with default author name", () => {
     const msg = buildUserMessage({
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       content: "Hello",
       messageType: "user_message",
       type: "user_message",
@@ -170,7 +171,7 @@ describe("buildUserMessage", () => {
 
   it("uses provided author name", () => {
     const msg = buildUserMessage({
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       content: "Hello",
       authorName: "Alice",
       messageType: "comment",
@@ -189,7 +190,7 @@ describe("buildUserMessage", () => {
 describe("buildSystemMessage", () => {
   it("builds a system message", () => {
     const msg = buildSystemMessage({
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       content: "Task moved to trash",
       timestamp: "2026-01-01T00:00:00.000Z",
     });
@@ -208,10 +209,10 @@ describe("buildSystemMessage", () => {
 
   it("includes optional type and stepId", () => {
     const msg = buildSystemMessage({
-      taskId: "task-1" as any,
+      taskId: testId<"tasks">("task-1"),
       content: "System error",
       type: "system_error",
-      stepId: "step-1" as any,
+      stepId: testId<"steps">("step-1"),
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 

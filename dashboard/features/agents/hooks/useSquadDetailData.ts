@@ -26,7 +26,7 @@ export function useSquadDetailData(squadId: Id<"squadSpecs"> | null): SquadDetai
   return {
     squad: squad ?? null,
     workflows,
-    agents: agentIds.length === 0 ? [] : agents,
+    agents: agentIds.length === 0 ? [] : agents?.filter((a): a is Doc<"agents"> => a !== null),
     isLoading,
   };
 }

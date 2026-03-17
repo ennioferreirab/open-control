@@ -33,6 +33,8 @@ vi.mock("@/hooks/useSelectableAgents", () => ({
   ],
 }));
 
+import type { Doc } from "@/convex/_generated/dataModel";
+
 const baseTask = {
   _id: "task1" as never,
   _creationTime: 1000,
@@ -44,7 +46,7 @@ const baseTask = {
   tags: [],
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
-} as any;
+} as Doc<"tasks">;
 
 describe("useThreadComposer", () => {
   beforeEach(() => {
@@ -82,21 +84,25 @@ describe("useThreadComposer", () => {
   });
 
   it("detects isPlanChatMode when review + awaitingKickoff", () => {
-    const planChatTask = { ...baseTask, status: "review", awaitingKickoff: true };
+    const planChatTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+    } as Doc<"tasks">;
     const { result } = renderHook(() => useThreadComposer(planChatTask));
     expect(result.current.isPlanChatMode).toBe(true);
     expect(result.current.isInProgress).toBe(false);
   });
 
   it("detects isInProgress for in_progress status", () => {
-    const ipTask = { ...baseTask, status: "in_progress" };
+    const ipTask = { ...baseTask, status: "in_progress" as const } as Doc<"tasks">;
     const { result } = renderHook(() => useThreadComposer(ipTask));
     expect(result.current.isInProgress).toBe(true);
     expect(result.current.isPlanChatMode).toBe(false);
   });
 
   it("detects isBlocked for retrying status", () => {
-    const retryingTask = { ...baseTask, status: "retrying" };
+    const retryingTask = { ...baseTask, status: "retrying" as const } as Doc<"tasks">;
     const { result } = renderHook(() => useThreadComposer(retryingTask));
     expect(result.current.isBlocked).toBe(true);
   });
@@ -118,7 +124,11 @@ describe("useThreadComposer", () => {
   });
 
   it("sends plan message in plan chat mode", async () => {
-    const planTask = { ...baseTask, status: "review", awaitingKickoff: true };
+    const planTask = {
+      ...baseTask,
+      status: "review" as const,
+      awaitingKickoff: true,
+    } as Doc<"tasks">;
     const { result } = renderHook(() => useThreadComposer(planTask));
     act(() => {
       result.current.setContent("Modify step 2");
@@ -182,7 +192,7 @@ describe("useThreadComposer", () => {
   });
 
   it("calls restore mutation via handleRestore", async () => {
-    const deletedTask = { ...baseTask, status: "deleted" };
+    const deletedTask = { ...baseTask, status: "deleted" as const } as Doc<"tasks">;
     const { result } = renderHook(() => useThreadComposer(deletedTask));
     await act(async () => {
       await result.current.handleRestore();

@@ -57,7 +57,11 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     if (!KEBAB_CASE_RE.test(args.name)) {
+<<<<<<< HEAD
       throw new ConvexError(`Board name must be kebab-case (e.g. "project-alpha"): "${args.name}"`);
+=======
+      throw new Error(`Board name must be kebab-case (e.g. "project-alpha"): "${args.name}"`);
+>>>>>>> worktree-agent-aacc91e7
     }
 
     const existing = await ctx.db

@@ -1,6 +1,13 @@
 "use client";
 
+<<<<<<< HEAD
 import { Doc } from "@/convex/_generated/dataModel";
+=======
+// eslint-disable-next-line no-restricted-imports -- this is a leaf UI component that directly binds a mutation
+import { useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { Doc } from "../convex/_generated/dataModel";
+>>>>>>> worktree-agent-aacc91e7
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
 import { STATUS_COLORS, type TaskStatus } from "@/lib/constants";

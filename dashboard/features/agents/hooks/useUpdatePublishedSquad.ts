@@ -58,7 +58,7 @@ export function useUpdatePublishedSquad(): UseUpdatePublishedSquadResult {
   const publish = async (args: UpdatePublishedSquadArgs): Promise<Id<"squadSpecs"> | null> => {
     setIsPublishing(true);
     try {
-      return await publishMutation(args);
+      return (await publishMutation(args)) as Id<"squadSpecs">;
     } finally {
       setIsPublishing(false);
     }

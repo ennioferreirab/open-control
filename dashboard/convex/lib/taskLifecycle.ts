@@ -196,6 +196,7 @@ type TaskLifecycleCtx =
     };
 
 export async function markPlanStepsCompleted(
+<<<<<<< HEAD
   _ctx: TaskLifecycleCtx,
   _taskId: Id<"tasks">,
   _task: { executionPlan?: { steps?: Array<Record<string, unknown>> } },
@@ -204,6 +205,23 @@ export async function markPlanStepsCompleted(
   void _taskId;
   void _task;
   // executionPlan is static authored data. Live step status is read from `steps`.
+=======
+  ctx: { db: { patch: (id: Id<"tasks">, value: Record<string, unknown>) => Promise<void> } },
+  taskId: Id<"tasks">,
+  task: { executionPlan?: { steps: Record<string, unknown>[] } & Record<string, unknown> },
+): Promise<void> {
+  const plan = task.executionPlan;
+  if (!plan?.steps?.length) return;
+
+  const updatedSteps = plan.steps.map((step: Record<string, unknown>) => ({
+    ...step,
+    status: "completed",
+  }));
+
+  await ctx.db.patch(taskId, {
+    executionPlan: { ...plan, steps: updatedSteps },
+  });
+>>>>>>> worktree-agent-aacc91e7
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
+import { testId } from "@/tests/helpers/mockConvex";
 
 // Mock convex/react
 const mockMutationFns: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -85,7 +86,7 @@ describe("useTaskDetailActions", () => {
   it("calls approve mutation with correct args", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.approve("task1" as any);
+      await result.current.approve(testId<"tasks">("task1"));
     });
     expect(mockMutationFns["tasks:approve"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -100,7 +101,7 @@ describe("useTaskDetailActions", () => {
       generatedBy: "lead-agent" as const,
     };
     await act(async () => {
-      await result.current.kickOff("task1" as any, plan);
+      await result.current.kickOff(testId<"tasks">("task1"), plan);
     });
     expect(mockMutationFns["tasks:approveAndKickOff"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -116,7 +117,7 @@ describe("useTaskDetailActions", () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
       try {
-        await result.current.kickOff("task1" as any, undefined);
+        await result.current.kickOff(testId<"tasks">("task1"), undefined);
       } catch {
         // expected
       }
@@ -128,7 +129,7 @@ describe("useTaskDetailActions", () => {
   it("calls pause and manages loading state", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.pause("task1" as any);
+      await result.current.pause(testId<"tasks">("task1"));
     });
     expect(mockMutationFns["tasks:pauseTask"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -140,7 +141,7 @@ describe("useTaskDetailActions", () => {
     mockMutationFns["tasks:pauseTask"] = vi.fn().mockRejectedValue(new Error("Pause failed"));
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.pause("task1" as any);
+      await result.current.pause(testId<"tasks">("task1"));
     });
     expect(result.current.pauseError).toBe("Pause failed: Pause failed");
     expect(result.current.isPausing).toBe(false);
@@ -149,7 +150,7 @@ describe("useTaskDetailActions", () => {
   it("calls resume and manages loading state", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.resume("task1" as any, undefined);
+      await result.current.resume(testId<"tasks">("task1"), undefined);
     });
     expect(mockMutationFns["tasks:resumeTask"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -161,7 +162,7 @@ describe("useTaskDetailActions", () => {
   it("calls retry mutation", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.retry("task1" as any);
+      await result.current.retry(testId<"tasks">("task1"));
     });
     expect(mockMutationFns["tasks:retry"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -171,7 +172,7 @@ describe("useTaskDetailActions", () => {
   it("calls addMergeSource mutation and clears loading state", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.addMergeSource("task1" as any, "task2" as any);
+      await result.current.addMergeSource(testId<"tasks">("task1"), testId<"tasks">("task2"));
     });
     expect(mockMutationFns["tasks:addMergeSource"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -183,7 +184,7 @@ describe("useTaskDetailActions", () => {
   it("calls removeMergeSource mutation and clears loading state", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.removeMergeSource("task1" as any, "task2" as any);
+      await result.current.removeMergeSource(testId<"tasks">("task1"), testId<"tasks">("task2"));
     });
     expect(mockMutationFns["tasks:removeMergeSource"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -199,7 +200,7 @@ describe("useTaskDetailActions", () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
       try {
-        await result.current.addMergeSource("task1" as any, "task2" as any);
+        await result.current.addMergeSource(testId<"tasks">("task1"), testId<"tasks">("task2"));
       } catch {
         // expected
       }
@@ -214,7 +215,7 @@ describe("useTaskDetailActions", () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
       try {
-        await result.current.removeMergeSource("task1" as any, "task2" as any);
+        await result.current.removeMergeSource(testId<"tasks">("task1"), testId<"tasks">("task2"));
       } catch {
         // expected
       }
@@ -225,7 +226,7 @@ describe("useTaskDetailActions", () => {
   it("calls updateTags mutation", () => {
     const { result } = renderHook(() => useTaskDetailActions());
     act(() => {
-      result.current.updateTags("task1" as any, ["tag1", "tag2"]);
+      result.current.updateTags(testId<"tasks">("task1"), ["tag1", "tag2"]);
     });
     expect(mockMutationFns["tasks:updateTags"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -236,7 +237,7 @@ describe("useTaskDetailActions", () => {
   it("calls updateTitle mutation", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.updateTitle("task1" as any, "New Title");
+      await result.current.updateTitle(testId<"tasks">("task1"), "New Title");
     });
     expect(mockMutationFns["tasks:updateTitle"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -247,7 +248,7 @@ describe("useTaskDetailActions", () => {
   it("calls updateDescription mutation", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.updateDescription("task1" as any, "New desc");
+      await result.current.updateDescription(testId<"tasks">("task1"), "New desc");
     });
     expect(mockMutationFns["tasks:updateDescription"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -258,7 +259,7 @@ describe("useTaskDetailActions", () => {
   it("calls deleteTask mutation and resets delete state", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.deleteTask("task1" as any);
+      await result.current.deleteTask(testId<"tasks">("task1"));
     });
     expect(mockMutationFns["tasks:softDelete"]).toHaveBeenCalledWith({
       taskId: "task1",
@@ -274,7 +275,7 @@ describe("useTaskDetailActions", () => {
   it("sends rejected plan feedback through postUserPlanMessage", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {
-      await result.current.submitPlanReviewFeedback("task1" as any, "Please revise");
+      await result.current.submitPlanReviewFeedback(testId<"tasks">("task1"), "Please revise");
     });
     expect(mockMutationFns["messages:postUserPlanMessage"]).toHaveBeenCalledWith({
       taskId: "task1",

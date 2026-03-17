@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+<<<<<<< HEAD
+=======
+import { testId } from "@/tests/helpers/mockConvex";
+>>>>>>> worktree-agent-aacc91e7
 
 import { approveTask, retryTask } from "./taskReview";
 
@@ -28,19 +32,31 @@ function makeCtx(task: object | null) {
 describe("approveTask", () => {
   it("throws when the task is not found", async () => {
     const { db } = makeCtx(null);
+<<<<<<< HEAD
     await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow("Task not found");
+=======
+    await expect(approveTask({ db }, testId<"tasks">("task-1"))).rejects.toThrow("Task not found");
+>>>>>>> worktree-agent-aacc91e7
   });
 
   it("throws when the task is not in review state", async () => {
     const { db } = makeCtx({ _id: "task-1", status: "in_progress", isManual: false });
+<<<<<<< HEAD
     await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow(
+=======
+    await expect(approveTask({ db }, testId<"tasks">("task-1"))).rejects.toThrow(
+>>>>>>> worktree-agent-aacc91e7
       "Task is not in review state",
     );
   });
 
   it("throws when the task is a manual task", async () => {
     const { db } = makeCtx({ _id: "task-1", status: "review", isManual: true });
+<<<<<<< HEAD
     await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow(
+=======
+    await expect(approveTask({ db }, testId<"tasks">("task-1"))).rejects.toThrow(
+>>>>>>> worktree-agent-aacc91e7
       "Cannot approve a manual task",
     );
   });
@@ -53,7 +69,11 @@ describe("approveTask", () => {
       awaitingKickoff: true,
       title: "Squad mission",
     });
+<<<<<<< HEAD
     await expect(approveTask({ db }, "task-1" as never)).rejects.toThrow(
+=======
+    await expect(approveTask({ db }, testId<"tasks">("task-1"))).rejects.toThrow(
+>>>>>>> worktree-agent-aacc91e7
       "Cannot approve a pre-kickoff task directly",
     );
   });
@@ -83,7 +103,11 @@ describe("approveTask", () => {
       isMergeTask: false,
     });
 
+<<<<<<< HEAD
     await approveTask({ db }, "task-1" as never, "Alice");
+=======
+    await approveTask({ db }, testId<"tasks">("task-1"), "Alice");
+>>>>>>> worktree-agent-aacc91e7
 
     expect(patch).toHaveBeenCalledWith("task-1", expect.objectContaining({ status: "done" }));
     expect(insert).toHaveBeenCalledWith(
@@ -103,7 +127,11 @@ describe("approveTask", () => {
       trustLevel: "autonomous",
     });
 
+<<<<<<< HEAD
     await approveTask({ db }, "task-1" as never);
+=======
+    await approveTask({ db }, testId<"tasks">("task-1"));
+>>>>>>> worktree-agent-aacc91e7
 
     expect(patch).toHaveBeenCalledWith("task-1", expect.objectContaining({ status: "done" }));
   });

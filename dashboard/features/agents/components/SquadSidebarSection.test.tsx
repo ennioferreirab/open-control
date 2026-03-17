@@ -38,13 +38,25 @@ describe("SquadSidebarSection", () => {
   });
 
   it("renders Squads section label", () => {
-    mockUseSquadSidebarData.mockReturnValue({ squads: [], isLoading: false });
+    mockUseSquadSidebarData.mockReturnValue({
+      squads: [],
+      archivedSquads: [],
+      isLoading: false,
+      archiveSquad: vi.fn(),
+      unarchiveSquad: vi.fn(),
+    });
     render(<SquadSidebarSection onSelectSquad={vi.fn()} />);
     expect(screen.getByText("Squads")).toBeInTheDocument();
   });
 
   it("renders empty state when no squads exist", () => {
-    mockUseSquadSidebarData.mockReturnValue({ squads: [], isLoading: false });
+    mockUseSquadSidebarData.mockReturnValue({
+      squads: [],
+      archivedSquads: [],
+      isLoading: false,
+      archiveSquad: vi.fn(),
+      unarchiveSquad: vi.fn(),
+    });
     render(<SquadSidebarSection onSelectSquad={vi.fn()} />);
     expect(screen.getByText(/no squads/i)).toBeInTheDocument();
   });
@@ -64,7 +76,13 @@ describe("SquadSidebarSection", () => {
         updatedAt: "2026-01-01",
       },
     ] as Doc<"squadSpecs">[];
-    mockUseSquadSidebarData.mockReturnValue({ squads: mockSquads, isLoading: false });
+    mockUseSquadSidebarData.mockReturnValue({
+      squads: mockSquads,
+      archivedSquads: [],
+      isLoading: false,
+      archiveSquad: vi.fn(),
+      unarchiveSquad: vi.fn(),
+    });
     render(<SquadSidebarSection onSelectSquad={vi.fn()} />);
     expect(screen.getByText("Alpha Squad")).toBeInTheDocument();
   });
@@ -84,7 +102,13 @@ describe("SquadSidebarSection", () => {
         updatedAt: "2026-01-01",
       },
     ] as Doc<"squadSpecs">[];
-    mockUseSquadSidebarData.mockReturnValue({ squads: mockSquads, isLoading: false });
+    mockUseSquadSidebarData.mockReturnValue({
+      squads: mockSquads,
+      archivedSquads: [],
+      isLoading: false,
+      archiveSquad: vi.fn(),
+      unarchiveSquad: vi.fn(),
+    });
     render(<SquadSidebarSection onSelectSquad={handleSelect} />);
     await userEvent.click(screen.getByText("Alpha Squad"));
     expect(handleSelect).toHaveBeenCalledWith("sq1");

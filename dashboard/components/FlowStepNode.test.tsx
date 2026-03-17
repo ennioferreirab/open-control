@@ -22,6 +22,8 @@ function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
     selectable: false,
     deletable: false,
     zIndex: 0,
+    position: { x: 0, y: 0 },
+    measured: { width: 0, height: 0 },
     data: {
       step: {
         tempId: "step-1",
@@ -39,11 +41,20 @@ function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
       onOpenParentTask,
       onStepClick,
       ...overrides,
+<<<<<<< HEAD
     } as FlowStepNodeType["data"],
   };
 
   render(<FlowStepNode {...props} />);
   return { onRetry, onOpenParentTask, onStepClick };
+=======
+    },
+  } as unknown as FlowStepNodeType;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  render(<FlowStepNode {...(props as any)} />);
+  return { onRetry, onOpenParentTask };
+>>>>>>> worktree-agent-aacc91e7
 }
 
 describe("FlowStepNode", () => {

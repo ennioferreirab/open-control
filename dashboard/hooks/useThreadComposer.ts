@@ -9,6 +9,14 @@ import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 // Statuses where the user cannot interact with the task thread at all.
 const BLOCKED_STATUSES = ["retrying"];
 
+/** Imperative navigation API attached to textarea by AgentMentionAutocomplete */
+interface MentionNavElement {
+  navigateDown: () => void;
+  navigateUp: () => void;
+  selectFocused: () => boolean | void;
+  close: () => void;
+}
+
 export interface ThreadComposerState {
   content: string;
   setContent: (value: string) => void;
@@ -78,11 +86,12 @@ export function useThreadComposer(task: Doc<"tasks"> | null): ThreadComposerStat
     }
   }, [task?.assignedAgent, isSubmitting]);
 
-  const taskAny = task as any;
-  const isPlanChatMode = task?.status === "review" && taskAny?.awaitingKickoff === true;
+  const awaitingKickoff = task
+    ? (task as Doc<"tasks"> & { awaitingKickoff?: boolean }).awaitingKickoff
+    : undefined;
+  const isPlanChatMode = task?.status === "review" && awaitingKickoff === true;
   const isInProgress =
-    task?.status === "in_progress" ||
-    (task?.status === "review" && taskAny?.awaitingKickoff !== true);
+    task?.status === "in_progress" || (task?.status === "review" && awaitingKickoff !== true);
   const isBlocked = task ? BLOCKED_STATUSES.includes(task.status) : false;
 
   const canSend =
@@ -196,7 +205,9 @@ export function useThreadComposer(task: Doc<"tasks"> | null): ThreadComposerStat
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (mentionQuery !== null) {
-        const nav = (textareaRef.current as any)?.__mentionNav;
+        const nav = (
+          textareaRef.current as (HTMLTextAreaElement & { __mentionNav?: MentionNavElement }) | null
+        )?.__mentionNav;
         if (nav) {
           if (e.key === "ArrowDown") {
             e.preventDefault();

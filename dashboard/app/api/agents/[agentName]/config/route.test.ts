@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { NextRequest } from "next/server";
 
 const mockReadFile = vi.hoisted(() => vi.fn());
 const mockWriteFile = vi.hoisted(() => vi.fn());
@@ -52,7 +53,11 @@ describe("PUT /api/agents/[agentName]/config", () => {
       }),
     });
 
+<<<<<<< HEAD
     const res = await PUT(req as any, {
+=======
+    const res = await PUT(req as NextRequest, {
+>>>>>>> worktree-agent-aacc91e7
       params: Promise.resolve({ agentName: "youtube-summarizer" }),
     });
 

@@ -124,6 +124,7 @@ export function PromptEditModal({
   // not on every render where initialPrompt/initialVariables reference changes.
   useEffect(() => {
     if (open && !prevOpenRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional re-initialization on modal open
       setLocalPrompt(initialPrompt);
       setLocalVariables(initialVariables);
     }

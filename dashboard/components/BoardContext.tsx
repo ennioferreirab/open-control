@@ -1,7 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+<<<<<<< HEAD
 import { Id } from "@/convex/_generated/dataModel";
+=======
+import { Id } from "../convex/_generated/dataModel";
+>>>>>>> worktree-agent-aacc91e7
 import { useBoardProviderData } from "@/features/boards/hooks/useBoardProviderData";
 
 const LOCAL_STORAGE_KEY = "nanobot-active-board";
@@ -58,6 +62,7 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     if (stored && boards) {
       const found = boards.find((b) => b._id === stored);
       if (found) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional sync from localStorage
         setActiveBoardIdState(found._id as Id<"boards">);
         setInitialized(true);
         return;

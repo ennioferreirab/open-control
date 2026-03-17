@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { testId } from "@/tests/helpers/mockConvex";
 
 // Mock useTaskCardActions to avoid convex dependency
 const mockToggleFavoriteTask = vi.fn();
@@ -15,20 +16,21 @@ vi.mock("@/features/tasks/hooks/useTaskCardActions", () => ({
 }));
 
 import { CompactFavoriteCard } from "../../components/CompactFavoriteCard";
+import type { Doc } from "@/convex/_generated/dataModel";
 
 function makeTask(overrides: Record<string, unknown> = {}) {
   return {
-    _id: "task1" as any,
+    _id: testId<"tasks">("task1"),
     _creationTime: 1700000000000,
     title: "Test Task Title",
-    status: "in_progress",
+    status: "in_progress" as const,
     assignedAgent: "dev-agent",
-    trustLevel: "autonomous",
+    trustLevel: "autonomous" as const,
     isFavorite: true,
     createdAt: "2024-01-01T00:00:00.000Z",
     updatedAt: "2024-01-01T00:00:00.000Z",
     ...overrides,
-  } as any;
+  } as unknown as Doc<"tasks">;
 }
 
 describe("CompactFavoriteCard", () => {

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MarkdownViewer } from "./MarkdownViewer";
+import type { ComponentProps } from "react";
+
+type MarkdownViewerProps = ComponentProps<typeof MarkdownViewer>;
 
 // Mock react-syntax-highlighter to avoid JSDOM rendering issues
 vi.mock("react-syntax-highlighter", () => ({
@@ -97,7 +100,11 @@ describe("MarkdownViewer", () => {
           content: "![Chart](./images/chart.png)",
           taskId: "task_1",
           sourceFile: OUTPUT_SOURCE_FILE,
+<<<<<<< HEAD
         } as any)}
+=======
+        } as MarkdownViewerProps)}
+>>>>>>> worktree-agent-aacc91e7
       />,
     );
 
@@ -115,7 +122,11 @@ describe("MarkdownViewer", () => {
           content: "[Open artifact](../artifact.html)",
           taskId: "task_1",
           sourceFile: OUTPUT_SOURCE_FILE,
+<<<<<<< HEAD
         } as any)}
+=======
+        } as MarkdownViewerProps)}
+>>>>>>> worktree-agent-aacc91e7
       />,
     );
 
@@ -130,7 +141,11 @@ describe("MarkdownViewer", () => {
           content: "[External](https://example.com/manual)",
           taskId: "task_1",
           sourceFile: OUTPUT_SOURCE_FILE,
+<<<<<<< HEAD
         } as any)}
+=======
+        } as MarkdownViewerProps)}
+>>>>>>> worktree-agent-aacc91e7
       />,
     );
 

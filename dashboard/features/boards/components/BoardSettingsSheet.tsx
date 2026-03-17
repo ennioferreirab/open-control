@@ -223,7 +223,7 @@ export function BoardSettingsSheet({ open, onClose }: BoardSettingsSheetProps) {
                         {artifact.path}
                       </span>
                     </button>
-                    {artifactSource && (
+                    {artifactSource && artifactSource.kind === "board-artifact" && (
                       <a
                         href={`/api/boards/${artifactSource.boardName}/artifacts/${encodeURIComponent(
                           artifact.path,

@@ -5,7 +5,11 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { PanelLeft } from "lucide-react";
 
+<<<<<<< HEAD
 import { useIsMobile } from "@/hooks/useIsMobile";
+=======
+import { useIsMobile } from "@/hooks/use-mobile";
+>>>>>>> worktree-agent-aacc91e7
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -640,10 +644,15 @@ const SidebarMenuSkeleton = React.forwardRef<
     showIcon?: boolean;
   }
 >(({ className, showIcon = false, ...props }, ref) => {
+<<<<<<< HEAD
   // Random width between 50 to 90%.
   const width = React.useMemo(() => {
     return `${Math.floor(Math.random() * 40) + 50}%`;
   }, []);
+=======
+  // Random width between 50 to 90%, stable across re-renders.
+  const [width] = React.useState(() => `${Math.floor(Math.random() * 40) + 50}%`);
+>>>>>>> worktree-agent-aacc91e7
 
   return (
     <div

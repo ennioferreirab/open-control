@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+<<<<<<< HEAD
 import { useUpsertTagAttributeValue } from "@/hooks/useUpsertTagAttributeValue";
+=======
+// eslint-disable-next-line no-restricted-imports -- leaf component that directly binds mutations
+import { useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
+>>>>>>> worktree-agent-aacc91e7
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
