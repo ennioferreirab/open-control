@@ -1,8 +1,7 @@
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
-import { specStatusValidator } from "./schema";
+import { specStatusValidator, workflowStepTypeValidator } from "./schema";
 import { publishSquadGraph } from "./lib/squadGraphPublisher";
 import { updatePublishedSquadGraph } from "./lib/squadGraphUpdater";
 
@@ -34,18 +33,18 @@ export const createDraft = internalMutation({
 
 export const publish = internalMutation({
   args: {
-    specId: v.string(),
+    specId: v.id("squadSpecs"),
   },
   handler: async (ctx, args) => {
-    const spec = await ctx.db.get(args.specId as Id<"squadSpecs">);
+    const spec = await ctx.db.get(args.specId);
     if (!spec) {
-      throw new Error(`Squad spec not found: ${args.specId}`);
+      throw new ConvexError(`Squad spec not found: ${args.specId}`);
     }
     if (spec.status !== "draft") {
-      throw new Error("Can only publish specs in draft status");
+      throw new ConvexError("Can only publish specs in draft status");
     }
     const now = new Date().toISOString();
-    await ctx.db.patch(args.specId as Id<"squadSpecs">, {
+    await ctx.db.patch(args.specId, {
       status: "published",
       version: spec.version + 1,
       publishedAt: now,
@@ -62,7 +61,7 @@ export const setDefaultWorkflow = internalMutation({
   handler: async (ctx, args) => {
     const spec = await ctx.db.get(args.squadSpecId);
     if (!spec) {
-      throw new Error(`Squad spec not found: ${args.squadSpecId}`);
+      throw new ConvexError(`Squad spec not found: ${args.squadSpecId}`);
     }
     const now = new Date().toISOString();
     await ctx.db.patch(args.squadSpecId, {
@@ -114,8 +113,8 @@ export const archiveSquad = mutation({
   args: { squadSpecId: v.id("squadSpecs") },
   handler: async (ctx, args) => {
     const spec = await ctx.db.get(args.squadSpecId);
-    if (!spec) throw new Error("Squad not found");
-    if (spec.status === "archived") throw new Error("Already archived");
+    if (!spec) throw new ConvexError("Squad not found");
+    if (spec.status === "archived") throw new ConvexError("Already archived");
     await ctx.db.patch(args.squadSpecId, {
       status: "archived",
       updatedAt: new Date().toISOString(),
@@ -127,8 +126,8 @@ export const unarchiveSquad = mutation({
   args: { squadSpecId: v.id("squadSpecs") },
   handler: async (ctx, args) => {
     const spec = await ctx.db.get(args.squadSpecId);
-    if (!spec) throw new Error("Squad not found");
-    if (spec.status !== "archived") throw new Error("Squad is not archived");
+    if (!spec) throw new ConvexError("Squad not found");
+    if (spec.status !== "archived") throw new ConvexError("Squad is not archived");
     await ctx.db.patch(args.squadSpecId, {
       status: "published",
       updatedAt: new Date().toISOString(),
@@ -165,13 +164,7 @@ export const publishGraph = mutation({
           steps: v.array(
             v.object({
               key: v.string(),
-              type: v.union(
-                v.literal("agent"),
-                v.literal("human"),
-                v.literal("checkpoint"),
-                v.literal("review"),
-                v.literal("system"),
-              ),
+              type: workflowStepTypeValidator,
               agentKey: v.optional(v.string()),
               reviewSpecId: v.optional(v.string()),
               onReject: v.optional(v.string()),
@@ -222,13 +215,7 @@ export const updatePublishedGraph = mutation({
           steps: v.array(
             v.object({
               key: v.string(),
-              type: v.union(
-                v.literal("agent"),
-                v.literal("human"),
-                v.literal("checkpoint"),
-                v.literal("review"),
-                v.literal("system"),
-              ),
+              type: workflowStepTypeValidator,
               agentKey: v.optional(v.string()),
               reviewSpecId: v.optional(v.string()),
               onReject: v.optional(v.string()),

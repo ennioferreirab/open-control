@@ -90,6 +90,8 @@ export interface SquadGraphInput {
 // Minimal db context type for testability
 // ---------------------------------------------------------------------------
 
+import { ConvexError } from "convex/values";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbContext = { db: any };
 
@@ -99,13 +101,13 @@ function validateReviewStep(step: SquadGraphWorkflowStepInput): void {
   }
 
   if (!step.agentKey) {
-    throw new Error(`Review step "${step.key}" requires agentKey`);
+    throw new ConvexError(`Review step "${step.key}" requires agentKey`);
   }
   if (!step.reviewSpecId) {
-    throw new Error(`Review step "${step.key}" requires reviewSpecId`);
+    throw new ConvexError(`Review step "${step.key}" requires reviewSpecId`);
   }
   if (!step.onReject) {
-    throw new Error(`Review step "${step.key}" requires onReject`);
+    throw new ConvexError(`Review step "${step.key}" requires onReject`);
   }
 }
 

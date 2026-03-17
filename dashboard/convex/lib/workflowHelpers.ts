@@ -7,6 +7,7 @@
  * These are pure TypeScript helpers — NOT Convex functions.
  */
 
+import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 
 // ---------------------------------------------------------------------------
@@ -97,8 +98,6 @@ export async function requireEntity<T>(
 ): Promise<T> {
   const entity = await ctx.db.get(id);
   if (!entity) {
-    // Use dynamic import to avoid coupling to convex/values at module level
-    const { ConvexError } = await import("convex/values");
     throw new ConvexError(`${entityName} not found`);
   }
   return entity as T;
@@ -136,9 +135,7 @@ export function assertValidTransition(
   entityLabel: string = "Entity"
 ): void {
   if (!isTransitionAllowed(currentStatus, newStatus, transitionMap, universalTargets)) {
-    // ConvexError is imported synchronously here since this is a validation function
-    // that must throw synchronously
-    throw new Error(
+    throw new ConvexError(
       `Cannot transition ${entityLabel} from '${currentStatus}' to '${newStatus}'`
     );
   }

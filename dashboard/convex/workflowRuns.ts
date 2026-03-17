@@ -10,6 +10,7 @@
 import { ConvexError, v } from "convex/values";
 
 import { internalMutation, internalQuery } from "./_generated/server";
+import { workflowRunStatusValidator } from "./schema";
 
 export const create = internalMutation({
   args: {
@@ -55,12 +56,7 @@ export const getByTaskId = internalQuery({
 export const updateStatus = internalMutation({
   args: {
     workflowRunId: v.id("workflowRuns"),
-    status: v.union(
-      v.literal("active"),
-      v.literal("completed"),
-      v.literal("failed"),
-      v.literal("paused"),
-    ),
+    status: workflowRunStatusValidator,
     completedAt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

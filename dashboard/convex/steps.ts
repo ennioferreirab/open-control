@@ -15,7 +15,7 @@ import {
   validateBatchSteps,
   logStepStatusChange,
 } from "./lib/stepLifecycle";
-import { workflowStepTypeValidator } from "./schema";
+import { stepStatusValidator, workflowStepTypeValidator } from "./schema";
 import { logActivity } from "./lib/workflowHelpers";
 
 function syncExecutionPlanStepStatus(
@@ -195,7 +195,7 @@ export const create = internalMutation({
     title: v.string(),
     description: v.string(),
     assignedAgent: v.string(),
-    status: v.optional(v.string()),
+    status: v.optional(stepStatusValidator),
     blockedBy: v.optional(v.array(v.id("steps"))),
     parallelGroup: v.number(),
     order: v.number(),
@@ -328,7 +328,7 @@ export const batchCreate = internalMutation({
 export const updateStatus = internalMutation({
   args: {
     stepId: v.id("steps"),
-    status: v.string(),
+    status: stepStatusValidator,
     errorMessage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -342,9 +342,6 @@ export const updateStatus = internalMutation({
       return;
     }
 
-    if (!isValidStepStatus(args.status)) {
-      throw new ConvexError(`Invalid step status: ${args.status}`);
-    }
     if (step.status === args.status) {
       return;
     }
