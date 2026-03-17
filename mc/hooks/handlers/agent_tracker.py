@@ -1,13 +1,18 @@
 """Agent tracker — tracks subagent lifecycle."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import ClassVar
 
 from ..handler import BaseHandler
 
 
 class AgentTrackerHandler(BaseHandler):
-    events = [("SubagentStart", None), ("SubagentStop", None)]
+    events: ClassVar[list[tuple[str, str | None]]] = [
+        ("SubagentStart", None),
+        ("SubagentStop", None),
+    ]
 
     def handle(self) -> str | None:
         event = self.payload.get("hook_event_name", "")

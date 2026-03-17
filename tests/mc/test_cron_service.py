@@ -63,7 +63,13 @@ def test_parse_old_job_without_agent_defaults_none(tmp_path) -> None:
                 "id": "abc12345",
                 "name": "old job",
                 "enabled": True,
-                "schedule": {"kind": "cron", "expr": "0 9 * * *", "tz": None, "atMs": None, "everyMs": None},
+                "schedule": {
+                    "kind": "cron",
+                    "expr": "0 9 * * *",
+                    "tz": None,
+                    "atMs": None,
+                    "everyMs": None,
+                },
                 "payload": {
                     "kind": "agent_turn",
                     "message": "do something",
@@ -73,7 +79,13 @@ def test_parse_old_job_without_agent_defaults_none(tmp_path) -> None:
                     "taskId": None,
                     # intentionally missing "agent" key
                 },
-                "state": {"nextRunAtMs": None, "lastRunAtMs": None, "lastStatus": None, "lastError": None, "lastTaskId": None},
+                "state": {
+                    "nextRunAtMs": None,
+                    "lastRunAtMs": None,
+                    "lastStatus": None,
+                    "lastError": None,
+                    "lastTaskId": None,
+                },
                 "createdAtMs": 0,
                 "updatedAtMs": 0,
                 "deleteAfterRun": False,

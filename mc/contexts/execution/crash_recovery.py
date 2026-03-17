@@ -34,9 +34,7 @@ class AgentGateway:
         self._bridge = bridge
         self._retry_counts: dict[str, int] = {}
 
-    async def handle_agent_crash(
-        self, agent_name: str, task_id: str, error: Exception
-    ) -> None:
+    async def handle_agent_crash(self, agent_name: str, task_id: str, error: Exception) -> None:
         """Handle an agent crash during task execution.
 
         On first crash: transitions task to "retrying", logs error to thread,
@@ -68,9 +66,11 @@ class AgentGateway:
         attempt = current_retries + 1
 
         logger.info(
-            "[gateway] Agent '%s' crashed on task %s. "
-            "Auto-retrying (attempt %d/%d)",
-            agent_name, task_id, attempt, MAX_AUTO_RETRIES,
+            "[gateway] Agent '%s' crashed on task %s. Auto-retrying (attempt %d/%d)",
+            agent_name,
+            task_id,
+            attempt,
+            MAX_AUTO_RETRIES,
         )
 
         # Transition task to "retrying"
@@ -79,8 +79,7 @@ class AgentGateway:
             task_id,
             "retrying",
             agent_name,
-            f"Agent {agent_name} crashed. Auto-retrying "
-            f"(attempt {attempt}/{MAX_AUTO_RETRIES})",
+            f"Agent {agent_name} crashed. Auto-retrying (attempt {attempt}/{MAX_AUTO_RETRIES})",
         )
 
         # Write error details to task thread
@@ -102,16 +101,14 @@ class AgentGateway:
             f"Re-dispatching task to {agent_name}",
         )
 
-    async def _crash_task(
-        self, task_id: str, agent_name: str, error_msg: str
-    ) -> None:
+    async def _crash_task(self, task_id: str, agent_name: str, error_msg: str) -> None:
         """Retry exhausted: transition to crashed, log full error."""
         self._retry_counts.pop(task_id, None)
 
         logger.error(
-            "[gateway] Agent '%s' crashed on task %s. "
-            "Retry exhausted — marking as crashed.",
-            agent_name, task_id,
+            "[gateway] Agent '%s' crashed on task %s. Retry exhausted — marking as crashed.",
+            agent_name,
+            task_id,
         )
 
         # Transition task to "crashed"

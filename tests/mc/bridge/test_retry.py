@@ -55,7 +55,7 @@ class TestMutationWithRetry:
         client = MagicMock()
         client.mutation.side_effect = Exception("fail")
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="fail"):
             mutation_with_retry(client, "tasks:create", {"title": "Test"})
 
         assert mock_sleep.call_args_list == [call(1), call(2), call(4)]

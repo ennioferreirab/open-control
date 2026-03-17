@@ -39,9 +39,7 @@ def load_agent_config(
 
     result = validate_agent_file(config_file)
     if isinstance(result, list):
-        logger.warning(
-            "[roster] Agent '%s' config invalid: %s", agent_name, result
-        )
+        logger.warning("[roster] Agent '%s' config invalid: %s", agent_name, result)
         return None, None, None
 
     return result.prompt, result.model, result.skills
@@ -96,7 +94,8 @@ def sync_agent_from_convex(
             agent_prompt = agent_prompt.replace(placeholder, var["value"])
         logger.info(
             "[roster] Interpolated %d variable(s) for '%s'",
-            len(variables), agent_name,
+            len(variables),
+            agent_name,
         )
 
     # Sync model
@@ -105,7 +104,9 @@ def sync_agent_from_convex(
         if convex_model != agent_model:
             logger.info(
                 "[roster] Model synced from Convex for '%s': %s -> %s",
-                agent_name, agent_model, convex_model,
+                agent_name,
+                agent_model,
+                convex_model,
             )
         agent_model = convex_model
 
@@ -115,7 +116,9 @@ def sync_agent_from_convex(
         if convex_skills != agent_skills:
             logger.info(
                 "[roster] Skills synced from Convex for '%s': %s -> %s",
-                agent_name, agent_skills, convex_skills,
+                agent_name,
+                agent_skills,
+                convex_skills,
             )
         agent_skills = convex_skills
 

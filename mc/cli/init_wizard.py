@@ -51,6 +51,7 @@ LEAD_AGENT_CONFIG: dict = {
 # Preset templates
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class AgentPreset:
     """Immutable template for a preset agent."""
@@ -119,6 +120,7 @@ PRESETS: list[AgentPreset] = [
 # Planning data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AgentPlan:
     """One agent to be created (or skipped) during the wizard."""
@@ -145,6 +147,7 @@ class CreationResult:
 # Existence checks
 # ---------------------------------------------------------------------------
 
+
 def agent_exists(name: str) -> bool:
     """Return True if ``~/.nanobot/agents/<name>/config.yaml`` exists."""
     return (AGENTS_DIR / name / "config.yaml").is_file()
@@ -158,6 +161,7 @@ def lead_agent_exists() -> bool:
 # ---------------------------------------------------------------------------
 # YAML builders
 # ---------------------------------------------------------------------------
+
 
 def build_lead_agent_yaml() -> str:
     """Return the YAML string for the lead-agent preset."""
@@ -178,6 +182,7 @@ def build_preset_yaml(preset: AgentPreset) -> str:
 # ---------------------------------------------------------------------------
 # Custom agent generation (async, uses LLM)
 # ---------------------------------------------------------------------------
+
 
 async def generate_custom_agent(description: str) -> tuple[str | None, list[str]]:
     """Generate agent YAML from a natural language description.
@@ -203,6 +208,7 @@ async def generate_custom_agent(description: str) -> tuple[str | None, list[str]
 # Batch creation
 # ---------------------------------------------------------------------------
 
+
 def create_agents(plans: list[AgentPlan]) -> list[CreationResult]:
     """Create agents from a list of plans, skipping those marked to skip.
 
@@ -212,11 +218,13 @@ def create_agents(plans: list[AgentPlan]) -> list[CreationResult]:
 
     for plan in plans:
         if plan.skip:
-            results.append(CreationResult(
-                name=plan.name,
-                success=True,
-                error=f"skipped: {plan.skip_reason}",
-            ))
+            results.append(
+                CreationResult(
+                    name=plan.name,
+                    success=True,
+                    error=f"skipped: {plan.skip_reason}",
+                )
+            )
             continue
 
         try:
@@ -225,23 +233,29 @@ def create_agents(plans: list[AgentPlan]) -> list[CreationResult]:
             # Post-write validation
             validation = validate_agent_file(config_path)
             if isinstance(validation, list):
-                results.append(CreationResult(
-                    name=plan.name,
-                    success=False,
-                    error="; ".join(validation),
-                ))
+                results.append(
+                    CreationResult(
+                        name=plan.name,
+                        success=False,
+                        error="; ".join(validation),
+                    )
+                )
                 continue
 
-            results.append(CreationResult(
-                name=plan.name,
-                success=True,
-                path=str(config_path),
-            ))
+            results.append(
+                CreationResult(
+                    name=plan.name,
+                    success=True,
+                    path=str(config_path),
+                )
+            )
         except Exception as exc:
-            results.append(CreationResult(
-                name=plan.name,
-                success=False,
-                error=str(exc),
-            ))
+            results.append(
+                CreationResult(
+                    name=plan.name,
+                    success=False,
+                    error=str(exc),
+                )
+            )
 
     return results

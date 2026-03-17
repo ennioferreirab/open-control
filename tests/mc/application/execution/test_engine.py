@@ -166,13 +166,19 @@ class TestExecutionEngine:
         )
 
         req_nb = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="NB", agent_name="nb",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="NB",
+            agent_name="nb",
             runner_type=RunnerType.NANOBOT,
         )
         req_cc = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t2",
-            task_id="t2", title="CC", agent_name="cc",
+            entity_type=EntityType.TASK,
+            entity_id="t2",
+            task_id="t2",
+            title="CC",
+            agent_name="cc",
             runner_type=RunnerType.CLAUDE_CODE,
         )
 
@@ -187,8 +193,11 @@ class TestExecutionEngine:
         """Engine returns workflow error for unknown runner type."""
         engine = ExecutionEngine(strategies={})
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="Test", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Test",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         result = await engine.run(req)
@@ -198,12 +207,13 @@ class TestExecutionEngine:
     @pytest.mark.asyncio()
     async def test_strategy_crash_is_caught(self) -> None:
         """Unexpected strategy exceptions are caught and categorized (AC3)."""
-        engine = ExecutionEngine(
-            strategies={RunnerType.NANOBOT: FakeCrashStrategy()}
-        )
+        engine = ExecutionEngine(strategies={RunnerType.NANOBOT: FakeCrashStrategy()})
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="Crash Test", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Crash Test",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         result = await engine.run(req)
@@ -214,12 +224,13 @@ class TestExecutionEngine:
     @pytest.mark.asyncio()
     async def test_tier_error_in_strategy_crash(self) -> None:
         """Tier-related ValueError in strategy is categorized as TIER (AC3)."""
-        engine = ExecutionEngine(
-            strategies={RunnerType.NANOBOT: FakeProviderCrashStrategy()}
-        )
+        engine = ExecutionEngine(strategies={RunnerType.NANOBOT: FakeProviderCrashStrategy()})
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="Tier Test", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Tier Test",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         result = await engine.run(req)
@@ -229,12 +240,13 @@ class TestExecutionEngine:
     @pytest.mark.asyncio()
     async def test_error_strategy_returns_error_result(self) -> None:
         """Strategy-reported errors are passed through."""
-        engine = ExecutionEngine(
-            strategies={RunnerType.NANOBOT: FakeErrorStrategy()}
-        )
+        engine = ExecutionEngine(strategies={RunnerType.NANOBOT: FakeErrorStrategy()})
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="Fail", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Fail",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         result = await engine.run(req)
@@ -273,8 +285,11 @@ class TestPostExecution:
             post_execution_hooks=[hook],
         )
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="Test", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Test",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         await engine.run(req)
@@ -295,8 +310,11 @@ class TestPostExecution:
             post_execution_hooks=[hook],
         )
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t_fail",
-            task_id="t_fail", title="Fail", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t_fail",
+            task_id="t_fail",
+            title="Fail",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         await engine.run(req)
@@ -317,8 +335,11 @@ class TestPostExecution:
             post_execution_hooks=[hook],
         )
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t_crash",
-            task_id="t_crash", title="Crash", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t_crash",
+            task_id="t_crash",
+            title="Crash",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         await engine.run(req)
@@ -345,8 +366,11 @@ class TestPostExecution:
             post_execution_hooks=[hook1, hook2, hook3],
         )
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="Test", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Test",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         await engine.run(req)
@@ -358,9 +382,7 @@ class TestPostExecution:
         """A failing hook does not prevent subsequent hooks from running."""
         calls: list[int] = []
 
-        async def failing_hook(
-            req: ExecutionRequest, res: ExecutionResult
-        ) -> None:
+        async def failing_hook(req: ExecutionRequest, res: ExecutionResult) -> None:
             calls.append(1)
             raise RuntimeError("Hook crashed")
 
@@ -372,8 +394,11 @@ class TestPostExecution:
             post_execution_hooks=[failing_hook, ok_hook],
         )
         req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="Test", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Test",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         result = await engine.run(req)
@@ -397,16 +422,22 @@ class TestPostExecution:
 
         # Task-level (no step_id)
         task_req = ExecutionRequest(
-            entity_type=EntityType.TASK, entity_id="t1",
-            task_id="t1", title="Task", agent_name="a",
+            entity_type=EntityType.TASK,
+            entity_id="t1",
+            task_id="t1",
+            title="Task",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
         )
         await engine.run(task_req)
 
         # Step-level (with step_id)
         step_req = ExecutionRequest(
-            entity_type=EntityType.STEP, entity_id="step_42",
-            task_id="t1", title="Step", agent_name="a",
+            entity_type=EntityType.STEP,
+            entity_id="step_42",
+            task_id="t1",
+            title="Step",
+            agent_name="a",
             runner_type=RunnerType.NANOBOT,
             step_id="step_42",
         )

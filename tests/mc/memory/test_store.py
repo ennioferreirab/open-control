@@ -160,10 +160,7 @@ def test_undated_entries_skipped_in_recent_history(tmp_path):
     recent = datetime.now().strftime("%Y-%m-%d")
 
     # Simulate legacy file with an undated entry
-    history = (
-        f"Undated legacy entry\n\n"
-        f"[{recent}] Recent dated entry\n"
-    )
+    history = f"Undated legacy entry\n\n[{recent}] Recent dated entry\n"
     (tmp_path / "memory" / "HISTORY.md").write_text(history, encoding="utf-8")
 
     ctx = store.get_memory_context()
@@ -201,9 +198,13 @@ def test_append_history_preserves_existing_date(tmp_path):
 async def test_consolidation_worker_loops_until_history_below_threshold(
     tmp_path,
 ):
-    with patch.object(HybridMemoryStore, "_resolve_consolidation_model", return_value="test-model"), \
-         patch("mc.memory.consolidation.is_history_above_threshold") as threshold_mock, \
-         patch("mc.memory.consolidation.consolidate_history_and_memory", new_callable=AsyncMock) as consolidate_mock:
+    with (
+        patch.object(HybridMemoryStore, "_resolve_consolidation_model", return_value="test-model"),
+        patch("mc.memory.consolidation.is_history_above_threshold") as threshold_mock,
+        patch(
+            "mc.memory.consolidation.consolidate_history_and_memory", new_callable=AsyncMock
+        ) as consolidate_mock,
+    ):
         store = HybridMemoryStore(tmp_path)
         threshold_mock.side_effect = [True, True, True, False]
         consolidate_mock.return_value = True
@@ -223,9 +224,13 @@ async def test_consolidation_worker_loops_until_history_below_threshold(
 async def test_consolidation_failure_enters_cooldown_and_skips_immediate_retry(
     tmp_path,
 ):
-    with patch.object(HybridMemoryStore, "_resolve_consolidation_model", return_value="test-model"), \
-         patch("mc.memory.consolidation.is_history_above_threshold", return_value=True), \
-         patch("mc.memory.consolidation.consolidate_history_and_memory", new_callable=AsyncMock) as consolidate_mock:
+    with (
+        patch.object(HybridMemoryStore, "_resolve_consolidation_model", return_value="test-model"),
+        patch("mc.memory.consolidation.is_history_above_threshold", return_value=True),
+        patch(
+            "mc.memory.consolidation.consolidate_history_and_memory", new_callable=AsyncMock
+        ) as consolidate_mock,
+    ):
         store = HybridMemoryStore(tmp_path)
         consolidate_mock.return_value = False
 

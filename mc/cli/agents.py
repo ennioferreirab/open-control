@@ -643,7 +643,7 @@ def migrate_agents(
     if skipped:
         console.print(f"\n[dim]Skipped — already migrated ({len(skipped)}):[/dim]")
         for name in skipped:
-            console.print(f"  [dim]–[/dim] {name}")
+            console.print(f"  [dim]-[/dim] {name}")
 
     if errors:
         console.print(f"\n[red]Errors ({len(errors)}):[/red]")

@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 # Helper: make a fake task executor with a mock bridge
 # ---------------------------------------------------------------------------
 
+
 def _make_executor(bridge=None):
     """Return a TaskExecutor with an optional mock bridge."""
     from mc.contexts.execution.executor import TaskExecutor
@@ -33,6 +34,7 @@ def _make_executor(bridge=None):
 # ---------------------------------------------------------------------------
 # 1. resolve_board_workspace returns correct path (now in board_utils)
 # ---------------------------------------------------------------------------
+
 
 class TestResolveBoardWorkspace:
     def test_returns_correct_path(self, tmp_path):
@@ -124,6 +126,7 @@ class TestResolveBoardWorkspace:
 # 2. Board-scoped session key format
 # ---------------------------------------------------------------------------
 
+
 class TestBoardSessionKey:
     def test_session_key_format_with_board(self):
         board_name = "project-alpha"
@@ -153,7 +156,9 @@ class TestBoardSessionKey:
 
         with (
             patch("pathlib.Path.home", return_value=tmp_path),
-            patch("mc.contexts.execution.executor._make_provider", return_value=(MagicMock(), "model")),
+            patch(
+                "mc.contexts.execution.executor._make_provider", return_value=(MagicMock(), "model")
+            ),
             patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
             patch("nanobot.bus.queue.MessageBus"),
         ):
@@ -174,24 +179,28 @@ class TestBoardSessionKey:
 # 3-5. Agent filter respects board enabledAgents
 # ---------------------------------------------------------------------------
 
+
 class TestBoardAgentFilter:
     """Test the agent filtering logic from the orchestrator."""
 
     def _make_agent(self, name: str, is_system: bool = False, enabled: bool = True):
         """Create a fake AgentData-like dict."""
-        return type("Agent", (), {
-            "name": name,
-            "is_system": is_system,
-            "enabled": enabled,
-        })()
+        return type(
+            "Agent",
+            (),
+            {
+                "name": name,
+                "is_system": is_system,
+                "enabled": enabled,
+            },
+        )()
 
     def _filter_agents(self, agents, board_enabled_agents):
         """Apply the same filtering logic as the orchestrator."""
         if not board_enabled_agents:
             return agents
         return [
-            a for a in agents
-            if a.name in board_enabled_agents or getattr(a, "is_system", False)
+            a for a in agents if a.name in board_enabled_agents or getattr(a, "is_system", False)
         ]
 
     def test_empty_enabled_agents_allows_all(self):

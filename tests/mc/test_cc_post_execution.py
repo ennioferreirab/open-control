@@ -1,4 +1,5 @@
 """Tests for CC-11: Post-execution and execution features."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -79,7 +80,9 @@ class TestTrustLevel:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=_mock_result())
 
-            agent_data = AgentData(name="test", display_name="Test", role="agent", backend="claude-code")
+            agent_data = AgentData(
+                name="test", display_name="Test", role="agent", backend="claude-code"
+            )
             await executor._execute_cc_task(
                 "t1",
                 "Title",
@@ -111,7 +114,9 @@ class TestTrustLevel:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=_mock_result())
 
-            agent_data = AgentData(name="test", display_name="Test", role="agent", backend="claude-code")
+            agent_data = AgentData(
+                name="test", display_name="Test", role="agent", backend="claude-code"
+            )
             await executor._execute_cc_task(
                 "t1",
                 "Title",
@@ -137,7 +142,9 @@ class TestArtifacts:
             patch(_PATCH_IPC_SRV) as MockIPC,
             patch(_PATCH_PROVIDER) as MockProv,
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}) as mock_snap,
+            patch(
+                "mc.contexts.execution.executor._snapshot_output_dir", return_value={}
+            ) as mock_snap,
             patch(
                 "mc.contexts.execution.executor._collect_output_artifacts",
                 return_value=[{"path": "output/report.pdf", "action": "created"}],
@@ -148,7 +155,9 @@ class TestArtifacts:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=_mock_result())
 
-            agent_data = AgentData(name="test", display_name="Test", role="agent", backend="claude-code")
+            agent_data = AgentData(
+                name="test", display_name="Test", role="agent", backend="claude-code"
+            )
             await executor._execute_cc_task("t1", "Title", "desc", "test", agent_data)
 
         mock_snap.assert_called_once_with("t1")
@@ -180,7 +189,9 @@ class TestHeartbeat:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=_mock_result())
 
-            agent_data = AgentData(name="test", display_name="Test", role="agent", backend="claude-code")
+            agent_data = AgentData(
+                name="test", display_name="Test", role="agent", backend="claude-code"
+            )
             await executor._execute_cc_task("t1", "Title", "desc", "test", agent_data)
 
         assert heartbeat_file.exists()
@@ -209,9 +220,13 @@ class TestProviderError:
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
             MockIPC.return_value.start = AsyncMock()
             MockIPC.return_value.stop = AsyncMock()
-            MockProv.return_value.execute_task = AsyncMock(side_effect=ProviderError("auth expired"))
+            MockProv.return_value.execute_task = AsyncMock(
+                side_effect=ProviderError("auth expired")
+            )
 
-            agent_data = AgentData(name="test", display_name="Test", role="agent", backend="claude-code")
+            agent_data = AgentData(
+                name="test", display_name="Test", role="agent", backend="claude-code"
+            )
             await executor._execute_cc_task("t1", "Title", "desc", "test", agent_data)
 
         mock_handle.assert_called_once()
@@ -237,7 +252,9 @@ class TestEffortLevel:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=_mock_result())
 
-            agent_data = AgentData(name="test", display_name="Test", role="agent", backend="claude-code")
+            agent_data = AgentData(
+                name="test", display_name="Test", role="agent", backend="claude-code"
+            )
             await executor._execute_cc_task(
                 "t1",
                 "Title",
@@ -269,7 +286,9 @@ class TestEffortLevel:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=_mock_result())
 
-            agent_data = AgentData(name="test", display_name="Test", role="agent", backend="claude-code")
+            agent_data = AgentData(
+                name="test", display_name="Test", role="agent", backend="claude-code"
+            )
             await executor._execute_cc_task(
                 "t1",
                 "Title",
@@ -323,7 +342,9 @@ class TestClearRetryCount:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=_mock_result())
 
-            agent_data = AgentData(name="test", display_name="Test", role="agent", backend="claude-code")
+            agent_data = AgentData(
+                name="test", display_name="Test", role="agent", backend="claude-code"
+            )
             await executor._execute_cc_task("t1", "Title", "desc", "test", agent_data)
 
         executor._agent_gateway.clear_retry_count.assert_called_with("t1")

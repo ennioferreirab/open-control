@@ -6,6 +6,7 @@ import os
 import shlex
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 from mc.contexts.interactive.identity import InteractiveSessionIdentity
 from mc.contexts.interactive.types import InteractiveLaunchSpec
@@ -17,7 +18,7 @@ class NanobotInteractiveAdapter:
     """Prepare and clean up Nanobot-backed interactive sessions."""
 
     provider_name = "mc"
-    capabilities = [
+    capabilities: ClassVar[list[str]] = [
         "tui",
         "commands",
         "interactive-prompts",

@@ -298,7 +298,7 @@ class PlanningWorker:
                 title,
                 len(created_step_ids),
             )
-            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
+            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))  # noqa: RUF006
             logger.info(
                 "[planning] Task '%s': step dispatch started (autonomous mode)",
                 title,
@@ -376,7 +376,7 @@ class PlanningWorker:
                 title,
                 len(created_step_ids),
             )
-            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
+            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))  # noqa: RUF006
             logger.info(
                 "[planning] Workflow task '%s': step dispatch started (autonomous mode)",
                 title,

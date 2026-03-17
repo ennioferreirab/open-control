@@ -69,9 +69,7 @@ class BridgeClient:
         """
         return mutation_with_retry(self._client, function_name, args)
 
-    def subscribe(
-        self, function_name: str, args: dict[str, Any] | None = None
-    ) -> Iterator[Any]:
+    def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         """Subscribe to a Convex query for real-time updates.
 
         Args:

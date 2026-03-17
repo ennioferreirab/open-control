@@ -68,12 +68,14 @@ def _is_negotiable_status(task_data: dict[str, Any]) -> bool:
 
 # Statuses where a non-mention message is treated as a follow-up to the
 # assigned agent (rather than a plain comment).
-_ACTIVE_TASK_STATUSES = frozenset({
-    "assigned",
-    "in_progress",
-    "review",
-    "retrying",
-})
+_ACTIVE_TASK_STATUSES = frozenset(
+    {
+        "assigned",
+        "in_progress",
+        "review",
+        "retrying",
+    }
+)
 
 
 class ConversationIntentResolver:

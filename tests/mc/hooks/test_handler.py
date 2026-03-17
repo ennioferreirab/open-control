@@ -1,5 +1,8 @@
 """Tests for mc.hooks.handler — BaseHandler subclassing and method dispatch."""
+
 from __future__ import annotations
+
+from typing import ClassVar
 
 import pytest
 
@@ -11,26 +14,27 @@ class TestBaseHandlerMatching:
 
     def test_exact_match(self):
         class H(BaseHandler):
-            events = [("PostToolUse", "Write")]
+            events: ClassVar[list[tuple[str, str | None]]] = [("PostToolUse", "Write")]
 
         assert H.matches("PostToolUse", "Write") is True
 
     def test_exact_mismatch_tool(self):
         class H(BaseHandler):
-            events = [("PostToolUse", "Write")]
+            events: ClassVar[list[tuple[str, str | None]]] = [("PostToolUse", "Write")]
 
         assert H.matches("PostToolUse", "Bash") is False
 
     def test_exact_mismatch_event(self):
         class H(BaseHandler):
-            events = [("PostToolUse", "Write")]
+            events: ClassVar[list[tuple[str, str | None]]] = [("PostToolUse", "Write")]
 
         assert H.matches("TaskCompleted", "Write") is False
 
     def test_wildcard_matcher(self):
         """When matcher_value is None, any tool name should match."""
+
         class H(BaseHandler):
-            events = [("TaskCompleted", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TaskCompleted", None)]
 
         assert H.matches("TaskCompleted", "") is True
         assert H.matches("TaskCompleted", "anything") is True
@@ -38,13 +42,16 @@ class TestBaseHandlerMatching:
 
     def test_wildcard_wrong_event(self):
         class H(BaseHandler):
-            events = [("TaskCompleted", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TaskCompleted", None)]
 
         assert H.matches("PostToolUse", "") is False
 
     def test_multiple_events(self):
         class H(BaseHandler):
-            events = [("PostToolUse", "Write"), ("TaskCompleted", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [
+                ("PostToolUse", "Write"),
+                ("TaskCompleted", None),
+            ]
 
         assert H.matches("PostToolUse", "Write") is True
         assert H.matches("TaskCompleted", "any") is True
@@ -52,7 +59,7 @@ class TestBaseHandlerMatching:
 
     def test_empty_events_list(self):
         class H(BaseHandler):
-            events = []
+            events: ClassVar[list[tuple[str, str | None]]] = []
 
         assert H.matches("PostToolUse", "Write") is False
 
@@ -81,7 +88,7 @@ class TestBaseHandlerSubclass:
 
     def test_subclass_can_override_handle(self):
         class Custom(BaseHandler):
-            events = [("TestEvent", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TestEvent", None)]
 
             def handle(self) -> str | None:
                 return "custom result"
@@ -91,14 +98,14 @@ class TestBaseHandlerSubclass:
 
     def test_subclass_inherits_matches(self):
         class Custom(BaseHandler):
-            events = [("TestEvent", "ToolA")]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TestEvent", "ToolA")]
 
         assert Custom.matches("TestEvent", "ToolA") is True
         assert Custom.matches("TestEvent", "ToolB") is False
 
     def test_subclass_can_return_none(self):
         class Custom(BaseHandler):
-            events = [("TestEvent", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TestEvent", None)]
 
             def handle(self) -> str | None:
                 return None
@@ -108,7 +115,7 @@ class TestBaseHandlerSubclass:
 
     def test_subclass_can_access_payload(self):
         class Custom(BaseHandler):
-            events = [("TestEvent", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TestEvent", None)]
 
             def handle(self) -> str | None:
                 return self.payload.get("name")

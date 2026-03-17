@@ -26,23 +26,17 @@ class TestSyncAgentFromConvex:
 
     def test_convex_prompt_overrides_yaml(self) -> None:
         convex = {"prompt": "convex prompt"}
-        prompt, _, _ = sync_agent_from_convex(
-            "test-agent", "yaml prompt", None, None, convex
-        )
+        prompt, _, _ = sync_agent_from_convex("test-agent", "yaml prompt", None, None, convex)
         assert prompt == "convex prompt"
 
     def test_convex_model_overrides_yaml(self) -> None:
         convex = {"model": "gpt-5"}
-        _, model, _ = sync_agent_from_convex(
-            "test-agent", None, "gpt-4", None, convex
-        )
+        _, model, _ = sync_agent_from_convex("test-agent", None, "gpt-4", None, convex)
         assert model == "gpt-5"
 
     def test_convex_skills_overrides_yaml(self) -> None:
         convex = {"skills": ["write", "review"]}
-        _, _, skills = sync_agent_from_convex(
-            "test-agent", None, None, ["code"], convex
-        )
+        _, _, skills = sync_agent_from_convex("test-agent", None, None, ["code"], convex)
         assert skills == ["write", "review"]
 
     def test_variable_interpolation(self) -> None:
@@ -53,31 +47,23 @@ class TestSyncAgentFromConvex:
                 {"name": "role", "value": "developer"},
             ],
         }
-        prompt, _, _ = sync_agent_from_convex(
-            "test-agent", None, None, None, convex
-        )
+        prompt, _, _ = sync_agent_from_convex("test-agent", None, None, None, convex)
         assert prompt == "Hello Alice, your role is developer"
 
     def test_empty_variables_no_error(self) -> None:
         convex = {"prompt": "Hello {{name}}", "variables": []}
-        prompt, _, _ = sync_agent_from_convex(
-            "test-agent", None, None, None, convex
-        )
+        prompt, _, _ = sync_agent_from_convex("test-agent", None, None, None, convex)
         assert prompt == "Hello {{name}}"
 
     def test_convex_empty_prompt_keeps_yaml(self) -> None:
         convex = {"prompt": ""}
-        prompt, _, _ = sync_agent_from_convex(
-            "test-agent", "yaml prompt", None, None, convex
-        )
+        prompt, _, _ = sync_agent_from_convex("test-agent", "yaml prompt", None, None, convex)
         # Empty string is falsy, so yaml prompt is kept
         assert prompt == "yaml prompt"
 
     def test_convex_none_skills_keeps_yaml(self) -> None:
         convex = {}  # no "skills" key at all
-        _, _, skills = sync_agent_from_convex(
-            "test-agent", None, None, ["code"], convex
-        )
+        _, _, skills = sync_agent_from_convex("test-agent", None, None, ["code"], convex)
         assert skills == ["code"]
 
 

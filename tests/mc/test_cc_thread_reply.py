@@ -1,4 +1,5 @@
 """Tests for handle_cc_thread_reply orientation injection (CC-12)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,7 +29,9 @@ def _make_executor(bridge=None):
 async def test_thread_reply_passes_orientation_to_prepare():
     """handle_cc_thread_reply should call ws_mgr.prepare() with orientation kwarg."""
     executor = _make_executor()
-    agent_data = AgentData(name="test-agent", display_name="Test", role="agent", backend="claude-code")
+    agent_data = AgentData(
+        name="test-agent", display_name="Test", role="agent", backend="claude-code"
+    )
 
     mock_ws_ctx = WorkspaceContext(
         cwd=Path("/tmp/test"),
@@ -37,13 +40,18 @@ async def test_thread_reply_passes_orientation_to_prepare():
         socket_path="/tmp/mc-test.sock",
     )
 
-    mock_result = CCTaskResult(output="done", session_id="s1", cost_usd=0.01, usage={}, is_error=False)
+    mock_result = CCTaskResult(
+        output="done", session_id="s1", cost_usd=0.01, usage={}, is_error=False
+    )
 
-    with patch("claude_code.workspace.CCWorkspaceManager") as MockWS, \
-         patch("claude_code.ipc_server.MCSocketServer") as MockIPC, \
-         patch("claude_code.provider.ClaudeCodeProvider") as MockProv, \
-         patch("mc.infrastructure.orientation.load_orientation", return_value="Global orientation text"):
-
+    with (
+        patch("claude_code.workspace.CCWorkspaceManager") as MockWS,
+        patch("claude_code.ipc_server.MCSocketServer") as MockIPC,
+        patch("claude_code.provider.ClaudeCodeProvider") as MockProv,
+        patch(
+            "mc.infrastructure.orientation.load_orientation", return_value="Global orientation text"
+        ),
+    ):
         MockWS.return_value.prepare.return_value = mock_ws_ctx
         MockIPC.return_value.start = AsyncMock()
         MockIPC.return_value.stop = AsyncMock()
@@ -53,5 +61,6 @@ async def test_thread_reply_passes_orientation_to_prepare():
 
         MockWS.return_value.prepare.assert_called_once()
         call_kwargs = MockWS.return_value.prepare.call_args
-        assert call_kwargs.kwargs.get("orientation") == "Global orientation text" or \
-               (len(call_kwargs.args) >= 4 and "Global orientation text" in str(call_kwargs))
+        assert call_kwargs.kwargs.get("orientation") == "Global orientation text" or (
+            len(call_kwargs.args) >= 4 and "Global orientation text" in str(call_kwargs)
+        )

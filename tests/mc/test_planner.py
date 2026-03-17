@@ -15,6 +15,7 @@ from nanobot.providers.base import LLMResponse
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_agent(name: str, role: str, skills: list[str]) -> AgentData:
     """Create a test AgentData instance."""
     return AgentData(name=name, display_name=name, role=role, skills=skills)
@@ -36,9 +37,7 @@ def _mock_llm_response(data: dict) -> LLMResponse:
 def _stub_non_cc_default_model():
     """Keep planner unit tests on the non-CC path unless a test opts in explicitly."""
     cfg = SimpleNamespace(
-        agents=SimpleNamespace(
-            defaults=SimpleNamespace(model="anthropic/test-model")
-        )
+        agents=SimpleNamespace(defaults=SimpleNamespace(model="anthropic/test-model"))
     )
     with patch("nanobot.config.loader.load_config", return_value=cfg):
         yield
@@ -100,6 +99,7 @@ def _multi_step_plan_json() -> dict:
 # Task 1 Tests: Core planner module — plan generation
 # ---------------------------------------------------------------------------
 
+
 class TestTaskPlannerSingleStep:
     """Test valid single-step plan generation (Task 4.2 / AC #1)."""
 
@@ -114,7 +114,10 @@ class TestTaskPlannerSingleStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Write a utility function",
                 description="Create a Python helper",
@@ -137,7 +140,10 @@ class TestTaskPlannerSingleStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Fix a typo",
                 description=None,
@@ -162,7 +168,10 @@ class TestTaskPlannerMultiStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Build API endpoint with docs",
                 description="Create a REST endpoint, document it, then review",
@@ -186,7 +195,10 @@ class TestTaskPlannerMultiStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Build API endpoint with docs",
                 description="Create, document, review",
@@ -211,7 +223,10 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             await planner.plan_task(
                 title="Write tests",
                 description="Unit tests for auth module",
@@ -249,7 +264,10 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -276,7 +294,10 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             await planner.plan_task(
                 title="Transcrever e resumir os ultimos 5 videos deste canal",
                 description="Gerar um consolidado dos 5 videos mais recentes do canal no YouTube",
@@ -303,7 +324,10 @@ class TestTaskPlannerPrompt:
         planner = TaskPlanner()
 
         with (
-            patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")),
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ),
             patch(
                 "mc.contexts.planning.planner._load_lead_agent_planning_skills",
                 return_value=(
@@ -351,7 +375,10 @@ class TestTaskPlannerNanobotFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Obscure task",
                 description=None,
@@ -383,7 +410,10 @@ class TestTaskPlannerNanobotFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Obscure task",
                 description=None,
@@ -396,6 +426,7 @@ class TestTaskPlannerNanobotFallback:
 # ---------------------------------------------------------------------------
 # Task 2 Tests: Agent name validation and fallback
 # ---------------------------------------------------------------------------
+
 
 class TestAgentNameValidation:
     """Test agent name validation — invalid names replaced with nanobot (Task 4.4 / AC #4)."""
@@ -423,7 +454,10 @@ class TestAgentNameValidation:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -443,7 +477,10 @@ class TestAgentNameValidation:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -479,7 +516,10 @@ class TestAgentNameNoneHandling:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -503,7 +543,10 @@ class TestExplicitAgentOverride:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Multi-step task",
                 description="Complex task",
@@ -525,7 +568,10 @@ class TestExplicitAgentOverride:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Task",
                 description="desc",
@@ -549,7 +595,10 @@ class TestLLMFailureFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Write python tests",
                 description="Test the auth module",
@@ -572,7 +621,10 @@ class TestLLMFailureFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Write documentation",
                 description="Document the API",
@@ -596,7 +648,10 @@ class TestLLMFailureFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Calibrate quantum transducer mesh",
                 description=None,
@@ -643,7 +698,10 @@ class TestPlannerReasoningLevel:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             await planner.plan_task(
                 title="Write tests",
                 description="Unit tests for planner",
@@ -679,7 +737,9 @@ class TestPlannerReasoningLevel:
                 "mc.contexts.planning.planner._load_lead_agent_planning_skills",
                 return_value=(["using-superpowers", "writing-plans"], "skill body"),
             ),
-            patch.object(planner, "_cc_plan", AsyncMock(return_value=expected_plan)) as cc_plan_mock,
+            patch.object(
+                planner, "_cc_plan", AsyncMock(return_value=expected_plan)
+            ) as cc_plan_mock,
         ):
             plan = await planner.plan_task(
                 title="Plan task",
@@ -708,8 +768,13 @@ class TestPlannerDiagnosticLogging:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")), \
-             patch("mc.contexts.planning.planner.logger") as mock_logger:
+        with (
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ),
+            patch("mc.contexts.planning.planner.logger") as mock_logger,
+        ):
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -717,10 +782,7 @@ class TestPlannerDiagnosticLogging:
             )
 
         # Should log timeout specifically
-        timeout_calls = [
-            c for c in mock_logger.warning.call_args_list
-            if "timed out" in str(c)
-        ]
+        timeout_calls = [c for c in mock_logger.warning.call_args_list if "timed out" in str(c)]
         assert len(timeout_calls) >= 1
 
     @pytest.mark.asyncio
@@ -733,8 +795,13 @@ class TestPlannerDiagnosticLogging:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")), \
-             patch("mc.contexts.planning.planner.logger") as mock_logger:
+        with (
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ),
+            patch("mc.contexts.planning.planner.logger") as mock_logger,
+        ):
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -743,8 +810,7 @@ class TestPlannerDiagnosticLogging:
 
         # Should log with exc_info=True
         error_calls = [
-            c for c in mock_logger.warning.call_args_list
-            if "LLM planning failed" in str(c)
+            c for c in mock_logger.warning.call_args_list if "LLM planning failed" in str(c)
         ]
         assert len(error_calls) >= 1
         # Verify exc_info=True was passed
@@ -765,7 +831,10 @@ class TestPlannerModelParameter:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "anthropic/claude-sonnet-4-6")) as mock_create:
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "anthropic/claude-sonnet-4-6"),
+        ) as mock_create:
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -790,7 +859,10 @@ class TestPlannerModelParameter:
 
         with (
             patch("nanobot.config.loader.load_config", return_value=mock_config),
-            patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")) as mock_create,
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ) as mock_create,
         ):
             await planner.plan_task(
                 title="Test task",
@@ -811,12 +883,16 @@ class TestPlannerModelParameter:
         mock_ipc.start = AsyncMock()
         mock_ipc.stop = AsyncMock()
         mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = MagicMock(cwd=".", mcp_config=".mcp.json", claude_md="CLAUDE.md", socket_path="/tmp/planner.sock")
+        mock_ws_mgr.prepare.return_value = MagicMock(
+            cwd=".", mcp_config=".mcp.json", claude_md="CLAUDE.md", socket_path="/tmp/planner.sock"
+        )
         mock_cc_provider = MagicMock()
-        mock_cc_provider.execute_task = AsyncMock(return_value=MagicMock(
-            is_error=False,
-            output=json.dumps(_single_step_plan_json()),
-        ))
+        mock_cc_provider.execute_task = AsyncMock(
+            return_value=MagicMock(
+                is_error=False,
+                output=json.dumps(_single_step_plan_json()),
+            )
+        )
         mock_config = MagicMock()
         mock_config.agents.defaults.model = "cc/claude-sonnet-4-6"
         mock_config.claude_code = MagicMock(cli_path="claude")
@@ -856,7 +932,10 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Write tests for auth",
                 description="Testing task",
@@ -876,7 +955,10 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Write tests for auth",
                 description="Testing task",
@@ -898,7 +980,10 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -925,7 +1010,10 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -961,7 +1049,10 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Write a utility function",
                 description="Create a Python helper",
@@ -977,6 +1068,7 @@ class TestMalformedJSONFallback:
 # Task 3 Tests: Orchestrator integration
 # ---------------------------------------------------------------------------
 
+
 class TestOrchestratorPlannerIntegration:
     """Test that orchestrator calls planner instead of heuristic routing (Task 4.8 / AC #7, #12)."""
 
@@ -989,13 +1081,22 @@ class TestOrchestratorPlannerIntegration:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+            ]
+        )
 
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
-        ])
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Do it",
+                    description="Do it",
+                    assigned_agent="code-agent",
+                ),
+            ]
+        )
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -1004,8 +1105,12 @@ class TestOrchestratorPlannerIntegration:
             "description": "Write some Python",
         }
 
-        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner,
+            patch(
+                "mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough
+            ),
+        ):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1022,13 +1127,22 @@ class TestOrchestratorPlannerIntegration:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+            ]
+        )
 
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
-        ])
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Do it",
+                    description="Do it",
+                    assigned_agent="code-agent",
+                ),
+            ]
+        )
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -1038,16 +1152,21 @@ class TestOrchestratorPlannerIntegration:
             "assigned_agent": "code-agent",
         }
 
-        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner,
+            patch(
+                "mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough
+            ),
+        ):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
             await orch._planning_worker.process_task(task_data)
 
             call_kwargs = mock_planner_instance.plan_task.call_args
-            assert call_kwargs.kwargs.get("explicit_agent") == "code-agent" or \
-                   (len(call_kwargs.args) >= 4 and call_kwargs.args[3] == "code-agent")
+            assert call_kwargs.kwargs.get("explicit_agent") == "code-agent" or (
+                len(call_kwargs.args) >= 4 and call_kwargs.args[3] == "code-agent"
+            )
 
     @pytest.mark.asyncio
     async def test_plan_stored_and_dispatched(self):
@@ -1058,13 +1177,22 @@ class TestOrchestratorPlannerIntegration:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+            ]
+        )
 
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
-        ])
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Do it",
+                    description="Do it",
+                    assigned_agent="code-agent",
+                ),
+            ]
+        )
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -1073,8 +1201,12 @@ class TestOrchestratorPlannerIntegration:
             "description": None,
         }
 
-        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner,
+            patch(
+                "mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough
+            ),
+        ):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1101,8 +1233,12 @@ class TestOrchestratorPlannerIntegration:
             "is_manual": True,
         }
 
-        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner,
+            patch(
+                "mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough
+            ),
+        ):
             await orch._planning_worker.process_task(task_data)
 
             MockPlanner.assert_not_called()
@@ -1193,27 +1329,34 @@ class TestRemoteTerminalExclusion:
         from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
-            "steps": [{
-                "tempId": "step_1",
-                "title": "Research task",
-                "description": "Research something",
-                "assignedAgent": "Macbook",
-                "blockedBy": [],
-                "parallelGroup": 1,
-                "order": 1,
-            }]
+            "steps": [
+                {
+                    "tempId": "step_1",
+                    "title": "Research task",
+                    "description": "Research something",
+                    "assignedAgent": "Macbook",
+                    "blockedBy": [],
+                    "parallelGroup": 1,
+                    "order": 1,
+                }
+            ]
         }
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
 
         agents = [
             _make_agent("nanobot", "generalist", ["general"]),
-            AgentData(name="Macbook", display_name="Macbook", role="remote-terminal", skills=["shell"]),
+            AgentData(
+                name="Macbook", display_name="Macbook", role="remote-terminal", skills=["shell"]
+            ),
         ]
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Research task",
                 description=None,
@@ -1266,6 +1409,7 @@ class TestOrientationRosterInterpolation:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _to_thread_passthrough(fn, *args, **kwargs):
     """Replacement for asyncio.to_thread that calls synchronously."""

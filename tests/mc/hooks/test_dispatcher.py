@@ -1,4 +1,5 @@
 """Tests for mc.hooks.dispatcher — event routing to handlers."""
+
 from __future__ import annotations
 
 import json
@@ -12,11 +13,13 @@ from mc.hooks.config import HookConfig
 from mc.hooks.context import HookContext
 from mc.hooks.dispatcher import _dispatch, main
 from mc.hooks.handler import BaseHandler
+from typing import ClassVar
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def dispatch_env(tmp_path: Path):
@@ -49,6 +52,7 @@ def dispatch_env(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # _dispatch tests
 # ---------------------------------------------------------------------------
+
 
 class TestDispatch:
     """Test the _dispatch() function."""
@@ -159,7 +163,7 @@ class TestDispatch:
         """A handler that raises should not crash the dispatcher."""
 
         class BrokenHandler(BaseHandler):
-            events = [("TestBroken", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TestBroken", None)]
 
             def handle(self):
                 raise RuntimeError("boom")
@@ -181,13 +185,13 @@ class TestDispatch:
         """When multiple handlers match, their results are joined with '; '."""
 
         class HandlerA(BaseHandler):
-            events = [("MultiTest", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("MultiTest", None)]
 
             def handle(self):
                 return "result A"
 
         class HandlerB(BaseHandler):
-            events = [("MultiTest", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("MultiTest", None)]
 
             def handle(self):
                 return "result B"
@@ -212,13 +216,13 @@ class TestDispatch:
         """Handlers that return None should not appear in output."""
 
         class SilentHandler(BaseHandler):
-            events = [("SilentTest", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("SilentTest", None)]
 
             def handle(self):
                 return None
 
         class LoudHandler(BaseHandler):
-            events = [("SilentTest", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("SilentTest", None)]
 
             def handle(self):
                 return "loud"
@@ -256,6 +260,7 @@ class TestDispatch:
 # ---------------------------------------------------------------------------
 # main() tests (stdin/stdout integration)
 # ---------------------------------------------------------------------------
+
 
 class TestMain:
     def test_main_with_valid_payload(self, dispatch_env):

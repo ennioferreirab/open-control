@@ -1,4 +1,5 @@
 """Tests for mc.hooks.context — HookContext lifecycle, persistence, pruning."""
+
 from __future__ import annotations
 
 import json
@@ -16,6 +17,7 @@ from mc.hooks.context import HookContext, _safe_session_id
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def state_dirs(tmp_path: Path):
@@ -38,6 +40,7 @@ def state_dirs(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # Session ID sanitization
 # ---------------------------------------------------------------------------
+
 
 class TestSafeSessionId:
     def test_normal_id(self):
@@ -65,6 +68,7 @@ class TestSafeSessionId:
 # ---------------------------------------------------------------------------
 # HookContext construction
 # ---------------------------------------------------------------------------
+
 
 class TestHookContextInit:
     def test_initial_state(self):
@@ -123,6 +127,7 @@ class TestHookContextInit:
 # ---------------------------------------------------------------------------
 # Persistence (save / load)
 # ---------------------------------------------------------------------------
+
 
 class TestHookContextPersistence:
     def test_save_and_load_round_trip(self, state_dirs):
@@ -193,6 +198,7 @@ class TestHookContextPersistence:
 # Auto-prune
 # ---------------------------------------------------------------------------
 
+
 class TestHookContextAutoPrune:
     def test_prunes_old_state_files(self, state_dirs):
         tmp_path, state_dir = state_dirs
@@ -225,6 +231,7 @@ class TestHookContextAutoPrune:
 
         # Patch unlink to raise OSError
         original_unlink = Path.unlink
+
         def failing_unlink(self, *args, **kwargs):
             if "old-err" in str(self):
                 raise OSError("permission denied")

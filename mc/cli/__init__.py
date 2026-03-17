@@ -56,9 +56,7 @@ def _get_bridge():
 
     if not convex_url:
         console.print("[red]CONVEX_URL not set.[/red]")
-        console.print(
-            "Set CONVEX_URL environment variable or ensure dashboard/.env.local exists."
-        )
+        console.print("Set CONVEX_URL environment variable or ensure dashboard/.env.local exists.")
         raise typer.Exit(1)
 
     admin_key = os.environ.get("CONVEX_ADMIN_KEY")

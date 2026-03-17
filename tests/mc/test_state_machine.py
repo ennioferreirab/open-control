@@ -142,28 +142,49 @@ class TestGetEventType:
     """Test activity event type mapping for transitions."""
 
     def test_inbox_to_assigned(self) -> None:
-        assert get_event_type(TaskStatus.INBOX, TaskStatus.ASSIGNED) == ActivityEventType.TASK_ASSIGNED
+        assert (
+            get_event_type(TaskStatus.INBOX, TaskStatus.ASSIGNED) == ActivityEventType.TASK_ASSIGNED
+        )
 
     def test_assigned_to_in_progress(self) -> None:
-        assert get_event_type(TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS) == ActivityEventType.TASK_STARTED
+        assert (
+            get_event_type(TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS)
+            == ActivityEventType.TASK_STARTED
+        )
 
     def test_in_progress_to_review(self) -> None:
-        assert get_event_type(TaskStatus.IN_PROGRESS, TaskStatus.REVIEW) == ActivityEventType.REVIEW_REQUESTED
+        assert (
+            get_event_type(TaskStatus.IN_PROGRESS, TaskStatus.REVIEW)
+            == ActivityEventType.REVIEW_REQUESTED
+        )
 
     def test_in_progress_to_done(self) -> None:
-        assert get_event_type(TaskStatus.IN_PROGRESS, TaskStatus.DONE) == ActivityEventType.TASK_COMPLETED
+        assert (
+            get_event_type(TaskStatus.IN_PROGRESS, TaskStatus.DONE)
+            == ActivityEventType.TASK_COMPLETED
+        )
 
     def test_review_to_done(self) -> None:
-        assert get_event_type(TaskStatus.REVIEW, TaskStatus.DONE) == ActivityEventType.TASK_COMPLETED
+        assert (
+            get_event_type(TaskStatus.REVIEW, TaskStatus.DONE) == ActivityEventType.TASK_COMPLETED
+        )
 
     def test_crashed_to_inbox(self) -> None:
-        assert get_event_type(TaskStatus.CRASHED, TaskStatus.INBOX) == ActivityEventType.TASK_RETRYING
+        assert (
+            get_event_type(TaskStatus.CRASHED, TaskStatus.INBOX) == ActivityEventType.TASK_RETRYING
+        )
 
     def test_any_to_retrying(self) -> None:
-        assert get_event_type(TaskStatus.IN_PROGRESS, TaskStatus.RETRYING) == ActivityEventType.TASK_RETRYING
+        assert (
+            get_event_type(TaskStatus.IN_PROGRESS, TaskStatus.RETRYING)
+            == ActivityEventType.TASK_RETRYING
+        )
 
     def test_any_to_crashed(self) -> None:
-        assert get_event_type(TaskStatus.ASSIGNED, TaskStatus.CRASHED) == ActivityEventType.TASK_CRASHED
+        assert (
+            get_event_type(TaskStatus.ASSIGNED, TaskStatus.CRASHED)
+            == ActivityEventType.TASK_CRASHED
+        )
 
     def test_unmapped_transition_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="No event type mapping"):

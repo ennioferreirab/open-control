@@ -25,6 +25,7 @@ import pytest
 # Helpers (shared across tests)
 # ---------------------------------------------------------------------------
 
+
 class _AnyString:
     """Matches any string in assertions."""
 
@@ -70,12 +71,15 @@ class TestProviderErrorHandling:
             "Token expired", action="Run: nanobot provider login anthropic-oauth"
         )
 
-        with patch(
-            "mc.contexts.execution.executor._run_agent_on_task",
-            new_callable=AsyncMock,
-            side_effect=provider_err,
-        ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-                patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                side_effect=provider_err,
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_prov_err", "Test task", None, "test-agent", "autonomous"
             )
@@ -83,8 +87,7 @@ class TestProviderErrorHandling:
         # Should have written a system message containing the action
         send_calls = mock_bridge.send_message.call_args_list
         assert any(
-            "Provider error" in str(c) and "nanobot provider login" in str(c)
-            for c in send_calls
+            "Provider error" in str(c) and "nanobot provider login" in str(c) for c in send_calls
         ), f"Expected provider error message with action, got: {send_calls}"
 
     @pytest.mark.asyncio
@@ -100,25 +103,26 @@ class TestProviderErrorHandling:
 
         executor = TaskExecutor(mock_bridge)
 
-        provider_err = ProviderError(
-            "Missing httpx", action="pip install httpx"
-        )
+        provider_err = ProviderError("Missing httpx", action="pip install httpx")
 
-        with patch(
-            "mc.contexts.execution.executor._run_agent_on_task",
-            new_callable=AsyncMock,
-            side_effect=provider_err,
-        ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-                patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                side_effect=provider_err,
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_prov_act", "Activity task", None, "agent-x", "autonomous"
             )
 
         # Should have created a system_error activity
         activity_calls = mock_bridge.create_activity.call_args_list
-        assert any(
-            c[0][0] == "system_error" for c in activity_calls
-        ), f"Expected system_error activity, got: {activity_calls}"
+        assert any(c[0][0] == "system_error" for c in activity_calls), (
+            f"Expected system_error activity, got: {activity_calls}"
+        )
 
     @pytest.mark.asyncio
     async def test_provider_error_crashes_task(self):
@@ -135,21 +139,24 @@ class TestProviderErrorHandling:
 
         provider_err = ProviderError("Config broken")
 
-        with patch(
-            "mc.contexts.execution.executor._run_agent_on_task",
-            new_callable=AsyncMock,
-            side_effect=provider_err,
-        ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-                patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                side_effect=provider_err,
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_crash_prov", "Crash task", None, "agent-z", "autonomous"
             )
 
         # Task should be transitioned to crashed
         status_calls = mock_bridge.update_task_status.call_args_list
-        assert any(
-            c[0][1] == "crashed" for c in status_calls
-        ), f"Expected crashed status, got: {status_calls}"
+        assert any(c[0][1] == "crashed" for c in status_calls), (
+            f"Expected crashed status, got: {status_calls}"
+        )
 
     @pytest.mark.asyncio
     async def test_anthropic_oauth_expired_surfaces_login_command(self):
@@ -171,12 +178,15 @@ class TestProviderErrorHandling:
             "No Anthropic OAuth token found. Run: nanobot provider login anthropic-oauth"
         )
 
-        with patch(
-            "mc.contexts.execution.executor._run_agent_on_task",
-            new_callable=AsyncMock,
-            side_effect=oauth_err,
-        ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-                patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                side_effect=oauth_err,
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_oauth", "OAuth task", None, "oauth-agent", "autonomous"
             )
@@ -184,9 +194,9 @@ class TestProviderErrorHandling:
         # The system message should contain the login command
         send_calls = mock_bridge.send_message.call_args_list
         messages = [str(c) for c in send_calls]
-        assert any(
-            "nanobot provider login anthropic-oauth" in m for m in messages
-        ), f"Expected login command in messages, got: {messages}"
+        assert any("nanobot provider login anthropic-oauth" in m for m in messages), (
+            f"Expected login command in messages, got: {messages}"
+        )
 
     @pytest.mark.asyncio
     async def test_provider_error_does_not_auto_retry(self):
@@ -201,16 +211,19 @@ class TestProviderErrorHandling:
 
         executor = TaskExecutor(mock_bridge)
 
-        with patch(
-            "mc.contexts.execution.executor._run_agent_on_task",
-            new_callable=AsyncMock,
-            side_effect=ProviderError("Broken"),
-        ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-                patch("asyncio.to_thread", side_effect=_to_thread_passthrough), \
-                patch.object(executor._agent_gateway, "handle_agent_crash", new_callable=AsyncMock) as mock_crash:
-            await executor._execute_task(
-                "task_no_retry", "No retry", None, "agent", "autonomous"
-            )
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                side_effect=ProviderError("Broken"),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+            patch.object(
+                executor._agent_gateway, "handle_agent_crash", new_callable=AsyncMock
+            ) as mock_crash,
+        ):
+            await executor._execute_task("task_no_retry", "No retry", None, "agent", "autonomous")
             # handle_agent_crash should NOT be called for provider errors
             mock_crash.assert_not_called()
 
@@ -229,12 +242,15 @@ class TestProviderErrorHandling:
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_prov_cleanup")
 
-        with patch(
-            "mc.contexts.execution.executor._run_agent_on_task",
-            new_callable=AsyncMock,
-            side_effect=ProviderError("Broken"),
-        ), patch.object(executor, "_load_agent_config", return_value=(None, None, None)), \
-                patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                new_callable=AsyncMock,
+                side_effect=ProviderError("Broken"),
+            ),
+            patch.object(executor, "_load_agent_config", return_value=(None, None, None)),
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+        ):
             await executor._execute_task(
                 "task_prov_cleanup", "Cleanup", None, "agent", "autonomous"
             )
@@ -265,7 +281,15 @@ class TestSyncSkillsPublicAPI:
 
         # Wrap a real SkillsLoader to track method calls
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
+
+        _skills_path = (
+            Path(__file__).parent.parent.parent
+            / "vendor"
+            / "nanobot"
+            / "nanobot"
+            / "agent"
+            / "skills.py"
+        )
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -295,8 +319,7 @@ class TestSyncSkillsPublicAPI:
 
         # Verify at least one upsert was made (the skill was synced)
         upsert_calls = [
-            c for c in mock_bridge.mutation.call_args_list
-            if c[0][0] == "skills:upsertByName"
+            c for c in mock_bridge.mutation.call_args_list if c[0][0] == "skills:upsertByName"
         ]
         assert len(upsert_calls) >= 1, "Expected at least one skill to be synced"
 
@@ -307,7 +330,15 @@ class TestSkillsLoaderPublicMethods:
     def test_get_skill_body_strips_frontmatter(self, tmp_path):
         """get_skill_body() should return content without frontmatter."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
+
+        _skills_path = (
+            Path(__file__).parent.parent.parent
+            / "vendor"
+            / "nanobot"
+            / "nanobot"
+            / "agent"
+            / "skills.py"
+        )
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -328,7 +359,15 @@ class TestSkillsLoaderPublicMethods:
     def test_get_skill_body_returns_none_for_missing(self, tmp_path):
         """get_skill_body() should return None for nonexistent skill."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
+
+        _skills_path = (
+            Path(__file__).parent.parent.parent
+            / "vendor"
+            / "nanobot"
+            / "nanobot"
+            / "agent"
+            / "skills.py"
+        )
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -340,7 +379,15 @@ class TestSkillsLoaderPublicMethods:
     def test_is_skill_available_with_met_requirements(self, tmp_path):
         """is_skill_available() returns True when requirements are met."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
+
+        _skills_path = (
+            Path(__file__).parent.parent.parent
+            / "vendor"
+            / "nanobot"
+            / "nanobot"
+            / "agent"
+            / "skills.py"
+        )
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -358,7 +405,15 @@ class TestSkillsLoaderPublicMethods:
     def test_is_skill_available_with_unmet_requirements(self, tmp_path):
         """is_skill_available() returns False when a required binary is missing."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
+
+        _skills_path = (
+            Path(__file__).parent.parent.parent
+            / "vendor"
+            / "nanobot"
+            / "nanobot"
+            / "agent"
+            / "skills.py"
+        )
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -377,7 +432,15 @@ class TestSkillsLoaderPublicMethods:
     def test_get_missing_requirements_returns_description(self, tmp_path):
         """get_missing_requirements() returns human-readable missing items."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
+
+        _skills_path = (
+            Path(__file__).parent.parent.parent
+            / "vendor"
+            / "nanobot"
+            / "nanobot"
+            / "agent"
+            / "skills.py"
+        )
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
@@ -398,7 +461,15 @@ class TestSkillsLoaderPublicMethods:
     def test_get_missing_requirements_returns_none_when_met(self, tmp_path):
         """get_missing_requirements() returns None when all requirements are met."""
         import importlib.util
-        _skills_path = Path(__file__).parent.parent.parent / "vendor" / "nanobot" / "nanobot" / "agent" / "skills.py"
+
+        _skills_path = (
+            Path(__file__).parent.parent.parent
+            / "vendor"
+            / "nanobot"
+            / "nanobot"
+            / "agent"
+            / "skills.py"
+        )
         spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
         skills_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(skills_mod)
