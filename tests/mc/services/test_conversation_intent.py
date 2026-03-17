@@ -55,9 +55,7 @@ class TestCommentIntent:
         )
         assert result.intent == ConversationIntent.COMMENT
 
-    def test_plain_message_done_task(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_plain_message_done_task(self, resolver: ConversationIntentResolver) -> None:
         """A plain message on a done task (no mention) is a comment."""
         task_data: dict = {"status": "done", "assigned_agent": "researcher"}
         result = resolver.resolve(
@@ -67,9 +65,7 @@ class TestCommentIntent:
         )
         assert result.intent == ConversationIntent.COMMENT
 
-    def test_empty_content_is_comment(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_empty_content_is_comment(self, resolver: ConversationIntentResolver) -> None:
         task_data: dict = {"status": "in_progress", "assigned_agent": "researcher"}
         result = resolver.resolve(
             content="   ",
@@ -96,9 +92,7 @@ class TestMentionIntent:
         assert result.intent == ConversationIntent.MENTION
         assert result.mentioned_agents == [("researcher", "help me with this")]
 
-    def test_mention_in_done_task(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_mention_in_done_task(self, resolver: ConversationIntentResolver) -> None:
         """@mention works on done tasks (universal mentions)."""
         task_data: dict = {"status": "done", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -109,9 +103,7 @@ class TestMentionIntent:
         assert result.intent == ConversationIntent.MENTION
         assert result.mentioned_agents[0][0] == "bob"
 
-    def test_mention_in_crashed_task(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_mention_in_crashed_task(self, resolver: ConversationIntentResolver) -> None:
         """@mention works on crashed tasks."""
         task_data: dict = {"status": "crashed", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -121,9 +113,7 @@ class TestMentionIntent:
         )
         assert result.intent == ConversationIntent.MENTION
 
-    def test_mention_overrides_follow_up(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_mention_overrides_follow_up(self, resolver: ConversationIntentResolver) -> None:
         """A message with @mention is always classified as mention, not follow_up."""
         task_data: dict = {"status": "in_progress", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -133,9 +123,7 @@ class TestMentionIntent:
         )
         assert result.intent == ConversationIntent.MENTION
 
-    def test_mention_overrides_plan_chat(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_mention_overrides_plan_chat(self, resolver: ConversationIntentResolver) -> None:
         """@mention takes priority over plan_chat."""
         task_data: dict = {
             "status": "review",
@@ -150,9 +138,7 @@ class TestMentionIntent:
         )
         assert result.intent == ConversationIntent.MENTION
 
-    def test_mention_overrides_manual_reply(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_mention_overrides_manual_reply(self, resolver: ConversationIntentResolver) -> None:
         """@mention takes priority over manual_reply (ask_user pending)."""
         task_data: dict = {"status": "review", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -169,9 +155,7 @@ class TestMentionIntent:
 class TestManualReplyIntent:
     """Human reply in manual/human task (ask_user pending)."""
 
-    def test_manual_reply_when_ask_pending(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_manual_reply_when_ask_pending(self, resolver: ConversationIntentResolver) -> None:
         """User reply while ask_user is pending => manual_reply."""
         task_data: dict = {"status": "review", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -181,9 +165,7 @@ class TestManualReplyIntent:
         )
         assert result.intent == ConversationIntent.MANUAL_REPLY
 
-    def test_manual_reply_in_progress(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_manual_reply_in_progress(self, resolver: ConversationIntentResolver) -> None:
         """manual_reply recognized when ask_user pending, even in_progress."""
         task_data: dict = {"status": "in_progress", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -200,9 +182,7 @@ class TestManualReplyIntent:
 class TestPlanChatIntent:
     """Plan discussion/negotiation."""
 
-    def test_plan_chat_review_awaiting_kickoff(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_plan_chat_review_awaiting_kickoff(self, resolver: ConversationIntentResolver) -> None:
         """Review + awaitingKickoff + plan => plan_chat."""
         task_data: dict = {
             "status": "review",
@@ -217,9 +197,7 @@ class TestPlanChatIntent:
         )
         assert result.intent == ConversationIntent.PLAN_CHAT
 
-    def test_plan_chat_in_progress_with_plan(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_plan_chat_in_progress_with_plan(self, resolver: ConversationIntentResolver) -> None:
         """in_progress with execution plan => plan_chat."""
         task_data: dict = {
             "status": "in_progress",
@@ -251,9 +229,7 @@ class TestPlanChatIntent:
         # Should be follow_up or comment, not plan_chat
         assert result.intent != ConversationIntent.PLAN_CHAT
 
-    def test_not_plan_chat_when_no_plan(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_not_plan_chat_when_no_plan(self, resolver: ConversationIntentResolver) -> None:
         """in_progress without execution plan is NOT plan_chat."""
         task_data: dict = {
             "status": "in_progress",
@@ -273,9 +249,7 @@ class TestPlanChatIntent:
 class TestFollowUpIntent:
     """Non-mention follow-up to agent in active task."""
 
-    def test_follow_up_in_progress(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_follow_up_in_progress(self, resolver: ConversationIntentResolver) -> None:
         """Non-mention message on in_progress task (no plan) => follow_up."""
         task_data: dict = {"status": "in_progress", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -285,9 +259,7 @@ class TestFollowUpIntent:
         )
         assert result.intent == ConversationIntent.FOLLOW_UP
 
-    def test_follow_up_assigned(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_follow_up_assigned(self, resolver: ConversationIntentResolver) -> None:
         """Non-mention on assigned task => follow_up."""
         task_data: dict = {"status": "assigned", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -297,9 +269,7 @@ class TestFollowUpIntent:
         )
         assert result.intent == ConversationIntent.FOLLOW_UP
 
-    def test_follow_up_review_non_kickoff(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_follow_up_review_non_kickoff(self, resolver: ConversationIntentResolver) -> None:
         """Non-mention on review (not awaiting kickoff) => follow_up."""
         task_data: dict = {
             "status": "review",
@@ -313,9 +283,7 @@ class TestFollowUpIntent:
         )
         assert result.intent == ConversationIntent.FOLLOW_UP
 
-    def test_follow_up_retrying(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_follow_up_retrying(self, resolver: ConversationIntentResolver) -> None:
         """Non-mention on retrying task => follow_up."""
         task_data: dict = {"status": "retrying", "assigned_agent": "alice"}
         result = resolver.resolve(
@@ -357,9 +325,7 @@ class TestResolveResultFields:
         )
         assert result.mentioned_agents == []
 
-    def test_result_carries_content(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_result_carries_content(self, resolver: ConversationIntentResolver) -> None:
         task_data: dict = {"status": "inbox"}
         result = resolver.resolve(
             content="some message",
@@ -368,9 +334,7 @@ class TestResolveResultFields:
         )
         assert result.content == "some message"
 
-    def test_result_carries_task_data(
-        self, resolver: ConversationIntentResolver
-    ) -> None:
+    def test_result_carries_task_data(self, resolver: ConversationIntentResolver) -> None:
         task_data: dict = {"status": "done", "assigned_agent": "alice"}
         result = resolver.resolve(
             content="thanks",

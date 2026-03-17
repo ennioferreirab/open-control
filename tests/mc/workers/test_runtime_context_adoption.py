@@ -198,9 +198,7 @@ class TestKickoffResumeWorkerAcceptsRuntimeContext:
             return MagicMock()
 
         with (
-            patch(
-                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-            ),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch(
                 "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,

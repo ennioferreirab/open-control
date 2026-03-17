@@ -6,7 +6,10 @@ def test_build_task_message_with_description():
     from mc.contexts.execution.executor import build_task_message
 
     result = build_task_message("Fix login bug", "The login form rejects valid emails")
-    assert result == "<title>Fix login bug</title>\n<description>The login form rejects valid emails</description>"
+    assert (
+        result
+        == "<title>Fix login bug</title>\n<description>The login form rejects valid emails</description>"
+    )
 
 
 def test_build_task_message_without_description():

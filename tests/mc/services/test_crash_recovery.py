@@ -132,9 +132,7 @@ class TestClearRetryCount:
         service.clear_retry_count("task-1")
         assert service.get_retry_count("task-1") == 0
 
-    def test_clears_nonexistent_count_safely(
-        self, service: CrashRecoveryService
-    ) -> None:
+    def test_clears_nonexistent_count_safely(self, service: CrashRecoveryService) -> None:
         """Clearing a count for a task that has no entry does not raise."""
         service.clear_retry_count("nonexistent")  # Should not raise
 

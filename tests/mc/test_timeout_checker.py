@@ -21,6 +21,7 @@ from mc.runtime.timeout_checker import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_bridge() -> MagicMock:
     """Create a mock ConvexBridge."""
     bridge = MagicMock()
@@ -58,6 +59,7 @@ def _make_task(
 # Test: _format_duration
 # ---------------------------------------------------------------------------
 
+
 class TestFormatDuration:
     def test_minutes_only(self) -> None:
         assert _format_duration(timedelta(minutes=15)) == "15m"
@@ -76,6 +78,7 @@ class TestFormatDuration:
 # Test: Stalled task detection
 # ---------------------------------------------------------------------------
 
+
 class TestStalledTaskDetection:
     """AC #1: Flag tasks in 'in_progress' that exceed the timeout."""
 
@@ -92,7 +95,9 @@ class TestStalledTaskDetection:
         # No settings configured (use defaults)
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [stalled_task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatus": [stalled_task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -127,7 +132,9 @@ class TestStalledTaskDetection:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [fresh_task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatus": [fresh_task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -147,7 +154,9 @@ class TestStalledTaskDetection:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [stalled_task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatus": [stalled_task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         # First check — should flag
@@ -162,6 +171,7 @@ class TestStalledTaskDetection:
 # ---------------------------------------------------------------------------
 # Test: Per-task timeout override
 # ---------------------------------------------------------------------------
+
 
 class TestPerTaskTimeoutOverride:
     """AC #6: Per-task timeout overrides global default."""
@@ -211,6 +221,7 @@ class TestPerTaskTimeoutOverride:
 # ---------------------------------------------------------------------------
 # Test: Global settings from Convex
 # ---------------------------------------------------------------------------
+
 
 class TestGlobalSettings:
     """AC #5, #8: Timeout values read from settings table."""
@@ -269,6 +280,7 @@ class TestGlobalSettings:
 # ---------------------------------------------------------------------------
 # Test: Review escalation
 # ---------------------------------------------------------------------------
+
 
 class TestReviewEscalation:
     """AC #3, #4: Review requests exceeding inter-agent timeout are escalated."""
@@ -390,6 +402,7 @@ class TestReviewEscalation:
 # ---------------------------------------------------------------------------
 # Test: start() loop behavior
 # ---------------------------------------------------------------------------
+
 
 class TestStartLoop:
     """AC #7: Timeout checking runs as a periodic check."""

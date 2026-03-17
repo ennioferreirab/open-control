@@ -267,7 +267,7 @@ class TaskExecutor(CCExecutorMixin):
                     )
                     continue
                 self._known_assigned_ids.add(task_id)
-                asyncio.create_task(self._pickup_task(task_data))
+                asyncio.create_task(self._pickup_task(task_data))  # noqa: RUF006
 
     async def _pickup_task(self, task_data: dict[str, Any]) -> None:
         """Transition assigned task to in_progress and start execution."""

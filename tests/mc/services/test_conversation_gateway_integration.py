@@ -60,9 +60,7 @@ def ask_user_registry() -> MagicMock:
 
 
 @pytest.fixture
-def conversation_service(
-    bridge: MagicMock, ask_user_registry: MagicMock
-) -> ConversationService:
+def conversation_service(bridge: MagicMock, ask_user_registry: MagicMock) -> ConversationService:
     return ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
 
 
@@ -76,9 +74,7 @@ class TestGatewayCreatesConversationService:
         self, bridge: MagicMock, ask_user_registry: MagicMock
     ) -> None:
         """ConversationService can be constructed with bridge + registry."""
-        svc = ConversationService(
-            bridge=bridge, ask_user_registry=ask_user_registry
-        )
+        svc = ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
         assert svc._bridge is bridge
         assert svc._ask_user_registry is ask_user_registry
 
@@ -88,14 +84,10 @@ class TestGatewayCreatesConversationService:
         """MentionWatcher can be constructed with a conversation_service parameter."""
         from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
-        watcher = MentionWatcher(
-            bridge, conversation_service=conversation_service
-        )
+        watcher = MentionWatcher(bridge, conversation_service=conversation_service)
         assert watcher._conversation_service is conversation_service
 
-    def test_mention_watcher_works_without_conversation_service(
-        self, bridge: MagicMock
-    ) -> None:
+    def test_mention_watcher_works_without_conversation_service(self, bridge: MagicMock) -> None:
         """MentionWatcher still works without conversation_service (backward compat)."""
         from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
@@ -103,7 +95,8 @@ class TestGatewayCreatesConversationService:
         assert watcher._conversation_service is None
 
     def test_ask_user_watcher_accepts_conversation_service(
-        self, bridge: MagicMock,
+        self,
+        bridge: MagicMock,
         ask_user_registry: MagicMock,
         conversation_service: ConversationService,
     ) -> None:
@@ -167,9 +160,7 @@ class TestRuntimeIntentClassification:
     ) -> None:
         """When ask_user is pending, message is classified as MANUAL_REPLY."""
         ask_user_registry.has_pending_ask.return_value = True
-        svc = ConversationService(
-            bridge=bridge, ask_user_registry=ask_user_registry
-        )
+        svc = ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
         task_data: dict[str, Any] = {
             "status": "in_progress",
             "assigned_agent": "alice",
@@ -225,9 +216,11 @@ class TestSharedContextAssembly:
         self, conversation_service: ConversationService, bridge: MagicMock
     ) -> None:
         """build_context delegates to the shared ThreadContextBuilder."""
-        bridge.get_task_messages = MagicMock(return_value=[
-            {"author_name": "User", "author_type": "user", "content": "hello"},
-        ])
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {"author_name": "User", "author_type": "user", "content": "hello"},
+            ]
+        )
         with patch(
             "mc.contexts.conversation.service.build_thread_context",
             return_value="[Thread History]\nUser [user]: hello",
@@ -318,9 +311,7 @@ class TestBehaviorPreservation:
     ) -> None:
         """Ask-user replies deliver MANUAL_REPLY intent for caller handling."""
         ask_user_registry.has_pending_ask.return_value = True
-        svc = ConversationService(
-            bridge=bridge, ask_user_registry=ask_user_registry
-        )
+        svc = ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
         task_data: dict[str, Any] = {
             "status": "in_progress",
             "assigned_agent": "alice",
@@ -494,22 +485,20 @@ class TestMentionWatcherWithConversationService:
 
         from mc.contexts.conversation.mentions.watcher import MentionWatcher
 
-        watcher = MentionWatcher(
-            bridge, conversation_service=conversation_service
-        )
+        watcher = MentionWatcher(bridge, conversation_service=conversation_service)
 
         # Mock: global recent user messages query returns a mention message
-        bridge.get_recent_user_messages = MagicMock(return_value=[
-            {
-                "_id": "msg-1",
-                "author_type": "user",
-                "content": "@researcher help",
-                "task_id": "task-1",
-            },
-        ])
-        bridge.query = MagicMock(return_value={
-            "id": "task-1", "status": "done", "title": "Test"
-        })
+        bridge.get_recent_user_messages = MagicMock(
+            return_value=[
+                {
+                    "_id": "msg-1",
+                    "author_type": "user",
+                    "content": "@researcher help",
+                    "task_id": "task-1",
+                },
+            ]
+        )
+        bridge.query = MagicMock(return_value={"id": "task-1", "status": "done", "title": "Test"})
 
         # Patch ConversationService.handle_message to verify routing
         with patch(
@@ -538,17 +527,17 @@ class TestMentionWatcherWithConversationService:
         watcher = MentionWatcher(bridge)
 
         # Mock: global recent user messages query returns a mention message
-        bridge.get_recent_user_messages = MagicMock(return_value=[
-            {
-                "_id": "msg-1",
-                "author_type": "user",
-                "content": "@researcher help",
-                "task_id": "task-1",
-            },
-        ])
-        bridge.query = MagicMock(return_value={
-            "id": "task-1", "status": "done", "title": "Test"
-        })
+        bridge.get_recent_user_messages = MagicMock(
+            return_value=[
+                {
+                    "_id": "msg-1",
+                    "author_type": "user",
+                    "content": "@researcher help",
+                    "task_id": "task-1",
+                },
+            ]
+        )
+        bridge.query = MagicMock(return_value={"id": "task-1", "status": "done", "title": "Test"})
 
         with patch(
             "mc.contexts.conversation.mentions.handler.handle_all_mentions",

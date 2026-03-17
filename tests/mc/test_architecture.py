@@ -269,7 +269,9 @@ def test_execution_executor_does_not_keep_output_artifact_helpers_inline() -> No
     ]
 
     for forbidden in forbidden_defs:
-        assert forbidden not in source, f"mc/contexts/execution/executor.py still defines {forbidden}"
+        assert forbidden not in source, (
+            f"mc/contexts/execution/executor.py still defines {forbidden}"
+        )
 
 
 def test_execution_modules_use_canonical_completion_status_helper() -> None:
@@ -296,7 +298,9 @@ def test_execution_executor_does_not_keep_completion_reporting_inline() -> None:
     ]
 
     for forbidden in forbidden_fragments:
-        assert forbidden not in source, f"mc/contexts/execution/executor.py still contains {forbidden}"
+        assert forbidden not in source, (
+            f"mc/contexts/execution/executor.py still contains {forbidden}"
+        )
 
 
 def test_bridge_toplevel_only_imports_types() -> None:

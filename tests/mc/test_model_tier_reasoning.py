@@ -178,10 +178,16 @@ class TestReasoningPropagationToProviderChat:
         from mc.contexts.execution.executor import _run_agent_on_task
 
         mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=MagicMock(
-            content="done", has_tool_calls=False, tool_calls=[], reasoning_content=None,
-            thinking_blocks=None, finish_reason="stop",
-        ))
+        mock_provider.chat = AsyncMock(
+            return_value=MagicMock(
+                content="done",
+                has_tool_calls=False,
+                tool_calls=[],
+                reasoning_content=None,
+                thinking_blocks=None,
+                finish_reason="stop",
+            )
+        )
         mock_provider.get_default_model = MagicMock(return_value=SONNET_MODEL)
 
         with patch(
@@ -218,10 +224,16 @@ class TestReasoningPropagationToProviderChat:
         from mc.contexts.execution.executor import _run_agent_on_task
 
         mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=MagicMock(
-            content="done", has_tool_calls=False, tool_calls=[], reasoning_content=None,
-            thinking_blocks=None, finish_reason="stop",
-        ))
+        mock_provider.chat = AsyncMock(
+            return_value=MagicMock(
+                content="done",
+                has_tool_calls=False,
+                tool_calls=[],
+                reasoning_content=None,
+                thinking_blocks=None,
+                finish_reason="stop",
+            )
+        )
         mock_provider.get_default_model = MagicMock(return_value=SONNET_MODEL)
 
         with patch(
@@ -297,13 +309,18 @@ class TestLiteLLMProviderReasoningInjection:
 
         provider = LiteLLMProvider(api_key="test-key")
         fake_response = MagicMock()
-        fake_response.choices = [MagicMock(
-            message=MagicMock(content="ok", tool_calls=None),
-            finish_reason="stop",
-        )]
+        fake_response.choices = [
+            MagicMock(
+                message=MagicMock(content="ok", tool_calls=None),
+                finish_reason="stop",
+            )
+        ]
         fake_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 
-        with patch("nanobot.providers.litellm_provider.acompletion", new=AsyncMock(return_value=fake_response)) as mock_ac:
+        with patch(
+            "nanobot.providers.litellm_provider.acompletion",
+            new=AsyncMock(return_value=fake_response),
+        ) as mock_ac:
             await provider.chat(
                 messages=[{"role": "user", "content": "hello"}],
                 model="anthropic/claude-sonnet-4-6-20250514",
@@ -322,13 +339,18 @@ class TestLiteLLMProviderReasoningInjection:
 
         provider = LiteLLMProvider(api_key="test-key")
         fake_response = MagicMock()
-        fake_response.choices = [MagicMock(
-            message=MagicMock(content="ok", tool_calls=None),
-            finish_reason="stop",
-        )]
+        fake_response.choices = [
+            MagicMock(
+                message=MagicMock(content="ok", tool_calls=None),
+                finish_reason="stop",
+            )
+        ]
         fake_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 
-        with patch("nanobot.providers.litellm_provider.acompletion", new=AsyncMock(return_value=fake_response)) as mock_ac:
+        with patch(
+            "nanobot.providers.litellm_provider.acompletion",
+            new=AsyncMock(return_value=fake_response),
+        ) as mock_ac:
             await provider.chat(
                 messages=[{"role": "user", "content": "hello"}],
                 model="anthropic/claude-sonnet-4-6-20250514",
@@ -346,13 +368,18 @@ class TestLiteLLMProviderReasoningInjection:
 
         provider = LiteLLMProvider(api_key="test-key")
         fake_response = MagicMock()
-        fake_response.choices = [MagicMock(
-            message=MagicMock(content="ok", tool_calls=None),
-            finish_reason="stop",
-        )]
+        fake_response.choices = [
+            MagicMock(
+                message=MagicMock(content="ok", tool_calls=None),
+                finish_reason="stop",
+            )
+        ]
         fake_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 
-        with patch("nanobot.providers.litellm_provider.acompletion", new=AsyncMock(return_value=fake_response)) as mock_ac:
+        with patch(
+            "nanobot.providers.litellm_provider.acompletion",
+            new=AsyncMock(return_value=fake_response),
+        ) as mock_ac:
             await provider.chat(
                 messages=[{"role": "user", "content": "hello"}],
                 model="anthropic/claude-sonnet-4-6-20250514",
@@ -369,13 +396,18 @@ class TestLiteLLMProviderReasoningInjection:
 
         provider = LiteLLMProvider(api_key="test-key")
         fake_response = MagicMock()
-        fake_response.choices = [MagicMock(
-            message=MagicMock(content="ok", tool_calls=None),
-            finish_reason="stop",
-        )]
+        fake_response.choices = [
+            MagicMock(
+                message=MagicMock(content="ok", tool_calls=None),
+                finish_reason="stop",
+            )
+        ]
         fake_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 
-        with patch("nanobot.providers.litellm_provider.acompletion", new=AsyncMock(return_value=fake_response)) as mock_ac:
+        with patch(
+            "nanobot.providers.litellm_provider.acompletion",
+            new=AsyncMock(return_value=fake_response),
+        ) as mock_ac:
             await provider.chat(
                 messages=[{"role": "user", "content": "hello"}],
                 model="openai/gpt-4o",

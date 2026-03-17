@@ -253,7 +253,12 @@ class TestTasksList:
         mock_client.query.return_value = [
             {"_id": "1", "title": "Done task", "status": "done", "createdAt": "2026-01-01"},
             {"_id": "2", "title": "Inbox task", "status": "inbox", "createdAt": "2026-01-02"},
-            {"_id": "3", "title": "In progress task", "status": "in_progress", "createdAt": "2026-01-03"},
+            {
+                "_id": "3",
+                "title": "In progress task",
+                "status": "in_progress",
+                "createdAt": "2026-01-03",
+            },
         ]
 
         with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):

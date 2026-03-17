@@ -191,9 +191,7 @@ class TestSendAgentMessage:
         worker = ReviewWorker(_make_ctx(bridge))
 
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
-            result = await worker.send_agent_message(
-                "task-1", "nanobot", "Hello"
-            )
+            result = await worker.send_agent_message("task-1", "nanobot", "Hello")
 
         assert result == "msg-id"
         bridge.send_message.assert_called_once_with(
@@ -208,9 +206,7 @@ class TestHandleReviewFeedback:
         worker = ReviewWorker(_make_ctx(bridge))
 
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
-            await worker.handle_review_feedback(
-                "task-1", "reviewer-bot", "Needs changes"
-            )
+            await worker.handle_review_feedback("task-1", "reviewer-bot", "Needs changes")
 
         bridge.send_message.assert_called_once()
         msg_args = bridge.send_message.call_args[0]
@@ -235,9 +231,7 @@ class TestHandleReviewApproval:
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_approval("task-1", "reviewer-bot")
 
-        bridge.update_task_status.assert_called_once_with(
-            "task-1", TaskStatus.DONE, "reviewer-bot"
-        )
+        bridge.update_task_status.assert_called_once_with("task-1", TaskStatus.DONE, "reviewer-bot")
 
     @pytest.mark.asyncio
     async def test_human_approved_requests_hitl(self) -> None:

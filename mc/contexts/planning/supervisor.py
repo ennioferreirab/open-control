@@ -81,7 +81,7 @@ class PlanNegotiationSupervisor:
                     task_id,
                 )
 
-        asyncio.create_task(_run_and_cleanup())
+        asyncio.create_task(_run_and_cleanup())  # noqa: RUF006
 
     async def process_batch(self, tasks_batch: object) -> None:
         """Process a batch of tasks from a subscription queue."""

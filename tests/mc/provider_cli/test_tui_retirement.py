@@ -10,6 +10,7 @@ Verifies that:
 from __future__ import annotations
 
 import pathlib
+from typing import ClassVar
 
 REPO_ROOT = pathlib.Path(__file__).parents[3]
 DASHBOARD_ROOT = REPO_ROOT / "dashboard"
@@ -45,7 +46,8 @@ class TestInteractiveChatTabsNoTuiDependency:
         source = _read_source(source_path)
         # Check for functional TUI tab usage (not just mentions in comments)
         functional_lines = [
-            line for line in source.splitlines()
+            line
+            for line in source.splitlines()
             if not line.strip().startswith("*") and not line.strip().startswith("//")
         ]
         functional_source = "\n".join(functional_lines)
@@ -84,7 +86,12 @@ class TestBackendDeprecationNotices:
 class TestSupportedPathNoTmxDependency:
     """Supported step execution path modules must have no tmux/PTY/websocket imports."""
 
-    FORBIDDEN_PATTERNS = ["import tmux", "import pty", "import websockets", "TmuxSession"]
+    FORBIDDEN_PATTERNS: ClassVar[list[str]] = [
+        "import tmux",
+        "import pty",
+        "import websockets",
+        "TmuxSession",
+    ]
 
     def _assert_no_forbidden(self, source: str, label: str) -> None:
         for pattern in self.FORBIDDEN_PATTERNS:
@@ -125,9 +132,7 @@ class TestGatewayTuiConditional:
         source = self._gateway_source()
         source_lower = source.lower()
         assert (
-            "deprecated" in source_lower
-            or "superseded" in source_lower
-            or "legacy" in source_lower
+            "deprecated" in source_lower or "superseded" in source_lower or "legacy" in source_lower
         ), "gateway.py lacks a deprecation/legacy comment about the TUI runtime."
 
     def test_gateway_provider_cli_log_message_present(self) -> None:
@@ -137,9 +142,7 @@ class TestGatewayTuiConditional:
             or "provider_cli" in source.lower()
             or "PROVIDER_CLI" in source
         )
-        assert has_provider_cli_note, (
-            "gateway.py does not mention provider-cli."
-        )
+        assert has_provider_cli_note, "gateway.py does not mention provider-cli."
 
 
 class TestProviderCliModulesNoPtyDependency:
@@ -223,8 +226,8 @@ class TestProviderCliRunnerStrategyNoTmux:
     def test_strategy_does_not_import_tmux_or_pty_modules(self) -> None:
         source = self._strategy_source()
         violations = [p for p in _PTY_TMUX_PATTERNS if p in source]
-        assert not violations, (
-            "ProviderCliRunnerStrategy imports tmux/PTY: " + ", ".join(repr(v) for v in violations)
+        assert not violations, "ProviderCliRunnerStrategy imports tmux/PTY: " + ", ".join(
+            repr(v) for v in violations
         )
 
     def test_strategy_does_not_reference_interactive_session_coordinator(self) -> None:
@@ -241,8 +244,8 @@ class TestProviderProcessSupervisorNoTmux:
     def test_supervisor_does_not_import_tmux_or_pty_modules(self) -> None:
         source = self._supervisor_source()
         violations = [p for p in _PTY_TMUX_PATTERNS if p in source]
-        assert not violations, (
-            "ProviderProcessSupervisor imports tmux/PTY: " + ", ".join(repr(v) for v in violations)
+        assert not violations, "ProviderProcessSupervisor imports tmux/PTY: " + ", ".join(
+            repr(v) for v in violations
         )
 
 
@@ -255,8 +258,8 @@ class TestClaudeCodeCLIParserNoTmux:
     def test_parser_does_not_import_tmux_or_pty_modules(self) -> None:
         source = self._parser_source()
         violations = [p for p in _PTY_TMUX_PATTERNS if p in source]
-        assert not violations, (
-            "ClaudeCodeCLIParser imports tmux/PTY: " + ", ".join(repr(v) for v in violations)
+        assert not violations, "ClaudeCodeCLIParser imports tmux/PTY: " + ", ".join(
+            repr(v) for v in violations
         )
 
 

@@ -1,4 +1,4 @@
-"""Tests for the gateway module — Tasks 1–5."""
+"""Tests for the gateway module — Tasks 1-5."""
 
 import asyncio
 import os

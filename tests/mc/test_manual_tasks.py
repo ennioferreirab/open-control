@@ -12,6 +12,7 @@ from mc.types import ActivityEventType
 # Task 7.1: Orchestrator skips manual tasks
 # ---------------------------------------------------------------------------
 
+
 class TestOrchestratorSkipsManualTasks:
     """The orchestrator must NOT route manual tasks (is_manual=True)."""
 
@@ -115,6 +116,7 @@ class TestOrchestratorSkipsManualTasks:
 # Task 7.1b: Executor skips manual tasks in assigned subscription
 # ---------------------------------------------------------------------------
 
+
 class TestExecutorSkipsManualTasks:
     """The executor must NOT pick up manual tasks from the assigned queue."""
 
@@ -183,6 +185,7 @@ class TestExecutorSkipsManualTasks:
         executor = TaskExecutor(mock_bridge)
 
         with patch.object(executor, "_execute_task", new_callable=AsyncMock):
+
             async def passthrough(fn, *args, **kwargs):
                 return fn(*args, **kwargs)
 
@@ -202,6 +205,7 @@ class TestExecutorSkipsManualTasks:
 # ---------------------------------------------------------------------------
 # Task 8.3: Python types include MANUAL_TASK_STATUS_CHANGED
 # ---------------------------------------------------------------------------
+
 
 class TestManualTaskEventType:
     """ActivityEventType enum includes the manual task event."""

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
 
 from ..config import get_config, get_project_root
 from ..handler import BaseHandler
 
 
 class PlanCaptureHandler(BaseHandler):
-    events = [("PostToolUse", "ExitPlanMode")]
+    events: ClassVar[list[tuple[str, str | None]]] = [("PostToolUse", "ExitPlanMode")]
 
     def handle(self) -> str | None:
         if self.ctx.active_plan:

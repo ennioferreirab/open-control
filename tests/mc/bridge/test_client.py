@@ -67,9 +67,11 @@ class TestBridgeClientSubscribe:
     @patch("mc.bridge.client.ConvexClient")
     def test_subscribe_yields_converted_results(self, MockClient):
         mock_client = MockClient.return_value
-        mock_client.subscribe.return_value = iter([
-            [{"_id": "1", "assignedAgent": "bob"}],
-        ])
+        mock_client.subscribe.return_value = iter(
+            [
+                [{"_id": "1", "assignedAgent": "bob"}],
+            ]
+        )
 
         client = BridgeClient("https://test.convex.cloud")
         results = list(client.subscribe("tasks:list"))

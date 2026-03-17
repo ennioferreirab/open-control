@@ -8,6 +8,7 @@ import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import ClassVar
 
 from ..config import get_config, get_project_root
 from ..handler import BaseHandler
@@ -91,7 +92,10 @@ def compute_parallel_groups(tasks: list[dict]) -> list[dict]:
 
 
 class PlanTrackerHandler(BaseHandler):
-    events = [("PostToolUse", "Write"), ("TaskCompleted", None)]
+    events: ClassVar[list[tuple[str, str | None]]] = [
+        ("PostToolUse", "Write"),
+        ("TaskCompleted", None),
+    ]
 
     def handle(self) -> str | None:
         event = self.payload.get("hook_event_name", "")

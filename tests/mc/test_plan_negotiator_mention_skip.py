@@ -62,6 +62,7 @@ def _make_task_data(
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestPlanNegotiatorMentionSkip:
     """Verifies PlanNegotiator skips @mention messages."""
 
@@ -97,21 +98,18 @@ class TestPlanNegotiatorMentionSkip:
         mock_queue.get = AsyncMock(side_effect=_fake_queue_get)
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
-        with patch(
-            "mc.contexts.planning.negotiation.asyncio.to_thread",
-            new=AsyncMock(
-                side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
             ),
-        ), patch(
-            "mc.contexts.planning.negotiation.handle_plan_negotiation",
-            new=AsyncMock(return_value=None),
-        ) as mock_handle:
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
             try:
-                self._run(
-                    start_plan_negotiation_loop(
-                        bridge, "task_mention", poll_interval=0.01
-                    )
-                )
+                self._run(start_plan_negotiation_loop(bridge, "task_mention", poll_interval=0.01))
             except asyncio.CancelledError:
                 pass
 
@@ -147,21 +145,18 @@ class TestPlanNegotiatorMentionSkip:
         mock_queue.get = AsyncMock(side_effect=_fake_queue_get)
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
-        with patch(
-            "mc.contexts.planning.negotiation.asyncio.to_thread",
-            new=AsyncMock(
-                side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
             ),
-        ), patch(
-            "mc.contexts.planning.negotiation.handle_plan_negotiation",
-            new=AsyncMock(return_value=None),
-        ) as mock_handle:
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
             try:
-                self._run(
-                    start_plan_negotiation_loop(
-                        bridge, "task_normal", poll_interval=0.01
-                    )
-                )
+                self._run(start_plan_negotiation_loop(bridge, "task_normal", poll_interval=0.01))
             except asyncio.CancelledError:
                 pass
 
@@ -205,21 +200,18 @@ class TestPlanNegotiatorMentionSkip:
         mock_queue.get = AsyncMock(side_effect=_fake_queue_get)
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
-        with patch(
-            "mc.contexts.planning.negotiation.asyncio.to_thread",
-            new=AsyncMock(
-                side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
             ),
-        ), patch(
-            "mc.contexts.planning.negotiation.handle_plan_negotiation",
-            new=AsyncMock(return_value=None),
-        ) as mock_handle:
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
             try:
-                self._run(
-                    start_plan_negotiation_loop(
-                        bridge, "task_mixed", poll_interval=0.01
-                    )
-                )
+                self._run(start_plan_negotiation_loop(bridge, "task_mixed", poll_interval=0.01))
             except asyncio.CancelledError:
                 pass
 
@@ -229,9 +221,7 @@ class TestPlanNegotiatorMentionSkip:
 
     def test_skips_mention_on_review_awaiting_kickoff(self):
         """AC3: PlanNegotiator skips @mention on review+awaitingKickoff task."""
-        task_data = _make_task_data(
-            status="review", awaiting_kickoff=True
-        )
+        task_data = _make_task_data(status="review", awaiting_kickoff=True)
 
         mention_msg = {
             "_id": "msg_rev_mention",
@@ -258,21 +248,18 @@ class TestPlanNegotiatorMentionSkip:
         mock_queue.get = AsyncMock(side_effect=_fake_queue_get)
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
-        with patch(
-            "mc.contexts.planning.negotiation.asyncio.to_thread",
-            new=AsyncMock(
-                side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
             ),
-        ), patch(
-            "mc.contexts.planning.negotiation.handle_plan_negotiation",
-            new=AsyncMock(return_value=None),
-        ) as mock_handle:
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle,
+        ):
             try:
-                self._run(
-                    start_plan_negotiation_loop(
-                        bridge, "task_rev", poll_interval=0.01
-                    )
-                )
+                self._run(start_plan_negotiation_loop(bridge, "task_rev", poll_interval=0.01))
             except asyncio.CancelledError:
                 pass
 
@@ -322,21 +309,18 @@ class TestNoDoubleProcessing:
         mock_queue.get = AsyncMock(side_effect=_fake_queue_get)
         bridge.async_subscribe = MagicMock(return_value=mock_queue)
 
-        with patch(
-            "mc.contexts.planning.negotiation.asyncio.to_thread",
-            new=AsyncMock(
-                side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
+        with (
+            patch(
+                "mc.contexts.planning.negotiation.asyncio.to_thread",
+                new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
             ),
-        ), patch(
-            "mc.contexts.planning.negotiation.handle_plan_negotiation",
-            new=AsyncMock(return_value=None),
-        ) as mock_handle_negotiation:
+            patch(
+                "mc.contexts.planning.negotiation.handle_plan_negotiation",
+                new=AsyncMock(return_value=None),
+            ) as mock_handle_negotiation,
+        ):
             try:
-                self._run(
-                    start_plan_negotiation_loop(
-                        bridge, "task_both", poll_interval=0.01
-                    )
-                )
+                self._run(start_plan_negotiation_loop(bridge, "task_both", poll_interval=0.01))
             except asyncio.CancelledError:
                 pass
 
@@ -366,9 +350,7 @@ class TestNoDoubleProcessing:
 
         # Mock asyncio.to_thread for ALL MentionWatcher polls (including the
         # first seed poll) to avoid spawning real threads in tests.
-        _to_thread_mock = AsyncMock(
-            side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
-        )
+        _to_thread_mock = AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs))
 
         with patch(
             "mc.contexts.conversation.mentions.watcher.asyncio.to_thread",

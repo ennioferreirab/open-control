@@ -63,7 +63,7 @@ def tasks_create(
             result = bridge.mutation("tasks:create", args)
         except Exception as exc:
             _cli.console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         task_id = result if isinstance(result, str) else (result or {}).get("id", "")
         _cli.console.print(f"[green]Task created:[/green] {title}")
         if task_id:
@@ -203,7 +203,7 @@ def _task_mutation_command(
             _cli.console.print(success_message)
         except Exception as exc:
             _cli.console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 

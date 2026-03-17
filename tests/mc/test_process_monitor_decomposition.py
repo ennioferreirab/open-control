@@ -15,30 +15,37 @@ class TestConfigFunctionsAccessible:
 
     def test_config_default_model_importable(self) -> None:
         from mc.infrastructure.config import _config_default_model
+
         assert callable(_config_default_model)
 
     def test_resolve_convex_url_importable(self) -> None:
         from mc.infrastructure.config import _resolve_convex_url
+
         assert callable(_resolve_convex_url)
 
     def test_resolve_admin_key_importable(self) -> None:
         from mc.infrastructure.config import _resolve_admin_key
+
         assert callable(_resolve_admin_key)
 
     def test_filter_agent_fields_importable(self) -> None:
         from mc.infrastructure.config import filter_agent_fields
+
         assert callable(filter_agent_fields)
 
     def test_parse_utc_timestamp_importable(self) -> None:
         from mc.infrastructure.config import _parse_utc_timestamp
+
         assert callable(_parse_utc_timestamp)
 
     def test_read_file_or_none_importable(self) -> None:
         from mc.infrastructure.config import _read_file_or_none
+
         assert callable(_read_file_or_none)
 
     def test_read_session_data_importable(self) -> None:
         from mc.infrastructure.config import _read_session_data
+
         assert callable(_read_session_data)
 
 
@@ -47,38 +54,47 @@ class TestSyncUtilitiesAccessible:
 
     def test_sync_model_tiers_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import _sync_model_tiers
+
         assert callable(_sync_model_tiers)
 
     def test_sync_embedding_model_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import _sync_embedding_model
+
         assert callable(_sync_embedding_model)
 
     def test_distribute_builtin_skills_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import _distribute_builtin_skills
+
         assert callable(_distribute_builtin_skills)
 
     def test_sync_skills_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import sync_skills
+
         assert callable(sync_skills)
 
     def test_sync_agent_registry_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import sync_agent_registry
+
         assert callable(sync_agent_registry)
 
     def test_sync_nanobot_default_model_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import sync_nanobot_default_model
+
         assert callable(sync_nanobot_default_model)
 
     def test_ensure_low_agent_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import ensure_low_agent
+
         assert callable(ensure_low_agent)
 
     def test_ensure_nanobot_agent_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import ensure_nanobot_agent
+
         assert callable(ensure_nanobot_agent)
 
     def test_fetch_bot_identity_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import _fetch_bot_identity
+
         assert callable(_fetch_bot_identity)
 
 
@@ -87,14 +103,17 @@ class TestCleanupLogicAccessible:
 
     def test_cleanup_deleted_agents_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import _cleanup_deleted_agents
+
         assert callable(_cleanup_deleted_agents)
 
     def test_restore_archived_files_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import _restore_archived_files
+
         assert callable(_restore_archived_files)
 
     def test_write_back_convex_agents_importable(self) -> None:
         from mc.infrastructure.agent_bootstrap import _write_back_convex_agents
+
         assert callable(_write_back_convex_agents)
 
 
@@ -103,10 +122,12 @@ class TestCrashHandlerAccessible:
 
     def test_agent_gateway_importable(self) -> None:
         from mc.contexts.execution.crash_recovery import AgentGateway
+
         assert AgentGateway is not None
 
     def test_max_auto_retries_importable(self) -> None:
         from mc.contexts.execution.crash_recovery import MAX_AUTO_RETRIES
+
         assert MAX_AUTO_RETRIES == 1
 
 
@@ -115,6 +136,7 @@ class TestPlanNegotiationAccessible:
 
     def test_plan_negotiation_supervisor_importable(self) -> None:
         from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
+
         assert PlanNegotiationSupervisor is not None
 
 
@@ -132,6 +154,7 @@ class TestGatewayReExports:
             _resolve_convex_url,
             filter_agent_fields,
         )
+
         assert AGENTS_DIR is not None
         assert callable(_config_default_model)
         assert callable(_resolve_convex_url)
@@ -158,6 +181,7 @@ class TestGatewayReExports:
             sync_nanobot_default_model,
             sync_skills,
         )
+
         assert NANOBOT_AGENT_NAME is not None
         assert _NANOBOT_AGENT_CONFIG is not None
         assert callable(ensure_low_agent)
@@ -175,6 +199,7 @@ class TestGatewayReExports:
 
     def test_gateway_reexports_crash_handler(self) -> None:
         from mc.runtime.gateway import MAX_AUTO_RETRIES, AgentGateway
+
         assert AgentGateway is not None
         assert MAX_AUTO_RETRIES == 1
 
@@ -196,4 +221,5 @@ class TestAgentSyncService:
 
     def test_agent_sync_service_importable(self) -> None:
         from mc.contexts.agents.sync import AgentSyncService
+
         assert AgentSyncService is not None

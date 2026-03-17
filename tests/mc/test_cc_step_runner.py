@@ -30,9 +30,7 @@ class TestCCStepRunnerArchitecture:
 
     def test_no_executor_imports(self) -> None:
         """cc_step_runner must not import from mc.contexts.execution.executor."""
-        filepath = (
-            MC_ROOT / "contexts" / "execution" / "cc_step_runner.py"
-        )
+        filepath = MC_ROOT / "contexts" / "execution" / "cc_step_runner.py"
         assert filepath.exists(), "cc_step_runner.py must exist"
 
         source = filepath.read_text(encoding="utf-8")
@@ -88,9 +86,7 @@ class TestCCStepRunnerEngineIntegration:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "test-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: test-agent\nmodel: cc/claude-sonnet-4-6"
-        )
+        (config_dir / "config.yaml").write_text("name: test-agent\nmodel: cc/claude-sonnet-4-6")
 
         with (
             patch(
@@ -140,9 +136,7 @@ class TestCCStepRunnerEngineIntegration:
         assert request.agent_name == "test-agent"
 
     @pytest.mark.asyncio
-    async def test_builds_correct_execution_request(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_builds_correct_execution_request(self, tmp_path: Path) -> None:
         """The ExecutionRequest has correct step context fields."""
         from mc.contexts.execution.cc_step_runner import execute_step_via_cc
 
@@ -172,9 +166,7 @@ class TestCCStepRunnerEngineIntegration:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "test-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: test-agent\nmodel: cc/claude-sonnet-4-6"
-        )
+        (config_dir / "config.yaml").write_text("name: test-agent\nmodel: cc/claude-sonnet-4-6")
 
         with (
             patch(
@@ -236,9 +228,7 @@ class TestCCStepRunnerEngineIntegration:
         mock_engine.run = AsyncMock(return_value=mock_engine_result)
 
         bridge = MagicMock()
-        bridge.check_and_unblock_dependents = MagicMock(
-            return_value=["step-next"]
-        )
+        bridge.check_and_unblock_dependents = MagicMock(return_value=["step-next"])
         bridge.post_step_completion = MagicMock()
         bridge.update_step_status = MagicMock()
         bridge.create_activity = MagicMock()
@@ -248,9 +238,7 @@ class TestCCStepRunnerEngineIntegration:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "test-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: test-agent\nmodel: cc/claude-sonnet-4-6"
-        )
+        (config_dir / "config.yaml").write_text("name: test-agent\nmodel: cc/claude-sonnet-4-6")
 
         with (
             patch(
@@ -316,9 +304,7 @@ class TestCCStepRunnerEngineIntegration:
         agents_dir = tmp_path / "agents"
         config_dir = agents_dir / "test-agent"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text(
-            "name: test-agent\nmodel: cc/claude-sonnet-4-6"
-        )
+        (config_dir / "config.yaml").write_text("name: test-agent\nmodel: cc/claude-sonnet-4-6")
 
         with (
             patch(

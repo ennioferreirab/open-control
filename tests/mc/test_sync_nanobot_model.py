@@ -114,11 +114,13 @@ def test_resolves_tier_reference_before_writing(tmp_path, monkeypatch):
         "model": "tier:standard-low",
     }
     # TierResolver queries model_tiers setting via bridge.query
-    bridge.query.return_value = json.dumps({
-        "standard-low": "anthropic/claude-haiku-4-5",
-        "standard-medium": "anthropic/claude-sonnet-4-6",
-        "standard-high": "anthropic/claude-opus-4-6",
-    })
+    bridge.query.return_value = json.dumps(
+        {
+            "standard-low": "anthropic/claude-haiku-4-5",
+            "standard-medium": "anthropic/claude-sonnet-4-6",
+            "standard-high": "anthropic/claude-opus-4-6",
+        }
+    )
 
     updated = sync_nanobot_default_model(bridge)
 

@@ -70,9 +70,7 @@ def _mock_to_thread():
     """Patch asyncio.to_thread to run synchronously (no real threading in tests)."""
     with patch(
         "mc.contexts.conversation.mentions.watcher.asyncio.to_thread",
-        new=AsyncMock(
-            side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
-        ),
+        new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
     ):
         yield
 
@@ -255,9 +253,7 @@ class TestMentionWatcherUniversalCoverage:
         from mc.contexts.conversation.mentions.handler import handle_mention
 
         source = inspect.getsource(handle_mention)
-        pattern = re.compile(
-            r'session_key\s*=\s*f"mc:mention:\{agent_name\}:\{task_id\}:'
-        )
+        pattern = re.compile(r'session_key\s*=\s*f"mc:mention:\{agent_name\}:\{task_id\}:')
         assert pattern.search(source), (
             "handle_mention does not construct session_key with "
             "'mc:mention:{agent_name}:{task_id}:...' pattern"

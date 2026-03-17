@@ -23,9 +23,7 @@ class TestExecutionResultDefaults:
         assert result.has_artifacts is False
 
     def test_has_artifacts_present(self) -> None:
-        result = ExecutionResult(
-            artifacts=[{"path": "output/report.pdf", "action": "created"}]
-        )
+        result = ExecutionResult(artifacts=[{"path": "output/report.pdf", "action": "created"}])
         assert result.has_artifacts is True
 
 

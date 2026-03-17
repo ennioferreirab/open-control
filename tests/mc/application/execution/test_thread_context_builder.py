@@ -27,9 +27,7 @@ def _agent_msg(content: str) -> dict[str, Any]:
     }
 
 
-def _step_completion(
-    step_id: str, content: str, agent: str = "agent-1"
-) -> dict[str, Any]:
+def _step_completion(step_id: str, content: str, agent: str = "agent-1") -> dict[str, Any]:
     return {
         "author_name": agent,
         "author_type": "agent",
@@ -76,17 +74,13 @@ class TestBuildThreadContextStepAware:
             _step_completion("step_0", "Step 0 done"),
             _user_msg("Go ahead"),
         ]
-        result = build_thread_context(
-            msgs, predecessor_step_ids=["step_0"]
-        )
+        result = build_thread_context(msgs, predecessor_step_ids=["step_0"])
         assert "Step 0 done" in result
 
     def test_predecessor_without_user_messages(self) -> None:
         """Step context should work even without user messages."""
         msgs = [_step_completion("step_0", "Step 0 done")]
-        result = build_thread_context(
-            msgs, predecessor_step_ids=["step_0"]
-        )
+        result = build_thread_context(msgs, predecessor_step_ids=["step_0"])
         assert "Step 0 done" in result
 
     def test_empty_predecessors_falls_back_to_legacy(self) -> None:

@@ -1,4 +1,5 @@
 """Tests for mention_handler orientation fix (CC-12)."""
+
 from __future__ import annotations
 
 import inspect
@@ -18,7 +19,9 @@ async def test_mention_handler_no_import_error():
 
     # The module should use load_orientation, not _maybe_inject_orientation
     source = inspect.getsource(mc.contexts.conversation.mentions.handler)
-    assert "_maybe_inject_orientation" not in source, \
+    assert "_maybe_inject_orientation" not in source, (
         "mention_handler should not reference _maybe_inject_orientation"
-    assert "load_orientation" in source, \
+    )
+    assert "load_orientation" in source, (
         "mention_handler should use load_orientation from mc.infrastructure.orientation"
+    )
