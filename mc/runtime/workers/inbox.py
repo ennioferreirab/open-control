@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_kind
 from mc.contexts.planning.title_generation import generate_title_via_low_agent
 from mc.contexts.routing.router import DirectDelegationRouter
+from mc.domain.workflow_ownership import is_workflow_generated_plan, is_workflow_owned_task
 
 if TYPE_CHECKING:
     from mc.infrastructure.runtime_context import RuntimeContext
@@ -146,10 +147,10 @@ class InboxWorker:
         # plan was already compiled at launch time.  Routing them through
         # planning would overwrite the workflow plan with a lead-agent plan.
         execution_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
-        is_workflow_plan = execution_plan.get("generatedBy") == "workflow"
+        is_workflow_plan = is_workflow_generated_plan(execution_plan)
         work_mode = task_data.get("work_mode") or task_data.get("workMode")
 
-        if work_mode == "ai_workflow" and is_workflow_plan:
+        if is_workflow_owned_task(task_data) and is_workflow_plan:
             result = await asyncio.to_thread(
                 self._bridge.transition_task_from_snapshot,
                 task_data,

@@ -12,6 +12,7 @@ from mc.contexts.planning.review_messages import (
     build_plan_review_message,
     build_plan_review_metadata,
 )
+from mc.domain.workflow_ownership import is_workflow_generated_plan, is_workflow_owned_task
 from mc.types import (
     LEAD_AGENT_NAME,
     NANOBOT_AGENT_NAME,
@@ -168,7 +169,7 @@ class PlanningWorker:
         # execution plan was already compiled at launch time.  Invoking the
         # lead-agent planner here would overwrite the workflow plan.
         raw_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
-        if work_mode == "ai_workflow" and raw_plan.get("generatedBy") == "workflow":
+        if is_workflow_owned_task(task_data) and is_workflow_generated_plan(raw_plan):
             logger.info(
                 "[planning] Workflow task '%s' (%s): skipping LLM planner, using pre-compiled plan",
                 title,

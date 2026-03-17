@@ -19,6 +19,15 @@ import {
   updateStatus,
 } from "./steps";
 
+function makeCollectOnlyQuery(records: () => Record<string, unknown>[]) {
+  return (table: string) => ({
+    withIndex: () => ({
+      first: async () => (table === "agents" ? null : null),
+      collect: async () => (table === "agents" ? [] : records()),
+    }),
+  });
+}
+
 describe("isValidStepStatus", () => {
   it("accepts all supported step statuses", () => {
     expect(isValidStepStatus("planned")).toBe(true);
@@ -242,11 +251,7 @@ describe("acceptHumanStep", () => {
           return "activity-1";
         },
         // Query returns only the human step itself (no blocked dependents)
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [step],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [step]),
       },
     };
 
@@ -411,11 +416,7 @@ describe("updateStatus", () => {
           inserted.push({ table, value });
           return `${table}-1`;
         },
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [step, deletedHistoricalStep],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [step, deletedHistoricalStep]),
       },
     };
 
@@ -484,11 +485,7 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [step],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [step]),
       },
     };
 
@@ -517,20 +514,16 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [
-              {
-                _id: "step-1",
-                taskId: "task-1",
-                title: "Human review",
-                status: "assigned",
-                assignedAgent: "human",
-                order: 1,
-              },
-            ],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [
+          {
+            _id: "step-1",
+            taskId: "task-1",
+            title: "Human review",
+            status: "assigned",
+            assignedAgent: "human",
+            order: 1,
+          },
+        ]),
       },
     };
 
@@ -590,11 +583,7 @@ describe("manualMoveStep", () => {
           inserted.push({ table, value });
           return `${table}-1`;
         },
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [step],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [step]),
       },
     };
 
@@ -681,11 +670,7 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [step],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [step]),
       },
     };
 
@@ -749,11 +734,7 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [step],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [step]),
       },
     };
 
@@ -815,11 +796,7 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [step],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [step]),
       },
     };
 
@@ -889,11 +866,7 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [currentStep, deletedHistoricalStep],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [currentStep, deletedHistoricalStep]),
       },
     };
 
@@ -1114,11 +1087,7 @@ describe("updateStatus", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [completedStep, genericReviewStep],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [completedStep, genericReviewStep]),
       },
     };
 
@@ -1204,11 +1173,7 @@ describe("updateStatus", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [movedStep, reviewStep],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [movedStep, reviewStep]),
       },
     };
 
@@ -1277,11 +1242,7 @@ describe("transition", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: () => ({
-          withIndex: () => ({
-            collect: async () => [step],
-          }),
-        }),
+        query: makeCollectOnlyQuery(() => [step]),
       },
     };
 
