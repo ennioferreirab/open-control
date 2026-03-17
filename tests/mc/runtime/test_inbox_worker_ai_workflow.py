@@ -183,3 +183,29 @@ class TestInboxWorkerAiWorkflowBypass:
 
         bridge.transition_task_from_snapshot.assert_called_once()
         assert bridge.transition_task_from_snapshot.call_args.args[1] == "planning"
+
+    @pytest.mark.asyncio
+    async def test_claim_prevents_duplicate_routing_when_known_ids_are_cleared(self) -> None:
+        """Persistent claims, not _known_inbox_ids, must gate duplicate inbox routing."""
+        bridge = _make_bridge()
+        claims: set[tuple[str, str, str]] = set()
+
+        def _mutation(name: str, args: dict) -> dict | None:
+            if name != "runtimeClaims:acquire":
+                return None
+            claim = (args["claim_kind"], args["entity_type"], args["entity_id"])
+            if claim in claims:
+                return {"granted": False, "ownerId": "other-runtime"}
+            claims.add(claim)
+            return {"granted": True, "claimId": "claim-1"}
+
+        bridge.mutation.side_effect = _mutation
+        worker = InboxWorker(_make_ctx(bridge))
+        task = _make_workflow_task()
+
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+            await worker.process_batch([task])
+            worker._known_inbox_ids.clear()
+            await worker.process_batch([task])
+
+        bridge.transition_task_from_snapshot.assert_called_once()

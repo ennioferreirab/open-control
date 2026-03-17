@@ -21,6 +21,7 @@ from mc.application.execution.completion_status import (
     resolve_completion_status,
 )
 from mc.application.execution.interactive_mode import resolve_task_runner_type
+from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_kind
 from mc.contexts.execution.agent_runner import (  # noqa: F401
     AgentRunResult,
     _coerce_agent_run_result,
@@ -299,6 +300,17 @@ class TaskExecutor(CCExecutorMixin):
                         task_data.get("title", ""),
                         task_id,
                     )
+                    continue
+                claimed = await asyncio.to_thread(
+                    acquire_runtime_claim,
+                    self._bridge,
+                    claim_kind=task_snapshot_claim_kind("executor", task_data),
+                    entity_type="task",
+                    entity_id=task_id,
+                    metadata={"status": task_data.get("status", "assigned")},
+                )
+                if not claimed:
+                    logger.debug("[executor] Claim denied for task %s", task_id)
                     continue
                 self._known_assigned_ids.add(task_id)
                 asyncio.create_task(self._pickup_task(task_data))

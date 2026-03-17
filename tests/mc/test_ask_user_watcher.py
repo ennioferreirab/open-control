@@ -1,12 +1,13 @@
 """Tests for AskUserReplyWatcher — watches task threads for user replies to ask_user."""
 
 import asyncio
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 
 from mc.contexts.conversation.ask_user.handler import AskUserHandler
-from mc.contexts.conversation.ask_user.watcher import AskUserReplyWatcher
 from mc.contexts.conversation.ask_user.registry import AskUserRegistry
+from mc.contexts.conversation.ask_user.watcher import AskUserReplyWatcher
 
 
 def _handler_with_pending(task_id: str) -> AskUserHandler:
@@ -41,16 +42,28 @@ class TestAskUserReplyWatcher:
         watcher = AskUserReplyWatcher(bridge, registry)
 
         # First poll: only the agent question exists — seeds the seen set
-        bridge.get_task_messages = MagicMock(return_value=[
-            {"_id": "msg-1", "author_type": "agent", "content": "**agent is asking:**\n\nWhat color?"},
-        ])
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {
+                    "_id": "msg-1",
+                    "author_type": "agent",
+                    "content": "**agent is asking:**\n\nWhat color?",
+                },
+            ]
+        )
         await watcher._poll_once()
 
         # Second poll: user reply appears
-        bridge.get_task_messages = MagicMock(return_value=[
-            {"_id": "msg-1", "author_type": "agent", "content": "**agent is asking:**\n\nWhat color?"},
-            {"_id": "msg-2", "author_type": "user", "content": "Blue"},
-        ])
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {
+                    "_id": "msg-1",
+                    "author_type": "agent",
+                    "content": "**agent is asking:**\n\nWhat color?",
+                },
+                {"_id": "msg-2", "author_type": "user", "content": "Blue"},
+            ]
+        )
         await watcher._poll_once()
 
         # The fake future in _pending_ask should have been resolved
@@ -64,9 +77,11 @@ class TestAskUserReplyWatcher:
         handler = _handler_with_pending("task-abc")
         registry.register("task-abc", handler)
 
-        bridge.get_task_messages = MagicMock(return_value=[
-            {"_id": "msg-1", "author_type": "agent", "content": "I am done"},
-        ])
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {"_id": "msg-1", "author_type": "agent", "content": "I am done"},
+            ]
+        )
 
         await AskUserReplyWatcher(bridge, registry)._poll_once()
 
@@ -99,9 +114,11 @@ class TestAskUserReplyWatcher:
         await watcher._poll_once()
 
         # Second poll: user message appears
-        bridge.get_task_messages = MagicMock(return_value=[
-            {"_id": "msg-1", "author_type": "user", "content": "Blue"},
-        ])
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {"_id": "msg-1", "author_type": "user", "content": "Blue"},
+            ]
+        )
         await watcher._poll_once()
 
         assert future.done()
@@ -116,3 +133,48 @@ class TestAskUserReplyWatcher:
         await watcher._poll_once()
 
         assert not future2.done()  # msg-1 already seen, not delivered again
+
+    @pytest.mark.asyncio
+    async def test_claim_prevents_duplicate_delivery_when_seen_cache_is_cleared(
+        self, bridge, registry
+    ):
+        loop = asyncio.get_running_loop()
+        handler = AskUserHandler()
+        future = loop.create_future()
+        handler._pending_ask["req-123"] = future
+        handler._task_to_request["task-abc"] = "req-123"
+        registry.register("task-abc", handler)
+
+        claims: set[tuple[str, str, str]] = set()
+
+        def _mutation(name: str, args: dict) -> dict | None:
+            if name != "runtimeClaims:acquire":
+                return None
+            claim = (args["claim_kind"], args["entity_type"], args["entity_id"])
+            if claim in claims:
+                return {"granted": False, "ownerId": "other-runtime"}
+            claims.add(claim)
+            return {"granted": True, "claimId": "claim-1"}
+
+        bridge.mutation = MagicMock(side_effect=_mutation)
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {"_id": "msg-1", "author_type": "user", "content": "Blue"},
+            ]
+        )
+
+        watcher = AskUserReplyWatcher(bridge, registry)
+        watcher._seen_messages["task-abc"] = set()
+
+        await watcher._poll_once()
+        assert future.done()
+        assert future.result() == "Blue"
+
+        future2 = loop.create_future()
+        handler._pending_ask["req-456"] = future2
+        handler._task_to_request["task-abc"] = "req-456"
+        watcher._seen_messages["task-abc"] = set()
+
+        await watcher._poll_once()
+
+        assert not future2.done()

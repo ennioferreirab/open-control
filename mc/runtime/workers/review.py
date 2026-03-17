@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_kind
 from mc.contexts.interaction.service import has_pending_execution_question
 from mc.types import (
     ActivityEventType,
@@ -42,6 +43,17 @@ class ReviewWorker:
         for task_data in tasks:
             task_id = task_data.get("id")
             if not task_id or task_id in self._known_review_task_ids:
+                continue
+            claimed = await asyncio.to_thread(
+                acquire_runtime_claim,
+                self._bridge,
+                claim_kind=task_snapshot_claim_kind("review", task_data),
+                entity_type="task",
+                entity_id=task_id,
+                metadata={"status": task_data.get("status", "review")},
+            )
+            if not claimed:
+                logger.debug("[review] Claim denied for task %s", task_id)
                 continue
             self._known_review_task_ids.add(task_id)
             await self.handle_review_transition(task_id, task_data)

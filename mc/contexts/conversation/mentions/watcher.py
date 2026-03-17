@@ -19,6 +19,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
+from mc.bridge.runtime_claims import acquire_runtime_claim
+
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
 
@@ -117,6 +119,17 @@ class MentionWatcher:
         for msg in messages:
             msg_id = msg.get("_id") or msg.get("id") or ""
             if not msg_id or msg_id in self._seen_message_ids:
+                continue
+            claimed = await asyncio.to_thread(
+                acquire_runtime_claim,
+                self._bridge,
+                claim_kind="mention-message",
+                entity_type="message",
+                entity_id=msg_id,
+                metadata={"messageType": "user_message"},
+            )
+            if not claimed:
+                logger.debug("[mention_watcher] Claim denied for message %s", msg_id)
                 continue
             self._seen_message_ids.add(msg_id)
 

@@ -4,22 +4,20 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from mc.runtime.timeout_checker import (
     CHECK_INTERVAL_SECONDS,
-    DEFAULT_INTER_AGENT_TIMEOUT_MINUTES,
-    DEFAULT_TASK_TIMEOUT_MINUTES,
     TimeoutChecker,
     _format_duration,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_bridge() -> MagicMock:
     """Create a mock ConvexBridge."""
@@ -58,6 +56,7 @@ def _make_task(
 # Test: _format_duration
 # ---------------------------------------------------------------------------
 
+
 class TestFormatDuration:
     def test_minutes_only(self) -> None:
         assert _format_duration(timedelta(minutes=15)) == "15m"
@@ -76,6 +75,7 @@ class TestFormatDuration:
 # Test: Stalled task detection
 # ---------------------------------------------------------------------------
 
+
 class TestStalledTaskDetection:
     """AC #1: Flag tasks in 'in_progress' that exceed the timeout."""
 
@@ -92,7 +92,9 @@ class TestStalledTaskDetection:
         # No settings configured (use defaults)
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [stalled_task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatus": [stalled_task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -111,9 +113,9 @@ class TestStalledTaskDetection:
         assert "stalled" in msg_args[0][3].lower()
 
         # Verify markStalled mutation was called
-        bridge.mutation.assert_called_once()
-        mut_args = bridge.mutation.call_args
-        assert mut_args[0][0] == "tasks:markStalled"
+        mutation_names = [call_args[0][0] for call_args in bridge.mutation.call_args_list]
+        assert "runtimeClaims:acquire" in mutation_names
+        assert "tasks:markStalled" in mutation_names
 
     @pytest.mark.asyncio
     async def test_does_not_flag_fresh_task(self) -> None:
@@ -127,7 +129,9 @@ class TestStalledTaskDetection:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [fresh_task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatus": [fresh_task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -147,7 +151,9 @@ class TestStalledTaskDetection:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [stalled_task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatus": [stalled_task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         # First check — should flag
@@ -162,6 +168,7 @@ class TestStalledTaskDetection:
 # ---------------------------------------------------------------------------
 # Test: Per-task timeout override
 # ---------------------------------------------------------------------------
+
 
 class TestPerTaskTimeoutOverride:
     """AC #6: Per-task timeout overrides global default."""
@@ -211,6 +218,7 @@ class TestPerTaskTimeoutOverride:
 # ---------------------------------------------------------------------------
 # Test: Global settings from Convex
 # ---------------------------------------------------------------------------
+
 
 class TestGlobalSettings:
     """AC #5, #8: Timeout values read from settings table."""
@@ -269,6 +277,7 @@ class TestGlobalSettings:
 # ---------------------------------------------------------------------------
 # Test: Review escalation
 # ---------------------------------------------------------------------------
+
 
 class TestReviewEscalation:
     """AC #3, #4: Review requests exceeding inter-agent timeout are escalated."""
@@ -390,6 +399,7 @@ class TestReviewEscalation:
 # ---------------------------------------------------------------------------
 # Test: start() loop behavior
 # ---------------------------------------------------------------------------
+
 
 class TestStartLoop:
     """AC #7: Timeout checking runs as a periodic check."""

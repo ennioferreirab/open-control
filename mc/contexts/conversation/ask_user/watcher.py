@@ -6,6 +6,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from mc.bridge.runtime_claims import acquire_runtime_claim
+
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
     from mc.contexts.conversation.ask_user.registry import AskUserRegistry
@@ -88,15 +90,28 @@ class AskUserReplyWatcher:
                 msg_id = msg.get("_id") or msg.get("id") or ""
                 if not msg_id or msg_id in seen:
                     continue
-                seen.add(msg_id)
 
                 author_type = msg.get("author_type") or msg.get("authorType") or ""
                 if author_type != "user":
+                    seen.add(msg_id)
                     continue
 
                 content = (msg.get("content") or "").strip()
                 if not content:
+                    seen.add(msg_id)
                     continue
+
+                claimed = await asyncio.to_thread(
+                    acquire_runtime_claim,
+                    self._bridge,
+                    claim_kind="ask-user-reply",
+                    entity_type="message",
+                    entity_id=msg_id,
+                    metadata={"taskId": task_id},
+                )
+                if not claimed:
+                    continue
+                seen.add(msg_id)
 
                 if self._conversation_service is not None:
                     try:

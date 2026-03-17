@@ -356,3 +356,44 @@ class TestPlanningWorkerAiWorkflowBypass:
         assert call_args.args[1] == "review"
         assert call_args.kwargs["awaiting_kickoff"] is True
         assert call_args.kwargs["review_phase"] == "plan_review"
+
+    @pytest.mark.asyncio
+    async def test_claim_prevents_duplicate_workflow_dispatch_when_known_ids_are_cleared(
+        self,
+    ) -> None:
+        """Persistent claims, not _known_planning_ids, must gate duplicate planning work."""
+        bridge = _make_bridge()
+        claims: set[tuple[str, str, str]] = set()
+
+        def _mutation(name: str, args: dict) -> dict | None:
+            if name != "runtimeClaims:acquire":
+                return None
+            claim = (args["claim_kind"], args["entity_type"], args["entity_id"])
+            if claim in claims:
+                return {"granted": False, "ownerId": "other-runtime"}
+            claims.add(claim)
+            return {"granted": True, "claimId": "claim-1"}
+
+        bridge.mutation.side_effect = _mutation
+        materializer = _make_materializer()
+        dispatcher = _make_dispatcher()
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
+        task = _make_workflow_task()
+
+        def _capture_create_task(coro):
+            coro.close()
+            return MagicMock()
+
+        with (
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.runtime.workers.planning.asyncio.create_task",
+                side_effect=_capture_create_task,
+            ),
+            patch("mc.runtime.workers.planning.TaskPlanner"),
+        ):
+            await worker.process_batch([task])
+            worker._known_planning_ids.clear()
+            await worker.process_batch([task])
+
+        materializer.materialize.assert_called_once()

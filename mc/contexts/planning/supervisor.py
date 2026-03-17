@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_kind
 from mc.contexts.planning.negotiation import start_plan_negotiation_loop
 
 if TYPE_CHECKING:
@@ -98,6 +99,17 @@ class PlanNegotiationSupervisor:
                         "[plan_negotiation] Skipping plan negotiation for task %s (cron requeue)",
                         task_id,
                     )
+                    continue
+                claimed = await asyncio.to_thread(
+                    acquire_runtime_claim,
+                    self._bridge,
+                    claim_kind=task_snapshot_claim_kind("plan-negotiation", task_data),
+                    entity_type="task",
+                    entity_id=task_id,
+                    metadata={"status": task_status},
+                )
+                if not claimed:
+                    logger.debug("[plan_negotiation] Claim denied for task %s", task_id)
                     continue
                 await self._spawn_loop_if_needed(task_id)
 

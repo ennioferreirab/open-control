@@ -20,6 +20,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
+from mc.bridge.runtime_claims import acquire_runtime_claim
 from mc.types import ActivityEventType, AuthorType, MessageType
 
 if TYPE_CHECKING:
@@ -137,6 +138,17 @@ class TimeoutChecker:
 
         elapsed = now - updated_at
         if elapsed > timedelta(minutes=timeout_minutes):
+            claimed = await asyncio.to_thread(
+                acquire_runtime_claim,
+                self._bridge,
+                claim_kind=f"timeout-stalled:{updated_at_str}",
+                entity_type="task",
+                entity_id=task_id,
+                metadata={"status": task.get("status", "in_progress")},
+                lease_seconds=self._check_interval * 2,
+            )
+            if not claimed:
+                return False
             await self._flag_stalled_task(task_id, task, elapsed)
             return True
         return False
@@ -201,6 +213,17 @@ class TimeoutChecker:
 
         elapsed = now - updated_at
         if elapsed > timedelta(minutes=timeout_minutes):
+            claimed = await asyncio.to_thread(
+                acquire_runtime_claim,
+                self._bridge,
+                claim_kind=f"timeout-review:{updated_at_str}",
+                entity_type="task",
+                entity_id=task_id,
+                metadata={"status": task.get("status", "review")},
+                lease_seconds=self._check_interval * 2,
+            )
+            if not claimed:
+                return False
             await self._escalate_review(task_id, task, elapsed)
             return True
         return False

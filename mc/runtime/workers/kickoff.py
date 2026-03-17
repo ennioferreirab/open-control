@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from mc.bridge.runtime_claims import acquire_runtime_claim
 from mc.types import ActivityEventType, ExecutionPlan, StepStatus, TaskStatus
 
 if TYPE_CHECKING:
@@ -93,6 +94,17 @@ class KickoffResumeWorker:
             self._processed_signatures[task_id] = signature
 
             if not task_data.get("execution_plan"):
+                continue
+            claimed = await asyncio.to_thread(
+                acquire_runtime_claim,
+                self._bridge,
+                claim_kind=f"kickoff:{signature}",
+                entity_type="task",
+                entity_id=task_id,
+                metadata={"status": task_data.get("status", "in_progress")},
+            )
+            if not claimed:
+                logger.debug("[kickoff] Claim denied for task %s", task_id)
                 continue
 
             try:

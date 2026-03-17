@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mc.infrastructure.runtime_context import RuntimeContext
+from mc.runtime.workers.kickoff import KickoffResumeWorker
 from mc.types import (
     ActivityEventType,
     StepStatus,
     TaskStatus,
 )
-from mc.runtime.workers.kickoff import KickoffResumeWorker
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -90,9 +90,7 @@ class TestKickoffWorkerKickoff:
         }
 
         with (
-            patch(
-                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-            ),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch(
                 "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
@@ -121,14 +119,12 @@ class TestKickoffWorkerKickoff:
             "execution_plan": _make_plan_dict(),
         }
 
-        with patch(
-            "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-        ):
+        with patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_batch([task_data])
 
-        bridge.update_task_status.assert_called_once()
-        args = bridge.update_task_status.call_args[0]
-        assert args[1] == TaskStatus.CRASHED
+        bridge.transition_task_from_snapshot.assert_called_once()
+        args = bridge.transition_task_from_snapshot.call_args
+        assert args.args[1] == TaskStatus.CRASHED
 
         bridge.create_activity.assert_called_once()
         act_args = bridge.create_activity.call_args[0]
@@ -146,9 +142,7 @@ class TestKickoffWorkerKickoff:
             "title": "No Plan",
         }
 
-        with patch(
-            "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-        ):
+        with patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_batch([task_data])
 
         materializer.materialize.assert_not_called()
@@ -183,9 +177,7 @@ class TestKickoffWorkerResume:
         }
 
         with (
-            patch(
-                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-            ),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch(
                 "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
@@ -227,9 +219,7 @@ class TestKickoffWorkerResume:
         }
 
         with (
-            patch(
-                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-            ),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch(
                 "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
@@ -343,9 +333,7 @@ class TestKickoffWorkerResume:
         }
 
         with (
-            patch(
-                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-            ),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch("mc.runtime.workers.kickoff.asyncio.create_task") as create_mock,
         ):
             await worker.process_batch([task_data])
@@ -376,9 +364,7 @@ class TestKickoffWorkerProcessBatch:
             return MagicMock()
 
         with (
-            patch(
-                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-            ),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch(
                 "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
@@ -408,9 +394,7 @@ class TestKickoffWorkerProcessBatch:
             return MagicMock()
 
         with (
-            patch(
-                "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-            ),
+            patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread),
             patch(
                 "mc.runtime.workers.kickoff.asyncio.create_task",
                 side_effect=_capture_create_task,
@@ -441,9 +425,7 @@ class TestKickoffWorkerProcessBatch:
             "execution_plan": _make_plan_dict(),
         }
 
-        with patch(
-            "mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread
-        ):
+        with patch("mc.runtime.workers.kickoff.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_batch([task])
 
         # Should skip because ID was pre-registered
