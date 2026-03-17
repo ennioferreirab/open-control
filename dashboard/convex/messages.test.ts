@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  create,
   postMentionMessage,
+  postLeadAgentMessage,
+  postStepCompletion,
   postUserPlanMessage,
   postUserReply,
   sendThreadMessage,
@@ -15,6 +18,30 @@ type InsertCall = {
 function getMentionHandler() {
   return (
     postMentionMessage as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
+}
+
+function getCreateHandler() {
+  return (
+    create as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
+}
+
+function getPostStepCompletionHandler() {
+  return (
+    postStepCompletion as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
+}
+
+function getLeadAgentHandler() {
+  return (
+    postLeadAgentMessage as unknown as {
       _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
     }
   )._handler;
@@ -64,6 +91,53 @@ function makeCtx(task: Record<string, unknown> | null) {
     ctx: { db: { get, patch, insert, query } },
     inserts,
     mocks: { get, patch, insert, query },
+  };
+}
+
+function makeReceiptCtx() {
+  const inserts: InsertCall[] = [];
+  const receipts = new Map<string, Record<string, unknown>>();
+
+  const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
+    inserts.push({ table, value });
+    if (table === "runtimeReceipts") {
+      receipts.set(String(value.idempotencyKey), value);
+      return "receipt-id-123";
+    }
+    if (table === "messages") {
+      return `msg-${inserts.filter((entry) => entry.table === "messages").length}`;
+    }
+    return "activity-id-123";
+  });
+
+  const query = vi.fn((table: string) => ({
+    withIndex: vi.fn(
+      (
+        _indexName: string,
+        apply?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+      ) => {
+        let idempotencyKey: string | null = null;
+        apply?.({
+          eq: (_field: string, value: string) => {
+            idempotencyKey = value;
+            return {};
+          },
+        });
+        return {
+          first: vi.fn(async () =>
+            table === "runtimeReceipts" && idempotencyKey
+              ? (receipts.get(idempotencyKey) ?? null)
+              : null,
+          ),
+          collect: vi.fn(async () => []),
+        };
+      },
+    ),
+  }));
+
+  return {
+    ctx: { db: { insert, query } },
+    inserts,
   };
 }
 
@@ -192,6 +266,87 @@ describe("messages.postMentionMessage", () => {
     });
 
     expect(result).toBe("msg-id-123");
+  });
+});
+
+describe("messages idempotency receipts", () => {
+  it("reuses a stored receipt for messages.create", async () => {
+    const handler = getCreateHandler();
+    const { ctx, inserts } = makeReceiptCtx();
+
+    const first = await handler(ctx, {
+      taskId: "task-1",
+      authorName: "bot",
+      authorType: "agent",
+      content: "hello",
+      messageType: "work",
+      timestamp: "2026-03-16T12:00:00.000Z",
+      idempotencyKey: "msg:create:1",
+    });
+    const second = await handler(ctx, {
+      taskId: "task-1",
+      authorName: "bot",
+      authorType: "agent",
+      content: "hello",
+      messageType: "work",
+      timestamp: "2026-03-16T12:00:00.000Z",
+      idempotencyKey: "msg:create:1",
+    });
+
+    expect(first).toBe("msg-1");
+    expect(second).toBe("msg-1");
+    expect(inserts.filter((entry) => entry.table === "messages")).toHaveLength(1);
+    expect(inserts.filter((entry) => entry.table === "runtimeReceipts")).toHaveLength(1);
+  });
+
+  it("dedupes postStepCompletion side effects behind one receipt", async () => {
+    const handler = getPostStepCompletionHandler();
+    const { ctx, inserts } = makeReceiptCtx();
+
+    const first = await handler(ctx, {
+      taskId: "task-1",
+      stepId: "step-1",
+      agentName: "coder",
+      content: "done",
+      idempotencyKey: "step-complete:1",
+    });
+    const second = await handler(ctx, {
+      taskId: "task-1",
+      stepId: "step-1",
+      agentName: "coder",
+      content: "done",
+      idempotencyKey: "step-complete:1",
+    });
+
+    expect(first).toBe("msg-1");
+    expect(second).toBe("msg-1");
+    expect(inserts.filter((entry) => entry.table === "messages")).toHaveLength(1);
+    expect(inserts.filter((entry) => entry.table === "activities")).toHaveLength(1);
+    expect(inserts.filter((entry) => entry.table === "runtimeReceipts")).toHaveLength(1);
+  });
+
+  it("dedupes postLeadAgentMessage writes behind one receipt", async () => {
+    const handler = getLeadAgentHandler();
+    const { ctx, inserts } = makeReceiptCtx();
+
+    const first = await handler(ctx, {
+      taskId: "task-1",
+      content: "plan v1",
+      type: "lead_agent_plan",
+      idempotencyKey: "lead-plan:1",
+    });
+    const second = await handler(ctx, {
+      taskId: "task-1",
+      content: "plan v1",
+      type: "lead_agent_plan",
+      idempotencyKey: "lead-plan:1",
+    });
+
+    expect(first).toBe("msg-1");
+    expect(second).toBe("msg-1");
+    expect(inserts.filter((entry) => entry.table === "messages")).toHaveLength(1);
+    expect(inserts.filter((entry) => entry.table === "activities")).toHaveLength(1);
+    expect(inserts.filter((entry) => entry.table === "runtimeReceipts")).toHaveLength(1);
   });
 });
 

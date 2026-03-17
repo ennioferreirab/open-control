@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { getRuntimeReceipt, storeRuntimeReceipt } from "./runtimeReceipts";
 
 export const create = mutation({
   args: {
@@ -48,36 +49,42 @@ export const create = mutation({
     ),
     description: v.string(),
     timestamp: v.string(),
+    idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("activities", {
+    const receipt = await getRuntimeReceipt<string>(ctx, args.idempotencyKey);
+    if (receipt) {
+      return receipt;
+    }
+    const activityId = await ctx.db.insert("activities", {
       taskId: args.taskId,
       agentName: args.agentName,
       eventType: args.eventType,
       description: args.description,
       timestamp: args.timestamp,
     });
+    await storeRuntimeReceipt(ctx, {
+      idempotencyKey: args.idempotencyKey,
+      scope: "activities:create",
+      entityType: "activity",
+      entityId: String(activityId),
+      response: activityId,
+    });
+    return activityId;
   },
 });
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
-      .query("activities")
-      .withIndex("by_timestamp")
-      .collect();
+    return await ctx.db.query("activities").withIndex("by_timestamp").collect();
   },
 });
 
 export const listRecent = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
-      .query("activities")
-      .withIndex("by_timestamp")
-      .order("desc")
-      .take(100);
+    return await ctx.db.query("activities").withIndex("by_timestamp").order("desc").take(100);
   },
 });
 

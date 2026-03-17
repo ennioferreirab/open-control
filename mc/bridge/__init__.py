@@ -27,6 +27,7 @@ from convex import ConvexClient  # noqa: F401 -- re-exported for patch compatibi
 
 from mc.bridge.adapter import _BridgeClientAdapter
 from mc.bridge.facade_mixins import BridgeRepositoryFacadeMixin
+from mc.bridge.idempotency import ensure_idempotency_key
 from mc.bridge.key_conversion import (  # noqa: F401
     _convert_keys_to_camel,
     _convert_keys_to_snake,
@@ -94,6 +95,7 @@ class ConvexBridge(BridgeRepositoryFacadeMixin):
 
     def _mutation_with_retry(self, function_name: str, args: dict[str, Any] | None = None) -> Any:
         camel_args = _convert_keys_to_camel(args) if args else {}
+        camel_args = ensure_idempotency_key(function_name, camel_args)
         last_exception = None
         max_attempts = MAX_RETRIES + 1
 

@@ -1726,6 +1726,104 @@ describe("tasks.transition", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
+  it("persists one receipt for a successful transition replay", async () => {
+    const handler = getTransitionHandler();
+    const patchedTasks = new Map<string, Record<string, unknown>>();
+    const receipts = new Map<string, Record<string, unknown>>();
+    const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
+      if (table === "runtimeReceipts") {
+        receipts.set(String(value.idempotencyKey), value);
+        return "receipt-1";
+      }
+      return "activity-1";
+    });
+    const patch = vi.fn(async (id: string, value: Record<string, unknown>) => {
+      patchedTasks.set(id, { ...(patchedTasks.get(id) ?? {}), ...value });
+    });
+    const get = vi.fn(async () => {
+      if (patchedTasks.has("task-1")) {
+        return {
+          _id: "task-1",
+          title: "Task 1",
+          status: "review",
+          reviewPhase: "final_approval",
+          stateVersion: 4,
+          ...patchedTasks.get("task-1"),
+        };
+      }
+      return {
+        _id: "task-1",
+        title: "Task 1",
+        status: "in_progress",
+        stateVersion: 3,
+      };
+    });
+    const query = vi.fn((table: string) => ({
+      withIndex: vi.fn(
+        (
+          _indexName: string,
+          apply?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+        ) => {
+          let idempotencyKey: string | null = null;
+          apply?.({
+            eq: (_field: string, value: string) => {
+              idempotencyKey = value;
+              return {};
+            },
+          });
+          return {
+            first: vi.fn(async () =>
+              table === "runtimeReceipts" && idempotencyKey
+                ? (receipts.get(idempotencyKey) ?? null)
+                : null,
+            ),
+          };
+        },
+      ),
+    }));
+
+    await handler(
+      { db: { get, patch, insert, query } },
+      {
+        taskId: "task-1",
+        fromStatus: "in_progress",
+        expectedStateVersion: 3,
+        toStatus: "review",
+        reviewPhase: "final_approval",
+        reason: "All steps completed",
+        idempotencyKey: "task-1:v3:final-review",
+      },
+    );
+    const replay = await handler(
+      { db: { get, patch, insert, query } },
+      {
+        taskId: "task-1",
+        fromStatus: "in_progress",
+        expectedStateVersion: 3,
+        toStatus: "review",
+        reviewPhase: "final_approval",
+        reason: "All steps completed",
+        idempotencyKey: "task-1:v3:final-review",
+      },
+    );
+
+    expect(replay).toEqual(
+      expect.objectContaining({
+        kind: "noop",
+        stateVersion: 4,
+        reason: "already_applied",
+      }),
+    );
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledWith(
+      "runtimeReceipts",
+      expect.objectContaining({
+        idempotencyKey: "task-1:v3:final-review",
+      }),
+    );
+    expect(insert).toHaveBeenCalledTimes(2);
+  });
+
   it("supports assigned to assigned reassignment through the compatibility path", async () => {
     const handler = getUpdateStatusHandler();
     const patch = vi.fn(async () => undefined);

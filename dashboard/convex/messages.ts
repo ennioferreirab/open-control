@@ -10,6 +10,7 @@ import {
   appendExecutionInteraction,
   upsertExecutionSession,
 } from "./lib/executionInteractionState";
+import { getRuntimeReceipt, storeRuntimeReceipt } from "./runtimeReceipts";
 
 /** Validator for the unified thread message type (new field). */
 const threadMessageTypeValidator = v.optional(
@@ -145,9 +146,14 @@ export const create = internalMutation({
     fileAttachments: fileAttachmentsValidator,
     planReview: planReviewValidator,
     leadAgentConversation: leadAgentConversationValidator,
+    idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("messages", {
+    const receipt = await getRuntimeReceipt<string>(ctx, args.idempotencyKey);
+    if (receipt) {
+      return receipt;
+    }
+    const messageId = await ctx.db.insert("messages", {
       taskId: args.taskId,
       authorName: args.authorName,
       authorType: args.authorType,
@@ -161,6 +167,14 @@ export const create = internalMutation({
       planReview: args.planReview,
       leadAgentConversation: args.leadAgentConversation,
     });
+    await storeRuntimeReceipt(ctx, {
+      idempotencyKey: args.idempotencyKey,
+      scope: "messages:create",
+      entityType: "message",
+      entityId: String(messageId),
+      response: messageId,
+    });
+    return messageId;
   },
 });
 
@@ -175,8 +189,13 @@ export const postStepCompletion = internalMutation({
     agentName: v.string(),
     content: v.string(),
     artifacts: artifactsValidator,
+    idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const receipt = await getRuntimeReceipt<string>(ctx, args.idempotencyKey);
+    if (receipt) {
+      return receipt;
+    }
     const timestamp = new Date().toISOString();
     const messageId = await ctx.db.insert("messages", {
       taskId: args.taskId,
@@ -196,6 +215,14 @@ export const postStepCompletion = internalMutation({
       agentName: args.agentName,
       description: `Step completion posted by ${args.agentName}`,
       timestamp,
+    });
+
+    await storeRuntimeReceipt(ctx, {
+      idempotencyKey: args.idempotencyKey,
+      scope: "messages:postStepCompletion",
+      entityType: "message",
+      entityId: String(messageId),
+      response: messageId,
     });
 
     return messageId;
@@ -246,8 +273,13 @@ export const postLeadAgentMessage = internalMutation({
     content: v.string(),
     type: v.union(v.literal("lead_agent_plan"), v.literal("lead_agent_chat")),
     planReview: planReviewValidator,
+    idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const receipt = await getRuntimeReceipt<string>(ctx, args.idempotencyKey);
+    if (receipt) {
+      return receipt;
+    }
     const timestamp = new Date().toISOString();
     const messageId = await ctx.db.insert("messages", {
       taskId: args.taskId,
@@ -267,6 +299,14 @@ export const postLeadAgentMessage = internalMutation({
       agentName: "lead-agent",
       description: `Lead agent posted ${args.type === "lead_agent_plan" ? "plan" : "chat"} message`,
       timestamp,
+    });
+
+    await storeRuntimeReceipt(ctx, {
+      idempotencyKey: args.idempotencyKey,
+      scope: "messages:postLeadAgentMessage",
+      entityType: "message",
+      entityId: String(messageId),
+      response: messageId,
     });
 
     return messageId;

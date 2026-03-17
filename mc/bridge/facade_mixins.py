@@ -183,10 +183,17 @@ class BridgeRepositoryFacadeMixin:
         content: str,
         message_type: str,
         msg_type: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         self._ensure_repos()
         return self._messages.send_message(
-            task_id, author_name, author_type, content, message_type, msg_type
+            task_id,
+            author_name,
+            author_type,
+            content,
+            message_type,
+            msg_type,
+            idempotency_key,
         )
 
     def post_step_completion(
@@ -196,9 +203,17 @@ class BridgeRepositoryFacadeMixin:
         agent_name: str,
         content: str,
         artifacts: list[dict[str, Any]] | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         self._ensure_repos()
-        return self._messages.post_step_completion(task_id, step_id, agent_name, content, artifacts)
+        return self._messages.post_step_completion(
+            task_id,
+            step_id,
+            agent_name,
+            content,
+            artifacts,
+            idempotency_key,
+        )
 
     def post_lead_agent_message(
         self,
@@ -206,19 +221,30 @@ class BridgeRepositoryFacadeMixin:
         content: str,
         msg_type: str,
         plan_review: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         self._ensure_repos()
         return self._messages.post_lead_agent_message(
-            task_id, content, msg_type, plan_review=plan_review
+            task_id,
+            content,
+            msg_type,
+            plan_review=plan_review,
+            idempotency_key=idempotency_key,
         )
 
     def get_recent_user_messages(self, since_timestamp: str) -> list[dict[str, Any]]:
         self._ensure_repos()
         return self._messages.get_recent_user_messages(since_timestamp)
 
-    def post_system_error(self, task_id: str, content: str, step_id: str | None = None) -> Any:
+    def post_system_error(
+        self,
+        task_id: str,
+        content: str,
+        step_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Any:
         self._ensure_repos()
-        return self._messages.post_system_error(task_id, content, step_id)
+        return self._messages.post_system_error(task_id, content, step_id, idempotency_key)
 
     def sync_agent(self, agent_data: Any) -> Any:
         self._ensure_repos()

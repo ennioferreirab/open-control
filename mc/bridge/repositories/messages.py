@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -10,6 +12,11 @@ if TYPE_CHECKING:
     from mc.bridge.client import BridgeClient
 
 logger = logging.getLogger(__name__)
+
+
+def _content_digest(*parts: Any) -> str:
+    payload = json.dumps(parts, sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 class MessageRepository:
@@ -39,6 +46,7 @@ class MessageRepository:
         content: str,
         message_type: str,
         msg_type: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         """Send a task-scoped message with retry and logging.
 
@@ -62,10 +70,12 @@ class MessageRepository:
         }
         if msg_type is not None:
             args["type"] = msg_type
-        result = self._client.mutation("messages:create", args)
-        self._log_state_transition(
-            "message", f"Message sent by {author_name} on task {task_id}"
+        args["idempotency_key"] = idempotency_key or (
+            f"py:message:{task_id}:{author_name}:{message_type}:{msg_type or 'none'}:"
+            f"{_content_digest(content, args['timestamp'])}"
         )
+        result = self._client.mutation("messages:create", args)
+        self._log_state_transition("message", f"Message sent by {author_name} on task {task_id}")
         return result
 
     def post_step_completion(
@@ -75,6 +85,7 @@ class MessageRepository:
         agent_name: str,
         content: str,
         artifacts: list[dict[str, Any]] | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         """Post a step-completion message to the unified task thread.
 
@@ -98,6 +109,9 @@ class MessageRepository:
         }
         if artifacts:
             args["artifacts"] = artifacts
+        args["idempotency_key"] = idempotency_key or (
+            f"py:step-completion:{task_id}:{step_id}:{agent_name}:{_content_digest(content, artifacts)}"
+        )
         result = self._client.mutation("messages:postStepCompletion", args)
         self._log_state_transition(
             "message",
@@ -111,6 +125,7 @@ class MessageRepository:
         content: str,
         msg_type: str,
         plan_review: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         """Post a Lead Agent plan or chat message to the unified task thread.
 
@@ -129,6 +144,9 @@ class MessageRepository:
         }
         if plan_review is not None:
             args["plan_review"] = plan_review
+        args["idempotency_key"] = idempotency_key or (
+            f"py:lead-agent:{task_id}:{msg_type}:{_content_digest(content, plan_review)}"
+        )
         result = self._client.mutation("messages:postLeadAgentMessage", args)
         self._log_state_transition(
             "message",
@@ -141,6 +159,7 @@ class MessageRepository:
         task_id: str,
         content: str,
         step_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Any:
         """Post a system error message to the task thread.
 
@@ -159,10 +178,11 @@ class MessageRepository:
         }
         if step_id is not None:
             args["step_id"] = step_id
-        result = self._client.mutation("messages:create", args)
-        self._log_state_transition(
-            "message", f"System error posted on task {task_id}"
+        args["idempotency_key"] = idempotency_key or (
+            f"py:system-error:{task_id}:{step_id or 'none'}:{_content_digest(content, args['timestamp'])}"
         )
+        result = self._client.mutation("messages:create", args)
+        self._log_state_transition("message", f"System error posted on task {task_id}")
         return result
 
     @staticmethod

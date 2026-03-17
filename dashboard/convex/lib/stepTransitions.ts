@@ -4,6 +4,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 
 import { isValidStepStatus, isValidStepTransition, logStepStatusChange } from "./stepLifecycle";
+import { getRuntimeReceipt, storeRuntimeReceipt } from "../runtimeReceipts";
 
 type TransitionMutationCtx = Pick<MutationCtx, "db">;
 
@@ -122,6 +123,10 @@ export async function applyStepTransition(
   step: StepSnapshot,
   args: StepTransitionArgs,
 ): Promise<StepTransitionResult> {
+  const receipt = await getRuntimeReceipt<StepTransitionResult>(ctx, args.idempotencyKey);
+  if (receipt) {
+    return receipt;
+  }
   const currentStateVersion = getStepStateVersion(step);
 
   if (isSemanticNoop(step, args.toStatus, args.errorMessage)) {
@@ -180,10 +185,24 @@ export async function applyStepTransition(
     });
   }
 
-  return {
+  const result = {
     kind: "applied",
     stepId: args.stepId,
     status: args.toStatus,
     stateVersion: nextStateVersion,
   };
+  await storeRuntimeReceipt(ctx, {
+    idempotencyKey: args.idempotencyKey,
+    scope: "steps:transition",
+    entityType: "step",
+    entityId: String(args.stepId),
+    response: {
+      kind: "noop",
+      stepId: args.stepId,
+      status: args.toStatus,
+      stateVersion: nextStateVersion,
+      reason: "already_applied",
+    } satisfies StepTransitionResult,
+  });
+  return result;
 }

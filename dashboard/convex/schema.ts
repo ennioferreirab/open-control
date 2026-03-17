@@ -262,6 +262,29 @@ export default defineSchema({
     .index("by_taskId", ["taskId"])
     .index("by_authorType_timestamp", ["authorType", "timestamp"]),
 
+  runtimeClaims: defineTable({
+    claimKind: v.string(),
+    entityType: v.string(),
+    entityId: v.string(),
+    ownerId: v.string(),
+    leaseExpiresAt: v.string(),
+    metadata: v.optional(v.any()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_claimKey", ["claimKind", "entityType", "entityId"])
+    .index("by_leaseExpiresAt", ["leaseExpiresAt"]),
+
+  runtimeReceipts: defineTable({
+    idempotencyKey: v.string(),
+    scope: v.string(),
+    entityType: v.optional(v.string()),
+    entityId: v.optional(v.string()),
+    response: v.any(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  }).index("by_idempotencyKey", ["idempotencyKey"]),
+
   agents: defineTable({
     name: v.string(),
     displayName: v.string(),

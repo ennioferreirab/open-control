@@ -270,8 +270,8 @@ describe("acceptHumanStep", () => {
     await handler(ctx, { stepId: "step-1" });
 
     const acceptedActivity = insertedActivities.find((a) => {
-      const desc = (a as Record<string, unknown>).description as string;
-      return desc.includes("Human accepted step");
+      const desc = (a as Record<string, unknown>).description;
+      return typeof desc === "string" && desc.includes("Human accepted step");
     });
     expect(acceptedActivity).toBeDefined();
     expect((acceptedActivity as Record<string, unknown>).description).toContain("Review documents");
@@ -1335,6 +1335,107 @@ describe("transition", () => {
     ).toMatchObject({
       status: "completed",
     });
+  });
+
+  it("persists one receipt for a successful step transition replay", async () => {
+    const handler = (
+      transition as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+      }
+    )._handler;
+    const patchedById: Record<string, Record<string, unknown>> = {};
+    const receipts = new Map<string, Record<string, unknown>>();
+    const insert = async (table: string, value: Record<string, unknown>) => {
+      if (table === "runtimeReceipts") {
+        receipts.set(String(value.idempotencyKey), value);
+        return "receipt-1";
+      }
+      return "activity-1";
+    };
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Finish work",
+      description: "Run the last step",
+      status: "running",
+      assignedAgent: "nanobot",
+      order: 1,
+      stateVersion: 2,
+    };
+    const task = {
+      _id: "task-1",
+      status: "in_progress",
+      stateVersion: 4,
+      title: "Task 1",
+      executionPlan: { steps: [{ title: "Finish work", order: 1, status: "running" }] },
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") {
+            return patchedById["step-1"] ? { ...step, ...patchedById["step-1"] } : step;
+          }
+          if (id === "task-1") {
+            return patchedById["task-1"] ? { ...task, ...patchedById["task-1"] } : task;
+          }
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert,
+        query: (table: string) => ({
+          withIndex: (
+            _indexName: string,
+            apply?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+          ) => {
+            let idempotencyKey: string | null = null;
+            apply?.({
+              eq: (_field: string, value: string) => {
+                idempotencyKey = value;
+                return {};
+              },
+            });
+            return {
+              first: async () =>
+                table === "runtimeReceipts" && idempotencyKey
+                  ? (receipts.get(idempotencyKey) ?? null)
+                  : null,
+              collect: async () => [
+                patchedById["step-1"] ? { ...step, ...patchedById["step-1"] } : step,
+              ],
+            };
+          },
+        }),
+      },
+    };
+
+    await handler(ctx, {
+      stepId: "step-1",
+      fromStatus: "running",
+      expectedStateVersion: 2,
+      toStatus: "completed",
+      reason: "Worker finished successfully",
+      idempotencyKey: "py:step-1:v2:running:completed",
+    });
+    const replay = await handler(ctx, {
+      stepId: "step-1",
+      fromStatus: "running",
+      expectedStateVersion: 2,
+      toStatus: "completed",
+      reason: "Worker finished successfully",
+      idempotencyKey: "py:step-1:v2:running:completed",
+    });
+
+    expect(replay).toEqual(
+      expect.objectContaining({
+        kind: "noop",
+        stateVersion: 3,
+        reason: "already_applied",
+      }),
+    );
+    expect(receipts.get("py:step-1:v2:running:completed")).toBeDefined();
   });
 });
 

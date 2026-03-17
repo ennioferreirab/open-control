@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
+from mc.bridge import ConvexBridge
 from mc.bridge.retry import (
     BACKOFF_BASE_SECONDS,
     MAX_RETRIES,
@@ -81,6 +82,58 @@ class TestMutationWithRetry:
         result = mutation_with_retry(client, "system:reset")
 
         assert result is None
+
+    @patch("mc.bridge.retry.time.sleep")
+    def test_generates_and_reuses_idempotency_key_for_message_retries(self, mock_sleep):
+        """Supported write mutations should get one stable key across retry attempts."""
+        client = MagicMock()
+        client.mutation.side_effect = [Exception("Timeout"), {"_id": "ok"}]
+
+        mutation_with_retry(
+            client,
+            "messages:create",
+            {
+                "task_id": "task-1",
+                "author_name": "bot",
+                "author_type": "agent",
+                "content": "hello",
+                "message_type": "work",
+                "timestamp": "2026-03-16T12:00:00.000Z",
+            },
+        )
+
+        first_args = client.mutation.call_args_list[0].args[1]
+        second_args = client.mutation.call_args_list[1].args[1]
+        assert first_args["idempotencyKey"] == second_args["idempotencyKey"]
+        assert first_args["idempotencyKey"].startswith("messages:create:")
+
+
+class TestBridgeMutationWithRetry:
+    @patch("mc.bridge.time.sleep")
+    def test_reuses_existing_idempotency_key_across_bridge_retries(self, mock_sleep):
+        """Bridge retry should keep a caller-supplied key stable on every attempt."""
+        bridge = object.__new__(ConvexBridge)
+        bridge._client = MagicMock()
+        bridge._client.mutation.side_effect = [Exception("Timeout"), {"_id": "ok"}]
+        bridge._write_error_activity = MagicMock()
+
+        result = bridge._mutation_with_retry(
+            "tasks:transition",
+            {
+                "task_id": "task-1",
+                "from_status": "in_progress",
+                "expected_state_version": 3,
+                "to_status": "review",
+                "reason": "done",
+                "idempotency_key": "py:task-1:v3:in_progress:review:none:none:none",
+            },
+        )
+
+        assert result == {"id": "ok"}
+        first_args = bridge._client.mutation.call_args_list[0].args[1]
+        second_args = bridge._client.mutation.call_args_list[1].args[1]
+        assert first_args["idempotencyKey"] == second_args["idempotencyKey"]
+        assert first_args["idempotencyKey"] == "py:task-1:v3:in_progress:review:none:none:none"
 
 
 class TestWriteErrorActivity:

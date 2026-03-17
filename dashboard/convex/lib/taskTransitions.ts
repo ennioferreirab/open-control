@@ -11,6 +11,7 @@ import {
 } from "./taskLifecycle";
 import { cascadeMergeSourceTasksToDone } from "./taskMerge";
 import { logActivity, type ActivityEventType } from "./workflowHelpers";
+import { getRuntimeReceipt, storeRuntimeReceipt } from "../runtimeReceipts";
 
 type ReviewPhase = "plan_review" | "execution_pause" | "final_approval";
 type TransitionMutationCtx = Pick<MutationCtx, "db">;
@@ -149,6 +150,10 @@ export async function applyTaskTransition(
   task: Doc<"tasks">,
   args: TaskTransitionArgs,
 ): Promise<TaskTransitionResult> {
+  const receipt = await getRuntimeReceipt<TaskTransitionResult>(ctx, args.idempotencyKey);
+  if (receipt) {
+    return receipt;
+  }
   const currentStateVersion = getTaskStateVersion(task);
   const nextReviewPhase = normalizeReviewPhase(args.toStatus, args.reviewPhase);
   const nextAwaitingKickoff = normalizeAwaitingKickoff(
@@ -263,7 +268,7 @@ export async function applyTaskTransition(
     await markPlanStepsCompleted(ctx, args.taskId, task);
   }
 
-  return {
+  const result = {
     kind: "applied",
     taskId: args.taskId,
     status: args.toStatus,
@@ -271,6 +276,22 @@ export async function applyTaskTransition(
     reviewPhase: nextReviewPhase,
     stateVersion: nextStateVersion,
   };
+  await storeRuntimeReceipt(ctx, {
+    idempotencyKey: args.idempotencyKey,
+    scope: "tasks:transition",
+    entityType: "task",
+    entityId: String(args.taskId),
+    response: {
+      kind: "noop",
+      taskId: args.taskId,
+      status: args.toStatus,
+      awaitingKickoff: nextAwaitingKickoff,
+      reviewPhase: nextReviewPhase,
+      stateVersion: nextStateVersion,
+      reason: "already_applied",
+    } satisfies TaskTransitionResult,
+  });
+  return result;
 }
 
 export async function applyRequiredTaskTransition(
