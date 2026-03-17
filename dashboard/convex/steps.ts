@@ -57,6 +57,7 @@ function syncExecutionPlanStepStatus(
 function deriveHumanParentTaskStatus(
   steps: Array<{
     status?: string;
+    workflowStepType?: string;
   }>,
 ): "done" | "crashed" | "in_progress" | "review" {
   const activeSteps = steps.filter((step) => step.status !== "deleted");
@@ -66,7 +67,7 @@ function deriveHumanParentTaskStatus(
   if (activeSteps.some((step) => step.status === "crashed")) {
     return "crashed";
   }
-  if (activeSteps.some((step) => step.status === "review")) {
+  if (activeSteps.some((step) => step.status === "review" && step.workflowStepType === "review")) {
     return "review";
   }
   return "in_progress";
@@ -200,6 +201,60 @@ async function reconcileParentTaskAfterStepChange(
     task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
     timestamp,
   );
+}
+
+function buildCurrentTaskSteps(
+  allTaskSteps: StepWithDependencies[],
+  args: {
+    stepId: Id<"steps">;
+    nextStepStatus: StepStatus;
+  },
+): StepWithDependencies[] {
+  return allTaskSteps.map((taskStep) =>
+    taskStep._id === args.stepId
+      ? {
+          _id: taskStep._id,
+          status: args.nextStepStatus,
+          blockedBy: taskStep.blockedBy,
+          workflowStepType: taskStep.workflowStepType,
+        }
+      : {
+          _id: taskStep._id,
+          status: taskStep.status as StepStatus,
+          blockedBy: taskStep.blockedBy,
+          workflowStepType: taskStep.workflowStepType,
+        },
+  );
+}
+
+async function reconcileParentTaskForStepTransition(
+  ctx: MutationCtx,
+  args: {
+    step: Parameters<typeof applyStepTransition>[1];
+    nextStepStatus: StepStatus;
+    timestamp: string;
+  },
+): Promise<void> {
+  const task = await ctx.db.get(args.step.taskId);
+  if (!task) {
+    throw new ConvexError("Parent task not found");
+  }
+
+  const allTaskSteps = await ctx.db
+    .query("steps")
+    .withIndex("by_taskId", (q) => q.eq("taskId", args.step.taskId))
+    .collect();
+
+  await reconcileParentTaskAfterStepChange(ctx, {
+    task,
+    step: args.step,
+    nextStepStatus: args.nextStepStatus,
+    currentTaskSteps: buildCurrentTaskSteps(allTaskSteps, {
+      stepId: args.step._id,
+      nextStepStatus: args.nextStepStatus,
+    }),
+    timestamp: args.timestamp,
+  });
 }
 
 // Re-export pure functions for testability and backward compatibility
@@ -419,34 +474,9 @@ export const updateStatus = internalMutation({
       return transitionResult;
     }
 
-    const task = await ctx.db.get(step.taskId);
-    if (!task) {
-      throw new ConvexError("Parent task not found");
-    }
-
-    const allTaskSteps = await ctx.db
-      .query("steps")
-      .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
-      .collect();
-    const currentTaskSteps: StepWithDependencies[] = allTaskSteps.map((taskStep) =>
-      taskStep._id === args.stepId
-        ? {
-            _id: taskStep._id,
-            status: args.status as StepStatus,
-            blockedBy: taskStep.blockedBy,
-          }
-        : {
-            _id: taskStep._id,
-            status: taskStep.status as StepStatus,
-            blockedBy: taskStep.blockedBy,
-          },
-    );
-
-    await reconcileParentTaskAfterStepChange(ctx, {
-      task,
-      step,
+    await reconcileParentTaskForStepTransition(ctx, {
+      step: step as Parameters<typeof applyStepTransition>[1],
       nextStepStatus: args.status as StepStatus,
-      currentTaskSteps,
       timestamp,
     });
 
@@ -469,7 +499,21 @@ export const transition = internalMutation({
     if (!step) {
       throw new ConvexError("Step not found");
     }
-    return await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], args);
+    const transitionResult = await applyStepTransition(
+      ctx,
+      step as Parameters<typeof applyStepTransition>[1],
+      args,
+    );
+    if (transitionResult.kind !== "applied") {
+      return transitionResult;
+    }
+
+    await reconcileParentTaskForStepTransition(ctx, {
+      step: step as Parameters<typeof applyStepTransition>[1],
+      nextStepStatus: args.toStatus as StepStatus,
+      timestamp: new Date().toISOString(),
+    });
+    return transitionResult;
   },
 });
 
@@ -914,6 +958,7 @@ export const updateStep = mutation({
     }
 
     const patch: Record<string, unknown> = {};
+    let nextStepStatus: StepStatus | null = null;
     if (args.title !== undefined) patch.title = args.title;
     if (args.description !== undefined) patch.description = args.description;
     if (args.assignedAgent !== undefined) patch.assignedAgent = args.assignedAgent;
@@ -933,7 +978,7 @@ export const updateStep = mutation({
 
       // Re-resolve status based on new blockers
       if (args.blockedByStepIds.length === 0) {
-        patch.status = "planned";
+        nextStepStatus = "planned";
       } else {
         const existingSteps = await ctx.db
           .query("steps")
@@ -941,11 +986,36 @@ export const updateStep = mutation({
           .collect();
         const blockerSteps = existingSteps.filter((s) => args.blockedByStepIds!.includes(s._id));
         const allDone = blockerSteps.every((s) => s.status === "completed");
-        patch.status = allDone ? "planned" : "blocked";
+        nextStepStatus = allDone ? "planned" : "blocked";
       }
     }
 
     await ctx.db.patch(args.stepId, patch);
+
+    if (nextStepStatus !== null && nextStepStatus !== step.status) {
+      const stepSnapshot = {
+        ...(step as Parameters<typeof applyStepTransition>[1]),
+        title: typeof patch.title === "string" ? patch.title : step.title,
+        description: typeof patch.description === "string" ? patch.description : step.description,
+        assignedAgent:
+          typeof patch.assignedAgent === "string" ? patch.assignedAgent : step.assignedAgent,
+      };
+      const transitionResult = await applyStepTransition(ctx, stepSnapshot, {
+        stepId: args.stepId,
+        fromStatus: step.status,
+        expectedStateVersion: getStepStateVersion(step),
+        toStatus: nextStepStatus,
+        reason: "Blocked-by dependencies updated",
+        idempotencyKey: `update-step:${String(args.stepId)}:${getStepStateVersion(step)}:${step.status}:${nextStepStatus}`,
+      });
+      if (transitionResult.kind === "applied") {
+        await reconcileParentTaskForStepTransition(ctx, {
+          step: stepSnapshot,
+          nextStepStatus,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
 
     // Also update the executionPlan JSON on the task
     const task = await ctx.db.get(step.taskId);

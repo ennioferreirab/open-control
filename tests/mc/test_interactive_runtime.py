@@ -8,6 +8,7 @@ import pytest
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 from websockets.frames import Close
 
+from mc.contexts.interactive.supervision_types import InteractiveSupervisionEvent
 from mc.runtime.interactive import (
     InteractiveRuntime,
     InteractiveSocketServer,
@@ -31,6 +32,39 @@ def test_build_interactive_runtime_creates_provider_agnostic_runtime() -> None:
     assert "codex" in runtime.adapters
     assert "mc" in runtime.adapters
     assert runtime.adapters["codex"]._supervision_sink is runtime.supervisor
+
+
+def test_build_interactive_runtime_wires_waiting_human_pause_semantics() -> None:
+    bridge = MagicMock()
+    bridge.query.return_value = {
+        "session_id": "interactive_session:codex",
+        "agent_name": "codex-reviewer",
+        "task_id": "task-1",
+        "step_id": "step-1",
+        "provider": "codex",
+        "scope_kind": "chat",
+        "scope_id": "chat:codex-reviewer",
+        "status": "attached",
+        "surface": "chat",
+        "tmux_session": "tmux:interactive_session:codex",
+        "attach_token": "attach-token",
+        "created_at": "2026-03-16T00:00:00Z",
+    }
+    bridge.get_task.return_value = {"id": "task-1", "status": "in_progress", "state_version": 2}
+
+    runtime = build_interactive_runtime(bridge, host="127.0.0.1", port=8877)
+
+    runtime.supervisor.handle_event(
+        InteractiveSupervisionEvent(
+            kind="paused_for_review",
+            provider="codex",
+            session_id="interactive_session:codex",
+            summary="Need user confirmation before continuing.",
+        )
+    )
+
+    bridge.transition_task_from_snapshot.assert_called_once()
+    bridge.update_step_status.assert_called_once_with("step-1", "waiting_human")
 
 
 def test_benign_handshake_abort_filter_drops_client_cancelled_handshake_errors() -> None:

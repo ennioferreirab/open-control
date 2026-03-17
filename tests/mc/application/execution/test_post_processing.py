@@ -41,7 +41,11 @@ def _cc_result(tmp_path: Path) -> ExecutionResult:
     )
 
 
-def _interactive_request(*, success: bool = True) -> ExecutionRequest:
+def _interactive_request(
+    *,
+    success: bool = True,
+    boundary_reason: str | None = "step_completion",
+) -> ExecutionRequest:
     return ExecutionRequest(
         entity_type=EntityType.STEP,
         entity_id="step-1",
@@ -50,7 +54,7 @@ def _interactive_request(*, success: bool = True) -> ExecutionRequest:
         title="Consolidate interactive step",
         agent_name="interactive-agent",
         runner_type=RunnerType.INTERACTIVE_TUI,
-        session_boundary_reason="step_completion",
+        session_boundary_reason=boundary_reason,
     )
 
 
@@ -206,3 +210,25 @@ class TestInteractiveMemoryConsolidationHook:
             task_id="task-1",
             model="interactive-test-model",
         )
+
+    @pytest.mark.asyncio
+    async def test_interactive_non_boundary_pause_skips_memory_consolidation(
+        self, tmp_path: Path
+    ) -> None:
+        hook = build_interactive_memory_consolidation_hook(bridge=MagicMock())
+        request = _interactive_request(boundary_reason=None)
+        result = _interactive_result(tmp_path)
+
+        with (
+            patch(
+                "mc.application.execution.post_processing.create_background_task"
+            ) as create_task_mock,
+            patch(
+                "mc.application.execution.post_processing.consolidate_task_output",
+                new=AsyncMock(return_value=True),
+            ) as consolidate_mock,
+        ):
+            await hook(request, result)
+
+        create_task_mock.assert_not_called()
+        consolidate_mock.assert_not_awaited()

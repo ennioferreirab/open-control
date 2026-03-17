@@ -237,6 +237,24 @@ class TestStepRepository:
         args = client.mutation.call_args[0][1]
         assert args["error_message"] == "OOM"
 
+    def test_update_step_status_raises_on_transition_conflict(self):
+        client = _make_client_mock()
+        client.query.return_value = {
+            "id": "step-1",
+            "status": "running",
+            "state_version": 6,
+        }
+        client.mutation.return_value = {
+            "kind": "conflict",
+            "reason": "stale_state",
+            "current_status": "completed",
+            "current_state_version": 7,
+        }
+        repo = StepRepository(client)
+
+        with pytest.raises(RuntimeError, match="Step transition conflict"):
+            repo.update_step_status("step-1", "completed")
+
     def test_transition_step_from_snapshot_uses_snapshot_status_and_version(self):
         client = _make_client_mock()
         repo = StepRepository(client)

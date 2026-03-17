@@ -14,6 +14,8 @@ import {
   retryStep,
   resolveBlockedByIds,
   resolveInitialStepStatus,
+  transition,
+  updateStep,
   updateStatus,
 } from "./steps";
 
@@ -1068,6 +1070,183 @@ describe("updateStatus", () => {
 
     expect(patchedValues).toEqual([]);
   });
+
+  it("does not project generic review status into parent task review", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const task = {
+      _id: "task-1",
+      title: "Human approval task",
+      status: "in_progress",
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Build artifact",
+            description: "Run build",
+            assignedAgent: "nanobot",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+            status: "running",
+          },
+          {
+            tempId: "step_2",
+            title: "Checkpoint",
+            description: "Wait here",
+            assignedAgent: "human",
+            blockedBy: [],
+            parallelGroup: 2,
+            order: 2,
+            status: "review",
+          },
+        ],
+      },
+    };
+
+    const completedStep = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Build artifact",
+      description: "Run build",
+      status: "running",
+      assignedAgent: "nanobot",
+      order: 1,
+      stateVersion: 2,
+    };
+    const genericReviewStep = {
+      _id: "step-2",
+      taskId: "task-1",
+      title: "Checkpoint",
+      description: "Wait here",
+      status: "review",
+      assignedAgent: "human",
+      workflowStepType: "checkpoint",
+      order: 2,
+      stateVersion: 5,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return completedStep;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: () => ({
+          withIndex: () => ({
+            collect: async () => [completedStep, genericReviewStep],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { stepId: "step-1", status: "completed" });
+
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "completed",
+      stateVersion: 3,
+    });
+    expect(patchedById["task-1"]?.status).toBeUndefined();
+    expect(
+      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
+    ).toMatchObject({
+      status: "completed",
+    });
+  });
+});
+
+describe("transition", () => {
+  function getHandler() {
+    return (
+      transition as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+      }
+    )._handler;
+  }
+
+  it("reconciles parent task status and execution plan for canonical step transitions", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const task = {
+      _id: "task-1",
+      title: "Canonical completion task",
+      status: "in_progress",
+      stateVersion: 4,
+      executionPlan: {
+        steps: [
+          {
+            tempId: "step_1",
+            title: "Finish work",
+            description: "Run the last step",
+            assignedAgent: "nanobot",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+            status: "running",
+          },
+        ],
+      },
+    };
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Finish work",
+      description: "Run the last step",
+      status: "running",
+      assignedAgent: "nanobot",
+      order: 1,
+      stateVersion: 2,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: () => ({
+          withIndex: () => ({
+            collect: async () => [step],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, {
+      stepId: "step-1",
+      fromStatus: "running",
+      expectedStateVersion: 2,
+      toStatus: "completed",
+      reason: "Worker finished successfully",
+      idempotencyKey: "py:step-1:v2:running:completed",
+    });
+
+    expect(patchedById["step-1"]).toMatchObject({
+      status: "completed",
+      stateVersion: 3,
+    });
+    expect(patchedById["task-1"]).toMatchObject({
+      status: "done",
+      stateVersion: 5,
+    });
+    expect(
+      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
+    ).toMatchObject({
+      status: "completed",
+    });
+  });
 });
 
 describe("retryStep", () => {
@@ -1244,5 +1423,81 @@ describe("deleteStep", () => {
           String(value.description).includes("deleted"),
       ),
     ).toBe(true);
+  });
+});
+
+describe("updateStep", () => {
+  function getHandler() {
+    return (
+      updateStep as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+      }
+    )._handler;
+  }
+
+  it("routes blocker-driven status changes through the step transition kernel", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const targetStep = {
+      _id: "step-2",
+      taskId: "task-1",
+      title: "Blocked work",
+      description: "Wait for dependency",
+      assignedAgent: "nanobot",
+      status: "planned",
+      blockedBy: [],
+      order: 2,
+      stateVersion: 3,
+    };
+    const blockerStep = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Blocker",
+      description: "Still running",
+      assignedAgent: "nanobot",
+      status: "running",
+      blockedBy: [],
+      order: 1,
+      stateVersion: 1,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-2") return targetStep;
+          if (id === "step-1") return blockerStep;
+          if (id === "task-1") {
+            return {
+              _id: "task-1",
+              status: "in_progress",
+              stateVersion: 1,
+              executionPlan: { steps: [] },
+            };
+          }
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: () => ({
+          withIndex: () => ({
+            collect: async () => [blockerStep, targetStep],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, {
+      stepId: "step-2",
+      blockedByStepIds: ["step-1"],
+    });
+
+    expect(patchedById["step-2"]).toMatchObject({
+      blockedBy: ["step-1"],
+      status: "blocked",
+      stateVersion: 4,
+    });
   });
 });

@@ -90,7 +90,10 @@ export function resolveInitialStepStatus(
 // Dependency Resolution
 // ---------------------------------------------------------------------------
 
-export type StepWithDependencies = Pick<Doc<"steps">, "_id" | "status" | "blockedBy">;
+export type StepWithDependencies = Pick<
+  Doc<"steps">,
+  "_id" | "status" | "blockedBy" | "workflowStepType"
+>;
 
 /**
  * Find blocked steps that are ready to be unblocked (all dependencies completed).

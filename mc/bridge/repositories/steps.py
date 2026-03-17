@@ -91,6 +91,10 @@ class StepRepository:
             reason=f"Compatibility transition via update_step_status ({status})",
             error_message=error_message,
         )
+        if isinstance(result, dict) and result.get("kind") == "conflict":
+            raise RuntimeError(
+                f"Step transition conflict for {step_id}: {result.get('reason', 'unknown')}"
+            )
         self._log_state_transition("step", f"Step {step_id} status changed to {status}")
         return result
 
