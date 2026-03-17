@@ -2,7 +2,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 
-import { taskFileMetadataValidator, taskFilesValidator } from "./schema";
+import { routingModeValidator, taskFileMetadataValidator, taskFilesValidator } from "./schema";
 import { buildTaskDetailView } from "./lib/taskDetailView";
 import {
   clearAllDoneTasks,
@@ -800,5 +800,25 @@ export const launchMission = mutation({
   },
   handler: async (ctx, args) => {
     return await launchSquadMission(ctx, args);
+  },
+});
+
+/**
+ * Persist routing metadata on a task after direct-delegation routing.
+ * Called by the MC Python gateway when a direct-delegate task is routed.
+ */
+export const patchRoutingDecision = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    routingMode: v.optional(routingModeValidator),
+    routingDecision: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new ConvexError("Task not found");
+    const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+    if (args.routingMode !== undefined) patch.routingMode = args.routingMode;
+    if (args.routingDecision !== undefined) patch.routingDecision = args.routingDecision;
+    await ctx.db.patch(args.taskId, patch);
   },
 });

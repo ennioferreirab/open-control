@@ -154,11 +154,20 @@ class PlanningWorker:
             logger.info("[planning] Skipping manual task '%s' (%s)", title, task_id)
             return
 
+        # Layer 4 defense: reject direct-delegate tasks — they must never reach planning.
+        work_mode = task_data.get("work_mode") or task_data.get("workMode")
+        if work_mode == "direct_delegate":
+            logger.warning(
+                "[planning] Direct-delegate task '%s' (%s) should not be in planning; skipping",
+                title,
+                task_id,
+            )
+            return
+
         # Layer 3 defense: bypass the LLM planner for workflow missions whose
         # execution plan was already compiled at launch time.  Invoking the
         # lead-agent planner here would overwrite the workflow plan.
         raw_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
-        work_mode = task_data.get("work_mode") or task_data.get("workMode")
         if work_mode == "ai_workflow" and raw_plan.get("generatedBy") == "workflow":
             logger.info(
                 "[planning] Workflow task '%s' (%s): skipping LLM planner, using pre-compiled plan",

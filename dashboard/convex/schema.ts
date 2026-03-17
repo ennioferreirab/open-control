@@ -156,6 +156,7 @@ export default defineSchema({
     // Execution scaffolding fields (optional, no behavior change yet)
     workMode: v.optional(workModeValidator),
     routingMode: v.optional(routingModeValidator),
+    routingDecision: v.optional(v.any()),
     squadSpecId: v.optional(v.id("squadSpecs")),
     workflowSpecId: v.optional(v.id("workflowSpecs")),
     createdAt: v.string(),
