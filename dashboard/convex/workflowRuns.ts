@@ -19,6 +19,7 @@ export const create = internalMutation({
     workflowSpecId: v.id("workflowSpecs"),
     boardId: v.id("boards"),
     launchedAt: v.string(),
+    // v.any(): dynamic step ID mapping between workflow spec and execution
     stepMapping: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
