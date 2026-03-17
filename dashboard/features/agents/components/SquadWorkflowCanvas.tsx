@@ -18,7 +18,7 @@ import {
   insertParallelStep,
   insertSequentialStep,
 } from "@/lib/planUtils";
-import type { PlanStep } from "@/lib/types";
+import type { EditablePlanStep } from "@/lib/types";
 import type {
   EditableWorkflow,
   EditableWorkflowStep,
@@ -46,7 +46,7 @@ interface SquadWorkflowCanvasProps {
   onSelectAgent: (agentName: string) => void;
 }
 
-function toPlanSteps(workflow: EditableWorkflow): PlanStep[] {
+function toPlanSteps(workflow: EditableWorkflow): EditablePlanStep[] {
   return workflow.steps.map((step, index) => ({
     tempId: step.key,
     title: step.title,
@@ -59,7 +59,7 @@ function toPlanSteps(workflow: EditableWorkflow): PlanStep[] {
 }
 
 function fromPlanSteps(
-  planSteps: PlanStep[],
+  planSteps: EditablePlanStep[],
   previousSteps: EditableWorkflowStep[],
   agents: Doc<"agents">[],
 ): EditableWorkflowStep[] {
@@ -171,7 +171,7 @@ export function SquadWorkflowCanvas(props: SquadWorkflowCanvasProps) {
   const selectedStep = selectedStepIndex >= 0 ? workflow.steps[selectedStepIndex] : null;
 
   const applyPlanTransform = (
-    transform: (steps: PlanStep[]) => PlanStep[],
+    transform: (steps: EditablePlanStep[]) => EditablePlanStep[],
     focusStepId?: string,
   ) => {
     const nextSteps = fromPlanSteps(transform(toPlanSteps(workflow)), workflow.steps, agents);

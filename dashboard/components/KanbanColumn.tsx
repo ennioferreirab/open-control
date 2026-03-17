@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { TaskCard } from "@/features/tasks/components/TaskCard";
-import { Doc, Id } from "../convex/_generated/dataModel";
+import { Doc, Id } from "@/convex/_generated/dataModel";
 import { Eraser, List } from "lucide-react";
 import { StepCard } from "@/features/tasks/components/StepCard";
 import { TaskGroupHeader } from "@/components/TaskGroupHeader";

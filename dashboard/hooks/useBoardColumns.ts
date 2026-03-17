@@ -1,6 +1,8 @@
+"use client";
+
 import { useMemo } from "react";
-import { Doc, Id } from "../convex/_generated/dataModel";
-import { isWorkflowOwnedTask } from "../lib/isWorkflowOwnedTask";
+import { Doc, Id } from "@/convex/_generated/dataModel";
+import { isWorkflowOwnedTask } from "@/lib/isWorkflowOwnedTask";
 
 export const COLUMNS = [
   { title: "Inbox", status: "inbox", accentColor: "bg-violet-500" },

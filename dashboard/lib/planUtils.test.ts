@@ -5,9 +5,9 @@ import {
   insertMergeStep,
   getMergeableSiblingIds,
 } from "./planUtils";
-import type { PlanStep } from "./types";
+import type { EditablePlanStep } from "./types";
 
-function makeStep(overrides: Partial<PlanStep> = {}): PlanStep {
+function makeStep(overrides: Partial<EditablePlanStep> = {}): EditablePlanStep {
   return {
     tempId: "step_1",
     title: "Step One",

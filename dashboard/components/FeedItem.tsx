@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { CheckCircle2, XCircle, Play, ArrowRight, Unlock, RefreshCw, Activity } from "lucide-react";
-import { Doc } from "../convex/_generated/dataModel";
+import { Doc } from "@/convex/_generated/dataModel";
 
 interface FeedItemProps {
   activity: Doc<"activities">;

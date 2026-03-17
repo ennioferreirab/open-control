@@ -1,18 +1,18 @@
 /**
  * Pure functions for graph-aware plan step insertion.
- * Each function returns a new PlanStep[] with the transformation applied.
+ * Each function returns a new EditablePlanStep[] with the transformation applied.
  */
 
-import type { PlanStep } from "./types";
+import type { EditablePlanStep } from "./types";
 
-export type StepData = Partial<Pick<PlanStep, "title" | "description" | "assignedAgent">>;
+export type StepData = Partial<Pick<EditablePlanStep, "title" | "description" | "assignedAgent">>;
 
 function blockersKey(blockedBy: string[]): string {
   return [...new Set(blockedBy)].sort().join("|");
 }
 
 /** Generate the next unique tempId for a step. */
-function nextTempId(steps: PlanStep[]): string {
+function nextTempId(steps: EditablePlanStep[]): string {
   const existingIds = new Set(steps.map((s) => s.tempId));
   const existingNums = steps
     .map((s) => s.tempId)
@@ -30,7 +30,7 @@ function nextTempId(steps: PlanStep[]): string {
  * Return the IDs that can be merged with `tempId`.
  * Merge scope is limited to steps in the same fork: same parallelGroup and same blockers.
  */
-export function getMergeableSiblingIds(steps: PlanStep[], tempId: string): string[] {
+export function getMergeableSiblingIds(steps: EditablePlanStep[], tempId: string): string[] {
   const sourceStep = steps.find((s) => s.tempId === tempId);
   if (!sourceStep) return [];
 
@@ -49,17 +49,17 @@ export function getMergeableSiblingIds(steps: PlanStep[], tempId: string): strin
  * Downstream steps that depended on `afterTempId` are rerouted through the new step.
  */
 export function insertSequentialStep(
-  steps: PlanStep[],
+  steps: EditablePlanStep[],
   afterTempId: string,
   stepData?: StepData,
-): PlanStep[] {
+): EditablePlanStep[] {
   const sourceStep = steps.find((s) => s.tempId === afterTempId);
   if (!sourceStep) return steps;
 
   const newId = nextTempId(steps);
   const maxOrder = steps.reduce((max, s) => Math.max(max, s.order), 0);
 
-  const newStep: PlanStep = {
+  const newStep: EditablePlanStep = {
     tempId: newId,
     title: stepData?.title ?? "",
     description: stepData?.description ?? "",
@@ -88,17 +88,17 @@ export function insertSequentialStep(
  * The new step shares the same blockers as the source step.
  */
 export function insertParallelStep(
-  steps: PlanStep[],
+  steps: EditablePlanStep[],
   parallelToTempId: string,
   stepData?: StepData,
-): PlanStep[] {
+): EditablePlanStep[] {
   const sourceStep = steps.find((s) => s.tempId === parallelToTempId);
   if (!sourceStep) return steps;
 
   const newId = nextTempId(steps);
   const maxOrder = steps.reduce((max, s) => Math.max(max, s.order), 0);
 
-  const newStep: PlanStep = {
+  const newStep: EditablePlanStep = {
     tempId: newId,
     title: stepData?.title ?? "",
     description: stepData?.description ?? "",
@@ -116,10 +116,10 @@ export function insertParallelStep(
  * Downstream steps that depended on any sibling are rerouted through the merge step.
  */
 export function insertMergeStep(
-  steps: PlanStep[],
+  steps: EditablePlanStep[],
   tempId: string,
   stepData?: StepData,
-): PlanStep[] {
+): EditablePlanStep[] {
   const sourceStep = steps.find((s) => s.tempId === tempId);
   if (!sourceStep) return steps;
 
@@ -130,7 +130,7 @@ export function insertMergeStep(
   const newId = nextTempId(steps);
   const maxOrder = steps.reduce((max, s) => Math.max(max, s.order), 0);
 
-  const newStep: PlanStep = {
+  const newStep: EditablePlanStep = {
     tempId: newId,
     title: stepData?.title ?? "",
     description: stepData?.description ?? "",

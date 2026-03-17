@@ -21,7 +21,7 @@ import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 import { HUMAN_AGENT_NAME } from "@/lib/constants";
 import { getStatusMeta } from "./FlowStepNode";
 import type { ExistingStep } from "./AddStepForm";
-import type { Id } from "../convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export interface EditStepData {
   title: string;

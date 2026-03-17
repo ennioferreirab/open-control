@@ -1,12 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
-import { Id } from "../convex/_generated/dataModel";
+import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Loader2, Paperclip } from "lucide-react";
 import { FileChip } from "./FileChip";
+import { useAddTaskFiles } from "@/hooks/useAddTaskFiles";
 
 export interface StepFileAttachmentProps {
   stepTempId: string;
@@ -26,7 +25,7 @@ export function StepFileAttachment({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const addTaskFiles = useMutation(api.tasks.addTaskFiles);
+  const addTaskFiles = useAddTaskFiles();
 
   const handleAttachClick = () => {
     fileInputRef.current?.click();

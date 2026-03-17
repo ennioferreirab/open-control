@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCronToTable } from "./cron-parser";
+import { parseCronToTable } from "./cronParser";
 
 describe("parseCronToTable", () => {
   it("parses '0 9 * * 1-5' (weekday mornings)", () => {

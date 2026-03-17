@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Id } from "../convex/_generated/dataModel";
+import { Id } from "@/convex/_generated/dataModel";
 import { useBoardProviderData } from "@/features/boards/hooks/useBoardProviderData";
 
 const LOCAL_STORAGE_KEY = "nanobot-active-board";

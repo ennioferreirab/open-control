@@ -1,11 +1,10 @@
 "use client";
 
-import { useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
-import { Doc } from "../convex/_generated/dataModel";
+import { Doc } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
 import { STATUS_COLORS, type TaskStatus } from "@/lib/constants";
+import { useTaskCardActions } from "@/features/tasks/hooks/useTaskCardActions";
 
 interface CompactFavoriteCardProps {
   task: Doc<"tasks">;
@@ -13,7 +12,7 @@ interface CompactFavoriteCardProps {
 }
 
 export function CompactFavoriteCard({ task, onClick }: CompactFavoriteCardProps) {
-  const toggleFavorite = useMutation(api.tasks.toggleFavorite);
+  const { toggleFavoriteTask } = useTaskCardActions();
   const colors = STATUS_COLORS[task.status as TaskStatus] ?? STATUS_COLORS.inbox;
   const initials = task.assignedAgent
     ? task.assignedAgent
@@ -47,7 +46,7 @@ export function CompactFavoriteCard({ task, onClick }: CompactFavoriteCardProps)
         className="h-3.5 w-3.5 fill-amber-400 text-amber-400 cursor-pointer shrink-0"
         onClick={(e) => {
           e.stopPropagation();
-          toggleFavorite({ taskId: task._id });
+          void toggleFavoriteTask(task._id);
         }}
       />
     </div>

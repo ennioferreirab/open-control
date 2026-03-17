@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { POLLING_DEFAULTS } from "@/features/settings/polling-fields";
+import { POLLING_DEFAULTS } from "@/features/settings/pollingFields";
 
 const DEFAULTS: Record<string, string> = {
   task_timeout_minutes: "30",

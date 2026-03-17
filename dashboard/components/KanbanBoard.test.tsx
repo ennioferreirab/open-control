@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import { KanbanBoard } from "@/features/boards/components/KanbanBoard";
-import { Doc, Id } from "../convex/_generated/dataModel";
+import { Doc, Id } from "@/convex/_generated/dataModel";
 import { BoardFilters } from "@/hooks/useBoardFilters";
 import { BoardViewData } from "@/features/boards/hooks/useBoardView";
 import { ColumnData } from "@/hooks/useBoardColumns";
