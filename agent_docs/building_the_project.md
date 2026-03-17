@@ -22,12 +22,13 @@ The `Makefile` at the project root is the primary interface for all operations.
 
 | Target | What it does | Needs Convex? |
 |--------|-------------|---------------|
-| `make start` | Start the full stack (Convex + Next.js + Gateway + Nanobot) | Starts it |
+| `make start` | Start attached — logs stream to terminal, Ctrl+C to stop | Starts it |
+| `make start d=1` | Start detached — runs in background, logs → `/tmp/mc.log` | Starts it |
 | `make down` | Stop everything | — |
 | `make status` | Show system health (agents, tasks) | Yes |
 | `make test` | Run all unit tests (Python + TypeScript) | No |
 | `make validate` | Lint + typecheck + unit tests | No |
-| `make takeover` | Stop any running stack, start from current tree | Restarts it |
+| `make takeover` | Stop any running stack, start from current tree (attached) | Restarts it |
 | `make lint` | Ruff + ESLint | No |
 | `make typecheck` | Pyright + tsc | No |
 | `make format` | Format all code (Ruff + Prettier) | No |

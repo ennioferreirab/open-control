@@ -1,6 +1,7 @@
 # ─── Mission Control ──────────────────────────────────────────────
 #
-# make start       Start the full stack (Convex + Next.js + Gateway)
+# make start       Start attached — logs stream to terminal (Ctrl+C to stop)
+# make start d=1   Start detached — runs in background, logs → /tmp/mc.log
 # make down        Stop everything
 # make status      Show system health
 #
@@ -16,10 +17,17 @@
 .PHONY: start down status test validate takeover lint typecheck format \
         test-py test-ts lint-py lint-ts typecheck-py typecheck-ts format-py format-ts
 
+MC_CMD := uv run python -m boot mc start
+
 # ─── Stack lifecycle ──────────────────────────────────────────────
 
+# Default: attached (logs stream to terminal). Pass d=1 for detached.
 start:
-	@uv run python -m boot mc start
+ifeq ($(d),1)
+	@nohup $(MC_CMD) > /tmp/mc.log 2>&1 & echo "Mission Control started in background. Logs: /tmp/mc.log"
+else
+	@$(MC_CMD)
+endif
 
 down:
 	@uv run python -m boot mc down
@@ -31,7 +39,7 @@ status:
 # Use this from a worktree to take over the Convex local backend.
 takeover: down
 	@sleep 2
-	@uv run python -m boot mc start
+	@$(MC_CMD)
 
 # ─── Testing ──────────────────────────────────────────────────────
 # Unit tests are fully mocked — no Convex needed.
