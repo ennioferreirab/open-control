@@ -139,6 +139,27 @@ describe("TaskCard", () => {
     expect(screen.getByText("4/4 steps")).toBeInTheDocument();
   });
 
+  it("does not infer completed progress from persisted execution plan statuses", () => {
+    render(
+      <TaskCard
+        task={{
+          ...baseTask,
+          status: "in_progress",
+          executionPlan: {
+            steps: [
+              { status: "completed" },
+              { status: "completed" },
+              { status: "completed" },
+              { status: "completed" },
+            ],
+          },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("4/4 steps")).not.toBeInTheDocument();
+  });
+
   // --- Story 5.1: Review indicator ---
 
   it("does not show review indicator for autonomous tasks", () => {

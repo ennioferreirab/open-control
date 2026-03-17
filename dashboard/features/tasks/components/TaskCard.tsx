@@ -24,10 +24,6 @@ import { InlineRejection } from "@/components/InlineRejection";
 import { useTaskCardActions } from "@/features/tasks/hooks/useTaskCardActions";
 import { badgeVariants } from "@/components/ui/badge";
 
-type TaskProgressStep = {
-  status?: string;
-};
-
 type TaskCardProgress = {
   completedSteps: number;
   totalSteps: number;
@@ -63,11 +59,8 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress 
   const showDenyButton =
     task.status === "review" && task.trustLevel === "human_approved" && !task.isManual;
   const isManual = task.isManual === true;
-  const executionPlan = task.executionPlan as { steps?: TaskProgressStep[] } | undefined;
-  const steps = Array.isArray(executionPlan?.steps) ? executionPlan.steps : [];
-  const totalSteps = progress?.totalSteps ?? steps.length;
-  const completedSteps =
-    progress?.completedSteps ?? steps.filter((step) => step.status === "completed").length;
+  const totalSteps = progress?.totalSteps ?? 0;
+  const completedSteps = progress?.completedSteps ?? 0;
   const progressPercent = totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0;
   const showProgress =
     totalSteps > 1 && (task.status === "in_progress" || task.status === "retrying");

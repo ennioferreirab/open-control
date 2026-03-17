@@ -429,11 +429,7 @@ describe("updateStatus", () => {
       status: "done",
       stateVersion: 3,
     });
-    expect(
-      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
-    ).toMatchObject({
-      status: "completed",
-    });
+    expect(patchedById["task-1"]).not.toHaveProperty("executionPlan");
     expect(
       inserted.some(
         ({ table, value }) =>
@@ -558,7 +554,7 @@ describe("manualMoveStep", () => {
     });
   });
 
-  it("moves the parent task to done and syncs execution plan when the last human step completes", async () => {
+  it("moves the parent task to done when the last human step completes", async () => {
     const handler = getHandler();
     const patchedById: Record<string, Record<string, unknown>> = {};
     const inserted: Array<{ table: string; value: Record<string, unknown> }> = [];
@@ -622,11 +618,7 @@ describe("manualMoveStep", () => {
     expect(patchedById["task-1"]).toMatchObject({
       status: "done",
     });
-    expect(
-      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
-    ).toMatchObject({
-      status: "completed",
-    });
+    expect(patchedById["task-1"]).not.toHaveProperty("executionPlan");
     expect(
       inserted.some(
         ({ table, value }) =>
@@ -786,11 +778,7 @@ describe("manualMoveStep", () => {
     expect(patchedById["task-1"]).toMatchObject({
       status: "in_progress",
     });
-    expect(
-      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
-    ).toMatchObject({
-      status: "assigned",
-    });
+    expect(patchedById["task-1"]).not.toHaveProperty("executionPlan");
   });
 
   it("keeps the parent task in_progress when a human step moves to waiting_human", async () => {
@@ -855,11 +843,7 @@ describe("manualMoveStep", () => {
       status: "waiting_human",
     });
     expect(patchedById["task-1"]?.status).not.toBe("review");
-    expect(
-      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
-    ).toMatchObject({
-      status: "waiting_human",
-    });
+    expect(patchedById["task-1"]).toBeUndefined();
   });
 
   it("ignores deleted steps when deciding that the parent task is done", async () => {
@@ -1153,11 +1137,7 @@ describe("updateStatus", () => {
       stateVersion: 3,
     });
     expect(patchedById["task-1"]?.status).toBeUndefined();
-    expect(
-      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
-    ).toMatchObject({
-      status: "completed",
-    });
+    expect(patchedById["task-1"]).toBeUndefined();
   });
 
   it("preserves parent workflow review when another human step is manually moved", async () => {
@@ -1259,7 +1239,7 @@ describe("transition", () => {
     )._handler;
   }
 
-  it("reconciles parent task status and execution plan for canonical step transitions", async () => {
+  it("reconciles parent task status for canonical step transitions", async () => {
     const handler = getHandler();
     const patchedById: Record<string, Record<string, unknown>> = {};
 
@@ -1330,11 +1310,7 @@ describe("transition", () => {
       status: "done",
       stateVersion: 5,
     });
-    expect(
-      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
-    ).toMatchObject({
-      status: "completed",
-    });
+    expect(patchedById["task-1"]).not.toHaveProperty("executionPlan");
   });
 
   it("persists one receipt for a successful step transition replay", async () => {
@@ -1646,7 +1622,7 @@ describe("deleteStep", () => {
     ).toBe(true);
   });
 
-  it("syncs the parent execution plan when a step is deleted", async () => {
+  it("does not rewrite execution plan when a step is deleted", async () => {
     const handler = getHandler();
     const patchedById: Record<string, Record<string, unknown>> = {};
 
@@ -1705,11 +1681,7 @@ describe("deleteStep", () => {
     expect(patchedById["step-1"]).toMatchObject({
       status: "deleted",
     });
-    expect(
-      (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
-    ).toMatchObject({
-      status: "deleted",
-    });
+    expect(patchedById["task-1"]).toBeUndefined();
   });
 });
 

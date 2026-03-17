@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { Id } from "../_generated/dataModel";
+
 import {
   isValidTaskTransition,
   getTaskEventType,
@@ -12,6 +14,8 @@ import {
   TRANSITION_EVENT_MAP,
   RESTORE_TARGET_MAP,
 } from "./taskLifecycle";
+
+const taskId = "task-1" as Id<"tasks">;
 
 // ---------------------------------------------------------------------------
 // isValidTaskTransition
@@ -67,9 +71,7 @@ describe("getTaskEventType", () => {
   });
 
   it("throws for unmapped transitions", () => {
-    expect(() => getTaskEventType("done", "in_progress")).toThrow(
-      /No event type mapping/
-    );
+    expect(() => getTaskEventType("done", "in_progress")).toThrow(/No event type mapping/);
   });
 });
 
@@ -83,7 +85,7 @@ describe("logTaskStatusChange", () => {
     const ctx = { db: { insert } };
 
     await logTaskStatusChange(ctx, {
-      taskId: "task-1" as any,
+      taskId,
       fromStatus: "inbox",
       toStatus: "assigned",
       agentName: "coder",
@@ -104,18 +106,19 @@ describe("logTaskStatusChange", () => {
     const ctx = { db: { insert } };
 
     await logTaskStatusChange(ctx, {
-      taskId: "task-1" as any,
+      taskId,
       fromStatus: "in_progress",
       toStatus: "done",
       taskTitle: "My Great Task",
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(insert).toHaveBeenCalledWith("activities",
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
       expect.objectContaining({
         eventType: "task_completed",
         description: 'Task completed: "My Great Task"',
-      })
+      }),
     );
   });
 
@@ -124,16 +127,17 @@ describe("logTaskStatusChange", () => {
     const ctx = { db: { insert } };
 
     await logTaskStatusChange(ctx, {
-      taskId: "task-1" as any,
+      taskId,
       fromStatus: "in_progress",
       toStatus: "review",
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(insert).toHaveBeenCalledWith("activities",
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
       expect.objectContaining({
         description: "Task status changed from in_progress to review",
-      })
+      }),
     );
   });
 });
@@ -148,17 +152,18 @@ describe("logTaskCreated", () => {
     const ctx = { db: { insert } };
 
     await logTaskCreated(ctx, {
-      taskId: "task-1" as any,
+      taskId,
       title: "Manual task",
       isManual: true,
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(insert).toHaveBeenCalledWith("activities",
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
       expect.objectContaining({
         eventType: "task_created",
         description: 'Manual task created: "Manual task"',
-      })
+      }),
     );
   });
 
@@ -167,18 +172,19 @@ describe("logTaskCreated", () => {
     const ctx = { db: { insert } };
 
     await logTaskCreated(ctx, {
-      taskId: "task-1" as any,
+      taskId,
       title: "Auto task",
       isManual: false,
       assignedAgent: "coder",
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(insert).toHaveBeenCalledWith("activities",
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
       expect.objectContaining({
         description: 'Task created and assigned to coder: "Auto task"',
         agentName: "coder",
-      })
+      }),
     );
   });
 
@@ -187,17 +193,18 @@ describe("logTaskCreated", () => {
     const ctx = { db: { insert } };
 
     await logTaskCreated(ctx, {
-      taskId: "task-1" as any,
+      taskId,
       title: "Reviewed task",
       isManual: false,
       trustLevel: "human_approved",
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(insert).toHaveBeenCalledWith("activities",
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
       expect.objectContaining({
         description: expect.stringContaining("(trust: human approved)"),
-      })
+      }),
     );
   });
 
@@ -206,7 +213,7 @@ describe("logTaskCreated", () => {
     const ctx = { db: { insert } };
 
     await logTaskCreated(ctx, {
-      taskId: "task-1" as any,
+      taskId,
       title: "Supervised task",
       isManual: false,
       assignedAgent: "agent-1",
@@ -214,10 +221,11 @@ describe("logTaskCreated", () => {
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(insert).toHaveBeenCalledWith("activities",
+    expect(insert).toHaveBeenCalledWith(
+      "activities",
       expect.objectContaining({
         description: expect.stringContaining("(supervised)"),
-      })
+      }),
     );
   });
 
@@ -226,7 +234,7 @@ describe("logTaskCreated", () => {
     const ctx = { db: { insert } };
 
     await logTaskCreated(ctx, {
-      taskId: "task-1" as any,
+      taskId,
       title: "Manual task",
       isManual: true,
       supervisionMode: "supervised",
@@ -243,7 +251,7 @@ describe("logTaskCreated", () => {
 // ---------------------------------------------------------------------------
 
 describe("markPlanStepsCompleted", () => {
-  it("marks all plan steps as completed", async () => {
+  it("does not rewrite executionPlan when a task completes", async () => {
     const patch = vi.fn(async () => undefined);
     const ctx = { db: { patch } };
 
@@ -256,23 +264,16 @@ describe("markPlanStepsCompleted", () => {
       },
     };
 
-    await markPlanStepsCompleted(ctx, "task-1" as any, task);
+    await markPlanStepsCompleted(ctx, taskId, task);
 
-    expect(patch).toHaveBeenCalledWith("task-1", {
-      executionPlan: {
-        steps: [
-          { tempId: "s1", title: "Step 1", status: "completed" },
-          { tempId: "s2", title: "Step 2", status: "completed" },
-        ],
-      },
-    });
+    expect(patch).not.toHaveBeenCalled();
   });
 
   it("does nothing when there is no execution plan", async () => {
     const patch = vi.fn(async () => undefined);
     const ctx = { db: { patch } };
 
-    await markPlanStepsCompleted(ctx, "task-1" as any, {});
+    await markPlanStepsCompleted(ctx, taskId, {});
 
     expect(patch).not.toHaveBeenCalled();
   });
@@ -281,7 +282,7 @@ describe("markPlanStepsCompleted", () => {
     const patch = vi.fn(async () => undefined);
     const ctx = { db: { patch } };
 
-    await markPlanStepsCompleted(ctx, "task-1" as any, {
+    await markPlanStepsCompleted(ctx, taskId, {
       executionPlan: { steps: [] },
     });
 
@@ -341,8 +342,16 @@ describe("TRANSITION_EVENT_MAP consistency", () => {
 describe("RESTORE_TARGET_MAP consistency", () => {
   it("covers all non-deleted statuses", () => {
     const expectedKeys = [
-      "planning", "ready", "failed", "inbox", "assigned",
-      "in_progress", "review", "done", "crashed", "retrying",
+      "planning",
+      "ready",
+      "failed",
+      "inbox",
+      "assigned",
+      "in_progress",
+      "review",
+      "done",
+      "crashed",
+      "retrying",
     ];
     for (const key of expectedKeys) {
       expect(RESTORE_TARGET_MAP).toHaveProperty(key);

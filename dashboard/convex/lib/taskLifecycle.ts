@@ -186,40 +186,15 @@ export async function logTaskCreated(
 // Execution Plan Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Mark all execution plan steps as completed on a task.
- * Called when a task transitions to "done" to keep the plan UI in sync.
- */
-type ExecutionPlanStep = Record<string, unknown>;
-type ExecutionPlanTask = {
-  executionPlan?: {
-    steps?: ExecutionPlanStep[];
-  };
-};
-
 export async function markPlanStepsCompleted(
-  ctx: {
-    db: {
-      patch: (
-        id: Id<"tasks">,
-        value: { executionPlan: { steps: ExecutionPlanStep[] } },
-      ) => Promise<void>;
-    };
-  },
-  taskId: Id<"tasks">,
-  task: ExecutionPlanTask,
+  _ctx: { db: { patch: (id: Id<"tasks">, value: unknown) => Promise<void> } },
+  _taskId: Id<"tasks">,
+  _task: { executionPlan?: { steps?: Array<Record<string, unknown>> } },
 ): Promise<void> {
-  const plan = task.executionPlan;
-  if (!plan?.steps?.length) return;
-
-  const updatedSteps = plan.steps.map((step) => ({
-    ...step,
-    status: "completed",
-  }));
-
-  await ctx.db.patch(taskId, {
-    executionPlan: { ...plan, steps: updatedSteps },
-  });
+  void _ctx;
+  void _taskId;
+  void _task;
+  // executionPlan is static authored data. Live step status is read from `steps`.
 }
 
 /**

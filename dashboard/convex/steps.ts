@@ -18,42 +18,6 @@ import { applyTaskTransition, getTaskStateVersion } from "./lib/taskTransitions"
 import { workflowStepTypeValidator } from "./schema";
 import { logActivity } from "./lib/workflowHelpers";
 
-function syncExecutionPlanStepStatus(
-  executionPlan: unknown,
-  step: {
-    title?: string;
-    description?: string;
-    order?: number;
-  },
-  newStatus: string,
-): unknown {
-  const plan = executionPlan as { steps?: Array<Record<string, unknown>> } | undefined;
-  if (!plan?.steps?.length) {
-    return executionPlan;
-  }
-
-  let updated = false;
-  const steps = plan.steps.map((planStep) => {
-    const sameOrder = Number(planStep.order) === Number(step.order);
-    const sameTitle = String(planStep.title ?? "") === String(step.title ?? "");
-    const sameDescription =
-      step.description == null ||
-      String(planStep.description ?? "") === String(step.description ?? "");
-
-    if (!sameOrder || !sameTitle || !sameDescription) {
-      return planStep;
-    }
-
-    updated = true;
-    return {
-      ...planStep,
-      status: newStatus,
-    };
-  });
-
-  return updated ? { ...plan, steps } : executionPlan;
-}
-
 function deriveHumanParentTaskStatus(
   steps: Array<{
     status?: string;
@@ -117,15 +81,8 @@ async function reconcileParentTaskAfterStepChange(
     timestamp: string;
   },
 ): Promise<void> {
-  const { task, step, nextStepStatus, currentTaskSteps, timestamp } = args;
-  const syncedExecutionPlan = syncExecutionPlanStepStatus(task.executionPlan, step, nextStepStatus);
+  const { task, step, currentTaskSteps, timestamp } = args;
   const nextTaskStatus = deriveHumanParentTaskStatus(currentTaskSteps);
-  if (syncedExecutionPlan !== task.executionPlan) {
-    await ctx.db.patch(step.taskId, {
-      executionPlan: syncedExecutionPlan,
-      updatedAt: timestamp,
-    });
-  }
 
   if (task.status === nextTaskStatus) {
     return;
@@ -599,18 +556,6 @@ export const manualMoveStep = mutation({
     const task = await ctx.db.get(step.taskId);
     if (!task) {
       throw new ConvexError("Parent task not found");
-    }
-
-    const syncedExecutionPlan = syncExecutionPlanStepStatus(
-      task.executionPlan,
-      step,
-      args.newStatus,
-    );
-    if (syncedExecutionPlan !== task.executionPlan) {
-      await ctx.db.patch(step.taskId, {
-        executionPlan: syncedExecutionPlan,
-        updatedAt: timestamp,
-      });
     }
 
     const allTaskSteps = await ctx.db
