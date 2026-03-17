@@ -34,6 +34,26 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _transition_task_from_snapshot(
+    bridge: Any,
+    task_data: dict[str, Any],
+    to_status: str,
+    *,
+    reason: str,
+    agent_name: str | None = None,
+    review_phase: str | None = None,
+) -> Any:
+    result = await asyncio.to_thread(
+        bridge.transition_task_from_snapshot,
+        task_data,
+        to_status,
+        reason=reason,
+        agent_name=agent_name,
+        review_phase=review_phase,
+    )
+    return result
+
+
 def _as_positive_int(value: Any, default: int) -> int:
     """Convert a value to a positive int, with fallback."""
     try:
@@ -260,13 +280,20 @@ class StepDispatcher:
             final_steps = await asyncio.to_thread(self._bridge.get_steps_by_task, task_id)
             any_crashed = any(step.get("status") == StepStatus.CRASHED for step in final_steps)
             if any_crashed:
-                await asyncio.to_thread(
-                    self._bridge.update_task_status,
-                    task_id,
-                    TaskStatus.CRASHED,
-                    NANOBOT_AGENT_NAME,
-                    "One or more steps crashed",
-                )
+                task_data = await asyncio.to_thread(self._bridge.get_task, task_id)
+                if isinstance(task_data, dict):
+                    await _transition_task_from_snapshot(
+                        self._bridge,
+                        task_data,
+                        TaskStatus.CRASHED,
+                        agent_name=NANOBOT_AGENT_NAME,
+                        reason="One or more steps crashed",
+                    )
+                else:
+                    logger.warning(
+                        "[dispatcher] Could not load task %s before crashed transition",
+                        task_id,
+                    )
                 return
             all_completed = bool(final_steps) and all(
                 step.get("status") == StepStatus.COMPLETED for step in final_steps
@@ -279,15 +306,23 @@ class StepDispatcher:
                     {"task_id": task_id},
                 )
                 final_status = resolve_completion_status(task_data)
-                await asyncio.to_thread(
-                    self._bridge.update_task_status,
-                    task_id,
+                transition_result = await _transition_task_from_snapshot(
+                    self._bridge,
+                    task_data,
                     final_status,
-                    None,
-                    f"All {step_count} steps completed",
-                    None,
-                    resolve_completion_review_phase(task_data),
+                    reason=f"All {step_count} steps completed",
+                    review_phase=resolve_completion_review_phase(task_data),
                 )
+                if not isinstance(transition_result, dict) or transition_result.get("kind") not in {
+                    "applied",
+                    "noop",
+                }:
+                    logger.warning(
+                        "[dispatcher] Final task transition for %s did not apply: %s",
+                        task_id,
+                        transition_result,
+                    )
+                    return
                 if final_status == TaskStatus.REVIEW:
                     await asyncio.to_thread(
                         self._bridge.create_activity,

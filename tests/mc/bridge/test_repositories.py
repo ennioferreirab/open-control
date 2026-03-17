@@ -26,6 +26,66 @@ def _make_client_mock() -> MagicMock:
 
 
 class TestTaskRepository:
+    def test_transition_task(self):
+        client = _make_client_mock()
+        client.mutation.return_value = {
+            "kind": "applied",
+            "task_id": "task-1",
+            "status": "review",
+            "state_version": 4,
+        }
+        repo = TaskRepository(client)
+
+        result = repo.transition_task(
+            "task-1",
+            from_status="planning",
+            to_status="review",
+            expected_state_version=3,
+            reason="Plan ready for review",
+            idempotency_key="py:task-1:v3:planning:review",
+            awaiting_kickoff=True,
+            review_phase="plan_review",
+            agent_name="lead-agent",
+        )
+
+        assert result["kind"] == "applied"
+        client.mutation.assert_called_once_with(
+            "tasks:transition",
+            {
+                "task_id": "task-1",
+                "from_status": "planning",
+                "expected_state_version": 3,
+                "to_status": "review",
+                "awaiting_kickoff": True,
+                "review_phase": "plan_review",
+                "reason": "Plan ready for review",
+                "idempotency_key": "py:task-1:v3:planning:review",
+                "agent_name": "lead-agent",
+            },
+        )
+
+    def test_transition_task_from_snapshot_uses_snapshot_status_and_version(self):
+        client = _make_client_mock()
+        repo = TaskRepository(client)
+
+        repo.transition_task_from_snapshot(
+            {
+                "id": "task-1",
+                "status": "inbox",
+                "state_version": 7,
+            },
+            "planning",
+            reason="Inbox task routed to planning",
+        )
+
+        args = client.mutation.call_args[0][1]
+        assert args["task_id"] == "task-1"
+        assert args["from_status"] == "inbox"
+        assert args["expected_state_version"] == 7
+        assert args["to_status"] == "planning"
+        assert args["reason"] == "Inbox task routed to planning"
+        assert args["idempotency_key"] == "py:task-1:v7:inbox:planning:none:none:none"
+
     def test_update_task_status(self):
         client = _make_client_mock()
         repo = TaskRepository(client)
@@ -522,3 +582,26 @@ class TestTaskRepositoryIdempotency:
 
         with pytest.raises(RuntimeError, match="Convex unreachable"):
             repo.update_task_status("task-1", "in_progress")
+
+    def test_transition_task_surfaces_conflict_result_without_raising(self):
+        client = _make_client_mock()
+        client.mutation.return_value = {
+            "kind": "conflict",
+            "task_id": "task-1",
+            "current_status": "review",
+            "current_state_version": 5,
+            "reason": "stale_state",
+        }
+        repo = TaskRepository(client)
+
+        result = repo.transition_task(
+            "task-1",
+            from_status="in_progress",
+            to_status="review",
+            expected_state_version=4,
+            reason="Need approval",
+            idempotency_key="py:task-1:v4:in_progress:review",
+        )
+
+        assert result["kind"] == "conflict"
+        assert result["reason"] == "stale_state"

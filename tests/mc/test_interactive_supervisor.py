@@ -16,6 +16,7 @@ from mc.types import ActivityEventType
 
 def test_supervisor_marks_task_and_step_running_on_turn_started() -> None:
     bridge = MagicMock()
+    bridge.get_task.return_value = {"id": "task-1", "status": "review", "state_version": 1}
     registry = MagicMock()
     registry.get.return_value = {
         "session_id": "interactive_session:claude",
@@ -34,12 +35,13 @@ def test_supervisor_marks_task_and_step_running_on_turn_started() -> None:
     )
 
     registry.record_supervision.assert_called_once()
-    bridge.update_task_status.assert_called_once_with(
-        "task-1",
-        "in_progress",
-        agent_name="claude-pair",
-        description="Interactive turn started for step step-1",
-    )
+    bridge.get_task.assert_called_once_with("task-1")
+    bridge.transition_task_from_snapshot.assert_called_once()
+    transition_call = bridge.transition_task_from_snapshot.call_args
+    assert transition_call.args[0]["id"] == "task-1"
+    assert transition_call.args[1] == "in_progress"
+    assert transition_call.kwargs["agent_name"] == "claude-pair"
+    assert transition_call.kwargs["reason"] == "Interactive turn started for step step-1"
     bridge.update_step_status.assert_called_once_with("step-1", "running")
     bridge.create_activity.assert_called_once_with(
         ActivityEventType.STEP_STARTED,
@@ -51,6 +53,7 @@ def test_supervisor_marks_task_and_step_running_on_turn_started() -> None:
 
 def test_supervisor_marks_task_review_and_step_review_when_paused() -> None:
     bridge = MagicMock()
+    bridge.get_task.return_value = {"id": "task-1", "status": "in_progress", "state_version": 1}
     registry = MagicMock()
     registry.get.return_value = {
         "session_id": "interactive_session:claude",
@@ -69,14 +72,14 @@ def test_supervisor_marks_task_review_and_step_review_when_paused() -> None:
         )
     )
 
-    bridge.update_task_status.assert_called_once_with(
-        "task-1",
-        "review",
-        agent_name="claude-pair",
-        description="Need user confirmation before continuing.",
-        awaiting_kickoff=False,
-        review_phase="execution_pause",
-    )
+    bridge.get_task.assert_called_once_with("task-1")
+    bridge.transition_task_from_snapshot.assert_called_once()
+    transition_call = bridge.transition_task_from_snapshot.call_args
+    assert transition_call.args[1] == "review"
+    assert transition_call.kwargs["agent_name"] == "claude-pair"
+    assert transition_call.kwargs["reason"] == "Need user confirmation before continuing."
+    assert transition_call.kwargs["awaiting_kickoff"] is False
+    assert transition_call.kwargs["review_phase"] == "execution_pause"
     bridge.update_step_status.assert_called_once_with("step-1", "review")
     bridge.create_activity.assert_called_once_with(
         ActivityEventType.REVIEW_REQUESTED,
@@ -118,6 +121,7 @@ def test_supervisor_does_not_project_approval_requested_as_workflow_review() -> 
 
 def test_supervisor_marks_task_and_step_crashed_on_session_failure() -> None:
     bridge = MagicMock()
+    bridge.get_task.return_value = {"id": "task-1", "status": "in_progress", "state_version": 1}
     registry = MagicMock()
     registry.get.return_value = {
         "session_id": "interactive_session:claude",
@@ -136,12 +140,12 @@ def test_supervisor_marks_task_and_step_crashed_on_session_failure() -> None:
         )
     )
 
-    bridge.update_task_status.assert_called_once_with(
-        "task-1",
-        "crashed",
-        agent_name="claude-pair",
-        description="Provider process exited unexpectedly",
-    )
+    bridge.get_task.assert_called_once_with("task-1")
+    bridge.transition_task_from_snapshot.assert_called_once()
+    transition_call = bridge.transition_task_from_snapshot.call_args
+    assert transition_call.args[1] == "crashed"
+    assert transition_call.kwargs["agent_name"] == "claude-pair"
+    assert transition_call.kwargs["reason"] == "Provider process exited unexpectedly"
     bridge.update_step_status.assert_called_once_with(
         "step-1",
         "crashed",
@@ -238,6 +242,7 @@ def test_supervisor_suppresses_lifecycle_side_effects_during_human_takeover() ->
 
 def _make_supervisor() -> tuple[MagicMock, MagicMock, InteractiveExecutionSupervisor]:
     bridge = MagicMock()
+    bridge.get_task.return_value = {"id": "task-1", "status": "review", "state_version": 1}
     registry = MagicMock()
     registry.get.return_value = {
         "session_id": "interactive_session:claude",
@@ -374,7 +379,7 @@ def test_activity_log_write_failure_does_not_break_supervision_flow() -> None:
     # record_supervision still called
     registry.record_supervision.assert_called_once()
     # lifecycle side-effects still applied
-    bridge.update_task_status.assert_called_once()
+    bridge.transition_task_from_snapshot.assert_called_once()
     bridge.update_step_status.assert_called_once()
     assert result == {}
 
@@ -513,9 +518,6 @@ def test_supervisor_record_supervision_no_null_values_in_payload() -> None:
 def test_supervisor_turn_started_is_idempotent_when_task_already_in_progress() -> None:
     """Repeated turn_started must not fail when task is already in_progress."""
     bridge = MagicMock()
-    bridge.update_task_status.side_effect = Exception(
-        "Cannot transition in_progress -> in_progress"
-    )
     registry = MagicMock()
     registry.get.return_value = {
         "session_id": "interactive_session:claude",
@@ -524,6 +526,11 @@ def test_supervisor_turn_started_is_idempotent_when_task_already_in_progress() -
         "step_id": "step-1",
     }
     registry.record_supervision.return_value = {}
+    bridge.get_task.return_value = {"id": "task-1", "status": "in_progress", "state_version": 3}
+    bridge.transition_task_from_snapshot.return_value = {
+        "kind": "noop",
+        "reason": "already_applied",
+    }
     supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
 
     supervisor.handle_event(
@@ -562,13 +569,9 @@ def test_supervisor_paused_for_review_is_idempotent_when_task_and_step_already_r
     """Repeated pause events must not fail when ask_user already moved workflow to review."""
     bridge = MagicMock()
 
-    def _update_task_status(*args: object, **kwargs: object) -> None:
-        raise Exception("Cannot transition from 'review' to 'review'")
-
     def _update_step_status(*args: object, **kwargs: object) -> None:
         raise Exception("Cannot transition review -> review")
 
-    bridge.update_task_status.side_effect = _update_task_status
     bridge.update_step_status.side_effect = _update_step_status
     registry = MagicMock()
     registry.get.return_value = {
@@ -578,6 +581,11 @@ def test_supervisor_paused_for_review_is_idempotent_when_task_and_step_already_r
         "step_id": "step-1",
     }
     registry.record_supervision.return_value = {}
+    bridge.get_task.return_value = {"id": "task-1", "status": "review", "state_version": 5}
+    bridge.transition_task_from_snapshot.return_value = {
+        "kind": "noop",
+        "reason": "already_applied",
+    }
     supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
 
     supervisor.handle_event(
@@ -600,7 +608,6 @@ def test_supervisor_paused_for_review_is_idempotent_when_task_and_step_already_r
 def test_supervisor_genuine_transition_failure_still_surfaces() -> None:
     """Unexpected transition failures must not be silently swallowed."""
     bridge = MagicMock()
-    bridge.update_task_status.side_effect = Exception("Network timeout connecting to Convex")
     registry = MagicMock()
     registry.get.return_value = {
         "session_id": "interactive_session:claude",
@@ -609,6 +616,10 @@ def test_supervisor_genuine_transition_failure_still_surfaces() -> None:
         "step_id": "step-1",
     }
     registry.record_supervision.return_value = {}
+    bridge.get_task.return_value = {"id": "task-1", "status": "review", "state_version": 4}
+    bridge.transition_task_from_snapshot.side_effect = Exception(
+        "Network timeout connecting to Convex"
+    )
     supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
 
     with pytest.raises(Exception, match="Network timeout"):

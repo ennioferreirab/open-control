@@ -17,6 +17,33 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _coerce_state_version(task_data: dict[str, Any]) -> int:
+    raw_value = task_data.get("state_version", task_data.get("stateVersion", 0))
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _default_transition_idempotency_key(
+    *,
+    task_id: str,
+    expected_state_version: int,
+    from_status: str,
+    to_status: str,
+    review_phase: str | None,
+    awaiting_kickoff: bool | None,
+    agent_name: str | None,
+) -> str:
+    awaiting_segment = (
+        "true" if awaiting_kickoff is True else "false" if awaiting_kickoff is False else "none"
+    )
+    return (
+        f"py:{task_id}:v{expected_state_version}:{from_status}:{to_status}:"
+        f"{review_phase or 'none'}:{awaiting_segment}:{agent_name or 'none'}"
+    )
+
+
 class TaskRepository:
     """Data access methods for task entities in Convex."""
 
@@ -49,6 +76,84 @@ class TaskRepository:
             desc += f" by {agent_name}"
         self._log_state_transition("task", desc)
         return result
+
+    def transition_task(
+        self,
+        task_id: str,
+        *,
+        from_status: str,
+        to_status: str,
+        expected_state_version: int,
+        reason: str,
+        idempotency_key: str,
+        agent_name: str | None = None,
+        awaiting_kickoff: bool | None = None,
+        review_phase: str | None = None,
+    ) -> Any:
+        """Apply a canonical task transition through Convex."""
+        mutation_args: dict[str, Any] = {
+            "task_id": task_id,
+            "from_status": from_status,
+            "expected_state_version": expected_state_version,
+            "to_status": to_status,
+            "reason": reason,
+            "idempotency_key": idempotency_key,
+        }
+        if agent_name is not None:
+            mutation_args["agent_name"] = agent_name
+        if awaiting_kickoff is not None:
+            mutation_args["awaiting_kickoff"] = awaiting_kickoff
+        if review_phase is not None:
+            mutation_args["review_phase"] = review_phase
+        result = self._client.mutation("tasks:transition", mutation_args)
+        logger.debug(
+            "[bridge] task transition %s -> %s for %s returned %s",
+            from_status,
+            to_status,
+            task_id,
+            result.get("kind") if isinstance(result, dict) else type(result).__name__,
+        )
+        return result
+
+    def transition_task_from_snapshot(
+        self,
+        task_data: dict[str, Any],
+        to_status: str,
+        *,
+        reason: str,
+        agent_name: str | None = None,
+        awaiting_kickoff: bool | None = None,
+        review_phase: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Any:
+        """Transition a task using status/version from an in-memory snapshot."""
+        task_id = str(task_data.get("id") or task_data.get("_id") or "").strip()
+        if not task_id:
+            raise ValueError("Task snapshot is missing an id")
+        from_status = str(task_data.get("status") or "").strip()
+        if not from_status:
+            raise ValueError(f"Task snapshot {task_id} is missing a status")
+        expected_state_version = _coerce_state_version(task_data)
+        resolved_idempotency_key = idempotency_key or _default_transition_idempotency_key(
+            task_id=task_id,
+            expected_state_version=expected_state_version,
+            from_status=from_status,
+            to_status=to_status,
+            review_phase=review_phase,
+            awaiting_kickoff=awaiting_kickoff,
+            agent_name=agent_name,
+        )
+        return self.transition_task(
+            task_id,
+            from_status=from_status,
+            to_status=to_status,
+            expected_state_version=expected_state_version,
+            reason=reason,
+            idempotency_key=resolved_idempotency_key,
+            agent_name=agent_name,
+            awaiting_kickoff=awaiting_kickoff,
+            review_phase=review_phase,
+        )
 
     def update_execution_plan(self, task_id: str, plan: dict[str, Any]) -> Any:
         """Update the executionPlan field on a task document.

@@ -24,6 +24,7 @@ async def _sync_to_thread(func, *args, **kwargs):
 def _make_bridge() -> MagicMock:
     bridge = MagicMock()
     bridge.update_task_status.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.mutation.return_value = None
     bridge.create_activity.return_value = None
     return bridge
@@ -76,7 +77,7 @@ class TestInboxWorkerAiWorkflowBypass:
             await worker.process_task(task)
 
         # Must NOT call planning
-        call_args_list = bridge.update_task_status.call_args_list
+        call_args_list = bridge.transition_task_from_snapshot.call_args_list
         statuses = [call[0][1] for call in call_args_list]
         assert "planning" not in statuses, (
             "ai_workflow tasks with a workflow plan must not be routed to planning"
@@ -92,10 +93,10 @@ class TestInboxWorkerAiWorkflowBypass:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        bridge.update_task_status.assert_called_once()
-        call_args = bridge.update_task_status.call_args[0]
-        assert call_args[0] == "task-workflow-1"
-        assert call_args[1] == "review"
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args.args[0]["id"] == "task-workflow-1"
+        assert call_args.args[1] == "review"
 
     @pytest.mark.asyncio
     async def test_workflow_task_sets_awaiting_kickoff(self) -> None:
@@ -107,18 +108,9 @@ class TestInboxWorkerAiWorkflowBypass:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        # update_task_status signature: (task_id, status, agent_name, description, awaiting_kickoff)
-        # The inbox bypass calls: (task_id, "review", None, description, True)
-        call_args = bridge.update_task_status.call_args
-        positional = call_args[0]
-        keyword = call_args[1] if len(call_args) > 1 else {}
-        # awaiting_kickoff is the 5th positional arg (index 4) or a keyword arg
-        awaiting = keyword.get("awaiting_kickoff") or (
-            len(positional) > 4 and positional[4] is True
-        )
-        assert awaiting, (
-            "update_task_status must be called with awaiting_kickoff=True for workflow tasks"
-        )
+        kwargs = bridge.transition_task_from_snapshot.call_args.kwargs
+        assert kwargs["awaiting_kickoff"] is True
+        assert kwargs["review_phase"] == "plan_review"
 
     @pytest.mark.asyncio
     async def test_normal_task_still_routes_to_planning(self) -> None:
@@ -138,7 +130,11 @@ class TestInboxWorkerAiWorkflowBypass:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        bridge.update_task_status.assert_called_once_with("task-normal", "planning")
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args.args[0]["id"] == "task-normal"
+        assert call_args.args[1] == "planning"
+        assert call_args.kwargs["reason"] == "Inbox task routed to planning"
 
     @pytest.mark.asyncio
     async def test_ai_workflow_without_workflow_plan_still_routes_to_planning(self) -> None:
@@ -159,7 +155,8 @@ class TestInboxWorkerAiWorkflowBypass:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        bridge.update_task_status.assert_called_once_with("task-no-plan", "planning")
+        bridge.transition_task_from_snapshot.assert_called_once()
+        assert bridge.transition_task_from_snapshot.call_args.args[1] == "planning"
 
     @pytest.mark.asyncio
     async def test_ai_workflow_with_lead_agent_plan_still_routes_to_planning(self) -> None:
@@ -184,4 +181,5 @@ class TestInboxWorkerAiWorkflowBypass:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        bridge.update_task_status.assert_called_once_with("task-lead-plan", "planning")
+        bridge.transition_task_from_snapshot.assert_called_once()
+        assert bridge.transition_task_from_snapshot.call_args.args[1] == "planning"

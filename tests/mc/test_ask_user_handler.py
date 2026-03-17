@@ -41,7 +41,14 @@ async def test_ask_posts_question_and_waits() -> None:
     bridge = MagicMock()
     bridge.send_message = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
+    bridge.transition_task_from_snapshot = MagicMock(return_value={"kind": "applied"})
     bridge.update_step_status = MagicMock(return_value=None)
+    bridge.get_task = MagicMock(
+        side_effect=[
+            {"id": "task-1", "status": "in_progress", "state_version": 3},
+            {"id": "task-1", "status": "review", "state_version": 4},
+        ]
+    )
     bridge.get_steps_by_task = MagicMock(return_value=[{"id": "step-1", "status": "running"}])
 
     ask_task = asyncio.create_task(
@@ -71,9 +78,15 @@ async def test_ask_posts_question_and_waits() -> None:
     assert "1. Blue" in send_call[0][3]
     assert "2. Green" in send_call[0][3]
 
-    assert bridge.update_task_status.call_count == 2
-    assert bridge.update_task_status.call_args_list[0][0][1] == "review"
-    assert bridge.update_task_status.call_args_list[1][0][1] == "in_progress"
+    assert bridge.transition_task_from_snapshot.call_count == 2
+    assert bridge.transition_task_from_snapshot.call_args_list[0].args[1] == "review"
+    assert bridge.transition_task_from_snapshot.call_args_list[1].args[1] == "in_progress"
+    assert bridge.transition_task_from_snapshot.call_args_list[0].kwargs["review_phase"] == (
+        "execution_pause"
+    )
+    assert (
+        bridge.transition_task_from_snapshot.call_args_list[0].kwargs["awaiting_kickoff"] is False
+    )
     assert bridge.update_step_status.call_args_list[0][0] == ("step-1", "review")
     assert bridge.update_step_status.call_args_list[1][0] == ("step-1", "running")
     assert bridge.create_activity.call_args_list[0][0] == (
@@ -96,7 +109,14 @@ async def test_ask_without_options() -> None:
     bridge = MagicMock()
     bridge.send_message = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
+    bridge.transition_task_from_snapshot = MagicMock(return_value={"kind": "applied"})
     bridge.update_step_status = MagicMock(return_value=None)
+    bridge.get_task = MagicMock(
+        side_effect=[
+            {"id": "task-2", "status": "in_progress", "state_version": 1},
+            {"id": "task-2", "status": "review", "state_version": 2},
+        ]
+    )
     bridge.get_steps_by_task = MagicMock(return_value=[])
 
     ask_task = asyncio.create_task(
@@ -126,7 +146,11 @@ async def test_ask_cleanup_on_exception() -> None:
     bridge = MagicMock()
     bridge.send_message = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
+    bridge.transition_task_from_snapshot = MagicMock(return_value={"kind": "applied"})
     bridge.update_step_status = MagicMock(return_value=None)
+    bridge.get_task = MagicMock(
+        return_value={"id": "task-3", "status": "in_progress", "state_version": 1}
+    )
     bridge.get_steps_by_task = MagicMock(return_value=[])
 
     ask_task = asyncio.create_task(
@@ -155,7 +179,14 @@ async def test_ask_posts_structured_questionnaire() -> None:
     bridge = MagicMock()
     bridge.send_message = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
+    bridge.transition_task_from_snapshot = MagicMock(return_value={"kind": "applied"})
     bridge.update_step_status = MagicMock(return_value=None)
+    bridge.get_task = MagicMock(
+        side_effect=[
+            {"id": "task-q", "status": "in_progress", "state_version": 5},
+            {"id": "task-q", "status": "review", "state_version": 6},
+        ]
+    )
     bridge.get_steps_by_task = MagicMock(return_value=[{"id": "step-q", "status": "running"}])
 
     questions = [

@@ -16,6 +16,35 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _transition_succeeded(result: object) -> bool:
+    return isinstance(result, dict) and result.get("kind") in {"applied", "noop"}
+
+
+async def _transition_task(
+    bridge: "ConvexBridge",
+    task_id: str,
+    to_status: str,
+    *,
+    reason: str,
+    awaiting_kickoff: bool | None = None,
+    review_phase: str | None = None,
+) -> object:
+    snapshot = await asyncio.to_thread(bridge.get_task, task_id)
+    if not isinstance(snapshot, dict):
+        logger.warning(
+            "ask_user: unable to load task snapshot for %s before %s", task_id, to_status
+        )
+        return None
+    return await asyncio.to_thread(
+        bridge.transition_task_from_snapshot,
+        snapshot,
+        to_status,
+        reason=reason,
+        awaiting_kickoff=awaiting_kickoff,
+        review_phase=review_phase,
+    )
+
+
 class AskUserHandler:
     """Unified ask_user handler for all agent backends."""
 
@@ -71,22 +100,25 @@ class AskUserHandler:
             self._request_to_step[request_id] = step_id
 
         try:
-            await asyncio.to_thread(
-                bridge.update_task_status,
+            result = await _transition_task(
+                bridge,
                 task_id,
                 "review",
-                description=f"{agent_name} is waiting for user reply (ask_user)",
+                reason=f"{agent_name} is waiting for user reply (ask_user)",
+                awaiting_kickoff=False,
+                review_phase="execution_pause",
             )
-            if step_id is not None:
+            if step_id is not None and _transition_succeeded(result):
                 await asyncio.to_thread(bridge.update_step_status, step_id, "review")
-            await asyncio.to_thread(
-                bridge.create_activity,
-                ActivityEventType.REVIEW_REQUESTED,
-                f"Interactive session paused for review for @{agent_name}.",
-                task_id,
-                agent_name,
-            )
-            increment_interactive_metric("interactive_ask_user_pause_total")
+            if _transition_succeeded(result):
+                await asyncio.to_thread(
+                    bridge.create_activity,
+                    ActivityEventType.REVIEW_REQUESTED,
+                    f"Interactive session paused for review for @{agent_name}.",
+                    task_id,
+                    agent_name,
+                )
+                increment_interactive_metric("interactive_ask_user_pause_total")
         except Exception as exc:
             logger.warning("ask_user: failed to set task to review: %s", exc)
 
@@ -98,22 +130,23 @@ class AskUserHandler:
             step_id = self._request_to_step.pop(request_id, None)
 
         try:
-            await asyncio.to_thread(
-                bridge.update_task_status,
+            result = await _transition_task(
+                bridge,
                 task_id,
                 "in_progress",
-                description=f"{agent_name} received user reply, resuming",
+                reason=f"{agent_name} received user reply, resuming",
             )
-            if step_id is not None:
+            if step_id is not None and _transition_succeeded(result):
                 await asyncio.to_thread(bridge.update_step_status, step_id, "running")
-            await asyncio.to_thread(
-                bridge.create_activity,
-                ActivityEventType.STEP_STARTED,
-                f"Interactive session resumed after user reply for @{agent_name}.",
-                task_id,
-                agent_name,
-            )
-            increment_interactive_metric("interactive_ask_user_resume_total")
+            if _transition_succeeded(result):
+                await asyncio.to_thread(
+                    bridge.create_activity,
+                    ActivityEventType.STEP_STARTED,
+                    f"Interactive session resumed after user reply for @{agent_name}.",
+                    task_id,
+                    agent_name,
+                )
+                increment_interactive_metric("interactive_ask_user_resume_total")
         except Exception as exc:
             logger.warning("ask_user: failed to restore task to in_progress: %s", exc)
 

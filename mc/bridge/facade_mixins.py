@@ -23,6 +23,54 @@ class BridgeRepositoryFacadeMixin:
             task_id, status, agent_name, description, awaiting_kickoff, review_phase
         )
 
+    def transition_task(
+        self,
+        task_id: str,
+        *,
+        from_status: str,
+        to_status: str,
+        expected_state_version: int,
+        reason: str,
+        idempotency_key: str,
+        agent_name: str | None = None,
+        awaiting_kickoff: bool | None = None,
+        review_phase: str | None = None,
+    ) -> Any:
+        self._ensure_repos()
+        return self._tasks.transition_task(
+            task_id,
+            from_status=from_status,
+            to_status=to_status,
+            expected_state_version=expected_state_version,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            agent_name=agent_name,
+            awaiting_kickoff=awaiting_kickoff,
+            review_phase=review_phase,
+        )
+
+    def transition_task_from_snapshot(
+        self,
+        task_data: dict[str, Any],
+        to_status: str,
+        *,
+        reason: str,
+        agent_name: str | None = None,
+        awaiting_kickoff: bool | None = None,
+        review_phase: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Any:
+        self._ensure_repos()
+        return self._tasks.transition_task_from_snapshot(
+            task_data,
+            to_status,
+            reason=reason,
+            agent_name=agent_name,
+            awaiting_kickoff=awaiting_kickoff,
+            review_phase=review_phase,
+            idempotency_key=idempotency_key,
+        )
+
     def update_execution_plan(self, task_id: str, plan: dict[str, Any]) -> Any:
         self._ensure_repos()
         return self._tasks.update_execution_plan(task_id, plan)

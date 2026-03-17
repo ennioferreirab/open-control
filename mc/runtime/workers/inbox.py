@@ -14,6 +14,37 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _transition_applied_or_noop(task_id: str, to_status: str, result: Any) -> bool:
+    if not isinstance(result, dict):
+        logger.warning("[inbox] Task %s transition to %s returned %r", task_id, to_status, result)
+        return False
+    kind = result.get("kind")
+    if kind == "applied":
+        return True
+    if kind == "noop":
+        logger.info(
+            "[inbox] Task %s transition to %s already applied (%s)",
+            task_id,
+            to_status,
+            result.get("reason"),
+        )
+        return True
+    if kind == "conflict":
+        logger.warning(
+            "[inbox] Task %s transition to %s skipped due to %s (current_status=%s, current_state_version=%s)",
+            task_id,
+            to_status,
+            result.get("reason"),
+            result.get("current_status"),
+            result.get("current_state_version"),
+        )
+        return False
+    logger.warning(
+        "[inbox] Task %s transition to %s returned unknown result %r", task_id, to_status, result
+    )
+    return False
+
+
 class InboxWorker:
     """Processes inbox tasks: auto-title generation and routing to planning/assigned."""
 
@@ -106,14 +137,16 @@ class InboxWorker:
         work_mode = task_data.get("work_mode") or task_data.get("workMode")
 
         if work_mode == "ai_workflow" and is_workflow_plan:
-            await asyncio.to_thread(
-                self._bridge.update_task_status,
-                task_id,
+            result = await asyncio.to_thread(
+                self._bridge.transition_task_from_snapshot,
+                task_data,
                 "review",
-                None,
-                f"Workflow plan ready for kick-off: '{title}'",
-                True,  # awaiting_kickoff
+                reason=f"Workflow plan ready for kick-off: '{title}'",
+                awaiting_kickoff=True,
+                review_phase="plan_review",
             )
+            if not _transition_applied_or_noop(task_id, "review", result):
+                return
             logger.info(
                 "[inbox] Workflow task %s ('%s') -> review (awaitingKickoff); bypassing planning",
                 task_id,
@@ -122,11 +155,14 @@ class InboxWorker:
             return
 
         next_status = "assigned" if assigned_agent else "planning"
-        await asyncio.to_thread(
-            self._bridge.update_task_status,
-            task_id,
+        result = await asyncio.to_thread(
+            self._bridge.transition_task_from_snapshot,
+            task_data,
             next_status,
+            reason=f"Inbox task routed to {next_status}",
         )
+        if not _transition_applied_or_noop(task_id, next_status, result):
+            return
         logger.info(
             "[inbox] Inbox task %s ('%s') -> %s",
             task_id,

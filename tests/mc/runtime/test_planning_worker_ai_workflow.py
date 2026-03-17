@@ -30,6 +30,7 @@ def _make_bridge() -> MagicMock:
     bridge.batch_create_steps.return_value = ["step-1"]
     bridge.kick_off_task.return_value = None
     bridge.update_task_status.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.create_activity.return_value = None
     bridge.send_message.return_value = None
     return bridge
@@ -327,3 +328,31 @@ class TestPlanningWorkerAiWorkflowBypass:
 
         planner_cls.assert_called_once()
         planner.plan_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_supervised_plan_transitions_via_canonical_review_transition(self) -> None:
+        bridge = _make_bridge()
+        bridge.list_agents.return_value = []
+        materializer = _make_materializer()
+        dispatcher = _make_dispatcher()
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
+        task = {
+            **_make_normal_task("task-supervised"),
+            "supervision_mode": "supervised",
+        }
+        plan = _make_lead_agent_plan()
+
+        with (
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
+        ):
+            planner = planner_cls.return_value
+            planner.plan_task = AsyncMock(return_value=plan)
+            await worker.process_task(task)
+
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args.args[0]["id"] == "task-supervised"
+        assert call_args.args[1] == "review"
+        assert call_args.kwargs["awaiting_kickoff"] is True
+        assert call_args.kwargs["review_phase"] == "plan_review"

@@ -84,6 +84,37 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+async def _transition_completion(
+    bridge: Any,
+    *,
+    task_id: str,
+    task_data: dict[str, Any] | None,
+    title: str,
+    agent_name: str,
+) -> tuple[Any, str, dict[str, Any] | None]:
+    snapshot: dict[str, Any] | None = await asyncio.to_thread(bridge.get_task, task_id)
+    if not isinstance(snapshot, dict):
+        snapshot = task_data or None
+    snapshot_for_status = {
+        "id": task_id,
+        "status": TaskStatus.IN_PROGRESS,
+        "state_version": 0,
+        **(task_data or {}),
+        **(snapshot or {}),
+    }
+    final_status = resolve_completion_status(snapshot_for_status)
+    result = await asyncio.to_thread(
+        bridge.transition_task_from_snapshot,
+        snapshot_for_status,
+        final_status,
+        reason=f"Agent {agent_name} completed task '{title}'",
+        agent_name=agent_name,
+        review_phase=resolve_completion_review_phase(snapshot_for_status),
+    )
+    return result, final_status, snapshot
+
+
 # Strong references to fire-and-forget background tasks to prevent GC cancellation.
 # See: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
 _background_tasks: set[asyncio.Task[None]] = set()
@@ -626,19 +657,25 @@ class TaskExecutor(CCExecutorMixin):
                         cron_parent_task_id,
                     )
 
-            final_status = resolve_completion_status(task_data)
-
             # Activity event (task_completed) is written by the Convex
-            # tasks:updateStatus mutation — no duplicate create_activity here.
-            await asyncio.to_thread(
-                self._bridge.update_task_status,
-                task_id,
-                final_status,
-                agent_name,
-                f"Agent {agent_name} completed task '{title}'",
-                None,
-                resolve_completion_review_phase(task_data),
+            # tasks:transition mutation — no duplicate create_activity here.
+            transition_result, final_status, _fresh_task = await _transition_completion(
+                self._bridge,
+                task_id=task_id,
+                task_data=task_data,
+                title=title,
+                agent_name=agent_name,
             )
+            if not isinstance(transition_result, dict) or transition_result.get("kind") not in {
+                "applied",
+                "noop",
+            }:
+                logger.warning(
+                    "[executor] Task '%s' completion transition did not apply: %s",
+                    title,
+                    transition_result,
+                )
+                return
 
             # Clear retry count on success
             self._agent_gateway.clear_retry_count(task_id)

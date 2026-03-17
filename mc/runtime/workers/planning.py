@@ -31,6 +31,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_transition_conflict(result: Any, reason: str | None = None) -> bool:
+    return (
+        isinstance(result, dict)
+        and result.get("kind") == "conflict"
+        and (reason is None or result.get("reason") == reason)
+    )
+
+
 class PlanningWorker:
     """Processes planning tasks: generates plans, materializes steps, dispatches."""
 
@@ -49,6 +57,54 @@ class PlanningWorker:
         self._lead_agent_name = LEAD_AGENT_NAME
         self._known_planning_ids: set[str] = set()
         self._known_kickoff_ids = known_kickoff_ids if known_kickoff_ids is not None else set()
+
+    async def _transition_task_from_snapshot(
+        self,
+        task_data: dict[str, Any],
+        to_status: str,
+        *,
+        reason: str,
+        agent_name: str | None = None,
+        awaiting_kickoff: bool | None = None,
+        review_phase: str | None = None,
+        retry_on_stale: bool = False,
+    ) -> Any:
+        task_id = str(task_data.get("id") or "")
+        result = await asyncio.to_thread(
+            self._bridge.transition_task_from_snapshot,
+            task_data,
+            to_status,
+            reason=reason,
+            agent_name=agent_name,
+            awaiting_kickoff=awaiting_kickoff,
+            review_phase=review_phase,
+        )
+        if retry_on_stale and _is_transition_conflict(result, "stale_state") and task_id:
+            fresh_task = await asyncio.to_thread(self._bridge.get_task, task_id)
+            if isinstance(fresh_task, dict) and fresh_task.get("status") == task_data.get("status"):
+                logger.info(
+                    "[planning] Retrying task %s transition to %s with refreshed state_version",
+                    task_id,
+                    to_status,
+                )
+                result = await asyncio.to_thread(
+                    self._bridge.transition_task_from_snapshot,
+                    fresh_task,
+                    to_status,
+                    reason=reason,
+                    agent_name=agent_name,
+                    awaiting_kickoff=awaiting_kickoff,
+                    review_phase=review_phase,
+                )
+        if isinstance(result, dict) and result.get("kind") in {"applied", "noop"}:
+            return result
+        logger.warning(
+            "[planning] Task %s transition to %s did not apply: %s",
+            task_id,
+            to_status,
+            result,
+        )
+        return result
 
     async def process_batch(self, tasks: list[dict[str, Any]]) -> None:
         """Process a batch of planning tasks from a subscription update."""
@@ -225,12 +281,11 @@ class PlanningWorker:
                 exc_info=True,
             )
 
-            await asyncio.to_thread(
-                self._bridge.update_task_status,
-                task_id,
+            await self._transition_task_from_snapshot(
+                task_data,
                 TaskStatus.FAILED,
-                None,
-                f"Plan generation failed: {exc}",
+                reason=f"Plan generation failed: {exc}",
+                retry_on_stale=True,
             )
             await asyncio.to_thread(
                 self._bridge.create_activity,
@@ -257,15 +312,16 @@ class PlanningWorker:
         if supervision_mode != "autonomous":
             # Transition to review with awaitingKickoff so the dashboard
             # shows the kick-off UI
-            await asyncio.to_thread(
-                self._bridge.update_task_status,
-                task_id,
+            result = await self._transition_task_from_snapshot(
+                task_data,
                 TaskStatus.REVIEW,
-                None,
-                f"Plan ready for review: '{title}'",
-                True,  # awaiting_kickoff
-                ReviewPhase.PLAN_REVIEW,
+                reason=f"Plan ready for review: '{title}'",
+                awaiting_kickoff=True,
+                review_phase=ReviewPhase.PLAN_REVIEW,
+                retry_on_stale=True,
             )
+            if not isinstance(result, dict) or result.get("kind") not in {"applied", "noop"}:
+                return
             await asyncio.to_thread(
                 self._bridge.create_activity,
                 ActivityEventType.TASK_PLANNING,
@@ -352,15 +408,16 @@ class PlanningWorker:
         if supervision_mode != "autonomous":
             # Transition to review with awaitingKickoff so the dashboard shows
             # the kick-off UI for the pre-compiled workflow plan.
-            await asyncio.to_thread(
-                self._bridge.update_task_status,
-                task_id,
+            result = await self._transition_task_from_snapshot(
+                task_data,
                 TaskStatus.REVIEW,
-                None,
-                f"Workflow plan ready for review: '{title}'",
-                True,  # awaiting_kickoff
-                ReviewPhase.PLAN_REVIEW,
+                reason=f"Workflow plan ready for review: '{title}'",
+                awaiting_kickoff=True,
+                review_phase=ReviewPhase.PLAN_REVIEW,
+                retry_on_stale=True,
             )
+            if not isinstance(result, dict) or result.get("kind") not in {"applied", "noop"}:
+                return
             logger.info(
                 "[planning] Workflow task '%s' transitioned to review (awaitingKickoff).",
                 title,
@@ -391,10 +448,11 @@ class PlanningWorker:
                 exc,
                 exc_info=True,
             )
-            await asyncio.to_thread(
-                self._bridge.update_task_status,
-                task_id,
+            await self._transition_task_from_snapshot(
+                task_data,
                 TaskStatus.FAILED,
+                reason=f"Workflow plan materialization failed: {type(exc).__name__}: {exc}",
+                retry_on_stale=True,
             )
             await asyncio.to_thread(
                 self._bridge.send_message,

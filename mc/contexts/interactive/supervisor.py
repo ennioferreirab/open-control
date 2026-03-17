@@ -180,6 +180,42 @@ class InteractiveExecutionSupervisor:
         if event.kind == "session_failed":
             self._mark_crashed(event)
 
+    def _transition_task(
+        self,
+        event: InteractiveSupervisionEvent,
+        to_status: str,
+        *,
+        reason: str,
+        awaiting_kickoff: bool | None = None,
+        review_phase: str | None = None,
+    ) -> object | None:
+        if not event.task_id:
+            return None
+        task_snapshot = self._bridge.get_task(event.task_id)
+        if not isinstance(task_snapshot, dict):
+            logger.warning(
+                "Interactive supervision missing task snapshot for %s before %s",
+                event.task_id,
+                to_status,
+            )
+            return None
+        result = self._bridge.transition_task_from_snapshot(
+            task_snapshot,
+            to_status,
+            agent_name=event.agent_name,
+            reason=reason,
+            awaiting_kickoff=awaiting_kickoff,
+            review_phase=review_phase,
+        )
+        if isinstance(result, dict) and result.get("kind") == "conflict":
+            logger.warning(
+                "Interactive supervision transition for task %s to %s skipped due to %s",
+                event.task_id,
+                to_status,
+                result.get("reason"),
+            )
+        return result
+
     def _mark_running(self, event: InteractiveSupervisionEvent) -> None:
         if event.task_id:
             description = (
@@ -187,20 +223,11 @@ class InteractiveExecutionSupervisor:
                 if event.step_id
                 else "Interactive turn started"
             )
-            try:
-                self._bridge.update_task_status(
-                    event.task_id,
-                    "in_progress",
-                    agent_name=event.agent_name,
-                    description=description,
-                )
-            except Exception as exc:
-                if _is_same_status_error(exc, "in_progress"):
-                    logger.debug(
-                        "Task %s already in_progress — idempotent, skipping", event.task_id
-                    )
-                else:
-                    raise
+            self._transition_task(
+                event,
+                "in_progress",
+                reason=description,
+            )
         if event.step_id:
             try:
                 self._bridge.update_step_status(event.step_id, "running")
@@ -225,20 +252,13 @@ class InteractiveExecutionSupervisor:
     ) -> None:
         description = event.summary or "Interactive session is waiting for user input."
         if event.task_id:
-            try:
-                self._bridge.update_task_status(
-                    event.task_id,
-                    "review",
-                    agent_name=event.agent_name,
-                    description=description,
-                    awaiting_kickoff=False,
-                    review_phase="execution_pause",
-                )
-            except Exception as exc:
-                if _is_same_status_error(exc, "review"):
-                    logger.debug("Task %s already review — idempotent, skipping", event.task_id)
-                else:
-                    raise
+            self._transition_task(
+                event,
+                "review",
+                reason=description,
+                awaiting_kickoff=False,
+                review_phase="execution_pause",
+            )
         if event.step_id:
             try:
                 self._bridge.update_step_status(event.step_id, "review")
@@ -274,11 +294,10 @@ class InteractiveExecutionSupervisor:
         description = event.error or "Interactive session failed."
         increment_interactive_metric("interactive_session_crash_total")
         if event.task_id:
-            self._bridge.update_task_status(
-                event.task_id,
+            self._transition_task(
+                event,
                 "crashed",
-                agent_name=event.agent_name,
-                description=description,
+                reason=description,
             )
         if event.step_id:
             self._bridge.update_step_status(event.step_id, "crashed", description)

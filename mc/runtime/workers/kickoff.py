@@ -17,6 +17,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _transition_task_from_snapshot(
+    bridge: Any,
+    task_data: dict[str, Any],
+    to_status: str,
+    *,
+    reason: str,
+) -> Any:
+    task_id = str(task_data.get("id") or "")
+    result = await asyncio.to_thread(
+        bridge.transition_task_from_snapshot,
+        task_data,
+        to_status,
+        reason=reason,
+    )
+    if isinstance(result, dict) and result.get("kind") in {"applied", "noop"}:
+        return result
+    logger.warning(
+        "[kickoff] Task %s transition to %s did not apply: %s", task_id, to_status, result
+    )
+    return result
+
+
 def _coerce_order(value: Any) -> int | None:
     try:
         return int(value)
@@ -175,12 +197,11 @@ class KickoffResumeWorker:
                 exc_info=True,
             )
             try:
-                await asyncio.to_thread(
-                    self._bridge.update_task_status,
-                    task_id,
+                await _transition_task_from_snapshot(
+                    self._bridge,
+                    task_data,
                     TaskStatus.CRASHED,
-                    None,
-                    f"Materialization failed after kick-off: {type(exc).__name__}: {exc}",
+                    reason=f"Materialization failed after kick-off: {type(exc).__name__}: {exc}",
                 )
                 await asyncio.to_thread(
                     self._bridge.create_activity,

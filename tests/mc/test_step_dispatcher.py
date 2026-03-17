@@ -80,6 +80,7 @@ def _make_stateful_bridge(
     bridge.update_step_status.side_effect = _update_step_status
     bridge.check_and_unblock_dependents.side_effect = _check_and_unblock_dependents
     bridge.update_task_status.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.create_activity.return_value = None
     bridge.get_task_messages.return_value = []
     bridge.query.return_value = {"title": "Main Task", "status": "in_progress"}
@@ -263,7 +264,7 @@ class TestStepDispatcher:
 
         engine.run.assert_awaited_once()
         request = engine.run.await_args.args[0]
-        assert request.runner_type == RunnerType.INTERACTIVE_TUI
+        assert request.runner_type == RunnerType.PROVIDER_CLI
         assert request.agent_name == "cc-agent"
 
     @pytest.mark.asyncio
@@ -285,16 +286,12 @@ class TestStepDispatcher:
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert state["step-1"]["status"] == StepStatus.COMPLETED
-        bridge.update_task_status.assert_called_once()
-        status_call = bridge.update_task_status.call_args
-        assert status_call.args == (
-            "task-1",
-            TaskStatus.REVIEW,
-            None,
-            "All 1 steps completed",
-            None,
-            ReviewPhase.FINAL_APPROVAL,
-        )
+        bridge.transition_task_from_snapshot.assert_called_once()
+        status_call = bridge.transition_task_from_snapshot.call_args
+        assert status_call.args[0]["status"] == TaskStatus.IN_PROGRESS
+        assert status_call.args[1] == TaskStatus.REVIEW
+        assert status_call.kwargs["reason"] == "All 1 steps completed"
+        assert status_call.kwargs["review_phase"] == ReviewPhase.FINAL_APPROVAL
         bridge.create_activity.assert_any_call(
             ActivityEventType.TASK_DISPATCH_STARTED,
             "Steps dispatched in autonomous mode",
@@ -342,16 +339,10 @@ class TestStepDispatcher:
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert state["step-1"]["status"] == StepStatus.COMPLETED
-        bridge.update_task_status.assert_called_once()
-        status_call = bridge.update_task_status.call_args
-        assert status_call.args == (
-            "task-1",
-            TaskStatus.DONE,
-            None,
-            "All 1 steps completed",
-            None,
-            None,
-        )
+        bridge.transition_task_from_snapshot.assert_called_once()
+        status_call = bridge.transition_task_from_snapshot.call_args
+        assert status_call.args[1] == TaskStatus.DONE
+        assert status_call.kwargs["reason"] == "All 1 steps completed"
         assert not any(
             call.args[0] == ActivityEventType.REVIEW_REQUESTED
             for call in bridge.create_activity.call_args_list
@@ -640,16 +631,11 @@ class TestStepDispatcher:
         ):
             await dispatcher.dispatch_steps("task-1", ["step-1", "step-2"])
 
-        bridge.update_task_status.assert_called_once()
-        status_call = bridge.update_task_status.call_args
-        assert status_call.args == (
-            "task-1",
-            TaskStatus.REVIEW,
-            None,
-            "All 2 steps completed",
-            None,
-            ReviewPhase.FINAL_APPROVAL,
-        )
+        bridge.transition_task_from_snapshot.assert_called_once()
+        status_call = bridge.transition_task_from_snapshot.call_args
+        assert status_call.args[1] == TaskStatus.REVIEW
+        assert status_call.kwargs["reason"] == "All 2 steps completed"
+        assert status_call.kwargs["review_phase"] == ReviewPhase.FINAL_APPROVAL
 
     @pytest.mark.asyncio
     async def test_step_completion_calls_post_step_completion(self) -> None:
@@ -1033,16 +1019,11 @@ class TestStepOutputFileSync:
         # Step must complete successfully despite the sync failure
         assert state["step-1"]["status"] == StepStatus.COMPLETED
         # Task must also complete
-        bridge.update_task_status.assert_called_once()
-        status_call = bridge.update_task_status.call_args
-        assert status_call.args == (
-            "task-1",
-            TaskStatus.REVIEW,
-            None,
-            "All 1 steps completed",
-            None,
-            ReviewPhase.FINAL_APPROVAL,
-        )
+        bridge.transition_task_from_snapshot.assert_called_once()
+        status_call = bridge.transition_task_from_snapshot.call_args
+        assert status_call.args[1] == TaskStatus.REVIEW
+        assert status_call.kwargs["reason"] == "All 1 steps completed"
+        assert status_call.kwargs["review_phase"] == ReviewPhase.FINAL_APPROVAL
 
     @pytest.mark.asyncio
     async def test_sync_called_before_post_step_completion(self) -> None:
