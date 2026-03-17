@@ -7,7 +7,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, Mapping, TextIO
 
 from mc.application.execution.runtime import run_nanobot_task
 from mc.cli import _get_bridge
@@ -222,7 +222,7 @@ def main() -> int:
         bridge.close()
 
 
-def _require_env(env: dict[str, str], key: str) -> str:
+def _require_env(env: Mapping[str, str], key: str) -> str:
     value = env.get(key, "").strip()
     if not value:
         raise RuntimeError(f"Missing required environment variable: {key}")

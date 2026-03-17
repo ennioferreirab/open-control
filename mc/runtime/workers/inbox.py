@@ -92,6 +92,9 @@ class InboxWorker:
     async def process_task(self, task_data: dict[str, Any]) -> None:
         """Handle an inbox task: generate auto-title then transition to planning or assigned."""
         task_id = task_data.get("id")
+        if not isinstance(task_id, str):
+            logger.warning("[inbox] Task missing 'id' field, skipping")
+            return
         if task_data.get("is_manual"):
             logger.info("[inbox] Skipping manual inbox task %s", task_id)
             return

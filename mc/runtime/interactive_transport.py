@@ -57,7 +57,7 @@ class InteractiveSocketTransport:
         self._resize_handler = resize_handler
         self._monotonic_time = monotonic_time
         self._active_websockets: dict[str, Any] = {}
-        self._pending_terminations: set[str] = {}
+        self._pending_terminations: set[str] = set()
         self._session_locks: dict[str, asyncio.Lock] = {}
         module_log_level = _resolve_transport_log_level()
         if module_log_level is not None:
@@ -257,7 +257,7 @@ class InteractiveSocketTransport:
                 wait_closed = getattr(existing, "wait_closed", None)
                 if callable(wait_closed):
                     with contextlib.suppress(Exception):
-                        await asyncio.wait_for(wait_closed(), timeout=1)
+                        await asyncio.wait_for(wait_closed(), timeout=1)  # type: ignore[arg-type]
                 await asyncio.sleep(0)
             self._active_websockets[session_id] = websocket
 

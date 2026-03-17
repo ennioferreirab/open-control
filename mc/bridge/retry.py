@@ -86,6 +86,7 @@ def mutation_with_retry(
         last_exception,
     )
     _write_error_activity(client, function_name, str(last_exception))
+    assert last_exception is not None
     raise last_exception
 
 

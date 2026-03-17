@@ -26,6 +26,7 @@ import pytest
 from mc.hooks.config import HookConfig, get_config, get_project_root
 from mc.hooks.context import HookContext, _safe_session_id
 from mc.hooks.handler import BaseHandler
+from typing import ClassVar
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -126,7 +127,7 @@ def _agent_event(event: str, agent_id: str, agent_type: str) -> dict:
 class TestBaseHandler:
     def test_matches_exact(self):
         class H(BaseHandler):
-            events = [("PostToolUse", "Write")]
+            events: ClassVar[list[tuple[str, str | None]]] = [("PostToolUse", "Write")]
 
         assert H.matches("PostToolUse", "Write") is True
         assert H.matches("PostToolUse", "Bash") is False
@@ -134,7 +135,7 @@ class TestBaseHandler:
 
     def test_matches_wildcard(self):
         class H(BaseHandler):
-            events = [("TaskCompleted", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TaskCompleted", None)]
 
         assert H.matches("TaskCompleted", "") is True
         assert H.matches("TaskCompleted", "anything") is True
@@ -142,7 +143,10 @@ class TestBaseHandler:
 
     def test_matches_multi_events(self):
         class H(BaseHandler):
-            events = [("PostToolUse", "Write"), ("TaskCompleted", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [
+                ("PostToolUse", "Write"),
+                ("TaskCompleted", None),
+            ]
 
         assert H.matches("PostToolUse", "Write") is True
         assert H.matches("TaskCompleted", "x") is True

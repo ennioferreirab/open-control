@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from ..handler import BaseHandler
 
 
 class SkillTrackerHandler(BaseHandler):
-    events = [("PostToolUse", "Skill")]
+    events: ClassVar[list[tuple[str, str | None]]] = [("PostToolUse", "Skill")]
 
     def handle(self) -> str | None:
         tool_input = self.payload.get("tool_input", {})

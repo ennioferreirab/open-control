@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from claude_code.ipc_server import MCSocketServer
 from claude_code.workspace import CCWorkspaceManager
@@ -23,7 +23,7 @@ class ClaudeCodeInteractiveAdapter:
     """Prepare and clean up Claude Code interactive sessions."""
 
     provider_name = "claude-code"
-    capabilities = [
+    capabilities: ClassVar[list[str]] = [
         "tui",
         "autocomplete",
         "interactive-prompts",

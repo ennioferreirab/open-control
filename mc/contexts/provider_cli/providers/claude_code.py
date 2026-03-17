@@ -67,7 +67,7 @@ class ClaudeCodeCLIParser:
         if not chunk:
             return []
 
-        text = chunk if isinstance(chunk, str) else chunk.decode("utf-8", errors="replace")
+        text: str = chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
         events: list[ParsedCliEvent] = []
 
         for line in text.splitlines():

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class ChatRepository:
     """Data access methods for chat messages in Convex."""
 
-    def __init__(self, client: BridgeClient):
+    def __init__(self, client: "BridgeClientProtocol"):
         self._client = client
 
     def get_pending_chat_messages(self) -> list[dict[str, Any]]:

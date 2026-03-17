@@ -1,4 +1,4 @@
-"""Tests for MC provider tool adapters — AC1–AC5."""
+"""Tests for MC provider tool adapters — AC1-AC5."""
 
 from __future__ import annotations
 

@@ -296,6 +296,7 @@ def assist_agent():
         )
 
         if choice in ("y", ""):
+            assert parsed is not None
             _save_assisted_agent(parsed["name"], yaml_text, create_agent_workspace)
             return
         elif choice == "n":
@@ -308,11 +309,13 @@ def assist_agent():
                     "y",
                     "",
                 ):
+                    assert parsed is not None
                     _save_assisted_agent(parsed["name"], yaml_text, create_agent_workspace)
                 else:
                     console.print("Cancelled.")
                 return
             feedback = typer.prompt("What would you like to change?")
+            assert isinstance(feedback, str)
             if not feedback.strip():
                 console.print("No feedback provided. Cancelled.")
                 raise typer.Exit(0)
@@ -507,6 +510,7 @@ def register_init_command(mc_app: typer.Typer) -> None:
                         console.print(f"  [red]Error:[/red] {'; '.join(errors)}")
                         continue
 
+                    assert yaml_text is not None
                     parsed = yaml.safe_load(yaml_text)
                     agent_name = parsed.get("name", "custom-agent")
                     agent_role = parsed.get("role", "Custom Agent")
@@ -643,7 +647,7 @@ def migrate_agents(
     if skipped:
         console.print(f"\n[dim]Skipped — already migrated ({len(skipped)}):[/dim]")
         for name in skipped:
-            console.print(f"  [dim]–[/dim] {name}")
+            console.print(f"  [dim]-[/dim] {name}")
 
     if errors:
         console.print(f"\n[red]Errors ({len(errors)}):[/red]")

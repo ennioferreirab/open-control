@@ -12,7 +12,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -20,5 +20,5 @@ logger = logging.getLogger(__name__)
 class SettingsRepository:
     """Data access methods for settings in Convex."""
 
-    def __init__(self, client: BridgeClient):
+    def __init__(self, client: "BridgeClientProtocol"):
         self._client = client

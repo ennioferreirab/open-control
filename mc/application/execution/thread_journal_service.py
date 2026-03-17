@@ -164,7 +164,7 @@ class ThreadJournalService:
             max_tokens=state.summary_token_budget,
         )
 
-        batch_ids = [self._message_id(message) for message in batch if self._message_id(message)]
+        batch_ids = [mid for msg in batch if (mid := self._message_id(msg)) is not None]
         state.compacted_summary = summary
         state.last_compacted_message_id = self._message_id(batch[-1])
         state.last_compacted_timestamp = str(batch[-1].get("timestamp") or "")

@@ -81,7 +81,7 @@ class InteractiveExecutionSupervisor:
         if merged_event.agent_name is not None:
             event_payload["agent_name"] = merged_event.agent_name
         updated_metadata = self._registry.record_supervision(
-            merged_event.session_id,
+            merged_event.session_id or "",
             event=event_payload,
             timestamp=timestamp,
         )

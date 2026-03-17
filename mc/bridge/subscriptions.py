@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from mc.bridge.key_conversion import _convert_keys_to_camel, _convert_keys_to_snake
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class SubscriptionManager:
     to all consumer queues.
     """
 
-    def __init__(self, client: BridgeClient):
+    def __init__(self, client: "BridgeClientProtocol"):
         self._client = client
         self._shared_polls: dict[tuple, tuple[asyncio.Task, list[asyncio.Queue]]] = {}  # type: ignore[type-arg]
 

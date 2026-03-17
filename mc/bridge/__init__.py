@@ -133,6 +133,7 @@ class ConvexBridge(BridgeRepositoryFacadeMixin):
             last_exception,
         )
         self._write_error_activity(function_name, str(last_exception))
+        assert last_exception is not None
         raise last_exception
 
     def _write_error_activity(self, mutation_name: str, error_message: str) -> None:
@@ -158,5 +159,6 @@ class ConvexBridge(BridgeRepositoryFacadeMixin):
 
     def close(self) -> None:
         logger.info("ConvexBridge closing connection")
-        if hasattr(self._client, "close"):
-            self._client.close()
+        close_fn = getattr(self._client, "close", None)
+        if close_fn is not None:
+            close_fn()

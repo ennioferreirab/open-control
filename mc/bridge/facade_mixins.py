@@ -4,11 +4,43 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from mc.bridge.repositories.agents import AgentRepository
+    from mc.bridge.repositories.boards import BoardRepository
+    from mc.bridge.repositories.chats import ChatRepository
+    from mc.bridge.repositories.messages import MessageRepository
+    from mc.bridge.repositories.specs import SpecsRepository
+    from mc.bridge.repositories.steps import StepRepository
+    from mc.bridge.repositories.tasks import TaskRepository
+    from mc.bridge.subscriptions import SubscriptionManager
 
 
 class BridgeRepositoryFacadeMixin:
-    """Delegating façade methods for the ConvexBridge repositories."""
+    """Delegating façade methods for the ConvexBridge repositories.
+
+    Attribute stubs below are declared for type-checking only.
+    At runtime they are provided by ConvexBridge which hosts this mixin.
+    """
+
+    # -- Type-checking stubs: provided by ConvexBridge at runtime --
+    _tasks: "TaskRepository"
+    _steps: "StepRepository"
+    _messages: "MessageRepository"
+    _agents: "AgentRepository"
+    _boards: "BoardRepository"
+    _chats: "ChatRepository"
+    _specs: "SpecsRepository"
+    _subscriptions: "SubscriptionManager"
+
+    def _ensure_repos(self) -> None: ...
+
+    def _mutation_with_retry(
+        self, function_name: str, args: dict[str, Any] | None = None
+    ) -> Any: ...
+
+    def _log_state_transition(self, entity_type: str, description: str) -> None: ...
 
     def update_task_status(
         self,

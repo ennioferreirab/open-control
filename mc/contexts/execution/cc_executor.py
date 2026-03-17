@@ -69,6 +69,10 @@ class CCExecutorMixin:
     _on_task_completed: Any
     _ask_user_registry: Any
 
+    async def _handle_provider_error(
+        self, task_id: str, title: str, agent_name: str, exc: Exception
+    ) -> None: ...
+
     async def _enrich_cc_description(
         self,
         task_id: str,
@@ -77,10 +81,10 @@ class CCExecutorMixin:
     ) -> str:
         """Enrich CC task description with file manifest, thread context, and tag attributes."""
         description = description or ""
+        fresh_task: dict[str, Any] | None = None
         try:
             safe_id = task_safe_id(task_id)
             files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
-            fresh_task: dict[str, Any] | None = None
             try:
                 fresh_task = await asyncio.to_thread(
                     self._bridge.query, "tasks:getById", {"task_id": task_id}

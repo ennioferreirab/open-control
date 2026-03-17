@@ -10,6 +10,7 @@ Verifies that:
 from __future__ import annotations
 
 import pathlib
+from typing import ClassVar
 
 REPO_ROOT = pathlib.Path(__file__).parents[3]
 DASHBOARD_ROOT = REPO_ROOT / "dashboard"
@@ -85,7 +86,12 @@ class TestBackendDeprecationNotices:
 class TestSupportedPathNoTmxDependency:
     """Supported step execution path modules must have no tmux/PTY/websocket imports."""
 
-    FORBIDDEN_PATTERNS = ["import tmux", "import pty", "import websockets", "TmuxSession"]
+    FORBIDDEN_PATTERNS: ClassVar[list[str]] = [
+        "import tmux",
+        "import pty",
+        "import websockets",
+        "TmuxSession",
+    ]
 
     def _assert_no_forbidden(self, source: str, label: str) -> None:
         for pattern in self.FORBIDDEN_PATTERNS:

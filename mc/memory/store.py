@@ -168,7 +168,7 @@ class HybridMemoryStore(MemoryStore):
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(_run())
+            loop.create_task(_run())  # noqa: RUF006
         except RuntimeError:
             # No running event loop — skip async consolidation
             logger.debug("No event loop available for consolidation, skipping")

@@ -491,7 +491,7 @@ class StepDispatcher:
                 agent_model=agent_model,
                 reasoning_level=reasoning_level,
                 task_title=step_title,
-                task_description=execution_description,
+                task_description=execution_description or "",
                 agent_skills=agent_skills,
                 board_name=board_name,
                 memory_workspace=memory_workspace,

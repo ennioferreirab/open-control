@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class AgentRepository:
     """Data access methods for agent entities in Convex."""
 
-    def __init__(self, client: BridgeClient):
+    def __init__(self, client: "BridgeClientProtocol"):
         self._client = client
 
     def sync_agent(self, agent_data: Any) -> Any:

@@ -215,6 +215,7 @@ class TestPlanChatIntent:
         )
         assert result.intent == ConversationIntent.PLAN_CHAT
 
+
     def test_plan_chat_in_progress_with_plan(self, resolver: ConversationIntentResolver) -> None:
         """in_progress with execution plan => plan_chat."""
         task_data: dict = {

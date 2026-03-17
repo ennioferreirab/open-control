@@ -502,7 +502,7 @@ class TestMutationRetry:
         mock_client.mutation.side_effect = Exception("fail")
 
         bridge = ConvexBridge("https://test.convex.cloud")
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="fail"):
             bridge.mutation("tasks:create", {"title": "Test"})
 
         # Sleep called after attempt 1 (1s), attempt 2 (2s), attempt 3 (4s)
@@ -571,7 +571,7 @@ class TestDualLogging:
 
         with caplog.at_level(logging.ERROR, logger="mc.bridge"):
             bridge = ConvexBridge("https://test.convex.cloud")
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Network error"):
                 bridge.mutation("tasks:create", {"title": "Test"})
 
         assert any("failed after 4 attempts" in r.message for r in caplog.records)

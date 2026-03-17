@@ -177,6 +177,7 @@ class MemoryIndex:
                     """,
                     (canonical_path_str, content, start, end, created_at),
                 )
+                assert cur.lastrowid is not None
                 chunk_id = int(cur.lastrowid)
                 self._conn.execute(
                     "INSERT INTO chunks_fts(rowid, content) VALUES (?, ?)",

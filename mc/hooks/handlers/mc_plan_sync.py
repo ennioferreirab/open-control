@@ -11,7 +11,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from ..config import get_config, get_project_root
 from ..handler import BaseHandler
@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 class MCPlanSyncHandler(BaseHandler):
     """Syncs plan events to Mission Control via IPC."""
 
-    events = [("PostToolUse", "Write"), ("TaskCompleted", None)]
+    events: ClassVar[list[tuple[str, str | None]]] = [
+        ("PostToolUse", "Write"),
+        ("TaskCompleted", None),
+    ]
 
     def handle(self) -> str | None:
         mc_ctx = self._discover_mc_context()

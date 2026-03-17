@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def _content_digest(*parts: Any) -> str:
 class MessageRepository:
     """Data access methods for message entities in Convex."""
 
-    def __init__(self, client: BridgeClient):
+    def __init__(self, client: "BridgeClientProtocol"):
         self._client = client
 
     def get_task_messages(self, task_id: str) -> list[dict[str, Any]]:

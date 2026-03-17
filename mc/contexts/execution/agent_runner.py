@@ -114,7 +114,7 @@ async def _run_agent_on_task(
     bridge: ConvexBridge | None = None,
     ask_user_registry: Any | None = None,
     on_progress: Any | None = None,
-) -> tuple[str, str, AgentLoop]:
+) -> tuple["AgentRunResult", str, "AgentLoop"]:
     """Run the nanobot agent loop on a task and return the result."""
     if is_lead_agent(agent_name):
         raise LeadAgentExecutionError(

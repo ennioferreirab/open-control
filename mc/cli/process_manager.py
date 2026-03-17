@@ -374,6 +374,8 @@ class ProcessManager:
                 logger.error(
                     f"[MC] Process {label} (PID: {process.pid}) did not exit after SIGKILL"
                 )
+            except (ProcessLookupError, OSError):
+                pass
             return "killed"
 
     async def _kill_port(self, port: int) -> None:

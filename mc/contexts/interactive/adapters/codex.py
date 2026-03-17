@@ -6,6 +6,7 @@ import shutil
 from collections.abc import Awaitable, Callable
 from inspect import isawaitable
 from pathlib import Path
+from typing import ClassVar
 
 from mc.contexts.interactive.adapters.codex_app_server import (
     CodexAppServerSession,
@@ -41,7 +42,7 @@ class CodexInteractiveAdapter:
     """Prepare and clean up Codex interactive sessions."""
 
     provider_name = "codex"
-    capabilities = [
+    capabilities: ClassVar[list[str]] = [
         "tui",
         "autocomplete",
         "interactive-prompts",

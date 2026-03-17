@@ -66,7 +66,8 @@ class CodexSupervisionRelay:
             return None
 
         if method in {"turn/started", "turn/completed"}:
-            turn = params.get("turn") if isinstance(params.get("turn"), dict) else {}
+            raw_turn = params.get("turn")
+            turn: dict[str, Any] = raw_turn if isinstance(raw_turn, dict) else {}
             turn_id = _text(turn.get("id"))
             summary = _text(turn.get("summary"))
             kind = "turn_started" if method == "turn/started" else "turn_completed"
@@ -82,7 +83,8 @@ class CodexSupervisionRelay:
             )
 
         if method in {"item/started", "item/completed"}:
-            item = params.get("item") if isinstance(params.get("item"), dict) else {}
+            raw_item = params.get("item")
+            item: dict[str, Any] = raw_item if isinstance(raw_item, dict) else {}
             kind = "item_started" if method == "item/started" else "item_completed"
             item_type = _text(item.get("type"))
             message_phase = _text(item.get("phase"))

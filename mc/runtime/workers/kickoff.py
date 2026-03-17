@@ -172,7 +172,7 @@ class KickoffResumeWorker:
                 title,
                 len(dispatchable_step_ids),
             )
-            asyncio.create_task(
+            asyncio.create_task(  # noqa: RUF006
                 self._step_dispatcher.dispatch_steps(task_id, dispatchable_step_ids)
             )
         else:
@@ -196,7 +196,7 @@ class KickoffResumeWorker:
             if is_workflow_owned_task(task_data):
                 await self._create_workflow_run(task_id, task_data, created_step_ids, plan)
 
-            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
+            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))  # noqa: RUF006
             logger.info(
                 "[kickoff] Task '%s': materialized %d steps after kick-off",
                 title,

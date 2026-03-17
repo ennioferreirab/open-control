@@ -55,9 +55,11 @@ class InteractiveProviderAdapter(Protocol):
         resume_session_id: str | None = None,
     ) -> InteractiveLaunchSpec:
         """Prepare launch metadata for a provider-backed interactive session."""
+        ...
 
     async def stop_session(self, session_key: str) -> None:
         """Tear down provider-specific runtime state for a session."""
+        ...
 
 
 class InteractiveSupervisionSink(Protocol):
@@ -65,6 +67,7 @@ class InteractiveSupervisionSink(Protocol):
 
     def handle_event(self, event: InteractiveSupervisionEvent) -> dict[str, object]:
         """Consume a provider-agnostic lifecycle event."""
+        ...
 
     def record_final_result(
         self,
@@ -74,3 +77,4 @@ class InteractiveSupervisionSink(Protocol):
         source: str,
     ) -> dict[str, object]:
         """Persist a canonical final result for a running interactive session."""
+        ...
