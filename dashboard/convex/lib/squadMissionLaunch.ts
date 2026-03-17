@@ -164,7 +164,7 @@ export async function attachWorkflowExecutionPlan(
 ): Promise<WorkflowExecutionPlan> {
   const task = await ctx.db.get(taskId);
   if (!task) {
-    throw new Error(`Task not found: ${taskId}`);
+    throw new ConvexError(`Task not found: ${taskId}`);
   }
 
   const plan = compileWorkflowExecutionPlan(workflow, agentRefs, generatedAt);

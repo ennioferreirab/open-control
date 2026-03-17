@@ -1,8 +1,8 @@
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { v, ConvexError } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
-import { routingModeValidator, taskFileMetadataValidator, taskFilesValidator } from "./schema";
+import { routingModeValidator, taskFileMetadataValidator, taskFilesValidator, taskStatusValidator } from "./schema";
 import { buildTaskDetailView } from "./lib/taskDetailView";
 import {
   clearAllDoneTasks,
@@ -160,19 +160,7 @@ export const toggleFavorite = mutation({
 
 export const listByStatus = query({
   args: {
-    status: v.union(
-      v.literal("planning"),
-      v.literal("ready"),
-      v.literal("failed"),
-      v.literal("inbox"),
-      v.literal("assigned"),
-      v.literal("in_progress"),
-      v.literal("review"),
-      v.literal("done"),
-      v.literal("retrying"),
-      v.literal("crashed"),
-      v.literal("deleted"),
-    ),
+    status: taskStatusValidator,
   },
   handler: async (ctx, args) => {
     return await ctx.db
@@ -574,7 +562,7 @@ export const manualMove = mutation({
 export const updateStatus = internalMutation({
   args: {
     taskId: v.id("tasks"),
-    status: v.string(),
+    status: taskStatusValidator,
     agentName: v.optional(v.string()),
     awaitingKickoff: v.optional(v.boolean()),
     reviewPhase: v.optional(

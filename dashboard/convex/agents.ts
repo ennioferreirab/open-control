@@ -1,7 +1,7 @@
 import { internalMutation, mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
-import { interactiveProviderValidator } from "./schema";
+import { agentStatusValidator, interactiveProviderValidator } from "./schema";
 
 // ---------------------------------------------------------------------------
 // Agent metric helpers — callable from lifecycle completion paths
@@ -199,7 +199,7 @@ export const upsertByName = mutation({
 export const updateStatus = internalMutation({
   args: {
     agentName: v.string(),
-    status: v.string(),
+    status: agentStatusValidator,
   },
   handler: async (ctx, args) => {
     const agent = await ctx.db
@@ -213,7 +213,7 @@ export const updateStatus = internalMutation({
 
     const timestamp = new Date().toISOString();
     await ctx.db.patch(agent._id, {
-      status: args.status as "active" | "idle" | "crashed",
+      status: args.status,
       lastActiveAt: timestamp,
     });
   },
@@ -268,7 +268,7 @@ export const updateConfig = mutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.name}' not found`);
+      throw new ConvexError(`Agent '${args.name}' not found`);
     }
 
     const timestamp = new Date().toISOString();
@@ -310,12 +310,12 @@ export const setEnabled = mutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.agentName}' not found`);
+      throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
     // System agents cannot be disabled
     if (agent.isSystem) {
-      throw new Error(`Cannot change enabled state of system agent '${args.agentName}'`);
+      throw new ConvexError(`Cannot change enabled state of system agent '${args.agentName}'`);
     }
 
     const timestamp = new Date().toISOString();
@@ -345,11 +345,11 @@ export const softDeleteAgent = mutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.agentName}' not found`);
+      throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
     if (agent.isSystem) {
-      throw new Error(`Cannot delete system agent '${args.agentName}'`);
+      throw new ConvexError(`Cannot delete system agent '${args.agentName}'`);
     }
 
     const timestamp = new Date().toISOString();
@@ -386,11 +386,11 @@ export const archiveAgentData = internalMutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.agentName}' not found`);
+      throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
     if (!agent.deletedAt) {
-      throw new Error(
+      throw new ConvexError(
         `Agent '${args.agentName}' is not deleted — archive only applies to soft-deleted agents`,
       );
     }
@@ -415,11 +415,11 @@ export const restoreAgent = mutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.agentName}' not found`);
+      throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
     if (!agent.deletedAt) {
-      throw new Error(`Agent '${args.agentName}' is not deleted`);
+      throw new ConvexError(`Agent '${args.agentName}' is not deleted`);
     }
 
     const timestamp = new Date().toISOString();
@@ -512,7 +512,7 @@ export const publishProjection = mutation({
       // Guard: refuse to publish to a soft-deleted agent. A deleted agent must
       // be explicitly restored before it can receive new projection data.
       if (existing.deletedAt) {
-        throw new Error(
+        throw new ConvexError(
           `Cannot publish projection to deleted agent '${args.name}' — restore it first.`,
         );
       }

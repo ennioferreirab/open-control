@@ -1,6 +1,5 @@
 import { internalMutation, internalQuery, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import { specStatusValidator } from "./schema";
 
@@ -52,18 +51,18 @@ export const createDraft = internalMutation({
 
 export const publish = internalMutation({
   args: {
-    specId: v.string(),
+    specId: v.id("agentSpecs"),
   },
   handler: async (ctx, args) => {
-    const spec = await ctx.db.get(args.specId as Id<"agentSpecs">);
+    const spec = await ctx.db.get(args.specId);
     if (!spec) {
-      throw new Error(`Agent spec not found: ${args.specId}`);
+      throw new ConvexError(`Agent spec not found: ${args.specId}`);
     }
     if (spec.status !== "draft") {
-      throw new Error("Can only publish specs in draft status");
+      throw new ConvexError("Can only publish specs in draft status");
     }
     const now = new Date().toISOString();
-    await ctx.db.patch(args.specId as Id<"agentSpecs">, {
+    await ctx.db.patch(args.specId, {
       status: "published",
       version: spec.version + 1,
       compiledAt: now,
@@ -74,10 +73,10 @@ export const publish = internalMutation({
 
 export const getDraft = internalQuery({
   args: {
-    specId: v.string(),
+    specId: v.id("agentSpecs"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.specId as Id<"agentSpecs">);
+    return await ctx.db.get(args.specId);
   },
 });
 

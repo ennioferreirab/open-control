@@ -1,6 +1,5 @@
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 export const create = internalMutation({
   args: {
@@ -23,16 +22,16 @@ export const create = internalMutation({
 
 export const setEnabled = internalMutation({
   args: {
-    bindingId: v.string(),
+    bindingId: v.id("boardSquadBindings"),
     enabled: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const binding = await ctx.db.get(args.bindingId as Id<"boardSquadBindings">);
+    const binding = await ctx.db.get(args.bindingId);
     if (!binding) {
-      throw new Error(`Board squad binding not found: ${args.bindingId}`);
+      throw new ConvexError(`Board squad binding not found: ${args.bindingId}`);
     }
     const now = new Date().toISOString();
-    await ctx.db.patch(args.bindingId as Id<"boardSquadBindings">, {
+    await ctx.db.patch(args.bindingId, {
       enabled: args.enabled,
       updatedAt: now,
     });

@@ -1,6 +1,5 @@
 import { internalMutation, internalQuery, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import { specStatusValidator, workflowStepTypeValidator } from "./schema";
 
@@ -18,13 +17,13 @@ function validateReviewSteps(steps: WorkflowStepRecord[] | undefined): void {
       continue;
     }
     if (!step.agentId) {
-      throw new Error(`Review step "${step.id}" requires agentId`);
+      throw new ConvexError(`Review step "${step.id}" requires agentId`);
     }
     if (!step.reviewSpecId) {
-      throw new Error(`Review step "${step.id}" requires reviewSpecId`);
+      throw new ConvexError(`Review step "${step.id}" requires reviewSpecId`);
     }
     if (!step.onReject) {
-      throw new Error(`Review step "${step.id}" requires onReject`);
+      throw new ConvexError(`Review step "${step.id}" requires onReject`);
     }
   }
 }
@@ -81,19 +80,19 @@ export const createDraft = internalMutation({
 
 export const publish = internalMutation({
   args: {
-    specId: v.string(),
+    specId: v.id("workflowSpecs"),
   },
   handler: async (ctx, args) => {
-    const spec = await ctx.db.get(args.specId as Id<"workflowSpecs">);
+    const spec = await ctx.db.get(args.specId);
     if (!spec) {
-      throw new Error(`Workflow spec not found: ${args.specId}`);
+      throw new ConvexError(`Workflow spec not found: ${args.specId}`);
     }
     if (spec.status !== "draft") {
-      throw new Error("Can only publish specs in draft status");
+      throw new ConvexError("Can only publish specs in draft status");
     }
     validateReviewSteps(spec.steps as WorkflowStepRecord[] | undefined);
     const now = new Date().toISOString();
-    await ctx.db.patch(args.specId as Id<"workflowSpecs">, {
+    await ctx.db.patch(args.specId, {
       status: "published",
       version: spec.version + 1,
       publishedAt: now,

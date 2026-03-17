@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -53,7 +53,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     if (!KEBAB_CASE_RE.test(args.name)) {
-      throw new Error(
+      throw new ConvexError(
         `Board name must be kebab-case (e.g. "project-alpha"): "${args.name}"`
       );
     }
@@ -63,7 +63,7 @@ export const create = mutation({
       .withIndex("by_name", (q) => q.eq("name", args.name))
       .first();
     if (existing && !existing.deletedAt) {
-      throw new Error(`Board name already in use: "${args.name}"`);
+      throw new ConvexError(`Board name already in use: "${args.name}"`);
     }
 
     const now = new Date().toISOString();
@@ -101,7 +101,7 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const board = await ctx.db.get(args.boardId);
     if (!board || board.deletedAt) {
-      throw new Error("Board not found");
+      throw new ConvexError("Board not found");
     }
 
     const now = new Date().toISOString();
@@ -126,10 +126,10 @@ export const softDelete = mutation({
   handler: async (ctx, args) => {
     const board = await ctx.db.get(args.boardId);
     if (!board || board.deletedAt) {
-      throw new Error("Board not found");
+      throw new ConvexError("Board not found");
     }
     if (board.isDefault) {
-      throw new Error("Cannot delete the default board");
+      throw new ConvexError("Cannot delete the default board");
     }
 
     const now = new Date().toISOString();
