@@ -75,6 +75,15 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._tasks.update_execution_plan(task_id, plan)
 
+    def patch_routing_decision(
+        self,
+        task_id: str,
+        routing_mode: str,
+        routing_decision: dict[str, Any],
+    ) -> Any:
+        self._ensure_repos()
+        return self._tasks.patch_routing_decision(task_id, routing_mode, routing_decision)
+
     def kick_off_task(self, task_id: str, step_count: int) -> Any:
         self._ensure_repos()
         return self._tasks.kick_off_task(task_id, step_count)
@@ -253,6 +262,10 @@ class BridgeRepositoryFacadeMixin:
     def list_agents(self) -> list[dict[str, Any]]:
         self._ensure_repos()
         return self._agents.list_agents()
+
+    def list_active_registry_view(self) -> list[dict[str, Any]]:
+        self._ensure_repos()
+        return self._agents.list_active_registry_view()
 
     def get_agent_by_name(self, name: str) -> dict[str, Any] | None:
         self._ensure_repos()

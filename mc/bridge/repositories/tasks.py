@@ -172,6 +172,31 @@ class TaskRepository:
             {"task_id": task_id, "execution_plan": plan},
         )
 
+    def patch_routing_decision(
+        self,
+        task_id: str,
+        routing_mode: str,
+        routing_decision: dict[str, Any],
+    ) -> Any:
+        """Persist routing metadata on a task document.
+
+        Args:
+            task_id: Convex task _id.
+            routing_mode: e.g. "lead_agent".
+            routing_decision: Serialized RoutingDecision dict.
+
+        Returns:
+            Mutation result (if any).
+        """
+        return self._client.mutation(
+            "tasks:patchRoutingDecision",
+            {
+                "task_id": task_id,
+                "routing_mode": routing_mode,
+                "routing_decision": routing_decision,
+            },
+        )
+
     def kick_off_task(self, task_id: str, step_count: int) -> Any:
         """Transition a task to the running state after materialization."""
         result = self._client.mutation(

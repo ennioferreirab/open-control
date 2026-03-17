@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_kind
 from mc.contexts.planning.title_generation import generate_title_via_low_agent
+from mc.contexts.routing.router import DirectDelegationRouter
 
 if TYPE_CHECKING:
     from mc.infrastructure.runtime_context import RuntimeContext
@@ -165,6 +166,57 @@ class InboxWorker:
                 title,
             )
             return
+
+        # Direct delegation: route through the DirectDelegationRouter
+        if work_mode == "direct_delegate":
+            router = DirectDelegationRouter(self._bridge)
+            decision = await asyncio.to_thread(router.route, task_data)
+
+            if decision is None:
+                # No suitable agent found — fall through to planning
+                logger.warning(
+                    "[inbox] No routing target for direct-delegate task %s; falling through to planning",
+                    task_id,
+                )
+            else:
+                # Persist routing metadata on the task document
+                routing_decision_payload = {
+                    "target_agent": decision.target_agent,
+                    "reason": decision.reason,
+                    "reason_code": decision.reason_code,
+                    "registry_snapshot": decision.registry_snapshot,
+                    "routed_at": decision.routed_at,
+                }
+                try:
+                    await asyncio.to_thread(
+                        self._bridge.patch_routing_decision,
+                        task_id,
+                        "lead_agent",
+                        routing_decision_payload,
+                    )
+                except Exception:
+                    logger.warning(
+                        "[inbox] Failed to persist routing decision for task %s; continuing",
+                        task_id,
+                        exc_info=True,
+                    )
+
+                # Transition to assigned with the resolved agent
+                await asyncio.to_thread(
+                    self._bridge.update_task_status,
+                    task_id,
+                    "assigned",
+                    decision.target_agent,
+                    f"Direct delegation to {decision.target_agent}",
+                )
+                logger.info(
+                    "[inbox] Direct-delegate task %s ('%s') -> assigned to %s (%s)",
+                    task_id,
+                    title,
+                    decision.target_agent,
+                    decision.reason_code,
+                )
+                return
 
         next_status = "assigned" if assigned_agent else "planning"
         result = await asyncio.to_thread(
