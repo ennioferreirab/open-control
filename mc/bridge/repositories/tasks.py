@@ -47,7 +47,7 @@ def _default_transition_idempotency_key(
 class TaskRepository:
     """Data access methods for task entities in Convex."""
 
-    def __init__(self, client: "BridgeClientProtocol"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def update_task_status(

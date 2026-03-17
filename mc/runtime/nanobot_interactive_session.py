@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, TextIO
+from typing import Any, TextIO
 
 from mc.application.execution.runtime import run_nanobot_task
 from mc.cli import _get_bridge

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class AgentRepository:
     """Data access methods for agent entities in Convex."""
 
-    def __init__(self, client: "BridgeClientProtocol"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def sync_agent(self, agent_data: Any) -> Any:

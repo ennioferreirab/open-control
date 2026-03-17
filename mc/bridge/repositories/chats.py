@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class ChatRepository:
     """Data access methods for chat messages in Convex."""
 
-    def __init__(self, client: "BridgeClientProtocol"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def get_pending_chat_messages(self) -> list[dict[str, Any]]:

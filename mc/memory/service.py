@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 MEMORY_CONSOLIDATION_MODEL = "tier:standard-medium"
 
 
-def resolve_consolidation_model(bridge: "ConvexBridge | None" = None) -> str | None:
+def resolve_consolidation_model(bridge: ConvexBridge | None = None) -> str | None:
     """Resolve the LLM model for memory consolidation with graceful fallback.
 
     Resolution order:

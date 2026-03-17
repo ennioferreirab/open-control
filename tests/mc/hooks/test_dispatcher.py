@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from io import StringIO
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -12,7 +13,6 @@ import pytest
 from mc.hooks.config import HookConfig
 from mc.hooks.dispatcher import _dispatch, main
 from mc.hooks.handler import BaseHandler
-from typing import ClassVar
 
 # ---------------------------------------------------------------------------
 # Fixtures
