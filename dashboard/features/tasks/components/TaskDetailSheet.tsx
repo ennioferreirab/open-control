@@ -95,6 +95,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     isAwaitingKickoff,
     isPaused,
     taskStatus,
+    isWorkflowTask,
     pendingExecutionQuestion,
   } = view;
 
@@ -673,6 +674,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                     messages &&
                     !isMergeLockedSource &&
                     planViewMode !== "canvas" &&
+                    isWorkflowTask &&
                     shouldShowPlanReviewPanel && (
                       <PlanReviewPanel
                         className={planViewMode === "conversation" ? "mt-2 min-h-0" : undefined}
