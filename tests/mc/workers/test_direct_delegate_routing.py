@@ -25,6 +25,7 @@ def _make_bridge() -> MagicMock:
     bridge.patch_routing_decision.return_value = None
     bridge.list_active_registry_view.return_value = []
     bridge.get_board_by_id.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     return bridge
 
 
@@ -133,8 +134,10 @@ class TestInboxWorkerDirectDelegation:
         ):
             await worker.process_task(task)
 
-        # Falls through to planning (no assigned_agent on task)
-        bridge.update_task_status.assert_called_once_with("task-dd-3", "planning")
+        # Falls through to planning via transition_task_from_snapshot
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "planning"
         bridge.patch_routing_decision.assert_not_called()
 
     @pytest.mark.asyncio
@@ -154,14 +157,10 @@ class TestInboxWorkerDirectDelegation:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        # Should go to review (awaitingKickoff), not direct delegation
-        bridge.update_task_status.assert_called_once_with(
-            "task-wf-1",
-            "review",
-            None,
-            "Workflow plan ready for kick-off: 'Workflow task'",
-            True,
-        )
+        # Should go to review via transition_task_from_snapshot, not direct delegation
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "review"
         bridge.patch_routing_decision.assert_not_called()
 
     @pytest.mark.asyncio
