@@ -94,6 +94,23 @@ def _make_workflow_task(task_id: str = "task-workflow-1") -> dict:
     }
 
 
+def _make_legacy_workflow_task(task_id: str = "task-legacy-workflow-1") -> dict:
+    task = _make_workflow_task(task_id)
+    task.pop("work_mode", None)
+    return task
+
+
+def _make_bridge_workflow_task(task_id: str = "task-bridge-workflow-1") -> dict:
+    """Build a workflow task as it actually arrives from the Python bridge."""
+    task = _make_workflow_task(task_id)
+    task["execution_plan"] = {
+        "generated_by": "workflow",
+        "generated_at": "2026-03-14T10:00:00.000Z",
+        "steps": task["execution_plan"]["steps"],
+    }
+    return task
+
+
 def _make_normal_task(task_id: str = "task-normal-1") -> dict:
     """Build a normal (non-workflow) task dict."""
     return {
@@ -215,6 +232,65 @@ class TestPlanningWorkerAiWorkflowBypass:
         assert passed_plan.generated_by == "workflow"
 
         # Dispatch must be called
+        assert len(scheduled_coroutines) == 1
+
+    @pytest.mark.asyncio
+    async def test_legacy_workflow_task_without_work_mode_still_bypasses_planner(self) -> None:
+        """Legacy workflow tasks should still use the precompiled workflow plan."""
+        bridge = _make_bridge()
+        materializer = _make_materializer()
+        dispatcher = _make_dispatcher()
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
+        task = _make_legacy_workflow_task()
+
+        scheduled_coroutines: list[object] = []
+
+        def _capture_create_task(coro):
+            scheduled_coroutines.append(coro)
+            coro.close()
+            return MagicMock()
+
+        with (
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.runtime.workers.planning.asyncio.create_task",
+                side_effect=_capture_create_task,
+            ),
+            patch("mc.runtime.workers.planning.TaskPlanner"),
+        ):
+            await worker.process_task(task)
+
+        materializer.materialize.assert_called_once()
+        assert len(scheduled_coroutines) == 1
+
+    @pytest.mark.asyncio
+    async def test_bridge_workflow_task_with_snake_case_plan_bypasses_planner(self) -> None:
+        """Bridge-normalized workflow payloads must not invoke the lead-agent planner."""
+        bridge = _make_bridge()
+        materializer = _make_materializer()
+        dispatcher = _make_dispatcher()
+        worker = PlanningWorker(_make_ctx(bridge), materializer, dispatcher)
+        task = _make_bridge_workflow_task()
+
+        scheduled_coroutines: list[object] = []
+
+        def _capture_create_task(coro):
+            scheduled_coroutines.append(coro)
+            coro.close()
+            return MagicMock()
+
+        with (
+            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.runtime.workers.planning.asyncio.create_task",
+                side_effect=_capture_create_task,
+            ),
+            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
+        ):
+            await worker.process_task(task)
+            planner_cls.assert_not_called()
+
+        materializer.materialize.assert_called_once()
         assert len(scheduled_coroutines) == 1
 
     @pytest.mark.asyncio

@@ -55,6 +55,12 @@ describe("stepStatusToColumnStatus", () => {
     );
   });
 
+  it("maps legacy workflow assigned steps to assigned while the parent task is in_progress", () => {
+    expect(stepStatusToColumnStatus("assigned", "in_progress", "nanobot", undefined, true)).toBe(
+      "assigned",
+    );
+  });
+
   it("maps blocked steps to assigned column by default", () => {
     expect(stepStatusToColumnStatus("blocked")).toBe("assigned");
   });
@@ -188,6 +194,22 @@ describe("useBoardColumns", () => {
     const inProgressCol = columns[2]; // In Progress
     expect(inProgressCol.stepGroups).toHaveLength(1);
     expect(inProgressCol.stepGroups[0].steps).toHaveLength(1); // only running step
+  });
+
+  it("treats legacy workflow tasks as workflow when grouping assigned steps", () => {
+    const tasks = [
+      makeTask({
+        _id: "task_1",
+        status: "in_progress",
+        executionPlan: { generatedBy: "workflow", steps: [] },
+      }),
+    ];
+    const steps = [makeStep({ taskId: "task_1", status: "assigned", order: 1 })];
+    const { result } = renderHook(() => useBoardColumns(tasks, steps));
+    const columns = result.current!;
+
+    expect(columns[1].stepGroups).toHaveLength(1);
+    expect(columns[2].stepGroups).toHaveLength(0);
   });
 
   it("skips steps for done tasks", () => {

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Doc, Id } from "../convex/_generated/dataModel";
+import { isWorkflowOwnedTask } from "../lib/isWorkflowOwnedTask";
 
 export const COLUMNS = [
   { title: "Inbox", status: "inbox", accentColor: "bg-violet-500" },
@@ -43,7 +44,10 @@ export function stepStatusToColumnStatus(
   taskStatus?: Doc<"tasks">["status"],
   assignedAgent?: Doc<"steps">["assignedAgent"],
   workMode?: Doc<"tasks">["workMode"],
+  isWorkflowTask?: boolean,
 ): ColumnStatus | null {
+  const workflowOwned = isWorkflowTask ?? workMode === "ai_workflow";
+
   switch (stepStatus) {
     case "assigned":
     case "blocked":
@@ -53,7 +57,7 @@ export function stepStatusToColumnStatus(
       }
       // Workflow tasks should surface newly-materialized assigned work in the
       // Assigned column before the step dispatcher advances it to running.
-      if (workMode === "ai_workflow") {
+      if (workflowOwned) {
         return "assigned";
       }
       // Non-human work follows task progress and surfaces in In Progress once execution has begun.
@@ -99,6 +103,9 @@ export function useBoardColumns(
     );
     const taskStatusMap = new Map(tasks.map((task) => [task._id, task.status] as const));
     const taskWorkModeMap = new Map(tasks.map((task) => [task._id, task.workMode] as const));
+    const taskWorkflowOwnedMap = new Map(
+      tasks.map((task) => [task._id, isWorkflowOwnedTask(task)] as const),
+    );
 
     // Group steps by taskId, skipping done tasks and most review tasks.
     // waiting_human is a special case: keep rendering it as a step group in
@@ -117,6 +124,7 @@ export function useBoardColumns(
         taskStatus,
         step.assignedAgent,
         taskWorkModeMap.get(step.taskId),
+        taskWorkflowOwnedMap.get(step.taskId),
       );
       if (!mappedColumn) {
         continue;
@@ -192,6 +200,7 @@ export function useBoardColumns(
                   taskStatus,
                   step.assignedAgent,
                   taskWorkModeMap.get(taskId),
+                  taskWorkflowOwnedMap.get(taskId),
                 ) === col.status,
             )
             .sort((a, b) => a.order - b.order);

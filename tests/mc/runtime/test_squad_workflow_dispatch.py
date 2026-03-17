@@ -38,15 +38,14 @@ def _make_plan_step(
 
 def _make_task_data(
     task_id: str = "task-1",
-    work_mode: str = "ai_workflow",
+    work_mode: str | None = "ai_workflow",
     squad_spec_id: str = "squad-spec-1",
     workflow_spec_id: str = "workflow-spec-1",
     board_id: str = "board-1",
 ) -> dict:
-    return {
+    data = {
         "id": task_id,
         "title": "Test workflow task",
-        "work_mode": work_mode,
         "squad_spec_id": squad_spec_id,
         "workflow_spec_id": workflow_spec_id,
         "board_id": board_id,
@@ -69,11 +68,31 @@ def _make_task_data(
         },
         "updated_at": "2026-03-14T10:00:00Z",
     }
+    if work_mode is not None:
+        data["work_mode"] = work_mode
+    return data
 
 
 async def _sync_to_thread(func, *args, **kwargs):
     """Run to_thread payloads synchronously in tests."""
     return func(*args, **kwargs)
+
+
+def _mutation_with_runtime_claims(
+    *,
+    workflow_run_result: Any = None,
+    workflow_run_error: Exception | None = None,
+):
+    def _mutation(name: str, _args: dict) -> Any:
+        if name == "runtimeClaims:acquire":
+            return {"granted": True, "claimId": "claim-1"}
+        if name == "workflowRuns:create":
+            if workflow_run_error is not None:
+                raise workflow_run_error
+            return workflow_run_result
+        return None
+
+    return _mutation
 
 
 def _make_step_execution_request(step: dict[str, Any]) -> Any:
@@ -138,7 +157,9 @@ async def test_workflow_run_created_when_work_mode_is_ai_workflow() -> None:
     bridge = MagicMock()
     bridge.get_steps_by_task.return_value = []
     bridge.batch_create_steps.return_value = ["step-a"]
-    bridge.mutation.return_value = "workflow-run-1"
+    bridge.mutation.side_effect = _mutation_with_runtime_claims(
+        workflow_run_result="workflow-run-1"
+    )
 
     materializer = MagicMock()
     materializer.materialize.return_value = ["step-a"]
@@ -174,7 +195,7 @@ async def test_workflow_run_not_created_for_non_workflow_tasks() -> None:
     bridge = MagicMock()
     bridge.get_steps_by_task.return_value = []
     bridge.batch_create_steps.return_value = ["step-a"]
-    bridge.mutation.return_value = None
+    bridge.mutation.side_effect = _mutation_with_runtime_claims()
 
     materializer = MagicMock()
     materializer.materialize.return_value = ["step-a"]
@@ -197,12 +218,45 @@ async def test_workflow_run_not_created_for_non_workflow_tasks() -> None:
 
 
 @pytest.mark.asyncio
+async def test_workflow_run_created_for_legacy_workflow_without_work_mode() -> None:
+    """Legacy workflow tasks should still create workflow provenance."""
+    bridge = MagicMock()
+    bridge.get_steps_by_task.return_value = []
+    bridge.batch_create_steps.return_value = ["step-a"]
+    bridge.mutation.side_effect = _mutation_with_runtime_claims(
+        workflow_run_result="workflow-run-legacy"
+    )
+
+    materializer = MagicMock()
+    materializer.materialize.return_value = ["step-a"]
+
+    dispatcher = MagicMock()
+    dispatcher.dispatch_steps = AsyncMock()
+
+    worker = KickoffResumeWorker(
+        ctx=MagicMock(bridge=bridge),
+        plan_materializer=materializer,
+        step_dispatcher=dispatcher,
+    )
+
+    task_data = _make_task_data(work_mode=None)
+    task_data["execution_plan"]["generatedBy"] = "workflow"
+    await worker.process_batch([task_data])
+
+    mutation_calls = bridge.mutation.call_args_list
+    workflow_run_calls = [c for c in mutation_calls if c[0][0] == "workflowRuns:create"]
+    assert len(workflow_run_calls) == 1, "Expected workflowRuns:create for legacy workflow task"
+
+
+@pytest.mark.asyncio
 async def test_workflow_run_creation_failure_is_non_fatal() -> None:
     """A failure to create workflowRun does not abort the kickoff."""
     bridge = MagicMock()
     bridge.get_steps_by_task.return_value = []
     bridge.batch_create_steps.return_value = ["step-a"]
-    bridge.mutation.side_effect = RuntimeError("Convex unavailable")
+    bridge.mutation.side_effect = _mutation_with_runtime_claims(
+        workflow_run_error=RuntimeError("Convex unavailable")
+    )
 
     materializer = MagicMock()
     materializer.materialize.return_value = ["step-a"]
@@ -335,7 +389,7 @@ async def test_review_step_type_runs_as_agent_step() -> None:
 
 @pytest.mark.asyncio
 async def test_review_step_with_human_agent_sets_waiting_human() -> None:
-    """Review steps assigned to 'human' are set to waiting_human by dispatcher."""
+    """Review steps assigned to 'human' stay assigned until a person acts."""
     bridge = MagicMock()
     bridge.update_step_status = MagicMock()
     bridge.create_activity = MagicMock()
@@ -356,8 +410,8 @@ async def test_review_step_with_human_agent_sets_waiting_human() -> None:
     await dispatcher._execute_step("task-1", review_step)
 
     update_calls = bridge.update_step_status.call_args_list
-    assert any(c[0][1] == StepStatus.WAITING_HUMAN for c in update_calls), (
-        "Review step assigned to human should wait for manual action"
+    assert not any(c[0][1] == StepStatus.WAITING_HUMAN for c in update_calls), (
+        "Human-assigned review steps should stay assigned until manual action"
     )
     assert not any(c[0][1] == StepStatus.RUNNING for c in update_calls), (
         "Review step assigned to human should not start running"

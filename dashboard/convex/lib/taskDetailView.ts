@@ -1,6 +1,7 @@
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 
+import { isWorkflowOwnedTask } from "../../lib/isWorkflowOwnedTask";
 import { computeAllowedActions, computeUiFlags } from "./readModels";
 import { getMergeSourceLabel, resolveMergeSourceTree } from "./taskMerge";
 
@@ -132,13 +133,6 @@ export async function buildTaskDetailView(
     tagAttributeValues,
     uiFlags,
     allowedActions,
-    // Legacy compat: tasks without workMode that have a workflow-generated plan
-    // are treated as workflow (Story 31.12)
-    isWorkflowTask:
-      task.workMode === "ai_workflow" ||
-      (task.workMode == null &&
-        typeof task.executionPlan === "object" &&
-        task.executionPlan !== null &&
-        (task.executionPlan as Record<string, unknown>).generatedBy === "workflow"),
+    isWorkflowTask: isWorkflowOwnedTask(task),
   };
 }

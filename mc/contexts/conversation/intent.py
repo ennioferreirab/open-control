@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from mc.domain.workflow_ownership import is_workflow_owned_task
+
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
 
@@ -61,18 +63,7 @@ def _is_negotiable_status(task_data: dict[str, Any]) -> bool:
     - "review" with awaiting_kickoff=True (pre-kickoff plan review)
     - "in_progress" with an execution_plan (during planned execution)
     """
-    work_mode = task_data.get("work_mode") or task_data.get("workMode")
-    if work_mode == "direct_delegate":
-        return False
-    # Legacy compat: tasks without workMode that have a workflow-generated plan
-    # are treated as workflow (Story 31.12)
-    if work_mode is None:
-        plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
-        if isinstance(plan, dict) and plan.get("generatedBy") == "workflow":
-            pass  # treat as workflow — fall through to status checks
-        else:
-            return False
-    elif work_mode != "ai_workflow":
+    if not is_workflow_owned_task(task_data):
         return False
 
     status = task_data.get("status", "")

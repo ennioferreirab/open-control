@@ -89,6 +89,19 @@ describe("buildTaskDetailView – isWorkflowTask flag", () => {
     expect(result!.isWorkflowTask).toBe(false);
   });
 
+  it("sets isWorkflowTask=true for legacy workflow tasks without workMode", async () => {
+    const task = {
+      ...baseTask,
+      executionPlan: { generatedBy: "workflow", steps: [{ id: "s1" }] },
+    };
+    const ctx = makeCtx(task);
+
+    const result = await buildTaskDetailView(ctx as never, "task1" as never);
+
+    expect(result).not.toBeNull();
+    expect(result!.isWorkflowTask).toBe(true);
+  });
+
   it("returns null when task does not exist", async () => {
     const task = { ...baseTask };
     const ctx = makeCtx(task);

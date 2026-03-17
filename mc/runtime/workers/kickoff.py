@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from mc.bridge.runtime_claims import acquire_runtime_claim
+from mc.domain.workflow_ownership import is_workflow_owned_task
 from mc.types import ActivityEventType, ExecutionPlan, StepStatus, TaskStatus
 
 if TYPE_CHECKING:
@@ -192,8 +193,7 @@ class KickoffResumeWorker:
             )
 
             # Create provenance record for ai_workflow tasks.
-            work_mode = task_data.get("work_mode") or task_data.get("workMode")
-            if work_mode == "ai_workflow":
+            if is_workflow_owned_task(task_data):
                 await self._create_workflow_run(task_id, task_data, created_step_ids, plan)
 
             asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
