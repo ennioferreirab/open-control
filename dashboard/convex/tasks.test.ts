@@ -223,6 +223,67 @@ describe("tasks.create", () => {
     expect(activityInsert?.value.description).toContain("(supervised)");
   });
 
+  it("defaults workMode to direct_delegate for standard task creation (Story 31.5 AC1)", async () => {
+    const handler = getHandler();
+    const { ctx, inserts } = makeCtx();
+
+    await handler(ctx, { title: "Implement feature X" });
+
+    const taskInsert = inserts.find((entry) => entry.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert?.value.workMode).toBe("direct_delegate");
+    expect(taskInsert?.value.routingMode).toBeUndefined();
+  });
+
+  it("persists routingMode=human when assignedAgent is set on a non-manual task (Story 31.5 AC2)", async () => {
+    const handler = getHandler();
+    const { ctx, inserts } = makeCtx();
+
+    await handler(ctx, { title: "Fix critical bug", assignedAgent: "coder" });
+
+    const taskInsert = inserts.find((entry) => entry.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert?.value.workMode).toBe("direct_delegate");
+    expect(taskInsert?.value.routingMode).toBe("human");
+  });
+
+  it("does NOT persist routingMode=human when assignedAgent is set on a manual task (Story 31.5 AC2)", async () => {
+    const handler = getHandler();
+    const { ctx, inserts } = makeCtx();
+
+    await handler(ctx, { title: "Manual checklist", assignedAgent: "coder", isManual: true });
+
+    const taskInsert = inserts.find((entry) => entry.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert?.value.routingMode).toBeUndefined();
+  });
+
+  it("does NOT set routingMode when no assignedAgent is provided (Story 31.5 AC2)", async () => {
+    const handler = getHandler();
+    const { ctx, inserts } = makeCtx();
+
+    await handler(ctx, { title: "Open-ended research task" });
+
+    const taskInsert = inserts.find((entry) => entry.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert?.value.routingMode).toBeUndefined();
+  });
+
+  it("respects explicit routingMode from caller over the default derivation (Story 31.5 AC2)", async () => {
+    const handler = getHandler();
+    const { ctx, inserts } = makeCtx();
+
+    await handler(ctx, {
+      title: "Workflow-routed task",
+      assignedAgent: "coder",
+      routingMode: "workflow",
+    });
+
+    const taskInsert = inserts.find((entry) => entry.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert?.value.routingMode).toBe("workflow");
+  });
+
   it("defaults workMode to direct_delegate on standard task creation (Story 31.1 AC3)", async () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
