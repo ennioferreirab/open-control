@@ -135,12 +135,9 @@ export default defineSchema({
     autoTitle: v.optional(v.boolean()),
     awaitingKickoff: v.optional(v.boolean()),
     reviewPhase: v.optional(
-      v.union(
-        v.literal("plan_review"),
-        v.literal("execution_pause"),
-        v.literal("final_approval"),
-      ),
+      v.union(v.literal("plan_review"), v.literal("execution_pause"), v.literal("final_approval")),
     ),
+    stateVersion: v.number(),
     deletedAt: v.optional(v.string()),
     previousStatus: v.optional(v.string()),
     activeCronJobId: v.optional(v.string()),

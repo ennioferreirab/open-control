@@ -47,9 +47,9 @@ import {
   moveManualTask,
   retryTask,
   returnTaskToLeadAgent,
-  updateTaskStatusInternal,
 } from "./lib/taskReview";
 import { launchSquadMission } from "./lib/squadMissionLaunch";
+import { applyTaskTransition } from "./lib/taskTransitions";
 
 // ---------------------------------------------------------------------------
 // Re-export for backward compatibility (messages.ts imports isValidTransition)
@@ -264,6 +264,7 @@ export const createMergedTask = mutation({
       mergeSourceTaskIds: [args.primaryTaskId, args.secondaryTaskId],
       mergeSourceLabels: ["A", "B"],
       executionPlan: undefined,
+      stateVersion: 1,
       createdAt: now,
       updatedAt: now,
     });
@@ -578,7 +579,45 @@ export const updateStatus = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    await updateTaskStatusInternal(ctx, args);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    const currentStateVersion = task.stateVersion ?? 0;
+    return await applyTaskTransition(ctx, task, {
+      taskId: args.taskId,
+      fromStatus: task.status,
+      expectedStateVersion: currentStateVersion,
+      toStatus: args.status,
+      awaitingKickoff: args.awaitingKickoff,
+      reviewPhase: args.reviewPhase,
+      reason: `Compatibility transition via updateStatus (${args.status})`,
+      idempotencyKey: `compat:${String(args.taskId)}:${currentStateVersion}:${args.status}:${args.reviewPhase ?? "none"}`,
+      agentName: args.agentName,
+    });
+  },
+});
+
+export const transition = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    fromStatus: v.string(),
+    expectedStateVersion: v.number(),
+    toStatus: v.string(),
+    awaitingKickoff: v.optional(v.boolean()),
+    reviewPhase: v.optional(
+      v.union(v.literal("plan_review"), v.literal("execution_pause"), v.literal("final_approval")),
+    ),
+    reason: v.string(),
+    idempotencyKey: v.string(),
+    agentName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found");
+    }
+    return await applyTaskTransition(ctx, task, args);
   },
 });
 

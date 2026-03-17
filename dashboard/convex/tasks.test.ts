@@ -18,6 +18,7 @@ import {
   resumeTask,
   retry,
   softDelete,
+  transition,
   updateStatus,
 } from "./tasks";
 
@@ -147,6 +148,14 @@ function getUpdateStatusHandler() {
   )._handler;
 }
 
+function getTransitionHandler() {
+  return (
+    transition as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+    }
+  )._handler;
+}
+
 describe("tasks.create", () => {
   it("defaults supervision mode to autonomous and creates unassigned non-manual tasks in inbox (Story 1.5 AC 8.4)", async () => {
     // Non-manual tasks land in inbox first so the inbox routing loop can
@@ -161,6 +170,7 @@ describe("tasks.create", () => {
     expect(taskInsert).toBeDefined();
     expect(taskInsert?.value.supervisionMode).toBe("autonomous");
     expect(taskInsert?.value.status).toBe("inbox");
+    expect(taskInsert?.value.stateVersion).toBe(1);
   });
 
   it("forces manual tasks to autonomous supervision mode", async () => {
@@ -179,6 +189,7 @@ describe("tasks.create", () => {
     expect(taskInsert?.value.supervisionMode).toBe("autonomous");
     expect(taskInsert?.value.assignedAgent).toBeUndefined();
     expect(taskInsert?.value.status).toBe("inbox");
+    expect(taskInsert?.value.stateVersion).toBe(1);
 
     const activityInsert = inserts.find((entry) => entry.table === "activities");
     expect(activityInsert?.value.description).not.toContain("(supervised)");
@@ -197,6 +208,7 @@ describe("tasks.create", () => {
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert?.value.supervisionMode).toBe("supervised");
     expect(taskInsert?.value.status).toBe("inbox");
+    expect(taskInsert?.value.stateVersion).toBe(1);
 
     const activityInsert = inserts.find((entry) => entry.table === "activities");
     expect(activityInsert?.value.description).toContain("(supervised)");
@@ -207,7 +219,7 @@ describe("tasks.createMergedTask", () => {
   it("creates task C in planning so the lead agent can generate a reviewable plan", async () => {
     const handler = getCreateMergedTaskHandler();
     const patch = vi.fn(async () => undefined);
-    const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
+    const insert = vi.fn(async (table: string) => {
       if (table === "tasks") return "task-c";
       return `${table}-id`;
     });
@@ -258,6 +270,7 @@ describe("tasks.createMergedTask", () => {
         mergeSourceLabels: ["A", "B"],
         tags: ["alpha", "beta", "merged"],
         executionPlan: undefined,
+        stateVersion: 1,
       }),
     );
 
@@ -286,7 +299,7 @@ describe("tasks.createMergedTask", () => {
   it("creates task C in manual planning without persisting the visual merge alias", async () => {
     const handler = getCreateMergedTaskHandler();
     const patch = vi.fn(async () => undefined);
-    const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
+    const insert = vi.fn(async (table: string) => {
       if (table === "tasks") return "task-c";
       return `${table}-id`;
     });
@@ -324,6 +337,7 @@ describe("tasks.createMergedTask", () => {
         isManual: true,
         awaitingKickoff: undefined,
         executionPlan: undefined,
+        stateVersion: 1,
         tags: ["merged"],
       }),
     );
@@ -1181,8 +1195,8 @@ describe("tasks.retry", () => {
           else patchedSteps[id] = { ...(patchedSteps[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_index: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => steps,
           }),
         }),
@@ -1234,8 +1248,8 @@ describe("tasks.retry", () => {
           if (id !== "task-1") patchedSteps[id] = { ...(patchedSteps[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_index: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => steps,
           }),
         }),
@@ -1267,8 +1281,8 @@ describe("tasks.retry", () => {
         get: async (id: string) => (id === "task-1" ? task : null),
         patch,
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_index: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [],
           }),
         }),
@@ -1383,6 +1397,7 @@ describe("tasks.updateStatus", () => {
     const get = vi.fn(async () => ({
       _id: "task-review",
       status: "review",
+      stateVersion: 4,
       awaitingKickoff: undefined,
       title: "Plan review task",
     }));
@@ -1397,9 +1412,35 @@ describe("tasks.updateStatus", () => {
       expect.objectContaining({
         status: "review",
         awaitingKickoff: true,
+        stateVersion: 5,
       }),
     );
-    expect(insert).not.toHaveBeenCalled();
+    expect(insert).toHaveBeenCalled();
+  });
+
+  it("falls back to stateVersion=0 for legacy tasks without the field", async () => {
+    const handler = getUpdateStatusHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async () => ({
+      _id: "task-legacy",
+      status: "in_progress",
+      title: "Legacy task",
+    }));
+
+    await handler(
+      { db: { get, patch, insert } },
+      { taskId: "task-legacy", status: "review", reviewPhase: "final_approval" },
+    );
+
+    expect(patch).toHaveBeenCalledWith(
+      "task-legacy",
+      expect.objectContaining({
+        status: "review",
+        reviewPhase: "final_approval",
+        stateVersion: 1,
+      }),
+    );
   });
 
   it("cascades done to merged source tasks when an automatic merge task completes", async () => {
@@ -1411,6 +1452,7 @@ describe("tasks.updateStatus", () => {
         return {
           _id: "merge-task",
           status: "in_progress",
+          stateVersion: 2,
           isMergeTask: true,
           mergeSourceTaskIds: ["task-a", "task-b"],
           title: "Auto merged task",
@@ -1452,11 +1494,124 @@ describe("tasks.updateStatus", () => {
   });
 });
 
+describe("tasks.transition", () => {
+  it("applies a CAS transition and increments stateVersion", async () => {
+    const handler = getTransitionHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async () => ({
+      _id: "task-1",
+      status: "in_progress",
+      stateVersion: 3,
+      title: "Task 1",
+    }));
+
+    const result = await handler(
+      { db: { get, patch, insert } },
+      {
+        taskId: "task-1",
+        fromStatus: "in_progress",
+        expectedStateVersion: 3,
+        toStatus: "review",
+        reviewPhase: "final_approval",
+        reason: "All steps completed",
+        idempotencyKey: "task-1:v3:final-review",
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "applied",
+        stateVersion: 4,
+        status: "review",
+        reviewPhase: "final_approval",
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({
+        status: "review",
+        reviewPhase: "final_approval",
+        stateVersion: 4,
+      }),
+    );
+  });
+
+  it("returns conflict on stale stateVersion", async () => {
+    const handler = getTransitionHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async () => ({
+      _id: "task-1",
+      status: "in_progress",
+      stateVersion: 4,
+      title: "Task 1",
+    }));
+
+    const result = await handler(
+      { db: { get, patch, insert } },
+      {
+        taskId: "task-1",
+        fromStatus: "in_progress",
+        expectedStateVersion: 3,
+        toStatus: "review",
+        reviewPhase: "final_approval",
+        reason: "All steps completed",
+        idempotencyKey: "task-1:v3:final-review",
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "conflict",
+        currentStateVersion: 4,
+        reason: "stale_state",
+      }),
+    );
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("returns noop when the same semantic transition is replayed", async () => {
+    const handler = getTransitionHandler();
+    const patch = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "activity-1");
+    const get = vi.fn(async () => ({
+      _id: "task-1",
+      status: "review",
+      reviewPhase: "final_approval",
+      stateVersion: 4,
+      title: "Task 1",
+    }));
+
+    const result = await handler(
+      { db: { get, patch, insert } },
+      {
+        taskId: "task-1",
+        fromStatus: "review",
+        expectedStateVersion: 4,
+        toStatus: "review",
+        reviewPhase: "final_approval",
+        reason: "Replay",
+        idempotencyKey: "task-1:v4:final-review",
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "noop",
+        stateVersion: 4,
+        reason: "already_applied",
+      }),
+    );
+    expect(patch).not.toHaveBeenCalled();
+  });
+});
+
 describe("tasks.approveAndKickOff", () => {
   it("writes an approval decision message tied to the active plan version", async () => {
     const handler = getApproveAndKickOffHandler();
     const patch = vi.fn(async () => undefined);
-    const insert = vi.fn(async (table: string, value: Record<string, unknown>) => {
+    const insert = vi.fn(async (table: string) => {
       if (table === "messages") return "message-1";
       if (table === "activities") return "activity-1";
       return undefined;
@@ -1542,12 +1697,15 @@ function getLaunchMissionHandler() {
 
 describe("tasks.launchMission", () => {
   function makeLaunchCtx(opts: {
+    board?: Record<string, unknown> | null;
     squadSpec?: Record<string, unknown> | null;
     workflowSpec?: Record<string, unknown> | null;
   }) {
     const inserts: InsertCall[] = [];
+    const board = opts.board ?? { _id: "board-id-1", name: "Board 1" };
 
     const get = vi.fn(async (id: string) => {
+      if (board && id === board._id) return board;
       if (opts.squadSpec && id === opts.squadSpec._id) return opts.squadSpec;
       if (opts.workflowSpec && id === opts.workflowSpec._id) return opts.workflowSpec;
       return null;
@@ -1609,6 +1767,7 @@ describe("tasks.launchMission", () => {
     expect(taskInsert!.value.workMode).toBe("ai_workflow");
     expect(taskInsert!.value.squadSpecId).toBe("squad-id-1");
     expect(taskInsert!.value.workflowSpecId).toBe("workflow-id-1");
+    expect(taskInsert!.value.stateVersion).toBe(1);
   });
 
   it("throws if squad spec is not published", async () => {

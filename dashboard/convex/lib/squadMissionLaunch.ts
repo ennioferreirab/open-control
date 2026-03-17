@@ -119,6 +119,7 @@ export async function launchSquadMission(
     workflowSpecId: args.workflowSpecId,
     boardId: args.boardId,
     executionPlan: plan,
+    stateVersion: 1,
     createdAt: now,
     updatedAt: now,
   });

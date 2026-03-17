@@ -63,6 +63,7 @@ export async function createTask(
     ...(args.sourceAgent ? { sourceAgent: args.sourceAgent } : {}),
     ...(args.files ? { files: args.files } : {}),
     ...(args.autoTitle ? { autoTitle: true } : {}),
+    stateVersion: 1,
     createdAt: now,
     updatedAt: now,
   });
