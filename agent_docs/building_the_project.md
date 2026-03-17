@@ -23,7 +23,7 @@ The `Makefile` at the project root is the primary interface for all operations.
 | Target | What it does | Needs Convex? |
 |--------|-------------|---------------|
 | `make start` | Start attached — logs stream to terminal, Ctrl+C to stop | Starts it |
-| `make start d=1` | Start detached — runs in background, logs → `/tmp/mc.log` | Starts it |
+| `make up` | Start detached — runs in background, logs → `/tmp/mc.log` | Starts it |
 | `make down` | Stop everything | — |
 | `make status` | Show system health (agents, tasks) | Yes |
 | `make test` | Run all unit tests (Python + TypeScript) | No |

@@ -1,7 +1,7 @@
 # ─── Mission Control ──────────────────────────────────────────────
 #
 # make start       Start attached — logs stream to terminal (Ctrl+C to stop)
-# make start d=1   Start detached — runs in background, logs → /tmp/mc.log
+# make up          Start detached — runs in background, logs → /tmp/mc.log
 # make down        Stop everything
 # make status      Show system health
 #
@@ -14,20 +14,18 @@
 # make format      Format all code
 # ──────────────────────────────────────────────────────────────────
 
-.PHONY: start down status test validate takeover lint typecheck format \
+.PHONY: start up down status test validate takeover lint typecheck format \
         test-py test-ts lint-py lint-ts typecheck-py typecheck-ts format-py format-ts
 
 MC_CMD := uv run python -m boot mc start
 
 # ─── Stack lifecycle ──────────────────────────────────────────────
 
-# Default: attached (logs stream to terminal). Pass d=1 for detached.
 start:
-ifeq ($(d),1)
-	@nohup $(MC_CMD) > /tmp/mc.log 2>&1 & echo "Mission Control started in background. Logs: /tmp/mc.log"
-else
 	@$(MC_CMD)
-endif
+
+up:
+	@nohup $(MC_CMD) > /tmp/mc.log 2>&1 & echo "Mission Control started in background. Logs: /tmp/mc.log"
 
 down:
 	@uv run python -m boot mc down
