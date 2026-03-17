@@ -183,6 +183,7 @@ describe("launchSquadMission", () => {
     const taskInsert = inserts.find((i) => i.table === "tasks");
     expect(taskInsert).toBeDefined();
     expect(taskInsert!.value.workMode).toBe("ai_workflow");
+    expect(taskInsert!.value.routingMode).toBe("workflow");
     expect(taskInsert!.value.squadSpecId).toBe("squad-id-1");
     expect(taskInsert!.value.workflowSpecId).toBe("workflow-id-1");
   });

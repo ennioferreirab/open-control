@@ -56,6 +56,7 @@ export async function createTask(
     supervisionMode,
     reviewers: isManual ? undefined : args.reviewers,
     tags: args.tags,
+    workMode: "direct_delegate",
     ...(isManual ? { isManual: true } : {}),
     ...(boardId ? { boardId } : {}),
     ...(args.cronParentTaskId !== undefined ? { cronParentTaskId: args.cronParentTaskId } : {}),

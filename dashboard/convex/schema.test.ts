@@ -5,6 +5,7 @@ import {
   interactiveSessionScopeKindValidator,
   interactiveSessionStatusValidator,
   reviewScopeValidator,
+  routingModeValidator,
   specStatusValidator,
   taskFileMetadataValidator,
   workModeValidator,
@@ -59,13 +60,24 @@ describe("workflowStepTypeValidator", () => {
 });
 
 describe("workModeValidator", () => {
-  it("defines manual, ai_single, and ai_workflow as task work modes", () => {
+  it("defines direct_delegate and ai_workflow as task work modes", () => {
     expect(workModeValidator.kind).toBe("union");
-    expect(workModeValidator.members).toHaveLength(3);
+    expect(workModeValidator.members).toHaveLength(2);
     expect(workModeValidator.members.map((m: { value?: string }) => m.value)).toEqual([
-      "manual",
-      "ai_single",
+      "direct_delegate",
       "ai_workflow",
+    ]);
+  });
+});
+
+describe("routingModeValidator", () => {
+  it("defines lead_agent, workflow, and human as task routing modes", () => {
+    expect(routingModeValidator.kind).toBe("union");
+    expect(routingModeValidator.members).toHaveLength(3);
+    expect(routingModeValidator.members.map((m: { value?: string }) => m.value)).toEqual([
+      "lead_agent",
+      "workflow",
+      "human",
     ]);
   });
 });

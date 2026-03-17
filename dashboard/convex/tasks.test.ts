@@ -222,6 +222,28 @@ describe("tasks.create", () => {
     const activityInsert = inserts.find((entry) => entry.table === "activities");
     expect(activityInsert?.value.description).toContain("(supervised)");
   });
+
+  it("defaults workMode to direct_delegate on standard task creation (Story 31.1 AC3)", async () => {
+    const handler = getHandler();
+    const { ctx, inserts } = makeCtx();
+
+    await handler(ctx, { title: "Write unit tests" });
+
+    const taskInsert = inserts.find((entry) => entry.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert?.value.workMode).toBe("direct_delegate");
+  });
+
+  it("does not require executionPlan on direct-delegate tasks (Story 31.1 AC5)", async () => {
+    const handler = getHandler();
+    const { ctx, inserts } = makeCtx();
+
+    await handler(ctx, { title: "Implement feature X" });
+
+    const taskInsert = inserts.find((entry) => entry.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert?.value.executionPlan).toBeUndefined();
+  });
 });
 
 describe("tasks.createMergedTask", () => {

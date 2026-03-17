@@ -25,10 +25,12 @@ export const workflowStepTypeValidator = v.union(
   v.literal("system"),
 );
 
-export const workModeValidator = v.union(
-  v.literal("manual"),
-  v.literal("ai_single"),
-  v.literal("ai_workflow"),
+export const workModeValidator = v.union(v.literal("direct_delegate"), v.literal("ai_workflow"));
+
+export const routingModeValidator = v.union(
+  v.literal("lead_agent"),
+  v.literal("workflow"),
+  v.literal("human"),
 );
 
 export const taskFileMetadataValidator = v.object({
@@ -153,6 +155,7 @@ export default defineSchema({
     files: taskFilesValidator,
     // Execution scaffolding fields (optional, no behavior change yet)
     workMode: v.optional(workModeValidator),
+    routingMode: v.optional(routingModeValidator),
     squadSpecId: v.optional(v.id("squadSpecs")),
     workflowSpecId: v.optional(v.id("workflowSpecs")),
     createdAt: v.string(),

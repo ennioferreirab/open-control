@@ -115,6 +115,7 @@ export async function launchSquadMission(
     trustLevel: "autonomous",
     supervisionMode: "autonomous",
     workMode: "ai_workflow",
+    routingMode: "workflow",
     squadSpecId: args.squadSpecId,
     workflowSpecId: args.workflowSpecId,
     boardId: args.boardId,
