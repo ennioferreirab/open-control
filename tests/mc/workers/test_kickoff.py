@@ -23,7 +23,9 @@ async def _sync_to_thread(func, *args, **kwargs):
 
 def _make_bridge() -> MagicMock:
     bridge = MagicMock()
+    bridge.mutation.return_value = {"granted": True}
     bridge.update_task_status.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.create_activity.return_value = None
     bridge.get_steps_by_task.return_value = []
     return bridge

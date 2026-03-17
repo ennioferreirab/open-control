@@ -23,7 +23,9 @@ def test_interactive_runtime_does_not_reuse_headless_cc_session_storage() -> Non
 
 
 def test_interactive_runtime_does_not_overload_remote_terminal_bridge_contract() -> None:
-    forbidden = ["terminalSessions:", "pendingInput", "pending_input", '"output"', "'output'"]
+    # pendingInput (camelCase) is the bridge protocol field that must not be used.
+    # pending_input (snake_case) is a valid local variable name for internal bookkeeping.
+    forbidden = ["terminalSessions:", "pendingInput", '"output"', "'output'"]
 
     for filepath in INTERACTIVE_PYTHON_FILES:
         source = filepath.read_text(encoding="utf-8")

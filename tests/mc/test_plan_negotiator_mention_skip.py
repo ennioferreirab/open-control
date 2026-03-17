@@ -58,6 +58,18 @@ def _make_task_data(
     }
 
 
+def _make_bridge_query(task_data: dict):
+    """Return a query function that serves task_data for tasks:getById
+    and None for all other queries (e.g. executionQuestions:hasPendingForTask)."""
+
+    def _query(query_name: str, params: dict | None = None):
+        if query_name == "tasks:getById":
+            return task_data
+        return None
+
+    return MagicMock(side_effect=_query)
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -89,7 +101,7 @@ class TestPlanNegotiatorMentionSkip:
             raise asyncio.CancelledError
 
         bridge = MagicMock()
-        bridge.query = MagicMock(return_value=task_data)
+        bridge.query = _make_bridge_query(task_data)
         bridge.get_steps_by_task = MagicMock(return_value=[])
         bridge.post_lead_agent_message = MagicMock()
         bridge.update_execution_plan = MagicMock()
@@ -124,6 +136,7 @@ class TestPlanNegotiatorMentionSkip:
             "_id": "msg_normal",
             "author_type": "user",
             "content": "Please add a research step to the plan",
+            "lead_agent_conversation": True,
         }
 
         call_count = 0
@@ -136,7 +149,7 @@ class TestPlanNegotiatorMentionSkip:
             raise asyncio.CancelledError
 
         bridge = MagicMock()
-        bridge.query = MagicMock(return_value=task_data)
+        bridge.query = _make_bridge_query(task_data)
         bridge.get_steps_by_task = MagicMock(return_value=[])
         bridge.post_lead_agent_message = MagicMock()
         bridge.update_execution_plan = MagicMock()
@@ -179,6 +192,7 @@ class TestPlanNegotiatorMentionSkip:
             "_id": "msg_normal_batch",
             "author_type": "user",
             "content": "Remove step 2 from the plan",
+            "lead_agent_conversation": True,
         }
 
         call_count = 0
@@ -191,7 +205,7 @@ class TestPlanNegotiatorMentionSkip:
             raise asyncio.CancelledError
 
         bridge = MagicMock()
-        bridge.query = MagicMock(return_value=task_data)
+        bridge.query = _make_bridge_query(task_data)
         bridge.get_steps_by_task = MagicMock(return_value=[])
         bridge.post_lead_agent_message = MagicMock()
         bridge.update_execution_plan = MagicMock()
@@ -239,7 +253,7 @@ class TestPlanNegotiatorMentionSkip:
             raise asyncio.CancelledError
 
         bridge = MagicMock()
-        bridge.query = MagicMock(return_value=task_data)
+        bridge.query = _make_bridge_query(task_data)
         bridge.get_steps_by_task = MagicMock(return_value=[])
         bridge.post_lead_agent_message = MagicMock()
         bridge.update_execution_plan = MagicMock()
@@ -300,7 +314,7 @@ class TestNoDoubleProcessing:
             raise asyncio.CancelledError
 
         bridge = MagicMock()
-        bridge.query = MagicMock(return_value=task_data)
+        bridge.query = _make_bridge_query(task_data)
         bridge.get_steps_by_task = MagicMock(return_value=[])
         bridge.post_lead_agent_message = MagicMock()
         bridge.update_execution_plan = MagicMock()
@@ -345,6 +359,7 @@ class TestNoDoubleProcessing:
         }
         watcher_bridge.get_recent_user_messages = MagicMock(return_value=[new_mention])
         watcher_bridge.query = MagicMock(return_value=in_progress_task)
+        watcher_bridge.mutation = MagicMock(return_value={"granted": True, "claimId": "claim-1"})
 
         watcher = MentionWatcher(watcher_bridge)
 

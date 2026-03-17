@@ -38,6 +38,8 @@ def _make_bridge() -> MagicMock:
     bridge.batch_create_steps.return_value = ["step-1"]
     bridge.kick_off_task.return_value = None
     bridge.update_task_status.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
+    bridge.mutation.return_value = {"granted": True}
     bridge.create_activity.return_value = None
     bridge.send_message.return_value = None
     return bridge
@@ -221,10 +223,10 @@ class TestProcessPlanningTask:
             await orchestrator._planning_worker.process_task(task)
 
         bridge.update_execution_plan.assert_not_called()
-        bridge.update_task_status.assert_called_once()
-        status_args = bridge.update_task_status.call_args[0]
-        assert status_args[0] == "task-fail"
-        assert status_args[1] == TaskStatus.FAILED
+        bridge.transition_task_from_snapshot.assert_called_once()
+        transition_args = bridge.transition_task_from_snapshot.call_args[0]
+        assert transition_args[0].get("id") == "task-fail"
+        assert transition_args[1] == TaskStatus.FAILED
 
         failed_events = [
             c
@@ -315,12 +317,20 @@ class TestProcessPlanningTask:
         bridge = _make_bridge()
         bridge.list_agents.return_value = [
             {
+                "name": "lead-agent",
+                "display_name": "Lead Agent",
+                "role": "Orchestrator",
+                "skills": [],
+                "enabled": True,
+                "model": "tier:standard-high",
+            },
+            {
                 "name": "nanobot",
                 "display_name": "Owl",
                 "role": "Generalist",
                 "skills": ["general"],
                 "enabled": True,
-            }
+            },
         ]
         orchestrator = TaskOrchestrator(bridge)
         orchestrator._planning_worker._step_dispatcher = MagicMock()

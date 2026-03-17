@@ -37,8 +37,8 @@ describe("TASK_STATUSES", () => {
     }
   });
 
-  it("has exactly 10 statuses", () => {
-    expect(TASK_STATUSES).toHaveLength(10);
+  it("has exactly 11 statuses", () => {
+    expect(TASK_STATUSES).toHaveLength(11);
   });
 });
 

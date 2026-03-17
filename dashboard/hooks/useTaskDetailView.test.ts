@@ -16,6 +16,9 @@ vi.mock("../convex/_generated/api", () => ({
       getDetailView: "tasks:getDetailView",
       searchMergeCandidates: "tasks:searchMergeCandidates",
     },
+    executionQuestions: {
+      getPendingForTask: "executionQuestions:getPendingForTask",
+    },
   },
 }));
 
@@ -307,6 +310,6 @@ describe("useTaskDetailView", () => {
     });
 
     renderHook(() => useTaskDetailView(testId<"tasks">("task1"), { mergeQuery: "alpha" }));
-    expect(mockUseQuery).toHaveBeenCalledTimes(2);
+    expect(mockUseQuery).toHaveBeenCalledTimes(3);
   });
 });

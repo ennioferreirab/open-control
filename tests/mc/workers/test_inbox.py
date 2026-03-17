@@ -18,8 +18,9 @@ async def _sync_to_thread(func, *args, **kwargs):
 
 def _make_bridge() -> MagicMock:
     bridge = MagicMock()
+    bridge.mutation.return_value = {"granted": True}
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.update_task_status.return_value = None
-    bridge.mutation.return_value = None
     bridge.create_activity.return_value = None
     return bridge
 
@@ -49,7 +50,9 @@ class TestInboxWorkerProcessTask:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        bridge.update_task_status.assert_called_once_with("task-1", "planning")
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "planning"
 
     @pytest.mark.asyncio
     async def test_routes_to_assigned_when_agent_set(self) -> None:
@@ -67,7 +70,9 @@ class TestInboxWorkerProcessTask:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        bridge.update_task_status.assert_called_once_with("task-2", "assigned")
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "assigned"
 
     @pytest.mark.asyncio
     async def test_skips_manual_tasks(self) -> None:
@@ -83,7 +88,7 @@ class TestInboxWorkerProcessTask:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        bridge.update_task_status.assert_not_called()
+        bridge.transition_task_from_snapshot.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_auto_title_called_when_requested(self) -> None:
@@ -108,11 +113,13 @@ class TestInboxWorkerProcessTask:
         ):
             await worker.process_task(task)
 
-        bridge.mutation.assert_called_once_with(
+        bridge.mutation.assert_any_call(
             "tasks:updateTitle",
             {"task_id": "task-3", "title": "Widget Builder"},
         )
-        bridge.update_task_status.assert_called_once_with("task-3", "planning")
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "planning"
 
     @pytest.mark.asyncio
     async def test_auto_title_failure_still_transitions(self) -> None:
@@ -138,7 +145,9 @@ class TestInboxWorkerProcessTask:
             await worker.process_task(task)
 
         # Should still transition even if auto-title fails
-        bridge.update_task_status.assert_called_once_with("task-4", "planning")
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "planning"
 
 
 class TestInboxWorkerProcessBatch:
@@ -170,7 +179,7 @@ class TestInboxWorkerProcessBatch:
             await worker.process_batch(tasks)
 
         # Only one call (deduplication)
-        assert bridge.update_task_status.call_count == 1
+        assert bridge.transition_task_from_snapshot.call_count == 1
 
     @pytest.mark.asyncio
     async def test_prunes_stale_ids_so_reentry_works(self) -> None:
@@ -188,14 +197,14 @@ class TestInboxWorkerProcessBatch:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             # First batch
             await worker.process_batch([task])
-            assert bridge.update_task_status.call_count == 1
+            assert bridge.transition_task_from_snapshot.call_count == 1
 
             # Task leaves inbox (empty batch prunes)
             await worker.process_batch([])
 
             # Task re-enters inbox -- should be processed again
             await worker.process_batch([task])
-            assert bridge.update_task_status.call_count == 2
+            assert bridge.transition_task_from_snapshot.call_count == 2
 
     @pytest.mark.asyncio
     async def test_error_in_one_task_does_not_block_others(self) -> None:
@@ -231,4 +240,6 @@ class TestInboxWorkerProcessBatch:
             await worker.process_batch(tasks)
 
         assert call_count == 2
-        bridge.update_task_status.assert_called_once_with("task-ok", "planning")
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "planning"

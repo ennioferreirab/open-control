@@ -187,6 +187,7 @@ class TestPlanChatIntent:
             "status": "review",
             "review_phase": "plan_review",
             "awaiting_kickoff": True,
+            "work_mode": "ai_workflow",
             "execution_plan": {"steps": [{"title": "Step 1"}]},
             "assigned_agent": "alice",
         }
@@ -205,6 +206,7 @@ class TestPlanChatIntent:
             "status": "review",
             "review_phase": "plan_review",
             "awaiting_kickoff": False,
+            "work_mode": "ai_workflow",
             "execution_plan": {"steps": [{"title": "Step 1"}]},
             "assigned_agent": "alice",
         }
@@ -219,6 +221,7 @@ class TestPlanChatIntent:
         """in_progress with execution plan => plan_chat."""
         task_data: dict = {
             "status": "in_progress",
+            "work_mode": "ai_workflow",
             "execution_plan": {"steps": [{"title": "Step 1"}]},
             "assigned_agent": "alice",
         }

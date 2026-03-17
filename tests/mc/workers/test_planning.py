@@ -24,12 +24,14 @@ async def _sync_to_thread(func, *args, **kwargs):
 
 def _make_bridge() -> MagicMock:
     bridge = MagicMock()
+    bridge.mutation.return_value = {"granted": True}
     bridge.create_task_directory.return_value = None
     bridge.list_agents.return_value = []
     bridge.update_execution_plan.return_value = None
     bridge.batch_create_steps.return_value = ["step-1"]
     bridge.kick_off_task.return_value = None
     bridge.update_task_status.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.create_activity.return_value = None
     bridge.send_message.return_value = None
     return bridge
@@ -215,10 +217,9 @@ class TestPlanningWorkerProcessTask:
             await worker.process_task(task)
 
         bridge.update_execution_plan.assert_not_called()
-        bridge.update_task_status.assert_called_once()
-        status_args = bridge.update_task_status.call_args[0]
-        assert status_args[0] == "task-fail"
-        assert status_args[1] == TaskStatus.FAILED
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == TaskStatus.FAILED
 
         # Should send error message
         bridge.send_message.assert_called_once()
@@ -552,10 +553,9 @@ class TestPlanningWorkerLeadAgentModel:
             await worker.process_task(task)
 
         # Task must be marked FAILED — failure must not be silently swallowed
-        bridge.update_task_status.assert_called_once()
-        status_args = bridge.update_task_status.call_args[0]
-        assert status_args[0] == "task-fail-visible"
-        assert status_args[1] == TaskStatus.FAILED
+        bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == TaskStatus.FAILED
 
         # Error message must be surfaced
         bridge.send_message.assert_called_once()

@@ -19,8 +19,8 @@ async def _sync_to_thread(func, *args, **kwargs):
 
 def _make_bridge() -> MagicMock:
     bridge = MagicMock()
+    bridge.mutation.return_value = {"granted": True}
     bridge.update_task_status.return_value = None
-    bridge.mutation.return_value = None
     bridge.create_activity.return_value = None
     bridge.patch_routing_decision.return_value = None
     bridge.list_active_registry_view.return_value = []
@@ -47,7 +47,7 @@ class TestInboxWorkerDirectDelegation:
             "id": "task-dd-1",
             "title": "Direct delegate task",
             "description": "A task for direct delegation",
-            "workMode": "direct_delegate",
+            "work_mode": "direct_delegate",
             "is_manual": False,
         }
 
@@ -85,7 +85,7 @@ class TestInboxWorkerDirectDelegation:
         task = {
             "id": "task-dd-2",
             "title": "Delegated task",
-            "workMode": "direct_delegate",
+            "work_mode": "direct_delegate",
             "is_manual": False,
         }
 
@@ -124,7 +124,7 @@ class TestInboxWorkerDirectDelegation:
         task = {
             "id": "task-dd-3",
             "title": "No agent available",
-            "workMode": "direct_delegate",
+            "work_mode": "direct_delegate",
             "is_manual": False,
         }
 
@@ -149,8 +149,8 @@ class TestInboxWorkerDirectDelegation:
         task = {
             "id": "task-wf-1",
             "title": "Workflow task",
-            "workMode": "ai_workflow",
-            "executionPlan": {"generatedBy": "workflow", "steps": []},
+            "work_mode": "ai_workflow",
+            "execution_plan": {"generated_by": "workflow", "steps": []},
             "is_manual": False,
         }
 
@@ -173,7 +173,7 @@ class TestInboxWorkerDirectDelegation:
         task = {
             "id": "task-dd-4",
             "title": "Resilient delegation",
-            "workMode": "direct_delegate",
+            "work_mode": "direct_delegate",
             "is_manual": False,
         }
 
@@ -221,7 +221,7 @@ class TestPlanningWorkerDirectDelegateGuard:
         task = {
             "id": "task-dd-planning",
             "title": "Should be rejected",
-            "workMode": "direct_delegate",
+            "work_mode": "direct_delegate",
             "is_manual": False,
         }
 
@@ -279,8 +279,8 @@ class TestInboxWorkerHumanRouting:
         task = {
             "id": "task-human-1",
             "title": "Operator-assigned task",
-            "workMode": "direct_delegate",
-            "routingMode": "human",
+            "work_mode": "direct_delegate",
+            "routing_mode": "human",
             "assigned_agent": "coder-agent",
             "is_manual": False,
         }
@@ -302,8 +302,8 @@ class TestInboxWorkerHumanRouting:
         task = {
             "id": "task-human-2",
             "title": "Human-routed but no agent",
-            "workMode": "direct_delegate",
-            "routingMode": "human",
+            "work_mode": "direct_delegate",
+            "routing_mode": "human",
             "is_manual": False,
         }
 

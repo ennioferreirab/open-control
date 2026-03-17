@@ -60,7 +60,9 @@ class InMemoryBridge:
 
         return created_ids
 
-    def mutation(self, name: str, args: dict[str, Any]) -> str:
+    def mutation(self, name: str, args: dict[str, Any]) -> dict[str, Any] | str:
+        if name == "runtimeClaims:acquire":
+            return {"granted": True, "claimId": "claim-1"}
         if name == "workflowRuns:create":
             workflow_run_id = f"workflow-run-{len(self.workflow_runs) + 1}"
             self.workflow_runs.append({"id": workflow_run_id, **deepcopy(args)})

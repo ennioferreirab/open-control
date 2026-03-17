@@ -23,7 +23,8 @@ def _make_bridge() -> MagicMock:
     """Create a mock ConvexBridge."""
     bridge = MagicMock()
     bridge.query.return_value = None
-    bridge.mutation.return_value = None
+    # Return a granted claim so acquire_runtime_claim proceeds to flag/escalate.
+    bridge.mutation.return_value = {"granted": True, "claimId": "claim-1"}
     bridge.create_activity.return_value = None
     bridge.send_message.return_value = None
     return bridge

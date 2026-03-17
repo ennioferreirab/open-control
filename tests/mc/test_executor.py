@@ -459,8 +459,10 @@ class TestDelegateTaskNotAvailableInMCSteps:
                 self.tools.register(McDelegateTool())
                 captured_loop["instance"] = self
 
-            async def process_direct(self, **kwargs):
-                return "mocked result"
+            async def process_direct_result(self, **kwargs):
+                from types import SimpleNamespace
+
+                return SimpleNamespace(content="mocked result", is_error=False, error_message=None)
 
         with (
             patch("nanobot.agent.loop.AgentLoop", FakeAgentLoop),

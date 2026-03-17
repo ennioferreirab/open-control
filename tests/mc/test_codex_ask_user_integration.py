@@ -65,11 +65,17 @@ def _make_codex_config() -> MagicMock:
 
 class TestPrecondition:
     def test_ask_user_schema_contains_one_of(self) -> None:
-        """The canonical ask_user inputSchema must contain oneOf (our precondition)."""
+        """The canonical ask_user inputSchema must have both question and questions properties."""
         schema = _ask_user_input_schema()
-        assert "oneOf" in schema, (
-            "Precondition failed: ask_user schema should have oneOf "
-            "so we can verify it gets stripped"
+        assert "properties" in schema, (
+            "Precondition failed: ask_user schema should have properties "
+            "so we can verify question/questions are present"
+        )
+        assert "question" in schema["properties"], (
+            "Precondition failed: ask_user schema should have 'question' property"
+        )
+        assert "questions" in schema["properties"], (
+            "Precondition failed: ask_user schema should have 'questions' property"
         )
 
 
@@ -174,10 +180,10 @@ class TestEndToEndCodexAskUser:
         schema = _ask_user_input_schema()
         ask_user_tool = _as_openai_tool("mcp_mc_ask_user", schema)
 
-        # Precondition: the raw tool has oneOf
-        assert "oneOf" in ask_user_tool["function"]["parameters"]
+        # Precondition: the raw tool has the expected properties
+        assert "properties" in ask_user_tool["function"]["parameters"]
 
-        # Call chat() — AdaptedProvider should strip oneOf before OpenAICodexProvider
+        # Call chat() — AdaptedProvider should pass valid schema to OpenAICodexProvider
         with (
             patch(
                 "nanobot.providers.openai_codex_provider.get_codex_token",
@@ -277,7 +283,9 @@ class TestEndToEndCodexAskUser:
             )
 
         codex_tools = captured_body.get("tools", [])
-        assert len(codex_tools) == 7, f"Expected 7 tools, got {len(codex_tools)}"
+        assert len(codex_tools) == len(PHASE1_TOOLS), (
+            f"Expected {len(PHASE1_TOOLS)} tools, got {len(codex_tools)}"
+        )
 
         # No tool should have top-level combinators
         combinators = {"oneOf", "anyOf", "allOf", "not"}
