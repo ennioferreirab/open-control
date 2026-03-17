@@ -32,6 +32,7 @@ type DetailViewResult = {
   tagAttributeValues: Doc<"tagAttributeValues">[];
   uiFlags: ReturnType<typeof computeUiFlags>;
   allowedActions: ReturnType<typeof computeAllowedActions>;
+  isWorkflowTask: boolean;
 };
 
 export async function buildTaskDetailView(
@@ -131,5 +132,6 @@ export async function buildTaskDetailView(
     tagAttributeValues,
     uiFlags,
     allowedActions,
+    isWorkflowTask: task.workMode === "ai_workflow",
   };
 }

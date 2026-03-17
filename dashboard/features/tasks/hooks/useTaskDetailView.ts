@@ -65,6 +65,7 @@ type TaskDetailReadModel = {
     startInbox: boolean;
     sendMessage: boolean;
   };
+  isWorkflowTask: boolean;
 };
 
 export interface TaskDetailViewData {
@@ -89,6 +90,7 @@ export interface TaskDetailViewData {
   taskStatus: string | undefined;
   isAwaitingKickoff: boolean;
   isPaused: boolean;
+  isWorkflowTask: boolean;
 }
 
 interface TaskDetailViewOptions {
@@ -174,5 +176,6 @@ export function useTaskDetailView(
     taskStatus,
     isAwaitingKickoff: detailView?.uiFlags.isAwaitingKickoff ?? false,
     isPaused: detailView?.uiFlags.isPaused ?? false,
+    isWorkflowTask: detailView?.isWorkflowTask ?? false,
   };
 }
