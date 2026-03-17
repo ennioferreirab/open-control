@@ -69,9 +69,7 @@ def is_valid_transition(current_status: str, new_status: str) -> bool:
 def validate_transition(current_status: str, new_status: str) -> None:
     """Validate a state transition. Raises ValueError if invalid."""
     if not is_valid_transition(current_status, new_status):
-        raise ValueError(
-            f"Cannot transition from '{current_status}' to '{new_status}'"
-        )
+        raise ValueError(f"Cannot transition from '{current_status}' to '{new_status}'")
 
 
 def get_event_type(current_status: str, new_status: str) -> str:
@@ -97,9 +95,7 @@ def is_valid_step_transition(current_status: str, new_status: str) -> bool:
 def validate_step_transition(current_status: str, new_status: str) -> None:
     """Validate a step state transition. Raises ValueError if invalid."""
     if not is_valid_step_transition(current_status, new_status):
-        raise ValueError(
-            f"Cannot transition step from '{current_status}' to '{new_status}'"
-        )
+        raise ValueError(f"Cannot transition step from '{current_status}' to '{new_status}'")
 
 
 def get_step_event_type(current_status: str, new_status: str) -> str:

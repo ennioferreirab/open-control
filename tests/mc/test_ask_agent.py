@@ -69,9 +69,7 @@ def _setup_agent_dir(agents_dir: Path, name: str) -> None:
     """Create a minimal agent directory inside the given agents_dir."""
     agent = agents_dir / name
     agent.mkdir(parents=True, exist_ok=True)
-    (agent / "config.yaml").write_text(
-        f"name: {name}\nrole: Test Agent\nprompt: System prompt.\n"
-    )
+    (agent / "config.yaml").write_text(f"name: {name}\nrole: Test Agent\nprompt: System prompt.\n")
 
 
 # ---------------------------------------------------------------------------
@@ -207,9 +205,7 @@ class TestAskAgentDepthLimit:
             mock_inst.process_direct = AsyncMock(return_value="OK")
             MockLoop.return_value = mock_inst
 
-            result = await tool.execute(
-                target_agent="secretary", question="Test?"
-            )
+            result = await tool.execute(target_agent="secretary", question="Test?")
 
         assert result == "OK"
 
@@ -238,9 +234,7 @@ class TestAskAgentDepthLimit:
             mock_inst.process_direct = AsyncMock(return_value="OK")
             MockLoop.return_value = mock_inst
 
-            result = await tool.execute(
-                target_agent="secretary", question="Test?"
-            )
+            result = await tool.execute(target_agent="secretary", question="Test?")
 
         assert result == "OK"
 
@@ -270,9 +264,7 @@ class TestAskAgentDepthLimit:
             mock_inst.process_direct = AsyncMock(return_value="Response")
             MockLoop.return_value = mock_inst
 
-            await tool.execute(
-                target_agent="secretary", question="Test?"
-            )
+            await tool.execute(target_agent="secretary", question="Test?")
 
         assert child_ask_tool._depth == 1
         assert child_ask_tool._caller_agent == "secretary"
@@ -309,9 +301,7 @@ class TestAskAgentSuccess:
         ):
             mock_inst = MagicMock()
             mock_inst.tools.get.return_value = None
-            mock_inst.process_direct = AsyncMock(
-                return_value="The report should use PDF format."
-            )
+            mock_inst.process_direct = AsyncMock(return_value="The report should use PDF format.")
             MockLoop.return_value = mock_inst
 
             result = await tool.execute(
@@ -342,9 +332,7 @@ class TestAskAgentSuccess:
         ):
             mock_inst = MagicMock()
             mock_inst.tools.get.return_value = None
-            mock_inst.process_direct = AsyncMock(
-                return_value="Use markdown format."
-            )
+            mock_inst.process_direct = AsyncMock(return_value="Use markdown format.")
             MockLoop.return_value = mock_inst
 
             await tool.execute(
@@ -515,9 +503,7 @@ class TestAskAgentThreadLogging:
             mock_inst.process_direct = AsyncMock(return_value=long_response)
             MockLoop.return_value = mock_inst
 
-            result = await tool.execute(
-                target_agent="secretary", question="Long answer?"
-            )
+            result = await tool.execute(target_agent="secretary", question="Long answer?")
 
         # Full response returned to caller
         assert result == long_response
@@ -528,9 +514,7 @@ class TestAskAgentThreadLogging:
         assert len(response_part) == 500
 
     @pytest.mark.asyncio
-    async def test_thread_log_failure_does_not_break_tool(
-        self, agents_dir: Path
-    ) -> None:
+    async def test_thread_log_failure_does_not_break_tool(self, agents_dir: Path) -> None:
         """If thread logging fails, the tool still returns the response."""
         bridge = _make_bridge()
         bridge.send_message.side_effect = Exception("Convex down")
@@ -555,9 +539,7 @@ class TestAskAgentThreadLogging:
             mock_inst.process_direct = AsyncMock(return_value="OK")
             MockLoop.return_value = mock_inst
 
-            result = await tool.execute(
-                target_agent="secretary", question="Test?"
-            )
+            result = await tool.execute(target_agent="secretary", question="Test?")
 
         assert result == "OK"
 
@@ -589,9 +571,7 @@ class TestAskAgentNotFound:
         assert "writer" in result
 
     @pytest.mark.asyncio
-    async def test_agent_config_invalid_lists_available(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_agent_config_invalid_lists_available(self, tmp_path: Path) -> None:
         tool = _make_tool()
 
         agents_dir = tmp_path / "agents"
@@ -684,9 +664,7 @@ class TestAskAgentProviderError:
         ):
             mock_inst = MagicMock()
             mock_inst.tools.get.return_value = None
-            mock_inst.process_direct = AsyncMock(
-                side_effect=RuntimeError("Something broke")
-            )
+            mock_inst.process_direct = AsyncMock(side_effect=RuntimeError("Something broke"))
             MockLoop.return_value = mock_inst
 
             result = await tool.execute(
@@ -808,9 +786,7 @@ class TestAskAgentPromptConstruction:
                 question="Test?",
             )
 
-            session_key = mock_inst.process_direct.call_args.kwargs.get(
-                "session_key", ""
-            )
+            session_key = mock_inst.process_direct.call_args.kwargs.get("session_key", "")
             assert session_key.startswith("mc:ask:researcher:secretary:")
             uuid_part = session_key.split(":")[-1]
             assert len(uuid_part) == 8
@@ -846,9 +822,15 @@ class TestAskAgentTierResolution:
 
         with (
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir_with_nanobot),
-            patch("mc.infrastructure.agents.yaml_validator.validate_agent_file", return_value=agent_data),
+            patch(
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
+                return_value=agent_data,
+            ),
             patch("mc.infrastructure.providers.tier_resolver.TierResolver") as MockResolver,
-            patch("mc.infrastructure.providers.factory.create_provider", return_value=(MagicMock(), "claude-sonnet-4-6")) as mock_create,
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(MagicMock(), "claude-sonnet-4-6"),
+            ) as mock_create,
             patch("nanobot.agent.loop.AgentLoop") as MockLoop,
             patch("nanobot.bus.queue.MessageBus"),
         ):
@@ -878,7 +860,10 @@ class TestAskAgentTierResolution:
 
         with (
             patch("mc.infrastructure.config.AGENTS_DIR", agents_dir_with_nanobot),
-            patch("mc.infrastructure.agents.yaml_validator.validate_agent_file", return_value=agent_data),
+            patch(
+                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
+                return_value=agent_data,
+            ),
         ):
             result = await tool.execute(target_agent="nanobot", question="Help?")
 

@@ -1,7 +1,8 @@
 """Base handler class for hook factory."""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     from .context import HookContext
@@ -14,7 +15,7 @@ class BaseHandler:
     Each entry is a tuple of (event_name, matcher_value_or_None).
     """
 
-    events: list[tuple[str, str | None]] = []
+    events: ClassVar[list[tuple[str, str | None]]] = []
 
     def __init__(self, ctx: HookContext, payload: dict) -> None:
         self.ctx = ctx

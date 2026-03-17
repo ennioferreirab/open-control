@@ -22,9 +22,7 @@ class TestReviewTransitions:
 
     def test_planning_to_review_event_is_task_planning(self) -> None:
         """The event type for planning->review must be TASK_PLANNING."""
-        event = TRANSITION_EVENT_MAP.get(
-            (TaskStatus.PLANNING, TaskStatus.REVIEW)
-        )
+        event = TRANSITION_EVENT_MAP.get((TaskStatus.PLANNING, TaskStatus.REVIEW))
         assert event == ActivityEventType.TASK_PLANNING
 
     def test_review_to_in_progress_is_valid(self) -> None:
@@ -33,9 +31,7 @@ class TestReviewTransitions:
 
     def test_review_to_in_progress_event_is_task_started(self) -> None:
         """The kick-off event type must be TASK_STARTED."""
-        event = TRANSITION_EVENT_MAP.get(
-            (TaskStatus.REVIEW, TaskStatus.IN_PROGRESS)
-        )
+        event = TRANSITION_EVENT_MAP.get((TaskStatus.REVIEW, TaskStatus.IN_PROGRESS))
         assert event == ActivityEventType.TASK_STARTED
 
     def test_planning_to_failed_is_valid(self) -> None:

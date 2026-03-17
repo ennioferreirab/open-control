@@ -93,9 +93,7 @@ class TestAgentsList:
         agents_dir = tmp_path / "agents"
         good = agents_dir / "good-agent"
         good.mkdir(parents=True)
-        (good / "config.yaml").write_text(
-            "name: good-agent\nrole: Dev\nprompt: You dev.\n"
-        )
+        (good / "config.yaml").write_text("name: good-agent\nrole: Dev\nprompt: You dev.\n")
         bad = agents_dir / "bad-agent"
         bad.mkdir()
         (bad / "config.yaml").write_text("invalid: yaml: content: [")

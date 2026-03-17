@@ -18,6 +18,7 @@ tasks_app = typer.Typer(
 
 def register_docs_command(mc_app: typer.Typer) -> None:
     """Register the docs command on the main mc_app."""
+
     @mc_app.command()
     def docs():
         """Show auto-generated API documentation from Convex schema."""
@@ -44,9 +45,7 @@ def register_docs_command(mc_app: typer.Typer) -> None:
             if ts_file.name.startswith("_") or ts_file.name == "schema.ts":
                 continue
             doc_lines.append(f"\n## {ts_file.stem}\n")
-            doc_lines.append(
-                _parse_convex_functions(ts_file.read_text(), ts_file.stem)
-            )
+            doc_lines.append(_parse_convex_functions(ts_file.read_text(), ts_file.stem))
 
         md_text = "\n".join(doc_lines)
         console.print(Markdown(md_text))
@@ -55,9 +54,7 @@ def register_docs_command(mc_app: typer.Typer) -> None:
 def _parse_schema_tables(schema_text: str) -> str:
     """Extract table definitions from a Convex schema.ts file."""
     lines = []
-    table_matches = re.findall(
-        r"(\w+):\s*defineTable\(\{(.*?)\}\)", schema_text, re.DOTALL
-    )
+    table_matches = re.findall(r"(\w+):\s*defineTable\(\{(.*?)\}\)", schema_text, re.DOTALL)
     for table_name, body in table_matches:
         lines.append(f"### {table_name}\n")
         fields = re.findall(r"(\w+):\s*v\.(\w+)\(([^)]*)\)", body)
@@ -69,9 +66,7 @@ def _parse_schema_tables(schema_text: str) -> str:
                 lines.append(f"| {field_name} | {vtype} | {detail_clean} |")
         lines.append("")
 
-    index_matches = re.findall(
-        r'\.index\("(\w+)",\s*\[([^\]]+)\]\)', schema_text
-    )
+    index_matches = re.findall(r'\.index\("(\w+)",\s*\[([^\]]+)\]\)', schema_text)
     if index_matches:
         lines.append("### Indexes\n")
         for idx_name, idx_fields in index_matches:
@@ -105,9 +100,7 @@ def _parse_convex_functions(file_text: str, module_name: str) -> str:
 @tasks_app.command("create")
 def tasks_create(
     title: str = typer.Argument(None, help="Task title"),
-    description: str = typer.Option(
-        None, "--description", "-d", help="Task description"
-    ),
+    description: str = typer.Option(None, "--description", "-d", help="Task description"),
     tags: str = typer.Option(None, "--tags", "-t", help="Comma-separated tags"),
     trust_level: str = typer.Option(
         None,
@@ -138,9 +131,7 @@ def tasks_create(
 
     bridge = _cli._get_bridge()
     try:
-        tag_list = (
-            [t.strip() for t in tags.split(",") if t.strip()] if tags else None
-        )
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
         args: dict = {"title": title}
         if description:
             args["description"] = description
@@ -160,7 +151,7 @@ def tasks_create(
             result = bridge.mutation("tasks:create", args)
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         task_id = result if isinstance(result, str) else (result or {}).get("id", "")
         console.print(f"[green]Task created:[/green] {title}")
         if task_id:
@@ -314,7 +305,7 @@ def tasks_update_status(
             console.print(f"[green]Status updated:[/green] {task_id} \u2192 {status}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -340,7 +331,7 @@ def tasks_send_message(
             console.print(f"[green]Message sent to task:[/green] {task_id}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -359,7 +350,7 @@ def tasks_delete(
             console.print(f"[green]Task deleted:[/green] {task_id}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -380,7 +371,7 @@ def tasks_restore(
             console.print(f"[green]Task restored:[/green] {task_id} (mode: {mode})")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -401,7 +392,7 @@ def tasks_approve(
             console.print(f"[green]Task approved:[/green] {task_id}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -423,7 +414,7 @@ def tasks_deny(
             console.print(f"[yellow]Task denied:[/yellow] {task_id}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -442,7 +433,7 @@ def tasks_pause(
             console.print(f"[green]Task paused:[/green] {task_id}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -461,7 +452,7 @@ def tasks_resume(
             console.print(f"[green]Task resumed:[/green] {task_id}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -482,7 +473,7 @@ def tasks_update_title(
             console.print(f"[green]Title updated:[/green] {task_id} \u2192 {title}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -503,7 +494,7 @@ def tasks_update_description(
             console.print(f"[green]Description updated:[/green] {task_id}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -525,7 +516,7 @@ def tasks_update_tags(
             console.print(f"[green]Tags updated:[/green] {task_id} \u2192 {tag_list}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -546,6 +537,6 @@ def tasks_manual_move(
             console.print(f"[green]Task moved:[/green] {task_id} \u2192 {status}")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()

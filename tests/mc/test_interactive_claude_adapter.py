@@ -222,7 +222,7 @@ async def test_prepare_launch_wraps_workspace_bootstrap_failures() -> None:
         which=MagicMock(return_value="/usr/local/bin/claude"),
     )
 
-    with pytest.raises(InteractiveSessionBootstrapError, match="CLAUDE.md generation failed"):
+    with pytest.raises(InteractiveSessionBootstrapError, match=r"CLAUDE\.md generation failed"):
         await adapter.prepare_launch(
             identity=_identity(),
             agent=_agent(),

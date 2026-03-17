@@ -31,6 +31,7 @@ def _make_tool(*, channel: str = "mc", chat_id: str = "my-agent") -> tuple[CronT
 # set_telegram_default — fallback when deliver_channel='telegram' without deliver_to
 # ---------------------------------------------------------------------------
 
+
 class TestTelegramDefault:
     def test_deliver_channel_telegram_without_deliver_to_uses_default(self):
         """deliver_channel='telegram' + no deliver_to → uses set_telegram_default."""
@@ -105,6 +106,7 @@ class TestTelegramDefault:
 # ---------------------------------------------------------------------------
 # Numeric deliver_to validation for telegram
 # ---------------------------------------------------------------------------
+
 
 class TestTelegramDeliverToValidation:
     def test_non_numeric_deliver_to_for_telegram_returns_error(self):
@@ -182,6 +184,7 @@ class TestTelegramDeliverToValidation:
 # ---------------------------------------------------------------------------
 # _send_telegram_direct guard (gateway-level)
 # ---------------------------------------------------------------------------
+
 
 class TestSendTelegramDirectGuard:
     @pytest.mark.asyncio

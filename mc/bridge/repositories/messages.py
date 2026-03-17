@@ -63,9 +63,7 @@ class MessageRepository:
         if msg_type is not None:
             args["type"] = msg_type
         result = self._client.mutation("messages:create", args)
-        self._log_state_transition(
-            "message", f"Message sent by {author_name} on task {task_id}"
-        )
+        self._log_state_transition("message", f"Message sent by {author_name} on task {task_id}")
         return result
 
     def post_step_completion(
@@ -160,9 +158,7 @@ class MessageRepository:
         if step_id is not None:
             args["step_id"] = step_id
         result = self._client.mutation("messages:create", args)
-        self._log_state_transition(
-            "message", f"System error posted on task {task_id}"
-        )
+        self._log_state_transition("message", f"System error posted on task {task_id}")
         return result
 
     @staticmethod

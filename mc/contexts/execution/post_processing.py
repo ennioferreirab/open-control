@@ -78,18 +78,22 @@ def _collect_output_artifacts(
         if rel not in pre:
             # New file — created
             ext = entry.suffix.lstrip(".").upper() or "file"
-            artifacts.append({
-                "path": rel,
-                "action": "created",
-                "description": f"{ext}, {_human_size(size)}",
-            })
+            artifacts.append(
+                {
+                    "path": rel,
+                    "action": "created",
+                    "description": f"{ext}, {_human_size(size)}",
+                }
+            )
         elif entry.stat().st_mtime > pre[rel]:
             # Existing file with newer mtime — modified
-            artifacts.append({
-                "path": rel,
-                "action": "modified",
-                "diff": f"File updated ({_human_size(size)})",
-            })
+            artifacts.append(
+                {
+                    "path": rel,
+                    "action": "modified",
+                    "diff": f"File updated ({_human_size(size)})",
+                }
+            )
 
     return artifacts
 
@@ -274,7 +278,7 @@ def _provider_error_action(exc: Exception) -> str:
     # AnthropicOAuthExpired messages include "Run: nanobot provider login ..."
     msg = str(exc)
     if "Run:" in msg:
-        return msg[msg.index("Run:"):]
+        return msg[msg.index("Run:") :]
     return "Check provider configuration in ~/.nanobot/config.json"
 
 
@@ -320,8 +324,11 @@ def build_executor_agent_roster() -> str:
 
 
 async def _enrich_nanobot_description(
-    bridge: Any, task_id: str, title: str,
-    description: str | None, task_data: dict | None,
+    bridge: Any,
+    task_id: str,
+    title: str,
+    description: str | None,
+    task_data: dict | None,
 ) -> str:
     """Enrich nanobot task description with file manifest, thread context, and tag attributes.
 
@@ -339,9 +346,7 @@ async def _enrich_nanobot_description(
     safe_id = task_safe_id(task_id)
     files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
     try:
-        fresh_task = await asyncio.to_thread(
-            bridge.query, "tasks:getById", {"task_id": task_id}
-        )
+        fresh_task = await asyncio.to_thread(bridge.query, "tasks:getById", {"task_id": task_id})
         raw_files = (fresh_task or {}).get("files") or []
     except Exception:
         logger.warning(
@@ -367,8 +372,7 @@ async def _enrich_nanobot_description(
     )
     if file_manifest:
         manifest_summary = ", ".join(
-            f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
-            for f in file_manifest
+            f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})" for f in file_manifest
         )
         task_instruction += (
             f"\nTask has {len(file_manifest)} attached file(s) at "
@@ -376,9 +380,7 @@ async def _enrich_nanobot_description(
         )
     description = (description or "") + f"\n\n{task_instruction}"
     try:
-        thread_messages = await asyncio.to_thread(
-            bridge.get_task_messages, task_id
-        )
+        thread_messages = await asyncio.to_thread(bridge.get_task_messages, task_id)
         thread_context = build_thread_context(thread_messages)
         if thread_context:
             description = (description or "") + f"\n{thread_context}"
@@ -394,9 +396,7 @@ async def _enrich_nanobot_description(
             tag_attr_values = await asyncio.to_thread(
                 bridge.query, "tagAttributeValues:getByTask", {"task_id": task_id}
             )
-            tag_attr_catalog = await asyncio.to_thread(
-                bridge.query, "tagAttributes:list", {}
-            )
+            tag_attr_catalog = await asyncio.to_thread(bridge.query, "tagAttributes:list", {})
             tag_attrs_context = build_tag_attributes_context(
                 task_tags,
                 tag_attr_values if isinstance(tag_attr_values, list) else [],

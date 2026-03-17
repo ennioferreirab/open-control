@@ -241,14 +241,16 @@ def _parse_claude_code_opts(raw: dict) -> ClaudeCodeOpts:
         try:
             budget = float(budget)
         except (TypeError, ValueError):
-            raise ValueError(f"claude_code.max_budget_usd must be a number, got: {budget!r}")
+            raise ValueError(
+                f"claude_code.max_budget_usd must be a number, got: {budget!r}"
+            ) from None
 
     turns = raw.get("max_turns")
     if turns is not None:
         try:
             turns = int(turns)
         except (TypeError, ValueError):
-            raise ValueError(f"claude_code.max_turns must be an integer, got: {turns!r}")
+            raise ValueError(f"claude_code.max_turns must be an integer, got: {turns!r}") from None
 
     pm = raw.get("permission_mode", "acceptEdits")
     if not isinstance(pm, str):

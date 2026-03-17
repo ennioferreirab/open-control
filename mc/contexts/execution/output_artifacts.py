@@ -54,17 +54,21 @@ def _collect_output_artifacts(
 
         if rel not in pre:
             ext = entry.suffix.lstrip(".").upper() or "file"
-            artifacts.append({
-                "path": rel,
-                "action": "created",
-                "description": f"{ext}, {_human_size(size)}",
-            })
+            artifacts.append(
+                {
+                    "path": rel,
+                    "action": "created",
+                    "description": f"{ext}, {_human_size(size)}",
+                }
+            )
         elif entry.stat().st_mtime > pre[rel]:
-            artifacts.append({
-                "path": rel,
-                "action": "modified",
-                "diff": f"File updated ({_human_size(size)})",
-            })
+            artifacts.append(
+                {
+                    "path": rel,
+                    "action": "modified",
+                    "diff": f"File updated ({_human_size(size)})",
+                }
+            )
 
     return artifacts
 

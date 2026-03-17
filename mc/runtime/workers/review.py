@@ -183,7 +183,9 @@ class ReviewWorker:
         )
         task = await asyncio.to_thread(self._bridge.query, "tasks:getById", {"task_id": task_id})
         title = task.get("title", "Untitled") if task else "Untitled"
-        trust_level = task.get("trust_level", TrustLevel.AUTONOMOUS) if task else TrustLevel.AUTONOMOUS
+        trust_level = (
+            task.get("trust_level", TrustLevel.AUTONOMOUS) if task else TrustLevel.AUTONOMOUS
+        )
 
         await asyncio.to_thread(
             self._bridge.create_activity,

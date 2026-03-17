@@ -65,9 +65,7 @@ class TestDistributeBuiltinSkills:
         # Verify content integrity
         assert "Alpha skill body" in (target_alpha / "SKILL.md").read_text()
 
-    def test_copies_multiple_skills(
-        self, workspace_dir: Path, source_dir_with_skills: Path
-    ):
+    def test_copies_multiple_skills(self, workspace_dir: Path, source_dir_with_skills: Path):
         """All skill directories (those with SKILL.md) are copied."""
         from mc.runtime.gateway import _distribute_builtin_skills
 
@@ -118,9 +116,7 @@ class TestDistributeBuiltinSkills:
         assert missing_dir.is_dir()
         assert (missing_dir / "skill-alpha").is_dir()
 
-    def test_handles_missing_source_dir_gracefully(
-        self, workspace_dir: Path, tmp_path: Path
-    ):
+    def test_handles_missing_source_dir_gracefully(self, workspace_dir: Path, tmp_path: Path):
         """If a source_dir doesn't exist, it's skipped without error."""
         from mc.runtime.gateway import _distribute_builtin_skills
 
@@ -131,9 +127,7 @@ class TestDistributeBuiltinSkills:
         # Workspace should still be fine, just empty
         assert workspace_dir.is_dir()
 
-    def test_multiple_source_dirs(
-        self, workspace_dir: Path, tmp_path: Path
-    ):
+    def test_multiple_source_dirs(self, workspace_dir: Path, tmp_path: Path):
         """Skills from multiple source directories are all distributed."""
         from mc.runtime.gateway import _distribute_builtin_skills
 
@@ -178,14 +172,11 @@ class TestDistributeBuiltinSkills:
 
         # "not-a-skill" should not appear in logs as distributed
         distributed_lines = [
-            r for r in caplog.records
-            if "Distribut" in r.message and "not-a-skill" in r.message
+            r for r in caplog.records if "Distribut" in r.message and "not-a-skill" in r.message
         ]
         assert len(distributed_lines) == 0
 
-    def test_handles_source_dir_with_files_not_dirs(
-        self, workspace_dir: Path, tmp_path: Path
-    ):
+    def test_handles_source_dir_with_files_not_dirs(self, workspace_dir: Path, tmp_path: Path):
         """Files (not directories) in source_dir are ignored."""
         from mc.runtime.gateway import _distribute_builtin_skills
 

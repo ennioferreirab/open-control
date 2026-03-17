@@ -10,9 +10,7 @@ import typer
 def _parse_schema_tables(schema_text: str) -> str:
     """Extract table definitions from a Convex schema.ts file."""
     lines = []
-    table_matches = re.findall(
-        r"(\w+):\s*defineTable\(\{(.*?)\}\)", schema_text, re.DOTALL
-    )
+    table_matches = re.findall(r"(\w+):\s*defineTable\(\{(.*?)\}\)", schema_text, re.DOTALL)
     for table_name, body in table_matches:
         lines.append(f"### {table_name}\n")
         fields = re.findall(r"(\w+):\s*v\.(\w+)\(([^)]*)\)", body)

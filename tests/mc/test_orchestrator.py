@@ -136,9 +136,7 @@ class TestProcessPlanningTask:
             await orchestrator._planning_worker.process_task(task)
 
         bridge.create_task_directory.assert_called_once_with("task-1")
-        bridge.update_execution_plan.assert_called_once_with(
-            "task-1", plan.to_dict()
-        )
+        bridge.update_execution_plan.assert_called_once_with("task-1", plan.to_dict())
         bridge.update_task_status.assert_not_called()
         bridge.batch_create_steps.assert_called_once()
         bridge.kick_off_task.assert_called_once_with("task-1", 1)
@@ -188,9 +186,7 @@ class TestProcessPlanningTask:
             planner.plan_task = AsyncMock(return_value=plan)
             await orchestrator._planning_worker.process_task(task)
 
-        bridge.update_execution_plan.assert_called_once_with(
-            "task-supervised", plan.to_dict()
-        )
+        bridge.update_execution_plan.assert_called_once_with("task-supervised", plan.to_dict())
         bridge.batch_create_steps.assert_not_called()
         bridge.kick_off_task.assert_not_called()
         create_task_mock.assert_not_called()
@@ -208,9 +204,7 @@ class TestProcessPlanningTask:
             patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
         ):
             planner = planner_cls.return_value
-            planner.plan_task = AsyncMock(
-                side_effect=RuntimeError("planner exploded")
-            )
+            planner.plan_task = AsyncMock(side_effect=RuntimeError("planner exploded"))
             await orchestrator._planning_worker.process_task(task)
 
         bridge.update_execution_plan.assert_not_called()
@@ -443,9 +437,7 @@ class TestGenerateTitleViaLowAgent:
                 "mc.runtime.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
-                result = await generate_title_via_low_agent(
-                    bridge, "Do something useful"
-                )
+                result = await generate_title_via_low_agent(bridge, "Do something useful")
 
         assert result == "My Generated Title"
 
@@ -469,9 +461,7 @@ class TestGenerateTitleViaLowAgent:
                 "mc.runtime.orchestrator.asyncio.to_thread",
                 side_effect=_sync_to_thread,
             ):
-                result = await generate_title_via_low_agent(
-                    bridge, "Do something useful"
-                )
+                result = await generate_title_via_low_agent(bridge, "Do something useful")
 
         assert result is None
 
@@ -484,9 +474,7 @@ class TestGenerateTitleViaLowAgent:
             "mc.runtime.orchestrator.asyncio.to_thread",
             side_effect=_sync_to_thread,
         ):
-            result = await generate_title_via_low_agent(
-                bridge, "Do something useful"
-            )
+            result = await generate_title_via_low_agent(bridge, "Do something useful")
 
         assert result is None
 
@@ -516,7 +504,5 @@ class TestGenerateTitleViaLowAgent:
 
         # Verify the prompt was truncated
         call_messages = mock_provider.chat.call_args[1]["messages"]
-        assert (
-            len(call_messages[0]["content"]) <= 5100
-        )  # prompt header + 5000 char description
+        assert len(call_messages[0]["content"]) <= 5100  # prompt header + 5000 char description
         assert result == "Short Title"

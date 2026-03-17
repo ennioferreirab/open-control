@@ -99,14 +99,19 @@ async def _run_gateway_and_capture(captured: dict) -> None:
 
     stop_task = asyncio.create_task(trigger_stop())
 
-    with patch("mc.runtime.gateway.TaskOrchestrator", return_value=mock_orch_instance), \
-         patch("mc.runtime.gateway.TimeoutChecker", return_value=mock_tc_instance), \
-         patch("mc.contexts.execution.executor.TaskExecutor", mock_exec_cls), \
-         patch("mc.contexts.conversation.chat_handler.ChatHandler", return_value=mock_chat_instance), \
-         patch("nanobot.config.loader.load_config"), \
-         patch("mc.contexts.conversation.mentions.watcher.MentionWatcher", return_value=mock_mention_instance), \
-         patch("nanobot.cron.service.CronService", mock_cron_cls), \
-         patch("mc.runtime.gateway._run_plan_negotiation_manager", new=AsyncMock()):
+    with (
+        patch("mc.runtime.gateway.TaskOrchestrator", return_value=mock_orch_instance),
+        patch("mc.runtime.gateway.TimeoutChecker", return_value=mock_tc_instance),
+        patch("mc.contexts.execution.executor.TaskExecutor", mock_exec_cls),
+        patch("mc.contexts.conversation.chat_handler.ChatHandler", return_value=mock_chat_instance),
+        patch("nanobot.config.loader.load_config"),
+        patch(
+            "mc.contexts.conversation.mentions.watcher.MentionWatcher",
+            return_value=mock_mention_instance,
+        ),
+        patch("nanobot.cron.service.CronService", mock_cron_cls),
+        patch("mc.runtime.gateway._run_plan_negotiation_manager", new=AsyncMock()),
+    ):
         try:
             await run_gateway(mock_bridge)
         except SystemExit:
@@ -140,10 +145,12 @@ class TestOnCronJobDelivery:
         assert on_task_completed is not None
 
         # Verify the delivery is actually registered: calling on_task_completed triggers send
-        with patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x), \
-             patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]), \
-             patch("telegram.Bot") as MockBot, \
-             patch("nanobot.config.loader.load_config") as mock_cfg:
+        with (
+            patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x),
+            patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]),
+            patch("telegram.Bot") as MockBot,
+            patch("nanobot.config.loader.load_config") as mock_cfg,
+        ):
             mock_cfg.return_value.channels.telegram.token = "tok"
             mock_bot = AsyncMock()
             MockBot.return_value = mock_bot
@@ -171,8 +178,10 @@ class TestOnCronJobDelivery:
 
         # Calling on_task_completed with ANY task_id should NOT trigger delivery
         # because the failed mutation means no task_id was registered.
-        with patch("telegram.Bot") as MockBot, \
-             patch("nanobot.config.loader.load_config") as mock_cfg:
+        with (
+            patch("telegram.Bot") as MockBot,
+            patch("nanobot.config.loader.load_config") as mock_cfg,
+        ):
             mock_cfg.return_value.channels.telegram.token = "tok"
             mock_bot = AsyncMock()
             MockBot.return_value = mock_bot
@@ -204,8 +213,10 @@ class TestOnCronJobDelivery:
         assert on_task_completed is not None
 
         # MC channel requeues tasks directly — no Telegram delivery should happen
-        with patch("telegram.Bot") as MockBot, \
-             patch("nanobot.config.loader.load_config") as mock_cfg:
+        with (
+            patch("telegram.Bot") as MockBot,
+            patch("nanobot.config.loader.load_config") as mock_cfg,
+        ):
             mock_cfg.return_value.channels.telegram.token = "tok"
             mock_bot = AsyncMock()
             MockBot.return_value = mock_bot
@@ -229,8 +240,10 @@ class TestOnCronJobDelivery:
         assert on_task_completed is not None
 
         # deliver=False means no entry in pending_deliveries — send_message must not be called
-        with patch("telegram.Bot") as MockBot, \
-             patch("nanobot.config.loader.load_config") as mock_cfg:
+        with (
+            patch("telegram.Bot") as MockBot,
+            patch("nanobot.config.loader.load_config") as mock_cfg,
+        ):
             mock_cfg.return_value.channels.telegram.token = "tok"
             mock_bot = AsyncMock()
             MockBot.return_value = mock_bot
@@ -261,7 +274,9 @@ class TestOnCronJobDelivery:
         assert returned_task_id is None
 
         create_calls = [
-            call for call in captured["bridge"].mutation.call_args_list if call.args[0] == "tasks:create"
+            call
+            for call in captured["bridge"].mutation.call_args_list
+            if call.args[0] == "tasks:create"
         ]
         assert len(create_calls) == 1
         create_args = create_calls[0].args[1]
@@ -282,7 +297,9 @@ class TestOnCronJobDelivery:
         await on_job(job)
 
         create_calls = [
-            call for call in captured["bridge"].mutation.call_args_list if call.args[0] == "tasks:create"
+            call
+            for call in captured["bridge"].mutation.call_args_list
+            if call.args[0] == "tasks:create"
         ]
         assert len(create_calls) == 1
         create_args = create_calls[0].args[1]
@@ -358,8 +375,10 @@ class TestOnCronJobDelivery:
         async def _fake_telegram(chat_id: str, content: str) -> None:
             sent_messages.append(content)
 
-        with patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x), \
-             patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]):
+        with (
+            patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x),
+            patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]),
+        ):
             # Directly test that on_task_completed calls _send_telegram_direct
             # by verifying it pops the pending delivery and sends the result.
             # We patch at the telegram Bot level to avoid real network calls.
@@ -369,6 +388,7 @@ class TestOnCronJobDelivery:
                 mock_bot_instance.send_message = AsyncMock()
 
                 from nanobot.config.loader import load_config
+
                 with patch("nanobot.config.loader.load_config") as mock_cfg:
                     mock_cfg.return_value.channels.telegram.token = "fake-token"
                     await on_task_completed("task-abc", "YouTube summary result")

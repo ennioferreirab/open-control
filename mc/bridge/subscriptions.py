@@ -30,9 +30,7 @@ class SubscriptionManager:
         self._client = client
         self._shared_polls: dict[tuple, tuple[asyncio.Task, list[asyncio.Queue]]] = {}  # type: ignore[type-arg]
 
-    def subscribe(
-        self, function_name: str, args: dict[str, Any] | None = None
-    ) -> Iterator[Any]:
+    def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         """Subscribe to a Convex query for real-time updates.
 
         Args:
@@ -114,12 +112,13 @@ class SubscriptionManager:
         consecutive_errors = 0
         max_errors = 10
         while True:
-            if sleep_controller is not None and getattr(sleep_controller, "mode", "active") == "sleep":
+            if (
+                sleep_controller is not None
+                and getattr(sleep_controller, "mode", "active") == "sleep"
+            ):
                 await sleep_controller.wait_for_next_cycle(poll_interval)
             try:
-                result = await asyncio.to_thread(
-                    self._client.query, function_name, args
-                )
+                result = await asyncio.to_thread(self._client.query, function_name, args)
                 consecutive_errors = 0
                 is_error = isinstance(result, dict) and result.get("_error") is True
                 should_wake = (

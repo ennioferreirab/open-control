@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 from typer.testing import CliRunner
@@ -13,7 +14,7 @@ runner = CliRunner()
 
 
 class _FakeProcessManager:
-    instances: list["_FakeProcessManager"] = []
+    instances: ClassVar[list["_FakeProcessManager"]] = []
 
     def __init__(
         self,

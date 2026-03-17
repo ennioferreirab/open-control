@@ -51,6 +51,7 @@ skills:
 # YAML extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_yaml_from_response(response: str) -> str:
     """Extract YAML content from LLM response, handling code blocks."""
     match = re.search(r"```(?:yaml)?\s*\n(.*?)```", response, re.DOTALL)
@@ -62,6 +63,7 @@ def extract_yaml_from_response(response: str) -> str:
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 def validate_yaml_content(yaml_text: str) -> tuple[dict | None, list[str]]:
     """Parse and validate a YAML string as agent config.
@@ -78,9 +80,7 @@ def validate_yaml_content(yaml_text: str) -> tuple[dict | None, list[str]]:
         return None, [f"YAML parse error: {exc}"]
 
     if not isinstance(data, dict):
-        return None, [
-            f"Invalid YAML structure: expected a mapping, got {type(data).__name__}."
-        ]
+        return None, [f"Invalid YAML structure: expected a mapping, got {type(data).__name__}."]
 
     try:
         AgentConfig(**data)
@@ -93,6 +93,7 @@ def validate_yaml_content(yaml_text: str) -> tuple[dict | None, list[str]]:
 # ---------------------------------------------------------------------------
 # LLM generation
 # ---------------------------------------------------------------------------
+
 
 async def generate_agent_yaml(
     provider,
@@ -113,9 +114,7 @@ async def generate_agent_yaml(
     """
     system = YAML_GENERATION_PROMPT
     if feedback:
-        system += (
-            f"\n\nPrevious attempt was rejected. User feedback: {feedback}"
-        )
+        system += f"\n\nPrevious attempt was rejected. User feedback: {feedback}"
 
     user_content = f"Create an agent from this description: {description}"
 
@@ -175,20 +174,17 @@ def generate_soul_md(name: str, role: str, soul_override: str | None = None) -> 
     return DEFAULT_SOUL_TEMPLATE.format(display_name=display_name, role=role)
 
 
-def ensure_soul_md(
-    agent_dir: Path, name: str, role: str, soul_override: str | None = None
-) -> None:
+def ensure_soul_md(agent_dir: Path, name: str, role: str, soul_override: str | None = None) -> None:
     """Write SOUL.md if it doesn't exist yet (never overwrites user edits)."""
     soul_path = agent_dir / "SOUL.md"
     if not soul_path.exists():
-        soul_path.write_text(
-            generate_soul_md(name, role, soul_override), encoding="utf-8"
-        )
+        soul_path.write_text(generate_soul_md(name, role, soul_override), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
 # Workspace creation
 # ---------------------------------------------------------------------------
+
 
 def create_agent_workspace(name: str, yaml_text: str) -> Path:
     """Create the agent workspace directory and write config.yaml.
@@ -226,6 +222,7 @@ def create_agent_workspace(name: str, yaml_text: str) -> Path:
 # ---------------------------------------------------------------------------
 # Provider factory
 # ---------------------------------------------------------------------------
+
 
 def build_llm_provider():
     """Build an LLM provider from the nanobot configuration.

@@ -45,7 +45,9 @@ async def _requeue_cron_task(
 
     current_status = task.get("status", "")
     if current_status in ("in_progress", "assigned", "deleted"):
-        logger.info("[gateway] Cron origin task %s is '%s' — skipping re-queue", task_id, current_status)
+        logger.info(
+            "[gateway] Cron origin task %s is '%s' — skipping re-queue", task_id, current_status
+        )
         return None
 
     agent_name = agent or task.get("assigned_agent") or NANOBOT_AGENT_NAME

@@ -63,7 +63,7 @@ def tasks_create(
             result = bridge.mutation("tasks:create", args)
         except Exception as exc:
             _cli.console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         task_id = result if isinstance(result, str) else (result or {}).get("id", "")
         _cli.console.print(f"[green]Task created:[/green] {title}")
         if task_id:
@@ -157,7 +157,9 @@ def tasks_get(
         messages = messages[-10:]
 
         if output_json:
-            _cli.console.print(_json.dumps({"task": task, "messages": messages}, indent=2, default=str))
+            _cli.console.print(
+                _json.dumps({"task": task, "messages": messages}, indent=2, default=str)
+            )
             return
 
         _cli.console.print(f"\n[bold]Task:[/bold] {task.get('title', 'Untitled')}")
@@ -201,7 +203,7 @@ def _task_mutation_command(
             _cli.console.print(success_message)
         except Exception as exc:
             _cli.console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     finally:
         bridge.close()
 
@@ -216,7 +218,9 @@ def tasks_update_status(
     args: dict[str, object] = {"task_id": task_id, "status": status}
     if agent:
         args["agent_name"] = agent
-    _task_mutation_command("tasks:updateStatus", f"[green]Status updated:[/green] {task_id} → {status}", args)
+    _task_mutation_command(
+        "tasks:updateStatus", f"[green]Status updated:[/green] {task_id} → {status}", args
+    )
 
 
 @tasks_app.command("send-message")
@@ -236,7 +240,9 @@ def tasks_send_message(
 @tasks_app.command("delete")
 def tasks_delete(task_id: str = typer.Argument(..., help="Task ID")):
     """Soft-delete a task."""
-    _task_mutation_command("tasks:softDelete", f"[green]Task deleted:[/green] {task_id}", {"task_id": task_id})
+    _task_mutation_command(
+        "tasks:softDelete", f"[green]Task deleted:[/green] {task_id}", {"task_id": task_id}
+    )
 
 
 @tasks_app.command("restore")
@@ -258,7 +264,11 @@ def tasks_approve(
     user: str = typer.Option("User", "--user", help="Approving user name"),
 ):
     """Approve a task that is awaiting human approval."""
-    _task_mutation_command("tasks:approve", f"[green]Task approved:[/green] {task_id}", {"task_id": task_id, "user_name": user})
+    _task_mutation_command(
+        "tasks:approve",
+        f"[green]Task approved:[/green] {task_id}",
+        {"task_id": task_id, "user_name": user},
+    )
 
 
 @tasks_app.command("deny")
@@ -268,19 +278,27 @@ def tasks_deny(
     user: str = typer.Option("User", "--user", help="Denying user name"),
 ):
     """Deny a task that is awaiting human approval."""
-    _task_mutation_command("tasks:deny", f"[yellow]Task denied:[/yellow] {task_id}", {"task_id": task_id, "feedback": feedback, "user_name": user})
+    _task_mutation_command(
+        "tasks:deny",
+        f"[yellow]Task denied:[/yellow] {task_id}",
+        {"task_id": task_id, "feedback": feedback, "user_name": user},
+    )
 
 
 @tasks_app.command("pause")
 def tasks_pause(task_id: str = typer.Argument(..., help="Task ID")):
     """Pause a running task."""
-    _task_mutation_command("tasks:pauseTask", f"[green]Task paused:[/green] {task_id}", {"task_id": task_id})
+    _task_mutation_command(
+        "tasks:pauseTask", f"[green]Task paused:[/green] {task_id}", {"task_id": task_id}
+    )
 
 
 @tasks_app.command("resume")
 def tasks_resume(task_id: str = typer.Argument(..., help="Task ID")):
     """Resume a paused task."""
-    _task_mutation_command("tasks:resumeTask", f"[green]Task resumed:[/green] {task_id}", {"task_id": task_id})
+    _task_mutation_command(
+        "tasks:resumeTask", f"[green]Task resumed:[/green] {task_id}", {"task_id": task_id}
+    )
 
 
 @tasks_app.command("update-title")
@@ -289,7 +307,11 @@ def tasks_update_title(
     title: str = typer.Argument(..., help="New title"),
 ):
     """Update the title of a task."""
-    _task_mutation_command("tasks:updateTitle", f"[green]Title updated:[/green] {task_id} → {title}", {"task_id": task_id, "title": title})
+    _task_mutation_command(
+        "tasks:updateTitle",
+        f"[green]Title updated:[/green] {task_id} → {title}",
+        {"task_id": task_id, "title": title},
+    )
 
 
 @tasks_app.command("update-description")
