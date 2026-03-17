@@ -207,21 +207,68 @@ class TestStepRepository:
 
     def test_update_step_status(self):
         client = _make_client_mock()
+        client.query.return_value = {
+            "id": "step-1",
+            "status": "assigned",
+            "state_version": 4,
+        }
         repo = StepRepository(client)
         repo.update_step_status("step-1", "running")
 
-        client.mutation.assert_called_once_with(
-            "steps:updateStatus",
-            {"step_id": "step-1", "status": "running"},
-        )
+        client.query.assert_called_once_with("steps:getById", {"step_id": "step-1"})
+        client.mutation.assert_called_once()
+        args = client.mutation.call_args[0][1]
+        assert client.mutation.call_args[0][0] == "steps:transition"
+        assert args["step_id"] == "step-1"
+        assert args["from_status"] == "assigned"
+        assert args["expected_state_version"] == 4
+        assert args["to_status"] == "running"
 
     def test_update_step_status_with_error(self):
         client = _make_client_mock()
+        client.query.return_value = {
+            "id": "step-1",
+            "status": "running",
+            "state_version": 6,
+        }
         repo = StepRepository(client)
         repo.update_step_status("step-1", "crashed", error_message="OOM")
 
         args = client.mutation.call_args[0][1]
         assert args["error_message"] == "OOM"
+
+    def test_transition_step_from_snapshot_uses_snapshot_status_and_version(self):
+        client = _make_client_mock()
+        repo = StepRepository(client)
+
+        repo.transition_step_from_snapshot(
+            {
+                "id": "step-1",
+                "status": "waiting_human",
+                "state_version": 9,
+            },
+            "running",
+            reason="User replied, resuming step",
+        )
+
+        args = client.mutation.call_args[0][1]
+        assert client.mutation.call_args[0][0] == "steps:transition"
+        assert args["step_id"] == "step-1"
+        assert args["from_status"] == "waiting_human"
+        assert args["expected_state_version"] == 9
+        assert args["to_status"] == "running"
+        assert args["reason"] == "User replied, resuming step"
+        assert args["idempotency_key"] == "py:step-1:v9:waiting_human:running"
+
+    def test_get_step(self):
+        client = _make_client_mock()
+        client.query.return_value = {"id": "step-1", "status": "assigned"}
+        repo = StepRepository(client)
+
+        result = repo.get_step("step-1")
+
+        assert result == {"id": "step-1", "status": "assigned"}
+        client.query.assert_called_once_with("steps:getById", {"step_id": "step-1"})
 
     def test_get_steps_by_task(self):
         client = _make_client_mock()
@@ -545,6 +592,7 @@ class TestStepRepositoryIdempotency:
     def test_update_step_status_propagates_same_status_error(self):
         """StepRepository re-raises same-status errors from Convex."""
         client = _make_client_mock()
+        client.query.return_value = {"id": "step-1", "status": "running", "state_version": 1}
         client.mutation.side_effect = Exception("Cannot transition running -> running")
         repo = StepRepository(client)
 
@@ -554,6 +602,7 @@ class TestStepRepositoryIdempotency:
     def test_update_step_status_propagates_genuine_error(self):
         """StepRepository re-raises unexpected Convex errors."""
         client = _make_client_mock()
+        client.query.return_value = {"id": "step-1", "status": "running", "state_version": 1}
         client.mutation.side_effect = RuntimeError("Network error")
         repo = StepRepository(client)
 

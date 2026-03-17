@@ -285,11 +285,11 @@ class InteractionService:
                     "steps:updateStatus",
                     {
                         "step_id": context.step_id,
-                        "status": "review",
+                        "status": "waiting_human",
                     },
                 )
             except Exception as exc:
-                if not _is_same_status_error(exc, "review"):
+                if not _is_same_status_error(exc, "waiting_human"):
                     raise
         return self.wait_for_answer(question_id=question_id, context=context)
 

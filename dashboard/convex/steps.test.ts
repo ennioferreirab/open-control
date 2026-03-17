@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import type { Id } from "./_generated/dataModel";
+
 import {
   acceptHumanStep,
   batchCreate,
+  create,
   deleteStep,
   findBlockedStepsReadyToUnblock,
   isValidStepTransition,
@@ -100,6 +103,54 @@ describe("resolveInitialStepStatus", () => {
   });
 });
 
+describe("create", () => {
+  function getHandler() {
+    return (
+      create as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+      }
+    )._handler;
+  }
+
+  it("initializes stateVersion when creating a step", async () => {
+    const handler = getHandler();
+    const inserts: Array<{ table: string; value: Record<string, unknown> }> = [];
+
+    const ctx = {
+      db: {
+        get: async (id: string) =>
+          id === "task-1"
+            ? {
+                _id: "task-1",
+                title: "Task",
+              }
+            : null,
+        insert: async (table: string, value: Record<string, unknown>) => {
+          inserts.push({ table, value });
+          return table === "steps" ? "step-1" : "activity-1";
+        },
+      },
+    };
+
+    await handler(ctx, {
+      taskId: "task-1",
+      title: "Draft outline",
+      description: "Capture the first pass",
+      assignedAgent: "nanobot",
+      parallelGroup: 1,
+      order: 1,
+    });
+
+    expect(inserts[0]).toMatchObject({
+      table: "steps",
+      value: {
+        status: "assigned",
+        stateVersion: 0,
+      },
+    });
+  });
+});
+
 describe("isValidStepTransition", () => {
   it("allows valid transitions", () => {
     expect(isValidStepTransition("planned", "assigned")).toBe(true);
@@ -139,14 +190,14 @@ describe("isValidStepTransition", () => {
 describe("resolveBlockedByIds", () => {
   it("maps blockedBy temp IDs to real step IDs", () => {
     const mapped = resolveBlockedByIds(["step_1", "step_2"], {
-      step_1: "real-1" as any,
-      step_2: "real-2" as any,
+      step_1: "real-1" as Id<"steps">,
+      step_2: "real-2" as Id<"steps">,
     });
     expect(mapped).toEqual(["real-1", "real-2"]);
   });
 
   it("throws when a dependency temp ID is unknown", () => {
-    expect(() => resolveBlockedByIds(["missing"], {} as any)).toThrow(
+    expect(() => resolveBlockedByIds(["missing"], {} as Record<string, Id<"steps">>)).toThrow(
       /Unknown blockedByTempId dependency/,
     );
   });
@@ -189,8 +240,8 @@ describe("acceptHumanStep", () => {
           return "activity-1";
         },
         // Query returns only the human step itself (no blocked dependents)
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [step],
           }),
         }),
@@ -308,6 +359,7 @@ describe("updateStatus", () => {
       _id: "task-1",
       title: "Agent task",
       status: "in_progress",
+      stateVersion: 2,
       executionPlan: {
         steps: [
           {
@@ -357,8 +409,8 @@ describe("updateStatus", () => {
           inserted.push({ table, value });
           return `${table}-1`;
         },
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [step, deletedHistoricalStep],
           }),
         }),
@@ -369,9 +421,11 @@ describe("updateStatus", () => {
 
     expect(patchedById["step-1"]).toMatchObject({
       status: "completed",
+      stateVersion: 1,
     });
     expect(patchedById["task-1"]).toMatchObject({
       status: "done",
+      stateVersion: 3,
     });
     expect(
       (patchedById["task-1"]?.executionPlan as { steps: Array<{ status: string }> }).steps[0],
@@ -444,8 +498,8 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [step],
           }),
         }),
@@ -477,8 +531,8 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [
               {
                 _id: "step-1",
@@ -550,8 +604,8 @@ describe("manualMoveStep", () => {
           inserted.push({ table, value });
           return `${table}-1`;
         },
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [step],
           }),
         }),
@@ -645,8 +699,8 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [step],
           }),
         }),
@@ -713,8 +767,8 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [step],
           }),
         }),
@@ -783,8 +837,8 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [step],
           }),
         }),
@@ -861,8 +915,8 @@ describe("manualMoveStep", () => {
           patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
         },
         insert: async () => "activity-1",
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [currentStep, deletedHistoricalStep],
           }),
         }),
@@ -891,7 +945,7 @@ describe("batchCreate", () => {
   it("creates steps and patches blockedBy dependencies atomically", async () => {
     const handler = getHandler();
 
-    const records = new Map<string, any>();
+    const records = new Map<string, Record<string, unknown>>();
     let stepCounter = 0;
 
     const ctx = {
@@ -944,7 +998,9 @@ describe("batchCreate", () => {
 
     expect(created).toEqual(["step-1", "step-2"]);
     expect(records.get("step-1").status).toBe("assigned");
+    expect(records.get("step-1").stateVersion).toBe(0);
     expect(records.get("step-2").status).toBe("blocked");
+    expect(records.get("step-2").stateVersion).toBe(0);
     expect(records.get("step-2").blockedBy).toEqual(["step-1"]);
   });
 
@@ -1166,8 +1222,8 @@ describe("deleteStep", () => {
           inserted.push({ table, value });
           return `${table}-1`;
         },
-        query: (_table: string) => ({
-          withIndex: (_idx: string, _fn: unknown) => ({
+        query: () => ({
+          withIndex: () => ({
             collect: async () => [runningStep, blockedSibling],
           }),
         }),

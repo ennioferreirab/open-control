@@ -51,7 +51,7 @@ def test_supervisor_marks_task_and_step_running_on_turn_started() -> None:
     )
 
 
-def test_supervisor_marks_task_review_and_step_review_when_paused() -> None:
+def test_supervisor_marks_task_review_and_step_waiting_human_when_paused() -> None:
     bridge = MagicMock()
     bridge.get_task.return_value = {"id": "task-1", "status": "in_progress", "state_version": 1}
     registry = MagicMock()
@@ -80,7 +80,7 @@ def test_supervisor_marks_task_review_and_step_review_when_paused() -> None:
     assert transition_call.kwargs["reason"] == "Need user confirmation before continuing."
     assert transition_call.kwargs["awaiting_kickoff"] is False
     assert transition_call.kwargs["review_phase"] == "execution_pause"
-    bridge.update_step_status.assert_called_once_with("step-1", "review")
+    bridge.update_step_status.assert_called_once_with("step-1", "waiting_human")
     bridge.create_activity.assert_called_once_with(
         ActivityEventType.REVIEW_REQUESTED,
         "Interactive session paused for review for @claude-pair.",
@@ -565,12 +565,12 @@ def test_supervisor_item_started_is_idempotent_when_step_already_running() -> No
     )
 
 
-def test_supervisor_paused_for_review_is_idempotent_when_task_and_step_already_review() -> None:
+def test_supervisor_paused_for_review_is_idempotent_when_task_and_step_already_waiting() -> None:
     """Repeated pause events must not fail when ask_user already moved workflow to review."""
     bridge = MagicMock()
 
     def _update_step_status(*args: object, **kwargs: object) -> None:
-        raise Exception("Cannot transition review -> review")
+        raise Exception("Cannot transition waiting_human -> waiting_human")
 
     bridge.update_step_status.side_effect = _update_step_status
     registry = MagicMock()

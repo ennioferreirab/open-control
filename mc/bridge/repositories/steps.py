@@ -12,6 +12,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _coerce_state_version(step_data: dict[str, Any]) -> int:
+    raw_value = step_data.get("state_version", step_data.get("stateVersion", 0))
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _default_transition_idempotency_key(
+    *,
+    step_id: str,
+    expected_state_version: int,
+    from_status: str,
+    to_status: str,
+) -> str:
+    return f"py:{step_id}:v{expected_state_version}:{from_status}:{to_status}"
+
+
 class StepRepository:
     """Data access methods for step entities in Convex."""
 
@@ -62,14 +80,88 @@ class StepRepository:
         status: str,
         error_message: str | None = None,
     ) -> Any:
-        """Update a step's lifecycle status via steps:updateStatus."""
-        args: dict[str, Any] = {"step_id": step_id, "status": status}
-        if error_message is not None:
-            args["error_message"] = error_message
-
-        result = self._client.mutation("steps:updateStatus", args)
+        """Update a step's lifecycle status via the canonical CAS transition path."""
+        step_data = self.get_step(step_id)
+        if not isinstance(step_data, dict):
+            logger.warning("[bridge] skipping step transition for missing step %s", step_id)
+            return None
+        result = self.transition_step_from_snapshot(
+            step_data,
+            status,
+            reason=f"Compatibility transition via update_step_status ({status})",
+            error_message=error_message,
+        )
         self._log_state_transition("step", f"Step {step_id} status changed to {status}")
         return result
+
+    def transition_step(
+        self,
+        step_id: str,
+        *,
+        from_status: str,
+        to_status: str,
+        expected_state_version: int,
+        reason: str,
+        idempotency_key: str,
+        error_message: str | None = None,
+    ) -> Any:
+        """Apply a canonical step transition through Convex."""
+        mutation_args: dict[str, Any] = {
+            "step_id": step_id,
+            "from_status": from_status,
+            "expected_state_version": expected_state_version,
+            "to_status": to_status,
+            "reason": reason,
+            "idempotency_key": idempotency_key,
+        }
+        if error_message is not None:
+            mutation_args["error_message"] = error_message
+        result = self._client.mutation("steps:transition", mutation_args)
+        logger.debug(
+            "[bridge] step transition %s -> %s for %s returned %s",
+            from_status,
+            to_status,
+            step_id,
+            result.get("kind") if isinstance(result, dict) else type(result).__name__,
+        )
+        return result
+
+    def transition_step_from_snapshot(
+        self,
+        step_data: dict[str, Any],
+        to_status: str,
+        *,
+        reason: str,
+        error_message: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Any:
+        """Transition a step using status/version from an in-memory snapshot."""
+        step_id = str(step_data.get("id") or step_data.get("_id") or "").strip()
+        if not step_id:
+            raise ValueError("Step snapshot is missing an id")
+        from_status = str(step_data.get("status") or "").strip()
+        if not from_status:
+            raise ValueError(f"Step snapshot {step_id} is missing a status")
+        expected_state_version = _coerce_state_version(step_data)
+        resolved_idempotency_key = idempotency_key or _default_transition_idempotency_key(
+            step_id=step_id,
+            expected_state_version=expected_state_version,
+            from_status=from_status,
+            to_status=to_status,
+        )
+        return self.transition_step(
+            step_id,
+            from_status=from_status,
+            to_status=to_status,
+            expected_state_version=expected_state_version,
+            reason=reason,
+            error_message=error_message,
+            idempotency_key=resolved_idempotency_key,
+        )
+
+    def get_step(self, step_id: str) -> dict[str, Any] | None:
+        """Fetch a single step by id."""
+        return self._client.query("steps:getById", {"step_id": step_id})
 
     def get_steps_by_task(self, task_id: str) -> list[dict[str, Any]]:
         """Fetch all steps for a task ordered by step.order."""

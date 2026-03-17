@@ -36,8 +36,8 @@ class IdempotentStatusBridge(FakeBridge):
     def mutation(self, function_name: str, args: dict[str, Any] | None = None) -> Any:
         if function_name == "tasks:updateStatus" and args and args.get("status") == "review":
             raise Exception("Cannot transition from 'review' to 'review'")
-        if function_name == "steps:updateStatus" and args and args.get("status") == "review":
-            raise Exception("Cannot transition review -> review")
+        if function_name == "steps:updateStatus" and args and args.get("status") == "waiting_human":
+            raise Exception("Cannot transition waiting_human -> waiting_human")
         if function_name == "tasks:updateStatus" and args and args.get("status") == "in_progress":
             raise Exception("Cannot transition from 'in_progress' to 'in_progress'")
         if function_name == "steps:updateStatus" and args and args.get("status") == "running":
@@ -105,10 +105,12 @@ def test_ask_user_creates_question_posts_message_and_waits(monkeypatch) -> None:
     assert bridge.mutations[2][1]["awaiting_kickoff"] is False
     assert bridge.mutations[2][1]["review_phase"] == "execution_pause"
     assert bridge.mutations[3][0] == "steps:updateStatus"
+    assert bridge.mutations[3][1]["status"] == "waiting_human"
     assert bridge.mutations[-2][0] == "tasks:updateStatus"
     assert bridge.mutations[-2][1]["awaiting_kickoff"] is False
     assert "review_phase" not in bridge.mutations[-2][1]
     assert bridge.mutations[-1][0] == "steps:updateStatus"
+    assert bridge.mutations[-1][1]["status"] == "running"
 
 
 def test_has_pending_question_queries_convex() -> None:

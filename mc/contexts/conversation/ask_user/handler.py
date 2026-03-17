@@ -109,7 +109,7 @@ class AskUserHandler:
                 review_phase="execution_pause",
             )
             if step_id is not None and _transition_succeeded(result):
-                await asyncio.to_thread(bridge.update_step_status, step_id, "review")
+                await asyncio.to_thread(bridge.update_step_status, step_id, "waiting_human")
             if _transition_succeeded(result):
                 await asyncio.to_thread(
                     bridge.create_activity,
@@ -162,7 +162,7 @@ class AskUserHandler:
         if not isinstance(steps, list):
             return None
 
-        for candidate_status in ("review", "running", "assigned"):
+        for candidate_status in ("waiting_human", "review", "running", "assigned"):
             for step in steps:
                 if step.get("status") != candidate_status:
                     continue

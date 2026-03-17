@@ -266,10 +266,13 @@ class InteractiveExecutionSupervisor:
                 return
         if event.step_id:
             try:
-                self._bridge.update_step_status(event.step_id, "review")
+                self._bridge.update_step_status(event.step_id, "waiting_human")
             except Exception as exc:
-                if _is_same_status_error(exc, "review"):
-                    logger.debug("Step %s already review — idempotent, skipping", event.step_id)
+                if _is_same_status_error(exc, "waiting_human"):
+                    logger.debug(
+                        "Step %s already waiting_human — idempotent, skipping",
+                        event.step_id,
+                    )
                 else:
                     raise
         if event.task_id and event.agent_name:

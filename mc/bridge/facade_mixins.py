@@ -119,6 +119,50 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._steps.update_step_status(step_id, status, error_message)
 
+    def transition_step(
+        self,
+        step_id: str,
+        *,
+        from_status: str,
+        to_status: str,
+        expected_state_version: int,
+        reason: str,
+        idempotency_key: str,
+        error_message: str | None = None,
+    ) -> Any:
+        self._ensure_repos()
+        return self._steps.transition_step(
+            step_id,
+            from_status=from_status,
+            to_status=to_status,
+            expected_state_version=expected_state_version,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            error_message=error_message,
+        )
+
+    def transition_step_from_snapshot(
+        self,
+        step_data: dict[str, Any],
+        to_status: str,
+        *,
+        reason: str,
+        error_message: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Any:
+        self._ensure_repos()
+        return self._steps.transition_step_from_snapshot(
+            step_data,
+            to_status,
+            reason=reason,
+            error_message=error_message,
+            idempotency_key=idempotency_key,
+        )
+
+    def get_step(self, step_id: str) -> dict[str, Any] | None:
+        self._ensure_repos()
+        return self._steps.get_step(step_id)
+
     def get_steps_by_task(self, task_id: str) -> list[dict[str, Any]]:
         self._ensure_repos()
         return self._steps.get_steps_by_task(task_id)

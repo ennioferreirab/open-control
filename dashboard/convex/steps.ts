@@ -8,13 +8,13 @@ import {
   type StepWithDependencies,
   type StepStatus,
   isValidStepStatus,
-  isValidStepTransition,
   resolveInitialStepStatus,
   findBlockedStepsReadyToUnblock,
   resolveBlockedByIds,
   validateBatchSteps,
-  logStepStatusChange,
 } from "./lib/stepLifecycle";
+import { applyStepTransition, getStepStateVersion } from "./lib/stepTransitions";
+import { applyTaskTransition, getTaskStateVersion } from "./lib/taskTransitions";
 import { workflowStepTypeValidator } from "./schema";
 import { logActivity } from "./lib/workflowHelpers";
 
@@ -96,6 +96,7 @@ async function reconcileParentTaskAfterStepChange(
     task: {
       _id: Id<"tasks">;
       status: string;
+      stateVersion?: number;
       title?: string;
       executionPlan?: unknown;
       isMergeTask?: boolean;
@@ -118,40 +119,17 @@ async function reconcileParentTaskAfterStepChange(
   const { task, step, nextStepStatus, currentTaskSteps, timestamp } = args;
   const syncedExecutionPlan = syncExecutionPlanStepStatus(task.executionPlan, step, nextStepStatus);
   const nextTaskStatus = deriveHumanParentTaskStatus(currentTaskSteps);
-  const taskPatch: Record<string, unknown> = {};
-
   if (syncedExecutionPlan !== task.executionPlan) {
-    taskPatch.executionPlan = syncedExecutionPlan;
+    await ctx.db.patch(step.taskId, {
+      executionPlan: syncedExecutionPlan,
+      updatedAt: timestamp,
+    });
   }
-  if (task.status !== nextTaskStatus) {
-    taskPatch.status = nextTaskStatus;
-  }
-
-  if (Object.keys(taskPatch).length === 0) {
-    return;
-  }
-
-  taskPatch.updatedAt = timestamp;
-  await ctx.db.patch(step.taskId, taskPatch);
 
   if (task.status === nextTaskStatus) {
     return;
   }
 
-  if (nextTaskStatus === "done") {
-    await cascadeMergedSourceTasksToDone(
-      ctx,
-      task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
-      timestamp,
-    );
-  }
-
-  const taskEventType =
-    nextTaskStatus === "done"
-      ? "task_completed"
-      : nextTaskStatus === "crashed"
-        ? "task_crashed"
-        : "task_started";
   const taskDescription =
     nextTaskStatus === "done"
       ? `All ${currentTaskSteps.filter((taskStep) => taskStep.status !== "deleted").length} steps completed`
@@ -159,12 +137,69 @@ async function reconcileParentTaskAfterStepChange(
         ? "One or more steps crashed"
         : "Step state changed; task returned to in_progress";
 
-  await logActivity(ctx, {
-    taskId: step.taskId,
-    eventType: taskEventType,
-    description: taskDescription,
+  const transitionStatuses: string[] = [];
+  let transitionStartStatus = task.status;
+
+  if (
+    transitionStartStatus === "done" &&
+    nextTaskStatus !== "assigned" &&
+    nextTaskStatus !== "review"
+  ) {
+    transitionStatuses.push("assigned");
+    transitionStartStatus = "assigned";
+  }
+  if (transitionStartStatus === "assigned" && nextTaskStatus !== "in_progress") {
+    transitionStatuses.push("in_progress");
+    transitionStartStatus = "in_progress";
+  }
+  if (transitionStartStatus !== nextTaskStatus) {
+    transitionStatuses.push(nextTaskStatus);
+  }
+
+  let currentTask = task as {
+    _id: Id<"tasks">;
+    status: string;
+    stateVersion?: number;
+  };
+  let finalTransitionApplied = false;
+
+  for (const [index, transitionStatus] of transitionStatuses.entries()) {
+    const isFinalTransition = index === transitionStatuses.length - 1;
+    const transitionResult = await applyTaskTransition(
+      ctx,
+      currentTask as Parameters<typeof applyTaskTransition>[1],
+      {
+        taskId: step.taskId,
+        fromStatus: currentTask.status,
+        expectedStateVersion: getTaskStateVersion(currentTask),
+        toStatus: transitionStatus,
+        reason: `Step ${String(step._id)} reconciled parent task to ${transitionStatus}`,
+        idempotencyKey: `step-reconcile:${String(step._id)}:${getTaskStateVersion(currentTask)}:${currentTask.status}:${transitionStatus}`,
+        activityDescription: isFinalTransition ? taskDescription : undefined,
+        suppressActivityLog: !isFinalTransition,
+      },
+    );
+
+    if (transitionResult.kind === "conflict") {
+      return;
+    }
+    currentTask = {
+      ...currentTask,
+      status: transitionStatus,
+      stateVersion: transitionResult.stateVersion,
+    };
+    finalTransitionApplied = isFinalTransition && transitionResult.kind === "applied";
+  }
+
+  if (!finalTransitionApplied || nextTaskStatus !== "done") {
+    return;
+  }
+
+  await cascadeMergedSourceTasksToDone(
+    ctx,
+    task as { _id: Id<"tasks">; isMergeTask?: boolean; mergeSourceTaskIds?: Id<"tasks">[] },
     timestamp,
-  });
+  );
 }
 
 // Re-export pure functions for testability and backward compatibility
@@ -186,6 +221,15 @@ export const getByTask = query({
       .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
       .collect();
     return steps.sort((a, b) => a.order - b.order);
+  },
+});
+
+export const getById = query({
+  args: {
+    stepId: v.id("steps"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.stepId);
   },
 });
 
@@ -226,6 +270,7 @@ export const create = internalMutation({
       description: args.description,
       assignedAgent: args.assignedAgent,
       status,
+      stateVersion: 0,
       blockedBy: dependencyIds.length > 0 ? dependencyIds : undefined,
       parallelGroup: args.parallelGroup,
       order: args.order,
@@ -289,6 +334,7 @@ export const batchCreate = internalMutation({
         description: step.description,
         assignedAgent: step.assignedAgent,
         status,
+        stateVersion: 0,
         parallelGroup: step.parallelGroup,
         order: step.order,
         createdAt: now,
@@ -336,49 +382,42 @@ export const updateStatus = internalMutation({
     if (!step) {
       // Step may have been soft-deleted while the agent was
       // still running. Treat late-arriving status updates as a no-op.
-      return;
+      return {
+        kind: "noop" as const,
+        stepId: args.stepId,
+        status: args.status,
+        stateVersion: 0,
+        reason: "already_applied" as const,
+      };
     }
     if (step.status === "deleted") {
-      return;
-    }
-
-    if (!isValidStepStatus(args.status)) {
-      throw new ConvexError(`Invalid step status: ${args.status}`);
-    }
-    if (step.status === args.status) {
-      return;
-    }
-    if (!isValidStepTransition(step.status, args.status)) {
-      throw new ConvexError(`Invalid step transition: ${step.status} -> ${args.status}`);
+      return {
+        kind: "noop" as const,
+        stepId: args.stepId,
+        status: step.status,
+        stateVersion: getStepStateVersion(step),
+        reason: "already_applied" as const,
+      };
     }
 
     const timestamp = new Date().toISOString();
-    const patch: Record<string, unknown> = {
-      status: args.status,
-    };
+    const transitionResult = await applyStepTransition(
+      ctx,
+      step as Parameters<typeof applyStepTransition>[1],
+      {
+        stepId: args.stepId,
+        fromStatus: step.status,
+        expectedStateVersion: getStepStateVersion(step),
+        toStatus: args.status,
+        errorMessage: args.errorMessage,
+        reason: `Compatibility transition via updateStatus (${args.status})`,
+        idempotencyKey: `compat:${String(args.stepId)}:${getStepStateVersion(step)}:${step.status}:${args.status}`,
+      },
+    );
 
-    if (args.status === "running" && !step.startedAt) {
-      patch.startedAt = timestamp;
+    if (transitionResult.kind !== "applied") {
+      return transitionResult;
     }
-    if (args.status === "completed") {
-      patch.completedAt = timestamp;
-    }
-    if (args.status === "crashed") {
-      patch.errorMessage = args.errorMessage;
-    } else {
-      patch.errorMessage = undefined;
-    }
-
-    await ctx.db.patch(args.stepId, patch);
-
-    await logStepStatusChange(ctx, {
-      taskId: step.taskId,
-      stepTitle: step.title,
-      previousStatus: step.status,
-      nextStatus: args.status,
-      assignedAgent: step.assignedAgent,
-      timestamp,
-    });
 
     const task = await ctx.db.get(step.taskId);
     if (!task) {
@@ -410,6 +449,27 @@ export const updateStatus = internalMutation({
       currentTaskSteps,
       timestamp,
     });
+
+    return transitionResult;
+  },
+});
+
+export const transition = internalMutation({
+  args: {
+    stepId: v.id("steps"),
+    fromStatus: v.string(),
+    expectedStateVersion: v.number(),
+    toStatus: v.string(),
+    errorMessage: v.optional(v.string()),
+    reason: v.string(),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const step = await ctx.db.get(args.stepId);
+    if (!step) {
+      throw new ConvexError("Step not found");
+    }
+    return await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], args);
   },
 });
 
@@ -427,21 +487,13 @@ export const acceptHumanStep = mutation({
     }
 
     const timestamp = new Date().toISOString();
-
-    // Transition to "running" — the human has accepted and is working on it.
-    // Dependents remain blocked until the step is manually completed.
-    await ctx.db.patch(args.stepId, {
-      status: "running",
-      startedAt: step.startedAt ?? timestamp,
-    });
-
-    await logStepStatusChange(ctx, {
-      taskId: step.taskId,
-      stepTitle: step.title,
-      previousStatus: step.status,
-      nextStatus: "running",
-      assignedAgent: step.assignedAgent,
-      timestamp,
+    await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
+      stepId: args.stepId,
+      fromStatus: step.status,
+      expectedStateVersion: getStepStateVersion(step),
+      toStatus: "running",
+      reason: "Human accepted step",
+      idempotencyKey: `accept:${String(args.stepId)}:${getStepStateVersion(step)}`,
     });
 
     await logActivity(ctx, {
@@ -483,23 +535,22 @@ export const manualMoveStep = mutation({
     }
 
     const timestamp = new Date().toISOString();
-    const patch: Record<string, unknown> = { status: args.newStatus };
+    const transitionResult = await applyStepTransition(
+      ctx,
+      step as Parameters<typeof applyStepTransition>[1],
+      {
+        stepId: args.stepId,
+        fromStatus: step.status,
+        expectedStateVersion: getStepStateVersion(step),
+        toStatus: args.newStatus,
+        reason: `Manual move to ${args.newStatus}`,
+        idempotencyKey: `manual:${String(args.stepId)}:${getStepStateVersion(step)}:${args.newStatus}`,
+      },
+    );
 
-    if (args.newStatus === "running") {
-      patch.startedAt = step.startedAt ?? timestamp;
-    } else if (args.newStatus === "assigned" || args.newStatus === "waiting_human") {
-      patch.startedAt = undefined;
+    if (transitionResult.kind !== "applied") {
+      return step.taskId;
     }
-    if (args.newStatus === "completed") {
-      patch.completedAt = timestamp;
-    } else {
-      patch.completedAt = undefined;
-    }
-    if (args.newStatus !== "crashed") {
-      patch.errorMessage = undefined;
-    }
-
-    await ctx.db.patch(args.stepId, patch);
 
     const task = await ctx.db.get(step.taskId);
     if (!task) {
@@ -517,15 +568,6 @@ export const manualMoveStep = mutation({
         updatedAt: timestamp,
       });
     }
-
-    await logStepStatusChange(ctx, {
-      taskId: step.taskId,
-      stepTitle: step.title,
-      previousStatus: step.status,
-      nextStatus: args.newStatus,
-      assignedAgent: step.assignedAgent,
-      timestamp,
-    });
 
     const allTaskSteps = await ctx.db
       .query("steps")
@@ -553,18 +595,13 @@ export const manualMoveStep = mutation({
         const blockedStep = stepsById.get(unblockedStepId);
         if (!blockedStep) continue;
 
-        await ctx.db.patch(unblockedStepId, {
-          status: "assigned",
-          errorMessage: undefined,
-        });
-
-        await logStepStatusChange(ctx, {
-          taskId: blockedStep.taskId,
-          stepTitle: blockedStep.title,
-          previousStatus: blockedStep.status,
-          nextStatus: "assigned",
-          assignedAgent: blockedStep.assignedAgent,
-          timestamp,
+        await applyStepTransition(ctx, blockedStep as Parameters<typeof applyStepTransition>[1], {
+          stepId: unblockedStepId,
+          fromStatus: blockedStep.status,
+          expectedStateVersion: getStepStateVersion(blockedStep),
+          toStatus: "assigned",
+          reason: "Dependencies resolved",
+          idempotencyKey: `unblock:${String(unblockedStepId)}:${getStepStateVersion(blockedStep)}`,
         });
 
         await ctx.db.insert("activities", {
@@ -608,21 +645,13 @@ export const retryStep = mutation({
     }
 
     const timestamp = new Date().toISOString();
-
-    await ctx.db.patch(args.stepId, {
-      status: "assigned",
-      errorMessage: undefined,
-      startedAt: undefined,
-      completedAt: undefined,
-    });
-
-    await logStepStatusChange(ctx, {
-      taskId: step.taskId,
-      stepTitle: step.title,
-      previousStatus: step.status,
-      nextStatus: "assigned",
-      assignedAgent: step.assignedAgent,
-      timestamp,
+    await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
+      stepId: args.stepId,
+      fromStatus: step.status,
+      expectedStateVersion: getStepStateVersion(step),
+      toStatus: "assigned",
+      reason: "Manual retry initiated",
+      idempotencyKey: `retry:${String(args.stepId)}:${getStepStateVersion(step)}`,
     });
 
     await ctx.db.patch(step.taskId, {
@@ -745,6 +774,7 @@ export const addStep = mutation({
       description: args.description,
       assignedAgent: args.assignedAgent,
       status,
+      stateVersion: 0,
       blockedBy: blockedByIds.length > 0 ? blockedByIds : undefined,
       parallelGroup,
       order,
@@ -928,19 +958,16 @@ export const deleteStep = mutation({
     }
 
     const timestamp = new Date().toISOString();
-
-    await ctx.db.patch(args.stepId, {
-      status: "deleted",
-      deletedAt: timestamp,
+    await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
+      stepId: args.stepId,
+      fromStatus: step.status,
+      expectedStateVersion: getStepStateVersion(step),
+      toStatus: "deleted",
+      reason: "Step deleted",
+      idempotencyKey: `delete:${String(args.stepId)}:${getStepStateVersion(step)}`,
     });
-
-    await logStepStatusChange(ctx, {
-      taskId: step.taskId,
-      stepTitle: step.title,
-      previousStatus: step.status,
-      nextStatus: "deleted",
-      assignedAgent: step.assignedAgent,
-      timestamp,
+    await ctx.db.patch(args.stepId, {
+      deletedAt: timestamp,
     });
   },
 });
@@ -977,18 +1004,13 @@ export const checkAndUnblockDependents = internalMutation({
         continue;
       }
 
-      await ctx.db.patch(stepId, {
-        status: "assigned",
-        errorMessage: undefined,
-      });
-
-      await logStepStatusChange(ctx, {
-        taskId: blockedStep.taskId,
-        stepTitle: blockedStep.title,
-        previousStatus: blockedStep.status,
-        nextStatus: "assigned",
-        assignedAgent: blockedStep.assignedAgent,
-        timestamp,
+      await applyStepTransition(ctx, blockedStep as Parameters<typeof applyStepTransition>[1], {
+        stepId,
+        fromStatus: blockedStep.status,
+        expectedStateVersion: getStepStateVersion(blockedStep),
+        toStatus: "assigned",
+        reason: "Dependencies resolved",
+        idempotencyKey: `unblock:${String(stepId)}:${getStepStateVersion(blockedStep)}`,
       });
 
       await logActivity(ctx, {

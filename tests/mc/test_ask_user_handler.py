@@ -87,7 +87,7 @@ async def test_ask_posts_question_and_waits() -> None:
     assert (
         bridge.transition_task_from_snapshot.call_args_list[0].kwargs["awaiting_kickoff"] is False
     )
-    assert bridge.update_step_status.call_args_list[0][0] == ("step-1", "review")
+    assert bridge.update_step_status.call_args_list[0][0] == ("step-1", "waiting_human")
     assert bridge.update_step_status.call_args_list[1][0] == ("step-1", "running")
     assert bridge.create_activity.call_args_list[0][0] == (
         "review_requested",
@@ -235,5 +235,5 @@ async def test_ask_posts_structured_questionnaire() -> None:
     assert "1. Ship" in sent_content
     assert "4. Other" in sent_content
     assert "Audience" in sent_content
-    assert bridge.update_step_status.call_args_list[0][0] == ("step-q", "review")
+    assert bridge.update_step_status.call_args_list[0][0] == ("step-q", "waiting_human")
     assert bridge.update_step_status.call_args_list[1][0] == ("step-q", "running")

@@ -188,6 +188,7 @@ export default defineSchema({
     blockedBy: v.optional(v.array(v.id("steps"))),
     parallelGroup: v.number(),
     order: v.number(),
+    stateVersion: v.number(),
     createdAt: v.string(),
     deletedAt: v.optional(v.string()),
     startedAt: v.optional(v.string()),
