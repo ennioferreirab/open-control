@@ -30,16 +30,26 @@ claude-code-backend = { path = "vendor/claude-code", editable = true }
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["vendor"]
+extend-exclude = ["vendor/nanobot"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "RUF"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["N803", "N806"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+exclude = ["vendor/nanobot", "**/__pycache__"]
+reportMissingImports = true
+reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -53,6 +63,7 @@ dev = [
     "pytest-asyncio>=1.3.0,<2.0.0",
     "pytest-timeout>=2.3.0,<3.0.0",
     "ruff>=0.1.0",
+    "pyright>=1.1.0",
 ]
 skills = [
     "google-api-python-client>=2.190.0",

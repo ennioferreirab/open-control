@@ -221,3 +221,15 @@ development_status:
   27-16-add-nanobot-interactive-mc-live-support: done
   27-17-validate-interactive-step-execution-parity-across-providers: done
   epic-27-retrospective: optional
+
+  # Epic 33: Code Conventions Alignment
+  # Aligns the entire codebase with the new unified code conventions
+  # documented in agent_docs/code_conventions/. Focuses on naming contracts,
+  # type safety, error handling consistency, and formatting baseline.
+  epic-33: in-progress
+  33-1-python-type-and-enum-alignment: ready-for-dev
+  33-2-convex-error-handling-and-validators: ready-for-dev
+  33-3-convex-boundary-and-event-alignment: ready-for-dev
+  33-4-typescript-import-and-naming-alignment: ready-for-dev
+  33-5-run-formatters-and-linters: ready-for-dev
+  epic-33-retrospective: optional
