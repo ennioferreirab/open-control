@@ -98,8 +98,8 @@ describe("isValidTransition", () => {
     expect(isValidTransition("review", "done")).toBe(true);
   });
 
-  it("allows review -> inbox", () => {
-    expect(isValidTransition("review", "inbox")).toBe(true);
+  it("rejects review -> inbox", () => {
+    expect(isValidTransition("review", "inbox")).toBe(false);
   });
 
   it("allows review -> in_progress", () => {

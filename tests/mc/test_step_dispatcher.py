@@ -464,6 +464,93 @@ class TestStepDispatcher:
         bridge.update_step_status.assert_any_call("step-write-1", StepStatus.ASSIGNED)
 
     @pytest.mark.asyncio
+    async def test_review_step_rejection_reruns_target_with_feedback_context(self) -> None:
+        bridge, state = _make_stateful_bridge(
+            [
+                _step(
+                    "step-write-1",
+                    "Rewrite draft",
+                    status=StepStatus.COMPLETED,
+                    order=1,
+                    assigned_agent="writer",
+                ),
+                _step(
+                    "step-review-1",
+                    "Review draft",
+                    order=2,
+                    assigned_agent="reviewer",
+                    workflow_step_type="review",
+                    review_spec_id="review-spec-1",
+                    on_reject_step_id="step-write-1",
+                ),
+            ]
+        )
+        dispatcher = StepDispatcher(bridge)
+        bridge.get_task_messages.side_effect = [
+            [],
+            [
+                {
+                    "step_id": "step-write-1",
+                    "type": "step_completion",
+                    "content": "Attempt 1 draft output",
+                },
+                {
+                    "author_name": "reviewer",
+                    "author_type": "agent",
+                    "message_type": "review_feedback",
+                    "content": "Rejected: fix alignment and strengthen CTA contrast.",
+                },
+            ],
+        ]
+
+        async def _build_step_context_with_feedback(self, task_id, step):
+            from mc.application.execution.context_builder import build_review_feedback_context
+
+            req = _make_step_execution_request(step)
+            feedback_context = build_review_feedback_context(
+                bridge.get_task_messages(task_id),
+                step["id"],
+            )
+            if feedback_context:
+                req.description += f"\n\n{feedback_context}"
+            return req
+
+        run_agent = AsyncMock(
+            side_effect=[
+                (
+                    '{"verdict":"rejected","issues":["Fix alignment"],'
+                    '"strengths":[],"scores":{"overall":0.41},'
+                    '"vetoesTriggered":["alignment"],'
+                    '"recommendedReturnStep":"step-write-1"}'
+                ),
+                "Revised draft output",
+            ]
+        )
+        snap_patch, collect_patch = _patch_executor_helpers()
+        with (
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.application.execution.context_builder.ContextBuilder.build_step_context",
+                new=_build_step_context_with_feedback,
+            ),
+            patch("mc.contexts.execution.step_dispatcher._run_step_agent", new=run_agent),
+            snap_patch,
+            collect_patch,
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-review-1"])
+
+        assert state["step-review-1"]["status"] == StepStatus.BLOCKED
+        assert state["step-write-1"]["status"] == StepStatus.COMPLETED
+        bridge.update_step_status.assert_any_call("step-write-1", StepStatus.ASSIGNED)
+        assert run_agent.await_count == 2
+        assert run_agent.await_args_list[0].kwargs["agent_name"] == "reviewer"
+        rerun_kwargs = run_agent.await_args_list[1].kwargs
+        assert rerun_kwargs["agent_name"] == "writer"
+        request = rerun_kwargs["request"]
+        assert "Attempt 1 draft output" in request.description
+        assert "Rejected: fix alignment and strengthen CTA contrast." in request.description
+
+    @pytest.mark.asyncio
     async def test_dispatch_parallel_group_runs_concurrently(self) -> None:
         bridge, state = _make_stateful_bridge(
             [

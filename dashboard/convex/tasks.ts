@@ -51,7 +51,6 @@ import {
   denyTaskReview,
   moveManualTask,
   retryTask,
-  returnTaskToLeadAgent,
 } from "./lib/taskReview";
 import { launchSquadMission } from "./lib/squadMissionLaunch";
 import { applyTaskTransition } from "./lib/taskTransitions";
@@ -630,21 +629,6 @@ export const deny = mutation({
   },
   handler: async (ctx, args) => {
     await denyTaskReview(ctx, args.taskId, args.feedback, args.userName);
-  },
-});
-
-/**
- * Return a denied task to the Lead Agent for re-routing.
- * Resets status to "inbox", clears assignedAgent, preserves full thread.
- */
-export const returnToLeadAgent = mutation({
-  args: {
-    taskId: v.id("tasks"),
-    feedback: v.string(),
-    userName: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    await returnTaskToLeadAgent(ctx, args.taskId, args.feedback, args.userName);
   },
 });
 

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from mc.infrastructure.runtime_context import RuntimeContext
+from mc.domain.workflow.review_result import ReviewResult
 from mc.runtime.workers.review import ReviewWorker
 from mc.types import (
     ActivityEventType,
@@ -27,6 +28,7 @@ async def _sync_to_thread(func, *args, **kwargs):
 def _make_bridge() -> MagicMock:
     bridge = MagicMock()
     bridge.update_task_status.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.create_activity.return_value = None
     bridge.send_message.return_value = None
     bridge.get_steps_by_task.return_value = []
@@ -142,6 +144,16 @@ class TestHandleReviewTransition:
             {"id": "step-2", "status": "completed"},
         ]
         worker = ReviewWorker(_make_ctx(bridge))
+        worker._run_reviewer_agent = AsyncMock(  # type: ignore[attr-defined]
+            return_value=ReviewResult(
+                verdict="approved",
+                issues=[],
+                strengths=["Looks good"],
+                scores={"overall": 0.98},
+                vetoes_triggered=[],
+                recommended_return_step=None,
+            )
+        )
 
         task = {
             "id": "task-1",
@@ -155,8 +167,9 @@ class TestHandleReviewTransition:
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
-        bridge.send_message.assert_called_once()
-        bridge.create_activity.assert_called_once()
+        worker._run_reviewer_agent.assert_awaited_once_with("task-1", task, "reviewer-bot")  # type: ignore[attr-defined]
+        assert bridge.send_message.call_count == 2
+        assert bridge.create_activity.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_manual_review_task_not_auto_completed(self) -> None:
@@ -182,6 +195,16 @@ class TestHandleReviewTransition:
     async def test_routes_to_reviewers(self) -> None:
         bridge = _make_bridge()
         worker = ReviewWorker(_make_ctx(bridge))
+        worker._run_reviewer_agent = AsyncMock(  # type: ignore[attr-defined]
+            return_value=ReviewResult(
+                verdict="approved",
+                issues=[],
+                strengths=["Looks good"],
+                scores={"overall": 0.98},
+                vetoes_triggered=[],
+                recommended_return_step=None,
+            )
+        )
 
         task = {
             "id": "task-1",
@@ -194,12 +217,85 @@ class TestHandleReviewTransition:
         with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
             await worker.handle_review_transition("task-1", task)
 
-        bridge.send_message.assert_called_once()
-        msg_args = bridge.send_message.call_args[0]
-        assert "reviewer-bot" in msg_args[3]
-        bridge.create_activity.assert_called_once()
-        act_args = bridge.create_activity.call_args[0]
-        assert act_args[0] == ActivityEventType.REVIEW_REQUESTED
+        worker._run_reviewer_agent.assert_awaited_once_with("task-1", task, "reviewer-bot")  # type: ignore[attr-defined]
+        review_requested = [
+            call for call in bridge.create_activity.call_args_list if call.args[0] == ActivityEventType.REVIEW_REQUESTED
+        ]
+        assert len(review_requested) == 1
+        assert any("reviewer-bot" in call.args[3] for call in bridge.send_message.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_reviewer_approval_executes_and_completes_task(self) -> None:
+        bridge = _make_bridge()
+        worker = ReviewWorker(_make_ctx(bridge))
+        worker._run_reviewer_agent = AsyncMock(  # type: ignore[attr-defined]
+            return_value=ReviewResult(
+                verdict="approved",
+                issues=[],
+                strengths=["Looks good"],
+                scores={"overall": 0.98},
+                vetoes_triggered=[],
+                recommended_return_step=None,
+            )
+        )
+
+        task = {
+            "id": "task-1",
+            "title": "Review Task",
+            "trust_level": TrustLevel.AUTONOMOUS,
+            "reviewers": ["reviewer-bot"],
+            "assigned_agent": "writer-bot",
+            "awaiting_kickoff": None,
+            "review_phase": ReviewPhase.FINAL_APPROVAL,
+        }
+
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
+            await worker.handle_review_transition("task-1", task)
+
+        worker._run_reviewer_agent.assert_awaited_once_with("task-1", task, "reviewer-bot")  # type: ignore[attr-defined]
+        bridge.update_task_status.assert_called_once_with("task-1", TaskStatus.DONE, "reviewer-bot")
+
+    @pytest.mark.asyncio
+    async def test_reviewer_rejection_posts_feedback_and_reassigns_executor(self) -> None:
+        bridge = _make_bridge()
+        worker = ReviewWorker(_make_ctx(bridge))
+        worker._run_reviewer_agent = AsyncMock(  # type: ignore[attr-defined]
+            return_value=ReviewResult(
+                verdict="rejected",
+                issues=["Fix alignment"],
+                strengths=[],
+                scores={"overall": 0.41},
+                vetoes_triggered=["alignment"],
+                recommended_return_step=None,
+            )
+        )
+
+        task = {
+            "id": "task-1",
+            "title": "Review Task",
+            "trust_level": TrustLevel.AUTONOMOUS,
+            "reviewers": ["reviewer-bot"],
+            "assigned_agent": "writer-bot",
+            "awaiting_kickoff": None,
+            "review_phase": ReviewPhase.FINAL_APPROVAL,
+            "state_version": 4,
+            "status": TaskStatus.REVIEW,
+        }
+
+        with patch("mc.runtime.workers.review.asyncio.to_thread", new=_sync_to_thread):
+            await worker.handle_review_transition("task-1", task)
+
+        worker._run_reviewer_agent.assert_awaited_once_with("task-1", task, "reviewer-bot")  # type: ignore[attr-defined]
+        bridge.transition_task_from_snapshot.assert_called_once()
+        transition_args = bridge.transition_task_from_snapshot.call_args
+        assert transition_args.args[0] == task
+        assert transition_args.args[1] == TaskStatus.ASSIGNED
+        assert transition_args.kwargs["agent_name"] == "writer-bot"
+        assert any(
+            call.args[4] == MessageType.REVIEW_FEEDBACK and "Fix alignment" in call.args[3]
+            for call in bridge.send_message.call_args_list
+        )
+        bridge.update_task_status.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_human_approved_no_reviewers_requests_hitl(self) -> None:

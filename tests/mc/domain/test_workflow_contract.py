@@ -148,8 +148,8 @@ class TestIsValidTaskTransition:
     def test_review_to_done_valid(self) -> None:
         assert is_valid_task_transition("review", "done") is True
 
-    def test_review_to_inbox_valid(self) -> None:
-        assert is_valid_task_transition("review", "inbox") is True
+    def test_review_to_inbox_invalid(self) -> None:
+        assert is_valid_task_transition("review", "inbox") is False
 
     def test_review_to_in_progress_valid(self) -> None:
         assert is_valid_task_transition("review", "in_progress") is True
@@ -493,7 +493,7 @@ class TestParityWithConvex:
             "inbox": ["assigned", "in_progress"],
             "assigned": ["in_progress", "assigned"],
             "in_progress": ["review", "done", "assigned"],
-            "review": ["done", "inbox", "assigned", "in_progress"],
+            "review": ["done", "assigned", "in_progress"],
             "done": ["assigned"],
             "retrying": ["in_progress", "crashed"],
             "crashed": ["inbox", "assigned"],

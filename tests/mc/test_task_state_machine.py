@@ -25,9 +25,9 @@ class TestReviewTransitions:
         """HITL approval: review -> done must be valid."""
         assert is_valid_transition(TaskStatus.REVIEW, TaskStatus.DONE) is True
 
-    def test_review_to_inbox_is_valid(self) -> None:
-        """Return to lead agent: review -> inbox must be valid."""
-        assert is_valid_transition(TaskStatus.REVIEW, TaskStatus.INBOX) is True
+    def test_review_to_inbox_is_invalid(self) -> None:
+        """Review tasks should not route back to inbox directly."""
+        assert is_valid_transition(TaskStatus.REVIEW, TaskStatus.INBOX) is False
 
 
 # Import UNIVERSAL_TARGETS for reachability check
