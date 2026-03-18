@@ -251,7 +251,11 @@ class ClaudeCodeCLIParser:
                     kind="error",
                     text=result_text or subtype,
                     provider_session_id=self._discovered_session_id,
-                    metadata={"subtype": subtype, "source_type": "result", "source_subtype": "error"},
+                    metadata={
+                        "subtype": subtype,
+                        "source_type": "result",
+                        "source_subtype": "error",
+                    },
                 )
             ]
 

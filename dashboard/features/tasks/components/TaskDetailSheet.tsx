@@ -669,6 +669,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       <ProviderLiveChatPanel
                         sessionId={providerSession.sessionId}
                         events={providerSession.events}
+                        groupedTimeline={providerSession.groupedTimeline}
                         status={providerSession.status}
                         agentName={providerSession.agentName ?? liveSession.session.agentName}
                         provider={providerSession.provider ?? liveSession.session.provider}
