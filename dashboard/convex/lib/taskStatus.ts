@@ -6,6 +6,55 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { applyRequiredTaskTransition } from "./taskTransitions";
 import { logActivity } from "./workflowHelpers";
 
+async function resumeFromDone(
+  ctx: Pick<MutationCtx, "db">,
+  taskId: Id<"tasks">,
+  task: Doc<"tasks">,
+  executionPlan: unknown,
+): Promise<Id<"tasks">> {
+  // Transition to assigned so the Python TaskExecutor picks it up and
+  // dispatches the steps via StepDispatcher.
+  await applyRequiredTaskTransition(ctx, task, {
+    taskId,
+    fromStatus: "done",
+    toStatus: "assigned",
+    reason: "User resumed task from done",
+    idempotencyKey: `task:${String(taskId)}:${task.stateVersion ?? 0}:resume-from-done`,
+    suppressActivityLog: true,
+  });
+
+  // Promote planned steps to assigned so the dispatcher can pick them up
+  const allSteps = await ctx.db
+    .query("steps")
+    .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+    .collect();
+  for (const step of allSteps) {
+    if (step.status === "planned") {
+      await ctx.db.patch(step._id, {
+        status: "assigned",
+      });
+    }
+  }
+
+  const patch: Record<string, unknown> = {};
+  if (executionPlan !== undefined) {
+    patch.executionPlan = executionPlan;
+  }
+  if (Object.keys(patch).length > 0) {
+    patch.updatedAt = new Date().toISOString();
+    await ctx.db.patch(taskId, patch);
+  }
+
+  await logActivity(ctx, {
+    taskId,
+    eventType: "task_started",
+    description: "User resumed task execution from done",
+    timestamp: new Date().toISOString(),
+  });
+
+  return taskId;
+}
+
 export async function pauseTaskExecution(
   ctx: Pick<MutationCtx, "db">,
   taskId: Id<"tasks">,
@@ -41,8 +90,12 @@ export async function resumeTaskExecution(
   task: Doc<"tasks">,
   executionPlan: unknown,
 ): Promise<Id<"tasks">> {
+  if (task.status === "done") {
+    return await resumeFromDone(ctx, taskId, task, executionPlan);
+  }
+
   if (task.status !== "review") {
-    throw new ConvexError(`Cannot resume task in status '${task.status}'. Expected: review`);
+    throw new ConvexError(`Cannot resume task in status '${task.status}'. Expected: review or done`);
   }
   if (task.awaitingKickoff === true) {
     throw new ConvexError(

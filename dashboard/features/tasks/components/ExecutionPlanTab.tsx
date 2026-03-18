@@ -804,7 +804,7 @@ export function ExecutionPlanTab({
     if (!canAddOrEdit) {
       return (
         <p className="text-sm text-muted-foreground text-center py-8">
-          Direct execution &mdash; no multi-step plan
+          No execution steps
         </p>
       );
     }

@@ -99,6 +99,23 @@ describe("computeUiFlags", () => {
     const flags = computeUiFlags({ status: "done" }, []);
     expect(flags.isPlanEditable).toBe(false);
   });
+
+  it("hasUnexecutedSteps is true when steps with non-completed/non-deleted status exist", () => {
+    const steps: StepForFlags[] = [{ status: "completed" }, { status: "assigned" }];
+    const flags = computeUiFlags({ status: "done" }, steps);
+    expect(flags.hasUnexecutedSteps).toBe(true);
+  });
+
+  it("hasUnexecutedSteps is false when all steps are completed or deleted", () => {
+    const steps: StepForFlags[] = [{ status: "completed" }, { status: "deleted" }];
+    const flags = computeUiFlags({ status: "done" }, steps);
+    expect(flags.hasUnexecutedSteps).toBe(false);
+  });
+
+  it("hasUnexecutedSteps is false when there are no steps", () => {
+    const flags = computeUiFlags({ status: "done" }, []);
+    expect(flags.hasUnexecutedSteps).toBe(false);
+  });
 });
 
 // --- computeAllowedActions ---
@@ -223,6 +240,20 @@ describe("computeAllowedActions", () => {
 
   it("sendMessage is false when task is merge-locked into task C", () => {
     expect(getActions("done", { mergedIntoTaskId: "task-c" }).sendMessage).toBe(false);
+  });
+
+  it("resume is true when done with unexecuted steps", () => {
+    const steps: StepForFlags[] = [{ status: "completed" }, { status: "planned" }];
+    expect(getActions("done", {}, steps).resume).toBe(true);
+  });
+
+  it("resume is false when done with all steps completed", () => {
+    const steps: StepForFlags[] = [{ status: "completed" }];
+    expect(getActions("done", {}, steps).resume).toBe(false);
+  });
+
+  it("resume is false when done with no steps", () => {
+    expect(getActions("done").resume).toBe(false);
   });
 });
 

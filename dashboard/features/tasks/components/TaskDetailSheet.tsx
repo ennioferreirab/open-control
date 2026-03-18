@@ -99,6 +99,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     executionProvenance,
     taskStatus,
     isWorkflowTask,
+    hasUnexecutedSteps,
     pendingExecutionQuestion,
   } = view;
 
@@ -514,6 +515,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               taskStatus={taskStatus}
               isAwaitingKickoff={isAwaitingKickoff}
               isPaused={isPaused}
+              hasUnexecutedSteps={hasUnexecutedSteps}
               canApprove={canApprove}
               executionProvenance={executionProvenance}
               isMergeLockedSource={isMergeLockedSource}
@@ -591,7 +593,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
             >
               <TabsList className="mx-6 mt-4">
                 <TabsTrigger value="thread">Thread</TabsTrigger>
-                {isWorkflowTask && <TabsTrigger value="plan">Execution Plan</TabsTrigger>}
+                <TabsTrigger value="plan">Execution Plan</TabsTrigger>
                 {liveSession.session && <TabsTrigger value="live">Live</TabsTrigger>}
                 <TabsTrigger value="config">Config</TabsTrigger>
                 <TabsTrigger value="files">
@@ -618,41 +620,39 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 onFilterStepIdsChange={setFilterStepIds}
               />
 
-              {isWorkflowTask && (
-                <TabsContent
-                  value="plan"
-                  className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
-                >
-                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4">
-                    <div
-                      data-testid="plan-canvas-shell"
-                      className="w-full self-center lg:max-w-5xl xl:max-w-[60rem]"
-                    >
-                      <ExecutionPlanTab
-                        executionPlan={planForDisplay}
-                        liveSteps={liveSteps ?? undefined}
-                        isEditMode={task!.status === "review"}
-                        isPaused={isPaused}
-                        taskId={task!._id}
-                        taskStatus={taskStatus}
-                        boardId={task?.boardId}
-                        onLocalPlanChange={setLocalPlan}
-                        mergeAlias={mergeAlias}
-                        viewMode={planViewMode}
-                        onViewModeChange={setPlanViewMode}
-                        onClearPlan={canClearPlan ? handleClearPlan : undefined}
-                        isClearingPlan={isClearingPlan}
-                        onOpenParentTask={(stepId) => {
-                          setFilterStepIds(new Set([stepId]));
-                          setActiveTab("thread");
-                        }}
-                        onOpenLive={liveSession.liveStepIds.length > 0 ? handleOpenLive : undefined}
-                        liveStepIds={liveSession.liveStepIds}
-                      />
-                    </div>
+              <TabsContent
+                value="plan"
+                className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
+              >
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4">
+                  <div
+                    data-testid="plan-canvas-shell"
+                    className="w-full self-center lg:max-w-5xl xl:max-w-[60rem]"
+                  >
+                    <ExecutionPlanTab
+                      executionPlan={planForDisplay}
+                      liveSteps={liveSteps ?? undefined}
+                      isEditMode={task!.status === "review"}
+                      isPaused={isPaused}
+                      taskId={task!._id}
+                      taskStatus={taskStatus}
+                      boardId={task?.boardId}
+                      onLocalPlanChange={setLocalPlan}
+                      mergeAlias={mergeAlias}
+                      viewMode={planViewMode}
+                      onViewModeChange={setPlanViewMode}
+                      onClearPlan={canClearPlan ? handleClearPlan : undefined}
+                      isClearingPlan={isClearingPlan}
+                      onOpenParentTask={(stepId) => {
+                        setFilterStepIds(new Set([stepId]));
+                        setActiveTab("thread");
+                      }}
+                      onOpenLive={liveSession.liveStepIds.length > 0 ? handleOpenLive : undefined}
+                      liveStepIds={liveSession.liveStepIds}
+                    />
                   </div>
-                </TabsContent>
-              )}
+                </div>
+              </TabsContent>
 
               {task && liveSession.session && (
                 <TabsContent

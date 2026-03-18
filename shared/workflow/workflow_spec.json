@@ -22,7 +22,7 @@
     "assigned": ["in_progress", "assigned"],
     "in_progress": ["review", "done", "assigned"],
     "review": ["done", "assigned", "in_progress"],
-    "done": ["assigned"],
+    "done": ["assigned", "in_progress"],
     "retrying": ["in_progress", "crashed"],
     "crashed": ["inbox", "assigned"]
   },
@@ -47,7 +47,8 @@
     "retrying->crashed": "task_crashed",
     "crashed->inbox": "task_retrying",
     "crashed->assigned": "thread_message_sent",
-    "done->assigned": "thread_message_sent"
+    "done->assigned": "thread_message_sent",
+    "done->in_progress": "task_started"
   },
 
   "taskUniversalTargetEvents": {
@@ -82,7 +83,7 @@
   "stepTransitions": {
     "planned": ["assigned", "blocked"],
     "assigned": ["running", "review", "completed", "crashed", "blocked", "waiting_human"],
-    "running": ["review", "completed", "crashed"],
+    "running": ["assigned", "review", "completed", "crashed"],
     "review": ["running", "completed", "crashed"],
     "completed": [],
     "crashed": ["assigned"],
@@ -101,6 +102,7 @@
     "review->running": "step_started",
     "running->completed": "step_completed",
     "review->completed": "step_completed",
+    "running->assigned": "step_dispatched",
     "running->crashed": "system_error",
     "review->crashed": "system_error",
     "assigned->crashed": "system_error",

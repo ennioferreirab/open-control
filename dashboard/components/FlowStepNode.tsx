@@ -203,7 +203,6 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
   const normalizedStatus = normalizeStatus(resolvedStatus);
   const isWaitingHuman = normalizedStatus === "waiting_human";
   const isRunningHuman = normalizedStatus === "running" && step.assignedAgent === "human";
-  const isCrashed = normalizedStatus === "crashed";
   const agentDisplay = isVisualOnly || step.assignedAgent === "human" ? null : step.assignedAgent;
 
   // Buttons visible class: always for leaf, on group-hover for non-leaf
@@ -317,7 +316,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
           </div>
         )}
 
-        {isCrashed && !isEditMode && onRetry && (
+        {(normalizedStatus === "crashed" || normalizedStatus === "running" || normalizedStatus === "assigned") && !isEditMode && onRetry && (
           <div className="mt-1.5">
             <button
               type="button"

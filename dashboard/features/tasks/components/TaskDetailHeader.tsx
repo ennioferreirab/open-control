@@ -33,6 +33,7 @@ interface TaskDetailHeaderProps {
   taskStatus: string | undefined;
   isAwaitingKickoff: boolean;
   isPaused: boolean;
+  hasUnexecutedSteps: boolean;
   canApprove: boolean;
   executionProvenance: ExecutionProvenance | undefined;
   isMergeLockedSource: boolean;
@@ -108,6 +109,7 @@ export function TaskDetailHeader({
   taskStatus,
   isAwaitingKickoff,
   isPaused,
+  hasUnexecutedSteps,
   canApprove,
   executionProvenance,
   isMergeLockedSource,
@@ -350,6 +352,28 @@ export function TaskDetailHeader({
                 </Button>
               </>
             )}
+            {!isPaused && taskStatus === "done" && hasUnexecutedSteps && !manualPlanPrimaryAction && (
+              <Button
+                variant="default"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
+                onClick={() => void onResume()}
+                disabled={isResuming}
+                data-testid="resume-done-button"
+              >
+                {isResuming ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    Resuming...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3.5 w-3.5 mr-1" />
+                    Resume
+                  </>
+                )}
+              </Button>
+            )}
             {isAwaitingKickoff && (
               <Badge
                 variant="outline"
@@ -467,7 +491,7 @@ export function TaskDetailHeader({
                   Agent: {executionProvenance.agentDisplayName ?? executionProvenance.agentName}
                 </button>
               )}
-              {executionProvenance.squadId && executionProvenance.squadDisplayName && (
+              {executionProvenance?.squadId && executionProvenance.squadDisplayName && (
                 <button
                   type="button"
                   className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -476,7 +500,7 @@ export function TaskDetailHeader({
                   Squad: {executionProvenance.squadDisplayName}
                 </button>
               )}
-              {executionProvenance.squadId &&
+              {executionProvenance?.squadId &&
                 executionProvenance.workflowId &&
                 executionProvenance.workflowName && (
                   <button

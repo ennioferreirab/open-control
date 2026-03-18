@@ -63,6 +63,7 @@ type TaskDetailReadModel = {
     isPaused: boolean;
     isManual: boolean;
     isPlanEditable: boolean;
+    hasUnexecutedSteps: boolean;
   };
   allowedActions: {
     approve: boolean;
@@ -103,6 +104,7 @@ export interface TaskDetailViewData {
   canApprove: boolean;
   executionProvenance: ExecutionProvenance | undefined;
   isWorkflowTask: boolean;
+  hasUnexecutedSteps: boolean;
 }
 
 interface TaskDetailViewOptions {
@@ -191,5 +193,6 @@ export function useTaskDetailView(
     canApprove: detailView?.allowedActions.approve ?? false,
     executionProvenance: detailView?.executionProvenance,
     isWorkflowTask: detailView?.isWorkflowTask ?? false,
+    hasUnexecutedSteps: detailView?.uiFlags.hasUnexecutedSteps ?? false,
   };
 }

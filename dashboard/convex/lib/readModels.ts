@@ -26,6 +26,7 @@ export type UiFlags = {
   isPaused: boolean;
   isManual: boolean;
   isPlanEditable: boolean;
+  hasUnexecutedSteps: boolean;
 };
 
 /** Allowed actions computed from task state. */
@@ -91,12 +92,16 @@ export function computeUiFlags(task: TaskForFlags, steps: StepForFlags[]): UiFla
       reviewPhase === undefined &&
       !isAwaitingKickoff &&
       hasNonCompletedSteps);
+  const hasUnexecutedSteps = steps.some(
+    (s) => s.status !== "completed" && s.status !== "deleted",
+  );
 
   return {
     isAwaitingKickoff,
     isPaused,
     isManual: task.isManual === true,
     isPlanEditable: PLAN_EDITABLE_STATUSES.has(task.status),
+    hasUnexecutedSteps,
   };
 }
 
@@ -124,10 +129,11 @@ export function computeAllowedActions(task: TaskForFlags, uiFlags: UiFlags): All
     kickoff: status === "ready" || canKickOffFromReview,
     pause: status === "in_progress",
     resume:
-      status === "review" &&
-      uiFlags.isPaused &&
-      !uiFlags.isAwaitingKickoff &&
-      (reviewPhase === "execution_pause" || reviewPhase === undefined),
+      (status === "review" &&
+        uiFlags.isPaused &&
+        !uiFlags.isAwaitingKickoff &&
+        (reviewPhase === "execution_pause" || reviewPhase === undefined)) ||
+      (status === "done" && uiFlags.hasUnexecutedSteps),
     retry: status === "crashed" || status === "failed",
     savePlan: uiFlags.isPlanEditable,
     startInbox: status === "inbox",

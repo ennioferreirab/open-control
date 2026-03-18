@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { incrementAgentStepMetric, type AgentMetricDb } from "./agents";
@@ -525,8 +525,12 @@ export const retryStep = mutation({
     if (!step) {
       throw new ConvexError("Step not found");
     }
-    if (step.status !== "crashed") {
-      throw new ConvexError(`Step is not in crashed status (current: ${step.status})`);
+
+    const retryableStatuses = ["crashed", "running", "assigned"];
+    if (!retryableStatuses.includes(step.status)) {
+      throw new ConvexError(
+        `Step cannot be retried from status '${step.status}'. Expected: ${retryableStatuses.join(", ")}`,
+      );
     }
 
     const task = await ctx.db.get(step.taskId);
@@ -535,42 +539,25 @@ export const retryStep = mutation({
     }
 
     const timestamp = new Date().toISOString();
-    await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
-      stepId: args.stepId,
-      fromStatus: step.status,
-      expectedStateVersion: getStepStateVersion(step),
-      toStatus: "assigned",
-      reason: "Manual retry initiated",
-      idempotencyKey: `retry:${String(args.stepId)}:${getStepStateVersion(step)}`,
-    });
 
-    const retryingResult = await applyTaskTransition(
-      ctx,
-      task as Parameters<typeof applyTaskTransition>[1],
-      {
-        taskId: step.taskId,
-        fromStatus: task.status,
-        expectedStateVersion: getTaskStateVersion(task),
-        toStatus: "retrying",
-        reason: `Retrying step ${String(args.stepId)}`,
-        idempotencyKey: `retry-task:${String(step.taskId)}:${getTaskStateVersion(task)}:${task.status}:retrying`,
-        suppressActivityLog: true,
-      },
-    );
+    // For crashed tasks: use the original retrying → in_progress dance
+    if (step.status === "crashed" && task.status === "crashed") {
+      return await _retryCrashedStep(ctx, args.stepId, step, task, timestamp);
+    }
 
-    const retryingTaskSnapshot = {
-      ...task,
-      status: "retrying",
-      stateVersion:
-        retryingResult.kind === "conflict"
-          ? getTaskStateVersion(task)
-          : retryingResult.stateVersion,
-    };
-
-    await ctx.db.patch(step.taskId, {
-      stalledAt: undefined,
-      updatedAt: timestamp,
-    });
+    // For running/assigned steps on an active task: reset step and move task
+    // to assigned so the TaskExecutor re-dispatches via StepDispatcher.
+    if (step.status === "running" || step.status === "crashed") {
+      await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
+        stepId: args.stepId,
+        fromStatus: step.status,
+        expectedStateVersion: getStepStateVersion(step),
+        toStatus: "assigned",
+        reason: "Manual retry initiated",
+        idempotencyKey: `retry:${String(args.stepId)}:${getStepStateVersion(step)}`,
+      });
+    }
+    // assigned steps: already in the right status, no step transition needed
 
     await ctx.db.insert("activities", {
       taskId: step.taskId,
@@ -590,19 +577,23 @@ export const retryStep = mutation({
       timestamp,
     });
 
-    await applyTaskTransition(
-      ctx,
-      retryingTaskSnapshot as Parameters<typeof applyTaskTransition>[1],
-      {
-        taskId: step.taskId,
-        fromStatus: retryingTaskSnapshot.status,
-        expectedStateVersion: getTaskStateVersion(retryingTaskSnapshot),
-        toStatus: "in_progress",
-        reason: `Retry resumed for step ${String(args.stepId)}`,
-        idempotencyKey: `retry-task:${String(step.taskId)}:${getTaskStateVersion(retryingTaskSnapshot)}:${retryingTaskSnapshot.status}:in_progress`,
-        suppressActivityLog: true,
-      },
-    );
+    // Move task to assigned so Python TaskExecutor picks it up and
+    // dispatches all assigned steps via StepDispatcher.
+    if (task.status === "in_progress") {
+      await applyTaskTransition(
+        ctx,
+        task as Parameters<typeof applyTaskTransition>[1],
+        {
+          taskId: step.taskId,
+          fromStatus: task.status,
+          expectedStateVersion: getTaskStateVersion(task),
+          toStatus: "assigned",
+          reason: `Retry requested for step ${String(args.stepId)}`,
+          idempotencyKey: `retry-task:${String(step.taskId)}:${getTaskStateVersion(task)}:assigned`,
+          suppressActivityLog: true,
+        },
+      );
+    }
 
     await ctx.db.patch(step.taskId, {
       stalledAt: undefined,
@@ -612,6 +603,91 @@ export const retryStep = mutation({
     return step.taskId;
   },
 });
+
+/** Original retry path for crashed steps on crashed tasks. */
+async function _retryCrashedStep(
+  ctx: MutationCtx,
+  stepId: Id<"steps">,
+  step: Doc<"steps">,
+  task: Doc<"tasks">,
+  timestamp: string,
+): Promise<Id<"tasks">> {
+  await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
+    stepId,
+    fromStatus: step.status,
+    expectedStateVersion: getStepStateVersion(step),
+    toStatus: "assigned",
+    reason: "Manual retry initiated",
+    idempotencyKey: `retry:${String(stepId)}:${getStepStateVersion(step)}`,
+  });
+
+  const retryingResult = await applyTaskTransition(
+    ctx,
+    task as Parameters<typeof applyTaskTransition>[1],
+    {
+      taskId: step.taskId,
+      fromStatus: task.status,
+      expectedStateVersion: getTaskStateVersion(task),
+      toStatus: "retrying",
+      reason: `Retrying step ${String(stepId)}`,
+      idempotencyKey: `retry-task:${String(step.taskId)}:${getTaskStateVersion(task)}:${task.status}:retrying`,
+      suppressActivityLog: true,
+    },
+  );
+
+  const retryingTaskSnapshot = {
+    ...task,
+    status: "retrying",
+    stateVersion:
+      retryingResult.kind === "conflict"
+        ? getTaskStateVersion(task)
+        : retryingResult.stateVersion,
+  };
+
+  await ctx.db.patch(step.taskId, {
+    stalledAt: undefined,
+    updatedAt: timestamp,
+  });
+
+  await ctx.db.insert("activities", {
+    taskId: step.taskId,
+    agentName: step.assignedAgent,
+    eventType: "step_retrying",
+    description: `Manual retry initiated for step: "${step.title}"`,
+    timestamp,
+  });
+
+  await ctx.db.insert("messages", {
+    taskId: step.taskId,
+    stepId,
+    authorName: "System",
+    authorType: "system",
+    content: `Manual retry initiated for step "${step.title}".`,
+    messageType: "system_event",
+    timestamp,
+  });
+
+  await applyTaskTransition(
+    ctx,
+    retryingTaskSnapshot as Parameters<typeof applyTaskTransition>[1],
+    {
+      taskId: step.taskId,
+      fromStatus: retryingTaskSnapshot.status,
+      expectedStateVersion: getTaskStateVersion(retryingTaskSnapshot),
+      toStatus: "in_progress",
+      reason: `Retry resumed for step ${String(stepId)}`,
+      idempotencyKey: `retry-task:${String(step.taskId)}:${getTaskStateVersion(retryingTaskSnapshot)}:${retryingTaskSnapshot.status}:in_progress`,
+      suppressActivityLog: true,
+    },
+  );
+
+  await ctx.db.patch(step.taskId, {
+    stalledAt: undefined,
+    updatedAt: timestamp,
+  });
+
+  return step.taskId;
+}
 
 export const addStep = mutation({
   args: {

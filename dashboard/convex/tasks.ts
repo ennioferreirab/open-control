@@ -474,9 +474,9 @@ export const pauseTask = mutation({
 });
 
 /**
- * Resume a paused task (review WITHOUT awaitingKickoff).
- * Transitions from review to in_progress so the orchestrator can continue
- * dispatching pending/unblocked steps.
+ * Resume a paused or done task.
+ * For paused tasks: transitions from review to in_progress.
+ * For done tasks: transitions from done to in_progress and promotes planned steps.
  * Must NOT be used for pre-kickoff tasks (those have awaitingKickoff: true).
  */
 export const resumeTask = mutation({
