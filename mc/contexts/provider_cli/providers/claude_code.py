@@ -207,6 +207,38 @@ class ClaudeCodeCLIParser:
                         },
                     )
                 )
+        elif subtype in ("hook_started", "hook_response"):
+            hook_name = data.get("hook_name", subtype)
+            summary = f"{hook_name}"
+            events.append(
+                ParsedCliEvent(
+                    kind="system_event",
+                    text=summary,
+                    provider_session_id=self._discovered_session_id,
+                    metadata={
+                        "subtype": subtype,
+                        "source_type": "system",
+                        "source_subtype": subtype,
+                        "hook_name": hook_name,
+                        "raw_json": json.dumps(data),
+                    },
+                )
+            )
+        else:
+            # Other system subtypes (e.g. future ones) — emit as system event
+            summary = subtype or "system"
+            events.append(
+                ParsedCliEvent(
+                    kind="system_event",
+                    text=summary,
+                    provider_session_id=self._discovered_session_id,
+                    metadata={
+                        "subtype": subtype,
+                        "source_type": "system",
+                        "source_subtype": subtype,
+                    },
+                )
+            )
 
         return events
 

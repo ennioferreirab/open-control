@@ -78,6 +78,7 @@ const SYSTEM_KINDS = new Set([
   "session_stopped",
   "turn_started",
   "turn_updated",
+  "system_event",
 ]);
 
 const TOOL_KINDS = new Set(["tool_use"]);

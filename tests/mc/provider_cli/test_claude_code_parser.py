@@ -210,18 +210,24 @@ def test_parse_output_buffers_partial_json_without_newline() -> None:
     assert events == [], "Partial line without newline should be buffered"
 
 
-def test_parse_output_ignores_hook_response_system_events() -> None:
+def test_parse_output_emits_hook_response_as_system_event() -> None:
     parser = ClaudeCodeCLIParser()
     line = json.dumps(
         {
             "type": "system",
             "subtype": "hook_response",
+            "hook_name": "SessionStart:startup",
             "hook_event": "SessionStart",
             "output": '{"hookSpecificOutput": {"additionalContext": "huge"}}',
         }
     )
     events = parser.parse_output(_jsonl(line))
-    assert events == []
+    assert len(events) == 1
+    assert events[0].kind == "system_event"
+    assert "SessionStart:startup" in (events[0].text or "")
+    meta = events[0].metadata or {}
+    assert meta["source_type"] == "system"
+    assert meta["source_subtype"] == "hook_response"
 
 
 def test_parse_output_ignores_user_tool_result_messages() -> None:
