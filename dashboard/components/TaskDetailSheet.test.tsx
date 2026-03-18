@@ -2447,3 +2447,261 @@ describe("ThreadMessage", () => {
     expect(screen.getByText("Step: Extract invoice data")).toBeInTheDocument();
   });
 });
+
+describe("TaskDetailSheet — Live session selector", () => {
+  afterEach(() => {
+    cleanup();
+    mockUseQuery.mockReset();
+    mockMutationFn.mockClear();
+    mockDocumentViewerModal.mockReset();
+  });
+
+  function buildDetailViewWithSteps(
+    task: Doc<"tasks">,
+    steps: Doc<"steps">[] = [],
+  ) {
+    return {
+      task,
+      board: null,
+      messages: [],
+      steps,
+      files: [],
+      mergedIntoTask: null,
+      directMergeSources: [],
+      mergeSources: [],
+      mergeSourceThreads: [],
+      mergeSourceFiles: [],
+      tags: task.tags ?? [],
+      tagCatalog: [],
+      tagAttributes: [],
+      tagAttributeValues: [],
+      isWorkflowTask: false,
+      uiFlags: {
+        isAwaitingKickoff: false,
+        isPaused: false,
+        isManual: false,
+        isPlanEditable: false,
+      },
+      allowedActions: {
+        approve: false,
+        kickoff: false,
+        pause: false,
+        resume: false,
+        retry: false,
+        savePlan: false,
+        startInbox: false,
+        sendMessage: true,
+      },
+    };
+  }
+
+  function makeInteractiveSession(overrides: Partial<Doc<"interactiveSessions">> = {}) {
+    return {
+      _id: "session-1" as never,
+      _creationTime: 1,
+      sessionId: "interactive_session:s1",
+      agentName: "agent-alpha",
+      provider: "claude-code",
+      scopeKind: "task" as const,
+      scopeId: "task1",
+      surface: "step" as const,
+      tmuxSession: "mc-int-1",
+      status: "detached" as const,
+      capabilities: ["tui"] as ["tui"],
+      createdAt: "2026-03-13T09:00:00.000Z",
+      updatedAt: "2026-03-13T09:10:00.000Z",
+      taskId: "task1" as never,
+      stepId: "step1" as never,
+      supervisionState: "running" as const,
+      ...overrides,
+    } as Doc<"interactiveSessions">;
+  }
+
+  it("renders Live tab with session selector when multiple step sessions exist", async () => {
+    const user = userEvent.setup();
+
+    const task: Doc<"tasks"> = {
+      ...baseTask,
+      status: "in_progress" as const,
+      assignedAgent: "agent-alpha",
+    };
+    const step1: Doc<"steps"> = {
+      _id: "step1" as never,
+      _creationTime: 1,
+      taskId: "task1" as never,
+      title: "Research step",
+      description: "Do research",
+      assignedAgent: "agent-alpha",
+      status: "running" as const,
+      parallelGroup: 1,
+      order: 1,
+      createdAt: "2026-03-13T09:00:00.000Z",
+      startedAt: "2026-03-13T09:02:00.000Z",
+    };
+    const step2: Doc<"steps"> = {
+      _id: "step2" as never,
+      _creationTime: 2,
+      taskId: "task1" as never,
+      title: "Writing step",
+      description: "Write content",
+      assignedAgent: "agent-alpha",
+      status: "completed" as const,
+      parallelGroup: 1,
+      order: 2,
+      createdAt: "2026-03-13T09:05:00.000Z",
+      startedAt: "2026-03-13T09:06:00.000Z",
+      completedAt: "2026-03-13T09:10:00.000Z",
+    };
+
+    const sessions = [
+      makeInteractiveSession({
+        _id: "session-1" as never,
+        sessionId: "s1",
+        stepId: "step1" as never,
+        status: "detached",
+      }),
+      makeInteractiveSession({
+        _id: "session-2" as never,
+        sessionId: "s2",
+        stepId: "step2" as never,
+        status: "ended",
+      }),
+    ];
+
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return buildDetailViewWithSteps(task, [step1, step2]);
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "name" in (args as Record<string, unknown>)
+      ) {
+        return {
+          _id: "agent-doc",
+          _creationTime: 1,
+          name: "agent-alpha",
+          displayName: "Agent Alpha",
+          role: "Engineer",
+          prompt: "",
+          soul: "",
+          skills: [],
+          status: "active",
+          model: "cc/claude-sonnet-4-6",
+          interactiveProvider: "claude-code",
+        };
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        Object.keys(args as Record<string, unknown>).length === 0
+      ) {
+        return sessions;
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "sessionId" in (args as Record<string, unknown>)
+      ) {
+        return [];
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: "Live" }));
+
+    expect(screen.getByLabelText("Session:")).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+  });
+
+  it("does not render session selector when only one live session exists", async () => {
+    const user = userEvent.setup();
+
+    const task: Doc<"tasks"> = {
+      ...baseTask,
+      status: "in_progress" as const,
+      assignedAgent: "agent-alpha",
+    };
+    const step1: Doc<"steps"> = {
+      _id: "step1" as never,
+      _creationTime: 1,
+      taskId: "task1" as never,
+      title: "Single step",
+      description: "Only step",
+      assignedAgent: "agent-alpha",
+      status: "running" as const,
+      parallelGroup: 1,
+      order: 1,
+      createdAt: "2026-03-13T09:00:00.000Z",
+      startedAt: "2026-03-13T09:02:00.000Z",
+    };
+
+    const sessions = [
+      makeInteractiveSession({
+        _id: "session-1" as never,
+        sessionId: "s1",
+        stepId: "step1" as never,
+        status: "detached",
+      }),
+    ];
+
+    mockUseQuery.mockImplementation((_queryRef: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "taskId" in (args as Record<string, unknown>)
+      ) {
+        return buildDetailViewWithSteps(task, [step1]);
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "name" in (args as Record<string, unknown>)
+      ) {
+        return {
+          _id: "agent-doc",
+          _creationTime: 1,
+          name: "agent-alpha",
+          displayName: "Agent Alpha",
+          role: "Engineer",
+          prompt: "",
+          soul: "",
+          skills: [],
+          status: "active",
+          model: "cc/claude-sonnet-4-6",
+          interactiveProvider: "claude-code",
+        };
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        Object.keys(args as Record<string, unknown>).length === 0
+      ) {
+        return sessions;
+      }
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "sessionId" in (args as Record<string, unknown>)
+      ) {
+        return [];
+      }
+      return [];
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    await user.click(screen.getByRole("tab", { name: "Live" }));
+
+    expect(screen.queryByLabelText("Session:")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+});
