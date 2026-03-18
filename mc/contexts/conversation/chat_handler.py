@@ -492,7 +492,7 @@ class ChatHandler:
             NanobotRunnerStrategy,
         )
 
-        nanobot_strategy = NanobotRunnerStrategy()
+        nanobot_strategy = NanobotRunnerStrategy(bridge=self._bridge)
 
         engine = ExecutionEngine(
             strategies={RunnerType.NANOBOT: nanobot_strategy},

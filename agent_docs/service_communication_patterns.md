@@ -572,7 +572,7 @@ claude -p "<prompt>" --output-format stream-json --verbose
 
 ### Provider-to-Live Canonical Translation
 
-When the provider CLI strategy persists activity events to `sessionActivityLog`, it enriches the payload with canonical Live metadata from the parser's `ParsedCliEvent.metadata`:
+All runner strategies write to `sessionActivityLog` via `SessionActivityService` (`mc/contexts/interactive/activity_service.py`). This service is the **single point** for Live tab persistence — both nanobot and provider-cli runners use it.
 
 | Python metadata key | Convex field | Description |
 |---------------------|-------------|-------------|
@@ -582,11 +582,22 @@ When the provider CLI strategy persists activity events to `sessionActivityLog`,
 | `event.text` | `rawText` | Original text content from the parsed event |
 | `metadata.tool_input` | `rawJson` | Raw JSON payload (tool input or structured data) |
 
+The service provides four write methods, each targeting a different event source:
+
+| Method | Used by | Purpose |
+|--------|---------|---------|
+| `upsert_session()` | All runners | Create/update session in `interactiveSessions` |
+| `append_event()` | Nanobot `on_progress` callback | Generic event (text, tool_use) |
+| `append_result()` | All runners | Result event after execution |
+| `append_parsed_cli_event()` | Provider-CLI | Translates `ParsedCliEvent` into unified format |
+
 The frontend normalizer in `providerLiveEvents.ts` prefers canonical `sourceType` for classification when present, falling back to the existing heuristic path for legacy rows without canonical metadata.
 
 ### 4.4 Nanobot Runner — In-Process
 
-The agent loop runs **in-process** as an async coroutine (`AgentLoop.process_direct_result()`). However, when the model calls MC tools, the `AgentLoop` spawns a child `mc.runtime.mcp.bridge` subprocess via MCP stdio transport. This child process uses `InteractionService` (direct Convex HTTP) rather than a Unix socket — `MC_SOCKET_PATH` is **not set** for the nanobot MCP bridge; only `TASK_ID`, `AGENT_NAME`, `CONVEX_URL`, and `CONVEX_ADMIN_KEY` are injected.
+The agent loop runs **in-process** as an async coroutine (`AgentLoop.process_direct_result()`). The nanobot `AgentLoop` has a built-in `on_progress(text, *, tool_hint=False)` callback that `NanobotRunnerStrategy` wires to `SessionActivityService.append_event()` for real-time Live tab events. Session lifecycle (ready/ended/error) and result events also go through the service.
+
+When the model calls MC tools, the `AgentLoop` spawns a child `mc.runtime.mcp.bridge` subprocess via MCP stdio transport. This child process uses `InteractionService` (direct Convex HTTP) rather than a Unix socket — `MC_SOCKET_PATH` is **not set** for the nanobot MCP bridge; only `TASK_ID`, `AGENT_NAME`, `CONVEX_URL`, and `CONVEX_ADMIN_KEY` are injected.
 
 ### 4.5 Environment Variable Injection
 

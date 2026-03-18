@@ -237,6 +237,44 @@ The Gateway spawns agent processes and monitors their lifecycle:
 | `InteractiveTuiRunnerStrategy` | tmux terminal | PTY attachment (legacy) |
 | `HumanRunnerStrategy` | Human | No process — waits for user action |
 
+All strategies that produce live events use `SessionActivityService` for writing to Convex — see Live Reporting below.
+
+### Live Reporting (`SessionActivityService`)
+
+All runner strategies use `SessionActivityService` (`mc/contexts/interactive/activity_service.py`) as the unified layer for communicating with the dashboard Live tab. This service writes to two Convex tables:
+
+| Table | Mutation | Purpose |
+|-------|----------|---------|
+| `interactiveSessions` | `upsert` | Session lifecycle (ready → ended/error) |
+| `sessionActivityLog` | `append` | Streaming events (text, tool_use, result, error) |
+
+```text
+┌─────────────────────┐  ┌──────────────┐  ┌──────────────┐
+│  ProviderCliRunner   │  │ NanobotRunner│  │  Future CLI  │
+└────────┬────────────┘  └──────┬───────┘  └──────┬───────┘
+         │                      │                  │
+         ▼                      ▼                  ▼
+    ┌─────────────────────────────────────────────────┐
+    │         SessionActivityService                   │
+    │  upsert_session()        — session lifecycle     │
+    │  append_event()          — streaming events      │
+    │  append_result()         — execution result      │
+    │  append_parsed_cli_event() — CLI parser events   │
+    └────────────────────┬────────────────────────────┘
+                         │
+                         ▼
+                    bridge.mutation()
+```
+
+**Key behaviors:**
+- No-ops when `bridge=None` (testing/fallback)
+- Swallows bridge exceptions with `logger.debug` (non-fatal)
+- Applies `safe_string_for_convex()` overflow protection on `raw_text` and `raw_json`
+- Accepts `ts` override for CLI parser events (preserves parser timestamp)
+- Provider-specific fields pass through `**extra` kwargs
+
+**Adding a new runner:** instantiate `SessionActivityService(bridge)` and call its methods. No payload-building duplication needed.
+
 ### IPC Socket
 
 The Gateway exposes a **Unix socket** for subprocess communication:

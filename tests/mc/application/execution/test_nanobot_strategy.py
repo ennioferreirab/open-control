@@ -67,7 +67,7 @@ class TestNanobotStrategyErrorPropagation:
         fake_loop_obj = object()
         error_result = _make_fake_loop_result("Sorry, I encountered an error.", is_error=True)
 
-        async def fake_run_agent_loop(request):
+        async def fake_run_agent_loop(request, mc_session_id):
             return (error_result, "session_key_err", fake_loop_obj)
 
         monkeypatch.setattr(nanobot_mod, "_PROVIDER_ERRORS", ())
@@ -91,7 +91,7 @@ class TestNanobotStrategyErrorPropagation:
 
         error_result = _make_fake_loop_result("Error content", is_error=True)
 
-        async def fake_run_agent_loop(request):
+        async def fake_run_agent_loop(request, mc_session_id):
             return (error_result, "session_key_err", object())
 
         monkeypatch.setattr(nanobot_mod, "_PROVIDER_ERRORS", ())
@@ -116,7 +116,7 @@ class TestNanobotStrategyErrorPropagation:
 
         success_result = _make_fake_loop_result("Task completed successfully.", is_error=False)
 
-        async def fake_run_agent_loop(request):
+        async def fake_run_agent_loop(request, mc_session_id):
             return (success_result, "session_key_ok", FakeLoop())
 
         monkeypatch.setattr(nanobot_mod, "_PROVIDER_ERRORS", ())
@@ -153,7 +153,7 @@ class TestCodexAskUserSchemaRegression:
             error_message="400: ask_user parameter 'questions[].options' oneOf not supported",
         )
 
-        async def fake_run_agent_loop(request):
+        async def fake_run_agent_loop(request, mc_session_id):
             return (schema_fail_result, "session_key_codex", object())
 
         monkeypatch.setattr(nanobot_mod, "_PROVIDER_ERRORS", ())
@@ -183,7 +183,7 @@ class TestCodexAskUserSchemaRegression:
             memory_workspace = Path("/tmp/fake_memory")
 
         # Old-style: some callers may return a plain string
-        async def fake_run_agent_loop(request):
+        async def fake_run_agent_loop(request, mc_session_id):
             return ("Plain string result.", "session_key_str", FakeLoop())
 
         monkeypatch.setattr(nanobot_mod, "_PROVIDER_ERRORS", ())

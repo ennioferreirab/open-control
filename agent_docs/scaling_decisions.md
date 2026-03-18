@@ -22,7 +22,7 @@ Architectural decisions that work for the current scale but may need revisiting 
 | File | Lines | Role |
 |------|-------|------|
 | `mc/bridge/overflow.py` | all | `safe_string_for_convex()` — truncation + file backup utility |
-| `mc/application/execution/strategies/provider_cli.py` | `_append_activity_log`, `_resolve_overflow_dir` | Applies overflow protection to rawText and rawJson before Convex insert |
+| `mc/contexts/interactive/activity_service.py` | `append_event`, `_resolve_overflow_dir` | Centralized overflow protection for all runner strategies (nanobot + provider-cli) |
 | `mc/contexts/provider_cli/providers/claude_code.py` | `_truncate_large_values` | Per-key truncation of large dict values before JSON serialization |
 | `dashboard/convex/sessionActivityLog.ts` | `append` handler | rawText and rawJson stored without truncation (overflow handled upstream in Python) |
 | `dashboard/features/interactive/components/ProviderLiveEventRow.tsx` | `hasTruncationMarker`, truncated badge | Visual "Truncated" badge when content contains overflow marker |

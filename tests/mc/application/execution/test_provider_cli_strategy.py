@@ -1713,10 +1713,11 @@ async def test_strategy_fails_when_startup_session_persistence_to_convex_fails()
 
     result = await strategy.execute(_make_request())
 
-    assert result.success is False
-    assert result.error_message == "RuntimeError: Convex startup persistence failed"
-    parser.stop.assert_awaited_once_with(handle)
-    assert registry.get(handle.mc_session_id) is None
+    # Session persistence failures are now non-fatal (swallowed by
+    # SessionActivityService).  Execution should succeed despite the
+    # bridge error — the agent work was completed.
+    assert result.success is True
+    assert result.output == "Done"
 
 
 @pytest.mark.asyncio

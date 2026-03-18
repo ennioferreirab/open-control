@@ -412,7 +412,7 @@ def build_execution_engine(
 
     return ExecutionEngine(
         strategies={
-            RunnerType.NANOBOT: NanobotRunnerStrategy(),
+            RunnerType.NANOBOT: NanobotRunnerStrategy(bridge=bridge),
             RunnerType.CLAUDE_CODE: ClaudeCodeRunnerStrategy(
                 bridge=bridge,
                 cron_service=cron_service,
