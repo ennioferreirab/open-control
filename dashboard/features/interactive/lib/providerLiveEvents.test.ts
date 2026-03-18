@@ -188,6 +188,88 @@ describe("buildProviderLiveEvent", () => {
   });
 });
 
+describe("canonical metadata support (Story 2.1)", () => {
+  it("classifies by sourceType when present, bypassing heuristic path", () => {
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "assistant" }),
+    ).toBe("text");
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "result" }),
+    ).toBe("result");
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "system" }),
+    ).toBe("system");
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "tool_use" }),
+    ).toBe("tool");
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "error" }),
+    ).toBe("error");
+  });
+
+  it("classifies tool_use sourceType with skill toolName as skill", () => {
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: "dispatch_agent", sourceType: "tool_use" }),
+    ).toBe("skill");
+  });
+
+  it("falls through to heuristic when sourceType is not recognized", () => {
+    expect(
+      classifyProviderEventCategory({ kind: "turn_completed", toolName: undefined, sourceType: "unknown_future" }),
+    ).toBe("result");
+  });
+
+  it("falls through to heuristic when sourceType is undefined", () => {
+    expect(
+      classifyProviderEventCategory({ kind: "error", toolName: undefined, sourceType: undefined }),
+    ).toBe("error");
+  });
+
+  it("propagates canonical fields through buildProviderLiveEvent", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-canonical",
+      kind: "tool_use",
+      ts: "2026-03-18T10:00:00.000Z",
+      toolName: "Read",
+      sourceType: "tool_use",
+      sourceSubtype: "Read",
+      groupKey: "turn-abc",
+      rawText: "Read /src/index.ts",
+      rawJson: '{"path":"/src/index.ts"}',
+    });
+
+    expect(event.sourceType).toBe("tool_use");
+    expect(event.sourceSubtype).toBe("Read");
+    expect(event.groupKey).toBe("turn-abc");
+    expect(event.rawText).toBe("Read /src/index.ts");
+    expect(event.rawJson).toBe('{"path":"/src/index.ts"}');
+  });
+
+  it("prefers rawText over summary for body when both present", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-raw",
+      kind: "text",
+      ts: "2026-03-18T10:00:00.000Z",
+      summary: "legacy summary",
+      rawText: "canonical raw text",
+      sourceType: "assistant",
+    });
+
+    expect(event.body).toBe("canonical raw text");
+  });
+
+  it("falls back to summary when rawText is not present (legacy row)", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-legacy",
+      kind: "text",
+      ts: "2026-03-18T10:00:00.000Z",
+      summary: "legacy summary",
+    });
+
+    expect(event.body).toBe("legacy summary");
+  });
+});
+
 describe("buildProviderLiveEvents", () => {
   it("maps multiple raw entries into structured events", () => {
     const events = buildProviderLiveEvents([

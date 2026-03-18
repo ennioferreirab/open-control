@@ -25,6 +25,12 @@ export type ProviderLiveEvent = {
   toolInput?: string;
   filePath?: string;
   requiresAction: boolean;
+  // Canonical Live metadata (Story 2.1)
+  sourceType?: string;
+  sourceSubtype?: string;
+  groupKey?: string;
+  rawText?: string;
+  rawJson?: string;
 };
 
 type RawEntry = {
@@ -37,6 +43,12 @@ type RawEntry = {
   toolInput?: string;
   filePath?: string;
   requiresAction?: boolean;
+  // Canonical Live metadata (Story 2.1)
+  sourceType?: string;
+  sourceSubtype?: string;
+  groupKey?: string;
+  rawText?: string;
+  rawJson?: string;
 };
 
 /**
@@ -141,10 +153,24 @@ function shouldIgnoreProviderEntry(raw: RawEntry): boolean {
  * Pure function — no side effects.
  */
 export function classifyProviderEventCategory(
-  entry: Pick<RawEntry, "kind" | "toolName">,
+  entry: Pick<RawEntry, "kind" | "toolName" | "sourceType">,
 ): ProviderLiveCategory {
-  const { kind, toolName } = entry;
+  const { kind, toolName, sourceType } = entry;
 
+  // Canonical path: prefer sourceType when present (Story 2.1)
+  if (sourceType) {
+    if (sourceType === "tool_use") {
+      if (toolName && SKILL_TOOL_NAMES.has(toolName)) return "skill";
+      return "tool";
+    }
+    if (sourceType === "assistant") return "text";
+    if (sourceType === "result") return "result";
+    if (sourceType === "system") return "system";
+    if (sourceType === "error") return "error";
+    // Fall through to heuristic for unknown sourceType values
+  }
+
+  // Heuristic path: legacy rows without canonical metadata
   if (TOOL_KINDS.has(kind)) {
     if (toolName && SKILL_TOOL_NAMES.has(toolName)) return "skill";
     return "tool";
@@ -184,7 +210,8 @@ function getProviderEventBody(
     return normalizeText(raw.summary ?? raw.error ?? title);
   }
 
-  const primary = normalizeText(raw.summary ?? raw.error);
+  // Prefer rawText when canonical metadata is available (Story 2.1)
+  const primary = normalizeText(raw.rawText ?? raw.summary ?? raw.error);
   if (primary) {
     return primary;
   }
@@ -231,6 +258,11 @@ export function buildProviderLiveEvent(raw: RawEntry): ProviderLiveEvent {
     toolInput: raw.toolInput,
     filePath: raw.filePath,
     requiresAction: raw.requiresAction ?? false,
+    sourceType: raw.sourceType,
+    sourceSubtype: raw.sourceSubtype,
+    groupKey: raw.groupKey,
+    rawText: raw.rawText,
+    rawJson: raw.rawJson,
   };
 }
 
