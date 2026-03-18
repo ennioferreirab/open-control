@@ -4,8 +4,8 @@ import { v } from "convex/values";
 const TOOL_INPUT_MAX = 2000;
 const SUMMARY_MAX = 1000;
 const ERROR_MAX = 2000;
-const RAW_TEXT_MAX = 4000;
-// No truncation for rawJson — store complete JSON to preserve validity.
+// summary and error are UI preview fields — truncation is OK.
+// rawText, rawJson are canonical full-content fields — no truncation,
 // Convex strings support up to 1MB; typical events are 1-15KB.
 
 export const append = internalMutation({
@@ -59,7 +59,7 @@ export const append = internalMutation({
       sourceType: args.sourceType,
       sourceSubtype: args.sourceSubtype,
       groupKey: args.groupKey,
-      rawText: args.rawText !== undefined ? args.rawText.slice(0, RAW_TEXT_MAX) : undefined,
+      rawText: args.rawText,
       rawJson: args.rawJson,
     });
   },

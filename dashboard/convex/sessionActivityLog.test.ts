@@ -218,10 +218,10 @@ describe("sessionActivityLog.append", () => {
     });
   });
 
-  it("truncates rawText to 4000 chars", async () => {
+  it("stores rawText without truncation to preserve full content", async () => {
     const handler = getAppendHandler();
     const { ctx, inserts } = makeAppendCtx(null);
-    const longRawText = "r".repeat(5000);
+    const longRawText = "r".repeat(50000);
 
     await handler(ctx, {
       sessionId: "session-abc",
@@ -230,7 +230,7 @@ describe("sessionActivityLog.append", () => {
       rawText: longRawText,
     });
 
-    expect((inserts[0].value.rawText as string).length).toBe(4000);
+    expect((inserts[0].value.rawText as string).length).toBe(50000);
   });
 
   it("stores rawJson without truncation to preserve valid JSON", async () => {

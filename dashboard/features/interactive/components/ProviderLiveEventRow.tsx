@@ -35,8 +35,13 @@ function getCategoryClasses(category: ProviderLiveEvent["category"]): string {
   }
 }
 
+function hasTruncationMarker(text: string): boolean {
+  return text.includes("[truncated,") || text.includes("[truncated]");
+}
+
 export function ProviderLiveEventRow({ event }: { event: ProviderLiveEvent }) {
   const isError = event.category === "error";
+  const isTruncated = hasTruncationMarker(event.body ?? "") || hasTruncationMarker(event.rawJson ?? "");
   const timeLabel = event.timestamp
     ? new Date(event.timestamp).toLocaleTimeString([], {
         hour: "2-digit",
@@ -65,6 +70,11 @@ export function ProviderLiveEventRow({ event }: { event: ProviderLiveEvent }) {
         {event.requiresAction && (
           <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
             Action required
+          </span>
+        )}
+        {isTruncated && (
+          <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-medium text-orange-300">
+            Truncated
           </span>
         )}
         {timeLabel && <span className="ml-auto text-[10px] text-zinc-500">{timeLabel}</span>}
