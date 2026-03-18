@@ -8,7 +8,9 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import type { ProviderSessionStatus } from "@/features/interactive/components/ProviderLiveChatPanel";
 import {
   buildProviderLiveEvents,
+  buildGroupedTimeline,
   type ProviderLiveEvent,
+  type GroupedTimelineNode,
 } from "@/features/interactive/lib/providerLiveEvents";
 
 type InteractiveSessionDoc = Doc<"interactiveSessions">;
@@ -23,6 +25,11 @@ type RawActivityEntry = {
   toolInput?: string;
   filePath?: string;
   requiresAction?: boolean;
+  sourceType?: string;
+  sourceSubtype?: string;
+  groupKey?: string;
+  rawText?: string;
+  rawJson?: string;
 };
 
 /**
@@ -60,6 +67,7 @@ export function normalizeProviderEvents(entries: RawActivityEntry[]): ProviderLi
 
 type UseProviderSessionResult = {
   events: ProviderLiveEvent[];
+  groupedTimeline: GroupedTimelineNode[];
   status: ProviderSessionStatus;
   sessionId: string | null;
   agentName: string | null;
@@ -96,11 +104,17 @@ export function useProviderSession(
     [activityEntries],
   );
 
+  const groupedTimeline = useMemo<GroupedTimelineNode[]>(
+    () => buildGroupedTimeline(events),
+    [events],
+  );
+
   const isLoading =
     session === undefined || (session?.sessionId != null && activityEntries === undefined);
 
   return {
     events,
+    groupedTimeline,
     status: sessionStatus,
     sessionId: session?.sessionId ?? null,
     agentName: session?.agentName ?? null,

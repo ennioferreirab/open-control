@@ -4,8 +4,23 @@ import {
   classifyProviderEventCategory,
   buildProviderLiveEvent,
   buildProviderLiveEvents,
+  buildGroupedTimeline,
   SKILL_TOOL_NAMES,
+  type ProviderLiveEvent,
 } from "./providerLiveEvents";
+
+function makeEvent(overrides: Partial<ProviderLiveEvent> = {}): ProviderLiveEvent {
+  return {
+    id: "evt-default",
+    kind: "text",
+    category: "text",
+    title: "Response",
+    body: "test body",
+    timestamp: "2026-03-18T10:00:00.000Z",
+    requiresAction: false,
+    ...overrides,
+  };
+}
 
 describe("classifyProviderEventCategory", () => {
   it("classifies tool_use as tool", () => {
@@ -343,5 +358,82 @@ describe("buildProviderLiveEvents", () => {
       category: "result",
       body: duplicateBody,
     });
+  });
+});
+
+describe("buildGroupedTimeline", () => {
+  it("returns empty array for empty input", () => {
+    expect(buildGroupedTimeline([])).toEqual([]);
+  });
+
+  it("groups consecutive events with the same groupKey", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "system" }),
+      makeEvent({ id: "e2", groupKey: "turn-1", category: "tool" }),
+      makeEvent({ id: "e3", groupKey: "turn-1", category: "result" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].isGroup).toBe(true);
+    expect(nodes[0].events).toHaveLength(3);
+    expect(nodes[0].groupKey).toBe("turn-1");
+  });
+
+  it("uses first non-system category as primaryCategory", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "system" }),
+      makeEvent({ id: "e2", groupKey: "turn-1", category: "tool" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes[0].primaryCategory).toBe("tool");
+  });
+
+  it("renders events without groupKey as standalone nodes", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1" }),
+      makeEvent({ id: "e2" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(2);
+    expect(nodes[0].isGroup).toBe(false);
+    expect(nodes[1].isGroup).toBe(false);
+  });
+
+  it("breaks groups when a different groupKey appears", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "tool" }),
+      makeEvent({ id: "e2", groupKey: "turn-2", category: "tool" }),
+      makeEvent({ id: "e3", groupKey: "turn-1", category: "result" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(3);
+    expect(nodes[0].groupKey).toBe("turn-1");
+    expect(nodes[1].groupKey).toBe("turn-2");
+    expect(nodes[2].groupKey).toBe("turn-1");
+  });
+
+  it("handles mixed grouped and standalone events in chronological order", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "system" }),
+      makeEvent({ id: "e2", groupKey: "turn-1", category: "tool" }),
+      makeEvent({ id: "e3" }), // standalone
+      makeEvent({ id: "e4", groupKey: "turn-2", category: "result" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(3);
+    expect(nodes[0].isGroup).toBe(true);
+    expect(nodes[0].events).toHaveLength(2);
+    expect(nodes[1].isGroup).toBe(false);
+    expect(nodes[2].isGroup).toBe(false); // single-event group is not a group
+  });
+
+  it("treats a single event with groupKey as a non-group node", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "tool" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].isGroup).toBe(false);
+    expect(nodes[0].groupKey).toBe("turn-1");
   });
 });

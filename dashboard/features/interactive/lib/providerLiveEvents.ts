@@ -274,3 +274,84 @@ export function buildProviderLiveEvents(entries: RawEntry[]): ProviderLiveEvent[
     entries.filter((entry) => !shouldIgnoreProviderEntry(entry)).map(buildProviderLiveEvent),
   );
 }
+
+/** A grouped timeline node — either a single event or a cluster of related events */
+export type GroupedTimelineNode = {
+  /** Unique ID — the groupKey for groups, or event.id for standalone */
+  id: string;
+  /** Whether this is a group of multiple events or a single event */
+  isGroup: boolean;
+  /** The events in this node (1 for standalone, N for groups) */
+  events: ProviderLiveEvent[];
+  /** Timestamp of the first event in the group */
+  timestamp: string;
+  /** Primary category — derived from the first non-system event, or the first event */
+  primaryCategory: ProviderLiveCategory;
+  /** Group key if this is a group */
+  groupKey?: string;
+};
+
+/**
+ * Build a grouped chronological timeline from flat live events.
+ *
+ * Rules:
+ * 1. Events are already in chronological order (by seq from the DB).
+ * 2. Consecutive events with the same non-empty groupKey form one group.
+ * 3. Events without groupKey are standalone nodes.
+ * 4. A group's primaryCategory is the first non-system category, or "system" if all are system.
+ * 5. Groups break when a different groupKey appears (even if the same groupKey resumes later —
+ *    that starts a new group).
+ */
+export function buildGroupedTimeline(events: ProviderLiveEvent[]): GroupedTimelineNode[] {
+  if (events.length === 0) return [];
+
+  const nodes: GroupedTimelineNode[] = [];
+  let currentGroup: ProviderLiveEvent[] = [];
+  let currentGroupKey: string | undefined = undefined;
+
+  function flushGroup() {
+    if (currentGroup.length === 0) return;
+
+    const primaryEvent = currentGroup.find((e) => e.category !== "system") ?? currentGroup[0];
+    nodes.push({
+      id: currentGroupKey ?? currentGroup[0].id,
+      isGroup: currentGroup.length > 1,
+      events: [...currentGroup],
+      timestamp: currentGroup[0].timestamp,
+      primaryCategory: primaryEvent.category,
+      groupKey: currentGroupKey,
+    });
+    currentGroup = [];
+    currentGroupKey = undefined;
+  }
+
+  for (const event of events) {
+    const key = event.groupKey;
+
+    if (!key) {
+      // No groupKey — flush any pending group and emit standalone
+      flushGroup();
+      nodes.push({
+        id: event.id,
+        isGroup: false,
+        events: [event],
+        timestamp: event.timestamp,
+        primaryCategory: event.category,
+      });
+      continue;
+    }
+
+    if (key !== currentGroupKey) {
+      // Different group key — flush previous and start new group
+      flushGroup();
+      currentGroupKey = key;
+    }
+
+    currentGroup.push(event);
+  }
+
+  // Flush remaining
+  flushGroup();
+
+  return nodes;
+}
