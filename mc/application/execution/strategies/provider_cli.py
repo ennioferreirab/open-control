@@ -475,6 +475,31 @@ class ProviderCliRunnerStrategy:
             if event.text:
                 payload["summary"] = event.text
 
+        # Canonical Live metadata (Story 2.1)
+        metadata = event.metadata or {}
+        source_type = metadata.get("source_type")
+        if source_type is not None:
+            payload["source_type"] = source_type
+        source_subtype = metadata.get("source_subtype")
+        if source_subtype is not None:
+            payload["source_subtype"] = source_subtype
+
+        # Group key: use turnId from metadata if available for grouping related events
+        turn_id = metadata.get("turn_id") or event.provider_session_id
+        if turn_id is not None:
+            payload["group_key"] = turn_id
+
+        # Raw content preservation
+        if event.text is not None:
+            payload["raw_text"] = event.text
+        raw_json_data = metadata.get("tool_input")
+        if raw_json_data is not None:
+            if isinstance(raw_json_data, str):
+                payload["raw_json"] = raw_json_data
+            else:
+                import json as _json
+                payload["raw_json"] = _json.dumps(raw_json_data, ensure_ascii=True)
+
         self._bridge.mutation("sessionActivityLog:append", payload)
 
     async def _run(self, request: ExecutionRequest) -> ExecutionResult:

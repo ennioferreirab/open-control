@@ -4,6 +4,8 @@ import { v } from "convex/values";
 const TOOL_INPUT_MAX = 2000;
 const SUMMARY_MAX = 1000;
 const ERROR_MAX = 2000;
+const RAW_TEXT_MAX = 4000;
+const RAW_JSON_MAX = 8000;
 
 export const append = internalMutation({
   args: {
@@ -21,6 +23,11 @@ export const append = internalMutation({
     agentName: v.optional(v.string()),
     provider: v.optional(v.string()),
     requiresAction: v.optional(v.boolean()),
+    sourceType: v.optional(v.string()),
+    sourceSubtype: v.optional(v.string()),
+    groupKey: v.optional(v.string()),
+    rawText: v.optional(v.string()),
+    rawJson: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const last = await ctx.db
@@ -48,6 +55,11 @@ export const append = internalMutation({
       agentName: args.agentName,
       provider: args.provider,
       requiresAction: args.requiresAction,
+      sourceType: args.sourceType,
+      sourceSubtype: args.sourceSubtype,
+      groupKey: args.groupKey,
+      rawText: args.rawText !== undefined ? args.rawText.slice(0, RAW_TEXT_MAX) : undefined,
+      rawJson: args.rawJson !== undefined ? args.rawJson.slice(0, RAW_JSON_MAX) : undefined,
     });
   },
 });

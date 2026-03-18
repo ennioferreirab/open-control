@@ -158,7 +158,7 @@ class ClaudeCodeCLIParser:
                 ParsedCliEvent(
                     kind="text",
                     text=json.dumps(data),
-                    metadata={"raw_type": msg_type},
+                    metadata={"raw_type": msg_type, "source_type": msg_type},
                 )
             )
 
@@ -178,7 +178,11 @@ class ClaudeCodeCLIParser:
                         kind="session_id",
                         text=session_id,
                         provider_session_id=session_id,
-                        metadata={"subtype": subtype},
+                        metadata={
+                            "subtype": subtype,
+                            "source_type": "system",
+                            "source_subtype": subtype,
+                        },
                     )
                 )
 
@@ -200,6 +204,7 @@ class ClaudeCodeCLIParser:
                             kind="text",
                             text=text,
                             provider_session_id=self._discovered_session_id,
+                            metadata={"source_type": "assistant", "source_subtype": "text"},
                         )
                     )
             elif block_type == "tool_use":
@@ -222,6 +227,8 @@ class ClaudeCodeCLIParser:
                             "tool_id": block.get("id"),
                             "tool_name": tool_name,
                             "tool_input": tool_input,
+                            "source_type": "tool_use",
+                            "source_subtype": tool_name,
                         },
                     )
                 )
@@ -244,7 +251,7 @@ class ClaudeCodeCLIParser:
                     kind="error",
                     text=result_text or subtype,
                     provider_session_id=self._discovered_session_id,
-                    metadata={"subtype": subtype},
+                    metadata={"subtype": subtype, "source_type": "result", "source_subtype": "error"},
                 )
             ]
 
@@ -253,7 +260,7 @@ class ClaudeCodeCLIParser:
                 kind="result",
                 text=result_text,
                 provider_session_id=self._discovered_session_id,
-                metadata={"subtype": subtype},
+                metadata={"subtype": subtype, "source_type": "result", "source_subtype": "success"},
             )
         ]
 
@@ -281,5 +288,7 @@ class ClaudeCodeCLIParser:
                 "tool_id": tool_id,
                 "tool_name": tool_name,
                 "tool_input": tool_input,
+                "source_type": "tool_use",
+                "source_subtype": "ask_user",
             },
         )
