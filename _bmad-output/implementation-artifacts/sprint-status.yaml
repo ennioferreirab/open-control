@@ -1,0 +1,36 @@
+# generated: 2026-03-18
+# project: nanobot-ennio
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+generated: 2026-03-18
+project: nanobot-ennio
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  epic-2: in-progress
+  2-1-live-event-contract-and-storage: ready-for-dev
+  2-2-live-step-session-navigation: ready-for-dev
+  2-3-live-chronological-grouped-rendering: ready-for-dev
+  epic-2-retrospective: optional
