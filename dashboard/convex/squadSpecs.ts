@@ -234,3 +234,48 @@ export const updatePublishedGraph = mutation({
     return await updatePublishedSquadGraph(ctx, args.squadSpecId, args.graph);
   },
 });
+
+export const getSquadAgentsWithMemberships = query({
+  args: { squadSpecId: v.id("squadSpecs") },
+  handler: async (ctx, args) => {
+    const squadSpec = await ctx.db.get(args.squadSpecId);
+    if (!squadSpec || !squadSpec.agentIds || squadSpec.agentIds.length === 0) {
+      return [];
+    }
+
+    const allPublishedSquads = await ctx.db
+      .query("squadSpecs")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .collect();
+
+    const results = await Promise.all(
+      squadSpec.agentIds.map(async (agentId) => {
+        const agent = await ctx.db.get(agentId);
+        if (!agent || agent.isSystem || agent.deletedAt) {
+          return null;
+        }
+
+        const memberOf = allPublishedSquads
+          .filter(
+            (s) =>
+              s.agentIds != null &&
+              s.agentIds.includes(agentId),
+          )
+          .map((s) => ({
+            id: s._id,
+            displayName: s.displayName,
+            isCurrentSquad: s._id === args.squadSpecId,
+          }));
+
+        return {
+          agentId,
+          name: agent.name,
+          displayName: agent.displayName,
+          memberOf,
+        };
+      }),
+    );
+
+    return results.filter((r) => r !== null);
+  },
+});
