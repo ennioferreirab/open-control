@@ -217,7 +217,15 @@ function getProviderEventBody(
     return primary;
   }
 
-  if (category === "tool" || category === "skill" || category === "system") {
+  if (category === "tool" || category === "skill") {
+    return "";
+  }
+
+  if (category === "system") {
+    // For system_event with rawJson (e.g. hook_response), show the JSON content
+    if (raw.rawJson) {
+      return raw.rawJson;
+    }
     return "";
   }
 

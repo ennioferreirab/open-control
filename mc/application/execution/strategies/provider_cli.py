@@ -494,7 +494,7 @@ class ProviderCliRunnerStrategy:
         # Raw content preservation
         if event.text is not None:
             payload["raw_text"] = event.text
-        raw_json_data = metadata.get("tool_input")
+        raw_json_data = metadata.get("tool_input") or metadata.get("raw_json")
         if raw_json_data is not None:
             if isinstance(raw_json_data, str):
                 payload["raw_json"] = raw_json_data
