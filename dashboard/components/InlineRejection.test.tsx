@@ -4,7 +4,6 @@ import { InlineRejection } from "./InlineRejection";
 
 // Track mutation calls
 const mockDeny = vi.fn();
-const mockReturn = vi.fn();
 
 // Mock motion/react-client to render plain divs
 vi.mock("motion/react-client", () => ({
@@ -21,7 +20,6 @@ vi.mock("motion/react-client", () => ({
 vi.mock("@/features/tasks/hooks/useInlineRejectionActions", () => ({
   useInlineRejectionActions: () => ({
     deny: mockDeny,
-    returnToLeadAgent: mockReturn,
   }),
 }));
 
@@ -40,19 +38,13 @@ describe("InlineRejection", () => {
     render(<InlineRejection {...baseProps} />);
     expect(screen.getByPlaceholderText("Explain what needs to change...")).toBeInTheDocument();
     expect(screen.getByText("Submit")).toBeInTheDocument();
-    expect(screen.getByText("Return to Lead Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Return to Lead Agent")).not.toBeInTheDocument();
   });
 
   it("Submit button is disabled when textarea is empty", () => {
     render(<InlineRejection {...baseProps} />);
     const submitBtn = screen.getByText("Submit");
     expect(submitBtn).toBeDisabled();
-  });
-
-  it("Return to Lead Agent button is disabled when textarea is empty", () => {
-    render(<InlineRejection {...baseProps} />);
-    const returnBtn = screen.getByText("Return to Lead Agent");
-    expect(returnBtn).toBeDisabled();
   });
 
   it("enables Submit button when feedback is entered", () => {
@@ -70,17 +62,6 @@ describe("InlineRejection", () => {
     fireEvent.click(screen.getByText("Submit"));
     await waitFor(() => {
       expect(mockDeny).toHaveBeenCalledWith("Fix the colors");
-    });
-  });
-
-  it("calls returnToLeadAgent mutation on Return to Lead Agent click", async () => {
-    mockReturn.mockResolvedValue(undefined);
-    render(<InlineRejection {...baseProps} />);
-    const textarea = screen.getByPlaceholderText("Explain what needs to change...");
-    fireEvent.change(textarea, { target: { value: "Needs re-routing" } });
-    fireEvent.click(screen.getByText("Return to Lead Agent"));
-    await waitFor(() => {
-      expect(mockReturn).toHaveBeenCalledWith("Needs re-routing");
     });
   });
 

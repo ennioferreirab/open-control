@@ -16,7 +16,7 @@ export function InlineRejection({ taskId, onClose }: InlineRejectionProps) {
   const [feedback, setFeedback] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { deny, returnToLeadAgent } = useInlineRejectionActions(taskId, onClose);
+  const { deny } = useInlineRejectionActions(taskId, onClose);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -27,16 +27,6 @@ export function InlineRejection({ taskId, onClose }: InlineRejectionProps) {
     setIsSubmitting(true);
     try {
       await deny(feedback.trim());
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleReturn = async () => {
-    if (!feedback.trim()) return;
-    setIsSubmitting(true);
-    try {
-      await returnToLeadAgent(feedback.trim());
     } finally {
       setIsSubmitting(false);
     }
@@ -68,15 +58,6 @@ export function InlineRejection({ taskId, onClose }: InlineRejectionProps) {
             disabled={isSubmitting || !feedback.trim()}
           >
             Submit
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="text-xs h-7"
-            onClick={handleReturn}
-            disabled={isSubmitting || !feedback.trim()}
-          >
-            Return to Lead Agent
           </Button>
         </div>
       </div>

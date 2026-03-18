@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_kind
 from mc.contexts.interaction.service import has_pending_execution_question
+from mc.domain.workflow.review_result import ReviewResult, parse_review_result
 from mc.types import (
     ActivityEventType,
     AuthorType,
@@ -23,6 +24,46 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _build_task_review_contract(task: dict[str, Any], reviewer_name: str) -> str:
+    assigned_agent = task.get("assigned_agent") or "the assigned agent"
+    title = task.get("title", "Untitled")
+    lines = [
+        "[Task Review Contract]",
+        f"You are reviewing the completed work for task: {title}",
+        f"The work under review was produced by: {assigned_agent}",
+        f"You are the designated reviewer: {reviewer_name}",
+        "Review the task thread, artifacts, and latest deliverable before deciding.",
+        "Return ONLY a single JSON object in your final response.",
+        "Do not wrap the JSON in markdown fences.",
+        "Required JSON shape:",
+        "{",
+        '  "verdict": "approved" | "rejected",',
+        '  "issues": ["..."],',
+        '  "strengths": ["..."],',
+        '  "scores": { "criterion": number },',
+        '  "vetoesTriggered": ["..."],',
+        '  "recommendedReturnStep": null',
+        "}",
+        "If the work passes, set verdict to approved.",
+        "If the work fails, set verdict to rejected and include concrete, actionable issues.",
+    ]
+    return "\n".join(lines)
+
+
+def _format_review_feedback(reviewer_name: str, review_result: ReviewResult) -> str:
+    lines = [f"Rejected: {reviewer_name} requested changes."]
+    if review_result.issues:
+        lines.append("Issues:")
+        lines.extend(f"- {issue}" for issue in review_result.issues)
+    if review_result.strengths:
+        lines.append("Strengths:")
+        lines.extend(f"- {strength}" for strength in review_result.strengths)
+    if review_result.vetoes_triggered:
+        lines.append("Vetoes triggered:")
+        lines.extend(f"- {veto}" for veto in review_result.vetoes_triggered)
+    return "\n".join(lines)
+
+
 class ReviewWorker:
     """Handles review lifecycle: transitions, feedback, revision, and approval."""
 
@@ -35,6 +76,69 @@ class ReviewWorker:
         self._bridge = ctx.bridge
         self._ask_user_registry = ask_user_registry
         self._known_review_task_ids: set[str] = set()
+
+    def _build_execution_engine(self) -> Any:
+        from mc.application.execution.post_processing import build_execution_engine
+
+        return build_execution_engine(
+            bridge=self._bridge,
+            ask_user_registry=self._ask_user_registry,
+            provider_cli_registry=self._ctx.services.get("provider_cli_registry"),
+            provider_cli_supervisor=self._ctx.services.get("provider_cli_supervisor"),
+            provider_cli_projector=self._ctx.services.get("provider_cli_projector"),
+            provider_cli_supervision_sink=self._ctx.services.get("provider_cli_supervision_sink"),
+            provider_cli_control_plane=self._ctx.services.get("provider_cli_control_plane"),
+        )
+
+    async def _run_reviewer_agent(
+        self,
+        task_id: str,
+        task: dict[str, Any],
+        reviewer_name: str,
+    ) -> ReviewResult:
+        from mc.application.execution.context_builder import ContextBuilder
+
+        ctx_builder = ContextBuilder(self._bridge)
+        req = await ctx_builder.build_task_context(
+            task_id=task_id,
+            title=task.get("title", "Untitled"),
+            description=task.get("description"),
+            agent_name=reviewer_name,
+            trust_level=task.get("trust_level", TrustLevel.AUTONOMOUS),
+            task_data=task,
+        )
+        review_contract = _build_task_review_contract(task, reviewer_name)
+        req.description = f"{req.description}\n\n{review_contract}" if req.description else review_contract
+        if req.agent_prompt:
+            req.prompt = f"{req.agent_prompt}\n\n---\n\n{req.description}"
+        else:
+            req.prompt = req.description
+        req.session_boundary_reason = "task_review"
+
+        engine = self._build_execution_engine()
+        execution_result = await engine.run(req)
+        if not execution_result.success:
+            raise RuntimeError(execution_result.error_message or "Reviewer execution failed")
+        return parse_review_result(execution_result.output)
+
+    async def _record_non_terminal_approval(self, task_id: str, reviewer_name: str) -> None:
+        await asyncio.to_thread(
+            self._bridge.send_message,
+            task_id,
+            reviewer_name,
+            AuthorType.AGENT,
+            f"Approved by {reviewer_name}",
+            MessageType.APPROVAL,
+        )
+        task = await asyncio.to_thread(self._bridge.query, "tasks:getById", {"task_id": task_id})
+        title = task.get("title", "Untitled") if task else "Untitled"
+        await asyncio.to_thread(
+            self._bridge.create_activity,
+            ActivityEventType.REVIEW_APPROVED,
+            f"{reviewer_name} approved '{title}'",
+            task_id,
+            reviewer_name,
+        )
 
     async def process_batch(self, tasks: list[dict[str, Any]]) -> None:
         current_ids = {task.get("id") for task in tasks if task.get("id")}
@@ -127,6 +231,26 @@ class ReviewWorker:
                 f"Review requested from {reviewer_names} for '{title}'",
                 task_id,
             )
+            for index, reviewer_name in enumerate(reviewers):
+                review_result = await self._run_reviewer_agent(task_id, task, reviewer_name)
+                if review_result.verdict == "rejected":
+                    await self.handle_review_feedback(
+                        task_id,
+                        reviewer_name,
+                        _format_review_feedback(reviewer_name, review_result),
+                    )
+                    await asyncio.to_thread(
+                        self._bridge.transition_task_from_snapshot,
+                        task,
+                        TaskStatus.ASSIGNED,
+                        reason=f"Review rejected by {reviewer_name}; task returned for revision",
+                        agent_name=task.get("assigned_agent"),
+                    )
+                    return
+                if index < len(reviewers) - 1:
+                    await self._record_non_terminal_approval(task_id, reviewer_name)
+            await self.handle_review_approval(task_id, reviewers[-1])
+            return
 
         if trust_level == TrustLevel.HUMAN_APPROVED and not reviewers:
             logger.info("[review] Human approval requested for task '%s'.", title)

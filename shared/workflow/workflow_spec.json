@@ -21,7 +21,7 @@
     "inbox": ["assigned", "in_progress"],
     "assigned": ["in_progress", "assigned"],
     "in_progress": ["review", "done", "assigned"],
-    "review": ["done", "inbox", "assigned", "in_progress"],
+    "review": ["done", "assigned", "in_progress"],
     "done": ["assigned"],
     "retrying": ["in_progress", "crashed"],
     "crashed": ["inbox", "assigned"]
@@ -41,7 +41,6 @@
     "in_progress->done": "task_completed",
     "in_progress->assigned": "task_assigned",
     "review->done": "task_completed",
-    "review->inbox": "task_retrying",
     "review->in_progress": "task_started",
     "review->assigned": "thread_message_sent",
     "retrying->in_progress": "task_retrying",

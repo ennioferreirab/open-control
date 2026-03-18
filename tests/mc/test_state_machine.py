@@ -34,7 +34,7 @@ class TestIsValidTransition:
         assert is_valid_transition(TaskStatus.CRASHED, TaskStatus.INBOX) is True
 
     def test_review_to_inbox(self) -> None:
-        assert is_valid_transition(TaskStatus.REVIEW, TaskStatus.INBOX) is True
+        assert is_valid_transition(TaskStatus.REVIEW, TaskStatus.INBOX) is False
 
 
 class TestUniversalTransitions:
