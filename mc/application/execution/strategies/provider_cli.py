@@ -498,6 +498,7 @@ class ProviderCliRunnerStrategy:
                 payload["raw_json"] = raw_json_data
             else:
                 import json as _json
+
                 payload["raw_json"] = _json.dumps(raw_json_data, ensure_ascii=True)
 
         self._bridge.mutation("sessionActivityLog:append", payload)
