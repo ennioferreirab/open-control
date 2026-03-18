@@ -659,11 +659,37 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                   value="live"
                   className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
                 >
-                  <div className="min-h-0 flex-1 px-6 py-4">
-                    <div className="min-h-0 h-full overflow-hidden rounded-xl border border-border">
+                  <div className="min-h-0 flex-1 px-6 py-4 flex flex-col gap-3">
+                    {liveSession.liveChoices.length > 1 && (
+                      <div className="flex items-center gap-2">
+                        <label
+                          className="text-xs text-zinc-500"
+                          htmlFor="live-session-selector"
+                        >
+                          Session:
+                        </label>
+                        <select
+                          id="live-session-selector"
+                          className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200"
+                          value={selectedLiveStepId ?? liveSession.activeStep?._id ?? ""}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setSelectedLiveStepId(value === "task" ? null : value || null);
+                          }}
+                        >
+                          {liveSession.liveChoices.map((choice) => (
+                            <option key={choice.id} value={choice.id}>
+                              {choice.label} {choice.isActive ? "(active)" : `(${choice.status})`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border">
                       <ProviderLiveChatPanel
                         sessionId={providerSession.sessionId}
                         events={providerSession.events}
+                        groupedTimeline={providerSession.groupedTimeline}
                         status={providerSession.status}
                         agentName={providerSession.agentName ?? liveSession.session.agentName}
                         provider={providerSession.provider ?? liveSession.session.provider}

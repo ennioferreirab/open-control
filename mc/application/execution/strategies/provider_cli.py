@@ -280,6 +280,16 @@ class ProviderCliRunnerStrategy:
         command[config_index + 1] = str(session_config)
         return session_config
 
+    def _resolve_overflow_dir(self, session_id: str) -> Path | None:
+        """Return the overflow directory for large content, or None."""
+        try:
+            # Extract task_id from session_id (format: {task_id}-{entity_id})
+            task_id = session_id.split("-")[0] if "-" in session_id else session_id
+            tasks_dir = Path.home() / ".nanobot" / "tasks"
+            return tasks_dir / task_id / "output" / "_overflow"
+        except Exception:
+            return None
+
     def _cleanup(self, mc_session_id: str) -> None:
         """Remove the session record from the registry after execution completes."""
         if self._control_plane is not None:
@@ -474,6 +484,47 @@ class ProviderCliRunnerStrategy:
         else:
             if event.text:
                 payload["summary"] = event.text
+
+        # Canonical Live metadata (Story 2.1)
+        metadata = event.metadata or {}
+        source_type = metadata.get("source_type")
+        if source_type is not None:
+            payload["source_type"] = source_type
+        source_subtype = metadata.get("source_subtype")
+        if source_subtype is not None:
+            payload["source_subtype"] = source_subtype
+
+        # Group key: only set when the parser provides an explicit turn boundary.
+        # Do NOT fall back to provider_session_id — that is identical for all events
+        # in a session and would collapse everything into one group.
+        turn_id = metadata.get("turn_id")
+        if turn_id is not None:
+            payload["group_key"] = turn_id
+
+        # Raw content preservation — apply Convex overflow protection
+        from mc.bridge.overflow import safe_string_for_convex
+
+        overflow_dir = self._resolve_overflow_dir(session_id)
+        if event.text is not None:
+            payload["raw_text"] = safe_string_for_convex(
+                event.text,
+                field_name="raw_text",
+                task_id=session_id,
+                overflow_dir=overflow_dir,
+            )
+        raw_json_data = metadata.get("tool_input") or metadata.get("raw_json")
+        if raw_json_data is not None:
+            raw_str = (
+                raw_json_data
+                if isinstance(raw_json_data, str)
+                else json.dumps(raw_json_data, ensure_ascii=True)
+            )
+            payload["raw_json"] = safe_string_for_convex(
+                raw_str,
+                field_name="raw_json",
+                task_id=session_id,
+                overflow_dir=overflow_dir,
+            )
 
         self._bridge.mutation("sessionActivityLog:append", payload)
 

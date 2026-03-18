@@ -19,6 +19,11 @@ type ActivityLogDoc = {
   agentName?: string;
   provider?: string;
   requiresAction?: boolean;
+  sourceType?: string;
+  sourceSubtype?: string;
+  groupKey?: string;
+  rawText?: string;
+  rawJson?: string;
 };
 
 function getAppendHandler() {
@@ -187,6 +192,78 @@ describe("sessionActivityLog.append", () => {
       provider: "codex",
       requiresAction: true,
     });
+  });
+
+  it("stores canonical Live metadata fields when provided", async () => {
+    const handler = getAppendHandler();
+    const { ctx, inserts } = makeAppendCtx(null);
+
+    await handler(ctx, {
+      sessionId: "session-canonical",
+      kind: "tool_use",
+      ts: "2026-03-18T10:00:00.000Z",
+      sourceType: "tool_use",
+      sourceSubtype: "Read",
+      groupKey: "turn-abc",
+      rawText: "Read /src/index.ts",
+      rawJson: '{"path":"/src/index.ts"}',
+    });
+
+    expect(inserts[0].value).toMatchObject({
+      sourceType: "tool_use",
+      sourceSubtype: "Read",
+      groupKey: "turn-abc",
+      rawText: "Read /src/index.ts",
+      rawJson: '{"path":"/src/index.ts"}',
+    });
+  });
+
+  it("stores rawText without truncation to preserve full content", async () => {
+    const handler = getAppendHandler();
+    const { ctx, inserts } = makeAppendCtx(null);
+    const longRawText = "r".repeat(50000);
+
+    await handler(ctx, {
+      sessionId: "session-abc",
+      kind: "text",
+      ts: "2026-03-18T10:00:00.000Z",
+      rawText: longRawText,
+    });
+
+    expect((inserts[0].value.rawText as string).length).toBe(50000);
+  });
+
+  it("stores rawJson without truncation to preserve valid JSON", async () => {
+    const handler = getAppendHandler();
+    const { ctx, inserts } = makeAppendCtx(null);
+    const longRawJson = "j".repeat(20000);
+
+    await handler(ctx, {
+      sessionId: "session-abc",
+      kind: "tool_use",
+      ts: "2026-03-18T10:00:00.000Z",
+      rawJson: longRawJson,
+    });
+
+    expect((inserts[0].value.rawJson as string).length).toBe(20000);
+  });
+
+  it("omits canonical fields when not provided (backward compat)", async () => {
+    const handler = getAppendHandler();
+    const { ctx, inserts } = makeAppendCtx(null);
+
+    await handler(ctx, {
+      sessionId: "session-legacy",
+      kind: "text",
+      ts: "2026-03-18T10:00:00.000Z",
+      summary: "legacy summary",
+    });
+
+    expect(inserts[0].value.sourceType).toBeUndefined();
+    expect(inserts[0].value.sourceSubtype).toBeUndefined();
+    expect(inserts[0].value.groupKey).toBeUndefined();
+    expect(inserts[0].value.rawText).toBeUndefined();
+    expect(inserts[0].value.rawJson).toBeUndefined();
   });
 });
 

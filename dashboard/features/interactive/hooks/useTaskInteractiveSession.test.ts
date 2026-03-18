@@ -7,6 +7,7 @@ import {
   describeTaskInteractiveSession,
   selectTaskInteractiveSession,
   collectTaskLiveStepIds,
+  buildLiveChoices,
 } from "./useTaskInteractiveSession";
 
 type SessionDoc = Doc<"interactiveSessions">;
@@ -219,6 +220,132 @@ describe("selectTaskInteractiveSession", () => {
     );
 
     expect(session?.sessionId).toBe("completed-step");
+  });
+});
+
+describe("buildLiveChoices", () => {
+  it("returns empty array when no sessions exist", () => {
+    const choices = buildLiveChoices(null, [], testId<"tasks">("task1"));
+    expect(choices).toEqual([]);
+  });
+
+  it("returns step-scoped choices for sessions with stepId", () => {
+    const step1 = makeStep({
+      _id: testId<"steps">("step1"),
+      title: "Research phase",
+    });
+    const step2 = makeStep({
+      _id: testId<"steps">("step2"),
+      title: "Write copy",
+    });
+    const choices = buildLiveChoices(
+      [
+        makeSession({ stepId: testId<"steps">("step1"), status: "detached" }),
+        makeSession({
+          sessionId: "s2",
+          stepId: testId<"steps">("step2"),
+          status: "ended",
+        }),
+      ],
+      [step1, step2],
+      testId<"tasks">("task1"),
+    );
+
+    expect(choices).toHaveLength(2);
+    const ids = choices.map((c) => c.id);
+    expect(ids).toContain(testId<"steps">("step1"));
+    expect(ids).toContain(testId<"steps">("step2"));
+    const step1Choice = choices.find((c) => c.id === testId<"steps">("step1"))!;
+    expect(step1Choice.label).toBe("Research phase");
+    expect(step1Choice.isTaskLevel).toBe(false);
+    expect(step1Choice.stepId).toBe(testId<"steps">("step1"));
+  });
+
+  it("returns task-level choice for sessions without stepId", () => {
+    const choices = buildLiveChoices(
+      [makeSession({ stepId: undefined, status: "detached" })],
+      [],
+      testId<"tasks">("task1"),
+    );
+
+    expect(choices).toHaveLength(1);
+    expect(choices[0].id).toBe("task");
+    expect(choices[0].label).toBe("Task session");
+    expect(choices[0].isTaskLevel).toBe(true);
+  });
+
+  it("sorts active sessions before historical", () => {
+    const choices = buildLiveChoices(
+      [
+        makeSession({
+          sessionId: "ended",
+          stepId: testId<"steps">("step2"),
+          status: "ended",
+        }),
+        makeSession({
+          sessionId: "active",
+          stepId: testId<"steps">("step1"),
+          status: "detached",
+        }),
+      ],
+      [
+        makeStep({ _id: testId<"steps">("step1"), title: "Active step" }),
+        makeStep({ _id: testId<"steps">("step2"), title: "Completed step" }),
+      ],
+      testId<"tasks">("task1"),
+    );
+
+    expect(choices).toHaveLength(2);
+    expect(choices[0].isActive).toBe(true);
+    expect(choices[1].isActive).toBe(false);
+  });
+
+  it("deduplicates step choices when multiple sessions exist for the same step", () => {
+    const choices = buildLiveChoices(
+      [
+        makeSession({
+          sessionId: "s1",
+          stepId: testId<"steps">("step1"),
+          status: "ended",
+          updatedAt: "2026-03-13T09:05:00.000Z",
+        }),
+        makeSession({
+          sessionId: "s2",
+          stepId: testId<"steps">("step1"),
+          status: "detached",
+          updatedAt: "2026-03-13T09:10:00.000Z",
+        }),
+      ],
+      [makeStep({ _id: testId<"steps">("step1"), title: "Duplicate step" })],
+      testId<"tasks">("task1"),
+    );
+
+    expect(choices).toHaveLength(1);
+    expect(choices[0].id).toBe(testId<"steps">("step1"));
+  });
+
+  it("excludes sessions from other tasks", () => {
+    const choices = buildLiveChoices(
+      [
+        makeSession({
+          sessionId: "other-task",
+          taskId: testId<"tasks">("task2"),
+          stepId: testId<"steps">("step-other"),
+          status: "detached",
+        }),
+        makeSession({
+          sessionId: "this-task",
+          taskId: testId<"tasks">("task1"),
+          stepId: testId<"steps">("step1"),
+          status: "detached",
+        }),
+      ],
+      [makeStep({ _id: testId<"steps">("step1"), title: "Own step" })],
+      testId<"tasks">("task1"),
+    );
+
+    expect(choices).toHaveLength(1);
+    expect(choices[0].stepId).toBe(testId<"steps">("step1"));
   });
 });
 

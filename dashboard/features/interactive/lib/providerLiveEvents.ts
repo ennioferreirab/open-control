@@ -25,6 +25,12 @@ export type ProviderLiveEvent = {
   toolInput?: string;
   filePath?: string;
   requiresAction: boolean;
+  // Canonical Live metadata (Story 2.1)
+  sourceType?: string;
+  sourceSubtype?: string;
+  groupKey?: string;
+  rawText?: string;
+  rawJson?: string;
 };
 
 type RawEntry = {
@@ -37,6 +43,12 @@ type RawEntry = {
   toolInput?: string;
   filePath?: string;
   requiresAction?: boolean;
+  // Canonical Live metadata (Story 2.1)
+  sourceType?: string;
+  sourceSubtype?: string;
+  groupKey?: string;
+  rawText?: string;
+  rawJson?: string;
 };
 
 /**
@@ -66,6 +78,7 @@ const SYSTEM_KINDS = new Set([
   "session_stopped",
   "turn_started",
   "turn_updated",
+  "system_event",
 ]);
 
 const TOOL_KINDS = new Set(["tool_use"]);
@@ -141,10 +154,24 @@ function shouldIgnoreProviderEntry(raw: RawEntry): boolean {
  * Pure function — no side effects.
  */
 export function classifyProviderEventCategory(
-  entry: Pick<RawEntry, "kind" | "toolName">,
+  entry: Pick<RawEntry, "kind" | "toolName" | "sourceType">,
 ): ProviderLiveCategory {
-  const { kind, toolName } = entry;
+  const { kind, toolName, sourceType } = entry;
 
+  // Canonical path: prefer sourceType when present (Story 2.1)
+  if (sourceType) {
+    if (sourceType === "tool_use") {
+      if (toolName && SKILL_TOOL_NAMES.has(toolName)) return "skill";
+      return "tool";
+    }
+    if (sourceType === "assistant") return "text";
+    if (sourceType === "result") return "result";
+    if (sourceType === "system") return "system";
+    if (sourceType === "error") return "error";
+    // Fall through to heuristic for unknown sourceType values
+  }
+
+  // Heuristic path: legacy rows without canonical metadata
   if (TOOL_KINDS.has(kind)) {
     if (toolName && SKILL_TOOL_NAMES.has(toolName)) return "skill";
     return "tool";
@@ -184,7 +211,13 @@ function getProviderEventBody(
     return normalizeText(raw.summary ?? raw.error ?? title);
   }
 
-  const primary = normalizeText(raw.summary ?? raw.error);
+  // System events with rawJson: show the full JSON content (e.g. hook_response)
+  if (category === "system" && raw.rawJson) {
+    return raw.rawJson;
+  }
+
+  // Prefer rawText when canonical metadata is available (Story 2.1)
+  const primary = normalizeText(raw.rawText ?? raw.summary ?? raw.error);
   if (primary) {
     return primary;
   }
@@ -231,6 +264,11 @@ export function buildProviderLiveEvent(raw: RawEntry): ProviderLiveEvent {
     toolInput: raw.toolInput,
     filePath: raw.filePath,
     requiresAction: raw.requiresAction ?? false,
+    sourceType: raw.sourceType,
+    sourceSubtype: raw.sourceSubtype,
+    groupKey: raw.groupKey,
+    rawText: raw.rawText,
+    rawJson: raw.rawJson,
   };
 }
 
@@ -241,4 +279,85 @@ export function buildProviderLiveEvents(entries: RawEntry[]): ProviderLiveEvent[
   return dedupeProviderLiveEvents(
     entries.filter((entry) => !shouldIgnoreProviderEntry(entry)).map(buildProviderLiveEvent),
   );
+}
+
+/** A grouped timeline node — either a single event or a cluster of related events */
+export type GroupedTimelineNode = {
+  /** Unique ID — the groupKey for groups, or event.id for standalone */
+  id: string;
+  /** Whether this is a group of multiple events or a single event */
+  isGroup: boolean;
+  /** The events in this node (1 for standalone, N for groups) */
+  events: ProviderLiveEvent[];
+  /** Timestamp of the first event in the group */
+  timestamp: string;
+  /** Primary category — derived from the first non-system event, or the first event */
+  primaryCategory: ProviderLiveCategory;
+  /** Group key if this is a group */
+  groupKey?: string;
+};
+
+/**
+ * Build a grouped chronological timeline from flat live events.
+ *
+ * Rules:
+ * 1. Events are already in chronological order (by seq from the DB).
+ * 2. Consecutive events with the same non-empty groupKey form one group.
+ * 3. Events without groupKey are standalone nodes.
+ * 4. A group's primaryCategory is the first non-system category, or "system" if all are system.
+ * 5. Groups break when a different groupKey appears (even if the same groupKey resumes later —
+ *    that starts a new group).
+ */
+export function buildGroupedTimeline(events: ProviderLiveEvent[]): GroupedTimelineNode[] {
+  if (events.length === 0) return [];
+
+  const nodes: GroupedTimelineNode[] = [];
+  let currentGroup: ProviderLiveEvent[] = [];
+  let currentGroupKey: string | undefined = undefined;
+
+  function flushGroup() {
+    if (currentGroup.length === 0) return;
+
+    const primaryEvent = currentGroup.find((e) => e.category !== "system") ?? currentGroup[0];
+    nodes.push({
+      id: currentGroupKey ?? currentGroup[0].id,
+      isGroup: currentGroup.length > 1,
+      events: [...currentGroup],
+      timestamp: currentGroup[0].timestamp,
+      primaryCategory: primaryEvent.category,
+      groupKey: currentGroupKey,
+    });
+    currentGroup = [];
+    currentGroupKey = undefined;
+  }
+
+  for (const event of events) {
+    const key = event.groupKey;
+
+    if (!key) {
+      // No groupKey — flush any pending group and emit standalone
+      flushGroup();
+      nodes.push({
+        id: event.id,
+        isGroup: false,
+        events: [event],
+        timestamp: event.timestamp,
+        primaryCategory: event.category,
+      });
+      continue;
+    }
+
+    if (key !== currentGroupKey) {
+      // Different group key — flush previous and start new group
+      flushGroup();
+      currentGroupKey = key;
+    }
+
+    currentGroup.push(event);
+  }
+
+  // Flush remaining
+  flushGroup();
+
+  return nodes;
 }

@@ -4,8 +4,23 @@ import {
   classifyProviderEventCategory,
   buildProviderLiveEvent,
   buildProviderLiveEvents,
+  buildGroupedTimeline,
   SKILL_TOOL_NAMES,
+  type ProviderLiveEvent,
 } from "./providerLiveEvents";
+
+function makeEvent(overrides: Partial<ProviderLiveEvent> = {}): ProviderLiveEvent {
+  return {
+    id: "evt-default",
+    kind: "text",
+    category: "text",
+    title: "Response",
+    body: "test body",
+    timestamp: "2026-03-18T10:00:00.000Z",
+    requiresAction: false,
+    ...overrides,
+  };
+}
 
 describe("classifyProviderEventCategory", () => {
   it("classifies tool_use as tool", () => {
@@ -188,6 +203,88 @@ describe("buildProviderLiveEvent", () => {
   });
 });
 
+describe("canonical metadata support (Story 2.1)", () => {
+  it("classifies by sourceType when present, bypassing heuristic path", () => {
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "assistant" }),
+    ).toBe("text");
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "result" }),
+    ).toBe("result");
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "system" }),
+    ).toBe("system");
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "tool_use" }),
+    ).toBe("tool");
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: undefined, sourceType: "error" }),
+    ).toBe("error");
+  });
+
+  it("classifies tool_use sourceType with skill toolName as skill", () => {
+    expect(
+      classifyProviderEventCategory({ kind: "text", toolName: "dispatch_agent", sourceType: "tool_use" }),
+    ).toBe("skill");
+  });
+
+  it("falls through to heuristic when sourceType is not recognized", () => {
+    expect(
+      classifyProviderEventCategory({ kind: "turn_completed", toolName: undefined, sourceType: "unknown_future" }),
+    ).toBe("result");
+  });
+
+  it("falls through to heuristic when sourceType is undefined", () => {
+    expect(
+      classifyProviderEventCategory({ kind: "error", toolName: undefined, sourceType: undefined }),
+    ).toBe("error");
+  });
+
+  it("propagates canonical fields through buildProviderLiveEvent", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-canonical",
+      kind: "tool_use",
+      ts: "2026-03-18T10:00:00.000Z",
+      toolName: "Read",
+      sourceType: "tool_use",
+      sourceSubtype: "Read",
+      groupKey: "turn-abc",
+      rawText: "Read /src/index.ts",
+      rawJson: '{"path":"/src/index.ts"}',
+    });
+
+    expect(event.sourceType).toBe("tool_use");
+    expect(event.sourceSubtype).toBe("Read");
+    expect(event.groupKey).toBe("turn-abc");
+    expect(event.rawText).toBe("Read /src/index.ts");
+    expect(event.rawJson).toBe('{"path":"/src/index.ts"}');
+  });
+
+  it("prefers rawText over summary for body when both present", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-raw",
+      kind: "text",
+      ts: "2026-03-18T10:00:00.000Z",
+      summary: "legacy summary",
+      rawText: "canonical raw text",
+      sourceType: "assistant",
+    });
+
+    expect(event.body).toBe("canonical raw text");
+  });
+
+  it("falls back to summary when rawText is not present (legacy row)", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-legacy",
+      kind: "text",
+      ts: "2026-03-18T10:00:00.000Z",
+      summary: "legacy summary",
+    });
+
+    expect(event.body).toBe("legacy summary");
+  });
+});
+
 describe("buildProviderLiveEvents", () => {
   it("maps multiple raw entries into structured events", () => {
     const events = buildProviderLiveEvents([
@@ -261,5 +358,82 @@ describe("buildProviderLiveEvents", () => {
       category: "result",
       body: duplicateBody,
     });
+  });
+});
+
+describe("buildGroupedTimeline", () => {
+  it("returns empty array for empty input", () => {
+    expect(buildGroupedTimeline([])).toEqual([]);
+  });
+
+  it("groups consecutive events with the same groupKey", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "system" }),
+      makeEvent({ id: "e2", groupKey: "turn-1", category: "tool" }),
+      makeEvent({ id: "e3", groupKey: "turn-1", category: "result" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].isGroup).toBe(true);
+    expect(nodes[0].events).toHaveLength(3);
+    expect(nodes[0].groupKey).toBe("turn-1");
+  });
+
+  it("uses first non-system category as primaryCategory", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "system" }),
+      makeEvent({ id: "e2", groupKey: "turn-1", category: "tool" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes[0].primaryCategory).toBe("tool");
+  });
+
+  it("renders events without groupKey as standalone nodes", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1" }),
+      makeEvent({ id: "e2" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(2);
+    expect(nodes[0].isGroup).toBe(false);
+    expect(nodes[1].isGroup).toBe(false);
+  });
+
+  it("breaks groups when a different groupKey appears", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "tool" }),
+      makeEvent({ id: "e2", groupKey: "turn-2", category: "tool" }),
+      makeEvent({ id: "e3", groupKey: "turn-1", category: "result" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(3);
+    expect(nodes[0].groupKey).toBe("turn-1");
+    expect(nodes[1].groupKey).toBe("turn-2");
+    expect(nodes[2].groupKey).toBe("turn-1");
+  });
+
+  it("handles mixed grouped and standalone events in chronological order", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "system" }),
+      makeEvent({ id: "e2", groupKey: "turn-1", category: "tool" }),
+      makeEvent({ id: "e3" }), // standalone
+      makeEvent({ id: "e4", groupKey: "turn-2", category: "result" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(3);
+    expect(nodes[0].isGroup).toBe(true);
+    expect(nodes[0].events).toHaveLength(2);
+    expect(nodes[1].isGroup).toBe(false);
+    expect(nodes[2].isGroup).toBe(false); // single-event group is not a group
+  });
+
+  it("treats a single event with groupKey as a non-group node", () => {
+    const events: ProviderLiveEvent[] = [
+      makeEvent({ id: "e1", groupKey: "turn-1", category: "tool" }),
+    ];
+    const nodes = buildGroupedTimeline(events);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].isGroup).toBe(false);
+    expect(nodes[0].groupKey).toBe("turn-1");
   });
 });

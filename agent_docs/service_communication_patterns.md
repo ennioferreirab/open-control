@@ -570,6 +570,20 @@ claude -p "<prompt>" --output-format stream-json --verbose
 
 **Signals:** `interrupt` → `SIGINT` to pgid; `stop`/`terminate` → `SIGTERM` to pgid; `kill` → `SIGKILL` to pgid. Process group (`start_new_session=True`) ensures all children are signaled.
 
+### Provider-to-Live Canonical Translation
+
+When the provider CLI strategy persists activity events to `sessionActivityLog`, it enriches the payload with canonical Live metadata from the parser's `ParsedCliEvent.metadata`:
+
+| Python metadata key | Convex field | Description |
+|---------------------|-------------|-------------|
+| `source_type` | `sourceType` | Canonical event classification: `system`, `assistant`, `tool_use`, `result`, `error` |
+| `source_subtype` | `sourceSubtype` | Finer classification (e.g. `init`, `text`, tool name, `success`, `error`) |
+| `turn_id` | `groupKey` | Groups related events from the same provider turn. Only set when the parser provides explicit turn boundaries; absent for Claude Code sessions until turn-boundary parsing is added. |
+| `event.text` | `rawText` | Original text content from the parsed event |
+| `metadata.tool_input` | `rawJson` | Raw JSON payload (tool input or structured data) |
+
+The frontend normalizer in `providerLiveEvents.ts` prefers canonical `sourceType` for classification when present, falling back to the existing heuristic path for legacy rows without canonical metadata.
+
 ### 4.4 Nanobot Runner — In-Process
 
 The agent loop runs **in-process** as an async coroutine (`AgentLoop.process_direct_result()`). However, when the model calls MC tools, the `AgentLoop` spawns a child `mc.runtime.mcp.bridge` subprocess via MCP stdio transport. This child process uses `InteractionService` (direct Convex HTTP) rather than a Unix socket — `MC_SOCKET_PATH` is **not set** for the nanobot MCP bridge; only `TASK_ID`, `AGENT_NAME`, `CONVEX_URL`, and `CONVEX_ADMIN_KEY` are injected.

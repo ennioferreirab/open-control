@@ -413,6 +413,11 @@ Session-level event log for interactive sessions.
 | `agentName` | `v.optional(v.string())` | |
 | `provider` | `v.optional(v.string())` | |
 | `requiresAction` | `v.optional(v.boolean())` | |
+| `sourceType` | `v.optional(v.string())` | Canonical event type: system, assistant, tool_use, result, error |
+| `sourceSubtype` | `v.optional(v.string())` | Finer classification (e.g. "init", "text", tool name) |
+| `groupKey` | `v.optional(v.string())` | Groups related events from the same provider turn |
+| `rawText` | `v.optional(v.string())` | Original text content (truncated to 4000 chars) |
+| `rawJson` | `v.optional(v.string())` | Raw JSON payload (truncated to 8000 chars) |
 
 **Indexes:** `by_session` `["sessionId"]`, `by_session_seq` `["sessionId", "seq"]`
 

@@ -12,6 +12,22 @@ from mc.contexts.provider_cli.types import (
     ProviderSessionSnapshot,
 )
 
+RAW_JSON_VALUE_MAX = 16_000
+
+
+def _truncate_large_values(obj: Any, max_len: int = RAW_JSON_VALUE_MAX) -> Any:
+    """Recursively truncate string values exceeding max_len in a dict/list.
+
+    Keeps the JSON structure valid — only individual string values are cut.
+    """
+    if isinstance(obj, dict):
+        return {k: _truncate_large_values(v, max_len) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_truncate_large_values(item, max_len) for item in obj]
+    if isinstance(obj, str) and len(obj) > max_len:
+        return obj[:max_len] + f"... [truncated, {len(obj)} chars total]"
+    return obj
+
 
 class ClaudeCodeCLIParser:
     """Implements the ProviderCLIParser protocol for Claude Code CLI sessions.
@@ -30,6 +46,7 @@ class ClaudeCodeCLIParser:
     def __init__(self, *, supervisor: Any | None = None) -> None:
         self._supervisor = supervisor
         self._discovered_session_id: str | None = None
+        self._line_buffer: str = ""
 
     @property
     def discovered_session_id(self) -> str | None:
@@ -62,13 +79,34 @@ class ClaudeCodeCLIParser:
         """Parse raw output from Claude Code into structured events.
 
         Claude Code emits JSONL when run with ``--output-format stream-json``.
-        Each line is either a JSON object with a ``type`` field or plain text.
+        Each line is a complete JSON object terminated by ``\\n``.
+
+        TCP chunks (typically 8 KB) can split a single JSONL line across
+        multiple ``parse_output`` calls. The line buffer accumulates partial
+        content until a newline arrives, then parses the complete line.
         """
         if not chunk:
             return []
 
         text: str = chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
+        # Prepend any buffered content from the previous chunk
+        if self._line_buffer:
+            text = self._line_buffer + text
+            self._line_buffer = ""
+
         events: list[ParsedCliEvent] = []
+
+        # If the text does not end with a newline, the last segment is a
+        # partial JSONL line split by a TCP chunk boundary.
+        if not text.endswith("\n"):
+            last_nl = text.rfind("\n")
+            if last_nl == -1:
+                # No newline at all — buffer everything for next chunk
+                self._line_buffer = text
+                return events
+            # Buffer the trailing partial, process complete lines above it
+            self._line_buffer = text[last_nl + 1 :]
+            text = text[: last_nl + 1]
 
         for line in text.splitlines():
             stripped = line.strip()
@@ -157,8 +195,8 @@ class ClaudeCodeCLIParser:
             events.append(
                 ParsedCliEvent(
                     kind="text",
-                    text=json.dumps(data),
-                    metadata={"raw_type": msg_type},
+                    text=json.dumps(_truncate_large_values(data)),
+                    metadata={"raw_type": msg_type, "source_type": msg_type},
                 )
             )
 
@@ -178,9 +216,45 @@ class ClaudeCodeCLIParser:
                         kind="session_id",
                         text=session_id,
                         provider_session_id=session_id,
-                        metadata={"subtype": subtype},
+                        metadata={
+                            "subtype": subtype,
+                            "source_type": "system",
+                            "source_subtype": subtype,
+                        },
                     )
                 )
+        elif subtype in ("hook_started", "hook_response"):
+            hook_name = data.get("hook_name", subtype)
+            summary = f"{hook_name}"
+            events.append(
+                ParsedCliEvent(
+                    kind="system_event",
+                    text=summary,
+                    provider_session_id=self._discovered_session_id,
+                    metadata={
+                        "subtype": subtype,
+                        "source_type": "system",
+                        "source_subtype": subtype,
+                        "hook_name": hook_name,
+                        "raw_json": json.dumps(_truncate_large_values(data)),
+                    },
+                )
+            )
+        else:
+            # Other system subtypes (e.g. future ones) — emit as system event
+            summary = subtype or "system"
+            events.append(
+                ParsedCliEvent(
+                    kind="system_event",
+                    text=summary,
+                    provider_session_id=self._discovered_session_id,
+                    metadata={
+                        "subtype": subtype,
+                        "source_type": "system",
+                        "source_subtype": subtype,
+                    },
+                )
+            )
 
         return events
 
@@ -200,6 +274,7 @@ class ClaudeCodeCLIParser:
                             kind="text",
                             text=text,
                             provider_session_id=self._discovered_session_id,
+                            metadata={"source_type": "assistant", "source_subtype": "text"},
                         )
                     )
             elif block_type == "tool_use":
@@ -222,6 +297,8 @@ class ClaudeCodeCLIParser:
                             "tool_id": block.get("id"),
                             "tool_name": tool_name,
                             "tool_input": tool_input,
+                            "source_type": "tool_use",
+                            "source_subtype": tool_name,
                         },
                     )
                 )
@@ -244,7 +321,11 @@ class ClaudeCodeCLIParser:
                     kind="error",
                     text=result_text or subtype,
                     provider_session_id=self._discovered_session_id,
-                    metadata={"subtype": subtype},
+                    metadata={
+                        "subtype": subtype,
+                        "source_type": "result",
+                        "source_subtype": "error",
+                    },
                 )
             ]
 
@@ -253,7 +334,7 @@ class ClaudeCodeCLIParser:
                 kind="result",
                 text=result_text,
                 provider_session_id=self._discovered_session_id,
-                metadata={"subtype": subtype},
+                metadata={"subtype": subtype, "source_type": "result", "source_subtype": "success"},
             )
         ]
 
@@ -281,5 +362,7 @@ class ClaudeCodeCLIParser:
                 "tool_id": tool_id,
                 "tool_name": tool_name,
                 "tool_input": tool_input,
+                "source_type": "tool_use",
+                "source_subtype": "ask_user",
             },
         )

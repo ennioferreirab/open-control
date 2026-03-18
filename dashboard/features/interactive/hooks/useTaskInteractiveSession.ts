@@ -12,6 +12,21 @@ type StepDoc = Doc<"steps">;
 
 const ATTACHABLE_STATUSES = new Set(["ready", "attached", "detached"]);
 const HISTORICAL_STATUSES = new Set(["ended", "error"]);
+
+export type LiveChoice = {
+  /** Unique identifier for the choice — either a stepId or "task" for task-level sessions */
+  id: string;
+  /** Display label for the selector */
+  label: string;
+  /** Whether this choice is currently active (running/attached) */
+  isActive: boolean;
+  /** Session status for display */
+  status: string;
+  /** Step ID if this choice is step-scoped */
+  stepId?: string;
+  /** Whether this is a task-level (no step) session */
+  isTaskLevel: boolean;
+};
 const ACTIVE_STEP_STATUSES = new Set(["running", "review", "waiting_human", "assigned"]);
 
 type TaskLiveTarget = {
@@ -110,6 +125,62 @@ export function collectTaskLiveStepIds(
   return [...stepIds];
 }
 
+export function buildLiveChoices(
+  sessions: InteractiveSessionDoc[] | null | undefined,
+  steps: StepDoc[] | null | undefined,
+  taskId: string | null,
+): LiveChoice[] {
+  if (!taskId || !sessions?.length) return [];
+
+  const choices: LiveChoice[] = [];
+  const seenStepIds = new Set<string>();
+
+  for (const session of sessions) {
+    if (session.taskId !== taskId) continue;
+    if (!ATTACHABLE_STATUSES.has(session.status) && !HISTORICAL_STATUSES.has(session.status))
+      continue;
+
+    const stepId = session.stepId;
+    if (typeof stepId === "string") {
+      const isActive = ATTACHABLE_STATUSES.has(session.status);
+      const existingIdx = choices.findIndex((c) => c.stepId === stepId);
+      if (existingIdx === -1) {
+        seenStepIds.add(stepId);
+        const step = steps?.find((s) => s._id === stepId);
+        choices.push({
+          id: stepId,
+          label: step?.title ?? `Step ${stepId.slice(-6)}`,
+          isActive,
+          status: session.status,
+          stepId,
+          isTaskLevel: false,
+        });
+      } else if (isActive && !choices[existingIdx].isActive) {
+        // Prefer attachable session over historical for the same step
+        choices[existingIdx].isActive = true;
+        choices[existingIdx].status = session.status;
+      }
+    }
+
+    // Task-level sessions (no stepId)
+    if (session.stepId == null && !choices.some((c) => c.isTaskLevel)) {
+      choices.push({
+        id: "task",
+        label: "Task session",
+        isActive: ATTACHABLE_STATUSES.has(session.status),
+        status: session.status,
+        isTaskLevel: true,
+      });
+    }
+  }
+
+  // Sort: active first, then by label
+  return choices.sort((a, b) => {
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+    return a.label.localeCompare(b.label);
+  });
+}
+
 export function describeTaskInteractiveSession(
   session: InteractiveSessionDoc | null,
 ): string | null {
@@ -197,6 +268,10 @@ export function useTaskInteractiveSession(
     [sessions, sessionTarget],
   );
   const liveStepIds = useMemo(() => collectTaskLiveStepIds(sessions, taskId), [sessions, taskId]);
+  const liveChoices = useMemo(
+    () => buildLiveChoices(sessions, detailView?.steps ?? null, taskId),
+    [sessions, detailView?.steps, taskId],
+  );
   const stateLabel = useMemo(() => describeTaskInteractiveSession(session), [session]);
   const identityLabel = useMemo(() => {
     if (!session) {
@@ -209,6 +284,7 @@ export function useTaskInteractiveSession(
     activeStep: focusedStep,
     session,
     liveStepIds,
+    liveChoices,
     stateLabel,
     identityLabel,
   };
