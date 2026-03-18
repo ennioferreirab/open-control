@@ -1,8 +1,9 @@
 """Tests for enriched context in handle_mention().
 
-Verifies that handle_mention injects task metadata, uses ThreadContextBuilder
-with max_messages=20, includes execution plan summary, and removes
-_build_mention_context entirely.
+Verifies that handle_mention injects mention-specific sections
+([Mention], [Task Context], [Execution Plan], [Task Files]) into
+the ExecutionRequest built by ContextBuilder, then runs through
+ExecutionEngine.
 
 Story 13.2: Full Context for Mentioned Agents.
 """
@@ -10,12 +11,12 @@ Story 13.2: Full Context for Mentioned Agents.
 from __future__ import annotations
 
 import inspect
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import mc.contexts.conversation.mentions.handler as handler_module
+from mc.application.execution.request import ExecutionRequest, ExecutionResult
 from mc.contexts.conversation.mentions.handler import handle_mention
 
 
@@ -67,17 +68,22 @@ def _make_mock_config(prompt="You are a helpful researcher."):
     return mock_config
 
 
+class _MentionResult:
+    """Container for a handle_mention invocation result."""
+
+    def __init__(self) -> None:
+        self.prompt: str = ""
+
+
 @pytest.fixture
 def _mock_agent_env():
-    """Mock all external dependencies used inside handle_mention.
+    """Mock external dependencies for handle_mention (config validation only).
 
-    Since handle_mention uses local imports for config and validation,
-    we must patch the source modules, not mc.contexts.conversation.mentions.handler attributes.
+    ContextBuilder and ExecutionEngine are mocked separately in run_mention.
     """
     mock_config = _make_mock_config()
 
     mock_agents_dir = MagicMock()
-    # AGENTS_DIR / agent_name / "config.yaml" — must return a path with exists()=True
     mock_config_path = MagicMock()
     mock_config_path.exists.return_value = True
     mock_agent_dir = MagicMock()
@@ -95,38 +101,41 @@ def _mock_agent_env():
             "mc.infrastructure.agents.yaml_validator.validate_agent_file",
             return_value=mock_config,
         ),
-        patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-        patch("mc.types.is_tier_reference", return_value=False),
     ):
         yield mock_config
 
 
-class _MentionResult:
-    """Container for a handle_mention invocation result."""
-
-    def __init__(self) -> None:
-        self.content: str = ""
-
-
 @pytest.fixture
 def run_mention(mock_bridge, _mock_agent_env):
-    """Fixture that runs handle_mention and captures the prompt sent to the agent.
+    """Fixture that runs handle_mention and captures the prompt.
 
-    Returns an async callable that accepts optional overrides for handle_mention
-    kwargs and returns a ``_MentionResult`` whose ``.content`` holds the captured
-    prompt string.
+    Mocks ContextBuilder to return a controllable ExecutionRequest and
+    captures the final prompt from engine.run().
     """
 
     async def _run(**overrides) -> _MentionResult:
         result = _MentionResult()
 
-        async def _capture(**kwargs):
-            result.content = kwargs.get("content", "")
-            return "Agent response"
+        # Build a base ExecutionRequest that ContextBuilder would return
+        base_req = ExecutionRequest(
+            entity_type="task",
+            entity_id="task123",
+            task_id="task123",
+            title="Test task",
+            description="Base description from ContextBuilder",
+            agent_name="researcher",
+            agent_prompt=overrides.pop("agent_prompt", "You are a helpful researcher."),
+        )
 
-        mock_loop = MagicMock()
-        mock_loop.process_direct = _capture
-        mock_loop.tools = {}
+        mock_ctx_builder = MagicMock()
+        mock_ctx_builder.build_task_context = AsyncMock(return_value=base_req)
+
+        async def _capture_run(req):
+            result.prompt = req.prompt
+            return ExecutionResult(success=True, output="Agent response")
+
+        mock_engine = MagicMock()
+        mock_engine.run = _capture_run
 
         defaults = dict(
             bridge=mock_bridge,
@@ -140,11 +149,13 @@ def run_mention(mock_bridge, _mock_agent_env):
 
         with (
             patch(
-                "mc.infrastructure.providers.factory.create_provider",
-                return_value=("prov", "model"),
+                "mc.application.execution.context_builder.ContextBuilder",
+                return_value=mock_ctx_builder,
             ),
-            patch("nanobot.agent.loop.AgentLoop", return_value=mock_loop),
-            patch("nanobot.bus.queue.MessageBus"),
+            patch(
+                "mc.application.execution.post_processing.build_execution_engine",
+                return_value=mock_engine,
+            ),
         ):
             await handle_mention(**defaults)
 
@@ -165,44 +176,14 @@ class TestHandleMentionTaskMetadata:
             task_title="Research AI safety",
         )
 
-        content = result.content
-        assert "[Task Context]" in content
-        assert "Title: Research AI safety" in content
-        assert "Description: Investigate alignment techniques" in content
-        assert "Status: in_progress" in content
-        assert "Assigned Agent: researcher" in content
-        assert "Tags: ai, safety" in content
-        assert "Board ID: board_sprint1" in content
-
-
-class TestHandleMentionThreadContext:
-    """AC2: ThreadContextBuilder used with max_messages=20."""
-
-    @pytest.mark.asyncio
-    async def test_uses_thread_context_builder(self, run_mention):
-        """handle_mention calls ThreadContextBuilder.build with max_messages=20."""
-        captured_args = {}
-
-        class CapturingBuilder:
-            def build(self, messages, max_messages=20, **kwargs):
-                captured_args["messages"] = messages
-                captured_args["max_messages"] = max_messages
-                captured_args["kwargs"] = kwargs
-                return "[Thread History]\nUser: test message"
-
-        with patch(
-            "mc.contexts.conversation.mentions.handler.ThreadContextBuilder", CapturingBuilder
-        ):
-            await run_mention()
-
-        assert captured_args["max_messages"] == 20
-
-    @pytest.mark.asyncio
-    async def test_includes_thread_journal_hint(self, run_mention):
-        result = await run_mention()
-
-        assert "[Thread Journal]" in result.content
-        assert "THREAD_JOURNAL.md" in result.content
+        prompt = result.prompt
+        assert "[Task Context]" in prompt
+        assert "Title: Research AI safety" in prompt
+        assert "Description: Investigate alignment techniques" in prompt
+        assert "Status: in_progress" in prompt
+        assert "Assigned Agent: researcher" in prompt
+        assert "Tags: ai, safety" in prompt
+        assert "Board ID: board_sprint1" in prompt
 
 
 class TestHandleMentionExecutionPlan:
@@ -213,10 +194,10 @@ class TestHandleMentionExecutionPlan:
         """handle_mention includes [Execution Plan] when plan exists."""
         result = await run_mention()
 
-        content = result.content
-        assert "[Execution Plan]" in content
-        assert "1. Literature review — completed" in content
-        assert "2. Summarize findings — in_progress" in content
+        prompt = result.prompt
+        assert "[Execution Plan]" in prompt
+        assert "1. Literature review — completed" in prompt
+        assert "2. Summarize findings — in_progress" in prompt
 
     @pytest.mark.asyncio
     async def test_omits_plan_when_absent(self, mock_bridge, run_mention):
@@ -228,7 +209,7 @@ class TestHandleMentionExecutionPlan:
 
         result = await run_mention(task_title="Simple task")
 
-        assert "[Execution Plan]" not in result.content
+        assert "[Execution Plan]" not in result.prompt
 
 
 class TestHandleMentionTaskFiles:
@@ -239,8 +220,8 @@ class TestHandleMentionTaskFiles:
         """handle_mention includes [Task Files] when files exist."""
         result = await run_mention()
 
-        assert "[Task Files]" in result.content
-        assert "reference.pdf" in result.content
+        assert "[Task Files]" in result.prompt
+        assert "reference.pdf" in result.prompt
 
     @pytest.mark.asyncio
     async def test_omits_files_when_absent(self, mock_bridge, run_mention):
@@ -252,104 +233,7 @@ class TestHandleMentionTaskFiles:
 
         result = await run_mention(task_title="No files task")
 
-        assert "[Task Files]" not in result.content
-
-    @pytest.mark.asyncio
-    async def test_includes_merged_source_file_paths_and_threads(self, mock_bridge, run_mention):
-        """Merged tasks expose source metadata, files, and thread sections with absolute paths."""
-        mock_bridge.get_task.return_value = {
-            "title": "Merged Task C",
-            "description": "Continue from merged context",
-            "status": "inbox",
-            "is_merge_task": True,
-            "merge_source_task_ids": ["task_a", "task_b"],
-            "merge_source_labels": ["A", "B"],
-            "files": [],
-        }
-
-        source_tasks = {
-            "task_a": {
-                "title": "Task A",
-                "description": "First source",
-                "status": "done",
-                "files": [
-                    {"name": "source-a.pdf", "subfolder": "attachments"},
-                ],
-            },
-            "task_b": {
-                "title": "Task B",
-                "description": "Second source",
-                "status": "done",
-                "files": [
-                    {"name": "source-b.md", "subfolder": "output"},
-                ],
-            },
-        }
-
-        def query_side_effect(query_name: str, params: dict):
-            if query_name == "tasks:getById":
-                return source_tasks.get(params["task_id"])
-            return None
-
-        def message_side_effect(task_id: str):
-            if task_id == "task_a":
-                return [
-                    {
-                        "author_name": "agent-a",
-                        "author_type": "agent",
-                        "timestamp": "2026-01-01T10:00:00Z",
-                        "content": "Source A complete",
-                        "type": "step_completion",
-                        "artifacts": [{"path": "output/report-a.md", "action": "created"}],
-                    }
-                ]
-            if task_id == "task_b":
-                return [
-                    {
-                        "author_name": "agent-b",
-                        "author_type": "agent",
-                        "timestamp": "2026-01-01T10:05:00Z",
-                        "content": "Source B complete",
-                        "type": "step_completion",
-                        "artifacts": [{"path": "output/report-b.md", "action": "created"}],
-                    }
-                ]
-            return [
-                {
-                    "author_name": "User",
-                    "author_type": "user",
-                    "message_type": "user_message",
-                    "content": "Please continue",
-                }
-            ]
-
-        mock_bridge.query.side_effect = query_side_effect
-        mock_bridge.get_task_messages.side_effect = message_side_effect
-
-        result = await run_mention(task_title="Merged Task C")
-
-        source_a_path = str(
-            Path.home() / ".nanobot" / "tasks" / "task_a" / "attachments" / "source-a.pdf"
-        )
-        source_b_path = str(
-            Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "source-b.md"
-        )
-
-        assert "[Merged Task Origins]" in result.content
-        assert "[Source Task A Files]" in result.content
-        assert "[Source Task B Files]" in result.content
-        assert "[Source Thread A]" in result.content
-        assert "[Source Thread B]" in result.content
-        assert source_a_path in result.content
-        assert source_b_path in result.content
-        assert (
-            str(Path.home() / ".nanobot" / "tasks" / "task_a" / "output" / "report-a.md")
-            in result.content
-        )
-        assert (
-            str(Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "report-b.md")
-            in result.content
-        )
+        assert "[Task Files]" not in result.prompt
 
 
 class TestBuildMentionContextRemoved:
@@ -371,27 +255,126 @@ class TestHandleMentionPromptStructure:
     """AC5: Prompt structure follows the specified section order."""
 
     @pytest.mark.asyncio
-    async def test_section_order(self, run_mention):
-        """Sections appear in correct order: System > Mention > Task > Plan > Files."""
+    async def test_mention_sections_order(self, run_mention):
+        """Mention-specific sections appear in correct order: Mention > Task > Plan > Files."""
         result = await run_mention()
 
-        content = result.content
+        prompt = result.prompt
+        mention_idx = prompt.index("[Mention]")
+        task_idx = prompt.index("[Task Context]")
+        plan_idx = prompt.index("[Execution Plan]")
+        files_idx = prompt.index("[Task Files]")
 
-        # Verify section order
-        sys_idx = content.index("[System instructions]")
-        mention_idx = content.index("[Mention]")
-        task_idx = content.index("[Task Context]")
-        plan_idx = content.index("[Execution Plan]")
-        files_idx = content.index("[Task Files]")
-
-        assert sys_idx < mention_idx < task_idx < plan_idx < files_idx
+        assert mention_idx < task_idx < plan_idx < files_idx
 
     @pytest.mark.asyncio
-    async def test_no_system_instructions_when_prompt_none(self, _mock_agent_env, run_mention):
-        """Verifies [System instructions] section is omitted when agent prompt is None."""
-        _mock_agent_env.prompt = None
-
+    async def test_agent_prompt_before_mention_sections(self, run_mention):
+        """Agent prompt appears before mention-specific sections."""
         result = await run_mention()
 
-        assert "[System instructions]" not in result.content
-        assert "[Mention]" in result.content
+        prompt = result.prompt
+        researcher_idx = prompt.index("You are a helpful researcher.")
+        mention_idx = prompt.index("[Mention]")
+
+        assert researcher_idx < mention_idx
+
+    @pytest.mark.asyncio
+    async def test_no_agent_prompt_when_none(self, run_mention):
+        """When agent_prompt is None, prompt is just the description."""
+        result = await run_mention(agent_prompt=None)
+
+        assert "[Mention]" in result.prompt
+        assert "---" not in result.prompt.split("[Mention]")[0]
+
+
+class TestHandleMentionUsesExecutionEngine:
+    """Verify mention handler routes through ExecutionEngine."""
+
+    @pytest.mark.asyncio
+    async def test_sets_session_boundary_reason(self, mock_bridge, _mock_agent_env):
+        """handle_mention sets session_boundary_reason='mention' on the request."""
+        captured_req = {}
+
+        base_req = ExecutionRequest(
+            entity_type="task",
+            entity_id="task123",
+            task_id="task123",
+            title="Test task",
+            agent_name="researcher",
+            agent_prompt="You are a researcher.",
+        )
+
+        mock_ctx_builder = MagicMock()
+        mock_ctx_builder.build_task_context = AsyncMock(return_value=base_req)
+
+        async def _capture_run(req):
+            captured_req["req"] = req
+            return ExecutionResult(success=True, output="Agent response")
+
+        mock_engine = MagicMock()
+        mock_engine.run = _capture_run
+
+        with (
+            patch(
+                "mc.application.execution.context_builder.ContextBuilder",
+                return_value=mock_ctx_builder,
+            ),
+            patch(
+                "mc.application.execution.post_processing.build_execution_engine",
+                return_value=mock_engine,
+            ),
+        ):
+            await handle_mention(
+                bridge=mock_bridge,
+                task_id="task123",
+                agent_name="researcher",
+                query="help",
+                caller_message_content="@researcher help",
+                task_title="Test task",
+            )
+
+        assert captured_req["req"].session_boundary_reason == "mention"
+
+    @pytest.mark.asyncio
+    async def test_posts_error_on_engine_failure(self, mock_bridge, _mock_agent_env):
+        """handle_mention posts error message when engine returns failure."""
+        base_req = ExecutionRequest(
+            entity_type="task",
+            entity_id="task123",
+            task_id="task123",
+            title="Test task",
+            agent_name="researcher",
+        )
+
+        mock_ctx_builder = MagicMock()
+        mock_ctx_builder.build_task_context = AsyncMock(return_value=base_req)
+
+        async def _fail_run(req):
+            return ExecutionResult(success=False, error_message="Model not found")
+
+        mock_engine = MagicMock()
+        mock_engine.run = _fail_run
+
+        with (
+            patch(
+                "mc.application.execution.context_builder.ContextBuilder",
+                return_value=mock_ctx_builder,
+            ),
+            patch(
+                "mc.application.execution.post_processing.build_execution_engine",
+                return_value=mock_engine,
+            ),
+        ):
+            await handle_mention(
+                bridge=mock_bridge,
+                task_id="task123",
+                agent_name="researcher",
+                query="help",
+                caller_message_content="@researcher help",
+                task_title="Test task",
+            )
+
+        # Verify error is posted to the thread
+        sent = mock_bridge.send_message.call_args
+        assert "error" in sent[0][3].lower() or "Error" in sent[0][3]
+        assert "Model not found" in sent[0][3]

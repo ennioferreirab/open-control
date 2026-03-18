@@ -12,6 +12,7 @@ from mc.contexts.provider_cli.types import (
     ProviderProcessHandle,
 )
 
+
 def _make_handle(*, pid: int = 11111, pgid: int = 11110) -> ProviderProcessHandle:
     return ProviderProcessHandle(
         mc_session_id="mc-session-1",
@@ -45,7 +46,6 @@ async def test_discover_session_returns_runtime_owned_snapshot() -> None:
     assert snap.supports_stop is True
     assert snap.mc_session_id == "mc-session-1"
     assert snap.provider_session_id is None
-
 
 
 # ---------------------------------------------------------------------------

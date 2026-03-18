@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mc.contexts.routing.llm_delegator import LLMDelegationRouter
-from mc.contexts.routing.router import RoutingDecision
 
 
 def make_bridge(agents: list[dict] | None = None) -> MagicMock:
@@ -115,14 +114,13 @@ class TestPathBLLMDelegation:
 
     @pytest.mark.asyncio
     async def test_llm_timeout_raises(self) -> None:
-        import asyncio
 
         agents = [make_agent("agent-a")]
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
         mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_provider.chat = AsyncMock(side_effect=TimeoutError())
 
         with (
             patch(

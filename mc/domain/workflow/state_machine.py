@@ -40,6 +40,7 @@ VALID_TRANSITIONS: dict[str, list[str]] = dict(_SPEC["taskTransitions"])
 # Universal targets: allowed from ANY source state
 UNIVERSAL_TARGETS: set[str] = set(_SPEC["taskUniversalTargets"])
 
+
 def _parse_transition_key(k: str) -> tuple[str, str]:
     parts = k.split("->")
     if len(parts) != 2:
@@ -49,8 +50,7 @@ def _parse_transition_key(k: str) -> tuple[str, str]:
 
 # Map (from, to) -> activity event type
 TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
-    _parse_transition_key(k): v
-    for k, v in _SPEC["taskTransitionEvents"].items()
+    _parse_transition_key(k): v for k, v in _SPEC["taskTransitionEvents"].items()
 }
 
 # Step transitions: current_status -> [allowed_next_statuses]
@@ -58,8 +58,7 @@ STEP_VALID_TRANSITIONS: dict[str, list[str]] = dict(_SPEC["stepTransitions"])
 
 # Map (from, to) -> activity event type for step transitions
 STEP_TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
-    _parse_transition_key(k): v
-    for k, v in _SPEC["stepTransitionEvents"].items()
+    _parse_transition_key(k): v for k, v in _SPEC["stepTransitionEvents"].items()
 }
 
 

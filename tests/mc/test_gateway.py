@@ -940,6 +940,7 @@ class TestOrchestratorNoDuplicateActivity:
     async def test_review_keeps_standalone_activity_events(self):
         """Review routing should still create standalone activity events
         (review_requested, hitl_requested) that have no status transition."""
+        from mc.domain.workflow.review_result import ReviewResult
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
@@ -956,13 +957,29 @@ class TestOrchestratorNoDuplicateActivity:
             "trust_level": "agent_reviewed",
         }
 
-        with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        # Mock the reviewer agent execution so the test focuses on activity events
+        mock_review = ReviewResult(
+            verdict="approved",
+            issues=[],
+            strengths=[],
+            scores={},
+            vetoes_triggered=[],
+            recommended_return_step=None,
+        )
+        with (
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+            patch.object(
+                orch._review_worker,
+                "_run_reviewer_agent",
+                return_value=mock_review,
+            ),
+        ):
             await orch._review_worker.handle_review_transition("task_review_1", task_data)
 
-        # Should create review_requested (standalone event, no status change)
-        mock_bridge.create_activity.assert_called_once()
-        args = mock_bridge.create_activity.call_args
-        assert args[0][0] == "review_requested"
+        # Should create review_requested + review_approved (standalone events, no status change)
+        assert mock_bridge.create_activity.call_count == 2
+        first_call = mock_bridge.create_activity.call_args_list[0]
+        assert first_call[0][0] == "review_requested"
 
     @pytest.mark.asyncio
     async def test_autonomous_review_waits_for_explicit_approval(self):

@@ -14,20 +14,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mc.application.execution.file_enricher import (
-    build_merged_source_context,
-    load_merged_source_payloads,
-)
-from mc.application.execution.thread_journal_service import ThreadJournalService
 from mc.types import (
-    NANOBOT_AGENT_NAME,
     ActivityEventType,
     AuthorType,
     MessageType,
+    TrustLevel,
     is_lead_agent,
 )
 
@@ -46,28 +40,6 @@ _MENTION_RE = re.compile(
 
 # Timeout for a single mention response (seconds)
 MENTION_TIMEOUT_SECONDS = 120
-
-
-class ThreadContextBuilder:
-    """Compatibility wrapper around the shared thread-context builder."""
-
-    def build(
-        self,
-        messages: list[dict[str, Any]],
-        max_messages: int = 20,
-        **kwargs: Any,
-    ) -> str:
-        from mc.application.execution.thread_context_builder import build_thread_context
-
-        predecessor_step_ids = kwargs.get("predecessor_step_ids")
-        return build_thread_context(
-            messages,
-            max_messages=max_messages,
-            predecessor_step_ids=predecessor_step_ids,
-            compacted_summary=kwargs.get("compacted_summary", ""),
-            thread_journal_path=kwargs.get("thread_journal_path"),
-            recent_window_messages=kwargs.get("recent_window_messages"),
-        )
 
 
 def _known_agent_names() -> set[str]:
@@ -171,7 +143,7 @@ async def handle_mention(
         )
         return
 
-    # Load agent config
+    # Load agent config — needed for early validation and to get display_name
     from mc.infrastructure.agents.yaml_validator import validate_agent_file
     from mc.infrastructure.config import AGENTS_DIR
 
@@ -201,53 +173,10 @@ async def handle_mention(
         )
         return
 
-    agent_prompt = config_result.prompt
-    agent_model = config_result.model
-    agent_skills = config_result.skills
     display_name = config_result.display_name or agent_name
 
-    # Resolve tier references
-    from mc.types import is_tier_reference
-
-    if agent_model and is_tier_reference(agent_model):
-        try:
-            from mc.infrastructure.providers.tier_resolver import TierResolver
-
-            resolver = TierResolver(bridge)
-            agent_model = resolver.resolve_model(agent_model)
-        except ValueError as exc:
-            logger.warning(
-                "[mention_handler] Tier resolution failed for @%s: %s",
-                agent_name,
-                exc,
-            )
-            # Continue with None model (will use default)
-            agent_model = None
-
-    # Inject global orientation for non-lead agents
-    from mc.infrastructure.orientation import load_orientation
-
-    orientation = load_orientation(agent_name, bridge=bridge)
-    if orientation:
-        agent_prompt = f"{orientation}\n\n---\n\n{agent_prompt}" if agent_prompt else orientation
-
-    # System agent (nanobot) uses SOUL.md identity — skip prompt injection
-    if agent_name == NANOBOT_AGENT_NAME:
-        agent_prompt = None
-
-    # Fetch thread context and task data for the agent (shared pipeline -- AC2 of 16.1)
-    thread_context = ""
+    # Fetch task data for mention-specific sections
     task_data: dict[str, Any] | None = None
-    thread_messages: list[dict[str, Any]] = []
-    try:
-        thread_messages = await asyncio.to_thread(bridge.get_task_messages, task_id)
-    except Exception:
-        logger.warning(
-            "[mention_handler] Failed to fetch thread context for task %s",
-            task_id,
-            exc_info=True,
-        )
-
     try:
         task_data = await asyncio.to_thread(bridge.get_task, task_id)
     except Exception:
@@ -256,87 +185,6 @@ async def handle_mention(
             task_id,
             exc_info=True,
         )
-
-    try:
-        journal_service = ThreadJournalService(bridge=bridge)
-        snapshot = journal_service.sync_task_thread(
-            task_id=task_id,
-            task_title=str((task_data or {}).get("title") or task_title or task_id),
-            task_data=task_data or {},
-            messages=thread_messages,
-        )
-        journal_service.schedule_background_compaction(
-            task_id=task_id,
-            task_title=str((task_data or {}).get("title") or task_title or task_id),
-            task_data=task_data or {},
-            messages=thread_messages,
-        )
-        thread_context = ThreadContextBuilder().build(
-            thread_messages,
-            max_messages=20,
-            compacted_summary=snapshot.state.compacted_summary,
-            thread_journal_path=snapshot.journal_path,
-            recent_window_messages=snapshot.state.recent_window_messages,
-        )
-    except Exception:
-        logger.warning(
-            "[mention_handler] Failed to build journal-aware thread context for task %s",
-            task_id,
-            exc_info=True,
-        )
-
-    # Build the prompt for the agent
-    mention_query = query or caller_message_content
-    if not mention_query.strip():
-        mention_query = f"You were mentioned in task: {task_title or task_id}"
-
-    # Build structured sections
-    sections: list[str] = []
-
-    # [System instructions] — only if agent_prompt is set
-    if agent_prompt:
-        sections.append(f"[System instructions]\n{agent_prompt}")
-
-    # [Mention]
-    sections.append(
-        f"[Mention]\n"
-        f"You were mentioned via @{agent_name} in a task thread.\n"
-        f"User message: {mention_query}"
-    )
-
-    # [Task Context]
-    task_context = _build_task_context(task_data)
-    if task_context:
-        sections.append(task_context)
-
-    # [Execution Plan]
-    plan_section = _build_execution_plan_summary(task_data)
-    if plan_section:
-        sections.append(plan_section)
-
-    # [Task Files]
-    files_section = _build_task_files_section(task_data)
-    if files_section:
-        sections.append(files_section)
-
-    if task_data:
-        try:
-            merged_source_payloads = await load_merged_source_payloads(bridge, task_data)
-            merged_source_context = build_merged_source_context(merged_source_payloads)
-            if merged_source_context:
-                sections.append(merged_source_context)
-        except Exception:
-            logger.warning(
-                "[mention_handler] Failed to inject merged source context for task %s",
-                task_id,
-                exc_info=True,
-            )
-
-    # Thread context from ThreadContextBuilder
-    if thread_context:
-        sections.append(thread_context)
-
-    full_message = "\n\n".join(sections)
 
     # Post a "typing" indicator to the thread
     try:
@@ -350,59 +198,77 @@ async def handle_mention(
     except Exception:
         pass  # Non-critical
 
-    # Create provider and run agent
+    # Build the mention query
+    mention_query = query or caller_message_content
+    if not mention_query.strip():
+        mention_query = f"You were mentioned in task: {task_title or task_id}"
+
+    # Build execution context via ContextBuilder (handles YAML, Convex sync,
+    # tier resolution, orientation, thread context, file enrichment, etc.)
     try:
-        from nanobot.agent.loop import AgentLoop
-        from nanobot.bus.queue import MessageBus
+        from mc.application.execution.context_builder import ContextBuilder
+        from mc.application.execution.post_processing import build_execution_engine
 
-        from mc.infrastructure.providers.factory import create_provider
-
-        provider, resolved_model = create_provider(agent_model)
-
-        workspace = AGENTS_DIR / agent_name
-        workspace.mkdir(parents=True, exist_ok=True)
-
-        global_skills_dir = Path.home() / ".nanobot" / "workspace" / "skills"
-
-        # Use a unique session key per mention to avoid session contamination
-        session_key = f"mc:mention:{agent_name}:{task_id}:{uuid.uuid4().hex[:8]}"
-
-        bus = MessageBus()
-        loop = AgentLoop(
-            bus=bus,
-            provider=provider,
-            workspace=workspace,
-            model=resolved_model,
-            allowed_skills=agent_skills,
-            global_skills_dir=global_skills_dir,
+        ctx_builder = ContextBuilder(bridge)
+        req = await ctx_builder.build_task_context(
+            task_id=task_id,
+            title=task_title or task_data.get("title", task_id)
+            if task_data
+            else task_title or task_id,
+            description=task_data.get("description") if task_data else None,
+            agent_name=agent_name,
+            trust_level=task_data.get("trust_level", TrustLevel.AUTONOMOUS)
+            if task_data
+            else TrustLevel.AUTONOMOUS,
+            task_data=task_data or {},
         )
 
-        # Set MC context on ask_agent tool
-        if ask_tool := loop.tools.get("ask_agent"):
-            from nanobot.agent.tools.ask_agent import AskAgentTool
+        # Append mention-specific sections to description
+        mention_sections: list[str] = []
 
-            if isinstance(ask_tool, AskAgentTool):
-                ask_tool.set_context(
-                    caller_agent=agent_name,
-                    task_id=task_id,
-                    depth=0,
-                    bridge=bridge,
-                )
+        # [Mention] — the core reason the agent was invoked
+        mention_sections.append(
+            f"[Mention]\n"
+            f"You were mentioned via @{agent_name} in a task thread.\n"
+            f"User message: {mention_query}"
+        )
 
-        response = await asyncio.wait_for(
-            loop.process_direct(
-                content=full_message,
-                session_key=session_key,
-                channel="mc",
-                chat_id=agent_name,
-                task_id=task_id,
-            ),
+        # [Task Context] — task metadata summary
+        task_context = _build_task_context(task_data)
+        if task_context:
+            mention_sections.append(task_context)
+
+        # [Execution Plan] — step-by-step plan summary
+        plan_section = _build_execution_plan_summary(task_data)
+        if plan_section:
+            mention_sections.append(plan_section)
+
+        # [Task Files] — attached file listing
+        files_section = _build_task_files_section(task_data)
+        if files_section:
+            mention_sections.append(files_section)
+
+        mention_addendum = "\n\n".join(mention_sections)
+        req.description = (req.description or "") + f"\n\n{mention_addendum}"
+
+        # Reassemble the canonical prompt after modifying description
+        if req.agent_prompt:
+            req.prompt = f"{req.agent_prompt}\n\n---\n\n{req.description}"
+        else:
+            req.prompt = req.description or req.title
+
+        req.session_boundary_reason = "mention"
+
+        engine = build_execution_engine(bridge=bridge)
+        execution_result = await asyncio.wait_for(
+            engine.run(req),
             timeout=MENTION_TIMEOUT_SECONDS,
         )
 
-        # TODO: revisit task-based consolidation — may be better than message-count
-        # End the session (mention is a one-shot interaction)
-        # await loop.end_task_session(session_key)
+        if execution_result.success:
+            response = execution_result.output
+        else:
+            response = f"@{agent_name} encountered an error: {execution_result.error_message or 'Unknown error'}"
 
     except TimeoutError:
         response = (

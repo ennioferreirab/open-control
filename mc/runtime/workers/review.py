@@ -108,12 +108,21 @@ class ReviewWorker:
             task_data=task,
         )
         review_contract = _build_task_review_contract(task, reviewer_name)
-        req.description = f"{req.description}\n\n{review_contract}" if req.description else review_contract
+        req.description = (
+            f"{req.description}\n\n{review_contract}" if req.description else review_contract
+        )
         if req.agent_prompt:
             req.prompt = f"{req.agent_prompt}\n\n---\n\n{req.description}"
         else:
             req.prompt = req.description
         req.session_boundary_reason = "task_review"
+        logger.debug(
+            "[review] Execution request built for reviewer '%s' on task %s (runner_type=%s, model=%s)",
+            reviewer_name,
+            task_id,
+            req.runner_type.value,
+            req.model,
+        )
 
         engine = self._build_execution_engine()
         execution_result = await engine.run(req)
@@ -236,8 +245,7 @@ class ReviewWorker:
                     review_result = await self._run_reviewer_agent(task_id, task, reviewer_name)
                 except Exception as exc:
                     error_message = (
-                        f"Review by {reviewer_name} failed: {exc}. "
-                        "Task remains in review."
+                        f"Review by {reviewer_name} failed: {exc}. Task remains in review."
                     )
                     logger.exception(
                         "[review] Reviewer '%s' failed while reviewing task %s",

@@ -349,4 +349,3 @@ class TestEdgeCases:
             task_data={},
         )
         assert result.intent == ConversationIntent.COMMENT
-

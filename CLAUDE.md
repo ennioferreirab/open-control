@@ -49,13 +49,13 @@ All code, comments, commit messages, and docstrings in **English**.
 | Start stack | `make start` |
 | Stop stack | `make down` |
 | Pre-commit validation (no Convex needed) | `make validate` |
-| Steal Convex from another worktree | `make takeover` |
+| Steal Convex from another worktree | `make takeover` or `make takeover PORT=300x` |
 | Python tests | `uv run pytest` |
 | TypeScript tests | `cd dashboard && npm run test` |
 | Single TS test file | `cd dashboard && npx vitest run path/to/file.test.ts` |
 | Lint + typecheck | `make lint && make typecheck` |
 
-**Convex singleton:** only one local backend can run (port 3210). `make start` kills any existing instance. Never run `npx convex dev --local` directly.
+**Convex singleton:** only one local backend can run (port 3210). `make start` kills any existing instance. Never run `npx convex dev --local` directly. When using `make takeover` from a worktree, pass `PORT=300x` (e.g. `PORT=3001`) to run on a different port than the default 3000. If Convex prompts for login (non-interactive terminal error), run `cd dashboard && npx convex dev --local` once manually to authenticate, then retry `make takeover`.
 
 ### Development Method — BMAD
 
@@ -76,7 +76,7 @@ All features follow the **BMAD method** (v6.0.1). Use `/bmad-help` to see next s
 6. Code review → `/@_bmad/bmm/workflows/4-implementation/code-review`
 7. Run full test suite (`make validate`)
 8. Integration test — simulate real service interaction using backend functions
-9. `make takeover` on any available 300x port
+9. `make takeover PORT=300x` on any available port (e.g. `PORT=3001`, `PORT=3002`) to avoid conflicting with the default port 3000
 10. Share the port URL with the human for manual testing
 
 **Workflow rules:**

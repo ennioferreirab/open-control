@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.infrastructure.runtime_context import RuntimeContext
 from mc.domain.workflow.review_result import ReviewResult
+from mc.infrastructure.runtime_context import RuntimeContext
 from mc.runtime.workers.review import ReviewWorker
 from mc.types import (
     ActivityEventType,
@@ -219,7 +219,9 @@ class TestHandleReviewTransition:
 
         worker._run_reviewer_agent.assert_awaited_once_with("task-1", task, "reviewer-bot")  # type: ignore[attr-defined]
         review_requested = [
-            call for call in bridge.create_activity.call_args_list if call.args[0] == ActivityEventType.REVIEW_REQUESTED
+            call
+            for call in bridge.create_activity.call_args_list
+            if call.args[0] == ActivityEventType.REVIEW_REQUESTED
         ]
         assert len(review_requested) == 1
         assert any("reviewer-bot" in call.args[3] for call in bridge.send_message.call_args_list)
@@ -327,7 +329,9 @@ class TestHandleReviewTransition:
         assert "reviewer-bot" in error_args[1]
         assert "review model exploded" in error_args[1]
         system_errors = [
-            call for call in bridge.create_activity.call_args_list if call.args[0] == ActivityEventType.SYSTEM_ERROR
+            call
+            for call in bridge.create_activity.call_args_list
+            if call.args[0] == ActivityEventType.SYSTEM_ERROR
         ]
         assert len(system_errors) == 1
         bridge.transition_task_from_snapshot.assert_not_called()
