@@ -2,9 +2,7 @@
 
 Receives subscription events and delegates to domain-specific workers:
 - InboxWorker: new task processing, auto-title, initial routing
-- PlanningWorker: plan generation, materialization, validation
 - ReviewWorker: review routing, completion detection, post-review transitions
-- KickoffResumeWorker: task kickoff and resume flows
 
 Story 17.1: Orchestrator Worker Extraction (AC5).
 Updated to accept RuntimeContext per Story 20.3.
@@ -127,7 +125,7 @@ async def generate_title_via_low_agent(
 class TaskOrchestrator:
     """Thin coordinator: creates workers, subscribes to events, routes to workers.
 
-    All domain logic lives in workers (inbox, planning, review, kickoff).
+    All domain logic lives in workers (inbox, review).
     The orchestrator is the composition root.
     """
 
@@ -149,8 +147,8 @@ class TaskOrchestrator:
             self._ctx = RuntimeContext(bridge=bridge_or_ctx)
             self._bridge = bridge_or_ctx
 
-        self._plan_materializer = PlanMaterializer(self._bridge)
         self._sleep_controller = sleep_controller
+        self._plan_materializer = PlanMaterializer(self._bridge)
         self._step_dispatcher = StepDispatcher(
             self._bridge,
             cron_service=cron_service,
@@ -165,33 +163,19 @@ class TaskOrchestrator:
             provider_cli_control_plane=self._ctx.services.get("provider_cli_control_plane"),
         )
 
-        # Shared kickoff ID set -- prevents double-dispatch between
-        # planning (autonomous materialization) and kickoff watch.
-        self._known_kickoff_ids: set[str] = set()
-
         # Create workers (lazy imports to avoid circular dependency:
         # workers import generate_title_via_low_agent from this module)
         from mc.runtime.workers import (
             InboxWorker,
-            KickoffResumeWorker,
-            PlanningWorker,
             ReviewWorker,
         )
 
-        self._inbox_worker = InboxWorker(self._ctx)
-        self._planning_worker = PlanningWorker(
+        self._inbox_worker = InboxWorker(
             self._ctx,
-            self._plan_materializer,
-            self._step_dispatcher,
-            known_kickoff_ids=self._known_kickoff_ids,
+            plan_materializer=self._plan_materializer,
+            step_dispatcher=self._step_dispatcher,
         )
         self._review_worker = ReviewWorker(self._ctx, ask_user_registry=ask_user_registry)
-        self._kickoff_worker = KickoffResumeWorker(
-            self._ctx,
-            self._plan_materializer,
-            self._step_dispatcher,
-            known_kickoff_ids=self._known_kickoff_ids,
-        )
 
     # -- Subscription loops (coordination only) ---------------------------
 
@@ -210,21 +194,6 @@ class TaskOrchestrator:
                 continue
             await self._inbox_worker.process_batch(tasks)
 
-    async def start_routing_loop(self) -> None:
-        """Subscribe to planning tasks and route to PlanningWorker."""
-        logger.info("[orchestrator] Starting planning routing loop")
-        queue = self._bridge.async_subscribe(
-            "tasks:listByStatus",
-            {"status": "planning"},
-            poll_interval=5.0,
-            sleep_controller=self._sleep_controller,
-        )
-        while True:
-            tasks = await queue.get()
-            if tasks is None:
-                continue
-            await self._planning_worker.process_batch(tasks)
-
     async def start_review_routing_loop(self) -> None:
         """Subscribe to review tasks and route to ReviewWorker."""
         logger.info("[orchestrator] Starting review routing loop")
@@ -239,21 +208,6 @@ class TaskOrchestrator:
             if tasks is None:
                 continue
             await self._review_worker.process_batch(tasks)
-
-    async def start_kickoff_watch_loop(self) -> None:
-        """Subscribe to in_progress tasks and route to KickoffResumeWorker."""
-        logger.info("[orchestrator] Starting kickoff watch loop")
-        queue = self._bridge.async_subscribe(
-            "tasks:listByStatus",
-            {"status": "in_progress"},
-            poll_interval=5.0,
-            sleep_controller=self._sleep_controller,
-        )
-        while True:
-            tasks = await queue.get()
-            if tasks is None:
-                continue
-            await self._kickoff_worker.process_batch(tasks)
 
     async def send_agent_message(
         self,

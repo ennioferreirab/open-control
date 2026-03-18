@@ -32,7 +32,6 @@ describe("isValidTaskTransition", () => {
   it("rejects invalid transitions", () => {
     expect(isValidTaskTransition("done", "in_progress")).toBe(false);
     expect(isValidTaskTransition("inbox", "done")).toBe(false);
-    expect(isValidTaskTransition("planning", "assigned")).toBe(false);
   });
 
   it("allows universal targets from any state", () => {
@@ -57,7 +56,7 @@ describe("getTaskEventType", () => {
     expect(getTaskEventType("inbox", "assigned")).toBe("task_assigned");
     expect(getTaskEventType("in_progress", "done")).toBe("task_completed");
     expect(getTaskEventType("in_progress", "review")).toBe("review_requested");
-    expect(getTaskEventType("planning", "failed")).toBe("task_failed");
+    expect(getTaskEventType("ready", "failed")).toBe("task_failed");
   });
 
   it("returns task_retrying for retrying target regardless of source", () => {
@@ -304,9 +303,8 @@ describe("markPlanStepsCompleted", () => {
 
 describe("getRestoreTarget", () => {
   it("returns correct restore target for each status", () => {
-    expect(getRestoreTarget("planning")).toBe("planning");
-    expect(getRestoreTarget("ready")).toBe("planning");
-    expect(getRestoreTarget("failed")).toBe("planning");
+    expect(getRestoreTarget("ready")).toBe("inbox");
+    expect(getRestoreTarget("failed")).toBe("inbox");
     expect(getRestoreTarget("inbox")).toBe("inbox");
     expect(getRestoreTarget("assigned")).toBe("inbox");
     expect(getRestoreTarget("in_progress")).toBe("assigned");
@@ -329,7 +327,7 @@ describe("TASK_TRANSITIONS consistency", () => {
   it("matches the original transition map from tasks.ts", () => {
     // Verify key transitions that are known to be correct
     expect(TASK_TRANSITIONS["inbox"]).toContain("assigned");
-    expect(TASK_TRANSITIONS["inbox"]).toContain("planning");
+    expect(TASK_TRANSITIONS["inbox"]).toContain("in_progress");
     expect(TASK_TRANSITIONS["assigned"]).toContain("in_progress");
     expect(TASK_TRANSITIONS["in_progress"]).toContain("review");
     expect(TASK_TRANSITIONS["in_progress"]).toContain("done");
@@ -343,14 +341,13 @@ describe("TRANSITION_EVENT_MAP consistency", () => {
     expect(TRANSITION_EVENT_MAP["inbox->assigned"]).toBe("task_assigned");
     expect(TRANSITION_EVENT_MAP["in_progress->done"]).toBe("task_completed");
     expect(TRANSITION_EVENT_MAP["in_progress->review"]).toBe("review_requested");
-    expect(TRANSITION_EVENT_MAP["planning->failed"]).toBe("task_failed");
+    expect(TRANSITION_EVENT_MAP["ready->failed"]).toBe("task_failed");
   });
 });
 
 describe("RESTORE_TARGET_MAP consistency", () => {
   it("covers all non-deleted statuses", () => {
     const expectedKeys = [
-      "planning",
       "ready",
       "failed",
       "inbox",

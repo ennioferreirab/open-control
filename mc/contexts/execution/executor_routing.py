@@ -6,10 +6,9 @@ import asyncio
 import logging
 from typing import Any
 
-from mc.contexts.planning.planner import TaskPlanner
+from mc.contexts.routing.llm_delegator import LLMDelegationRouter
 from mc.types import (
     NANOBOT_AGENT_NAME,
-    AgentData,
     AuthorType,
     MessageType,
     TaskStatus,
@@ -70,7 +69,6 @@ async def _transition_task_from_snapshot(
 async def pickup_task(
     executor: Any,
     task_data: dict[str, Any],
-    planner_cls: type[TaskPlanner] = TaskPlanner,
 ) -> None:
     """Transition assigned task to in_progress and start execution."""
     task_id = task_data["id"]
@@ -83,7 +81,6 @@ async def pickup_task(
             await reroute_lead_agent_task(
                 executor._bridge,
                 task_data,
-                planner_cls=planner_cls,
             )
             return
 
@@ -128,60 +125,31 @@ async def pickup_task(
 async def reroute_lead_agent_task(
     bridge: Any,
     task_data: dict[str, Any],
-    planner_cls: type[TaskPlanner] = TaskPlanner,
 ) -> None:
-    """Re-route lead-agent tasks through the planner."""
-    from mc.infrastructure.config import filter_agent_fields
-
+    """Re-route lead-agent tasks through LLM delegation."""
     task_id = task_data["id"]
     title = task_data.get("title", "Untitled")
-    description = task_data.get("description")
 
     logger.warning(
         "[executor] Lead Agent dispatch intercepted for task '%s'. "
-        "Pure orchestrator invariant enforced; rerouting via planner.",
+        "Pure orchestrator invariant enforced; rerouting via LLM delegation.",
         title,
     )
 
+    router = LLMDelegationRouter(bridge)
     try:
-        agents_data = await asyncio.to_thread(bridge.list_agents)
-        agents = [AgentData(**filter_agent_fields(a)) for a in agents_data]
-        agents = [a for a in agents if a.enabled is not False]
-    except Exception:
+        decision = await router.route(task_data)
+        rerouted_agent = decision.target_agent
+    except RuntimeError as exc:
         logger.warning(
-            "[executor] Failed to list agents while rerouting lead-agent "
-            "task '%s'; using planner fallback",
+            "[executor] LLM delegation failed for lead-agent reroute on task '%s': %s; "
+            "falling back to '%s'",
             title,
-            exc_info=True,
+            exc,
+            NANOBOT_AGENT_NAME,
         )
-        agents = []
-
-    planner = planner_cls(bridge)
-    plan = await planner.plan_task(
-        title=title,
-        description=description,
-        agents=agents,
-        files=task_data.get("files") or [],
-    )
-
-    rerouted_agent = next(
-        (
-            step.assigned_agent
-            for step in plan.steps
-            if step.assigned_agent and not is_lead_agent(step.assigned_agent)
-        ),
-        None,
-    )
-    if not rerouted_agent:
         rerouted_agent = NANOBOT_AGENT_NAME
-        logger.warning(
-            "[executor] Lead-agent reroute produced no executable assignee; "
-            "using '%s' for task '%s'",
-            rerouted_agent,
-            title,
-        )
 
-    await asyncio.to_thread(bridge.update_execution_plan, task_id, plan.to_dict())
     transition_result = await _transition_task_from_snapshot(
         bridge,
         task_data,
@@ -190,7 +158,7 @@ async def reroute_lead_agent_task(
         reason=(
             f"Lead Agent dispatch intercepted for '{title}'. "
             f"Pure orchestrator invariant enforced; task re-routed to "
-            f"{rerouted_agent} via planner."
+            f"{rerouted_agent} via LLM delegation."
         ),
         retry_on_stale=True,
     )

@@ -80,11 +80,6 @@ describe("computeUiFlags", () => {
     expect(flags.isManual).toBe(false);
   });
 
-  it("isPlanEditable for planning status", () => {
-    const flags = computeUiFlags({ status: "planning" }, []);
-    expect(flags.isPlanEditable).toBe(true);
-  });
-
   it("isPlanEditable for ready status", () => {
     const flags = computeUiFlags({ status: "ready" }, []);
     expect(flags.isPlanEditable).toBe(true);
@@ -205,7 +200,6 @@ describe("computeAllowedActions", () => {
   });
 
   it("savePlan is true for plan-editable statuses", () => {
-    expect(getActions("planning").savePlan).toBe(true);
     expect(getActions("ready").savePlan).toBe(true);
     expect(getActions("review").savePlan).toBe(true);
     expect(getActions("in_progress").savePlan).toBe(false);
@@ -214,7 +208,7 @@ describe("computeAllowedActions", () => {
 
   it("startInbox is true only for inbox status", () => {
     expect(getActions("inbox").startInbox).toBe(true);
-    expect(getActions("planning").startInbox).toBe(false);
+    expect(getActions("ready").startInbox).toBe(false);
   });
 
   it("sendMessage is true for most statuses except deleted and retrying", () => {
@@ -248,7 +242,6 @@ describe("groupTasksByStatus", () => {
     expect(grouped.inbox).toHaveLength(2);
     expect(grouped.in_progress).toHaveLength(1);
     expect(grouped.done).toHaveLength(1);
-    expect(grouped.planning).toHaveLength(0);
     expect(grouped.review).toHaveLength(0);
   });
 

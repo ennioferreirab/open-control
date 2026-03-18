@@ -21,7 +21,6 @@ import {
 describe("TASK_STATUSES", () => {
   it("contains all expected task statuses", () => {
     const expected = [
-      "planning",
       "ready",
       "failed",
       "inbox",
@@ -37,8 +36,8 @@ describe("TASK_STATUSES", () => {
     }
   });
 
-  it("has exactly 11 statuses", () => {
-    expect(TASK_STATUSES).toHaveLength(11);
+  it("has exactly 10 statuses", () => {
+    expect(TASK_STATUSES).toHaveLength(10);
   });
 });
 
@@ -70,7 +69,6 @@ describe("THREAD_MESSAGE_TYPES", () => {
     expect(THREAD_MESSAGE_TYPES).toContain("step_completion");
     expect(THREAD_MESSAGE_TYPES).toContain("user_message");
     expect(THREAD_MESSAGE_TYPES).toContain("system_error");
-    expect(THREAD_MESSAGE_TYPES).toContain("lead_agent_plan");
     expect(THREAD_MESSAGE_TYPES).toContain("lead_agent_chat");
   });
 });
@@ -120,26 +118,6 @@ describe("isValidTransition", () => {
     expect(isValidTransition("done", "assigned")).toBe(true);
   });
 
-  it("allows planning -> review", () => {
-    expect(isValidTransition("planning", "review")).toBe(true);
-  });
-
-  it("allows planning -> failed", () => {
-    expect(isValidTransition("planning", "failed")).toBe(true);
-  });
-
-  it("allows planning -> ready", () => {
-    expect(isValidTransition("planning", "ready")).toBe(true);
-  });
-
-  it("allows planning -> in_progress", () => {
-    expect(isValidTransition("planning", "in_progress")).toBe(true);
-  });
-
-  it("allows inbox -> planning", () => {
-    expect(isValidTransition("inbox", "planning")).toBe(true);
-  });
-
   // Universal targets
   it("allows any -> retrying (universal)", () => {
     for (const status of TASK_STATUSES) {
@@ -164,8 +142,8 @@ describe("isValidTransition", () => {
     expect(isValidTransition("inbox", "done")).toBe(false);
   });
 
-  it("rejects inbox -> in_progress", () => {
-    expect(isValidTransition("inbox", "in_progress")).toBe(false);
+  it("allows inbox -> in_progress", () => {
+    expect(isValidTransition("inbox", "in_progress")).toBe(true);
   });
 
   it("rejects unknown status", () => {
@@ -181,7 +159,7 @@ describe("getAllowedTransitions", () => {
   it("returns allowed transitions for inbox", () => {
     const allowed = getAllowedTransitions("inbox");
     expect(allowed).toContain("assigned");
-    expect(allowed).toContain("planning");
+    expect(allowed).toContain("in_progress");
   });
 
   it("returns allowed transitions for assigned", () => {
@@ -423,10 +401,6 @@ describe("isMentionSafe", () => {
 
   it("returns true for retrying", () => {
     expect(isMentionSafe("retrying")).toBe(true);
-  });
-
-  it("returns false for planning", () => {
-    expect(isMentionSafe("planning")).toBe(false);
   });
 
   it("returns false for ready", () => {

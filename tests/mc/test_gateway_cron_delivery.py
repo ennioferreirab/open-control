@@ -65,9 +65,7 @@ async def _run_gateway_and_capture(captured: dict) -> None:
 
     # Orchestrator mock
     mock_orch_instance = MagicMock()
-    mock_orch_instance.start_routing_loop = AsyncMock()
     mock_orch_instance.start_review_routing_loop = AsyncMock()
-    mock_orch_instance.start_kickoff_watch_loop = AsyncMock()
     mock_orch_instance.start_inbox_routing_loop = AsyncMock()
 
     # Timeout checker mock
@@ -121,7 +119,6 @@ async def _run_gateway_and_capture(captured: dict) -> None:
             return_value=mock_mention_instance,
         ),
         patch("nanobot.cron.service.CronService", mock_cron_cls),
-        patch("mc.runtime.gateway._run_plan_negotiation_manager", new=AsyncMock()),
         patch(
             "mc.runtime.gateway.build_interactive_runtime",
             return_value=mock_interactive_runtime,

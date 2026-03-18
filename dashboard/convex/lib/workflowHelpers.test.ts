@@ -15,7 +15,7 @@ import {
 
 describe("isTransitionAllowed", () => {
   const transitions: Record<string, string[]> = {
-    inbox: ["assigned", "planning"],
+    inbox: ["assigned", "in_progress"],
     assigned: ["in_progress"],
     in_progress: ["review", "done"],
     done: [],

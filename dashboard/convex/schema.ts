@@ -6,7 +6,6 @@ import { v } from "convex/values";
 // ---------------------------------------------------------------------------
 
 export const taskStatusValidator = v.union(
-  v.literal("planning"),
   v.literal("ready"),
   v.literal("failed"),
   v.literal("inbox"),
@@ -39,7 +38,6 @@ export const agentStatusValidator = v.union(
 
 export const activityEventTypeValidator = v.union(
   v.literal("task_created"),
-  v.literal("task_planning"),
   v.literal("task_failed"),
   v.literal("task_assigned"),
   v.literal("task_started"),
@@ -208,6 +206,8 @@ export default defineSchema({
     interAgentTimeout: v.optional(v.number()),
     // v.any(): polymorphic plan shape from LLM generation
     executionPlan: v.optional(v.any()),
+    // Deprecated: supervision mode toggle removed from dashboard UI.
+    // Kept for backward compatibility with existing data and API callers.
     supervisionMode: v.optional(v.union(v.literal("autonomous"), v.literal("supervised"))),
     stalledAt: v.optional(v.string()),
     isManual: v.optional(v.boolean()),
@@ -297,7 +297,6 @@ export default defineSchema({
         v.literal("step_completion"),
         v.literal("user_message"),
         v.literal("system_error"),
-        v.literal("lead_agent_plan"),
         v.literal("lead_agent_chat"),
         v.literal("comment"),
       ),

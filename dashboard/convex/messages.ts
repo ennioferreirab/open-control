@@ -18,7 +18,6 @@ const threadMessageTypeValidator = v.optional(
     v.literal("step_completion"),
     v.literal("user_message"),
     v.literal("system_error"),
-    v.literal("lead_agent_plan"),
     v.literal("lead_agent_chat"),
     v.literal("comment"),
   ),
@@ -264,14 +263,13 @@ export const postSystemError = internalMutation({
 });
 
 /**
- * Post a Lead Agent message (plan or chat) to the unified task thread.
- * Used when the Lead Agent generates/updates a plan or sends a chat message.
+ * Post a Lead Agent chat message to the unified task thread.
  */
 export const postLeadAgentMessage = internalMutation({
   args: {
     taskId: v.id("tasks"),
     content: v.string(),
-    type: v.union(v.literal("lead_agent_plan"), v.literal("lead_agent_chat")),
+    type: v.literal("lead_agent_chat"),
     planReview: planReviewValidator,
     idempotencyKey: v.optional(v.string()),
   },
@@ -297,7 +295,7 @@ export const postLeadAgentMessage = internalMutation({
     await logThreadMessageSent(ctx, {
       taskId: args.taskId,
       agentName: "lead-agent",
-      description: `Lead agent posted ${args.type === "lead_agent_plan" ? "plan" : "chat"} message`,
+      description: "Lead agent posted chat message",
       timestamp,
     });
 

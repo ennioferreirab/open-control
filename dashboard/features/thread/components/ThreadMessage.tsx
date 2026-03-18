@@ -114,8 +114,6 @@ function getMessageStyles(message: Doc<"messages">): MessageStyles {
         return { bg: "bg-background", label: "Step Complete", labelColor: "text-green-600" };
       case STRUCTURED_MESSAGE_TYPE.SYSTEM_ERROR:
         return { bg: "bg-red-50", label: "Error", labelColor: "text-red-600" };
-      case STRUCTURED_MESSAGE_TYPE.LEAD_AGENT_PLAN:
-        return { bg: "bg-indigo-50", label: "Plan", labelColor: "text-indigo-600" };
       case STRUCTURED_MESSAGE_TYPE.LEAD_AGENT_CHAT:
         return { bg: "bg-indigo-50", label: "Lead Agent", labelColor: "text-indigo-600" };
       case STRUCTURED_MESSAGE_TYPE.USER_MESSAGE:
@@ -137,10 +135,9 @@ function ThreadMessageComponent({
   const styles = getMessageStyles(message);
   const resolvedTaskId = taskIdOverride ?? message.taskId;
   // Lead Agent messages have authorType "system" but should render as Markdown
-  // (not plain italic text). Exclude lead_agent_plan and lead_agent_chat from
-  // the isSystem flag so they get MarkdownRenderer treatment.
+  // (not plain italic text). Exclude lead_agent_chat from the isSystem flag
+  // so they get MarkdownRenderer treatment.
   const isLeadAgentMessage =
-    message.type === STRUCTURED_MESSAGE_TYPE.LEAD_AGENT_PLAN ||
     message.type === STRUCTURED_MESSAGE_TYPE.LEAD_AGENT_CHAT;
   const isSystem =
     !isLeadAgentMessage &&

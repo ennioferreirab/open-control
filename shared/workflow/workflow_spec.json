@@ -3,7 +3,6 @@
   "description": "Canonical workflow specification for task and step state machines. Single source of truth for Python and TypeScript adapters.",
 
   "taskStatuses": [
-    "planning",
     "ready",
     "failed",
     "inbox",
@@ -17,13 +16,12 @@
   ],
 
   "taskTransitions": {
-    "planning": ["failed", "review", "ready", "in_progress"],
-    "ready": ["in_progress", "planning", "failed"],
-    "failed": ["planning"],
-    "inbox": ["assigned", "planning"],
+    "ready": ["in_progress", "failed"],
+    "failed": ["inbox"],
+    "inbox": ["assigned", "in_progress"],
     "assigned": ["in_progress", "assigned"],
     "in_progress": ["review", "done", "assigned"],
-    "review": ["done", "inbox", "assigned", "in_progress", "planning"],
+    "review": ["done", "inbox", "assigned", "in_progress"],
     "done": ["assigned"],
     "retrying": ["in_progress", "crashed"],
     "crashed": ["inbox", "assigned"]
@@ -32,16 +30,11 @@
   "taskUniversalTargets": ["retrying", "crashed", "deleted"],
 
   "taskTransitionEvents": {
-    "planning->failed": "task_failed",
-    "planning->review": "task_planning",
-    "planning->in_progress": "task_started",
-    "planning->ready": "task_planning",
     "ready->in_progress": "task_started",
-    "ready->planning": "task_planning",
     "ready->failed": "task_failed",
-    "failed->planning": "task_planning",
+    "failed->inbox": "task_retrying",
     "inbox->assigned": "task_assigned",
-    "inbox->planning": "task_planning",
+    "inbox->in_progress": "task_started",
     "assigned->assigned": "task_reassigned",
     "assigned->in_progress": "task_started",
     "in_progress->review": "review_requested",
@@ -50,7 +43,6 @@
     "review->done": "task_completed",
     "review->inbox": "task_retrying",
     "review->in_progress": "task_started",
-    "review->planning": "task_planning",
     "review->assigned": "thread_message_sent",
     "retrying->in_progress": "task_retrying",
     "retrying->crashed": "task_crashed",
@@ -65,9 +57,8 @@
   },
 
   "taskRestoreTargetMap": {
-    "planning": "planning",
-    "ready": "planning",
-    "failed": "planning",
+    "ready": "inbox",
+    "failed": "inbox",
     "inbox": "inbox",
     "assigned": "inbox",
     "in_progress": "assigned",
@@ -134,7 +125,6 @@
     "step_completion",
     "user_message",
     "system_error",
-    "lead_agent_plan",
     "lead_agent_chat"
   ]
 }

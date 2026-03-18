@@ -76,9 +76,6 @@ class TestTaskStatuses:
     def test_contains_crashed(self) -> None:
         assert "crashed" in TASK_STATUSES
 
-    def test_contains_planning(self) -> None:
-        assert "planning" in TASK_STATUSES
-
     def test_contains_ready(self) -> None:
         assert "ready" in TASK_STATUSES
 
@@ -86,7 +83,7 @@ class TestTaskStatuses:
         assert "failed" in TASK_STATUSES
 
     def test_count(self) -> None:
-        assert len(TASK_STATUSES) == 11
+        assert len(TASK_STATUSES) == 10
 
 
 # ---------------------------------------------------------------------------
@@ -166,23 +163,11 @@ class TestIsValidTaskTransition:
     def test_done_to_assigned_valid(self) -> None:
         assert is_valid_task_transition("done", "assigned") is True
 
-    def test_planning_to_review_valid(self) -> None:
-        assert is_valid_task_transition("planning", "review") is True
-
-    def test_planning_to_failed_valid(self) -> None:
-        assert is_valid_task_transition("planning", "failed") is True
-
-    def test_planning_to_ready_valid(self) -> None:
-        assert is_valid_task_transition("planning", "ready") is True
-
-    def test_planning_to_in_progress_valid(self) -> None:
-        assert is_valid_task_transition("planning", "in_progress") is True
-
     def test_ready_to_in_progress_valid(self) -> None:
         assert is_valid_task_transition("ready", "in_progress") is True
 
-    def test_inbox_to_planning_valid(self) -> None:
-        assert is_valid_task_transition("inbox", "planning") is True
+    def test_inbox_to_in_progress_valid(self) -> None:
+        assert is_valid_task_transition("inbox", "in_progress") is True
 
     # Universal targets
     def test_any_to_retrying_valid(self) -> None:
@@ -201,8 +186,8 @@ class TestIsValidTaskTransition:
     def test_inbox_to_done_invalid(self) -> None:
         assert is_valid_task_transition("inbox", "done") is False
 
-    def test_inbox_to_in_progress_invalid(self) -> None:
-        assert is_valid_task_transition("inbox", "in_progress") is False
+    def test_inbox_to_review_invalid(self) -> None:
+        assert is_valid_task_transition("inbox", "review") is False
 
     def test_done_to_done_invalid(self) -> None:
         assert is_valid_task_transition("done", "done") is False
@@ -222,7 +207,7 @@ class TestGetAllowedTransitions:
     def test_inbox_allowed(self) -> None:
         allowed = get_allowed_transitions("inbox")
         assert "assigned" in allowed
-        assert "planning" in allowed
+        assert "in_progress" in allowed
 
     def test_assigned_allowed(self) -> None:
         allowed = get_allowed_transitions("assigned")
@@ -395,9 +380,6 @@ class TestIsMentionSafe:
     def test_retrying_is_mention_safe(self) -> None:
         assert is_mention_safe("retrying") is True
 
-    def test_planning_not_mention_safe(self) -> None:
-        assert is_mention_safe("planning") is False
-
     def test_ready_not_mention_safe(self) -> None:
         assert is_mention_safe("ready") is False
 
@@ -506,13 +488,12 @@ class TestParityWithConvex:
     def test_spec_task_transitions_match_convex(self) -> None:
         """taskTransitions in spec must match Convex VALID_TRANSITIONS exactly."""
         convex_transitions: dict[str, list[str]] = {
-            "planning": ["failed", "review", "ready", "in_progress"],
-            "ready": ["in_progress", "planning", "failed"],
-            "failed": ["planning"],
-            "inbox": ["assigned", "planning"],
+            "ready": ["in_progress", "failed"],
+            "failed": ["inbox"],
+            "inbox": ["assigned", "in_progress"],
             "assigned": ["in_progress", "assigned"],
             "in_progress": ["review", "done", "assigned"],
-            "review": ["done", "inbox", "assigned", "in_progress", "planning"],
+            "review": ["done", "inbox", "assigned", "in_progress"],
             "done": ["assigned"],
             "retrying": ["in_progress", "crashed"],
             "crashed": ["inbox", "assigned"],

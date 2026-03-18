@@ -8,7 +8,6 @@ export const create = mutation({
     agentName: v.optional(v.string()),
     eventType: v.union(
       v.literal("task_created"),
-      v.literal("task_planning"),
       v.literal("task_failed"),
       v.literal("task_assigned"),
       v.literal("task_started"),

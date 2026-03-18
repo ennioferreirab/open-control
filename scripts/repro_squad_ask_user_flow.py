@@ -155,7 +155,7 @@ def _lead_agent_messages_since(
             continue
         if message.get("author_name") != "lead-agent":
             continue
-        if message.get("type") in {"lead_agent_plan", "lead_agent_chat"}:
+        if message.get("type") == "lead_agent_chat":
             leaked.append(message)
     return leaked
 

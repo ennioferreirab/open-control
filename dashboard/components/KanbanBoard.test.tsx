@@ -168,7 +168,7 @@ function buildColumns(tasks: Doc<"tasks">[], steps: Doc<"steps">[] = []): Column
       .filter((t) => {
         if (col.status === "in_progress")
           return ["in_progress", "retrying", "crashed", "failed"].includes(t.status);
-        if (col.status === "assigned") return ["assigned", "planning", "ready"].includes(t.status);
+        if (col.status === "assigned") return ["assigned", "ready"].includes(t.status);
         if (col.status === "inbox") return t.status === "inbox";
         return t.status === col.status;
       })

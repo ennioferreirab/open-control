@@ -20,7 +20,6 @@ import { TaskDetailThreadTab } from "@/features/tasks/components/TaskDetailThrea
 import { TaskDetailConfigTab } from "@/features/tasks/components/TaskDetailConfigTab";
 import { TaskDetailFilesTab } from "@/features/tasks/components/TaskDetailFilesTab";
 import { DocumentViewerModal } from "@/components/DocumentViewerModal";
-import { PlanReviewPanel } from "@/features/tasks/components/PlanReviewPanel";
 import { TaskDetailHeader } from "@/features/tasks/components/TaskDetailHeader";
 import { ProviderLiveChatPanel } from "@/features/interactive/components/ProviderLiveChatPanel";
 import { useProviderSession } from "@/features/interactive/hooks/useProviderSession";
@@ -130,7 +129,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     isDeletingTask,
     deleteTaskError,
     resetDeleteTaskState,
-    submitPlanReviewFeedback,
     createActivity,
     createMergedTask,
     isCreatingMergeTask,
@@ -197,10 +195,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const mergeAlias = task?.isMergeTask ? buildMergeAliasDisplay(directMergeSources) : undefined;
   const planForDisplay = activePlan ?? taskExecutionPlan ?? null;
   const hasMaterializedLiveSteps = Boolean(liveSteps?.some((step) => step.status !== "deleted"));
-  const hasManualMergePlanReady =
-    taskStatus === "review" &&
-    task?.isManual &&
-    hasExecutablePlanSteps(localPlan ?? taskExecutionPlan);
   const hasSourceThreads = (mergeSourceThreads?.length ?? 0) > 0;
   const directSourceCount = directMergeSources?.length ?? 0;
   const canRemoveDirectSources = directSourceCount > 2;
@@ -366,39 +360,10 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     }
   };
 
-  const manualPlanPrimaryAction = hasManualMergePlanReady
-    ? hasMaterializedLiveSteps
-      ? {
-          label: "Resume",
-          pendingLabel: "Resuming...",
-          onClick: handleResume,
-          testId: "resume-manual-plan-button",
-        }
-      : {
-          label: "Start",
-          pendingLabel: "Starting...",
-          onClick: handleKickOff,
-          testId: "start-manual-plan-button",
-        }
-    : null;
-  const planPanelPrimaryAction =
-    taskStatus === "review"
-      ? task?.isManual
-        ? manualPlanPrimaryAction
-        : isAwaitingKickoff
-          ? {
-              label: "Approve",
-              pendingLabel: "Approving...",
-              onClick: handleKickOff,
-            }
-          : null
-      : null;
   const canClearPlan =
     Boolean(task?.isManual) &&
     (taskStatus === "review" || taskStatus === "inbox" || taskStatus === "in_progress") &&
     (hasExecutablePlanSteps(localPlan ?? taskExecutionPlan) || hasMaterializedLiveSteps);
-  const shouldShowPlanReviewPanel = pendingExecutionQuestion === null;
-
   const handleAttachFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!task || !isTaskLoaded) return;
     const files = Array.from(e.target.files ?? []);
@@ -565,14 +530,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               isEditingTitle={isEditingTitle}
               editTitleValue={editTitleValue}
               isEditingDescription={isEditingDescription}
-              manualPlanPrimaryAction={
-                manualPlanPrimaryAction
-                  ? {
-                      ...manualPlanPrimaryAction,
-                      isPending: hasMaterializedLiveSteps ? isResuming : isKickingOff,
-                    }
-                  : null
-              }
+              manualPlanPrimaryAction={null}
               onApprove={() => {
                 approve(task!._id);
                 onClose();
@@ -612,7 +570,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
             >
               <TabsList className="mx-6 mt-4">
                 <TabsTrigger value="thread">Thread</TabsTrigger>
-                <TabsTrigger value="plan">Execution Plan</TabsTrigger>
+                {isWorkflowTask && (
+                  <TabsTrigger value="plan">Execution Plan</TabsTrigger>
+                )}
                 {liveSession.session && <TabsTrigger value="live">Live</TabsTrigger>}
                 <TabsTrigger value="config">Config</TabsTrigger>
                 <TabsTrigger value="files">
@@ -639,63 +599,40 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 onFilterStepIdsChange={setFilterStepIds}
               />
 
-              <TabsContent
-                value="plan"
-                className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
-              >
-                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4">
-                  <div
-                    data-testid="plan-canvas-shell"
-                    className="w-full self-center lg:max-w-5xl xl:max-w-[60rem]"
-                  >
-                    <ExecutionPlanTab
-                      executionPlan={planForDisplay}
-                      liveSteps={liveSteps ?? undefined}
-                      isPlanning={task!.status === "planning"}
-                      isEditMode={task!.status === "review"}
-                      taskId={task!._id}
-                      taskStatus={taskStatus}
-                      boardId={task?.boardId}
-                      onLocalPlanChange={setLocalPlan}
-                      mergeAlias={mergeAlias}
-                      viewMode={planViewMode}
-                      onViewModeChange={setPlanViewMode}
-                      onClearPlan={canClearPlan ? handleClearPlan : undefined}
-                      isClearingPlan={isClearingPlan}
-                      onOpenParentTask={(stepId) => {
-                        setFilterStepIds(new Set([stepId]));
-                        setActiveTab("thread");
-                      }}
-                      onOpenLive={liveSession.liveStepIds.length > 0 ? handleOpenLive : undefined}
-                      liveStepIds={liveSession.liveStepIds}
-                    />
-                  </div>
-                  {task &&
-                    messages &&
-                    !isMergeLockedSource &&
-                    planViewMode !== "canvas" &&
-                    isWorkflowTask &&
-                    shouldShowPlanReviewPanel && (
-                      <PlanReviewPanel
-                        className={planViewMode === "conversation" ? "mt-2 min-h-0" : undefined}
-                        primaryActionLabel={planPanelPrimaryAction?.label}
-                        primaryActionPendingLabel={planPanelPrimaryAction?.pendingLabel}
-                        isPrimaryActionPending={
-                          planPanelPrimaryAction == null
-                            ? false
-                            : planPanelPrimaryAction.label === "Resume"
-                              ? isResuming
-                              : isKickingOff
-                        }
+              {isWorkflowTask && (
+                <TabsContent
+                  value="plan"
+                  className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col"
+                >
+                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4">
+                    <div
+                      data-testid="plan-canvas-shell"
+                      className="w-full self-center lg:max-w-5xl xl:max-w-[60rem]"
+                    >
+                      <ExecutionPlanTab
+                        executionPlan={planForDisplay}
                         liveSteps={liveSteps ?? undefined}
-                        messages={messages}
-                        onPrimaryAction={planPanelPrimaryAction?.onClick}
-                        onRejectPlan={(content) => submitPlanReviewFeedback(task._id, content)}
-                        task={task}
+                        isEditMode={task!.status === "review"}
+                        taskId={task!._id}
+                        taskStatus={taskStatus}
+                        boardId={task?.boardId}
+                        onLocalPlanChange={setLocalPlan}
+                        mergeAlias={mergeAlias}
+                        viewMode={planViewMode}
+                        onViewModeChange={setPlanViewMode}
+                        onClearPlan={canClearPlan ? handleClearPlan : undefined}
+                        isClearingPlan={isClearingPlan}
+                        onOpenParentTask={(stepId) => {
+                          setFilterStepIds(new Set([stepId]));
+                          setActiveTab("thread");
+                        }}
+                        onOpenLive={liveSession.liveStepIds.length > 0 ? handleOpenLive : undefined}
+                        liveStepIds={liveSession.liveStepIds}
                       />
-                    )}
-                </div>
-              </TabsContent>
+                    </div>
+                  </div>
+                </TabsContent>
+              )}
 
               {task && liveSession.session && (
                 <TabsContent

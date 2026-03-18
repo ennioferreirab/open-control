@@ -131,15 +131,6 @@ class TestCrashHandlerAccessible:
         assert MAX_AUTO_RETRIES == 1
 
 
-class TestPlanNegotiationAccessible:
-    """Plan negotiation manager extracted to mc.contexts.planning.supervisor."""
-
-    def test_plan_negotiation_supervisor_importable(self) -> None:
-        from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
-
-        assert PlanNegotiationSupervisor is not None
-
-
 class TestGatewayReExports:
     """Backward compat: mc.runtime.gateway re-exports all decomposed symbols."""
 

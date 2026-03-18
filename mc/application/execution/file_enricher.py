@@ -23,6 +23,21 @@ def _human_size(b: int) -> str:
     return f"{b / (1024 * 1024):.1f} MB"
 
 
+def _build_file_summary(files: list[dict]) -> str:
+    """Build a human-readable file summary for agent context."""
+    if not files:
+        return ""
+    total = sum(f.get("size", 0) for f in files)
+    names = ", ".join(
+        f"{f['name']} ({f.get('type', 'application/octet-stream')}, {_human_size(f.get('size', 0))})"
+        for f in files
+    )
+    return (
+        f"Task has {len(files)} attached file(s) (total {_human_size(total)}): {names}. "
+        f"Consider file types when selecting the best agent."
+    )
+
+
 def build_file_manifest(raw_files: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Normalize raw file records into a manifest with consistent keys.
 
@@ -124,8 +139,6 @@ def build_file_context(
 
         # Inject file routing context
         if raw_files:
-            from mc.contexts.planning.planner import _build_file_summary
-
             file_routing_summary = _build_file_summary(raw_files)
             if file_routing_summary:
                 delegation_summary = file_routing_summary.replace(

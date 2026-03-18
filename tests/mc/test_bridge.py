@@ -939,25 +939,6 @@ class TestPostStepCompletion:
 
 class TestPostLeadAgentMessage:
     @patch("mc.bridge.ConvexClient")
-    def test_post_lead_agent_plan(self, MockClient):
-        """post_lead_agent_message with lead_agent_plan type calls correct mutation."""
-        mock_client = MockClient.return_value
-        mock_client.mutation.return_value = "msg-789"
-
-        bridge = ConvexBridge("https://test.convex.cloud")
-        bridge.post_lead_agent_message(
-            task_id="task-abc",
-            content="Here is the execution plan...",
-            msg_type="lead_agent_plan",
-        )
-
-        call_args = mock_client.mutation.call_args[0]
-        assert call_args[0] == "messages:postLeadAgentMessage"
-        assert call_args[1]["taskId"] == "task-abc"
-        assert call_args[1]["content"] == "Here is the execution plan..."
-        assert call_args[1]["type"] == "lead_agent_plan"
-
-    @patch("mc.bridge.ConvexClient")
     def test_post_lead_agent_chat(self, MockClient):
         """post_lead_agent_message with lead_agent_chat type sends correct type value."""
         mock_client = MockClient.return_value
@@ -981,7 +962,7 @@ class TestPostLeadAgentMessage:
         mock_client.mutation.side_effect = [Exception("Timeout"), None]
 
         bridge = ConvexBridge("https://test.convex.cloud")
-        bridge.post_lead_agent_message("t1", "plan text", "lead_agent_plan")
+        bridge.post_lead_agent_message("t1", "chat text", "lead_agent_chat")
 
         assert mock_client.mutation.call_count == 2
 

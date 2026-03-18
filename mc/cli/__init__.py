@@ -76,7 +76,6 @@ def _get_status_color(status: str) -> str:
         "done": "green",
         "retrying": "yellow",
         "crashed": "red",
-        "planning": "cyan",
         "ready": "blue",
         "failed": "red",
         "deleted": "dim",

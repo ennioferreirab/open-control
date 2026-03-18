@@ -331,15 +331,15 @@ describe("messages idempotency receipts", () => {
 
     const first = await handler(ctx, {
       taskId: "task-1",
-      content: "plan v1",
-      type: "lead_agent_plan",
-      idempotencyKey: "lead-plan:1",
+      content: "chat v1",
+      type: "lead_agent_chat",
+      idempotencyKey: "lead-chat:1",
     });
     const second = await handler(ctx, {
       taskId: "task-1",
-      content: "plan v1",
-      type: "lead_agent_plan",
-      idempotencyKey: "lead-plan:1",
+      content: "chat v1",
+      type: "lead_agent_chat",
+      idempotencyKey: "lead-chat:1",
     });
 
     expect(first).toBe("msg-1");

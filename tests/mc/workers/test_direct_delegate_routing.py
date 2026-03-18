@@ -1,13 +1,13 @@
-"""Tests for direct-delegate routing through InboxWorker and PlanningWorker guard."""
+"""Tests for task routing through InboxWorker — LLM delegation and human routing."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.contexts.routing.router import DirectDelegationRouter, RoutingDecision
+from mc.contexts.routing.router import RoutingDecision
 from mc.infrastructure.runtime_context import RuntimeContext
 from mc.runtime.workers.inbox import InboxWorker
 
@@ -35,137 +35,134 @@ def _make_ctx(bridge: MagicMock | None = None) -> RuntimeContext:
     return RuntimeContext(bridge=bridge, agents_dir=Path("/tmp/test-agents"))
 
 
-class TestInboxWorkerDirectDelegation:
-    """Tests that InboxWorker routes direct_delegate tasks via DirectDelegationRouter."""
+def _mock_router(target_agent: str = "agent-alpha", reason_code: str = "llm_delegation"):
+    """Create a mock LLMDelegationRouter that returns a decision."""
+    decision = RoutingDecision(
+        target_agent=target_agent,
+        reason=f"LLM picked {target_agent}",
+        reason_code=reason_code,
+        registry_snapshot=[{"name": target_agent, "role": "dev"}],
+        routed_at="2026-01-01T00:00:00+00:00",
+    )
+    mock = MagicMock()
+    mock.route = AsyncMock(return_value=decision)
+    return mock
+
+
+class TestInboxWorkerLLMDelegation:
+    """Tests that InboxWorker routes tasks via LLMDelegationRouter."""
 
     @pytest.mark.asyncio
-    async def test_direct_delegate_task_transitions_to_assigned(self) -> None:
+    async def test_task_transitions_to_assigned(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-dd-1",
-            "title": "Direct delegate task",
-            "description": "A task for direct delegation",
-            "work_mode": "direct_delegate",
+            "title": "Some task",
+            "description": "A task for delegation",
             "is_manual": False,
         }
 
-        decision = RoutingDecision(
-            target_agent="agent-alpha",
-            reason="Least-loaded agent",
-            reason_code="least_loaded",
-            registry_snapshot=[{"name": "agent-alpha", "role": "dev"}],
-            routed_at="2026-01-01T00:00:00+00:00",
-        )
-
+        mock_router = _mock_router("agent-alpha")
         with (
             patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
-            patch.object(
-                DirectDelegationRouter,
-                "route",
-                return_value=decision,
-            ),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
         ):
             await worker.process_task(task)
 
-        # Should transition to assigned with the resolved agent
-        bridge.update_task_status.assert_called_once_with(
-            "task-dd-1",
-            "assigned",
-            "agent-alpha",
-            "Direct delegation to agent-alpha",
-        )
+        bridge.update_task_status.assert_called_once()
+        call_args = bridge.update_task_status.call_args[0]
+        assert call_args[1] == "assigned"
+        assert call_args[2] == "agent-alpha"
 
     @pytest.mark.asyncio
-    async def test_direct_delegate_task_stores_routing_metadata(self) -> None:
+    async def test_stores_routing_metadata(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-dd-2",
             "title": "Delegated task",
-            "work_mode": "direct_delegate",
             "is_manual": False,
         }
 
-        decision = RoutingDecision(
-            target_agent="agent-beta",
-            reason="Explicitly assigned to agent-beta",
-            reason_code="explicit_assignment",
-            registry_snapshot=[{"name": "agent-beta", "role": "analyst"}],
-            routed_at="2026-01-01T12:00:00+00:00",
-        )
-
+        mock_router = _mock_router("agent-beta", reason_code="explicit_assignment")
         with (
             patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
-            patch.object(DirectDelegationRouter, "route", return_value=decision),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
         ):
             await worker.process_task(task)
 
-        bridge.patch_routing_decision.assert_called_once_with(
-            "task-dd-2",
-            "lead_agent",
-            {
-                "target_agent": "agent-beta",
-                "reason": "Explicitly assigned to agent-beta",
-                "reason_code": "explicit_assignment",
-                "registry_snapshot": [{"name": "agent-beta", "role": "analyst"}],
-                "routed_at": "2026-01-01T12:00:00+00:00",
-            },
-        )
+        bridge.patch_routing_decision.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_direct_delegate_fails_when_no_agent(self) -> None:
-        """When the router returns None, the task should transition to failed (not planning)."""
+    async def test_delegation_failure_fails_task_explicitly(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
         task = {
             "id": "task-dd-3",
             "title": "No agent available",
-            "work_mode": "direct_delegate",
             "is_manual": False,
         }
 
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(side_effect=RuntimeError("No active agents"))
         with (
             patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
-            patch.object(DirectDelegationRouter, "route", return_value=None),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
         ):
             await worker.process_task(task)
 
-        # Should transition to failed, not planning
         bridge.transition_task_from_snapshot.assert_called_once()
         call_args = bridge.transition_task_from_snapshot.call_args
         assert call_args[0][1] == "failed"
-        bridge.patch_routing_decision.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_workflow_task_bypasses_direct_delegation(self) -> None:
-        """Workflow tasks with ai_workflow+workflow plan must NOT go through direct delegation."""
+    async def test_workflow_task_bypasses_delegation(self) -> None:
+        """Workflow tasks get materialized and dispatched, bypassing LLM delegation."""
         bridge = _make_bridge()
-        worker = InboxWorker(_make_ctx(bridge))
+        mock_materializer = MagicMock()
+        mock_materializer.materialize.return_value = ["step-1"]
+        mock_dispatcher = MagicMock()
+        mock_dispatcher.dispatch_steps = AsyncMock()
+        worker = InboxWorker(
+            _make_ctx(bridge),
+            plan_materializer=mock_materializer,
+            step_dispatcher=mock_dispatcher,
+        )
 
         task = {
             "id": "task-wf-1",
             "title": "Workflow task",
             "work_mode": "ai_workflow",
-            "execution_plan": {"generated_by": "workflow", "steps": []},
+            "execution_plan": {
+                "generated_by": "workflow",
+                "generated_at": "2026-01-01",
+                "steps": [
+                    {
+                        "temp_id": "s1",
+                        "title": "Step",
+                        "description": "Do",
+                        "assigned_agent": "nanobot",
+                        "blocked_by": [],
+                        "parallel_group": 1,
+                        "order": 1,
+                    }
+                ],
+            },
             "is_manual": False,
         }
 
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        # Should go to review via transition_task_from_snapshot, not direct delegation
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "review"
-        bridge.patch_routing_decision.assert_not_called()
+        mock_materializer.materialize.assert_called_once()
+        mock_dispatcher.dispatch_steps.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_routing_metadata_failure_does_not_block_assignment(self) -> None:
-        """If patch_routing_decision fails, the task should still transition to assigned."""
         bridge = _make_bridge()
         bridge.patch_routing_decision.side_effect = Exception("Convex error")
         worker = InboxWorker(_make_ctx(bridge))
@@ -173,103 +170,21 @@ class TestInboxWorkerDirectDelegation:
         task = {
             "id": "task-dd-4",
             "title": "Resilient delegation",
-            "work_mode": "direct_delegate",
             "is_manual": False,
         }
 
-        decision = RoutingDecision(
-            target_agent="agent-gamma",
-            reason="Least-loaded",
-            reason_code="least_loaded",
-            registry_snapshot=[],
-            routed_at="2026-01-01T00:00:00+00:00",
-        )
-
+        mock_router = _mock_router("agent-gamma")
         with (
             patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
-            patch.object(DirectDelegationRouter, "route", return_value=decision),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
         ):
             await worker.process_task(task)
 
-        # Still transitions to assigned despite routing metadata failure
-        bridge.update_task_status.assert_called_once_with(
-            "task-dd-4",
-            "assigned",
-            "agent-gamma",
-            "Direct delegation to agent-gamma",
-        )
-
-
-class TestPlanningWorkerDirectDelegateGuard:
-    """Tests that PlanningWorker rejects direct_delegate tasks."""
-
-    @pytest.mark.asyncio
-    async def test_planning_worker_rejects_direct_delegate(self) -> None:
-        from unittest.mock import MagicMock
-
-        from mc.runtime.workers.planning import PlanningWorker
-
-        bridge = _make_bridge()
-        bridge.create_task_directory.return_value = None
-        ctx = _make_ctx(bridge)
-        worker = PlanningWorker(
-            ctx,
-            plan_materializer=MagicMock(),
-            step_dispatcher=MagicMock(),
-        )
-
-        task = {
-            "id": "task-dd-planning",
-            "title": "Should be rejected",
-            "work_mode": "direct_delegate",
-            "is_manual": False,
-        }
-
-        with patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread):
-            await worker.process_task(task)
-
-        # Must not call list_agents or any planning machinery
-        bridge.list_agents.assert_not_called()
-        bridge.create_activity.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_planning_worker_allows_regular_tasks(self) -> None:
-        """Regular tasks (no workMode) should still reach the planning pipeline."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from mc.runtime.workers.planning import PlanningWorker
-
-        bridge = _make_bridge()
-        bridge.create_task_directory.return_value = None
-        bridge.list_agents.return_value = []
-        ctx = _make_ctx(bridge)
-        worker = PlanningWorker(
-            ctx,
-            plan_materializer=MagicMock(),
-            step_dispatcher=MagicMock(),
-        )
-
-        task = {
-            "id": "task-regular",
-            "title": "Normal task",
-            "is_manual": False,
-        }
-
-        with (
-            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.runtime.workers.planning.TaskPlanner") as mock_planner_class,
-        ):
-            mock_planner = MagicMock()
-            mock_planner.plan_task = AsyncMock(return_value=MagicMock(steps=[], to_dict=lambda: {}))
-            mock_planner_class.return_value = mock_planner
-            await worker.process_task(task)
-
-        # Regular task should invoke planning machinery (list_agents is called)
-        bridge.list_agents.assert_called_once()
+        bridge.update_task_status.assert_called_once()
 
 
 class TestInboxWorkerHumanRouting:
-    """Tests that human-routed tasks bypass the DirectDelegationRouter."""
+    """Tests that human-routed tasks bypass the LLMDelegationRouter."""
 
     @pytest.mark.asyncio
     async def test_human_routed_task_bypasses_router(self) -> None:
@@ -279,7 +194,6 @@ class TestInboxWorkerHumanRouting:
         task = {
             "id": "task-human-1",
             "title": "Operator-assigned task",
-            "work_mode": "direct_delegate",
             "routing_mode": "human",
             "assigned_agent": "coder-agent",
             "is_manual": False,
@@ -288,7 +202,6 @@ class TestInboxWorkerHumanRouting:
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        # Should transition to assigned without invoking the router
         bridge.transition_task_from_snapshot.assert_called_once()
         call_args = bridge.transition_task_from_snapshot.call_args
         assert call_args[0][1] == "assigned"
@@ -302,18 +215,19 @@ class TestInboxWorkerHumanRouting:
         task = {
             "id": "task-human-2",
             "title": "Human-routed but no agent",
-            "work_mode": "direct_delegate",
             "routing_mode": "human",
             "is_manual": False,
         }
 
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(side_effect=RuntimeError("No agents"))
         with (
             patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
-            patch.object(DirectDelegationRouter, "route", return_value=None),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
         ):
             await worker.process_task(task)
 
-        # Without assigned_agent, human routing doesn't activate — falls to router which fails
+        # Without assigned_agent, human routing doesn't activate — falls to LLM which fails
         bridge.transition_task_from_snapshot.assert_called_once()
         call_args = bridge.transition_task_from_snapshot.call_args
         assert call_args[0][1] == "failed"

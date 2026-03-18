@@ -308,7 +308,7 @@ describe("tasks.create", () => {
 });
 
 describe("tasks.createMergedTask", () => {
-  it("creates task C in planning so the lead agent can generate a reviewable plan", async () => {
+  it("creates task C in inbox so the lead agent can generate a reviewable plan", async () => {
     const handler = getCreateMergedTaskHandler();
     const patch = vi.fn(async () => undefined);
     const insert = vi.fn(async (table: string) => {
@@ -352,11 +352,10 @@ describe("tasks.createMergedTask", () => {
       expect.objectContaining({
         title: "Merge: Task A + Task B",
         description: 'Merged from "Task A" and "Task B". Continue work in this task.',
-        status: "planning",
+        status: "inbox",
         awaitingKickoff: undefined,
         boardId: "board-1",
         trustLevel: "human_approved",
-        supervisionMode: "supervised",
         isMergeTask: true,
         mergeSourceTaskIds: ["task-a", "task-b"],
         mergeSourceLabels: ["A", "B"],
@@ -388,7 +387,7 @@ describe("tasks.createMergedTask", () => {
     );
   });
 
-  it("creates task C in manual planning without persisting the visual merge alias", async () => {
+  it("creates task C in manual inbox without persisting the visual merge alias", async () => {
     const handler = getCreateMergedTaskHandler();
     const patch = vi.fn(async () => undefined);
     const insert = vi.fn(async (table: string) => {
@@ -425,7 +424,7 @@ describe("tasks.createMergedTask", () => {
     expect(insert).toHaveBeenCalledWith(
       "tasks",
       expect.objectContaining({
-        status: "planning",
+        status: "inbox",
         isManual: true,
         awaitingKickoff: undefined,
         executionPlan: undefined,
@@ -974,7 +973,7 @@ describe("tasks.kickOff", () => {
     const insert = vi.fn(async () => "activity-1");
     const get = vi.fn(async () => ({
       _id: "task-1",
-      status: "planning",
+      status: "review",
       stateVersion: 2,
       title: "Kick me off",
       executionPlan: { steps: [] },

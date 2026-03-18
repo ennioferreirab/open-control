@@ -65,7 +65,6 @@ from mc.runtime.timeout_checker import TimeoutChecker
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
-    from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
 
 logger = logging.getLogger(__name__)
 
@@ -87,41 +86,12 @@ def _build_provider_cli_supervision_sink(supervisor):
     return _sink
 
 
-# ---------------------------------------------------------------------------
-# Plan negotiation manager
-# ---------------------------------------------------------------------------
-
-# Plan negotiation supervisor instance — created at gateway level for cron integration.
-# The _cron_requeued_ids set is now managed by PlanNegotiationSupervisor.
-_plan_negotiation_supervisor: PlanNegotiationSupervisor | None = None
-
-
 def _resolve_log_level(env_var: str = "MC_LOG_LEVEL") -> int:
     """Resolve the gateway root log level from environment, defaulting to INFO."""
 
     level_name = os.environ.get(env_var, "INFO").strip().upper()
     level = getattr(logging, level_name, None)
     return level if isinstance(level, int) else logging.INFO
-
-
-async def _run_plan_negotiation_manager(
-    bridge: ConvexBridge,
-    ask_user_registry: Any | None = None,
-    sleep_controller: Any | None = None,
-) -> None:
-    """Manage per-task plan negotiation loops.
-
-    Thin wrapper that delegates to PlanNegotiationSupervisor (Story 17.2).
-    """
-    from mc.contexts.planning.supervisor import PlanNegotiationSupervisor
-
-    global _plan_negotiation_supervisor
-    _plan_negotiation_supervisor = PlanNegotiationSupervisor(
-        bridge=bridge,
-        ask_user_registry=ask_user_registry,
-        sleep_controller=sleep_controller,
-    )
-    await _plan_negotiation_supervisor.run()
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +132,6 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             bridge,
             job,
             pending_deliveries=pending_deliveries,
-            plan_negotiation_supervisor=_plan_negotiation_supervisor,
         )
 
     cron.on_job = _handle_cron_job
@@ -260,9 +229,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             )
 
     inbox_task = asyncio.create_task(_inbox_loop_with_crash_log())
-    routing_task = asyncio.create_task(orchestrator.start_routing_loop())
     review_task = asyncio.create_task(orchestrator.start_review_routing_loop())
-    kickoff_task = asyncio.create_task(orchestrator.start_kickoff_watch_loop())
 
     executor = TaskExecutor(
         bridge,
@@ -283,15 +250,6 @@ async def run_gateway(bridge: ConvexBridge) -> None:
         check_interval_seconds=polling_cfg["timeout_check_seconds"],
     )
     timeout_task = asyncio.create_task(timeout_checker.start())
-
-    # Plan negotiation manager — spawns per-task loops for review/in_progress tasks
-    plan_negotiation_task = asyncio.create_task(
-        _run_plan_negotiation_manager(
-            bridge,
-            ask_user_registry=ask_user_registry,
-            sleep_controller=sleep_controller,
-        )
-    )
 
     # Unified ConversationService — routes all thread messages through a
     # single pipeline (intent classification → dispatch).  Story 20.2.
@@ -345,24 +303,18 @@ async def run_gateway(bridge: ConvexBridge) -> None:
 
     # Cancel all loops gracefully
     inbox_task.cancel()
-    routing_task.cancel()
     review_task.cancel()
-    kickoff_task.cancel()
     execution_task.cancel()
     timeout_task.cancel()
-    plan_negotiation_task.cancel()
     chat_task.cancel()
     mention_task.cancel()
     ask_user_watcher_task.cancel()
     sleep_control_task.cancel()
     for task in (
         inbox_task,
-        routing_task,
         review_task,
-        kickoff_task,
         execution_task,
         timeout_task,
-        plan_negotiation_task,
         chat_task,
         mention_task,
         ask_user_watcher_task,

@@ -1,17 +1,17 @@
-"""Tests for InboxWorker ai_workflow bypass (defense-in-depth Layer 2).
+"""Tests for InboxWorker ai_workflow bypass.
 
-When a task has work_mode='ai_workflow' and execution_plan.generatedBy='workflow',
-InboxWorker must NOT route the task to 'planning' — it should go directly to 'review'
-with awaitingKickoff=True so the workflow plan is preserved.
+When a task has work_mode='ai_workflow' and a workflow-generated execution plan,
+InboxWorker must materialize steps and dispatch them for execution.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mc.contexts.routing.router import RoutingDecision
 from mc.infrastructure.runtime_context import RuntimeContext
 from mc.runtime.workers.inbox import InboxWorker
 
@@ -27,6 +27,7 @@ def _make_bridge() -> MagicMock:
     bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.mutation.return_value = None
     bridge.create_activity.return_value = None
+    bridge.patch_routing_decision.return_value = None
     return bridge
 
 
@@ -36,8 +37,27 @@ def _make_ctx(bridge: MagicMock | None = None) -> RuntimeContext:
     return RuntimeContext(bridge=bridge, agents_dir=Path("/tmp/test-agents"))
 
 
+def _make_materializer_and_dispatcher():
+    materializer = MagicMock()
+    materializer.materialize.return_value = ["step-real-1"]
+    dispatcher = MagicMock()
+    dispatcher.dispatch_steps = AsyncMock()
+    return materializer, dispatcher
+
+
+def _make_workflow_worker(bridge=None):
+    if bridge is None:
+        bridge = _make_bridge()
+    materializer, dispatcher = _make_materializer_and_dispatcher()
+    worker = InboxWorker(
+        _make_ctx(bridge),
+        plan_materializer=materializer,
+        step_dispatcher=dispatcher,
+    )
+    return worker, materializer, dispatcher
+
+
 def _make_workflow_task(task_id: str = "task-workflow-1") -> dict:
-    """Build a task dict that represents a launched squad mission with a compiled workflow plan."""
     return {
         "id": task_id,
         "title": "Squad Mission: Review Release",
@@ -63,104 +83,47 @@ def _make_workflow_task(task_id: str = "task-workflow-1") -> dict:
     }
 
 
-def _make_legacy_workflow_task(task_id: str = "task-legacy-workflow-1") -> dict:
-    task = _make_workflow_task(task_id)
-    task.pop("work_mode", None)
-    return task
-
-
-def _make_bridge_workflow_task(task_id: str = "task-bridge-workflow-1") -> dict:
-    """Build a workflow task as it actually arrives from the Python bridge."""
-    task = _make_workflow_task(task_id)
-    task["execution_plan"] = {
-        "generated_by": "workflow",
-        "generated_at": "2026-03-14T10:00:00.000Z",
-        "steps": task["execution_plan"]["steps"],
-    }
-    return task
+def _mock_llm_router(target_agent: str = "nanobot"):
+    decision = RoutingDecision(
+        target_agent=target_agent,
+        reason=f"LLM picked {target_agent}",
+        reason_code="llm_delegation",
+        registry_snapshot=[],
+        routed_at="2026-01-01T00:00:00+00:00",
+    )
+    mock_router = MagicMock()
+    mock_router.route = AsyncMock(return_value=decision)
+    return mock_router
 
 
 class TestInboxWorkerAiWorkflowBypass:
-    """Layer 2 guardrail: InboxWorker must bypass planning for workflow tasks."""
+    """Workflow tasks get materialized and dispatched."""
 
     @pytest.mark.asyncio
-    async def test_workflow_task_goes_to_review_not_planning(self) -> None:
-        """ai_workflow tasks with a workflow plan must NOT be routed to 'planning'."""
-        bridge = _make_bridge()
-        worker = InboxWorker(_make_ctx(bridge))
+    async def test_workflow_task_materializes_and_dispatches(self) -> None:
+        worker, materializer, dispatcher = _make_workflow_worker()
         task = _make_workflow_task()
 
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        # Must NOT call planning
-        call_args_list = bridge.transition_task_from_snapshot.call_args_list
-        statuses = [call[0][1] for call in call_args_list]
-        assert "planning" not in statuses, (
-            "ai_workflow tasks with a workflow plan must not be routed to planning"
-        )
+        materializer.materialize.assert_called_once()
+        dispatcher.dispatch_steps.assert_awaited_once_with("task-workflow-1", ["step-real-1"])
 
     @pytest.mark.asyncio
-    async def test_workflow_task_is_transitioned_to_review(self) -> None:
-        """ai_workflow tasks must be transitioned to 'review' status."""
-        bridge = _make_bridge()
-        worker = InboxWorker(_make_ctx(bridge))
+    async def test_workflow_task_never_reaches_planning(self) -> None:
+        worker, _, _ = _make_workflow_worker()
         task = _make_workflow_task()
 
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
             await worker.process_task(task)
 
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args.args[0]["id"] == "task-workflow-1"
-        assert call_args.args[1] == "review"
+        bridge = worker._bridge
+        for call in bridge.transition_task_from_snapshot.call_args_list:
+            assert call[0][1] in ("assigned", "in_progress")
 
     @pytest.mark.asyncio
-    async def test_workflow_task_sets_awaiting_kickoff(self) -> None:
-        """Transition to review must set awaitingKickoff=True so dashboard shows kick-off UI."""
-        bridge = _make_bridge()
-        worker = InboxWorker(_make_ctx(bridge))
-        task = _make_workflow_task()
-
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
-            await worker.process_task(task)
-
-        kwargs = bridge.transition_task_from_snapshot.call_args.kwargs
-        assert kwargs["awaiting_kickoff"] is True
-        assert kwargs["review_phase"] == "plan_review"
-
-    @pytest.mark.asyncio
-    async def test_legacy_workflow_task_without_work_mode_still_goes_to_review(self) -> None:
-        """Legacy workflow tasks should still preserve workflow-plan ownership."""
-        bridge = _make_bridge()
-        worker = InboxWorker(_make_ctx(bridge))
-        task = _make_legacy_workflow_task()
-
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
-            await worker.process_task(task)
-
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args.args[1] == "review"
-        bridge.patch_routing_decision.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_bridge_workflow_task_with_snake_case_plan_goes_to_review(self) -> None:
-        """Bridge-normalized workflow payloads must still bypass planning."""
-        bridge = _make_bridge()
-        worker = InboxWorker(_make_ctx(bridge))
-        task = _make_bridge_workflow_task()
-
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
-            await worker.process_task(task)
-
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args.args[1] == "review"
-
-    @pytest.mark.asyncio
-    async def test_normal_task_still_routes_to_planning(self) -> None:
-        """Non-workflow tasks must still be routed to 'planning' as before."""
+    async def test_normal_task_routes_via_llm_delegation(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
@@ -170,21 +133,20 @@ class TestInboxWorkerAiWorkflowBypass:
             "description": "Do something",
             "assigned_agent": None,
             "is_manual": False,
-            # no work_mode, no execution_plan
         }
 
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        mock_router = _mock_llm_router("nanobot")
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await worker.process_task(task)
 
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args.args[0]["id"] == "task-normal"
-        assert call_args.args[1] == "planning"
-        assert call_args.kwargs["reason"] == "Inbox task routed to planning"
+        mock_router.route.assert_awaited_once()
+        bridge.update_task_status.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_ai_workflow_without_workflow_plan_still_routes_to_planning(self) -> None:
-        """ai_workflow tasks without a pre-compiled workflow plan go to planning normally."""
+    async def test_ai_workflow_without_plan_routes_via_llm(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
@@ -195,44 +157,19 @@ class TestInboxWorkerAiWorkflowBypass:
             "assigned_agent": None,
             "is_manual": False,
             "work_mode": "ai_workflow",
-            # execution_plan is absent — plan not yet compiled
         }
 
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        mock_router = _mock_llm_router("nanobot")
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await worker.process_task(task)
 
-        bridge.transition_task_from_snapshot.assert_called_once()
-        assert bridge.transition_task_from_snapshot.call_args.args[1] == "planning"
+        mock_router.route.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_ai_workflow_with_lead_agent_plan_still_routes_to_planning(self) -> None:
-        """ai_workflow tasks whose plan was generated by lead-agent go to planning normally."""
-        bridge = _make_bridge()
-        worker = InboxWorker(_make_ctx(bridge))
-
-        task = {
-            "id": "task-lead-plan",
-            "title": "Lead agent plan task",
-            "description": "Has lead-agent plan",
-            "assigned_agent": None,
-            "is_manual": False,
-            "work_mode": "ai_workflow",
-            "execution_plan": {
-                "generated_by": "lead-agent",  # NOT a workflow plan
-                "generated_at": "2026-03-14T10:00:00.000Z",
-                "steps": [],
-            },
-        }
-
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
-            await worker.process_task(task)
-
-        bridge.transition_task_from_snapshot.assert_called_once()
-        assert bridge.transition_task_from_snapshot.call_args.args[1] == "planning"
-
-    @pytest.mark.asyncio
-    async def test_claim_prevents_duplicate_routing_when_known_ids_are_cleared(self) -> None:
-        """Persistent claims, not _known_inbox_ids, must gate duplicate inbox routing."""
+    async def test_claim_prevents_duplicate_routing(self) -> None:
         bridge = _make_bridge()
         claims: set[tuple[str, str, str]] = set()
 
@@ -246,7 +183,12 @@ class TestInboxWorkerAiWorkflowBypass:
             return {"granted": True, "claimId": "claim-1"}
 
         bridge.mutation.side_effect = _mutation
-        worker = InboxWorker(_make_ctx(bridge))
+        materializer, dispatcher = _make_materializer_and_dispatcher()
+        worker = InboxWorker(
+            _make_ctx(bridge),
+            plan_materializer=materializer,
+            step_dispatcher=dispatcher,
+        )
         task = _make_workflow_task()
 
         with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
@@ -254,4 +196,4 @@ class TestInboxWorkerAiWorkflowBypass:
             worker._known_inbox_ids.clear()
             await worker.process_batch([task])
 
-        bridge.transition_task_from_snapshot.assert_called_once()
+        materializer.materialize.assert_called_once()

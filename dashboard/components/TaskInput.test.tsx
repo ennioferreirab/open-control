@@ -118,7 +118,7 @@ describe("TaskInput", () => {
     expect(screen.queryByText("Task title required")).not.toBeInTheDocument();
   });
 
-  it("submits with autonomous supervision by default", async () => {
+  it("submits task with default settings", async () => {
     render(<TaskInput />);
 
     fireEvent.change(screen.getByPlaceholderText("Task title..."), {
@@ -132,27 +132,6 @@ describe("TaskInput", () => {
         description: undefined,
         tags: undefined,
         boardId: undefined,
-        supervisionMode: "autonomous",
-      });
-    });
-  });
-
-  it("submits with supervised mode after toggling supervision", async () => {
-    render(<TaskInput />);
-
-    fireEvent.change(screen.getByPlaceholderText("Task title..."), {
-      target: { value: "Needs review first" },
-    });
-    fireEvent.click(screen.getByTitle("Autonomous"));
-    fireEvent.click(screen.getByText("Create"));
-
-    await waitFor(() => {
-      expect(mockCreateTask).toHaveBeenCalledWith({
-        title: "Needs review first",
-        description: undefined,
-        tags: undefined,
-        boardId: undefined,
-        supervisionMode: "supervised",
       });
     });
   });
@@ -172,7 +151,6 @@ describe("TaskInput", () => {
         description: undefined,
         tags: undefined,
         boardId: undefined,
-        supervisionMode: "autonomous",
         assignedAgent: "reviewer",
       });
     });
@@ -202,7 +180,6 @@ describe("TaskInput", () => {
         tags: undefined,
         boardId: undefined,
         isManual: true,
-        supervisionMode: "autonomous",
       });
     });
 
@@ -251,7 +228,6 @@ describe("TaskInput", () => {
       expect(mockCreateTask).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Create task with files",
-          supervisionMode: "autonomous",
           files: [
             expect.objectContaining({
               name: "report.pdf",
@@ -341,23 +317,20 @@ describe("TaskInput", () => {
         description: undefined,
         tags: undefined,
         boardId: undefined,
-        supervisionMode: "autonomous",
       });
     });
   });
 
-  it("resets the title and supervision toggle after a successful submission", async () => {
+  it("resets the title after a successful submission", async () => {
     render(<TaskInput />);
 
     fireEvent.change(screen.getByPlaceholderText("Task title..."), {
       target: { value: "Reset me" },
     });
-    fireEvent.click(screen.getByTitle("Autonomous"));
     fireEvent.click(screen.getByText("Create"));
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Task title...")).toHaveValue("");
     });
-    expect(screen.getByTitle("Autonomous")).toBeInTheDocument();
   });
 });

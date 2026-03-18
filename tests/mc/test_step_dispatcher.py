@@ -1160,66 +1160,6 @@ class TestStepOutputFileSync:
         )
 
 
-class TestSupervisedModeSkipsDispatch:
-    """Verify supervised mode guard at orchestrator level (AC4)."""
-
-    @pytest.mark.asyncio
-    async def test_supervised_mode_does_not_trigger_dispatch(self) -> None:
-        from mc.runtime.orchestrator import TaskOrchestrator
-        from mc.types import ExecutionPlan, ExecutionPlanStep
-
-        bridge = MagicMock()
-        bridge.list_agents.return_value = [
-            {
-                "name": "nanobot",
-                "display_name": "Owl",
-                "role": "general",
-                "status": "active",
-                "model": "test",
-            }
-        ]
-        orchestrator = TaskOrchestrator(bridge)
-        orchestrator._planning_worker._step_dispatcher = MagicMock()
-        orchestrator._planning_worker._step_dispatcher.dispatch_steps = AsyncMock()
-
-        task = {
-            "id": "task-1",
-            "title": "Supervised task",
-            "description": "test",
-            "status": "planning",
-            "supervision_mode": "supervised",
-        }
-
-        plan = ExecutionPlan(
-            steps=[
-                ExecutionPlanStep(
-                    temp_id="s1",
-                    title="Step",
-                    description="d",
-                    assigned_agent="nanobot",
-                    blocked_by=[],
-                    parallel_group=1,
-                    order=1,
-                )
-            ]
-        )
-
-        with (
-            patch("mc.runtime.workers.planning.asyncio.to_thread", new=_sync_to_thread),
-            patch("mc.runtime.workers.planning.asyncio.create_task") as mock_create_task,
-            patch("mc.runtime.workers.planning.TaskPlanner") as planner_cls,
-        ):
-            planner = planner_cls.return_value
-            planner.plan_task = AsyncMock(return_value=plan)
-            await orchestrator._planning_worker.process_task(task)
-
-        # Supervised mode should NOT trigger dispatch or materialization
-        bridge.batch_create_steps.assert_not_called()
-        bridge.kick_off_task.assert_not_called()
-        orchestrator._planning_worker._step_dispatcher.dispatch_steps.assert_not_called()
-        mock_create_task.assert_not_called()
-
-
 class TestPausedTaskDispatch:
     """Story 7.4: Dispatcher respects paused task state (AC 7)."""
 

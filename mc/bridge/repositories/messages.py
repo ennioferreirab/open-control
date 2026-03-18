@@ -127,15 +127,14 @@ class MessageRepository:
         plan_review: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> Any:
-        """Post a Lead Agent plan or chat message to the unified task thread.
+        """Post a Lead Agent chat message to the unified task thread.
 
         Calls messages:postLeadAgentMessage Convex mutation.
 
         Args:
             task_id: Convex task _id.
-            content: Message body (plan text or chat message).
-            msg_type: ThreadMessageType value -- either "lead_agent_plan"
-                      or "lead_agent_chat".
+            content: Message body (chat message).
+            msg_type: ThreadMessageType value -- "lead_agent_chat".
         """
         args: dict[str, Any] = {
             "task_id": task_id,

@@ -155,14 +155,13 @@ describe("useBoardColumns", () => {
     expect(inProgressCol.tasks).toHaveLength(3);
   });
 
-  it("places planning and ready tasks in Assigned column", () => {
+  it("places ready tasks in Assigned column", () => {
     const tasks = [
-      makeTask({ _id: "t1", status: "planning" }),
-      makeTask({ _id: "t2", status: "ready" }),
+      makeTask({ _id: "t1", status: "ready" }),
     ];
     const { result } = renderHook(() => useBoardColumns(tasks, []));
     const assignedCol = result.current![1];
-    expect(assignedCol.tasks).toHaveLength(2);
+    expect(assignedCol.tasks).toHaveLength(1);
   });
 
   it("sorts tasks by creation time descending", () => {

@@ -159,7 +159,7 @@ export function useBoardColumns(
             );
           }
           if (col.status === "assigned") {
-            return t.status === "assigned" || t.status === "planning" || t.status === "ready";
+            return t.status === "assigned" || t.status === "ready";
           }
           if (col.status === "inbox") {
             return t.status === "inbox";

@@ -30,7 +30,7 @@ def _plan_message(message_id: str, content: str) -> dict[str, Any]:
         "author_name": "lead-agent",
         "author_type": "system",
         "message_type": "system_event",
-        "type": "lead_agent_plan",
+        "type": "lead_agent_chat",
         "timestamp": f"2026-03-16T12:01:{message_id[-1]}Z",
         "content": content,
     }

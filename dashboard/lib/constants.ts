@@ -1,6 +1,5 @@
 // Task status values
 export const TASK_STATUS = {
-  PLANNING: "planning",
   READY: "ready",
   FAILED: "failed",
   INBOX: "inbox",
@@ -42,7 +41,6 @@ export const AGENT_STATUS = {
 // Activity event type values
 export const ACTIVITY_EVENT_TYPE = {
   TASK_CREATED: "task_created",
-  TASK_PLANNING: "task_planning",
   TASK_FAILED: "task_failed",
   TASK_ASSIGNED: "task_assigned",
   TASK_STARTED: "task_started",
@@ -88,7 +86,6 @@ export const STRUCTURED_MESSAGE_TYPE = {
   STEP_COMPLETION: "step_completion",
   USER_MESSAGE: "user_message",
   SYSTEM_ERROR: "system_error",
-  LEAD_AGENT_PLAN: "lead_agent_plan",
   LEAD_AGENT_CHAT: "lead_agent_chat",
   COMMENT: "comment",
 } as const;
@@ -132,11 +129,6 @@ export type AuthorType = (typeof AUTHOR_TYPE)[keyof typeof AUTHOR_TYPE];
 
 // Status color mapping for Kanban board
 export const STATUS_COLORS: Record<TaskStatus, { border: string; bg: string; text: string }> = {
-  planning: {
-    border: "border-l-indigo-500",
-    bg: "bg-indigo-100 dark:bg-indigo-950",
-    text: "text-indigo-700 dark:text-indigo-300",
-  },
   ready: {
     border: "border-l-teal-500",
     bg: "bg-teal-100 dark:bg-teal-950",

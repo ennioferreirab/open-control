@@ -42,7 +42,6 @@ export type AllowedActions = {
 
 /** Task status type matching the schema union. */
 export type TaskStatus =
-  | "planning"
   | "ready"
   | "failed"
   | "inbox"
@@ -62,11 +61,10 @@ export type BoardColumn = {
 
 // --- Constants ---
 
-const PLAN_EDITABLE_STATUSES: ReadonlySet<string> = new Set(["planning", "ready", "review"]);
+const PLAN_EDITABLE_STATUSES: ReadonlySet<string> = new Set(["ready", "review"]);
 
 const BOARD_COLUMNS: readonly BoardColumn[] = [
   { status: "inbox", label: "Inbox" },
-  { status: "planning", label: "Planning" },
   { status: "ready", label: "Ready" },
   { status: "assigned", label: "Assigned" },
   { status: "in_progress", label: "In Progress" },

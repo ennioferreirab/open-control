@@ -48,7 +48,7 @@ export interface LaunchSquadMissionArgs {
  * Create a task bound to a published squadSpec and workflowSpec with a
  * workflow-generated execution plan already persisted on the task document.
  *
- * The task is created in `planning` so workflow missions use the normal
+ * The task is created in `inbox` so workflow missions enter the normal
  * lifecycle, while still preserving the precompiled workflow execution plan.
  *
  * @param ctx  - Convex mutation context.
@@ -111,9 +111,8 @@ export async function launchSquadMission(
   const taskId = await ctx.db.insert("tasks", {
     title: args.title,
     description: args.description,
-    status: "planning",
+    status: "inbox",
     trustLevel: "autonomous",
-    supervisionMode: "autonomous",
     workMode: "ai_workflow",
     routingMode: "workflow",
     squadSpecId: args.squadSpecId,
@@ -131,7 +130,6 @@ export async function launchSquadMission(
     isManual: false,
     assignedAgent: undefined,
     trustLevel: "autonomous",
-    supervisionMode: "autonomous",
     timestamp: now,
   });
 

@@ -122,7 +122,7 @@ def _lead_agent_messages(messages: list[dict[str, Any]], since: str) -> list[dic
             continue
         if message.get("author_name") != "lead-agent":
             continue
-        if message.get("type") in {"lead_agent_plan", "lead_agent_chat"}:
+        if message.get("type") == "lead_agent_chat":
             result.append(message)
     return result
 

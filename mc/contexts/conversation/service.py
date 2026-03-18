@@ -24,7 +24,6 @@ from mc.contexts.conversation.intent import (
     ResolveResult,
 )
 from mc.contexts.conversation.mentions.handler import handle_all_mentions
-from mc.contexts.planning.negotiation import handle_plan_negotiation
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
@@ -269,19 +268,8 @@ class ConversationService:
     async def _dispatch_plan_chat(
         self, task_id: str, content: str, task_data: dict[str, Any]
     ) -> None:
-        """Dispatch plan negotiation chat."""
-        current_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
-        task_status = task_data.get("status", "review")
-
+        """Plan negotiation has been removed. Log and no-op."""
         logger.info(
-            "[conversation] Dispatching plan_chat for task %s (status=%s)",
+            "[conversation] plan_chat intent for task %s ignored (planning phase removed)",
             task_id,
-            task_status,
-        )
-        await handle_plan_negotiation(
-            self._bridge,
-            task_id,
-            content,
-            current_plan,
-            task_status=task_status,
         )

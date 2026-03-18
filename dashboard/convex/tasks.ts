@@ -82,6 +82,8 @@ export const create = mutation({
     activeCronJobId: v.optional(v.string()),
     sourceAgent: v.optional(v.string()),
     autoTitle: v.optional(v.boolean()),
+    // Deprecated: supervisionMode is no longer set from the UI.
+    // Kept for backward compatibility with existing API callers.
     supervisionMode: v.optional(v.union(v.literal("autonomous"), v.literal("supervised"))),
     files: taskFilesValidator,
     routingMode: v.optional(
@@ -242,15 +244,11 @@ export const createMergedTask = mutation({
     const mergedTaskId = await ctx.db.insert("tasks", {
       title: `Merge: ${String(primaryTask.title)} + ${String(secondaryTask.title)}`,
       description: `Merged from "${String(primaryTask.title)}" and "${String(secondaryTask.title)}". Continue work in this task.`,
-      status: "planning",
+      status: "inbox",
       awaitingKickoff: undefined,
       reviewPhase: undefined,
       isManual: args.mode === "manual" ? true : undefined,
       trustLevel,
-      supervisionMode:
-        args.mode === "plan"
-          ? "supervised"
-          : (primaryTask.supervisionMode ?? secondaryTask.supervisionMode ?? "autonomous"),
       boardId: primaryTask.boardId ?? secondaryTask.boardId,
       tags: dedupeTags(
         primaryTask.tags as string[] | undefined,

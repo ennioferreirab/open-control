@@ -27,7 +27,6 @@ describe("canSendThreadMessage", () => {
     const allowedStatuses = [
       "inbox",
       "assigned",
-      "planning",
       "ready",
       "failed",
       "review",
@@ -55,7 +54,6 @@ describe("canPostPlanMessage", () => {
     const disallowedStatuses = [
       "inbox",
       "assigned",
-      "planning",
       "ready",
       "failed",
       "done",
@@ -82,7 +80,6 @@ describe("canPostComment", () => {
     const statuses = [
       "inbox",
       "assigned",
-      "planning",
       "ready",
       "failed",
       "in_progress",

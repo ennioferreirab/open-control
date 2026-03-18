@@ -160,6 +160,13 @@ export const create = internalMutation({
       throw new ConvexError("Task not found");
     }
 
+    // Defense in depth: direct tasks should never have steps
+    if (task.workMode === "direct_delegate") {
+      throw new ConvexError(
+        "Steps cannot be created for direct_delegate tasks. Steps are workflow-only.",
+      );
+    }
+
     const dependencyIds = args.blockedBy ?? [];
     for (const dependencyId of dependencyIds) {
       const dependencyStep = await ctx.db.get(dependencyId);
@@ -226,6 +233,13 @@ export const batchCreate = internalMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) {
       throw new ConvexError("Task not found");
+    }
+
+    // Defense in depth: direct tasks should never have steps
+    if (task.workMode === "direct_delegate") {
+      throw new ConvexError(
+        "Steps cannot be created for direct_delegate tasks. Steps are workflow-only.",
+      );
     }
 
     validateBatchSteps(args.steps);

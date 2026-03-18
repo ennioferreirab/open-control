@@ -23,13 +23,12 @@ import {
 
 /** Valid transition map: current_status -> [allowed_next_statuses] */
 export const TASK_TRANSITIONS: Record<string, string[]> = {
-  planning: ["failed", "review", "ready", "in_progress"],
-  ready: ["in_progress", "planning", "failed"],
-  failed: ["planning", "inbox"],
-  inbox: ["assigned", "planning", "in_progress"],
+  ready: ["in_progress", "failed"],
+  failed: ["inbox"],
+  inbox: ["assigned", "in_progress"],
   assigned: ["in_progress", "assigned"],
   in_progress: ["review", "done", "assigned"],
-  review: ["done", "inbox", "assigned", "in_progress", "planning"],
+  review: ["done", "inbox", "assigned", "in_progress"],
   done: ["assigned", "review"],
   retrying: ["in_progress", "crashed"],
   crashed: ["inbox", "assigned"],
@@ -40,17 +39,10 @@ export const TASK_UNIVERSAL_TARGETS = ["retrying", "crashed", "deleted"];
 
 /** Map transitions to activity event types */
 export const TRANSITION_EVENT_MAP: Record<string, string> = {
-  "planning->failed": "task_failed",
-  "planning->review": "task_planning",
-  "planning->in_progress": "task_started",
-  "planning->ready": "task_planning",
   "ready->in_progress": "task_started",
-  "ready->planning": "task_planning",
   "ready->failed": "task_failed",
-  "failed->planning": "task_planning",
   "failed->inbox": "task_retrying",
   "inbox->assigned": "task_assigned",
-  "inbox->planning": "task_planning",
   "inbox->in_progress": "task_started",
   "assigned->assigned": "task_reassigned",
   "assigned->in_progress": "task_started",
@@ -60,7 +52,6 @@ export const TRANSITION_EVENT_MAP: Record<string, string> = {
   "review->done": "task_completed",
   "review->inbox": "task_retrying",
   "review->in_progress": "task_started",
-  "review->planning": "task_planning",
   "retrying->in_progress": "task_retrying",
   "retrying->crashed": "task_crashed",
   "crashed->inbox": "task_retrying",
@@ -72,9 +63,8 @@ export const TRANSITION_EVENT_MAP: Record<string, string> = {
 
 /** Restore target map: previousStatus -> target status (n-1) */
 export const RESTORE_TARGET_MAP: Record<string, string> = {
-  planning: "planning",
-  ready: "planning",
-  failed: "planning",
+  ready: "inbox",
+  failed: "inbox",
   inbox: "inbox",
   assigned: "inbox",
   in_progress: "assigned",

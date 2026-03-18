@@ -8,7 +8,6 @@ import type { ExecutionPlan } from "@/lib/types";
 
 type ActivityEventType =
   | "task_created"
-  | "task_planning"
   | "task_failed"
   | "task_assigned"
   | "task_started"

@@ -50,7 +50,6 @@ describe("TaskInput layout", () => {
   it("shows AI controls by default", () => {
     render(<TaskInput />);
 
-    expect(screen.getByTitle("Autonomous")).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveAttribute("data-selected-value", "auto");
     expect(screen.getByRole("button", { name: /Switch to manual mode/i })).toBeInTheDocument();
   });
@@ -60,7 +59,6 @@ describe("TaskInput layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Switch to manual mode/i }));
 
-    expect(screen.queryByTitle("Autonomous")).not.toBeInTheDocument();
     expect(screen.queryByText("Auto (Lead Agent)")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Switch to AI mode/i })).toBeInTheDocument();
   });
@@ -71,19 +69,8 @@ describe("TaskInput layout", () => {
     fireEvent.click(screen.getByRole("button", { name: /Switch to manual mode/i }));
     fireEvent.click(screen.getByRole("button", { name: /Switch to AI mode/i }));
 
-    expect(screen.getByTitle("Autonomous")).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveAttribute("data-selected-value", "auto");
     expect(screen.getByRole("button", { name: /Switch to manual mode/i })).toBeInTheDocument();
-  });
-
-  it("toggles supervision button label between autonomous and supervised", () => {
-    render(<TaskInput />);
-
-    fireEvent.click(screen.getByTitle("Autonomous"));
-    expect(screen.getByTitle("Supervised")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTitle("Supervised"));
-    expect(screen.getByTitle("Autonomous")).toBeInTheDocument();
   });
 
   it("keeps attach and create actions visible in both modes", () => {

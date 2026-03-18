@@ -74,8 +74,8 @@ class TestUniversalTransitions:
 class TestInvalidTransitions:
     """Test that backward and illegal transitions are rejected."""
 
-    def test_inbox_to_in_progress(self) -> None:
-        assert is_valid_transition(TaskStatus.INBOX, TaskStatus.IN_PROGRESS) is False
+    def test_inbox_to_in_progress_is_valid(self) -> None:
+        assert is_valid_transition(TaskStatus.INBOX, TaskStatus.IN_PROGRESS) is True
 
     def test_inbox_to_done(self) -> None:
         assert is_valid_transition(TaskStatus.INBOX, TaskStatus.DONE) is False

@@ -39,7 +39,7 @@ Status strings are **never converted** — they are values, not keys. They must 
 ### TaskStatus
 
 ```
-planning | ready | inbox | assigned | in_progress | review | done | failed | retrying | crashed | deleted
+ready | inbox | assigned | in_progress | review | done | failed | retrying | crashed | deleted
 ```
 
 ### StepStatus

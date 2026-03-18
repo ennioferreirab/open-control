@@ -38,11 +38,11 @@ class TestTaskRepository:
 
         result = repo.transition_task(
             "task-1",
-            from_status="planning",
+            from_status="in_progress",
             to_status="review",
             expected_state_version=3,
             reason="Plan ready for review",
-            idempotency_key="py:task-1:v3:planning:review",
+            idempotency_key="py:task-1:v3:in_progress:review",
             awaiting_kickoff=True,
             review_phase="plan_review",
             agent_name="lead-agent",
@@ -53,13 +53,13 @@ class TestTaskRepository:
             "tasks:transition",
             {
                 "task_id": "task-1",
-                "from_status": "planning",
+                "from_status": "in_progress",
                 "expected_state_version": 3,
                 "to_status": "review",
                 "awaiting_kickoff": True,
                 "review_phase": "plan_review",
                 "reason": "Plan ready for review",
-                "idempotency_key": "py:task-1:v3:planning:review",
+                "idempotency_key": "py:task-1:v3:in_progress:review",
                 "agent_name": "lead-agent",
             },
         )
@@ -74,17 +74,17 @@ class TestTaskRepository:
                 "status": "inbox",
                 "state_version": 7,
             },
-            "planning",
-            reason="Inbox task routed to planning",
+            "in_progress",
+            reason="Inbox task routed to in_progress",
         )
 
         args = client.mutation.call_args[0][1]
         assert args["task_id"] == "task-1"
         assert args["from_status"] == "inbox"
         assert args["expected_state_version"] == 7
-        assert args["to_status"] == "planning"
-        assert args["reason"] == "Inbox task routed to planning"
-        assert args["idempotency_key"] == "py:task-1:v7:inbox:planning:none:none:none"
+        assert args["to_status"] == "in_progress"
+        assert args["reason"] == "Inbox task routed to in_progress"
+        assert args["idempotency_key"] == "py:task-1:v7:inbox:in_progress:none:none:none"
 
     def test_update_task_status(self):
         client = _make_client_mock()
@@ -387,10 +387,10 @@ class TestMessageRepository:
     def test_post_lead_agent_message(self):
         client = _make_client_mock()
         repo = MessageRepository(client)
-        repo.post_lead_agent_message("t1", "Plan text", "lead_agent_plan")
+        repo.post_lead_agent_message("t1", "Chat text", "lead_agent_chat")
 
         args = client.mutation.call_args[0][1]
-        assert args["type"] == "lead_agent_plan"
+        assert args["type"] == "lead_agent_chat"
 
     def test_post_system_error(self):
         client = _make_client_mock()

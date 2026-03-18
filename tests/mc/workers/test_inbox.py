@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mc.contexts.routing.router import RoutingDecision
 from mc.infrastructure.runtime_context import RuntimeContext
 from mc.runtime.workers.inbox import InboxWorker
 
@@ -22,6 +23,7 @@ def _make_bridge() -> MagicMock:
     bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.update_task_status.return_value = None
     bridge.create_activity.return_value = None
+    bridge.patch_routing_decision.return_value = None
     return bridge
 
 
@@ -31,11 +33,25 @@ def _make_ctx(bridge: MagicMock | None = None) -> RuntimeContext:
     return RuntimeContext(bridge=bridge, agents_dir=Path("/tmp/test-agents"))
 
 
+def _mock_llm_router(target_agent: str = "nanobot", reason_code: str = "llm_delegation"):
+    """Create a mock LLMDelegationRouter that returns a successful decision."""
+    decision = RoutingDecision(
+        target_agent=target_agent,
+        reason=f"LLM picked {target_agent}",
+        reason_code=reason_code,
+        registry_snapshot=[{"name": target_agent, "role": "agent"}],
+        routed_at="2025-01-01T00:00:00+00:00",
+    )
+    mock_router = MagicMock()
+    mock_router.route = AsyncMock(return_value=decision)
+    return mock_router
+
+
 class TestInboxWorkerProcessTask:
     """Happy path and error path tests for InboxWorker.process_task."""
 
     @pytest.mark.asyncio
-    async def test_routes_to_planning_when_no_assigned_agent(self) -> None:
+    async def test_routes_via_llm_delegation_when_no_assigned_agent(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
@@ -47,15 +63,23 @@ class TestInboxWorkerProcessTask:
             "is_manual": False,
         }
 
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        mock_router = _mock_llm_router("nanobot")
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await worker.process_task(task)
 
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "planning"
+        mock_router.route.assert_awaited_once_with(task)
+        bridge.update_task_status.assert_called_once_with(
+            "task-1",
+            "assigned",
+            "nanobot",
+            "Delegated to nanobot (llm_delegation)",
+        )
 
     @pytest.mark.asyncio
-    async def test_routes_to_assigned_when_agent_set(self) -> None:
+    async def test_routes_via_explicit_assignment_when_agent_set(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
@@ -67,12 +91,15 @@ class TestInboxWorkerProcessTask:
             "is_manual": False,
         }
 
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        mock_router = _mock_llm_router("nanobot", reason_code="explicit_assignment")
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await worker.process_task(task)
 
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "assigned"
+        mock_router.route.assert_awaited_once()
+        bridge.update_task_status.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_skips_manual_tasks(self) -> None:
@@ -104,12 +131,14 @@ class TestInboxWorkerProcessTask:
             "is_manual": False,
         }
 
+        mock_router = _mock_llm_router("nanobot")
         with (
             patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
             patch(
                 "mc.runtime.workers.inbox.generate_title_via_low_agent",
                 new=AsyncMock(return_value="Widget Builder"),
             ),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
         ):
             await worker.process_task(task)
 
@@ -117,12 +146,11 @@ class TestInboxWorkerProcessTask:
             "tasks:updateTitle",
             {"task_id": "task-3", "title": "Widget Builder"},
         )
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "planning"
+        # Task goes through LLM delegation after title generation
+        mock_router.route.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_auto_title_failure_still_transitions(self) -> None:
+    async def test_auto_title_failure_still_routes(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
@@ -135,19 +163,90 @@ class TestInboxWorkerProcessTask:
             "is_manual": False,
         }
 
+        mock_router = _mock_llm_router("nanobot")
         with (
             patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
             patch(
                 "mc.runtime.workers.inbox.generate_title_via_low_agent",
                 new=AsyncMock(return_value=None),
             ),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
         ):
             await worker.process_task(task)
 
-        # Should still transition even if auto-title fails
+        # Should still route even if auto-title fails
+        mock_router.route.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_llm_delegation_failure_fails_task_explicitly(self) -> None:
+        bridge = _make_bridge()
+        worker = InboxWorker(_make_ctx(bridge))
+
+        task = {
+            "id": "task-5",
+            "title": "Test",
+            "description": "Details",
+            "assigned_agent": None,
+            "is_manual": False,
+        }
+
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(side_effect=RuntimeError("LLM timeout"))
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
+            await worker.process_task(task)
+
+        # Task should transition to failed
         bridge.transition_task_from_snapshot.assert_called_once()
         call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "planning"
+        assert call_args[0][1] == "failed"
+        assert "LLM" in call_args[1]["reason"]
+
+    @pytest.mark.asyncio
+    async def test_workflow_task_materializes_and_dispatches(self) -> None:
+        bridge = _make_bridge()
+        bridge.batch_create_steps.return_value = ["step-real-1"]
+        bridge.kick_off_task.return_value = None
+        mock_materializer = MagicMock()
+        mock_materializer.materialize.return_value = ["step-real-1"]
+        mock_dispatcher = MagicMock()
+        mock_dispatcher.dispatch_steps = AsyncMock()
+        worker = InboxWorker(
+            _make_ctx(bridge),
+            plan_materializer=mock_materializer,
+            step_dispatcher=mock_dispatcher,
+        )
+
+        task = {
+            "id": "task-wf",
+            "title": "Workflow task",
+            "is_manual": False,
+            "work_mode": "ai_workflow",
+            "squad_spec_id": "squad-1",
+            "execution_plan": {
+                "steps": [
+                    {
+                        "temp_id": "step_1",
+                        "title": "Do thing",
+                        "description": "Do the thing",
+                        "assigned_agent": "nanobot",
+                        "blocked_by": [],
+                        "parallel_group": 1,
+                        "order": 1,
+                    }
+                ],
+                "generated_at": "2025-01-01",
+                "generated_by": "workflow",
+            },
+        }
+
+        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+            await worker.process_task(task)
+
+        mock_materializer.materialize.assert_called_once()
+        mock_dispatcher.dispatch_steps.assert_awaited_once_with("task-wf", ["step-real-1"])
 
 
 class TestInboxWorkerProcessBatch:
@@ -175,11 +274,15 @@ class TestInboxWorkerProcessBatch:
             },
         ]
 
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        mock_router = _mock_llm_router("nanobot")
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await worker.process_batch(tasks)
 
-        # Only one call (deduplication)
-        assert bridge.transition_task_from_snapshot.call_count == 1
+        # Only one route call (deduplication)
+        assert mock_router.route.await_count == 1
 
     @pytest.mark.asyncio
     async def test_prunes_stale_ids_so_reentry_works(self) -> None:
@@ -194,26 +297,28 @@ class TestInboxWorkerProcessBatch:
             "is_manual": False,
         }
 
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        mock_router = _mock_llm_router("nanobot")
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             # First batch
             await worker.process_batch([task])
-            assert bridge.transition_task_from_snapshot.call_count == 1
+            assert mock_router.route.await_count == 1
 
             # Task leaves inbox (empty batch prunes)
             await worker.process_batch([])
 
-            # Task re-enters inbox -- should be processed again
+            # Task re-enters inbox — should be processed again
             await worker.process_batch([task])
-            assert bridge.transition_task_from_snapshot.call_count == 2
+            assert mock_router.route.await_count == 2
 
     @pytest.mark.asyncio
     async def test_error_in_one_task_does_not_block_others(self) -> None:
         bridge = _make_bridge()
         worker = InboxWorker(_make_ctx(bridge))
 
-        # First task will error, second should still process
         call_count = 0
-
         original_process = worker.process_task
 
         async def _failing_process(task_data):
@@ -236,10 +341,13 @@ class TestInboxWorkerProcessBatch:
             },
         ]
 
-        with patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread):
+        mock_router = _mock_llm_router("nanobot")
+        with (
+            patch("mc.runtime.workers.inbox.asyncio.to_thread", new=_sync_to_thread),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await worker.process_batch(tasks)
 
         assert call_count == 2
-        bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "planning"
+        # Second task should have been routed successfully
+        mock_router.route.assert_awaited_once()

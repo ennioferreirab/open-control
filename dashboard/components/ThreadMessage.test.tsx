@@ -100,22 +100,6 @@ describe("ThreadMessage — lead_agent_chat", () => {
   });
 });
 
-// Verify lead_agent_plan also renders with indigo (not changed by story but good to confirm)
-describe("ThreadMessage — lead_agent_plan", () => {
-  it("renders with indigo background for lead_agent_plan type", () => {
-    const message = makeMessage({ type: "lead_agent_plan" });
-    const { container } = render(<ThreadMessage message={message as never} />);
-    const wrapper = container.firstChild as HTMLElement;
-    expect(wrapper.className).toContain("bg-indigo-50");
-  });
-
-  it("renders 'Plan' label for lead_agent_plan type", () => {
-    const message = makeMessage({ type: "lead_agent_plan" });
-    render(<ThreadMessage message={message as never} />);
-    expect(screen.getByText("Plan")).toBeInTheDocument();
-  });
-});
-
 // Verify user_message renders with blue background (no regression)
 describe("ThreadMessage — user_message", () => {
   it("renders with blue background for user_message type", () => {

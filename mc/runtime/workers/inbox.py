@@ -8,10 +8,13 @@ from typing import TYPE_CHECKING, Any
 
 from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_kind
 from mc.contexts.planning.title_generation import generate_title_via_low_agent
-from mc.contexts.routing.router import DirectDelegationRouter
+from mc.contexts.routing.llm_delegator import LLMDelegationRouter
 from mc.domain.workflow_ownership import is_workflow_generated_plan, is_workflow_owned_task
+from mc.types import ExecutionPlan
 
 if TYPE_CHECKING:
+    from mc.contexts.execution.step_dispatcher import StepDispatcher
+    from mc.contexts.planning.materializer import PlanMaterializer
     from mc.infrastructure.runtime_context import RuntimeContext
 
 logger = logging.getLogger(__name__)
@@ -49,11 +52,18 @@ def _transition_applied_or_noop(task_id: str, to_status: str, result: Any) -> bo
 
 
 class InboxWorker:
-    """Processes inbox tasks: auto-title generation and routing to planning/assigned."""
+    """Processes inbox tasks: auto-title generation, routing, and workflow dispatch."""
 
-    def __init__(self, ctx: RuntimeContext) -> None:
+    def __init__(
+        self,
+        ctx: RuntimeContext,
+        plan_materializer: PlanMaterializer | None = None,
+        step_dispatcher: StepDispatcher | None = None,
+    ) -> None:
         self._ctx = ctx
         self._bridge = ctx.bridge
+        self._plan_materializer = plan_materializer
+        self._step_dispatcher = step_dispatcher
         self._known_inbox_ids: set[str] = set()
 
     async def process_batch(self, tasks: list[dict[str, Any]]) -> None:
@@ -146,33 +156,19 @@ class InboxWorker:
                 task_id,
             )
 
-        # Layer 2 defense: bypass planning for workflow missions whose execution
-        # plan was already compiled at launch time.  Routing them through
-        # planning would overwrite the workflow plan with a lead-agent plan.
+        # Workflow tasks with pre-materialized steps: go directly to in_progress.
+        # Steps are materialized at task creation time (create squad / create workflow),
+        # so no planning or kickoff phase is needed.
         execution_plan = task_data.get("execution_plan") or {}
-        is_workflow_plan = is_workflow_generated_plan(execution_plan)
-        work_mode = task_data.get("work_mode")
 
-        if is_workflow_owned_task(task_data) and is_workflow_plan:
-            result = await asyncio.to_thread(
-                self._bridge.transition_task_from_snapshot,
-                task_data,
-                "review",
-                reason=f"Workflow plan ready for kick-off: '{title}'",
-                awaiting_kickoff=True,
-                review_phase="plan_review",
-            )
-            if not _transition_applied_or_noop(task_id, "review", result):
-                return
-            logger.info(
-                "[inbox] Workflow task %s ('%s') -> review (awaitingKickoff); bypassing planning",
-                task_id,
-                title,
-            )
+        if is_workflow_owned_task(task_data) and (
+            is_workflow_generated_plan(execution_plan) or execution_plan.get("steps")
+        ):
+            await self._materialize_and_dispatch_workflow(task_id, title, task_data, execution_plan)
             return
 
         # Human routing: operator-directed assignment bypasses lead-agent routing.
-        routing_mode = task_data.get("routing_mode") or task_data.get("routingMode")
+        routing_mode = task_data.get("routing_mode")
         if routing_mode == "human" and assigned_agent:
             result = await asyncio.to_thread(
                 self._bridge.transition_task_from_snapshot,
@@ -191,86 +187,100 @@ class InboxWorker:
             )
             return
 
-        # Direct delegation: route through the DirectDelegationRouter
-        if work_mode == "direct_delegate":
-            router = DirectDelegationRouter(self._bridge)
-            decision = await asyncio.to_thread(router.route, task_data)
-
-            if decision is None:
-                # No suitable agent — fail explicitly (planning rejects direct_delegate)
-                logger.warning(
-                    "[inbox] No routing target for direct-delegate task %s; marking as failed",
-                    task_id,
-                )
-                result = await asyncio.to_thread(
-                    self._bridge.transition_task_from_snapshot,
-                    task_data,
-                    "failed",
-                    reason="No delegatable agent available for direct delegation",
-                )
-                if _transition_applied_or_noop(task_id, "failed", result):
-                    try:
-                        await asyncio.to_thread(
-                            self._bridge.create_activity,
-                            "system_error",
-                            "No delegatable agent available. Check agent configuration and retry.",
-                            task_id,
-                        )
-                    except Exception:
-                        pass
-                return
-            else:
-                # Persist routing metadata on the task document
-                routing_decision_payload = {
-                    "target_agent": decision.target_agent,
-                    "reason": decision.reason,
-                    "reason_code": decision.reason_code,
-                    "registry_snapshot": decision.registry_snapshot,
-                    "routed_at": decision.routed_at,
-                }
+        # All other tasks: route through LLMDelegationRouter
+        # Path A: assignedAgent present → explicit assignment
+        # Path B: no agent (Auto) → LLM picks best agent
+        router = LLMDelegationRouter(self._bridge)
+        try:
+            decision = await router.route(task_data)
+        except RuntimeError as exc:
+            logger.error(
+                "[inbox] LLM delegation failed for task %s: %s",
+                task_id,
+                exc,
+            )
+            result = await asyncio.to_thread(
+                self._bridge.transition_task_from_snapshot,
+                task_data,
+                "failed",
+                reason=f"LLM delegation failed: {exc}",
+            )
+            if _transition_applied_or_noop(task_id, "failed", result):
                 try:
                     await asyncio.to_thread(
-                        self._bridge.patch_routing_decision,
+                        self._bridge.create_activity,
+                        "system_error",
+                        f"Task delegation failed: {exc}. Retry or assign an agent manually.",
                         task_id,
-                        "lead_agent",
-                        routing_decision_payload,
                     )
                 except Exception:
-                    logger.warning(
-                        "[inbox] Failed to persist routing decision for task %s; continuing",
-                        task_id,
-                        exc_info=True,
-                    )
-
-                # Transition to assigned with the resolved agent
-                await asyncio.to_thread(
-                    self._bridge.update_task_status,
-                    task_id,
-                    "assigned",
-                    decision.target_agent,
-                    f"Direct delegation to {decision.target_agent}",
-                )
-                logger.info(
-                    "[inbox] Direct-delegate task %s ('%s') -> assigned to %s (%s)",
-                    task_id,
-                    title,
-                    decision.target_agent,
-                    decision.reason_code,
-                )
-                return
-
-        next_status = "assigned" if assigned_agent else "planning"
-        result = await asyncio.to_thread(
-            self._bridge.transition_task_from_snapshot,
-            task_data,
-            next_status,
-            reason=f"Inbox task routed to {next_status}",
-        )
-        if not _transition_applied_or_noop(task_id, next_status, result):
+                    pass
             return
+
+        # Persist routing metadata on the task document
+        routing_decision_payload = {
+            "target_agent": decision.target_agent,
+            "reason": decision.reason,
+            "reason_code": decision.reason_code,
+            "registry_snapshot": decision.registry_snapshot,
+            "routed_at": decision.routed_at,
+        }
+        try:
+            await asyncio.to_thread(
+                self._bridge.patch_routing_decision,
+                task_id,
+                "lead_agent",
+                routing_decision_payload,
+            )
+        except Exception:
+            logger.warning(
+                "[inbox] Failed to persist routing decision for task %s; continuing",
+                task_id,
+                exc_info=True,
+            )
+
+        # Transition to assigned with the resolved agent
+        await asyncio.to_thread(
+            self._bridge.update_task_status,
+            task_id,
+            "assigned",
+            decision.target_agent,
+            f"Delegated to {decision.target_agent} ({decision.reason_code})",
+        )
         logger.info(
-            "[inbox] Inbox task %s ('%s') -> %s",
+            "[inbox] Task %s ('%s') -> assigned to %s (%s)",
             task_id,
             title,
-            next_status,
+            decision.target_agent,
+            decision.reason_code,
         )
+
+    async def _materialize_and_dispatch_workflow(
+        self,
+        task_id: str,
+        title: str,
+        task_data: dict[str, Any],
+        execution_plan: dict[str, Any],
+    ) -> None:
+        """Materialize workflow steps and dispatch them for execution."""
+        if not self._plan_materializer or not self._step_dispatcher:
+            raise RuntimeError(
+                f"Workflow task {task_id} requires plan_materializer and step_dispatcher"
+            )
+
+        plan = ExecutionPlan.from_dict(execution_plan)
+        if not plan.steps:
+            raise RuntimeError(f"Workflow task {task_id} has an empty execution plan")
+
+        # Materialize steps into the Convex steps table
+        step_ids = await asyncio.to_thread(self._plan_materializer.materialize, task_id, plan)
+
+        logger.info(
+            "[inbox] Workflow task %s ('%s') -> in_progress (%d steps materialized, dispatching)",
+            task_id,
+            title,
+            len(step_ids),
+        )
+
+        # Dispatch first round of steps (unblocked steps get assigned to agents)
+        await self._step_dispatcher.dispatch_steps(task_id, step_ids)

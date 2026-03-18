@@ -35,8 +35,10 @@ status:
 
 # Stop any running MC instance, then start from current directory.
 # Use this from a worktree to take over the Convex local backend.
+# Purges __pycache__ so stale .pyc from deleted modules are not loaded.
 takeover: down
 	@sleep 2
+	@find mc/ -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@$(MC_CMD)
 
 # ─── Testing ──────────────────────────────────────────────────────

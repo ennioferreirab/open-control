@@ -118,24 +118,3 @@ class TestBridgeSyncAgentSystemFlag:
         args = bridge.mutation.call_args[0][1]
         assert args["name"] == "nanobot"
         assert args["is_system"] is True
-
-
-class TestPlannerFallback:
-    def test_heuristic_fallback_assigns_best_scored_agent(self) -> None:
-        from mc.contexts.planning.planner import TaskPlanner
-
-        planner = TaskPlanner()
-        agents = [_make_agent("code-agent", skills=["python", "testing"])]
-
-        plan = planner._fallback_heuristic_plan(
-            title="Coordinate stakeholder update",
-            description="No matching specialist keywords",
-            agents=agents,
-            explicit_agent=None,
-        )
-
-        # When delegatable agents are present, the heuristic picks the first scored agent
-        # rather than the nanobot fallback, even if the score is zero.
-        assert plan.steps[0].assigned_agent == "code-agent"
-
-

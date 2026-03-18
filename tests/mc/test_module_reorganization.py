@@ -40,20 +40,10 @@ def test_context_packages_reexport_public_api() -> None:
     )
     from mc.contexts.planning import (
         PlanMaterializer,
-        TaskPlanner,
-        handle_plan_negotiation,
-        start_plan_negotiation_loop,
     )
     from mc.contexts.planning.materializer import (
         PlanMaterializer as ContextPlanMaterializer,
     )
-    from mc.contexts.planning.negotiation import (
-        handle_plan_negotiation as context_handle_plan_negotiation,
-    )
-    from mc.contexts.planning.negotiation import (
-        start_plan_negotiation_loop as context_start_plan_negotiation_loop,
-    )
-    from mc.contexts.planning.planner import TaskPlanner as ContextTaskPlanner
     from mc.contexts.planning.title_generation import (
         generate_title_via_low_agent as context_generate_title,
     )
@@ -75,10 +65,7 @@ def test_context_packages_reexport_public_api() -> None:
     assert main is runtime_main
     assert run_gateway is runtime_run_gateway
     assert runtime_generate_title is context_generate_title
-    assert TaskPlanner is ContextTaskPlanner
     assert PlanMaterializer is ContextPlanMaterializer
-    assert handle_plan_negotiation is context_handle_plan_negotiation
-    assert start_plan_negotiation_loop is context_start_plan_negotiation_loop
     assert TaskExecutor is ContextTaskExecutor
     assert StepDispatcher is ContextStepDispatcher
     assert CCExecutorMixin is ContextCCExecutorMixin

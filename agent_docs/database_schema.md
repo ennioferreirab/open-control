@@ -36,7 +36,7 @@ Core task records with status lifecycle and execution plans.
 |-------|------|-------|
 | `title` | `v.string()` | |
 | `description` | `v.optional(v.string())` | |
-| `status` | `taskStatusValidator` | `planning\|ready\|inbox\|assigned\|in_progress\|review\|done\|failed\|retrying\|crashed\|deleted` |
+| `status` | `taskStatusValidator` | `ready\|inbox\|assigned\|in_progress\|review\|done\|failed\|retrying\|crashed\|deleted` |
 | `assignedAgent` | `v.optional(v.string())` | |
 | `trustLevel` | `v.union("autonomous", "human_approved")` | |
 | `reviewers` | `v.optional(v.array(v.string()))` | |

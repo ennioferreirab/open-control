@@ -73,7 +73,6 @@ from claude_code.types import (  # noqa: F401, E402 — intentional re-exports
 class TaskStatus(StrEnum):
     """Task lifecycle states. Matches Convex tasks.status union type."""
 
-    PLANNING = "planning"
     READY = "ready"
     FAILED = "failed"
     INBOX = "inbox"
@@ -127,7 +126,6 @@ class ActivityEventType(StrEnum):
     """Activity feed event types. Matches Convex activities.eventType union type."""
 
     TASK_CREATED = "task_created"
-    TASK_PLANNING = "task_planning"
     TASK_FAILED = "task_failed"
     TASK_ASSIGNED = "task_assigned"
     TASK_STARTED = "task_started"
@@ -193,7 +191,6 @@ class ThreadMessageType(StrEnum):
     STEP_COMPLETION = "step_completion"
     USER_MESSAGE = "user_message"
     SYSTEM_ERROR = "system_error"
-    LEAD_AGENT_PLAN = "lead_agent_plan"
     LEAD_AGENT_CHAT = "lead_agent_chat"
 
 

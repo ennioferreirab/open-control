@@ -67,7 +67,6 @@ from mc.contexts.execution.provider_errors import (
 from mc.contexts.execution.provider_errors import (
     _provider_error_action as _provider_error_action_impl,
 )
-from mc.contexts.planning.planner import TaskPlanner
 from mc.types import (
     LEAD_AGENT_NAME,
     ActivityEventType,
@@ -317,11 +316,11 @@ class TaskExecutor(CCExecutorMixin):
 
     async def _pickup_task(self, task_data: dict[str, Any]) -> None:
         """Transition assigned task to in_progress and start execution."""
-        await _pickup_task_impl(self, task_data, planner_cls=TaskPlanner)
+        await _pickup_task_impl(self, task_data)
 
     async def _handle_lead_agent_task(self, task_data: dict[str, Any]) -> None:
-        """Re-route lead-agent tasks through the planner."""
-        await _reroute_lead_agent_task_impl(self._bridge, task_data, planner_cls=TaskPlanner)
+        """Re-route lead-agent tasks through LLM delegation."""
+        await _reroute_lead_agent_task_impl(self._bridge, task_data)
 
     def _load_agent_config(
         self, agent_name: str

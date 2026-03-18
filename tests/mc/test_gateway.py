@@ -89,7 +89,6 @@ class TestMainFunction:
             mock_bridge.close.assert_called_once()
 
 
-
 # ---------------------------------------------------------------------------
 # Task 1.4: run_gateway() starts routing loop + timeout checker
 # ---------------------------------------------------------------------------
@@ -125,7 +124,6 @@ class TestRunGateway:
             patch("mc.contexts.execution.executor.TaskExecutor") as mock_exec_cls,
             patch("mc.contexts.conversation.chat_handler.ChatHandler") as mock_ch_cls,
             patch("mc.contexts.conversation.ask_user.watcher.AskUserReplyWatcher") as mock_auw_cls,
-            patch("mc.contexts.planning.supervisor.PlanNegotiationSupervisor") as mock_pns_cls,
             patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls),
             patch("nanobot.config.loader.load_config"),
             patch("nanobot.bus.queue.MessageBus"),
@@ -140,9 +138,7 @@ class TestRunGateway:
             ),
         ):
             mock_orch_instance = mock_orch_cls.return_value
-            mock_orch_instance.start_routing_loop = AsyncMock()
             mock_orch_instance.start_review_routing_loop = AsyncMock()
-            mock_orch_instance.start_kickoff_watch_loop = AsyncMock()
             mock_orch_instance.start_inbox_routing_loop = AsyncMock()
 
             mock_tc_instance = mock_tc_cls.return_value
@@ -156,7 +152,6 @@ class TestRunGateway:
 
             mock_mw_cls.return_value.run = AsyncMock()
             mock_auw_cls.return_value.run = AsyncMock()
-            mock_pns_cls.return_value.run = AsyncMock()
 
             # run_gateway waits on a stop_event; we need to trigger it
             async def trigger_stop():
@@ -198,10 +193,7 @@ class TestRunGateway:
             assert mock_ch_cls.call_args.kwargs["sleep_controller"] is not None
             assert mock_mw_cls.call_args.kwargs["sleep_controller"] is not None
             assert mock_auw_cls.call_args.kwargs["sleep_controller"] is not None
-            assert mock_pns_cls.call_args.kwargs["sleep_controller"] is not None
-            mock_orch_instance.start_routing_loop.assert_called_once()
             mock_orch_instance.start_review_routing_loop.assert_called_once()
-            mock_orch_instance.start_kickoff_watch_loop.assert_called_once()
             mock_tc_instance.start.assert_called_once()
             mock_exec_instance.start_execution_loop.assert_called_once()
             mock_ch_instance.run.assert_called_once()
@@ -385,20 +377,13 @@ class TestExecutionLoop:
 
     @pytest.mark.asyncio
     async def test_pickup_task_reroutes_lead_agent(self):
-        """Lead-agent pickup is intercepted and re-routed via planner."""
+        """Lead-agent pickup is intercepted and re-routed via LLM delegation."""
         from mc.contexts.execution.executor import TaskExecutor
-        from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
         mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
-        mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(
-            return_value=[
-                {"name": "dev-agent", "display_name": "Dev", "role": "dev", "skills": ["coding"]},
-            ]
-        )
 
         task_data = {
             "id": "task_lead_reroute",
@@ -409,29 +394,33 @@ class TestExecutionLoop:
             "status": "assigned",
             "state_version": 1,
         }
-        plan = ExecutionPlan(
-            steps=[
-                ExecutionPlanStep(
-                    temp_id="step_1",
-                    title="Execute",
-                    description="Execute",
-                    assigned_agent="dev-agent",
-                ),
-            ]
-        )
 
         executor = TaskExecutor(mock_bridge)
 
+        # Mock LLM delegation to return dev-agent
+        from mc.contexts.routing.router import RoutingDecision
+
+        decision = RoutingDecision(
+            target_agent="dev-agent",
+            reason="LLM picked dev-agent",
+            reason_code="llm_delegation",
+            registry_snapshot=[{"name": "dev-agent", "role": "dev"}],
+            routed_at="2026-01-01T00:00:00+00:00",
+        )
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(return_value=decision)
+
         with (
-            patch("mc.contexts.execution.executor.TaskPlanner") as mock_planner_cls,
+            patch(
+                "mc.contexts.execution.executor_routing.LLMDelegationRouter",
+                return_value=mock_router,
+            ),
             patch.object(executor, "_execute_task", new_callable=AsyncMock) as mock_execute,
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
-            mock_planner_cls.return_value.plan_task = AsyncMock(return_value=plan)
             await executor._pickup_task(task_data)
 
         mock_execute.assert_not_called()
-        mock_bridge.update_execution_plan.assert_called_once()
         mock_bridge.transition_task_from_snapshot.assert_called_once()
         call_args = mock_bridge.transition_task_from_snapshot.call_args
         assert call_args[0][1] == "assigned"
@@ -459,7 +448,11 @@ class TestTaskExecution:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
-        mock_bridge.get_task.return_value = {"id": "task_001", "status": "in_progress", "state_version": 1}
+        mock_bridge.get_task.return_value = {
+            "id": "task_001",
+            "status": "in_progress",
+            "state_version": 1,
+        }
 
         executor = TaskExecutor(mock_bridge)
 
@@ -492,7 +485,12 @@ class TestTaskExecution:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
-        mock_bridge.get_task.return_value = {"id": "task_002", "status": "in_progress", "state_version": 1, "trust_level": "human_approved"}
+        mock_bridge.get_task.return_value = {
+            "id": "task_002",
+            "status": "in_progress",
+            "state_version": 1,
+            "trust_level": "human_approved",
+        }
 
         executor = TaskExecutor(mock_bridge)
 
@@ -677,7 +675,12 @@ class TestTrustLevelStatus:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
-        mock_bridge.get_task.return_value = {"id": "task_006", "status": "in_progress", "state_version": 1, "trust_level": "agent_reviewed"}
+        mock_bridge.get_task.return_value = {
+            "id": "task_006",
+            "status": "in_progress",
+            "state_version": 1,
+            "trust_level": "agent_reviewed",
+        }
 
         executor = TaskExecutor(mock_bridge)
 
@@ -820,11 +823,8 @@ class TestOrchestratorNoDuplicateActivity:
 
     @pytest.mark.asyncio
     async def test_explicit_assignment_no_duplicate_status_activity(self):
-        """Explicit assignment routes to 'assigned'; no duplicate status activity events.
-
-        Updated in Story 17.1: inbox processing only does auto-title + routing.
-        Planning is handled by PlanningWorker in a separate subscription.
-        """
+        """Explicit assignment routes to 'assigned' via LLM delegation; no duplicate status events."""
+        from mc.contexts.routing.router import RoutingDecision
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
@@ -832,12 +832,7 @@ class TestOrchestratorNoDuplicateActivity:
         mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
-        mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(
-            return_value=[
-                {"name": "agent-a", "display_name": "Agent A", "role": "dev", "skills": ["coding"]},
-            ]
-        )
+        mock_bridge.patch_routing_decision = MagicMock()
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -846,24 +841,32 @@ class TestOrchestratorNoDuplicateActivity:
             "assigned_agent": "agent-a",
         }
 
-        with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        decision = RoutingDecision(
+            target_agent="agent-a",
+            reason="Explicit",
+            reason_code="explicit_assignment",
+            registry_snapshot=[],
+            routed_at="2026-01-01T00:00:00+00:00",
+        )
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(return_value=decision)
+
+        with (
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await orch._inbox_worker.process_task(task_data)
 
-        # transition_task_from_snapshot called once for routing (Convex handles the activity)
-        mock_bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = mock_bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "assigned"
+        # update_task_status called once for assignment
+        mock_bridge.update_task_status.assert_called_once()
         # create_activity must NOT contain task_assigned (no duplicate status events)
         for call_args in mock_bridge.create_activity.call_args_list:
             assert call_args[0][0] != "task_assigned"
 
     @pytest.mark.asyncio
-    async def test_best_match_routing_no_duplicate_status_activity(self):
-        """Inbox routing transitions to planning; no duplicate status activity events.
-
-        Updated in Story 17.1: inbox processing only does auto-title + routing.
-        Planning is handled by PlanningWorker in a separate subscription.
-        """
+    async def test_auto_routing_via_llm_delegation(self):
+        """Inbox routing for tasks without agent goes through LLM delegation."""
+        from mc.contexts.routing.router import RoutingDecision
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
@@ -871,17 +874,7 @@ class TestOrchestratorNoDuplicateActivity:
         mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
-        mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(
-            return_value=[
-                {
-                    "name": "test-agent",
-                    "display_name": "Test",
-                    "role": "dev",
-                    "skills": ["testing"],
-                },
-            ]
-        )
+        mock_bridge.patch_routing_decision = MagicMock()
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -890,23 +883,31 @@ class TestOrchestratorNoDuplicateActivity:
             "description": None,
         }
 
-        with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        decision = RoutingDecision(
+            target_agent="test-agent",
+            reason="LLM picked test-agent",
+            reason_code="llm_delegation",
+            registry_snapshot=[],
+            routed_at="2026-01-01T00:00:00+00:00",
+        )
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(return_value=decision)
+
+        with (
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await orch._inbox_worker.process_task(task_data)
 
-        mock_bridge.transition_task_from_snapshot.assert_called_once()
-        call_args = mock_bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "planning"
+        mock_router.route.assert_awaited_once()
+        mock_bridge.update_task_status.assert_called_once()
         # create_activity must NOT contain task_assigned (no duplicate status events)
         for call_args in mock_bridge.create_activity.call_args_list:
             assert call_args[0][0] != "task_assigned"
 
     @pytest.mark.asyncio
-    async def test_fallback_routing_no_duplicate_status_activity(self):
-        """Inbox routing transitions to planning; no duplicate status events.
-
-        Updated in Story 17.1: inbox processing only does auto-title + routing.
-        Planning is handled by PlanningWorker in a separate subscription.
-        """
+    async def test_llm_delegation_failure_fails_task_explicitly(self):
+        """When LLM delegation fails, task transitions to 'failed' with clear error."""
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
@@ -914,8 +915,6 @@ class TestOrchestratorNoDuplicateActivity:
         mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
-        mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[])
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -924,15 +923,18 @@ class TestOrchestratorNoDuplicateActivity:
             "description": None,
         }
 
-        with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(side_effect=RuntimeError("No active agents"))
+
+        with (
+            patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
+            patch("mc.runtime.workers.inbox.LLMDelegationRouter", return_value=mock_router),
+        ):
             await orch._inbox_worker.process_task(task_data)
 
         mock_bridge.transition_task_from_snapshot.assert_called_once()
         call_args = mock_bridge.transition_task_from_snapshot.call_args
-        assert call_args[0][1] == "planning"
-        # create_activity must NOT contain task_assigned (no duplicate status events)
-        for call_args in mock_bridge.create_activity.call_args_list:
-            assert call_args[0][0] != "task_assigned"
+        assert call_args[0][1] == "failed"
 
     @pytest.mark.asyncio
     async def test_review_keeps_standalone_activity_events(self):

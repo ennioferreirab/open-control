@@ -1,100 +1,133 @@
-#  Open Mission Control
+# Open Mission Control
 
-## Vendor Boundary
+## WHAT — Project & Structure
 
-`vendor/nanobot/` is a git subtree of [HKUDS/nanobot](https://github.com/HKUDS/nanobot). **Do NOT edit files inside `vendor/nanobot/` without explicit user permission.** We absorb upstream evolution over time — the closer we stay to the original project, the easier syncs are. This directory must be excluded from project-wide code conventions and linting rules.
+An AI agent orchestration platform. Python backend (`mc/`) manages agent lifecycles, task execution, and inter-agent communication. TypeScript dashboard (`dashboard/`) provides the UI via Next.js + Convex (local backend, port 3210).
 
-`vendor/claude-code/` is our own code and **must follow** the same code conventions as the rest of the project.
+```
+mc/                  Python backend — runtime, workers, orchestrator, bridge to Convex
+  runtime/           Gateway, orchestrator, workers (inbox, execution)
+  contexts/          Domain logic — conversation, execution, routing, planning, agents
+  bridge/            Python↔Convex communication layer (HTTP client, key conversion, repos)
+  cli/               CLI entry point (`uv run nanobot mc start`)
+dashboard/           Next.js app + Convex backend
+  convex/            Convex functions (queries, mutations, actions) and schema
+  convex/lib/        Pure logic extracted from Convex functions — testable units
+  features/          Feature modules (tasks, thread, agents) with components/hooks
+  hooks/             Shared React hooks
+  components/        Shared UI components (shadcn/ui)
+shared/              Cross-language contracts (workflow spec JSON)
+tests/mc/            Python test suite (pytest)
+vendor/nanobot/      Git subtree — upstream HKUDS/nanobot. DO NOT EDIT without permission
+vendor/claude-code/  Our code — follows project conventions
+agent_docs/          Binding contracts for agents — see "Agent Docs" section below
+_bmad/               BMAD engine — do not edit
+_bmad-output/        BMAD artifacts (planning, implementation, project context)
+```
 
-## Language
+**Tech stack:** Python 3.12 (uv), TypeScript (Next.js 15, React 19), Convex (local backend), shadcn/ui, Tailwind CSS, Vitest, Pytest, Playwright (e2e).
 
-All code (variables, functions, classes, comments, commit messages, docstrings) must be written in English.
+## WHY — What Each Layer Does
 
-## Stack Lifecycle
+- **`mc/runtime/`** — Starts the process tree: gateway receives messages, orchestrator routes tasks through a state machine, workers execute steps via LLM providers
+- **`mc/bridge/`** — The only way Python talks to Convex. Handles key conversion (snake_case↔camelCase), repositories for each Convex table, retry/idempotency
+- **`mc/contexts/`** — Domain boundaries: conversation handling, execution strategies, agent routing, planning. Each context owns its logic and exposes a service
+- **`dashboard/convex/`** — Source of truth for all persistent state. Schema defines tasks, steps, messages, agents, threads, boards. `lib/` modules hold pure logic extracted for testability
+- **`dashboard/features/`** — UI organized by domain: tasks (kanban, detail sheet), thread (messages, input), agents (management)
+- **`shared/workflow/`** — `workflow_spec.json` defines the contract between Python and TypeScript for task/step state machines
 
-Use `make start` / `make down` to manage the stack. Use `make validate` for pre-commit checks (no Convex needed). Use `make takeover` from a worktree to steal the Convex instance. See [`building_the_project.md`](agent_docs/building_the_project.md) for full details.
+## HOW — Working on the Project
 
-**Convex singleton:** only one local backend can run (port 3210). `make start` kills any existing instance before starting. Never run `npx convex dev --local` directly.
+### Language
 
-## Development Method — BMAD
+All code, comments, commit messages, and docstrings in **English**.
+
+### Commands
+
+| Action | Command |
+|--------|---------|
+| Start stack | `make start` |
+| Stop stack | `make down` |
+| Pre-commit validation (no Convex needed) | `make validate` |
+| Steal Convex from another worktree | `make takeover` |
+| Python tests | `uv run pytest` |
+| TypeScript tests | `cd dashboard && npm run test` |
+| Single TS test file | `cd dashboard && npx vitest run path/to/file.test.ts` |
+| Lint + typecheck | `make lint && make typecheck` |
+
+**Convex singleton:** only one local backend can run (port 3210). `make start` kills any existing instance. Never run `npx convex dev --local` directly.
+
+### Development Method — BMAD
 
 All features follow the **BMAD method** (v6.0.1). Use `/bmad-help` to see next steps.
 
-### Choosing Your Track
-
 | Track | When to use | Entry point |
 |-------|-------------|-------------|
-| **Full BMAD** | New product area, complex multi-system feature, >5 stories anticipated, requires PRD + Architecture + UX | Phase 1 or 2 |
-| **Quick Flow** | Bug fixes, small features, clear scope (1–15 stories), brownfield changes that "fit on one page of notes" | `/bmad-bmm-quick-spec` → `/bmad-bmm-quick-dev` |
+| **Full BMAD** | New product area, complex multi-system feature, >5 stories, requires PRD + Architecture | Phase 1 or 2 |
+| **Quick Flow** | Bug fixes, small features, clear scope (1–15 stories) | `/bmad-bmm-quick-spec` → `/bmad-bmm-quick-dev` |
 
-**Rule of thumb:** if you'd feel uncomfortable skipping a PRD and architecture doc, use Full BMAD.
+**Full BMAD implementation cycle** (follow this order strictly):
 
-### Full BMAD Phases
+1. Create an implementation plan
+2. Create stories → `/@_bmad/bmm/workflows/4-implementation/create-story`
+3. Create a wave plan grouping stories for parallel execution
+4. Delegate story execution to **Sonnet** (Claude) or **GPT-5.4 Medium** (Codex)
+5. Dev agent executes → `/@_bmad/bmm/workflows/4-implementation/dev-story`
+6. Code review → `/@_bmad/bmm/workflows/4-implementation/code-review`
+7. Run full test suite (`make validate`)
+8. Integration test — simulate real service interaction using backend functions
+9. `make takeover` on any available 300x port
+10. Share the port URL with the human for manual testing
 
+**Workflow rules:**
+- **Step-file discipline.** Load one step at a time, follow exactly, never skip ahead.
+- **Role boundaries.** Dev agents must not modify architecture decisions. Conflict → halt and escalate.
+- **Validation gates are mandatory.** PRD validation, Implementation Readiness, Code Review (must find 3–10 issues).
+- **Stories must be self-contained.** A fresh agent must implement a story without prior conversation history.
 
-**Implementation** (per stories cycle) — Create a plan -> /@_bmad/bmm/workflows/4-implementation/create-story -> Create a wave plan → -> Delegate to sonnet (if you are Claude) or GPT-5.4 Medium (if you are Codex) -> devs execute -> /@_bmad/bmm/workflows/4-implementation/dev-story → /@_bmad/bmm/workflows/4-implementation/code-review → Run test suite -> Test the feature using code simulating real interaction with other services using backend functions -> Make takeover any 300x port -> Share the PORT to human test the feature
+**Artifacts:** `_bmad-output/planning-artifacts/` (PRD, architecture), `_bmad-output/implementation-artifacts/` (stories, sprint status), `_bmad-output/project-context.md` (LLM-optimized rules for workflows).
 
-### Workflow Execution Rules
+### Worktree Lifecycle
 
-- **Step-file discipline.** BMAD workflows use micro-file architecture — load one step at a time, follow it exactly, never skip or load ahead. Update `stepsCompleted` in output frontmatter after each step.
-- **Role boundaries.** Each agent has a defined scope. Do NOT let dev agents modify architecture decisions or skip validation gates. If an architecture-requirement conflict is discovered during implementation, **halt and escalate** — do not improvise.
-- **Validation gates are mandatory.** PRD validation (13 steps), Implementation Readiness check, and Code Review (must find 3–10 issues) are non-optional quality gates. For validation workflows, use a different LLM if available.
-- **Stories must be self-contained.** A fresh agent must be able to implement a story without reading prior conversation history. All context (file paths, ACs, API specs) must be inlined in the story file.
+All features go in isolated git worktrees. After merge, **delete immediately**: `git worktree remove .claude/worktrees/<name>`.
 
-### Artifacts
+### Testing
 
-- **Planning:** `_bmad-output/planning-artifacts/` — PRD, architecture, epics, UX design
-- **Implementation:** `_bmad-output/implementation-artifacts/` — story files, `sprint-status.yaml`
-- **Project context:** `_bmad-output/project-context.md` — LLM-optimized rules loaded by all implementation workflows (generate via `/bmad-bmm-generate-project-context`)
-- **BMAD engine:** `_bmad/` — **do not edit**
-- **Legacy artifacts:** `bmad_history/` — read-only reference from prior cycles
+[`running_tests.md`](agent_docs/running_tests.md) is **mandatory reading** before writing or modifying any test. It defines what to test, what to skip, banned anti-patterns, and the quality checklist. Follow it strictly.
 
-## Worktree Lifecycle
+**Subagent efficiency:** when dispatching subagents to write tests, provide all context upfront — target file, example test to follow, specific scenarios, output path. Do not let subagents explore the codebase to discover patterns.
 
-All new features must be implemented in isolated git worktrees. After the branch is merged back into main, the worktree **must be deleted** immediately. Do not leave stale worktrees around.
+### Error Handling
 
-```bash
-# After merge
-git worktree remove .claude/worktrees/<name>
-# Or if already deleted on disk
-git worktree prune
-```
+Never add silent fallbacks that mask failures. Fail explicitly with clear errors. Only add fallbacks if explicitly requested.
 
-## Testing
+### Vendor Boundary
 
-[`running_tests.md`](agent_docs/running_tests.md) is **mandatory reading** before writing or modifying any test. It defines what to test, what to skip, anti-patterns to avoid, and the quality checklist. **Follow it strictly** — do not write tests that fall into the "Never Test" or "Anti-Patterns (banned)" categories.
-
-**Subagent efficiency:** when dispatching subagents to write tests, provide all context upfront in the prompt — target file, example test file to follow, specific scenarios to test, and output path. Do not let subagents explore the codebase to discover patterns on their own.
-
-## Error Handling
-
-Never add silent fallbacks that mask failures. If a system call (LLM, API, etc.) fails, **fail explicitly** with a clear error. Only add fallback mechanisms if explicitly requested. Silent degradation is an anti-pattern.
+`vendor/nanobot/` is an upstream git subtree. **Do NOT edit** without explicit permission. `vendor/claude-code/` is our code — follows project conventions.
 
 ## Agent Docs — Contracts
 
-These documents are **binding contracts**. Before touching any layer of the system, you **MUST read** the relevant docs from the table below. They define how services communicate, how data is shaped, and how code is written. Do not guess — read the contract first.
+These are **binding contracts**. Before touching any layer, **read the relevant docs** below. Do not guess — read the contract first.
 
-`agent_docs/` is the **canonical index** of project documentation for agents. **Only permanent reference docs belong here.** Do NOT add ephemeral files (audit reports, one-off analyses, migration checklists, plan artifacts) to this directory or to the table below.
+`agent_docs/` contains only permanent reference docs. Do NOT add ephemeral files here.
 
 ### Structural contracts (require human approval to change)
 
-The following docs define the project's structural foundations. **Any modification to these files is a structural change.** You MUST use `AskUser` to get explicit human approval before editing them. Do NOT modify them silently, even as part of a larger refactor.
-
-**Keep contracts in sync.** If a code change alters behavior governed by a structural contract (new table, renamed field, changed protocol, new status value, etc.), you MUST update the corresponding doc in the same PR/commit. A contract that disagrees with the code is a bug.
+**Keep contracts in sync.** If a code change alters behavior governed by a structural contract, update the doc in the same PR/commit.
 
 | File | When to read | Description |
 |------|-------------|-------------|
-| [`service_architecture.md`](agent_docs/service_architecture.md) | Adding/modifying workers, services, processes, or changing how the runtime starts and stops | Defines every runtime service, process lifecycle, IPC protocols, env vars, and the task execution state machine |
-| [`service_communication_patterns.md`](agent_docs/service_communication_patterns.md) | Changing how services talk to each other — IPC messages, Convex bridge calls, polling, webhooks | Protocol specs for IPC sockets, Convex bridge, MCP bridge, dashboard↔backend comm, inter-agent messaging, hooks |
-| [`database_schema.md`](agent_docs/database_schema.md) | Adding/modifying Convex tables, fields, indexes, or writing queries/mutations | All Convex tables with field types, indexes, relationships, and valid enum values |
-| [`cross_service_naming.md`](agent_docs/code_conventions/cross_service_naming.md) | Using status values, entity types, or field names that cross Python↔TypeScript boundary | The single source of truth for key conversion rules, status enums, and entity type names shared across services |
+| [`service_architecture.md`](agent_docs/service_architecture.md) | Adding/modifying workers, services, processes, or changing runtime lifecycle | Every runtime service, process lifecycle, IPC protocols, env vars, task execution state machine |
+| [`service_communication_patterns.md`](agent_docs/service_communication_patterns.md) | Changing how services talk to each other — IPC, bridge, polling, webhooks | Protocol specs for IPC sockets, Convex bridge, MCP bridge, dashboard↔backend, inter-agent messaging |
+| [`database_schema.md`](agent_docs/database_schema.md) | Adding/modifying Convex tables, fields, indexes, or writing queries/mutations | All Convex tables with field types, indexes, relationships, valid enum values |
+| [`cross_service_naming.md`](agent_docs/code_conventions/cross_service_naming.md) | Using status values, entity types, or field names crossing Python↔TypeScript | Key conversion rules, status enums, entity type names shared across services |
 
 ### Reference docs (read before working in scope)
 
 | File | When to read | Description |
 |------|-------------|-------------|
-| [`building_the_project.md`](agent_docs/building_the_project.md) | Setting up the project, running the stack, debugging startup, or understanding the port layout | Prerequisites, `make` commands, startup sequence, port assignments, baseline health checks |
-| [`code_conventions/python.md`](agent_docs/code_conventions/python.md) | Writing or modifying any Python code in `mc/` or `tests/mc/` | Ruff config, naming conventions, type hint rules, import ordering, docstring style |
-| [`code_conventions/convex.md`](agent_docs/code_conventions/convex.md) | Writing or modifying Convex functions in `dashboard/convex/` | Function patterns (queries/mutations/actions), lib module structure, Convex-specific testing patterns |
-| [`code_conventions/typescript.md`](agent_docs/code_conventions/typescript.md) | Writing or modifying React/Next.js code in `dashboard/` (excl. `convex/`) | Component structure, feature module layout, hook patterns, import conventions |
-| [`running_tests.md`](agent_docs/running_tests.md) | Before writing, modifying, or running any test — **mandatory** | Decision tree for what to test vs skip, test commands, anti-patterns (banned), quality checklist |
+| [`building_the_project.md`](agent_docs/building_the_project.md) | Setting up, running the stack, debugging startup, port layout | Prerequisites, `make` commands, startup sequence, port assignments, health checks |
+| [`code_conventions/python.md`](agent_docs/code_conventions/python.md) | Writing/modifying Python in `mc/` or `tests/mc/` | Ruff config, naming, type hints, import ordering |
+| [`code_conventions/convex.md`](agent_docs/code_conventions/convex.md) | Writing/modifying Convex functions in `dashboard/convex/` | Function patterns, lib module structure, Convex testing |
+| [`code_conventions/typescript.md`](agent_docs/code_conventions/typescript.md) | Writing/modifying React/Next.js in `dashboard/` (excl. `convex/`) | Component structure, feature modules, hook patterns |
+| [`running_tests.md`](agent_docs/running_tests.md) | Before writing, modifying, or running any test — **mandatory** | Decision tree (test vs skip), commands, banned anti-patterns, quality checklist |

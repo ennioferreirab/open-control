@@ -245,7 +245,7 @@ describe("launchSquadMission", () => {
     ).rejects.toThrow("Workflow must be published");
   });
 
-  it("creates task in planning status so workflow missions re-enter the normal flow", async () => {
+  it("creates task in inbox status so workflow missions enter the inbox flow", async () => {
     const { ctx, inserts } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
@@ -261,13 +261,13 @@ describe("launchSquadMission", () => {
     });
 
     const taskInsert = inserts.find((i) => i.table === "tasks");
-    expect(taskInsert!.value.status).toBe("planning");
+    expect(taskInsert!.value.status).toBe("inbox");
     expect(taskInsert!.value.awaitingKickoff).toBeUndefined();
     expect(taskInsert!.value.trustLevel).toBe("autonomous");
     expect(taskInsert!.value.description).toBe("A test mission");
   });
 
-  it("does NOT create the task with inbox status", async () => {
+  it("creates the task with inbox status for inbox worker routing", async () => {
     const { ctx, inserts } = makeLaunchCtx({
       squadSpec: mockSquadSpec,
       workflowSpec: mockWorkflowSpec,
@@ -282,7 +282,7 @@ describe("launchSquadMission", () => {
     });
 
     const taskInsert = inserts.find((i) => i.table === "tasks");
-    expect(taskInsert!.value.status).not.toBe("inbox");
+    expect(taskInsert!.value.status).toBe("inbox");
   });
 
   it("throws if board does not exist", async () => {

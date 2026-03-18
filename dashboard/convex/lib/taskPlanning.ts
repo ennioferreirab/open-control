@@ -200,7 +200,7 @@ export async function kickOffTask(
   const task = await ctx.db.get(taskId);
   if (!task) throw new ConvexError("Task not found");
 
-  const allowedStatuses = ["planning", "review", "ready", "inbox", "assigned"] as const;
+  const allowedStatuses = ["review", "ready", "inbox", "assigned"] as const;
   if (!allowedStatuses.includes(task.status as (typeof allowedStatuses)[number])) {
     throw new ConvexError(
       `Cannot kick off task in status '${task.status}'. Expected one of: ${allowedStatuses.join(", ")}`,

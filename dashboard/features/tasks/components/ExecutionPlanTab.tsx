@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { ReactFlow, Background, Controls, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -70,7 +70,6 @@ interface ExecutionPlanTabProps {
     | null
     | undefined;
   liveSteps?: LiveStep[];
-  isPlanning?: boolean;
   isEditMode?: boolean;
   taskId?: string;
   taskStatus?: string;
@@ -285,7 +284,6 @@ function insertRootStepAfterMergeAlias(steps: EditablePlanStep[]): EditablePlanS
 export function ExecutionPlanTab({
   executionPlan,
   liveSteps,
-  isPlanning = false,
   isEditMode = false,
   taskId,
   taskStatus,
@@ -796,15 +794,6 @@ export function ExecutionPlanTab({
     },
     [editingStepId],
   );
-
-  if (isPlanning && !executionPlan) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 gap-3">
-        <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
-        <p className="text-sm text-muted-foreground">Generating execution plan...</p>
-      </div>
-    );
-  }
 
   if (displaySteps.length === 0) {
     if (!canAddOrEdit) {

@@ -201,13 +201,6 @@ describe("ExecutionPlanTab", () => {
     expect(screen.getByText(/Direct execution/)).toBeInTheDocument();
   });
 
-  it("shows generating message when planning and plan is not ready", () => {
-    const { container } = render(<ExecutionPlanTab executionPlan={null} isPlanning />);
-    expect(screen.getByText("Generating execution plan...")).toBeInTheDocument();
-    expect(screen.queryByText(/Direct execution/)).not.toBeInTheDocument();
-    expect(container.querySelector("svg.animate-spin")).toBeInTheDocument();
-  });
-
   it("shows direct execution message when plan is undefined", () => {
     render(<ExecutionPlanTab executionPlan={undefined} />);
     expect(screen.getByText(/Direct execution/)).toBeInTheDocument();
@@ -566,15 +559,6 @@ describe("ExecutionPlanTab", () => {
     };
     render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="in_progress" />);
     expect(screen.getByTestId("add-step-button")).toBeInTheDocument();
-  });
-
-  it("does NOT show Add Step button when taskStatus is planning", () => {
-    const plan = {
-      steps: [makeStep({ stepId: "s1", description: "Step one" })],
-      createdAt: "2026-01-01",
-    };
-    render(<ExecutionPlanTab executionPlan={plan} taskId="task-abc" taskStatus="planning" />);
-    expect(screen.queryByTestId("add-step-button")).not.toBeInTheDocument();
   });
 
   it("does NOT show Add Step button when taskId is missing", () => {
