@@ -131,3 +131,4 @@ These are **binding contracts**. Before touching any layer, **read the relevant 
 | [`code_conventions/convex.md`](agent_docs/code_conventions/convex.md) | Writing/modifying Convex functions in `dashboard/convex/` | Function patterns, lib module structure, Convex testing |
 | [`code_conventions/typescript.md`](agent_docs/code_conventions/typescript.md) | Writing/modifying React/Next.js in `dashboard/` (excl. `convex/`) | Component structure, feature modules, hook patterns |
 | [`running_tests.md`](agent_docs/running_tests.md) | Before writing, modifying, or running any test — **mandatory** | Decision tree (test vs skip), commands, banned anti-patterns, quality checklist |
+| [`scaling_decisions.md`](agent_docs/scaling_decisions.md) | Hitting platform limits (Convex 1MB, storage, throughput) or changing data flow for large content | Architectural decisions that work now but need revisiting at scale — current limits, files involved, future direction |

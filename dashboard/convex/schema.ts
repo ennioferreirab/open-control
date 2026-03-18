@@ -687,6 +687,11 @@ export default defineSchema({
     agentName: v.optional(v.string()),
     provider: v.optional(v.string()),
     requiresAction: v.optional(v.boolean()),
+    sourceType: v.optional(v.string()),
+    sourceSubtype: v.optional(v.string()),
+    groupKey: v.optional(v.string()),
+    rawText: v.optional(v.string()),
+    rawJson: v.optional(v.string()),
   })
     .index("by_session", ["sessionId"])
     .index("by_session_seq", ["sessionId", "seq"]),

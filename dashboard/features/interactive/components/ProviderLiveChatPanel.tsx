@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { ProviderLiveEventRow } from "@/features/interactive/components/ProviderLiveEventRow";
 import {
   compareProviderLiveCategories,
+  type GroupedTimelineNode,
   type ProviderLiveCategory,
   type ProviderLiveEvent,
 } from "@/features/interactive/lib/providerLiveEvents";
@@ -23,6 +24,7 @@ const STATUS_LABELS: Record<ProviderSessionStatus, string> = {
 interface ProviderLiveChatPanelProps {
   sessionId: string | null;
   events: ProviderLiveEvent[];
+  groupedTimeline?: GroupedTimelineNode[];
   status: ProviderSessionStatus;
   agentName: string;
   provider: string;
@@ -33,6 +35,7 @@ interface ProviderLiveChatPanelProps {
 export function ProviderLiveChatPanel({
   sessionId,
   events,
+  groupedTimeline,
   status,
   agentName,
   provider,
@@ -55,6 +58,14 @@ export function ProviderLiveChatPanel({
     () => events.filter((event) => !hiddenCategories.has(event.category)),
     [events, hiddenCategories],
   );
+
+  const filteredNodes = useMemo(() => {
+    if (!groupedTimeline?.length) return null;
+    return groupedTimeline.filter((node) => {
+      // For groups, show if any event's category is visible
+      return node.events.some((e) => !hiddenCategories.has(e.category));
+    });
+  }, [groupedTimeline, hiddenCategories]);
 
   const toggleCategory = (category: ProviderLiveCategory) => {
     setHiddenCategories((current) => {
@@ -155,8 +166,29 @@ export function ProviderLiveChatPanel({
           <p className="text-xs text-zinc-500">Connecting to provider session…</p>
         ) : events.length === 0 ? (
           <p className="text-xs text-zinc-500">No output yet.</p>
-        ) : filteredEvents.length === 0 ? (
+        ) : filteredNodes !== null && filteredNodes.length === 0 ? (
           <p className="text-xs text-zinc-500">No live events for the selected categories.</p>
+        ) : filteredNodes === null && filteredEvents.length === 0 ? (
+          <p className="text-xs text-zinc-500">No live events for the selected categories.</p>
+        ) : filteredNodes ? (
+          <div className="flex flex-col gap-2">
+            {filteredNodes.map((node) =>
+              node.isGroup ? (
+                <div
+                  key={node.id}
+                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-1 flex flex-col gap-1"
+                >
+                  {node.events
+                    .filter((e) => !hiddenCategories.has(e.category))
+                    .map((event) => (
+                      <ProviderLiveEventRow key={event.id} event={event} />
+                    ))}
+                </div>
+              ) : node.events[0] ? (
+                <ProviderLiveEventRow key={node.id} event={node.events[0]} />
+              ) : null,
+            )}
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
             {filteredEvents.map((event) => (
