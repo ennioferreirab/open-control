@@ -9,6 +9,8 @@ import type { Doc } from "@/convex/_generated/dataModel";
 const mockUseQuery = vi.fn();
 const mockMutationFn = vi.fn().mockResolvedValue(undefined);
 const mockDocumentViewerModal = vi.hoisted(() => vi.fn());
+const mockAgentConfigSheet = vi.hoisted(() => vi.fn());
+const mockSquadDetailSheet = vi.hoisted(() => vi.fn());
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => {
     const result = mockUseQuery(...args);
@@ -83,6 +85,33 @@ vi.mock("./DocumentViewerModal", () => ({
     if (!file) return null;
     return (
       <div data-testid="document-viewer-modal" data-task-id={taskId} data-file-name={file.name} />
+    );
+  },
+}));
+
+vi.mock("@/features/agents/components/AgentConfigSheet", () => ({
+  AgentConfigSheet: ({ agentName }: { agentName: string | null; onClose: () => void }) => {
+    mockAgentConfigSheet({ agentName });
+    if (!agentName) return null;
+    return <div data-testid="agent-config-sheet">{agentName}</div>;
+  },
+}));
+
+vi.mock("@/features/agents/components/SquadDetailSheet", () => ({
+  SquadDetailSheet: ({
+    squadId,
+    focusWorkflowId,
+  }: {
+    squadId: string | null;
+    focusWorkflowId?: string | null;
+    onClose: () => void;
+  }) => {
+    mockSquadDetailSheet({ squadId, focusWorkflowId: focusWorkflowId ?? null });
+    if (!squadId) return null;
+    return (
+      <div data-testid="squad-detail-sheet" data-workflow-id={focusWorkflowId ?? ""}>
+        {squadId}
+      </div>
     );
   },
 }));
@@ -196,6 +225,7 @@ vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
 
 type TaskDoc = Doc<"tasks">;
 type StepDoc = Doc<"steps">;
+type DetailViewOptions = Parameters<typeof buildDetailView>[3];
 
 const baseTask: TaskDoc = {
   _id: "task1" as never,
@@ -225,7 +255,33 @@ function buildDetailView(
   task: TaskDoc,
   messages: unknown[] = [],
   steps: StepDoc[] = [],
-  options: { isWorkflowTask?: boolean } = {},
+  options: {
+    isWorkflowTask?: boolean;
+    uiFlags?: Partial<{
+      isAwaitingKickoff: boolean;
+      isPaused: boolean;
+      isManual: boolean;
+      isPlanEditable: boolean;
+    }>;
+    allowedActions?: Partial<{
+      approve: boolean;
+      kickoff: boolean;
+      pause: boolean;
+      resume: boolean;
+      retry: boolean;
+      savePlan: boolean;
+      startInbox: boolean;
+      sendMessage: boolean;
+    }>;
+    executionProvenance?: Partial<{
+      agentName: string;
+      agentDisplayName: string;
+      squadId: string;
+      squadDisplayName: string;
+      workflowId: string;
+      workflowName: string;
+    }>;
+  } = {},
 ) {
   const awaitingKickoff =
     typeof (task as Partial<{ awaitingKickoff: boolean }>).awaitingKickoff === "boolean"
@@ -256,6 +312,7 @@ function buildDetailView(
       isPaused: task.status === "review" && !awaitingKickoff,
       isManual: false,
       isPlanEditable: task.status === "review" || task.status === "ready",
+      ...options.uiFlags,
     },
     allowedActions: {
       approve: task.status === "review",
@@ -266,7 +323,9 @@ function buildDetailView(
       savePlan: task.status === "review" || task.status === "ready",
       startInbox: task.status === "inbox",
       sendMessage: true,
+      ...options.allowedActions,
     },
+    executionProvenance: options.executionProvenance,
   };
 }
 
@@ -276,6 +335,8 @@ describe("TaskDetailSheet", () => {
     mockUseQuery.mockReset();
     mockMutationFn.mockClear();
     mockDocumentViewerModal.mockReset();
+    mockAgentConfigSheet.mockReset();
+    mockSquadDetailSheet.mockReset();
   });
 
   function oneRenderPass(
@@ -283,7 +344,7 @@ describe("TaskDetailSheet", () => {
     messages: unknown[] = [],
     steps: StepDoc[] = [],
     pendingExecutionQuestion: unknown = null,
-    detailViewOptions: { isWorkflowTask?: boolean } = {},
+    detailViewOptions: DetailViewOptions = {},
   ) {
     mockUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
       const name = queryRef;
@@ -312,7 +373,7 @@ describe("TaskDetailSheet", () => {
     messages: unknown[] = [],
     steps: StepDoc[] = [],
     pendingExecutionQuestion: unknown = null,
-    detailViewOptions: { isWorkflowTask?: boolean } = {},
+    detailViewOptions: DetailViewOptions = {},
   ) {
     mockUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
       const name = queryRef;
@@ -1631,6 +1692,81 @@ describe("TaskDetailSheet", () => {
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
   });
 
+  it("renders an agent provenance chip below tags and opens the agent sheet", () => {
+    oneRenderPass(baseTask, [], [], null, {
+      executionProvenance: {
+        agentName: "agent-alpha",
+        agentDisplayName: "Agent Alpha",
+      },
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    expect(screen.getByRole("button", { name: "Agent: Agent Alpha" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Agent: Agent Alpha" }));
+
+    expect(screen.getByTestId("agent-config-sheet")).toHaveTextContent("agent-alpha");
+  });
+
+  it("renders squad and workflow provenance chips and opens the squad sheet focused on the workflow", async () => {
+    const user = userEvent.setup();
+    const workflowTask = {
+      ...baseTask,
+      workMode: "ai_workflow" as const,
+      squadSpecId: "squad-id-1" as never,
+      workflowSpecId: "workflow-id-1" as never,
+    };
+    oneRenderPass(workflowTask, [], [], null, {
+      isWorkflowTask: true,
+      executionProvenance: {
+        squadId: "squad-id-1",
+        squadDisplayName: "Proposal Squad",
+        workflowId: "workflow-id-1",
+        workflowName: "Easy Proposal Workflow",
+      },
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    expect(screen.getByRole("button", { name: "Squad: Proposal Squad" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Workflow: Easy Proposal Workflow" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Workflow: Easy Proposal Workflow" }));
+
+    expect(screen.getByTestId("squad-detail-sheet")).toHaveTextContent("squad-id-1");
+    expect(screen.getByTestId("squad-detail-sheet")).toHaveAttribute(
+      "data-workflow-id",
+      "workflow-id-1",
+    );
+  });
+
+  it("does not show Approve when the review is an execution pause and resume is available", () => {
+    const pausedReviewTask = {
+      ...baseTask,
+      status: "review" as const,
+      reviewPhase: "execution_pause" as const,
+      trustLevel: "autonomous" as const,
+    };
+    oneRenderPass(pausedReviewTask, [], [], null, {
+      uiFlags: {
+        isAwaitingKickoff: false,
+        isPaused: true,
+      },
+      allowedActions: {
+        approve: false,
+        resume: true,
+      },
+    });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("resume-button")).toBeInTheDocument();
+  });
+
   // --- Story 6.4: Retry from Beginning button ---
 
   it("shows Retry from Beginning button for crashed tasks", () => {
@@ -2372,7 +2508,6 @@ describe("TaskDetailSheet", () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId("kick-off-button")).not.toBeInTheDocument();
   });
-
 });
 
 describe("ThreadMessage", () => {

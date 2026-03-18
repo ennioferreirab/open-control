@@ -5,6 +5,15 @@ import { isWorkflowOwnedTask } from "../../lib/isWorkflowOwnedTask";
 import { computeAllowedActions, computeUiFlags } from "./readModels";
 import { getMergeSourceLabel, resolveMergeSourceTree } from "./taskMerge";
 
+type ExecutionProvenance = {
+  agentName?: string;
+  agentDisplayName?: string;
+  squadId?: Id<"squadSpecs">;
+  squadDisplayName?: string;
+  workflowId?: Id<"workflowSpecs">;
+  workflowName?: string;
+};
+
 type DetailViewResult = {
   task: Doc<"tasks">;
   board: Doc<"boards"> | null;
@@ -33,8 +42,46 @@ type DetailViewResult = {
   tagAttributeValues: Doc<"tagAttributeValues">[];
   uiFlags: ReturnType<typeof computeUiFlags>;
   allowedActions: ReturnType<typeof computeAllowedActions>;
+  executionProvenance?: ExecutionProvenance;
   isWorkflowTask: boolean;
 };
+
+async function resolveExecutionProvenance(
+  ctx: QueryCtx,
+  task: Doc<"tasks">,
+): Promise<ExecutionProvenance | undefined> {
+  if (task.squadSpecId || task.workflowSpecId) {
+    const [squad, workflow] = await Promise.all([
+      task.squadSpecId ? ctx.db.get(task.squadSpecId) : Promise.resolve(null),
+      task.workflowSpecId ? ctx.db.get(task.workflowSpecId) : Promise.resolve(null),
+    ]);
+
+    if (!squad && !workflow) {
+      return undefined;
+    }
+
+    return {
+      squadId: squad?._id,
+      squadDisplayName: squad?.displayName,
+      workflowId: workflow?._id,
+      workflowName: workflow?.name,
+    };
+  }
+
+  if (!task.assignedAgent) {
+    return undefined;
+  }
+
+  const agent = await ctx.db
+    .query("agents")
+    .withIndex("by_name", (q) => q.eq("name", task.assignedAgent!))
+    .first();
+
+  return {
+    agentName: task.assignedAgent,
+    agentDisplayName: agent?.displayName ?? task.assignedAgent,
+  };
+}
 
 export async function buildTaskDetailView(
   ctx: QueryCtx,
@@ -43,25 +90,34 @@ export async function buildTaskDetailView(
   const task = await ctx.db.get(taskId);
   if (!task) return null;
 
-  const [board, messages, steps, tagCatalog, tagAttributes, tagAttributeValues, mergedIntoTask] =
-    await Promise.all([
-      task.boardId ? ctx.db.get(task.boardId) : Promise.resolve(null),
-      ctx.db
-        .query("messages")
-        .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
-        .collect(),
-      ctx.db
-        .query("steps")
-        .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
-        .collect(),
-      ctx.db.query("taskTags").collect(),
-      ctx.db.query("tagAttributes").collect(),
-      ctx.db
-        .query("tagAttributeValues")
-        .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
-        .collect(),
-      task.mergedIntoTaskId ? ctx.db.get(task.mergedIntoTaskId) : Promise.resolve(null),
-    ]);
+  const [
+    board,
+    messages,
+    steps,
+    tagCatalog,
+    tagAttributes,
+    tagAttributeValues,
+    mergedIntoTask,
+    executionProvenance,
+  ] = await Promise.all([
+    task.boardId ? ctx.db.get(task.boardId) : Promise.resolve(null),
+    ctx.db
+      .query("messages")
+      .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+      .collect(),
+    ctx.db
+      .query("steps")
+      .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+      .collect(),
+    ctx.db.query("taskTags").collect(),
+    ctx.db.query("tagAttributes").collect(),
+    ctx.db
+      .query("tagAttributeValues")
+      .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+      .collect(),
+    task.mergedIntoTaskId ? ctx.db.get(task.mergedIntoTaskId) : Promise.resolve(null),
+    resolveExecutionProvenance(ctx, task),
+  ]);
 
   const directMergeSources = Array.isArray(task.mergeSourceTaskIds)
     ? (
@@ -133,6 +189,7 @@ export async function buildTaskDetailView(
     tagAttributeValues,
     uiFlags,
     allowedActions,
+    executionProvenance,
     isWorkflowTask: isWorkflowOwnedTask(task),
   };
 }

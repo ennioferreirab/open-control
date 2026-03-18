@@ -34,6 +34,15 @@ export type MergeCandidateRef = {
   description?: string;
 };
 
+export type ExecutionProvenance = {
+  agentName?: string;
+  agentDisplayName?: string;
+  squadId?: Id<"squadSpecs">;
+  squadDisplayName?: string;
+  workflowId?: Id<"workflowSpecs">;
+  workflowName?: string;
+};
+
 type TaskDetailReadModel = {
   task: Doc<"tasks">;
   board: Doc<"boards"> | null;
@@ -65,6 +74,7 @@ type TaskDetailReadModel = {
     startInbox: boolean;
     sendMessage: boolean;
   };
+  executionProvenance?: ExecutionProvenance;
   isWorkflowTask: boolean;
 };
 
@@ -90,6 +100,8 @@ export interface TaskDetailViewData {
   taskStatus: string | undefined;
   isAwaitingKickoff: boolean;
   isPaused: boolean;
+  canApprove: boolean;
+  executionProvenance: ExecutionProvenance | undefined;
   isWorkflowTask: boolean;
 }
 
@@ -176,6 +188,8 @@ export function useTaskDetailView(
     taskStatus,
     isAwaitingKickoff: detailView?.uiFlags.isAwaitingKickoff ?? false,
     isPaused: detailView?.uiFlags.isPaused ?? false,
+    canApprove: detailView?.allowedActions.approve ?? false,
+    executionProvenance: detailView?.executionProvenance,
     isWorkflowTask: detailView?.isWorkflowTask ?? false,
   };
 }

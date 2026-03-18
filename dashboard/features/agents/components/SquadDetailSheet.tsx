@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Id, Doc } from "@/convex/_generated/dataModel";
 import {
   Sheet,
@@ -25,6 +25,7 @@ import type { EditableWorkflow } from "@/features/agents/components/SquadWorkflo
 interface SquadDetailSheetProps {
   squadId: Id<"squadSpecs"> | null;
   boardId?: Id<"boards">;
+  focusWorkflowId?: Id<"workflowSpecs"> | null;
   onClose: () => void;
   onMissionLaunched?: (taskId: Id<"tasks">) => void;
 }
@@ -77,6 +78,7 @@ function buildDraft(
 export function SquadDetailSheet({
   squadId,
   boardId,
+  focusWorkflowId,
   onClose,
   onMissionLaunched,
 }: SquadDetailSheetProps) {
@@ -163,6 +165,21 @@ export function SquadDetailSheet({
   };
 
   const visibleWorkflows = (draft ?? initialDraft)?.workflows ?? [];
+
+  useEffect(() => {
+    if (!squadId || !focusWorkflowId) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      const workflowElement = document.querySelector<HTMLElement>(
+        `[data-workflow-id="${focusWorkflowId}"]`,
+      );
+      workflowElement?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [focusWorkflowId, squadId, visibleWorkflows.length]);
 
   const updateWorkflowDraft = (nextWorkflow: EditableWorkflow) => {
     setDraft((current) => {
@@ -376,7 +393,15 @@ export function SquadDetailSheet({
                     ) : (
                       <div className="space-y-4">
                         {visibleWorkflows.map((workflow) => (
-                          <div key={workflow.id} className="space-y-2">
+                          <div
+                            key={workflow.id}
+                            data-workflow-id={workflow.id}
+                            className={`space-y-2 rounded-xl border px-3 py-3 transition-colors ${
+                              focusWorkflowId === workflow.id
+                                ? "border-sky-300 bg-sky-50/70"
+                                : "border-transparent"
+                            }`}
+                          >
                             {visibleWorkflows.length > 1 && (
                               <div className="flex items-center gap-2">
                                 {isEditing && editingWorkflowNameId === workflow.id ? (

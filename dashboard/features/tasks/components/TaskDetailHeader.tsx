@@ -9,7 +9,11 @@ import { Input } from "@/components/ui/input";
 import { AgentTextViewerModal } from "@/components/AgentTextViewerModal";
 import { Loader2, Pause, Pencil, Play, Trash2 } from "lucide-react";
 import { TAG_COLORS } from "@/lib/constants";
-import type { MergedTaskRef, TaskDetailViewData } from "@/features/tasks/hooks/useTaskDetailView";
+import type {
+  ExecutionProvenance,
+  MergedTaskRef,
+  TaskDetailViewData,
+} from "@/features/tasks/hooks/useTaskDetailView";
 import { InlineRejection } from "@/components/InlineRejection";
 
 type HeaderStatusColors = NonNullable<TaskDetailViewData["colors"]>;
@@ -29,6 +33,8 @@ interface TaskDetailHeaderProps {
   taskStatus: string | undefined;
   isAwaitingKickoff: boolean;
   isPaused: boolean;
+  canApprove: boolean;
+  executionProvenance: ExecutionProvenance | undefined;
   isMergeLockedSource: boolean;
   mergedIntoTask: MergedTaskRef | null | undefined;
   tagColorMap: Record<string, string>;
@@ -64,6 +70,9 @@ interface TaskDetailHeaderProps {
   onStartInbox: () => void | Promise<void>;
   onDeleteTask: () => void | Promise<void>;
   onOpenLive?: (() => void) | null;
+  onOpenAgent: (agentName: string) => void;
+  onOpenSquad: (squadId: string) => void;
+  onOpenWorkflow: (squadId: string, workflowId: string) => void;
   onOpenMergedTask: (taskId: Doc<"tasks">["_id"]) => void;
   onToggleRejection: () => void;
   onDeleteConfirmOpen: () => void;
@@ -99,6 +108,8 @@ export function TaskDetailHeader({
   taskStatus,
   isAwaitingKickoff,
   isPaused,
+  canApprove,
+  executionProvenance,
   isMergeLockedSource,
   mergedIntoTask,
   tagColorMap,
@@ -134,6 +145,9 @@ export function TaskDetailHeader({
   onStartInbox,
   onDeleteTask,
   onOpenLive,
+  onOpenAgent,
+  onOpenSquad,
+  onOpenWorkflow,
   onOpenMergedTask,
   onToggleRejection,
   onDeleteConfirmOpen,
@@ -175,270 +189,307 @@ export function TaskDetailHeader({
         )}
       </SheetTitle>
       <SheetDescription asChild>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="outline"
-            className={`text-xs ${colors?.bg ?? "bg-muted"} ${colors?.text ?? "text-foreground"} border-0`}
-          >
-            {task.status.replaceAll("_", " ")}
-          </Badge>
-          {task.assignedAgent && (
-            <span className="text-xs text-muted-foreground">{task.assignedAgent}</span>
-          )}
-          {(task.tags ?? []).map((tag) => {
-            const colorKey = tagColorMap[tag];
-            const color = colorKey ? TAG_COLORS[colorKey] : null;
-            const chipClass = `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs max-w-[200px] ${
-              color ? `${color.bg} ${color.text}` : "bg-muted text-muted-foreground"
-            }`;
-            const renderDot = () =>
-              color ? (
-                <span className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`} />
-              ) : null;
-            const attrs =
-              tagAttrValues?.filter((value) => value.tagName === tag && value.value) ?? [];
-            if (attrs.length === 0) {
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant="outline"
+              className={`text-xs ${colors?.bg ?? "bg-muted"} ${colors?.text ?? "text-foreground"} border-0`}
+            >
+              {task.status.replaceAll("_", " ")}
+            </Badge>
+            {(task.tags ?? []).map((tag) => {
+              const colorKey = tagColorMap[tag];
+              const color = colorKey ? TAG_COLORS[colorKey] : null;
+              const chipClass = `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs max-w-[200px] ${
+                color ? `${color.bg} ${color.text}` : "bg-muted text-muted-foreground"
+              }`;
+              const renderDot = () =>
+                color ? (
+                  <span className={`w-1.5 h-1.5 rounded-full ${color.dot} flex-shrink-0`} />
+                ) : null;
+              const attrs =
+                tagAttrValues?.filter((value) => value.tagName === tag && value.value) ?? [];
+              if (attrs.length === 0) {
+                return (
+                  <span key={tag} className={chipClass} title={tag}>
+                    {renderDot()}
+                    <span className="truncate">{tag}</span>
+                  </span>
+                );
+              }
               return (
-                <span key={tag} className={chipClass} title={tag}>
-                  {renderDot()}
-                  <span className="truncate">{tag}</span>
-                </span>
+                <Fragment key={tag}>
+                  {attrs.map((attr) => {
+                    const attrDef = tagAttributesList?.find(
+                      (attribute) => attribute._id === attr.attributeId,
+                    );
+                    if (!attrDef) return null;
+                    const label = `${tag}:${attrDef.name}=${attr.value}`;
+                    return (
+                      <span key={`${tag}-${attr.attributeId}`} className={chipClass} title={label}>
+                        {renderDot()}
+                        <span className="truncate">{label}</span>
+                      </span>
+                    );
+                  })}
+                </Fragment>
               );
-            }
-            return (
-              <Fragment key={tag}>
-                {attrs.map((attr) => {
-                  const attrDef = tagAttributesList?.find(
-                    (attribute) => attribute._id === attr.attributeId,
-                  );
-                  if (!attrDef) return null;
-                  const label = `${tag}:${attrDef.name}=${attr.value}`;
-                  return (
-                    <span key={`${tag}-${attr.attributeId}`} className={chipClass} title={label}>
-                      {renderDot()}
-                      <span className="truncate">{label}</span>
-                    </span>
-                  );
-                })}
-              </Fragment>
-            );
-          })}
-          {task.status === "review" && !task.isManual && !isAwaitingKickoff && (
-            <>
+            })}
+            {canApprove && (
+              <>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-green-500 hover:bg-green-600 text-white text-xs h-7 px-2"
+                  onClick={onApprove}
+                >
+                  Approve
+                </Button>
+                {task.trustLevel === "human_approved" && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="text-xs h-7 px-2"
+                    onClick={onToggleRejection}
+                  >
+                    Deny
+                  </Button>
+                )}
+              </>
+            )}
+            {task.status === "crashed" && (
               <Button
-                variant="default"
+                variant="outline"
                 size="sm"
-                className="bg-green-500 hover:bg-green-600 text-white text-xs h-7 px-2"
-                onClick={onApprove}
+                className="border-amber-500 text-amber-700 hover:bg-amber-50 text-xs"
+                onClick={() => void onRetry()}
               >
-                Approve
+                Retry from Beginning
               </Button>
-              {task.trustLevel === "human_approved" && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="text-xs h-7 px-2"
-                  onClick={onToggleRejection}
-                >
-                  Deny
-                </Button>
-              )}
-            </>
-          )}
-          {task.status === "crashed" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-amber-500 text-amber-700 hover:bg-amber-50 text-xs"
-              onClick={() => void onRetry()}
-            >
-              Retry from Beginning
-            </Button>
-          )}
-          {liveSessionLabel && (
-            <>
-              <Badge
-                variant="outline"
-                className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200"
-                data-testid="live-session-badge"
-              >
-                {liveSessionLabel}
-              </Badge>
-              {liveSessionIdentity && (
-                <span className="text-xs text-muted-foreground" data-testid="live-session-identity">
-                  {liveSessionIdentity}
-                </span>
-              )}
-              {onOpenLive && (
-                <Button
+            )}
+            {liveSessionLabel && (
+              <>
+                <Badge
                   variant="outline"
-                  size="sm"
-                  className="text-xs h-7 px-2"
-                  onClick={() => void onOpenLive()}
-                  data-testid="live-button"
+                  className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200"
+                  data-testid="live-session-badge"
                 >
-                  Live
-                </Button>
-              )}
-            </>
-          )}
-          {task.status === "in_progress" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-orange-400 text-orange-700 hover:bg-orange-50 text-xs h-7 px-2"
-              onClick={() => void onPause()}
-              disabled={isPausing}
-              data-testid="pause-button"
-            >
-              {isPausing ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                  Pausing...
-                </>
-              ) : (
-                <>
-                  <Pause className="h-3.5 w-3.5 mr-1" />
-                  Pause
-                </>
-              )}
-            </Button>
-          )}
-          {isPaused && !manualPlanPrimaryAction && (
-            <>
-              <Badge
-                variant="outline"
-                className="text-xs bg-orange-50 text-orange-700 border-orange-200"
-                data-testid="paused-badge"
-              >
-                Paused
-              </Badge>
+                  {liveSessionLabel}
+                </Badge>
+                {liveSessionIdentity && (
+                  <span
+                    className="text-xs text-muted-foreground"
+                    data-testid="live-session-identity"
+                  >
+                    {liveSessionIdentity}
+                  </span>
+                )}
+                {onOpenLive && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7 px-2"
+                    onClick={() => void onOpenLive()}
+                    data-testid="live-button"
+                  >
+                    Live
+                  </Button>
+                )}
+              </>
+            )}
+            {task.status === "in_progress" && (
               <Button
-                variant="default"
+                variant="outline"
                 size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                onClick={() => void onResume()}
-                disabled={isResuming}
-                data-testid="resume-button"
+                className="border-orange-400 text-orange-700 hover:bg-orange-50 text-xs h-7 px-2"
+                onClick={() => void onPause()}
+                disabled={isPausing}
+                data-testid="pause-button"
               >
-                {isResuming ? (
+                {isPausing ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                    Resuming...
+                    Pausing...
                   </>
                 ) : (
                   <>
-                    <Play className="h-3.5 w-3.5 mr-1" />
-                    Resume
+                    <Pause className="h-3.5 w-3.5 mr-1" />
+                    Pause
                   </>
                 )}
               </Button>
-            </>
-          )}
-          {isAwaitingKickoff && (
-            <Badge
-              variant="outline"
-              className="text-xs bg-amber-50 text-amber-700 border-amber-200"
-            >
-              Awaiting Kick-off
-            </Badge>
-          )}
-          {taskStatus === "inbox" && (
-            <>
-              {localPlanExists && (
-                <Button
+            )}
+            {isPaused && !manualPlanPrimaryAction && (
+              <>
+                <Badge
                   variant="outline"
-                  size="sm"
-                  className="text-xs h-7 px-2"
-                  onClick={() => void onSavePlan()}
-                  disabled={isSavingPlan}
-                  data-testid="save-plan-button"
+                  className="text-xs bg-orange-50 text-orange-700 border-orange-200"
+                  data-testid="paused-badge"
                 >
-                  {isSavingPlan ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Save Plan"
-                  )}
-                </Button>
-              )}
-              {(localPlanExists || taskExecutionPlanExists) && (
+                  Paused
+                </Badge>
                 <Button
                   variant="default"
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                  onClick={() => void onStartInbox()}
-                  disabled={isStartingInbox}
-                  data-testid="start-inbox-button"
+                  onClick={() => void onResume()}
+                  disabled={isResuming}
+                  data-testid="resume-button"
                 >
-                  {isStartingInbox ? (
+                  {isResuming ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                      Starting...
+                      Resuming...
                     </>
                   ) : (
                     <>
                       <Play className="h-3.5 w-3.5 mr-1" />
-                      Start
+                      Resume
                     </>
                   )}
                 </Button>
+              </>
+            )}
+            {isAwaitingKickoff && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+              >
+                Awaiting Kick-off
+              </Badge>
+            )}
+            {taskStatus === "inbox" && (
+              <>
+                {localPlanExists && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7 px-2"
+                    onClick={() => void onSavePlan()}
+                    disabled={isSavingPlan}
+                    data-testid="save-plan-button"
+                  >
+                    {isSavingPlan ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Plan"
+                    )}
+                  </Button>
+                )}
+                {(localPlanExists || taskExecutionPlanExists) && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
+                    onClick={() => void onStartInbox()}
+                    disabled={isStartingInbox}
+                    data-testid="start-inbox-button"
+                  >
+                    {isStartingInbox ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3.5 w-3.5 mr-1" />
+                        Start
+                      </>
+                    )}
+                  </Button>
+                )}
+              </>
+            )}
+            {taskStatus === "review" && task.isManual && localPlanExists && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-7 px-2"
+                onClick={() => void onSavePlan()}
+                disabled={isSavingPlan}
+                data-testid="save-plan-button"
+              >
+                {isSavingPlan ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Plan"
+                )}
+              </Button>
+            )}
+            {manualPlanPrimaryAction && (
+              <Button
+                variant="default"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
+                onClick={() => void manualPlanPrimaryAction.onClick()}
+                disabled={manualPlanPrimaryAction.isPending}
+                data-testid={manualPlanPrimaryAction.testId}
+              >
+                {manualPlanPrimaryAction.isPending ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    {manualPlanPrimaryAction.pendingLabel}
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3.5 w-3.5 mr-1" />
+                    {manualPlanPrimaryAction.label}
+                  </>
+                )}
+              </Button>
+            )}
+            {task.status !== "deleted" && !isMergeLockedSource && (
+              <button
+                type="button"
+                onClick={onDeleteConfirmOpen}
+                className="ml-auto flex-shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
+                aria-label="Delete task"
+                title="Delete task"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          {executionProvenance && (
+            <div className="flex flex-wrap items-center gap-2">
+              {executionProvenance.agentName && (
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={() => onOpenAgent(executionProvenance.agentName!)}
+                >
+                  Agent: {executionProvenance.agentDisplayName ?? executionProvenance.agentName}
+                </button>
               )}
-            </>
-          )}
-          {taskStatus === "review" && task.isManual && localPlanExists && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2"
-              onClick={() => void onSavePlan()}
-              disabled={isSavingPlan}
-              data-testid="save-plan-button"
-            >
-              {isSavingPlan ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Plan"
+              {executionProvenance.squadId && executionProvenance.squadDisplayName && (
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={() => onOpenSquad(executionProvenance.squadId!)}
+                >
+                  Squad: {executionProvenance.squadDisplayName}
+                </button>
               )}
-            </Button>
-          )}
-          {manualPlanPrimaryAction && (
-            <Button
-              variant="default"
-              size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-              onClick={() => void manualPlanPrimaryAction.onClick()}
-              disabled={manualPlanPrimaryAction.isPending}
-              data-testid={manualPlanPrimaryAction.testId}
-            >
-              {manualPlanPrimaryAction.isPending ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                  {manualPlanPrimaryAction.pendingLabel}
-                </>
-              ) : (
-                <>
-                  <Play className="h-3.5 w-3.5 mr-1" />
-                  {manualPlanPrimaryAction.label}
-                </>
-              )}
-            </Button>
-          )}
-          {task.status !== "deleted" && !isMergeLockedSource && (
-            <button
-              type="button"
-              onClick={onDeleteConfirmOpen}
-              className="ml-auto flex-shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
-              aria-label="Delete task"
-              title="Delete task"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+              {executionProvenance.squadId &&
+                executionProvenance.workflowId &&
+                executionProvenance.workflowName && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    onClick={() =>
+                      onOpenWorkflow(executionProvenance.squadId!, executionProvenance.workflowId!)
+                    }
+                  >
+                    Workflow: {executionProvenance.workflowName}
+                  </button>
+                )}
+            </div>
           )}
         </div>
       </SheetDescription>

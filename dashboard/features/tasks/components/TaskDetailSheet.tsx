@@ -24,6 +24,8 @@ import { TaskDetailHeader } from "@/features/tasks/components/TaskDetailHeader";
 import { ProviderLiveChatPanel } from "@/features/interactive/components/ProviderLiveChatPanel";
 import { useProviderSession } from "@/features/interactive/hooks/useProviderSession";
 import { useTaskInteractiveSession } from "@/features/interactive/hooks/useTaskInteractiveSession";
+import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
+import { SquadDetailSheet } from "@/features/agents/components/SquadDetailSheet";
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
@@ -93,6 +95,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     taskExecutionPlan,
     isAwaitingKickoff,
     isPaused,
+    canApprove,
+    executionProvenance,
     taskStatus,
     isWorkflowTask,
     pendingExecutionQuestion,
@@ -154,6 +158,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("both");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [filterStepIds, setFilterStepIds] = useState<Set<string>>(new Set());
+  const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
+  const [selectedSquadId, setSelectedSquadId] = useState<Id<"squadSpecs"> | null>(null);
+  const [focusedWorkflowId, setFocusedWorkflowId] = useState<Id<"workflowSpecs"> | null>(null);
 
   const handleDeleteTask = async () => {
     if (!task || !isTaskLoaded) return;
@@ -203,6 +210,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     setPlanViewMode("both");
     setFilterStepIds(new Set());
     setSelectedLiveStepId(null);
+    setSelectedAgentName(null);
+    setSelectedSquadId(null);
+    setFocusedWorkflowId(null);
   }, [taskId]);
 
   useEffect(() => {
@@ -504,6 +514,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               taskStatus={taskStatus}
               isAwaitingKickoff={isAwaitingKickoff}
               isPaused={isPaused}
+              canApprove={canApprove}
+              executionProvenance={executionProvenance}
               isMergeLockedSource={isMergeLockedSource}
               mergedIntoTask={mergedIntoTask}
               tagColorMap={tagColorMap}
@@ -545,6 +557,15 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               onStartInbox={handleStartInbox}
               onDeleteTask={handleDeleteTask}
               onOpenLive={liveSession.session ? () => handleOpenLive() : null}
+              onOpenAgent={(agentName) => setSelectedAgentName(agentName)}
+              onOpenSquad={(squadId) => {
+                setFocusedWorkflowId(null);
+                setSelectedSquadId(squadId as Id<"squadSpecs">);
+              }}
+              onOpenWorkflow={(squadId, workflowId) => {
+                setSelectedSquadId(squadId as Id<"squadSpecs">);
+                setFocusedWorkflowId(workflowId as Id<"workflowSpecs">);
+              }}
               onOpenMergedTask={(mergedTaskId) => onTaskOpen?.(mergedTaskId)}
               onToggleRejection={() => setShowRejection((current) => !current)}
               onDeleteConfirmOpen={() => setShowDeleteConfirm(true)}
@@ -570,9 +591,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
             >
               <TabsList className="mx-6 mt-4">
                 <TabsTrigger value="thread">Thread</TabsTrigger>
-                {isWorkflowTask && (
-                  <TabsTrigger value="plan">Execution Plan</TabsTrigger>
-                )}
+                {isWorkflowTask && <TabsTrigger value="plan">Execution Plan</TabsTrigger>}
                 {liveSession.session && <TabsTrigger value="live">Live</TabsTrigger>}
                 <TabsTrigger value="config">Config</TabsTrigger>
                 <TabsTrigger value="files">
@@ -723,6 +742,23 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
           onClose={() => setViewerFile(null)}
         />
       )}
+      <AgentConfigSheet
+        agentName={selectedAgentName}
+        onClose={() => setSelectedAgentName(null)}
+        onOpenSquad={(squadId) => {
+          setSelectedAgentName(null);
+          setFocusedWorkflowId(null);
+          setSelectedSquadId(squadId);
+        }}
+      />
+      <SquadDetailSheet
+        squadId={selectedSquadId}
+        focusWorkflowId={focusedWorkflowId}
+        onClose={() => {
+          setSelectedSquadId(null);
+          setFocusedWorkflowId(null);
+        }}
+      />
     </Sheet>
   );
 }
