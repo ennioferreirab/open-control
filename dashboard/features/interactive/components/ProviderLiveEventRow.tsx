@@ -6,6 +6,16 @@ import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { type ProviderLiveEvent } from "@/features/interactive/lib/providerLiveEvents";
 import { cn } from "@/lib/utils";
 
+function tryPrettyJson(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return null;
+  }
+}
+
 function getCategoryClasses(category: ProviderLiveEvent["category"]): string {
   switch (category) {
     case "tool":
@@ -62,18 +72,28 @@ export function ProviderLiveEventRow({ event }: { event: ProviderLiveEvent }) {
 
       {event.toolInput && (
         <div className="mt-2 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300 whitespace-pre-wrap break-words">
-          {event.toolInput}
+          {tryPrettyJson(event.toolInput) ?? event.toolInput}
         </div>
       )}
 
-      {event.body && (
-        <div className="mt-2 flex items-start gap-2 text-sm text-zinc-200">
-          {isError && <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />}
-          <div className="min-w-0 flex-1">
-            <MarkdownRenderer content={event.body} className="text-zinc-200" />
+      {event.body && (() => {
+        const prettyBody = tryPrettyJson(event.body);
+        if (prettyBody) {
+          return (
+            <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300 whitespace-pre-wrap break-words">
+              {prettyBody}
+            </div>
+          );
+        }
+        return (
+          <div className="mt-2 flex items-start gap-2 text-sm text-zinc-200">
+            {isError && <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />}
+            <div className="min-w-0 flex-1">
+              <MarkdownRenderer content={event.body} className="text-zinc-200" />
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </article>
   );
 }
