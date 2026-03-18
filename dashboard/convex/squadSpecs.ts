@@ -255,20 +255,23 @@ export const getSquadAgentsWithMemberships = query({
           return null;
         }
 
-        const otherSquads = allPublishedSquads
+        const memberOf = allPublishedSquads
           .filter(
             (s) =>
-              s._id !== args.squadSpecId &&
               s.agentIds != null &&
               s.agentIds.includes(agentId),
           )
-          .map((s) => ({ id: s._id, displayName: s.displayName }));
+          .map((s) => ({
+            id: s._id,
+            displayName: s.displayName,
+            isCurrentSquad: s._id === args.squadSpecId,
+          }));
 
         return {
           agentId,
           name: agent.name,
           displayName: agent.displayName,
-          otherSquads,
+          memberOf,
         };
       }),
     );

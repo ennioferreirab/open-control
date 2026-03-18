@@ -39,19 +39,16 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
   const archiveSquadMutation = useMutation(api.squadSpecs.archiveSquad);
   const softDeleteAgentMutation = useMutation(api.agents.softDeleteAgent);
 
-  // Reset state when squadId changes (new dialog opened)
   useEffect(() => {
     setCheckedAgents(new Map());
     setIsDeleting(false);
   }, [squadId]);
 
-  // Initialize all agents as checked when agent list loads
   useEffect(() => {
     if (!agents) return;
     setCheckedAgents((prev) => {
       const next = new Map<string, boolean>();
       for (const agent of agents) {
-        // Preserve existing checked state if already set, otherwise default to true
         next.set(String(agent.agentId), prev.get(String(agent.agentId)) ?? true);
       }
       return next;
@@ -87,6 +84,7 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
 
   const displayName = squad?.displayName ?? "";
   const agentList = agents ?? [];
+  const hasSharedAgents = agentList.some((a) => a.memberOf.length > 1);
 
   return (
     <AlertDialog
@@ -95,7 +93,7 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
         if (!open) onClose();
       }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent className={agentList.length > 0 ? "sm:max-w-lg" : undefined}>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete &quot;{displayName}&quot;?</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -103,34 +101,79 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
               {agentList.length > 0 ? (
                 <>
                   <p className="mb-3">
-                    This squad will be archived. Select agents to delete with it:
+                    This squad will be archived. Select which agents to delete:
                   </p>
-                  <ul className="space-y-3">
-                    {agentList.map((agent) => (
-                      <li key={String(agent.agentId)} className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id={`agent-${String(agent.agentId)}`}
-                            checked={checkedAgents.get(String(agent.agentId)) ?? true}
-                            onCheckedChange={() => handleToggle(String(agent.agentId))}
-                            aria-label={`Delete ${agent.displayName}`}
-                          />
-                          <label
-                            htmlFor={`agent-${String(agent.agentId)}`}
-                            className="cursor-pointer text-sm"
-                          >
-                            {agent.displayName}
-                          </label>
-                        </div>
-                        {agent.otherSquads.length > 0 && (
-                          <p className="pl-6 text-xs text-amber-500">
-                            Also in:{" "}
-                            {agent.otherSquads.map((s) => s.displayName).join(", ")}
-                          </p>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="w-10 px-3 py-2 text-left" />
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                            Agent
+                          </th>
+                          {hasSharedAgents && (
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                              Squads
+                            </th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {agentList.map((agent) => {
+                          const id = String(agent.agentId);
+                          const isShared = agent.memberOf.length > 1;
+                          return (
+                            <tr
+                              key={id}
+                              className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+                            >
+                              <td className="px-3 py-2">
+                                <Checkbox
+                                  id={`agent-${id}`}
+                                  checked={checkedAgents.get(id) ?? true}
+                                  onCheckedChange={() => handleToggle(id)}
+                                  aria-label={`Delete ${agent.displayName}`}
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <label
+                                  htmlFor={`agent-${id}`}
+                                  className="cursor-pointer font-medium"
+                                >
+                                  {agent.displayName}
+                                </label>
+                              </td>
+                              {hasSharedAgents && (
+                                <td className="px-3 py-2">
+                                  {agent.memberOf.map((s, i) => (
+                                    <span key={String(s.id)}>
+                                      {i > 0 && ", "}
+                                      <span
+                                        className={
+                                          s.isCurrentSquad
+                                            ? "text-muted-foreground line-through"
+                                            : isShared
+                                              ? "text-amber-500 font-medium"
+                                              : "text-muted-foreground"
+                                        }
+                                      >
+                                        {s.displayName}
+                                      </span>
+                                    </span>
+                                  ))}
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {hasSharedAgents && (
+                    <p className="mt-2 text-xs text-amber-500">
+                      Agents highlighted in amber also belong to other squads.
+                    </p>
+                  )}
                 </>
               ) : (
                 <p>This squad will be archived.</p>
