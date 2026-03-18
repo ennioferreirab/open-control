@@ -201,6 +201,22 @@ export async function applyTaskTransition(
   if (
     !canApplyTransition(task, args.toStatus, args.awaitingKickoff, args.reviewPhase, args.agentName)
   ) {
+    // Deleted/done tasks may still receive late transition attempts from
+    // in-flight workers.  Return a conflict instead of throwing so the
+    // caller (Python bridge) handles it gracefully with a warning.
+    if (task.status === "deleted" || task.status === "done") {
+      console.warn(
+        `Ignoring transition from '${task.status}' to '${args.toStatus}' for task ${args.taskId}`,
+      );
+      return {
+        kind: "conflict",
+        taskId: args.taskId,
+        currentStatus: task.status,
+        currentReviewPhase: task.reviewPhase as ReviewPhase | undefined,
+        currentStateVersion: currentStateVersion,
+        reason: "status_mismatch",
+      };
+    }
     throw new ConvexError(`Cannot transition from '${task.status}' to '${args.toStatus}'`);
   }
 

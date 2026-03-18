@@ -86,6 +86,7 @@ def test_human_step_type_survives_materialization() -> None:
     _, payload = bridge.batch_create_steps.call_args[0]
     assert payload[0]["workflow_step_type"] == "human"
     assert payload[0]["workflow_step_id"] == "review-docs"
+    assert payload[0]["assigned_agent"] == "human"
 
 
 def test_checkpoint_step_type_survives_materialization() -> None:
@@ -109,6 +110,7 @@ def test_checkpoint_step_type_survives_materialization() -> None:
 
     _, payload = bridge.batch_create_steps.call_args[0]
     assert payload[0]["workflow_step_type"] == "checkpoint"
+    assert payload[0]["assigned_agent"] == "human"
 
 
 def test_review_step_type_with_review_spec_id_preserved() -> None:
