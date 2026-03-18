@@ -111,10 +111,10 @@ async def _run_agent_on_task(
     memory_workspace: Path | None = None,
     cron_service: Any | None = None,
     task_id: str | None = None,
-    bridge: "ConvexBridge | None" = None,
+    bridge: ConvexBridge | None = None,
     ask_user_registry: Any | None = None,
     on_progress: Any | None = None,
-) -> tuple[str, str, "AgentLoop"]:
+) -> tuple[AgentRunResult, str, AgentLoop]:
     """Run the nanobot agent loop on a task and return the result."""
     if is_lead_agent(agent_name):
         raise LeadAgentExecutionError(
@@ -218,7 +218,7 @@ async def _run_agent_on_task(
             ask_user_registry.register(task_id, handler)
             ask_user_cleanup = (ask_user_registry, task_id)
         except Exception:
-            pass
+            logger.warning("[agent_runner] AskUser handler registration failed", exc_info=True)
 
     try:
         direct_result = await loop.process_direct_result(

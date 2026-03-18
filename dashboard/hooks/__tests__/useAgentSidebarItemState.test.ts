@@ -33,17 +33,13 @@ import { useAgentSidebarItemState } from "@/features/agents/hooks/useAgentSideba
 
 describe("useAgentSidebarItemState", () => {
   it("returns terminal sessions when enabled is true", () => {
-    const { result } = renderHook(() =>
-      useAgentSidebarItemState("remote-1", true),
-    );
+    const { result } = renderHook(() => useAgentSidebarItemState("remote-1", true));
 
     expect(result.current.terminalSessions).toEqual(mockSessions);
   });
 
   it("returns undefined when enabled is false (skip query)", () => {
-    const { result } = renderHook(() =>
-      useAgentSidebarItemState("remote-1", false),
-    );
+    const { result } = renderHook(() => useAgentSidebarItemState("remote-1", false));
 
     expect(result.current.terminalSessions).toBeUndefined();
     expect(lastQueryArgs).toBe("skip");

@@ -1,4 +1,5 @@
 """Shared session context for hook invocations."""
+
 from __future__ import annotations
 
 import fcntl

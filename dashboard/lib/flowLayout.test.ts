@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { stepsToNodesAndEdges, layoutWithDagre } from "./flowLayout";
-import type { PlanStep } from "./types";
+import type { EditablePlanStep } from "./types";
 
-function makeStep(overrides: Partial<PlanStep> & { tempId: string }): PlanStep {
+function makeStep(overrides: Partial<EditablePlanStep> & { tempId: string }): EditablePlanStep {
   return {
     title: overrides.tempId,
     description: overrides.tempId,
@@ -16,11 +16,7 @@ function makeStep(overrides: Partial<PlanStep> & { tempId: string }): PlanStep {
 
 describe("stepsToNodesAndEdges", () => {
   it("creates one flowStep node per step (plus START/END terminals)", () => {
-    const steps = [
-      makeStep({ tempId: "A" }),
-      makeStep({ tempId: "B" }),
-      makeStep({ tempId: "C" }),
-    ];
+    const steps = [makeStep({ tempId: "A" }), makeStep({ tempId: "B" }), makeStep({ tempId: "C" })];
     const { nodes } = stepsToNodesAndEdges(steps);
     const stepNodes = nodes.filter((n) => n.type === "flowStep");
     expect(stepNodes).toHaveLength(3);
@@ -38,11 +34,9 @@ describe("stepsToNodesAndEdges", () => {
     const { edges } = stepsToNodesAndEdges(steps);
     // Filter to step-to-step edges only
     const stepEdges = edges.filter(
-      (e) => e.source !== "__start__" && e.target !== "__end__" && e.source !== "__start__"
+      (e) => e.source !== "__start__" && e.target !== "__end__" && e.source !== "__start__",
     );
-    const depEdges = stepEdges.filter(
-      (e) => e.source !== "__start__" && e.target !== "__end__"
-    );
+    const depEdges = stepEdges.filter((e) => e.source !== "__start__" && e.target !== "__end__");
     expect(depEdges).toHaveLength(3);
     expect(depEdges[0]).toMatchObject({ source: "A", target: "B" });
     expect(depEdges[1]).toMatchObject({ source: "A", target: "C" });
@@ -60,7 +54,7 @@ describe("stepsToNodesAndEdges", () => {
     const steps = [makeStep({ tempId: "A", title: "My Step" })];
     const { nodes } = stepsToNodesAndEdges(steps);
     const stepNode = nodes.find((n) => n.id === "A")!;
-    const data = stepNode.data as { step: PlanStep };
+    const data = stepNode.data as { step: EditablePlanStep };
     expect(data.step.title).toBe("My Step");
     expect(data.step.tempId).toBe("A");
   });
@@ -75,10 +69,7 @@ describe("stepsToNodesAndEdges", () => {
   });
 
   it("connects START to root steps and leaf steps to END", () => {
-    const steps = [
-      makeStep({ tempId: "A" }),
-      makeStep({ tempId: "B", blockedBy: ["A"] }),
-    ];
+    const steps = [makeStep({ tempId: "A" }), makeStep({ tempId: "B", blockedBy: ["A"] })];
     const { edges } = stepsToNodesAndEdges(steps);
     expect(edges.find((e) => e.source === "__start__" && e.target === "A")).toBeDefined();
     expect(edges.find((e) => e.source === "B" && e.target === "__end__")).toBeDefined();
@@ -99,10 +90,7 @@ describe("stepsToNodesAndEdges", () => {
 
 describe("layoutWithDagre", () => {
   it("positions nodes with valid x/y coordinates", () => {
-    const steps = [
-      makeStep({ tempId: "A" }),
-      makeStep({ tempId: "B", blockedBy: ["A"] }),
-    ];
+    const steps = [makeStep({ tempId: "A" }), makeStep({ tempId: "B", blockedBy: ["A"] })];
     const { nodes, edges } = stepsToNodesAndEdges(steps);
     const positioned = layoutWithDagre(nodes, edges);
 
@@ -117,10 +105,7 @@ describe("layoutWithDagre", () => {
   });
 
   it("places dependent nodes to the right of their blockers (LR direction)", () => {
-    const steps = [
-      makeStep({ tempId: "A" }),
-      makeStep({ tempId: "B", blockedBy: ["A"] }),
-    ];
+    const steps = [makeStep({ tempId: "A" }), makeStep({ tempId: "B", blockedBy: ["A"] })];
     const { nodes, edges } = stepsToNodesAndEdges(steps);
     const positioned = layoutWithDagre(nodes, edges);
 

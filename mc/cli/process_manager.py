@@ -15,9 +15,9 @@ import logging
 import os
 import signal
 import sys
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable
 
 from mc.infrastructure.config import _resolve_admin_key, _resolve_convex_url
 
@@ -102,7 +102,7 @@ class ProcessManager:
 
         try:
             await asyncio.wait_for(self._start_all(configs), timeout=STARTUP_TIMEOUT_SECONDS)
-        except (asyncio.TimeoutError, RuntimeError) as exc:
+        except (TimeoutError, RuntimeError) as exc:
             logger.error(f"[MC] Startup failed: {exc}")
             # Abort: stop any processes that did start
             await self.stop()
@@ -361,19 +361,19 @@ class ProcessManager:
             await asyncio.wait_for(process.wait(), timeout=timeout)
             logger.info(f"[MC] Stopped {label} (exit code: {process.returncode})")
             return "stopped"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 f"[MC] Force-killing {label} (PID: {process.pid}) after {timeout}s timeout"
             )
             try:
                 os.killpg(process.pid, signal.SIGKILL)
                 await asyncio.wait_for(process.wait(), timeout=5.0)
-            except (ProcessLookupError, OSError):
-                pass
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(
                     f"[MC] Process {label} (PID: {process.pid}) did not exit after SIGKILL"
                 )
+            except OSError:
+                pass
             return "killed"
 
     async def _kill_port(self, port: int) -> None:

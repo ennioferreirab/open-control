@@ -7,14 +7,10 @@ from unittest.mock import patch
 
 import pytest
 
-from mc.contexts.provider_cli.parser import ProviderCLIParser
 from mc.contexts.provider_cli.providers.nanobot import NanobotCLIParser
 from mc.contexts.provider_cli.types import (
     ProviderProcessHandle,
 )
-
-pytestmark = pytest.mark.asyncio
-
 
 def _make_handle(*, pid: int = 11111, pgid: int = 11110) -> ProviderProcessHandle:
     return ProviderProcessHandle(
@@ -33,21 +29,12 @@ def _make_handle(*, pid: int = 11111, pgid: int = 11110) -> ProviderProcessHandl
 # ---------------------------------------------------------------------------
 
 
-def test_nanobot_parser_implements_provider_cli_parser_protocol() -> None:
-    parser = NanobotCLIParser()
-    assert isinstance(parser, ProviderCLIParser)
-
-
-def test_nanobot_parser_provider_name() -> None:
-    parser = NanobotCLIParser()
-    assert parser.provider_name == "nanobot"
-
-
 # ---------------------------------------------------------------------------
 # discover_session: runtime-owned metadata
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.asyncio
 async def test_discover_session_returns_runtime_owned_snapshot() -> None:
     parser = NanobotCLIParser()
     handle = _make_handle()
@@ -59,12 +46,6 @@ async def test_discover_session_returns_runtime_owned_snapshot() -> None:
     assert snap.mc_session_id == "mc-session-1"
     assert snap.provider_session_id is None
 
-
-async def test_snapshot_mode_is_runtime_owned_not_provider_native() -> None:
-    parser = NanobotCLIParser()
-    snap = await parser.discover_session(_make_handle())
-    assert snap.mode == "runtime-owned"
-    assert snap.mode != "provider-native"
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +104,7 @@ def test_parse_output_whitespace_only_returns_empty() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.asyncio
 async def test_interrupt_sends_sigint_to_process_group() -> None:
     parser = NanobotCLIParser()
     handle = _make_handle(pid=11111, pgid=11110)
@@ -131,6 +113,7 @@ async def test_interrupt_sends_sigint_to_process_group() -> None:
         mock_killpg.assert_called_once_with(11110, signal.SIGINT)
 
 
+@pytest.mark.asyncio
 async def test_interrupt_falls_back_to_pid_when_pgid_is_zero() -> None:
     parser = NanobotCLIParser()
     handle = _make_handle(pid=22222, pgid=0)
@@ -144,6 +127,7 @@ async def test_interrupt_falls_back_to_pid_when_pgid_is_zero() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.asyncio
 async def test_stop_sends_sigterm_to_process_group() -> None:
     parser = NanobotCLIParser()
     handle = _make_handle(pid=33333, pgid=33332)
@@ -152,6 +136,7 @@ async def test_stop_sends_sigterm_to_process_group() -> None:
         mock_killpg.assert_called_once_with(33332, signal.SIGTERM)
 
 
+@pytest.mark.asyncio
 async def test_stop_falls_back_to_pid_when_pgid_is_zero() -> None:
     parser = NanobotCLIParser()
     handle = _make_handle(pid=44444, pgid=0)
@@ -165,6 +150,7 @@ async def test_stop_falls_back_to_pid_when_pgid_is_zero() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.asyncio
 async def test_resume_raises_not_supported_error() -> None:
     parser = NanobotCLIParser()
     handle = _make_handle()

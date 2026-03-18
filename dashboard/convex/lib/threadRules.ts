@@ -26,9 +26,7 @@ export const PLAN_MESSAGE_ALLOWED_STATUSES = ["in_progress", "review"] as const;
  * Returns true if the task can receive user thread messages.
  */
 export function canSendThreadMessage(taskStatus: string): boolean {
-  return !THREAD_BLOCKED_STATUSES.includes(
-    taskStatus as (typeof THREAD_BLOCKED_STATUSES)[number]
-  );
+  return !THREAD_BLOCKED_STATUSES.includes(taskStatus as (typeof THREAD_BLOCKED_STATUSES)[number]);
 }
 
 /**
@@ -36,7 +34,7 @@ export function canSendThreadMessage(taskStatus: string): boolean {
  */
 export function canPostPlanMessage(taskStatus: string): boolean {
   return PLAN_MESSAGE_ALLOWED_STATUSES.includes(
-    taskStatus as (typeof PLAN_MESSAGE_ALLOWED_STATUSES)[number]
+    taskStatus as (typeof PLAN_MESSAGE_ALLOWED_STATUSES)[number],
   );
 }
 
@@ -61,7 +59,7 @@ export async function logThreadMessageSent(
     agentName?: string;
     description: string;
     timestamp?: string;
-  }
+  },
 ): Promise<void> {
   await logActivity(ctx, {
     taskId: params.taskId,

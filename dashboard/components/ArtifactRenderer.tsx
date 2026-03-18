@@ -3,11 +3,7 @@
 import { useState } from "react";
 import { FileCode, FileText, File, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { ARTIFACT_ACTION, type ArtifactAction } from "@/lib/constants";
@@ -25,12 +21,27 @@ interface ArtifactRendererProps {
 }
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
-const CODE_EXTS = new Set([".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".sh", ".md", ".json", ".yaml", ".yml"]);
+const CODE_EXTS = new Set([
+  ".py",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".go",
+  ".rs",
+  ".java",
+  ".sh",
+  ".md",
+  ".json",
+  ".yaml",
+  ".yml",
+]);
 
 function ArtifactFileIcon({ path }: { path: string }) {
   const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
   if (IMAGE_EXTS.has(ext)) return <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
-  if (CODE_EXTS.has(ext)) return <FileCode className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+  if (CODE_EXTS.has(ext))
+    return <FileCode className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   return <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
 }
 
@@ -100,11 +111,7 @@ function ArtifactItem({
       {hasDiff && (
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <CollapsibleTrigger className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors pl-5">
-            {isOpen ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
+            {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             <span>{isOpen ? "Hide diff" : "Show diff"}</span>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -132,10 +139,7 @@ function ArtifactItem({
   );
 }
 
-export function ArtifactRenderer({
-  artifacts,
-  onArtifactClick,
-}: ArtifactRendererProps) {
+export function ArtifactRenderer({ artifacts, onArtifactClick }: ArtifactRendererProps) {
   if (!artifacts || artifacts.length === 0) {
     return null;
   }

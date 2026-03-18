@@ -182,16 +182,22 @@ vi.mock("@/components/ui/select", async () => {
 
       const childType = child.type as { __mockSelectItem?: boolean };
       if (childType.__mockSelectItem) {
+        const typedChild = child as React.ReactElement<{
+          value: string;
+          children: React.ReactNode;
+          disabled?: boolean;
+        }>;
         options.push({
-          value: child.props.value,
-          label: child.props.children,
-          disabled: child.props.disabled,
+          value: typedChild.props.value,
+          label: typedChild.props.children,
+          disabled: typedChild.props.disabled,
         });
         return;
       }
 
-      if (child.props?.children) {
-        options.push(...extractOptions(child.props.children));
+      const withChildren = child as React.ReactElement<{ children?: React.ReactNode }>;
+      if (withChildren.props?.children) {
+        options.push(...extractOptions(withChildren.props.children));
       }
     });
 

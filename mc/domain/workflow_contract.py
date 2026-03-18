@@ -20,7 +20,7 @@ from typing import Any
 
 _SPEC_PATH = Path(__file__).resolve().parents[2] / "shared" / "workflow" / "workflow_spec.json"
 
-with open(_SPEC_PATH, "r") as _f:
+with open(_SPEC_PATH) as _f:
     SPEC: dict[str, Any] = json.load(_f)
 
 # ---------------------------------------------------------------------------

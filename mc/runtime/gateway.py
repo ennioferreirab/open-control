@@ -93,7 +93,7 @@ def _build_provider_cli_supervision_sink(supervisor):
 
 # Plan negotiation supervisor instance — created at gateway level for cron integration.
 # The _cron_requeued_ids set is now managed by PlanNegotiationSupervisor.
-_plan_negotiation_supervisor: "PlanNegotiationSupervisor | None" = None
+_plan_negotiation_supervisor: PlanNegotiationSupervisor | None = None
 
 
 def _resolve_log_level(env_var: str = "MC_LOG_LEVEL") -> int:
@@ -105,9 +105,9 @@ def _resolve_log_level(env_var: str = "MC_LOG_LEVEL") -> int:
 
 
 async def _run_plan_negotiation_manager(
-    bridge: "ConvexBridge",
-    ask_user_registry: "Any | None" = None,
-    sleep_controller: "Any | None" = None,
+    bridge: ConvexBridge,
+    ask_user_registry: Any | None = None,
+    sleep_controller: Any | None = None,
 ) -> None:
     """Manage per-task plan negotiation loops.
 
@@ -129,7 +129,7 @@ async def _run_plan_negotiation_manager(
 # ---------------------------------------------------------------------------
 
 
-async def run_gateway(bridge: "ConvexBridge") -> None:
+async def run_gateway(bridge: ConvexBridge) -> None:
     """Gateway main loop — starts orchestrator, executor, timeout checker, and cron service.
 
     Args:

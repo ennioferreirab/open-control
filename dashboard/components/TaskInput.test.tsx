@@ -87,7 +87,7 @@ describe("TaskInput", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-      })
+      }),
     );
   });
 
@@ -183,10 +183,7 @@ describe("TaskInput", () => {
 
     const disabledOption = screen.getByRole("option", { name: "Disabled Bot (Deactivated)" });
     expect(disabledOption).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("combobox")).toHaveAttribute(
-      "data-selected-value",
-      "auto"
-    );
+    expect(screen.getByRole("combobox")).toHaveAttribute("data-selected-value", "auto");
   });
 
   it("switches to manual mode and submits a manual task", async () => {
@@ -263,7 +260,7 @@ describe("TaskInput", () => {
               subfolder: "attachments",
             }),
           ],
-        })
+        }),
       );
     });
 
@@ -273,7 +270,7 @@ describe("TaskInput", () => {
         expect.objectContaining({
           method: "POST",
           body: expect.any(FormData),
-        })
+        }),
       );
     });
   });
@@ -304,7 +301,7 @@ describe("TaskInput", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 500,
-      })
+      }),
     );
     render(<TaskInput />);
 
@@ -322,7 +319,7 @@ describe("TaskInput", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Task created, but file upload to disk failed. Please retry.")
+        screen.getByText("Task created, but file upload to disk failed. Please retry."),
       ).toBeInTheDocument();
     });
     expect(screen.getByText("report.pdf (1 KB)")).toBeInTheDocument();
@@ -359,9 +356,7 @@ describe("TaskInput", () => {
     fireEvent.click(screen.getByText("Create"));
 
     await waitFor(() => {
-      expect(
-        screen.getByPlaceholderText("Task title...")
-      ).toHaveValue("");
+      expect(screen.getByPlaceholderText("Task title...")).toHaveValue("");
     });
     expect(screen.getByTitle("Autonomous")).toBeInTheDocument();
   });

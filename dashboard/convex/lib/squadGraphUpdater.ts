@@ -1,8 +1,10 @@
+import { ConvexError } from "convex/values";
 import type {
   SquadGraphAgentInput,
   SquadGraphWorkflowInput,
   SquadGraphWorkflowStepInput,
 } from "./squadGraphPublisher";
+import type { DbWriter } from "./types";
 
 export interface EditableSquadGraphWorkflowInput extends SquadGraphWorkflowInput {
   id?: string;
@@ -20,9 +22,6 @@ export interface EditableSquadGraphInput {
   reviewPolicy?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DbContext = { db: any };
-
 function validateStepReferences(
   stepKeys: Set<string>,
   workflow: EditableSquadGraphWorkflowInput,
@@ -30,7 +29,7 @@ function validateStepReferences(
   for (const step of workflow.steps) {
     for (const dep of step.dependsOn ?? []) {
       if (!stepKeys.has(dep)) {
-        throw new Error(`Step "${step.key}" has invalid dependency "${dep}"`);
+        throw new ConvexError(`Step "${step.key}" has invalid dependency "${dep}"`);
       }
     }
 
@@ -39,22 +38,24 @@ function validateStepReferences(
     }
 
     if (!step.agentKey) {
-      throw new Error(`Review step "${step.key}" requires agentKey`);
+      throw new ConvexError(`Review step "${step.key}" requires agentKey`);
     }
     if (!step.reviewSpecId) {
-      throw new Error(`Review step "${step.key}" requires reviewSpecId`);
+      throw new ConvexError(`Review step "${step.key}" requires reviewSpecId`);
     }
     if (!step.onReject) {
-      throw new Error(`Review step "${step.key}" requires onReject`);
+      throw new ConvexError(`Review step "${step.key}" requires onReject`);
     }
     if (!stepKeys.has(step.onReject)) {
-      throw new Error(`Review step "${step.key}" has invalid onReject target "${step.onReject}"`);
+      throw new ConvexError(
+        `Review step "${step.key}" has invalid onReject target "${step.onReject}"`,
+      );
     }
   }
 }
 
 async function resolveAgentIds(
-  ctx: DbContext,
+  ctx: DbWriter,
   agents: SquadGraphAgentInput[],
 ): Promise<Map<string, string>> {
   const agentKeyToId = new Map<string, string>();
@@ -63,16 +64,14 @@ async function resolveAgentIds(
     const lookupName = agent.reuseName ?? agent.name;
     const existingAgent = await ctx.db
       .query("agents")
-      .withIndex("by_name", (q: { eq: (field: string, value: string) => unknown }) =>
-        q.eq("name", lookupName),
-      )
+      .withIndex("by_name", (q) => q.eq("name", lookupName))
       .first();
 
     if (!existingAgent?._id) {
-      throw new Error(`Agent "${lookupName}" not found for published squad update`);
+      throw new ConvexError(`Agent "${lookupName}" not found for published squad update`);
     }
 
-    agentKeyToId.set(agent.key, existingAgent._id);
+    agentKeyToId.set(agent.key, existingAgent._id as string);
   }
 
   return agentKeyToId;
@@ -116,32 +115,30 @@ function buildStoredSteps(
 }
 
 export async function updatePublishedSquadGraph(
-  ctx: DbContext,
+  ctx: DbWriter,
   squadSpecId: string,
   graph: EditableSquadGraphInput,
 ): Promise<string> {
   const squad = await ctx.db.get(squadSpecId);
   if (!squad) {
-    throw new Error(`Squad spec not found: ${squadSpecId}`);
+    throw new ConvexError(`Squad spec not found: ${squadSpecId}`);
   }
 
   const now = new Date().toISOString();
   const agentKeyToId = await resolveAgentIds(ctx, graph.agents);
-  const existingWorkflows = await ctx.db
+  const existingWorkflows = (await ctx.db
     .query("workflowSpecs")
-    .withIndex("by_squadSpecId", (q: { eq: (field: string, value: string) => unknown }) =>
-      q.eq("squadSpecId", squadSpecId),
-    )
-    .collect();
+    .withIndex("by_squadSpecId", (q) => q.eq("squadSpecId", squadSpecId))
+    .collect()) as Array<Record<string, unknown>>;
 
   const existingWorkflowIds = new Set(
-    existingWorkflows.map((workflow: { _id: string }) => workflow._id),
+    existingWorkflows.map((workflow) => workflow._id as string),
   );
   const keptWorkflowIds = new Set<string>();
 
   for (const workflow of graph.workflows) {
     if (!workflow.id || !existingWorkflowIds.has(workflow.id)) {
-      throw new Error(
+      throw new ConvexError(
         `Workflow "${workflow.name}" is missing a valid id for published squad update`,
       );
     }
@@ -157,8 +154,8 @@ export async function updatePublishedSquadGraph(
   }
 
   for (const workflow of existingWorkflows) {
-    if (!keptWorkflowIds.has(workflow._id)) {
-      await ctx.db.delete(workflow._id);
+    if (!keptWorkflowIds.has(workflow._id as string)) {
+      await ctx.db.delete(workflow._id as string);
     }
   }
 

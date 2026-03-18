@@ -65,7 +65,8 @@ export function PdfViewer({ blobUrl, onDownload }: Props) {
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
         <p className="text-sm">Unable to render this PDF.</p>
         <Button variant="outline" size="sm" onClick={onDownload}>
-          <Download className="h-3.5 w-3.5 mr-1.5" />Download
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          Download
         </Button>
       </div>
     );
@@ -76,13 +77,27 @@ export function PdfViewer({ blobUrl, onDownload }: Props) {
       {/* Controls */}
       <div className="flex items-center justify-between px-4 py-2 border-b shrink-0 gap-2">
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Previous page" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Previous page"
+            disabled={currentPage <= 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-xs text-muted-foreground min-w-[80px] text-center">
             Page {currentPage} of {numPages || "—"}
           </span>
-          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Next page" disabled={currentPage >= numPages} onClick={() => setCurrentPage(p => p + 1)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Next page"
+            disabled={currentPage >= numPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -92,15 +107,30 @@ export function PdfViewer({ blobUrl, onDownload }: Props) {
             size="sm"
             onClick={() => setScale("fit")}
           >
-            <Maximize2 className="h-3.5 w-3.5 mr-1" />Fit
+            <Maximize2 className="h-3.5 w-3.5 mr-1" />
+            Fit
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Zoom out" onClick={zoomOut} disabled={scale === "fit"}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Zoom out"
+            onClick={zoomOut}
+            disabled={scale === "fit"}
+          >
             <Minus className="h-3 w-3" />
           </Button>
           <span className="text-xs text-muted-foreground w-12 text-center">
             {scale === "fit" ? "Fit" : `${Math.round((scale as number) * 100)}%`}
           </span>
-          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Zoom in" onClick={zoomIn} disabled={scale === 2.0}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Zoom in"
+            onClick={zoomIn}
+            disabled={scale === 2.0}
+          >
             <Plus className="h-3 w-3" />
           </Button>
         </div>

@@ -95,7 +95,7 @@ class ConversationIntentResolver:
     the intent of a user's message.
     """
 
-    def __init__(self, bridge: "ConvexBridge") -> None:
+    def __init__(self, bridge: ConvexBridge) -> None:
         self._bridge = bridge
 
     def resolve(

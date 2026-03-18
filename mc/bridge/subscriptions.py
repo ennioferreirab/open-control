@@ -6,14 +6,15 @@ via asyncio.Queue.
 
 from __future__ import annotations
 
-import asyncio  # noqa: F811 -- used in type annotation and runtime
+import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Iterator
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 from mc.bridge.key_conversion import _convert_keys_to_camel, _convert_keys_to_snake
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +27,11 @@ class SubscriptionManager:
     to all consumer queues.
     """
 
-    def __init__(self, client: "BridgeClient"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
         self._shared_polls: dict[tuple, tuple[asyncio.Task, list[asyncio.Queue]]] = {}  # type: ignore[type-arg]
 
-    def subscribe(
-        self, function_name: str, args: dict[str, Any] | None = None
-    ) -> Iterator[Any]:
+    def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         """Subscribe to a Convex query for real-time updates.
 
         Args:
@@ -53,7 +52,7 @@ class SubscriptionManager:
         args: dict[str, Any] | None = None,
         poll_interval: float = 2.0,
         sleep_controller: Any | None = None,
-    ) -> "asyncio.Queue[Any]":
+    ) -> asyncio.Queue[Any]:
         """Subscribe to a Convex query, returning an asyncio.Queue.
 
         Uses a polling strategy: periodically queries Convex and pushes
@@ -106,7 +105,7 @@ class SubscriptionManager:
         function_name: str,
         args: dict[str, Any] | None,
         poll_interval: float,
-        consumers: list["asyncio.Queue[Any]"],
+        consumers: list[asyncio.Queue[Any]],
         sleep_controller: Any | None = None,
     ) -> None:
         """Shared poll loop that fans out results to all consumer queues."""
@@ -114,12 +113,13 @@ class SubscriptionManager:
         consecutive_errors = 0
         max_errors = 10
         while True:
-            if sleep_controller is not None and getattr(sleep_controller, "mode", "active") == "sleep":
+            if (
+                sleep_controller is not None
+                and getattr(sleep_controller, "mode", "active") == "sleep"
+            ):
                 await sleep_controller.wait_for_next_cycle(poll_interval)
             try:
-                result = await asyncio.to_thread(
-                    self._client.query, function_name, args
-                )
+                result = await asyncio.to_thread(self._client.query, function_name, args)
                 consecutive_errors = 0
                 is_error = isinstance(result, dict) and result.get("_error") is True
                 should_wake = (

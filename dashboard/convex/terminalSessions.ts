@@ -8,11 +8,7 @@ export const upsert = internalMutation({
     output: v.string(),
     updatedAt: v.string(),
     pendingInput: v.optional(v.string()),
-    status: v.optional(v.union(
-      v.literal("idle"),
-      v.literal("processing"),
-      v.literal("error"),
-    )),
+    status: v.optional(v.union(v.literal("idle"), v.literal("processing"), v.literal("error"))),
     agentName: v.optional(v.string()),
     sleepMode: v.optional(v.boolean()),
     wakeSignal: v.optional(v.boolean()),
@@ -115,7 +111,10 @@ export const listSessions = query({
     const filtered = [];
     for (const session of sessions) {
       const name = session.agentName;
-      if (!name) { filtered.push(session); continue; }
+      if (!name) {
+        filtered.push(session);
+        continue;
+      }
       const agent = await ctx.db
         .query("agents")
         .withIndex("by_name", (q) => q.eq("name", name))

@@ -88,14 +88,14 @@ def _stop_mc() -> None:
     except (ValueError, OSError):
         _cli.console.print("Mission Control is not running (invalid PID file).")
         _cli._cleanup_pid_file()
-        raise typer.Exit(0)
+        raise typer.Exit(0) from None
 
     try:
         os.kill(pid, 0)
     except OSError:
         _cli.console.print("Mission Control is not running (stale PID file).")
         _cli._cleanup_pid_file()
-        raise typer.Exit(0)
+        raise typer.Exit(0) from None
 
     _cli.console.print("[yellow]Stopping Mission Control...[/yellow]")
     os.kill(pid, signal.SIGTERM)
@@ -242,7 +242,7 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
                 "Start with [bold]nanobot mc start[/bold]"
             )
             _cli._cleanup_pid_file()
-            raise typer.Exit(0)
+            raise typer.Exit(0) from None
 
         _cli.console.print("[bold green]Mission Control is running[/bold green]\n")
 
@@ -250,7 +250,7 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
             bridge = _cli._get_bridge()
         except SystemExit:
             _cli.console.print("[yellow]Cannot connect to Convex.[/yellow]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
         try:
             _cli.console.print("  Dashboard: [cyan]http://localhost:3000[/cyan]")

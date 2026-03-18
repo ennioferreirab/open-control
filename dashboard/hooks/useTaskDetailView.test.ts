@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
+import { testId } from "@/tests/helpers/mockConvex";
 
 // Mock convex/react
 const mockUseQuery = vi.fn();
@@ -15,11 +16,14 @@ vi.mock("../convex/_generated/api", () => ({
       getDetailView: "tasks:getDetailView",
       searchMergeCandidates: "tasks:searchMergeCandidates",
     },
+    executionQuestions: {
+      getPendingForTask: "executionQuestions:getPendingForTask",
+    },
   },
 }));
 
 const baseTask = {
-  _id: "task1" as never,
+  _id: testId<"tasks">("task1"),
   _creationTime: 1000,
   title: "Test Task",
   description: "A test task",
@@ -70,7 +74,7 @@ describe("useTaskDetailView", () => {
       },
     });
 
-    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    const { result } = renderHook(() => useTaskDetailView(testId<"tasks">("task1")));
     expect(result.current.isTaskLoaded).toBe(true);
     expect(result.current.task).toEqual(baseTask);
     expect(result.current.colors).not.toBeNull();
@@ -107,7 +111,7 @@ describe("useTaskDetailView", () => {
       },
     });
 
-    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    const { result } = renderHook(() => useTaskDetailView(testId<"tasks">("task1")));
     expect(result.current.isAwaitingKickoff).toBe(true);
     expect(result.current.isPaused).toBe(false);
   });
@@ -139,7 +143,7 @@ describe("useTaskDetailView", () => {
       },
     });
 
-    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    const { result } = renderHook(() => useTaskDetailView(testId<"tasks">("task1")));
     expect(result.current.isPaused).toBe(true);
     expect(result.current.isAwaitingKickoff).toBe(false);
   });
@@ -174,7 +178,7 @@ describe("useTaskDetailView", () => {
       },
     });
 
-    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    const { result } = renderHook(() => useTaskDetailView(testId<"tasks">("task1")));
     expect(result.current.tagColorMap).toEqual({
       frontend: "blue",
       backend: "green",
@@ -207,7 +211,7 @@ describe("useTaskDetailView", () => {
       },
     });
 
-    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    const { result } = renderHook(() => useTaskDetailView(testId<"tasks">("task1")));
     expect(result.current.colors).toBeDefined();
     expect(result.current.colors!.bg).toContain("blue");
   });
@@ -216,7 +220,17 @@ describe("useTaskDetailView", () => {
     const planTask = {
       ...baseTask,
       executionPlan: {
-        steps: [{ tempId: "s1", title: "Step 1", description: "Do it", assignedAgent: "a", blockedBy: [], parallelGroup: 0, order: 1 }],
+        steps: [
+          {
+            tempId: "s1",
+            title: "Step 1",
+            description: "Do it",
+            assignedAgent: "a",
+            blockedBy: [],
+            parallelGroup: 0,
+            order: 1,
+          },
+        ],
         generatedAt: "2026-01-01T00:00:00Z",
         generatedBy: "lead-agent",
       },
@@ -246,7 +260,7 @@ describe("useTaskDetailView", () => {
       },
     });
 
-    const { result } = renderHook(() => useTaskDetailView("task1" as any));
+    const { result } = renderHook(() => useTaskDetailView(testId<"tasks">("task1")));
     expect(result.current.taskExecutionPlan).toBeDefined();
     expect(result.current.taskExecutionPlan!.steps).toHaveLength(1);
   });
@@ -295,7 +309,7 @@ describe("useTaskDetailView", () => {
       return undefined;
     });
 
-    renderHook(() => useTaskDetailView("task1" as any, { mergeQuery: "alpha" }));
-    expect(mockUseQuery).toHaveBeenCalledTimes(2);
+    renderHook(() => useTaskDetailView(testId<"tasks">("task1"), { mergeQuery: "alpha" }));
+    expect(mockUseQuery).toHaveBeenCalledTimes(3);
   });
 });

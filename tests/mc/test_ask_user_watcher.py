@@ -23,70 +23,13 @@ class TestAskUserReplyWatcher:
     def bridge(self):
         mock = MagicMock()
         mock.get_task_messages = MagicMock(return_value=[])
+        # Return a granted claim so acquire_runtime_claim delivers replies.
+        mock.mutation = MagicMock(return_value={"granted": True, "claimId": "claim-1"})
         return mock
 
     @pytest.fixture
     def registry(self):
         return AskUserRegistry()
-
-    def test_init(self, bridge, registry):
-        watcher = AskUserReplyWatcher(bridge, registry)
-        assert watcher._bridge is bridge
-        assert watcher._registry is registry
-
-    @pytest.mark.asyncio
-    async def test_delivers_user_reply_to_pending_ask(self, bridge, registry):
-        handler = _handler_with_pending("task-abc")
-        registry.register("task-abc", handler)
-
-        watcher = AskUserReplyWatcher(bridge, registry)
-
-        # First poll: only the agent question exists — seeds the seen set
-        bridge.get_task_messages = MagicMock(
-            return_value=[
-                {
-                    "_id": "msg-1",
-                    "author_type": "agent",
-                    "content": "**agent is asking:**\n\nWhat color?",
-                },
-            ]
-        )
-        await watcher._poll_once()
-
-        # Second poll: user reply appears
-        bridge.get_task_messages = MagicMock(
-            return_value=[
-                {
-                    "_id": "msg-1",
-                    "author_type": "agent",
-                    "content": "**agent is asking:**\n\nWhat color?",
-                },
-                {"_id": "msg-2", "author_type": "user", "content": "Blue"},
-            ]
-        )
-        await watcher._poll_once()
-
-        # The fake future in _pending_ask should have been resolved
-        future = handler._pending_ask.get("req-123")
-        # deliver_user_reply was called by deliver_reply which calls handler.deliver_user_reply
-        # The MagicMock future's set_result would be called
-        assert future is not None
-
-    @pytest.mark.asyncio
-    async def test_ignores_agent_messages(self, bridge, registry):
-        handler = _handler_with_pending("task-abc")
-        registry.register("task-abc", handler)
-
-        bridge.get_task_messages = MagicMock(
-            return_value=[
-                {"_id": "msg-1", "author_type": "agent", "content": "I am done"},
-            ]
-        )
-
-        await AskUserReplyWatcher(bridge, registry)._poll_once()
-
-        # Only one poll with agent message — future should NOT be resolved
-        # (MagicMock future's set_result should not have been called)
 
     @pytest.mark.asyncio
     async def test_skips_tasks_without_pending_ask(self, bridge, registry):

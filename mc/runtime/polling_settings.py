@@ -31,7 +31,7 @@ POLLING_BOUNDS: dict[str, tuple[int, int]] = {
 }
 
 
-def _read_polling_settings(bridge: "ConvexBridge") -> dict[str, int]:
+def _read_polling_settings(bridge: ConvexBridge) -> dict[str, int]:
     """Read polling/sleep settings from Convex, falling back to defaults."""
     store: dict[str, str] = {}
     try:

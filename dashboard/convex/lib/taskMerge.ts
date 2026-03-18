@@ -17,9 +17,7 @@ type MergeCapableTask = Doc<"tasks"> & {
 type MergeTreeCtx = {
   db: {
     get: (id: Id<"tasks"> | string) => Promise<Doc<"tasks"> | null>;
-    query: (
-      table: "messages",
-    ) => {
+    query: (table: "messages") => {
       withIndex: (
         index: "by_taskId",
         builder: (q: { eq: (field: "taskId", value: Id<"tasks"> | string) => unknown }) => unknown,

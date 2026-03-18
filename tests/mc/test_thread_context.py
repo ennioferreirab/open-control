@@ -299,7 +299,7 @@ class TestPredecessorMessages:
         # Fill up 20 more messages after the predecessor
         later_messages = [_agent_msg(f"Later msg {i}") for i in range(19)]
         later_messages.append(_user_msg("Final user question"))
-        messages = [predecessor_msg] + later_messages
+        messages = [predecessor_msg, *later_messages]
         assert len(messages) == 21  # predecessor is in position 0, outside window
 
         builder = ThreadContextBuilder()
@@ -320,7 +320,7 @@ class TestPredecessorMessages:
         )
         later_messages = [_agent_msg(f"Msg {i}") for i in range(19)]
         later_messages.append(_user_msg("Follow-up"))
-        messages = [predecessor_msg] + later_messages
+        messages = [predecessor_msg, *later_messages]
         assert len(messages) == 21
 
         builder = ThreadContextBuilder()
@@ -339,7 +339,7 @@ class TestPredecessorMessages:
         extra_early_msg = _agent_msg("Very early work", timestamp="2026-01-01T08:30:00Z")
         later_messages = [_agent_msg(f"Msg {i}") for i in range(19)]
         later_messages.append(_user_msg("Follow-up"))
-        messages = [predecessor_msg, extra_early_msg] + later_messages
+        messages = [predecessor_msg, extra_early_msg, *later_messages]
         assert len(messages) == 22
 
         builder = ThreadContextBuilder()
@@ -360,7 +360,7 @@ class TestPredecessorMessages:
         )
         later_messages = [_agent_msg(f"Msg {i}") for i in range(19)]
         later_messages.append(_user_msg("Continue with step 3"))
-        messages = [pred1, pred2] + later_messages
+        messages = [pred1, pred2, *later_messages]
         assert len(messages) == 22
 
         builder = ThreadContextBuilder()
@@ -377,7 +377,7 @@ class TestPredecessorMessages:
 
         later_messages = [_agent_msg(f"Msg {i}") for i in range(19)]
         later_messages.append(_user_msg("Follow-up"))
-        messages = [non_completion] + later_messages
+        messages = [non_completion, *later_messages]
         assert len(messages) == 21
 
         builder = ThreadContextBuilder()
@@ -528,7 +528,7 @@ class TestArtifactFormatting:
         )
         later_messages = [_agent_msg(f"Msg {i}") for i in range(19)]
         later_messages.append(_user_msg("Continue"))
-        messages = [pred] + later_messages
+        messages = [pred, *later_messages]
 
         builder = ThreadContextBuilder()
         ctx = builder.build(messages, predecessor_step_ids=["step-1"])

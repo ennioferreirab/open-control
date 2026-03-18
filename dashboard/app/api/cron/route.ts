@@ -70,9 +70,6 @@ export async function GET() {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return NextResponse.json({ jobs: [] });
     }
-    return NextResponse.json(
-      { error: "Failed to read cron jobs" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to read cron jobs" }, { status: 500 });
   }
 }

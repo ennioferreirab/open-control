@@ -1,48 +1,42 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { testId } from "@/tests/helpers/mockConvex";
 
-// Mock convex/react hooks
-vi.mock("convex/react", () => ({
-  useQuery: vi.fn(),
-  useMutation: vi.fn(),
+// Mock useTaskCardActions to avoid convex dependency
+const mockToggleFavoriteTask = vi.fn();
+
+vi.mock("@/features/tasks/hooks/useTaskCardActions", () => ({
+  useTaskCardActions: () => ({
+    approveTask: vi.fn(),
+    approveAndKickOffTask: vi.fn(),
+    softDeleteTask: vi.fn(),
+    toggleFavoriteTask: mockToggleFavoriteTask,
+  }),
 }));
 
-vi.mock("../../convex/_generated/api", () => ({
-  api: {
-    tasks: {
-      toggleFavorite: "tasks:toggleFavorite",
-    },
-  },
-}));
-
-import { useMutation } from "convex/react";
 import { CompactFavoriteCard } from "../../components/CompactFavoriteCard";
-
-const mockUseMutation = useMutation as ReturnType<typeof vi.fn>;
+import type { Doc } from "@/convex/_generated/dataModel";
 
 function makeTask(overrides: Record<string, unknown> = {}) {
   return {
-    _id: "task1" as any,
+    _id: testId<"tasks">("task1"),
     _creationTime: 1700000000000,
     title: "Test Task Title",
-    status: "in_progress",
+    status: "in_progress" as const,
     assignedAgent: "dev-agent",
-    trustLevel: "autonomous",
+    trustLevel: "autonomous" as const,
     isFavorite: true,
     createdAt: "2024-01-01T00:00:00.000Z",
     updatedAt: "2024-01-01T00:00:00.000Z",
     ...overrides,
-  } as any;
+  } as unknown as Doc<"tasks">;
 }
 
 describe("CompactFavoriteCard", () => {
-  const mockToggleFavorite = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseMutation.mockReturnValue(mockToggleFavorite);
-    mockToggleFavorite.mockResolvedValue(undefined);
+    mockToggleFavoriteTask.mockResolvedValue(undefined);
   });
 
   it("renders task title", () => {
@@ -71,12 +65,12 @@ describe("CompactFavoriteCard", () => {
     expect(star).toBeInTheDocument();
   });
 
-  it("calls toggleFavorite when star is clicked", async () => {
+  it("calls toggleFavoriteTask when star is clicked", async () => {
     const user = userEvent.setup();
     const { container } = render(<CompactFavoriteCard task={makeTask()} />);
     const star = container.querySelector(".fill-amber-400")!;
     await user.click(star);
-    expect(mockToggleFavorite).toHaveBeenCalledWith({ taskId: "task1" });
+    expect(mockToggleFavoriteTask).toHaveBeenCalledWith("task1");
   });
 
   it("calls onClick when card is clicked", async () => {
@@ -90,12 +84,10 @@ describe("CompactFavoriteCard", () => {
   it("does not call onClick when star is clicked (stopPropagation)", async () => {
     const user = userEvent.setup();
     const handleClick = vi.fn();
-    const { container } = render(
-      <CompactFavoriteCard task={makeTask()} onClick={handleClick} />
-    );
+    const { container } = render(<CompactFavoriteCard task={makeTask()} onClick={handleClick} />);
     const star = container.querySelector(".fill-amber-400")!;
     await user.click(star);
     expect(handleClick).not.toHaveBeenCalled();
-    expect(mockToggleFavorite).toHaveBeenCalledTimes(1);
+    expect(mockToggleFavoriteTask).toHaveBeenCalledTimes(1);
   });
 });

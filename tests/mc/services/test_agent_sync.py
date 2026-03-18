@@ -315,7 +315,7 @@ class TestProjectionProtection:
         bridge.list_agents.return_value = [compiled_doc]
         bridge.get_agent_by_name.return_value = compiled_doc
 
-        synced, errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
+        synced, _errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
 
         # Should still appear in synced (for reporting), but NOT call sync_agent
         bridge.sync_agent.assert_not_called()
@@ -357,7 +357,7 @@ class TestProjectionProtection:
             "compiled_from_spec_id": None,
         }
 
-        synced, errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
+        _synced, _errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
 
         bridge.sync_agent.assert_called_once()
 
@@ -390,7 +390,7 @@ class TestProjectionProtection:
         # Not in Convex at all
         bridge.get_agent_by_name.return_value = None
 
-        synced, errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
+        _synced, _errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
 
         bridge.sync_agent.assert_called_once()
 

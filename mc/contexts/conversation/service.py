@@ -72,7 +72,7 @@ class ConversationService:
 
     def __init__(
         self,
-        bridge: "ConvexBridge",
+        bridge: ConvexBridge,
         ask_user_registry: Any | None = None,
     ) -> None:
         self._bridge = bridge

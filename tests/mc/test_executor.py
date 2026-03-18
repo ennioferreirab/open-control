@@ -9,8 +9,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -19,16 +17,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mc.contexts.execution.executor import (
-    _collect_output_artifacts,
-    _snapshot_output_dir,
     _build_thread_context,
+    _collect_output_artifacts,
     _human_size,
     _relocate_invalid_memory_files,
+    _snapshot_output_dir,
 )
 from mc.types import StepCompletionArtifact
 
-
 # ── _human_size ─────────────────────────────────────────────────────────
+
 
 class TestHumanSize:
     def test_bytes_below_mb(self):
@@ -45,6 +43,7 @@ class TestHumanSize:
 
 
 # ── StepCompletionArtifact ───────────────────────────────────────────────
+
 
 class TestStepCompletionArtifact:
     def test_to_dict_created_with_description(self):
@@ -105,12 +104,14 @@ class TestStepCompletionArtifact:
 
 # ── _snapshot_output_dir ────────────────────────────────────────────────
 
+
 def _make_home_patch(tmp_path: Path):
     """Patch Path.home() to return tmp_path for both executor functions."""
     # patch.object on the Path class used within the executor module.
     # Since executor imports Path via `from pathlib import Path`, the class
     # reference is shared, so patching pathlib.Path.home is sufficient.
     from pathlib import Path as _Path
+
     return patch.object(_Path, "home", return_value=tmp_path)
 
 
@@ -149,6 +150,7 @@ class TestSnapshotOutputDir:
 
 
 # ── _collect_output_artifacts ────────────────────────────────────────────
+
 
 class TestCollectOutputArtifacts:
     def test_new_file_is_created_artifact(self, tmp_path):
@@ -268,7 +270,9 @@ class TestRelocateInvalidMemoryFiles:
             moved = _relocate_invalid_memory_files(safe_id, workspace)
 
         assert len(moved) == 1
-        relocated = tmp_path / ".nanobot" / "tasks" / safe_id / "output" / "memory-relocated-rogue.md"
+        relocated = (
+            tmp_path / ".nanobot" / "tasks" / safe_id / "output" / "memory-relocated-rogue.md"
+        )
         assert moved[0] == relocated
         assert relocated.read_text(encoding="utf-8") == "artifact"
         assert not rogue.exists()
@@ -276,6 +280,7 @@ class TestRelocateInvalidMemoryFiles:
 
 
 # ── _build_thread_context with step_completion ──────────────────────────
+
 
 class TestBuildThreadContextWithArtifacts:
     def _user_msg(self, content: str) -> dict[str, Any]:
@@ -317,11 +322,13 @@ class TestBuildThreadContextWithArtifacts:
         messages = [
             self._step_completion_msg(
                 "Generated report.",
-                artifacts=[{
-                    "path": "output/report.pdf",
-                    "action": "created",
-                    "description": "PDF, 245 KB",
-                }],
+                artifacts=[
+                    {
+                        "path": "output/report.pdf",
+                        "action": "created",
+                        "description": "PDF, 245 KB",
+                    }
+                ],
             ),
             self._user_msg("Please also add a chart"),
         ]
@@ -335,11 +342,13 @@ class TestBuildThreadContextWithArtifacts:
         messages = [
             self._step_completion_msg(
                 "Updated data file.",
-                artifacts=[{
-                    "path": "output/data.json",
-                    "action": "modified",
-                    "diff": "File updated (12 KB)",
-                }],
+                artifacts=[
+                    {
+                        "path": "output/data.json",
+                        "action": "modified",
+                        "diff": "File updated (12 KB)",
+                    }
+                ],
             ),
             self._user_msg("Thanks"),
         ]
@@ -423,6 +432,7 @@ class TestBuildThreadContextWithArtifacts:
 
 # ── delegate_task removal in MC step execution ────────────────────────
 
+
 class TestDelegateTaskNotAvailableInMCSteps:
     """Agents executing MC steps must NOT have delegate_task in their toolset.
 
@@ -438,25 +448,29 @@ class TestDelegateTaskNotAvailableInMCSteps:
         captured_loop = {}
 
         # Patch AgentLoop to capture the instance and skip actual LLM execution
-        original_init = None
 
         class FakeAgentLoop:
             def __init__(self, **kwargs):
-                from nanobot.agent.tools.registry import ToolRegistry
                 from nanobot.agent.tools.mc_delegate import McDelegateTool
+                from nanobot.agent.tools.registry import ToolRegistry
 
                 self.tools = ToolRegistry()
                 # Simulate what the real __init__ does: register delegate_task
                 self.tools.register(McDelegateTool())
                 captured_loop["instance"] = self
 
-            async def process_direct(self, **kwargs):
-                return "mocked result"
+            async def process_direct_result(self, **kwargs):
+                from types import SimpleNamespace
+
+                return SimpleNamespace(content="mocked result", is_error=False, error_message=None)
 
         with (
             patch("nanobot.agent.loop.AgentLoop", FakeAgentLoop),
             patch.dict("sys.modules", {"nanobot.agent.loop": MagicMock(AgentLoop=FakeAgentLoop)}),
-            patch("mc.contexts.execution.executor._make_provider", return_value=(MagicMock(), "mock-model")),
+            patch(
+                "mc.contexts.execution.executor._make_provider",
+                return_value=(MagicMock(), "mock-model"),
+            ),
         ):
             await _run_agent_on_task(
                 agent_name="youtube-summarizer",

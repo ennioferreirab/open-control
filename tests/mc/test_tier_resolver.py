@@ -9,12 +9,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from mc.types import (
-    TIER_PREFIX,
     VALID_TIER_NAMES,
     extract_tier_name,
     is_tier_reference,
 )
-
 
 # ---------------------------------------------------------------------------
 # Unit tests for tier reference helpers in types.py (AC2)

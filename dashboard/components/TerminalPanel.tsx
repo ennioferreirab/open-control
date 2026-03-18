@@ -39,9 +39,7 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
     if (!outputContainer) return;
 
     const distanceFromBottom =
-      outputContainer.scrollHeight -
-      outputContainer.clientHeight -
-      outputContainer.scrollTop;
+      outputContainer.scrollHeight - outputContainer.clientHeight - outputContainer.scrollTop;
 
     setIsAtBottom(distanceFromBottom <= 8);
   };
@@ -157,9 +155,7 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
               )}
             </div>
           )}
-          {ipAddress && (
-            <span className="text-[10px] font-mono text-zinc-500">{ipAddress}</span>
-          )}
+          {ipAddress && <span className="text-[10px] font-mono text-zinc-500">{ipAddress}</span>}
         </div>
       </div>
 
@@ -170,10 +166,10 @@ export function TerminalPanel({ sessionId, agentName, ipAddress }: TerminalPanel
         onScroll={handleOutputScroll}
         className="flex-1 overflow-y-auto bg-zinc-950 p-3"
       >
-        <pre className="whitespace-pre-wrap break-words font-mono text-xs text-green-400">{session?.output || "Waiting for bridge connection..."}</pre>
-        {error && (
-          <p className="mt-2 text-xs text-red-400">{error}</p>
-        )}
+        <pre className="whitespace-pre-wrap break-words font-mono text-xs text-green-400">
+          {session?.output || "Waiting for bridge connection..."}
+        </pre>
+        {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
       </div>
 
       {/* TUI Navigation */}

@@ -64,7 +64,7 @@ def ensure_nanobot_agent(agents_dir: Path) -> None:
     _impl(agents_dir)
 
 
-def ensure_low_agent(bridge: "ConvexBridge") -> None:
+def ensure_low_agent(bridge: ConvexBridge) -> None:
     """Delegate to gateway.ensure_low_agent."""
     from mc.infrastructure.agent_bootstrap import ensure_low_agent as _impl
 
@@ -72,7 +72,7 @@ def ensure_low_agent(bridge: "ConvexBridge") -> None:
 
 
 def sync_skills_impl(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     builtin_skills_dir: Path | None = None,
 ) -> list[str]:
     """Delegate to gateway.sync_skills."""
@@ -95,7 +95,7 @@ def _config_default_model() -> str:
     return _impl()
 
 
-def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
+def _write_back_convex_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
     """Delegate to gateway._write_back_convex_agents."""
     from mc.infrastructure.agent_bootstrap import _write_back_convex_agents as _impl
 
@@ -111,7 +111,7 @@ class AgentSyncService:
         agents_dir: Path to the local agents directory (~/.nanobot/agents).
     """
 
-    def __init__(self, bridge: "ConvexBridge", agents_dir: Path) -> None:
+    def __init__(self, bridge: ConvexBridge, agents_dir: Path) -> None:
         self._bridge = bridge
         self._agents_dir = agents_dir
 
@@ -122,7 +122,7 @@ class AgentSyncService:
     def sync_agent_registry(
         self,
         default_model: str | None = None,
-    ) -> tuple[list["AgentData"], dict[str, list[str]]]:
+    ) -> tuple[list[AgentData], dict[str, list[str]]]:
         """Sync agent YAML files to Convex agents table.
 
         Write-back first (Convex -> local), then validate, resolve models,
@@ -147,7 +147,7 @@ class AgentSyncService:
         _write_back_convex_agents(self._bridge, self._agents_dir)
 
         # Step 1: Validate agent YAML in each subdirectory
-        valid_agents: list["AgentData"] = []
+        valid_agents: list[AgentData] = []
         errors: dict[str, list[str]] = {}
 
         non_agent_roles = {"remote-terminal"}

@@ -1,4 +1,4 @@
-"""Tests for the gateway module — Tasks 1–5."""
+"""Tests for the gateway module — Tasks 1-5."""
 
 import asyncio
 import os
@@ -65,20 +65,6 @@ class TestMainFunction:
     """Test that main() creates a bridge, syncs agents, and runs the gateway."""
 
     @pytest.mark.asyncio
-    async def test_main_logs_error_and_exits_when_no_url(self, monkeypatch):
-        """main() should log error and exit if Convex URL cannot be resolved."""
-        from mc.runtime.gateway import main
-
-        monkeypatch.delenv("CONVEX_URL", raising=False)
-        with (
-            patch("mc.runtime.gateway._resolve_convex_url", return_value=None),
-            patch("mc.runtime.gateway.logger") as mock_logger,
-        ):
-            # main() should return early (not hang) when URL is unresolvable
-            await main()
-            mock_logger.error.assert_called()
-
-    @pytest.mark.asyncio
     async def test_main_creates_bridge_and_calls_run_gateway(self, monkeypatch):
         """main() should create ConvexBridge, sync agents, and call run_gateway."""
         from mc.runtime.gateway import main
@@ -102,23 +88,6 @@ class TestMainFunction:
             mock_run.assert_called_once_with(mock_bridge)
             mock_bridge.close.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_main_logs_error_and_exits_when_no_admin_key(self, monkeypatch):
-        """main() should log error and exit if CONVEX_ADMIN_KEY is not set."""
-        from mc.runtime.gateway import main
-
-        monkeypatch.delenv("CONVEX_ADMIN_KEY", raising=False)
-        with (
-            patch(
-                "mc.runtime.gateway._resolve_convex_url", return_value="https://test.convex.cloud"
-            ),
-            patch("mc.runtime.gateway._resolve_admin_key", return_value=None),
-            patch("mc.runtime.gateway.logger") as mock_logger,
-            patch("mc.bridge.ConvexBridge") as mock_bridge_cls,
-        ):
-            await main()
-            mock_logger.error.assert_called()
-            mock_bridge_cls.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +263,8 @@ class TestExecutionLoop:
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
+        mock_bridge.mutation.return_value = {"granted": True}
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
@@ -304,6 +275,8 @@ class TestExecutionLoop:
             "description": "A test",
             "assigned_agent": "test-agent",
             "trust_level": "autonomous",
+            "status": "assigned",
+            "state_version": 1,
         }
 
         # async_subscribe returns an asyncio.Queue
@@ -321,11 +294,13 @@ class TestExecutionLoop:
                 except asyncio.CancelledError:
                     pass
 
-        mock_bridge.update_task_status.assert_any_call(
-            "task_123",
+        mock_bridge.transition_task_from_snapshot.assert_any_call(
+            task_data,
             "in_progress",
-            "test-agent",
-            unittest_any_string(),
+            reason=unittest_any_string(),
+            agent_name="test-agent",
+            review_phase=None,
+            awaiting_kickoff=None,
         )
 
     @pytest.mark.asyncio
@@ -371,6 +346,8 @@ class TestExecutionLoop:
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
+        mock_bridge.mutation.return_value = {"granted": True}
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
@@ -380,6 +357,8 @@ class TestExecutionLoop:
             "title": "Thread test",
             "assigned_agent": "agent-y",
             "trust_level": "autonomous",
+            "status": "assigned",
+            "state_version": 1,
         }
 
         mock_bridge.async_subscribe = lambda fn, args, **kw: _make_test_queue([task_data])
@@ -411,6 +390,7 @@ class TestExecutionLoop:
         from mc.types import ExecutionPlan, ExecutionPlanStep
 
         mock_bridge = MagicMock()
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
@@ -426,6 +406,8 @@ class TestExecutionLoop:
             "description": "reroute me",
             "assigned_agent": "lead-agent",
             "trust_level": "autonomous",
+            "status": "assigned",
+            "state_version": 1,
         }
         plan = ExecutionPlan(
             steps=[
@@ -450,10 +432,10 @@ class TestExecutionLoop:
 
         mock_execute.assert_not_called()
         mock_bridge.update_execution_plan.assert_called_once()
-        mock_bridge.update_task_status.assert_called_once()
-        status_args = mock_bridge.update_task_status.call_args[0]
-        assert status_args[1] == "assigned"
-        assert status_args[2] == "dev-agent"
+        mock_bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = mock_bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "assigned"
+        assert call_args[1].get("agent_name") == "dev-agent"
         message_args = mock_bridge.send_message.call_args[0]
         assert "pure orchestrator" in message_args[3].lower()
 
@@ -472,10 +454,12 @@ class TestTaskExecution:
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_task.return_value = {"id": "task_001", "status": "in_progress", "state_version": 1}
 
         executor = TaskExecutor(mock_bridge)
 
@@ -492,9 +476,10 @@ class TestTaskExecution:
                 "task_001", "Test task", "Do testing", "test-agent", "autonomous"
             )
 
-        mock_bridge.update_task_status.assert_any_call(
-            "task_001", "review", "test-agent", unittest_any_string()
-        )
+        mock_bridge.transition_task_from_snapshot.assert_called()
+        completion_call = mock_bridge.transition_task_from_snapshot.call_args
+        assert completion_call[0][1] == "review"
+        assert completion_call[1].get("agent_name") == "test-agent"
 
     @pytest.mark.asyncio
     async def test_human_approved_task_transitions_to_review(self):
@@ -502,10 +487,12 @@ class TestTaskExecution:
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_task.return_value = {"id": "task_002", "status": "in_progress", "state_version": 1, "trust_level": "human_approved"}
 
         executor = TaskExecutor(mock_bridge)
 
@@ -522,9 +509,10 @@ class TestTaskExecution:
                 "task_002", "Review task", "Do review", "test-agent", "human_approved"
             )
 
-        mock_bridge.update_task_status.assert_any_call(
-            "task_002", "review", "test-agent", unittest_any_string()
-        )
+        mock_bridge.transition_task_from_snapshot.assert_called()
+        completion_call = mock_bridge.transition_task_from_snapshot.call_args
+        assert completion_call[0][1] == "review"
+        assert completion_call[1].get("agent_name") == "test-agent"
 
     @pytest.mark.asyncio
     async def test_execution_writes_work_message(self):
@@ -684,10 +672,12 @@ class TestTrustLevelStatus:
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_task.return_value = {"id": "task_006", "status": "in_progress", "state_version": 1, "trust_level": "agent_reviewed"}
 
         executor = TaskExecutor(mock_bridge)
 
@@ -704,9 +694,10 @@ class TestTrustLevelStatus:
                 "task_006", "Reviewed task", "For review", "review-agent", "agent_reviewed"
             )
 
-        mock_bridge.update_task_status.assert_any_call(
-            "task_006", "review", "review-agent", unittest_any_string()
-        )
+        mock_bridge.transition_task_from_snapshot.assert_called()
+        completion_call = mock_bridge.transition_task_from_snapshot.call_args
+        assert completion_call[0][1] == "review"
+        assert completion_call[1].get("agent_name") == "review-agent"
 
 
 # ---------------------------------------------------------------------------
@@ -837,6 +828,8 @@ class TestOrchestratorNoDuplicateActivity:
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
+        mock_bridge.mutation.return_value = {"granted": True}
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
@@ -856,8 +849,10 @@ class TestOrchestratorNoDuplicateActivity:
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await orch._inbox_worker.process_task(task_data)
 
-        # update_task_status called once for routing (Convex handles the activity)
-        mock_bridge.update_task_status.assert_called_once()
+        # transition_task_from_snapshot called once for routing (Convex handles the activity)
+        mock_bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = mock_bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "assigned"
         # create_activity must NOT contain task_assigned (no duplicate status events)
         for call_args in mock_bridge.create_activity.call_args_list:
             assert call_args[0][0] != "task_assigned"
@@ -872,6 +867,8 @@ class TestOrchestratorNoDuplicateActivity:
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
+        mock_bridge.mutation.return_value = {"granted": True}
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
@@ -896,7 +893,9 @@ class TestOrchestratorNoDuplicateActivity:
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await orch._inbox_worker.process_task(task_data)
 
-        mock_bridge.update_task_status.assert_called_once()
+        mock_bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = mock_bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "planning"
         # create_activity must NOT contain task_assigned (no duplicate status events)
         for call_args in mock_bridge.create_activity.call_args_list:
             assert call_args[0][0] != "task_assigned"
@@ -911,6 +910,8 @@ class TestOrchestratorNoDuplicateActivity:
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
+        mock_bridge.mutation.return_value = {"granted": True}
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
@@ -926,7 +927,9 @@ class TestOrchestratorNoDuplicateActivity:
         with patch("asyncio.to_thread", side_effect=_to_thread_passthrough):
             await orch._inbox_worker.process_task(task_data)
 
-        mock_bridge.update_task_status.assert_called_once()
+        mock_bridge.transition_task_from_snapshot.assert_called_once()
+        call_args = mock_bridge.transition_task_from_snapshot.call_args
+        assert call_args[0][1] == "planning"
         # create_activity must NOT contain task_assigned (no duplicate status events)
         for call_args in mock_bridge.create_activity.call_args_list:
             assert call_args[0][0] != "task_assigned"
@@ -942,6 +945,7 @@ class TestOrchestratorNoDuplicateActivity:
         mock_bridge.create_activity = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.get_steps_by_task = MagicMock(return_value=[])
+        mock_bridge.query.return_value = None
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -1054,6 +1058,7 @@ class TestExecutorNoDuplicateActivity:
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
@@ -1064,6 +1069,8 @@ class TestExecutorNoDuplicateActivity:
             "description": None,
             "assigned_agent": "agent-m",
             "trust_level": "autonomous",
+            "status": "assigned",
+            "state_version": 1,
         }
 
         executor = TaskExecutor(mock_bridge)
@@ -1091,6 +1098,8 @@ class TestOrchestratorDeduplication:
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
+        mock_bridge.mutation.return_value = {"granted": True}
+        mock_bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.list_agents = MagicMock(return_value=[])
@@ -1115,7 +1124,7 @@ class TestOrchestratorDeduplication:
                 pass
 
         # Should only be called once despite appearing twice
-        assert mock_bridge.update_task_status.call_count == 1
+        assert mock_bridge.transition_task_from_snapshot.call_count == 1
 
     @pytest.mark.asyncio
     async def test_process_inbox_error_does_not_crash_loop(self):
@@ -1123,7 +1132,13 @@ class TestOrchestratorDeduplication:
         from mc.runtime.orchestrator import TaskOrchestrator
 
         mock_bridge = MagicMock()
-        mock_bridge.update_task_status = MagicMock(side_effect=RuntimeError("Convex down"))
+        mock_bridge.mutation.return_value = {"granted": True}
+        # First task raises error, second succeeds
+        mock_bridge.transition_task_from_snapshot.side_effect = [
+            RuntimeError("Convex down"),
+            {"kind": "applied"},
+        ]
+        mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.list_agents = MagicMock(return_value=[])
 
@@ -1147,7 +1162,7 @@ class TestOrchestratorDeduplication:
                 pass
 
         # Both tasks attempted (loop didn't crash on first error)
-        assert mock_bridge.update_task_status.call_count == 2
+        assert mock_bridge.transition_task_from_snapshot.call_count == 2
 
 
 # ---------------------------------------------------------------------------

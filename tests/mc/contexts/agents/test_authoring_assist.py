@@ -33,6 +33,7 @@ class TestAuthoringMode:
     def test_agent_mode(self) -> None:
         assert AuthoringMode.AGENT == "agent"
 
+
 class TestAuthoringResponseModel:
     """AuthoringResponse dataclass contract."""
 

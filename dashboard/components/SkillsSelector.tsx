@@ -21,9 +21,7 @@ export function SkillsSelector({ selected, onChange }: SkillsSelectorProps) {
     if (!skills) return [];
     const q = search.toLowerCase();
     return skills.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        s.description.toLowerCase().includes(q),
+      (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
     );
   }, [skills, search]);
 
@@ -57,9 +55,7 @@ export function SkillsSelector({ selected, onChange }: SkillsSelectorProps) {
   };
 
   if (skills === undefined) {
-    return (
-      <p className="text-sm text-muted-foreground py-2">Loading skills...</p>
-    );
+    return <p className="text-sm text-muted-foreground py-2">Loading skills...</p>;
   }
 
   return (
@@ -151,11 +147,12 @@ function SkillRow({
         <div className="flex items-center gap-1.5">
           {emoji && <span className="text-sm">{emoji}</span>}
           <span className="text-sm font-medium">{name}</span>
-          {always && (
-            <span className="text-[10px] text-muted-foreground">(always loaded)</span>
-          )}
+          {always && <span className="text-[10px] text-muted-foreground">(always loaded)</span>}
           {available ? (
-            <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" title="Requirements met" />
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0"
+              title="Requirements met"
+            />
           ) : (
             <span
               className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"

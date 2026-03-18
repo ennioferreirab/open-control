@@ -10,7 +10,12 @@ vi.mock("os", () => ({
   homedir: () => "/home/test",
 }));
 vi.mock("fs/promises", () => ({
-  default: { readFile: mockReadFile, writeFile: mockWriteFile, rename: mockRename, unlink: mockUnlink },
+  default: {
+    readFile: mockReadFile,
+    writeFile: mockWriteFile,
+    rename: mockRename,
+    unlink: mockUnlink,
+  },
   readFile: mockReadFile,
   writeFile: mockWriteFile,
   rename: mockRename,

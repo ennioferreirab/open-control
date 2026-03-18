@@ -17,8 +17,8 @@ import json
 import logging
 import os
 import shutil
-from collections.abc import Callable
-from datetime import datetime, timezone
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -69,7 +69,7 @@ class ProviderCliRunnerStrategy:
         supervisor: Any,
         command: list[str],
         cwd: str,
-        projector: "LiveStreamProjector | None" = None,
+        projector: LiveStreamProjector | None = None,
         supervision_sink: Callable[[dict[str, Any]], None] | None = None,
         control_plane: Any | None = None,
         bridge: Any | None = None,
@@ -219,7 +219,7 @@ class ProviderCliRunnerStrategy:
     def _patch_mcp_config_env(
         self,
         mcp_config: Path,
-        env_overrides: dict[str, str | None],
+        env_overrides: Mapping[str, str | None],
     ) -> None:
         """Patch env vars into the resolved MCP config, omitting ``None`` values."""
         filtered_overrides = {
@@ -309,7 +309,7 @@ class ProviderCliRunnerStrategy:
             )
         except StopAsyncIteration:
             raise
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise RuntimeError(
                 "Provider CLI stream output timed out after "
                 f"{self._stream_idle_timeout_seconds} seconds"
@@ -321,7 +321,7 @@ class ProviderCliRunnerStrategy:
                 self._supervisor.wait_for_exit(handle),
                 timeout=self._exit_timeout_seconds,
             )
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise RuntimeError(
                 f"Provider CLI process exit timed out after {self._exit_timeout_seconds} seconds"
             ) from exc
@@ -348,7 +348,7 @@ class ProviderCliRunnerStrategy:
                 ),
                 timeout=self._startup_timeout_seconds,
             )
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise RuntimeError(
                 f"Provider CLI start session timed out after {self._startup_timeout_seconds} seconds"
             ) from exc
@@ -385,7 +385,7 @@ class ProviderCliRunnerStrategy:
         """
         if self._bridge is None:
             return
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         metadata: dict[str, Any] = {
             "session_id": mc_session_id,
             "agent_name": agent_name,
@@ -557,7 +557,7 @@ class ProviderCliRunnerStrategy:
                 events = self._parser.parse_output(chunk)
                 for event in events:
                     collected_events.append(event)
-                    projected_timestamp = datetime.now(timezone.utc).isoformat()
+                    projected_timestamp = datetime.now(UTC).isoformat()
                     # Update registry with discovered session ID
                     if event.kind == "session_id" and event.provider_session_id:
                         self._registry.update_provider_session_id(
@@ -647,7 +647,7 @@ class ProviderCliRunnerStrategy:
                 bootstrap_prompt=bootstrap_prompt,
                 provider_session_id=session_id,
                 status="error",
-                ended_at=datetime.now(timezone.utc).isoformat(),
+                ended_at=datetime.now(UTC).isoformat(),
                 last_error=error_msg,
             )
             self._cleanup(handle.mc_session_id)
@@ -680,7 +680,7 @@ class ProviderCliRunnerStrategy:
                 bootstrap_prompt=bootstrap_prompt,
                 provider_session_id=session_id,
                 status="error",
-                ended_at=datetime.now(timezone.utc).isoformat(),
+                ended_at=datetime.now(UTC).isoformat(),
                 last_error=error_msg,
             )
             self._cleanup(handle.mc_session_id)
@@ -702,7 +702,7 @@ class ProviderCliRunnerStrategy:
             bootstrap_prompt=bootstrap_prompt,
             provider_session_id=session_id,
             status="ended",
-            ended_at=datetime.now(timezone.utc).isoformat(),
+            ended_at=datetime.now(UTC).isoformat(),
             final_result=output_text[:500] if output_text else None,
         )
         self._cleanup(handle.mc_session_id)

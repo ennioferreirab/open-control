@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ class DirectDelegationRouter:
     - Least-loaded agent (lowest tasksExecuted)
     """
 
-    def __init__(self, bridge: "ConvexBridge") -> None:
+    def __init__(self, bridge: ConvexBridge) -> None:
         self._bridge = bridge
 
     def route(
@@ -43,7 +44,7 @@ class DirectDelegationRouter:
 
         Returns None if no suitable agent is found.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         registry = self._bridge.list_active_registry_view()
         if not registry:
@@ -76,7 +77,7 @@ class DirectDelegationRouter:
                     registry_snapshot=[
                         {"name": a.get("name"), "role": a.get("role")} for a in registry
                     ],
-                    routed_at=datetime.now(timezone.utc).isoformat(),
+                    routed_at=datetime.now(UTC).isoformat(),
                 )
 
         if not candidates:
@@ -94,5 +95,5 @@ class DirectDelegationRouter:
             ),
             reason_code="least_loaded",
             registry_snapshot=[{"name": a.get("name"), "role": a.get("role")} for a in registry],
-            routed_at=datetime.now(timezone.utc).isoformat(),
+            routed_at=datetime.now(UTC).isoformat(),
         )

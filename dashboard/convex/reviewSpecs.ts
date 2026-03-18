@@ -1,6 +1,5 @@
 import { internalMutation, internalQuery } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import { reviewScopeValidator, specStatusValidator } from "./schema";
 
@@ -43,18 +42,18 @@ export const createDraft = internalMutation({
 
 export const publish = internalMutation({
   args: {
-    specId: v.string(),
+    specId: v.id("reviewSpecs"),
   },
   handler: async (ctx, args) => {
-    const spec = await ctx.db.get(args.specId as Id<"reviewSpecs">);
+    const spec = await ctx.db.get(args.specId);
     if (!spec) {
-      throw new Error(`Review spec not found: ${args.specId}`);
+      throw new ConvexError(`Review spec not found: ${args.specId}`);
     }
     if (spec.status !== "draft") {
-      throw new Error("Can only publish specs in draft status");
+      throw new ConvexError("Can only publish specs in draft status");
     }
     const now = new Date().toISOString();
-    await ctx.db.patch(args.specId as Id<"reviewSpecs">, {
+    await ctx.db.patch(args.specId, {
       status: "published",
       version: spec.version + 1,
       updatedAt: now,

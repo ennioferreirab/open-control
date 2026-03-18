@@ -123,6 +123,5 @@ describe("authoringContract", () => {
       };
       expect(resp.phase).toBe("discovery");
     });
-
   });
 });

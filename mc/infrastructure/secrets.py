@@ -25,8 +25,8 @@ def _known_secret_env_names() -> set[str]:
 
 def _populate_provider_secret_env(
     target: dict[str, str],
-    spec: "ProviderSpec",
-    provider_cfg: "ProviderConfig | dict | None",
+    spec: ProviderSpec,
+    provider_cfg: ProviderConfig | dict | None,
 ) -> None:
     """Add provider secrets if they are not already present."""
     if provider_cfg is None:
@@ -47,7 +47,7 @@ def _populate_provider_secret_env(
         target[env_name] = value
 
 
-def resolve_secret_env(config: "Config | None" = None) -> dict[str, str]:
+def resolve_secret_env(config: Config | None = None) -> dict[str, str]:
     """Resolve secret env vars from the current env and nanobot config."""
     from nanobot.config.loader import load_config
     from nanobot.providers.registry import PROVIDERS, find_by_name
@@ -81,7 +81,7 @@ def resolve_secret_env(config: "Config | None" = None) -> dict[str, str]:
 
 def build_subprocess_env(
     extra_env: dict[str, str] | None = None,
-    config: "Config | None" = None,
+    config: Config | None = None,
 ) -> dict[str, str]:
     """Return a full subprocess environment with resolved secrets injected."""
     env = os.environ.copy()

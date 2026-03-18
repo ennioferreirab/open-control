@@ -1,8 +1,6 @@
 """Unit tests for mc.bridge.client module."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from mc.bridge.client import BridgeClient
 
@@ -10,7 +8,7 @@ from mc.bridge.client import BridgeClient
 class TestBridgeClientInit:
     @patch("mc.bridge.client.ConvexClient")
     def test_creates_client(self, MockClient):
-        client = BridgeClient("https://test.convex.cloud")
+        BridgeClient("https://test.convex.cloud")
         MockClient.assert_called_once_with("https://test.convex.cloud")
 
     @patch("mc.bridge.client.ConvexClient")
@@ -67,9 +65,11 @@ class TestBridgeClientSubscribe:
     @patch("mc.bridge.client.ConvexClient")
     def test_subscribe_yields_converted_results(self, MockClient):
         mock_client = MockClient.return_value
-        mock_client.subscribe.return_value = iter([
-            [{"_id": "1", "assignedAgent": "bob"}],
-        ])
+        mock_client.subscribe.return_value = iter(
+            [
+                [{"_id": "1", "assignedAgent": "bob"}],
+            ]
+        )
 
         client = BridgeClient("https://test.convex.cloud")
         results = list(client.subscribe("tasks:list"))

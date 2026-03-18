@@ -48,7 +48,9 @@ server.tool(
     if (data.error) {
       return { content: [{ type: "text", text: `Error: ${data.error}` }], isError: true };
     }
-    return { content: [{ type: "text", text: `Agent spec created and published: ${data.specId}` }] };
+    return {
+      content: [{ type: "text", text: `Agent spec created and published: ${data.specId}` }],
+    };
   },
 );
 

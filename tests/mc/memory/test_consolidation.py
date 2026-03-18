@@ -11,8 +11,8 @@ import pytest
 
 from mc.memory.consolidation import (
     HISTORY_CONSOLIDATION_THRESHOLD_CHARS,
-    is_history_above_threshold,
     consolidate_history_and_memory,
+    is_history_above_threshold,
 )
 
 _REAL_NAMED_TEMPFILE = _tempfile.NamedTemporaryFile
@@ -28,7 +28,9 @@ def test_is_history_above_threshold_small_file(tmp_path):
 
 
 def test_is_history_above_threshold_large_file(tmp_path):
-    (tmp_path / "HISTORY.md").write_text("x" * (HISTORY_CONSOLIDATION_THRESHOLD_CHARS + 1), encoding="utf-8")
+    (tmp_path / "HISTORY.md").write_text(
+        "x" * (HISTORY_CONSOLIDATION_THRESHOLD_CHARS + 1), encoding="utf-8"
+    )
     assert is_history_above_threshold(tmp_path) is True
 
 
@@ -65,15 +67,24 @@ async def test_consolidate_archives_and_clears(tmp_path):
     (tmp_path / "HISTORY.md").write_text("[2026-03-05] Built memory system.", encoding="utf-8")
     (tmp_path / "MEMORY.md").write_text("Old facts.", encoding="utf-8")
 
-    response = _make_llm_response("# Consolidated Memory\n\nBuilt memory system. Old facts preserved.")
+    response = _make_llm_response(
+        "# Consolidated Memory\n\nBuilt memory system. Old facts preserved."
+    )
     temp_paths: list[Path] = []
     provider = MagicMock()
     provider.chat = AsyncMock(return_value=response)
 
-    with _force_small_threshold(), \
-         patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")), \
-         patch("mc.memory.index.MemoryIndex"), \
-         patch("tempfile.NamedTemporaryFile", side_effect=_capture_named_tempfile_factory(temp_paths)):
+    with (
+        _force_small_threshold(),
+        patch(
+            "mc.memory.consolidation.create_provider",
+            return_value=(provider, "resolved-medium-model"),
+        ),
+        patch("mc.memory.index.MemoryIndex"),
+        patch(
+            "tempfile.NamedTemporaryFile", side_effect=_capture_named_tempfile_factory(temp_paths)
+        ),
+    ):
         ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is True
@@ -111,7 +122,10 @@ async def test_consolidate_below_threshold_is_noop(tmp_path):
     history_file = tmp_path / "HISTORY.md"
     history_file.write_text("small history", encoding="utf-8")
 
-    with patch("mc.memory.consolidation.create_provider", side_effect=AssertionError("should not call provider")):
+    with patch(
+        "mc.memory.consolidation.create_provider",
+        side_effect=AssertionError("should not call provider"),
+    ):
         ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is True
@@ -126,7 +140,13 @@ async def test_consolidate_llm_failure(tmp_path):
     provider = MagicMock()
     provider.chat = AsyncMock(side_effect=RuntimeError("boom"))
 
-    with _force_small_threshold(), patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")):
+    with (
+        _force_small_threshold(),
+        patch(
+            "mc.memory.consolidation.create_provider",
+            return_value=(provider, "resolved-medium-model"),
+        ),
+    ):
         ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is False
@@ -142,7 +162,13 @@ async def test_consolidate_no_tool_call(tmp_path):
     provider = MagicMock()
     provider.chat = AsyncMock(return_value=response)
 
-    with _force_small_threshold(), patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")):
+    with (
+        _force_small_threshold(),
+        patch(
+            "mc.memory.consolidation.create_provider",
+            return_value=(provider, "resolved-medium-model"),
+        ),
+    ):
         ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is False
@@ -155,7 +181,13 @@ async def test_consolidate_empty_memory_returned(tmp_path):
     provider = MagicMock()
     provider.chat = AsyncMock(return_value=response)
 
-    with _force_small_threshold(), patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")):
+    with (
+        _force_small_threshold(),
+        patch(
+            "mc.memory.consolidation.create_provider",
+            return_value=(provider, "resolved-medium-model"),
+        ),
+    ):
         ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is False
@@ -176,7 +208,13 @@ async def test_consolidate_preserves_tail_arriving_during_llm(tmp_path):
 
     provider.chat = AsyncMock(side_effect=_chat)
 
-    with _force_small_threshold(), patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")):
+    with (
+        _force_small_threshold(),
+        patch(
+            "mc.memory.consolidation.create_provider",
+            return_value=(provider, "resolved-medium-model"),
+        ),
+    ):
         ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is True
@@ -202,9 +240,16 @@ async def test_consolidate_aborts_on_non_append_conflict(tmp_path):
 
     provider.chat = AsyncMock(side_effect=_chat)
 
-    with _force_small_threshold(), \
-         patch("mc.memory.consolidation.create_provider", return_value=(provider, "resolved-medium-model")), \
-         patch("tempfile.NamedTemporaryFile", side_effect=_capture_named_tempfile_factory(temp_paths)):
+    with (
+        _force_small_threshold(),
+        patch(
+            "mc.memory.consolidation.create_provider",
+            return_value=(provider, "resolved-medium-model"),
+        ),
+        patch(
+            "tempfile.NamedTemporaryFile", side_effect=_capture_named_tempfile_factory(temp_paths)
+        ),
+    ):
         ok = await consolidate_history_and_memory(tmp_path)
 
     assert ok is False

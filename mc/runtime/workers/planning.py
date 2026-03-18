@@ -168,7 +168,7 @@ class PlanningWorker:
         # Layer 3 defense: bypass the LLM planner for workflow missions whose
         # execution plan was already compiled at launch time.  Invoking the
         # lead-agent planner here would overwrite the workflow plan.
-        raw_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
+        raw_plan = task_data.get("execution_plan") or {}
         if is_workflow_owned_task(task_data) and is_workflow_generated_plan(raw_plan):
             logger.info(
                 "[planning] Workflow task '%s' (%s): skipping LLM planner, using pre-compiled plan",
@@ -378,7 +378,9 @@ class PlanningWorker:
                 title,
                 len(created_step_ids),
             )
-            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
+            asyncio.create_task(  # noqa: RUF006
+                self._step_dispatcher.dispatch_steps(task_id, created_step_ids)
+            )
             logger.info(
                 "[planning] Task '%s': step dispatch started (autonomous mode)",
                 title,
@@ -458,7 +460,9 @@ class PlanningWorker:
                 title,
                 len(created_step_ids),
             )
-            asyncio.create_task(self._step_dispatcher.dispatch_steps(task_id, created_step_ids))
+            asyncio.create_task(  # noqa: RUF006
+                self._step_dispatcher.dispatch_steps(task_id, created_step_ids)
+            )
             logger.info(
                 "[planning] Workflow task '%s': step dispatch started (autonomous mode)",
                 title,

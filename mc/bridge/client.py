@@ -7,7 +7,8 @@ query, mutation, and subscribe operations with key conversion.
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any, Protocol, runtime_checkable
 
 from convex import ConvexClient
 
@@ -15,6 +16,24 @@ from mc.bridge.key_conversion import _convert_keys_to_camel, _convert_keys_to_sn
 from mc.bridge.retry import mutation_with_retry
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class BridgeClientProtocol(Protocol):
+    """Structural protocol satisfied by both BridgeClient and _BridgeClientAdapter."""
+
+    @property
+    def raw_client(self) -> Any: ...
+
+    def query(self, function_name: str, args: dict[str, Any] | None = None) -> Any: ...
+
+    def mutation(self, function_name: str, args: dict[str, Any] | None = None) -> Any: ...
+
+    def subscribe(
+        self, function_name: str, args: dict[str, Any] | None = None
+    ) -> Iterator[Any]: ...
+
+    def close(self) -> None: ...
 
 
 class BridgeClient:
@@ -69,9 +88,7 @@ class BridgeClient:
         """
         return mutation_with_retry(self._client, function_name, args)
 
-    def subscribe(
-        self, function_name: str, args: dict[str, Any] | None = None
-    ) -> Iterator[Any]:
+    def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         """Subscribe to a Convex query for real-time updates.
 
         Args:
@@ -89,5 +106,6 @@ class BridgeClient:
     def close(self) -> None:
         """Close the Convex client connection."""
         logger.info("ConvexBridge closing connection")
-        if hasattr(self._client, "close"):
-            self._client.close()
+        close_fn = getattr(self._client, "close", None)
+        if close_fn is not None:
+            close_fn()

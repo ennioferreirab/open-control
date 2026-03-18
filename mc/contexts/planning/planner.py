@@ -14,6 +14,10 @@ import asyncio
 import logging
 import time
 import uuid
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mc.bridge import ConvexBridge
 
 from mc.contexts.planning.parser import (  # noqa: F401
     STANDARD_TOOLS,
@@ -161,7 +165,7 @@ Write detailed step descriptions that the executor agent can act on autonomously
 class TaskPlanner:
     """Plans task execution using LLM reasoning."""
 
-    def __init__(self, bridge: object | None = None) -> None:
+    def __init__(self, bridge: ConvexBridge | None = None) -> None:
         self._bridge = bridge
 
     async def plan_task(

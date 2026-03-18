@@ -1,8 +1,7 @@
 """Tests for mc.hooks.discovery — handler auto-discovery from directory."""
+
 from __future__ import annotations
 
-import sys
-import types
 from pathlib import Path
 from unittest.mock import patch
 
@@ -77,7 +76,9 @@ class TestDiscoveryEdgeCases:
         fake_init.write_text("")
         # No handlers/ subdirectory
 
-        with patch.object(Path, "parent", new_callable=lambda: property(lambda self: tmp_path / "hooks")):
+        with patch.object(
+            Path, "parent", new_callable=lambda: property(lambda self: tmp_path / "hooks")
+        ):
             # Simpler approach: patch __file__ in the module
             original_file = disc.__file__
             try:

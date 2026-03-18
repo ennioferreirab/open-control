@@ -2,7 +2,7 @@ import * as React from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { ThreadInput } from "@/features/thread/components/ThreadInput";
-import { api } from "../convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import { getFunctionName } from "convex/server";
 
 // Track mutations by the stable Convex function name (e.g. "messages:postMentionMessage").

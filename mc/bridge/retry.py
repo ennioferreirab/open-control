@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from convex import ConvexClient
@@ -86,6 +86,7 @@ def mutation_with_retry(
         last_exception,
     )
     _write_error_activity(client, function_name, str(last_exception))
+    assert last_exception is not None
     raise last_exception
 
 
@@ -96,7 +97,7 @@ def _write_error_activity(client: ConvexClient, mutation_name: str, error_messag
     the error is silently logged -- no cascading exceptions.
     """
     try:
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         client.mutation(
             "activities:create",
             {

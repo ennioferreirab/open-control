@@ -48,7 +48,11 @@ vi.mock("@/components/ui/input", () => ({
 }));
 
 vi.mock("@/components/ui/checkbox", () => ({
-  Checkbox: ({ checked, onCheckedChange, disabled }: {
+  Checkbox: ({
+    checked,
+    onCheckedChange,
+    disabled,
+  }: {
     checked: boolean;
     onCheckedChange: () => void;
     disabled?: boolean;
@@ -119,10 +123,13 @@ describe("SkillsSelector", () => {
 
     // Click on an unchecked skill (memory is unchecked because it's not in selected)
     // Find the label containing "memory" and click its checkbox
-    const memoryCheckbox = screen.getAllByRole("checkbox").find(
-      (el) => !el.closest("label")?.textContent?.includes("github")
-        && el.closest("label")?.textContent?.includes("memory")
-    );
+    const memoryCheckbox = screen
+      .getAllByRole("checkbox")
+      .find(
+        (el) =>
+          !el.closest("label")?.textContent?.includes("github") &&
+          el.closest("label")?.textContent?.includes("memory"),
+      );
     if (memoryCheckbox) {
       fireEvent.change(memoryCheckbox);
     }
@@ -141,9 +148,9 @@ describe("SkillsSelector", () => {
     render(<SkillsSelector selected={["memory"]} onChange={vi.fn()} />);
 
     // Find the disabled checkbox (memory is always-loaded)
-    const disabledCheckboxes = screen.getAllByRole("checkbox").filter(
-      (el) => (el as HTMLInputElement).disabled
-    );
+    const disabledCheckboxes = screen
+      .getAllByRole("checkbox")
+      .filter((el) => (el as HTMLInputElement).disabled);
     expect(disabledCheckboxes.length).toBeGreaterThan(0);
   });
 
@@ -155,9 +162,7 @@ describe("SkillsSelector", () => {
   });
 
   it("pins selected skills to top of list", () => {
-    const { container } = render(
-      <SkillsSelector selected={["summarize"]} onChange={vi.fn()} />
-    );
+    const { container } = render(<SkillsSelector selected={["summarize"]} onChange={vi.fn()} />);
 
     // Find all skill name elements - selected should appear before unselected
     const labels = container.querySelectorAll("label");
@@ -170,9 +175,7 @@ describe("SkillsSelector", () => {
   });
 
   it("shows availability indicator for skills", () => {
-    const { container } = render(
-      <SkillsSelector selected={[]} onChange={vi.fn()} />
-    );
+    const { container } = render(<SkillsSelector selected={[]} onChange={vi.fn()} />);
 
     // Available skills get green dot, unavailable get amber
     const greenDots = container.querySelectorAll(".bg-green-500");

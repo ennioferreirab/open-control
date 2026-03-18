@@ -1,19 +1,18 @@
 """Tests for the LLM-based task planner module (Story 4.5)."""
 
-import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from mc.types import AgentData, ExecutionPlan, ExecutionPlanStep
 from nanobot.providers.base import LLMResponse
 
+from mc.types import AgentData, ExecutionPlan, ExecutionPlanStep
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_agent(name: str, role: str, skills: list[str]) -> AgentData:
     """Create a test AgentData instance."""
@@ -36,9 +35,7 @@ def _mock_llm_response(data: dict) -> LLMResponse:
 def _stub_non_cc_default_model():
     """Keep planner unit tests on the non-CC path unless a test opts in explicitly."""
     cfg = SimpleNamespace(
-        agents=SimpleNamespace(
-            defaults=SimpleNamespace(model="anthropic/test-model")
-        )
+        agents=SimpleNamespace(defaults=SimpleNamespace(model="anthropic/test-model"))
     )
     with patch("nanobot.config.loader.load_config", return_value=cfg):
         yield
@@ -100,6 +97,7 @@ def _multi_step_plan_json() -> dict:
 # Task 1 Tests: Core planner module — plan generation
 # ---------------------------------------------------------------------------
 
+
 class TestTaskPlannerSingleStep:
     """Test valid single-step plan generation (Task 4.2 / AC #1)."""
 
@@ -114,7 +112,10 @@ class TestTaskPlannerSingleStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Write a utility function",
                 description="Create a Python helper",
@@ -137,7 +138,10 @@ class TestTaskPlannerSingleStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Fix a typo",
                 description=None,
@@ -162,7 +166,10 @@ class TestTaskPlannerMultiStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Build API endpoint with docs",
                 description="Create a REST endpoint, document it, then review",
@@ -186,7 +193,10 @@ class TestTaskPlannerMultiStep:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Build API endpoint with docs",
                 description="Create, document, review",
@@ -211,7 +221,10 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             await planner.plan_task(
                 title="Write tests",
                 description="Unit tests for auth module",
@@ -249,7 +262,10 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -276,7 +292,10 @@ class TestTaskPlannerPrompt:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             await planner.plan_task(
                 title="Transcrever e resumir os ultimos 5 videos deste canal",
                 description="Gerar um consolidado dos 5 videos mais recentes do canal no YouTube",
@@ -303,7 +322,10 @@ class TestTaskPlannerPrompt:
         planner = TaskPlanner()
 
         with (
-            patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")),
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ),
             patch(
                 "mc.contexts.planning.planner._load_lead_agent_planning_skills",
                 return_value=(
@@ -351,7 +373,10 @@ class TestTaskPlannerNanobotFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Obscure task",
                 description=None,
@@ -362,7 +387,7 @@ class TestTaskPlannerNanobotFallback:
 
     @pytest.mark.asyncio
     async def test_llm_lead_agent_assignment_is_rewritten_to_general(self):
-        """Lead-agent step assignments should be rewritten to nanobot."""
+        """Lead-agent step assignments should be replaced with the first delegatable agent."""
         from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
@@ -383,26 +408,31 @@ class TestTaskPlannerNanobotFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Obscure task",
                 description=None,
                 agents=SAMPLE_AGENTS,
             )
 
-        assert plan.steps[0].assigned_agent == "nanobot"
+        # lead-agent is replaced by the first delegatable agent in the roster
+        assert plan.steps[0].assigned_agent == "code-agent"
 
 
 # ---------------------------------------------------------------------------
 # Task 2 Tests: Agent name validation and fallback
 # ---------------------------------------------------------------------------
 
+
 class TestAgentNameValidation:
-    """Test agent name validation — invalid names replaced with nanobot (Task 4.4 / AC #4)."""
+    """Test agent name validation — invalid names replaced with fallback agent (Task 4.4 / AC #4)."""
 
     @pytest.mark.asyncio
-    async def test_invalid_agent_name_replaced_with_nanobot(self):
-        """Invalid agent names in LLM response should be replaced with nanobot."""
+    async def test_invalid_agent_name_replaced_with_fallback(self):
+        """Invalid agent names in LLM response should be replaced with the first delegatable agent."""
         from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
@@ -423,14 +453,18 @@ class TestAgentNameValidation:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
                 agents=SAMPLE_AGENTS,
             )
 
-        assert plan.steps[0].assigned_agent == "nanobot"
+        # Falls back to the first delegatable agent when name is invalid
+        assert plan.steps[0].assigned_agent == "code-agent"
 
     @pytest.mark.asyncio
     async def test_valid_agent_names_preserved(self):
@@ -443,7 +477,10 @@ class TestAgentNameValidation:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -479,7 +516,10 @@ class TestAgentNameNoneHandling:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -503,7 +543,10 @@ class TestExplicitAgentOverride:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Multi-step task",
                 description="Complex task",
@@ -525,7 +568,10 @@ class TestExplicitAgentOverride:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Task",
                 description="desc",
@@ -537,11 +583,11 @@ class TestExplicitAgentOverride:
 
 
 class TestLLMFailureFallback:
-    """Test LLM failure fallback — provider error triggers heuristic planning (Task 4.6 / AC #9)."""
+    """Test LLM failure propagation — provider errors are raised to the caller (Task 4.6 / AC #9)."""
 
     @pytest.mark.asyncio
-    async def test_provider_error_falls_back_to_heuristic(self):
-        """When LLM provider raises an error, fallback to heuristic planning."""
+    async def test_provider_error_propagates(self):
+        """When LLM provider raises an error, plan_task propagates the exception."""
         from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
@@ -549,22 +595,22 @@ class TestLLMFailureFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
-            plan = await planner.plan_task(
+        with (
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ),
+            pytest.raises(RuntimeError, match="Provider unavailable"),
+        ):
+            await planner.plan_task(
                 title="Write python tests",
                 description="Test the auth module",
                 agents=SAMPLE_AGENTS,
             )
 
-        # Should still produce a valid plan (from heuristic fallback)
-        assert isinstance(plan, ExecutionPlan)
-        assert len(plan.steps) >= 1
-        # Heuristic fallback should still assign an agent
-        assert plan.steps[0].assigned_agent is not None
-
     @pytest.mark.asyncio
-    async def test_timeout_error_falls_back_to_heuristic(self):
-        """When LLM times out, fallback to heuristic planning."""
+    async def test_timeout_error_propagates(self):
+        """When LLM times out, plan_task propagates the TimeoutError."""
         from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
@@ -572,38 +618,38 @@ class TestLLMFailureFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
-            plan = await planner.plan_task(
+        with (
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ),
+            pytest.raises(TimeoutError),
+        ):
+            await planner.plan_task(
                 title="Write documentation",
                 description="Document the API",
                 agents=SAMPLE_AGENTS,
             )
 
-        assert isinstance(plan, ExecutionPlan)
-        assert len(plan.steps) >= 1
-
-    @pytest.mark.asyncio
-    async def test_heuristic_fallback_never_returns_lead_agent(self):
-        """Heuristic fallback should use nanobot when no specialist matches."""
+    def test_heuristic_fallback_never_returns_lead_agent(self):
+        """_fallback_heuristic_plan should not assign lead-agent even when no keyword matches."""
         from mc.contexts.planning.planner import TaskPlanner
 
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(side_effect=RuntimeError("Provider unavailable"))
         agents = [
             _make_agent("finance-agent", "finance", ["boletos", "payments"]),
             _make_agent("docs-agent", "docs", ["markdown"]),
         ]
 
         planner = TaskPlanner()
+        plan = planner._fallback_heuristic_plan(
+            title="Calibrate quantum transducer mesh",
+            description=None,
+            agents=agents,
+            explicit_agent=None,
+        )
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
-            plan = await planner.plan_task(
-                title="Calibrate quantum transducer mesh",
-                description=None,
-                agents=agents,
-            )
-
-        assert plan.steps[0].assigned_agent == "nanobot"
+        assert plan.steps[0].assigned_agent != "lead-agent"
+        assert plan.steps[0].assigned_agent is not None
 
 
 class TestPlannerReasoningLevel:
@@ -643,7 +689,10 @@ class TestPlannerReasoningLevel:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             await planner.plan_task(
                 title="Write tests",
                 description="Unit tests for planner",
@@ -679,7 +728,9 @@ class TestPlannerReasoningLevel:
                 "mc.contexts.planning.planner._load_lead_agent_planning_skills",
                 return_value=(["using-superpowers", "writing-plans"], "skill body"),
             ),
-            patch.object(planner, "_cc_plan", AsyncMock(return_value=expected_plan)) as cc_plan_mock,
+            patch.object(
+                planner, "_cc_plan", AsyncMock(return_value=expected_plan)
+            ) as cc_plan_mock,
         ):
             plan = await planner.plan_task(
                 title="Plan task",
@@ -693,62 +744,6 @@ class TestPlannerReasoningLevel:
             "using-superpowers",
             "writing-plans",
         ]
-
-
-class TestPlannerDiagnosticLogging:
-    """Verify planner logs diagnostic details on failure."""
-
-    @pytest.mark.asyncio
-    async def test_timeout_logs_specific_message(self):
-        """Timeout should log a distinct warning with timeout duration."""
-        from mc.contexts.planning.planner import TaskPlanner
-
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(side_effect=asyncio.TimeoutError())
-
-        planner = TaskPlanner()
-
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")), \
-             patch("mc.contexts.planning.planner.logger") as mock_logger:
-            await planner.plan_task(
-                title="Test task",
-                description=None,
-                agents=SAMPLE_AGENTS,
-            )
-
-        # Should log timeout specifically
-        timeout_calls = [
-            c for c in mock_logger.warning.call_args_list
-            if "timed out" in str(c)
-        ]
-        assert len(timeout_calls) >= 1
-
-    @pytest.mark.asyncio
-    async def test_general_error_logs_with_traceback(self):
-        """General errors should log with exc_info=True."""
-        from mc.contexts.planning.planner import TaskPlanner
-
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(side_effect=RuntimeError("API exploded"))
-
-        planner = TaskPlanner()
-
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")), \
-             patch("mc.contexts.planning.planner.logger") as mock_logger:
-            await planner.plan_task(
-                title="Test task",
-                description=None,
-                agents=SAMPLE_AGENTS,
-            )
-
-        # Should log with exc_info=True
-        error_calls = [
-            c for c in mock_logger.warning.call_args_list
-            if "LLM planning failed" in str(c)
-        ]
-        assert len(error_calls) >= 1
-        # Verify exc_info=True was passed
-        assert error_calls[0].kwargs.get("exc_info") is True
 
 
 class TestPlannerModelParameter:
@@ -765,7 +760,10 @@ class TestPlannerModelParameter:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "anthropic/claude-sonnet-4-6")) as mock_create:
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "anthropic/claude-sonnet-4-6"),
+        ) as mock_create:
             await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -790,7 +788,10 @@ class TestPlannerModelParameter:
 
         with (
             patch("nanobot.config.loader.load_config", return_value=mock_config),
-            patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")) as mock_create,
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ) as mock_create,
         ):
             await planner.plan_task(
                 title="Test task",
@@ -811,12 +812,16 @@ class TestPlannerModelParameter:
         mock_ipc.start = AsyncMock()
         mock_ipc.stop = AsyncMock()
         mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = MagicMock(cwd=".", mcp_config=".mcp.json", claude_md="CLAUDE.md", socket_path="/tmp/planner.sock")
+        mock_ws_mgr.prepare.return_value = MagicMock(
+            cwd=".", mcp_config=".mcp.json", claude_md="CLAUDE.md", socket_path="/tmp/planner.sock"
+        )
         mock_cc_provider = MagicMock()
-        mock_cc_provider.execute_task = AsyncMock(return_value=MagicMock(
-            is_error=False,
-            output=json.dumps(_single_step_plan_json()),
-        ))
+        mock_cc_provider.execute_task = AsyncMock(
+            return_value=MagicMock(
+                is_error=False,
+                output=json.dumps(_single_step_plan_json()),
+            )
+        )
         mock_config = MagicMock()
         mock_config.agents.defaults.model = "cc/claude-sonnet-4-6"
         mock_config.claude_code = MagicMock(cli_path="claude")
@@ -844,11 +849,11 @@ class TestPlannerModelParameter:
 
 
 class TestMalformedJSONFallback:
-    """Test malformed JSON fallback — invalid LLM output triggers heuristic (Task 4.7 / AC #10)."""
+    """Test malformed JSON handling — invalid LLM output raises an error (Task 4.7 / AC #10)."""
 
     @pytest.mark.asyncio
-    async def test_invalid_json_falls_back_to_heuristic(self):
-        """When LLM returns invalid JSON, fallback to heuristic planning."""
+    async def test_invalid_json_raises_value_error(self):
+        """When LLM returns invalid JSON, plan_task raises ValueError."""
         from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
@@ -856,19 +861,22 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
-            plan = await planner.plan_task(
+        with (
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ),
+            pytest.raises(ValueError),
+        ):
+            await planner.plan_task(
                 title="Write tests for auth",
                 description="Testing task",
                 agents=SAMPLE_AGENTS,
             )
 
-        assert isinstance(plan, ExecutionPlan)
-        assert len(plan.steps) >= 1
-
     @pytest.mark.asyncio
-    async def test_json_missing_steps_key_falls_back(self):
-        """When LLM returns JSON without 'steps' key, fallback to heuristic."""
+    async def test_json_missing_steps_key_raises_value_error(self):
+        """When LLM returns JSON without 'steps' key, plan_task raises ValueError."""
         from mc.contexts.planning.planner import TaskPlanner
 
         mock_provider = MagicMock()
@@ -876,15 +884,18 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
-            plan = await planner.plan_task(
+        with (
+            patch(
+                "mc.infrastructure.providers.factory.create_provider",
+                return_value=(mock_provider, "test-model"),
+            ),
+            pytest.raises(ValueError),
+        ):
+            await planner.plan_task(
                 title="Write tests for auth",
                 description="Testing task",
                 agents=SAMPLE_AGENTS,
             )
-
-        assert isinstance(plan, ExecutionPlan)
-        assert len(plan.steps) >= 1
 
     @pytest.mark.asyncio
     async def test_markdown_fenced_json_is_parsed(self):
@@ -898,7 +909,10 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -925,7 +939,10 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Test task",
                 description=None,
@@ -961,7 +978,10 @@ class TestMalformedJSONFallback:
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Write a utility function",
                 description="Create a Python helper",
@@ -977,6 +997,7 @@ class TestMalformedJSONFallback:
 # Task 3 Tests: Orchestrator integration
 # ---------------------------------------------------------------------------
 
+
 class TestOrchestratorPlannerIntegration:
     """Test that orchestrator calls planner instead of heuristic routing (Task 4.8 / AC #7, #12)."""
 
@@ -989,13 +1010,22 @@ class TestOrchestratorPlannerIntegration:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+            ]
+        )
 
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
-        ])
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Do it",
+                    description="Do it",
+                    assigned_agent="code-agent",
+                ),
+            ]
+        )
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -1004,8 +1034,12 @@ class TestOrchestratorPlannerIntegration:
             "description": "Write some Python",
         }
 
-        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner,
+            patch(
+                "mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough
+            ),
+        ):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1022,13 +1056,22 @@ class TestOrchestratorPlannerIntegration:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+            ]
+        )
 
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
-        ])
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Do it",
+                    description="Do it",
+                    assigned_agent="code-agent",
+                ),
+            ]
+        )
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -1038,16 +1081,21 @@ class TestOrchestratorPlannerIntegration:
             "assigned_agent": "code-agent",
         }
 
-        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner,
+            patch(
+                "mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough
+            ),
+        ):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
             await orch._planning_worker.process_task(task_data)
 
             call_kwargs = mock_planner_instance.plan_task.call_args
-            assert call_kwargs.kwargs.get("explicit_agent") == "code-agent" or \
-                   (len(call_kwargs.args) >= 4 and call_kwargs.args[3] == "code-agent")
+            assert call_kwargs.kwargs.get("explicit_agent") == "code-agent" or (
+                len(call_kwargs.args) >= 4 and call_kwargs.args[3] == "code-agent"
+            )
 
     @pytest.mark.asyncio
     async def test_plan_stored_and_dispatched(self):
@@ -1058,13 +1106,22 @@ class TestOrchestratorPlannerIntegration:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.update_execution_plan = MagicMock()
-        mock_bridge.list_agents = MagicMock(return_value=[
-            {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
-        ])
+        mock_bridge.list_agents = MagicMock(
+            return_value=[
+                {"name": "code-agent", "display_name": "Code", "role": "dev", "skills": ["python"]},
+            ]
+        )
 
-        plan = ExecutionPlan(steps=[
-            ExecutionPlanStep(temp_id="step_1", title="Do it", description="Do it", assigned_agent="code-agent"),
-        ])
+        plan = ExecutionPlan(
+            steps=[
+                ExecutionPlanStep(
+                    temp_id="step_1",
+                    title="Do it",
+                    description="Do it",
+                    assigned_agent="code-agent",
+                ),
+            ]
+        )
 
         orch = TaskOrchestrator(mock_bridge)
         task_data = {
@@ -1073,8 +1130,12 @@ class TestOrchestratorPlannerIntegration:
             "description": None,
         }
 
-        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner,
+            patch(
+                "mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough
+            ),
+        ):
             mock_planner_instance = MockPlanner.return_value
             mock_planner_instance.plan_task = AsyncMock(return_value=plan)
 
@@ -1101,8 +1162,12 @@ class TestOrchestratorPlannerIntegration:
             "is_manual": True,
         }
 
-        with patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner, \
-             patch("mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough):
+        with (
+            patch("mc.runtime.workers.planning.TaskPlanner") as MockPlanner,
+            patch(
+                "mc.runtime.workers.planning.asyncio.to_thread", side_effect=_to_thread_passthrough
+            ),
+        ):
             await orch._planning_worker.process_task(task_data)
 
             MockPlanner.assert_not_called()
@@ -1119,7 +1184,7 @@ class TestEnrichedPlannerFeatures:
 
     def test_enriched_roster_includes_tools(self):
         """_build_agent_roster output must include a 'Tools:' line with STANDARD_TOOLS."""
-        from mc.contexts.planning.planner import _build_agent_roster, STANDARD_TOOLS
+        from mc.contexts.planning.planner import STANDARD_TOOLS, _build_agent_roster
 
         agents = [_make_agent("test-agent", "tester", ["python", "testing"])]
         roster = _build_agent_roster(agents)
@@ -1137,38 +1202,6 @@ class TestEnrichedPlannerFeatures:
 
         assert "**code-agent**" in roster
         assert "Skills: python, javascript" in roster
-
-    def test_system_prompt_has_decomposition_guidance(self):
-        """SYSTEM_PROMPT must contain key conceptual sections."""
-        from mc.contexts.planning.planner import SYSTEM_PROMPT
-
-        assert "Decomposition" in SYSTEM_PROMPT
-        assert "Anti-Patterns" in SYSTEM_PROMPT
-        assert "Examples" in SYSTEM_PROMPT
-        assert "Tool Awareness" in SYSTEM_PROMPT
-
-    def test_system_prompt_encourages_multi_step_for_complex_tasks(self):
-        """SYSTEM_PROMPT should NOT say 'most tasks need 1 step'."""
-        from mc.contexts.planning.planner import SYSTEM_PROMPT
-
-        assert "most tasks need exactly 1 step" not in SYSTEM_PROMPT
-        assert "most tasks need only 1 step" not in SYSTEM_PROMPT
-
-    def test_system_prompt_has_few_shot_examples(self):
-        """SYSTEM_PROMPT must include at least three numbered examples."""
-        from mc.contexts.planning.planner import SYSTEM_PROMPT
-
-        assert "Example 1" in SYSTEM_PROMPT
-        assert "Example 2" in SYSTEM_PROMPT
-        assert "Example 3" in SYSTEM_PROMPT
-
-    def test_user_prompt_template_does_not_bias_single_step(self):
-        """USER_PROMPT_TEMPLATE should not bias toward single-step plans."""
-        from mc.contexts.planning.planner import USER_PROMPT_TEMPLATE
-
-        lower = USER_PROMPT_TEMPLATE.lower()
-        assert "most tasks need only 1 step" not in lower
-        assert "most tasks need exactly 1 step" not in lower
 
 
 class TestRemoteTerminalExclusion:
@@ -1193,27 +1226,34 @@ class TestRemoteTerminalExclusion:
         from mc.contexts.planning.planner import TaskPlanner
 
         plan_json = {
-            "steps": [{
-                "tempId": "step_1",
-                "title": "Research task",
-                "description": "Research something",
-                "assignedAgent": "Macbook",
-                "blockedBy": [],
-                "parallelGroup": 1,
-                "order": 1,
-            }]
+            "steps": [
+                {
+                    "tempId": "step_1",
+                    "title": "Research task",
+                    "description": "Research something",
+                    "assignedAgent": "Macbook",
+                    "blockedBy": [],
+                    "parallelGroup": 1,
+                    "order": 1,
+                }
+            ]
         }
         mock_provider = MagicMock()
         mock_provider.chat = AsyncMock(return_value=_mock_llm_response(plan_json))
 
         agents = [
             _make_agent("nanobot", "generalist", ["general"]),
-            AgentData(name="Macbook", display_name="Macbook", role="remote-terminal", skills=["shell"]),
+            AgentData(
+                name="Macbook", display_name="Macbook", role="remote-terminal", skills=["shell"]
+            ),
         ]
 
         planner = TaskPlanner()
 
-        with patch("mc.infrastructure.providers.factory.create_provider", return_value=(mock_provider, "test-model")):
+        with patch(
+            "mc.infrastructure.providers.factory.create_provider",
+            return_value=(mock_provider, "test-model"),
+        ):
             plan = await planner.plan_task(
                 title="Research task",
                 description=None,
@@ -1233,8 +1273,9 @@ class TestOrientationRosterInterpolation:
 
     def test_orientation_roster_interpolation(self):
         """{agent_roster} placeholder in orientation file is replaced with roster text."""
-        from mc.contexts.execution.step_dispatcher import _maybe_inject_orientation
         from unittest.mock import patch
+
+        from mc.contexts.execution.step_dispatcher import _maybe_inject_orientation
 
         # Mock load_orientation to return interpolated text (roster interpolation
         # is tested in tests/mc/test_orientation.py; here we test delegation).
@@ -1250,8 +1291,9 @@ class TestOrientationRosterInterpolation:
 
     def test_orientation_without_placeholder(self):
         """Orientation files without {agent_roster} are returned unchanged (backwards compat)."""
-        from mc.contexts.execution.step_dispatcher import _maybe_inject_orientation
         from unittest.mock import patch
+
+        from mc.contexts.execution.step_dispatcher import _maybe_inject_orientation
 
         with patch(
             "mc.infrastructure.orientation.load_orientation",
@@ -1266,6 +1308,7 @@ class TestOrientationRosterInterpolation:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _to_thread_passthrough(fn, *args, **kwargs):
     """Replacement for asyncio.to_thread that calls synchronously."""

@@ -46,16 +46,16 @@ def _make_workflow_task(task_id: str = "task-workflow-1") -> dict:
         "is_manual": False,
         "work_mode": "ai_workflow",
         "execution_plan": {
-            "generatedBy": "workflow",
-            "generatedAt": "2026-03-14T10:00:00.000Z",
+            "generated_by": "workflow",
+            "generated_at": "2026-03-14T10:00:00.000Z",
             "steps": [
                 {
-                    "tempId": "step-1",
+                    "temp_id": "step-1",
                     "title": "Research",
                     "description": "Research the topic",
-                    "assignedAgent": "researcher",
-                    "blockedBy": [],
-                    "parallelGroup": 1,
+                    "assigned_agent": "researcher",
+                    "blocked_by": [],
+                    "parallel_group": 1,
                     "order": 1,
                 }
             ],
@@ -218,8 +218,8 @@ class TestInboxWorkerAiWorkflowBypass:
             "is_manual": False,
             "work_mode": "ai_workflow",
             "execution_plan": {
-                "generatedBy": "lead-agent",  # NOT a workflow plan
-                "generatedAt": "2026-03-14T10:00:00.000Z",
+                "generated_by": "lead-agent",  # NOT a workflow plan
+                "generated_at": "2026-03-14T10:00:00.000Z",
                 "steps": [],
             },
         }

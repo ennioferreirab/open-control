@@ -17,10 +17,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (token !== expectedToken) {
-    return NextResponse.json(
-      { error: "Invalid access token" },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: "Invalid access token" }, { status: 401 });
   }
 
   const sessionValue = hashToken(expectedToken);

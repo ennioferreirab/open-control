@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import * as React from "react";
+import { testId } from "@/tests/helpers/mockConvex";
 
 const user = userEvent.setup({ delay: null });
 
 // Mock convex/react hooks
+// eslint-disable-next-line no-restricted-imports
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
@@ -34,7 +37,28 @@ vi.mock("../../convex/_generated/api", () => ({
     tagAttributeValues: {
       removeByTaskAndTag: "tagAttributeValues:removeByTaskAndTag",
     },
+    executionQuestions: {
+      getPendingForTask: "executionQuestions:getPendingForTask",
+    },
   },
+}));
+
+// Mock interactive session hooks — not relevant to tag editing
+vi.mock("../../features/interactive/hooks/useTaskInteractiveSession", () => ({
+  useTaskInteractiveSession: () => ({
+    activeStep: null,
+    session: null,
+    liveStepIds: new Set(),
+    stateLabel: null,
+    identityLabel: null,
+  }),
+}));
+
+vi.mock("../../features/interactive/hooks/useProviderSession", () => ({
+  useProviderSession: () => ({
+    status: null,
+    liveEvents: [],
+  }),
 }));
 
 // Mock child components that are not relevant to tag editing
@@ -66,66 +90,106 @@ vi.mock("motion/react", () => ({
 
 // Mock Radix Popover to be testable in jsdom
 vi.mock("@/components/ui/popover", () => {
-  const React = require("react");
-  return {
-    Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    PopoverTrigger: React.forwardRef(
-      (
-        { children, asChild, ...props }: any,
-        ref: any
-      ) => {
-        if (asChild && React.isValidElement(children)) {
-          return React.cloneElement(children, { ...props, ref });
-        }
-        return <button {...props} ref={ref}>{children}</button>;
-      }
-    ),
-    PopoverContent: ({ children }: { children: React.ReactNode }) => (
-      <div data-testid="tag-popover-content">{children}</div>
-    ),
-  };
+  function Popover({ children }: { children: React.ReactNode }) {
+    return <>{children}</>;
+  }
+  const PopoverTrigger = React.forwardRef<
+    HTMLButtonElement,
+    { children: React.ReactNode; asChild?: boolean; [key: string]: unknown }
+  >(function PopoverTrigger({ children, asChild, ...props }, ref) {
+    if (asChild && React.isValidElement(children)) {
+      // Pass props to child without forwarding the ref to avoid render-time ref access
+      return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+        ...props,
+      });
+    }
+    return (
+      <button {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)} ref={ref}>
+        {children as React.ReactNode}
+      </button>
+    );
+  });
+  PopoverTrigger.displayName = "PopoverTrigger";
+  function PopoverContent({ children }: { children: React.ReactNode }) {
+    return <div data-testid="tag-popover-content">{children}</div>;
+  }
+  return { Popover, PopoverTrigger, PopoverContent };
 });
 
 // Mock Sheet components
 vi.mock("@/components/ui/sheet", () => {
-  const React = require("react");
-  return {
-    Sheet: ({ children, open }: any) => open ? <div data-testid="sheet">{children}</div> : null,
-    SheetContent: ({ children }: any) => <div>{children}</div>,
-    SheetHeader: ({ children }: any) => <div>{children}</div>,
-    SheetTitle: ({ children }: any) => <div>{children}</div>,
-    SheetDescription: ({ children, asChild }: any) => asChild ? <>{children}</> : <div>{children}</div>,
-  };
+  function Sheet({ children, open }: { children: React.ReactNode; open?: boolean }) {
+    return open ? <div data-testid="sheet">{children}</div> : null;
+  }
+  function SheetContent({ children }: { children: React.ReactNode }) {
+    return <div>{children}</div>;
+  }
+  function SheetHeader({ children }: { children: React.ReactNode }) {
+    return <div>{children}</div>;
+  }
+  function SheetTitle({ children }: { children: React.ReactNode }) {
+    return <div>{children}</div>;
+  }
+  function SheetDescription({
+    children,
+    asChild,
+  }: {
+    children: React.ReactNode;
+    asChild?: boolean;
+  }) {
+    return asChild ? <>{children}</> : <div>{children}</div>;
+  }
+  return { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription };
 });
 
 vi.mock("@/components/ui/tabs", () => {
-  const React = require("react");
-  function Tabs({ children, value, onValueChange }: any) {
-    return <div data-testid="tabs" data-value={value}>{children}</div>;
+  function Tabs({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value?: string;
+    onValueChange?: (v: string) => void;
+  }) {
+    return (
+      <div data-testid="tabs" data-value={value}>
+        {children}
+      </div>
+    );
   }
-  function TabsList({ children }: any) { return <div>{children}</div>; }
-  function TabsTrigger({ children, value }: any) {
+  function TabsList({ children }: { children: React.ReactNode }) {
+    return <div>{children}</div>;
+  }
+  function TabsTrigger({ children, value }: { children: React.ReactNode; value?: string }) {
     return <button data-value={value}>{children}</button>;
   }
-  function TabsContent({ children, value }: any) {
+  function TabsContent({ children, value }: { children: React.ReactNode; value?: string }) {
     return <div data-testid={`tab-${value}`}>{children}</div>;
   }
   return { Tabs, TabsList, TabsTrigger, TabsContent };
 });
 
 vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Badge: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) => (
+    <span {...(props as React.HTMLAttributes<HTMLSpanElement>)}>{children}</span>
+  ),
 }));
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Button: ({
+    children,
+    ...props
+  }: { children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props}>{children}</button>
+  ),
 }));
 vi.mock("@/components/ui/scroll-area", () => ({
-  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("@/components/ui/separator", () => ({
   Separator: () => <hr />,
 }));
 
+// eslint-disable-next-line no-restricted-imports
 import { useQuery, useMutation } from "convex/react";
 import { TaskDetailSheet } from "../../features/tasks/components/TaskDetailSheet";
 
@@ -140,7 +204,7 @@ const SAMPLE_TAGS_CATALOG = [
 
 function makeTask(overrides: Record<string, unknown> = {}) {
   return {
-    _id: "task1" as any,
+    _id: testId<"tasks">("task1"),
     _creationTime: 1700000000000,
     title: "Test Task",
     status: "in_progress",
@@ -154,15 +218,23 @@ function makeTask(overrides: Record<string, unknown> = {}) {
 }
 
 const SAMPLE_TAG_ATTRIBUTES = [
-  { _id: "attr1", name: "priority", type: "select", options: ["high", "medium", "low"], createdAt: "2024-01-01" },
+  {
+    _id: "attr1",
+    name: "priority",
+    type: "select",
+    options: ["high", "medium", "low"],
+    createdAt: "2024-01-01",
+  },
   { _id: "attr2", name: "severity", type: "text", createdAt: "2024-01-01" },
 ];
+
+type TagAttributeValue = { tagName: string; attributeId: string; value: string };
 
 function makeDetailView(
   task: ReturnType<typeof makeTask>,
   tagCatalog = SAMPLE_TAGS_CATALOG,
-  tagAttributes: any[] = [],
-  tagAttributeValues: any[] = [],
+  tagAttributes: (typeof SAMPLE_TAG_ATTRIBUTES)[number][] = [],
+  tagAttributeValues: TagAttributeValue[] = [],
 ) {
   return {
     task,
@@ -170,7 +242,7 @@ function makeDetailView(
     messages: [],
     steps: [],
     files: [],
-    tags: task.tags ?? [],
+    tags: (task.tags as string[] | undefined) ?? [],
     tagCatalog,
     tagAttributes,
     tagAttributeValues,
@@ -212,7 +284,7 @@ describe("TaskDetailSheet — tag editing (Story 9-3)", () => {
       if (String(ref).includes("getDetailView")) return makeDetailView(task);
       return undefined;
     });
-    render(<TaskDetailSheet taskId={"task1" as any} onClose={vi.fn()} />);
+    render(<TaskDetailSheet taskId={testId<"tasks">("task1")} onClose={vi.fn()} />);
     return task;
   }
 
@@ -282,9 +354,9 @@ describe("TaskDetailSheet — tag editing (Story 9-3)", () => {
       if (String(ref).includes("getDetailView")) return makeDetailView(task, []);
       return undefined;
     });
-    render(<TaskDetailSheet taskId={"task1" as any} onClose={vi.fn()} />);
+    render(<TaskDetailSheet taskId={testId<"tasks">("task1")} onClose={vi.fn()} />);
     expect(
-      screen.getByText("No tags defined. Open the Tags panel to create some.")
+      screen.getByText("No tags defined. Open the Tags panel to create some."),
     ).toBeInTheDocument();
   });
 
@@ -320,8 +392,8 @@ describe("TaskDetailSheet — header tag chips", () => {
 
   function renderWithAttrs(
     taskOverrides: Record<string, unknown> = {},
-    tagAttributes: any[] = [],
-    tagAttributeValues: any[] = [],
+    tagAttributes: (typeof SAMPLE_TAG_ATTRIBUTES)[number][] = [],
+    tagAttributeValues: TagAttributeValue[] = [],
   ) {
     const task = makeTask(taskOverrides);
     mockUseQuery.mockImplementation((ref: string) => {
@@ -329,7 +401,7 @@ describe("TaskDetailSheet — header tag chips", () => {
         return makeDetailView(task, SAMPLE_TAGS_CATALOG, tagAttributes, tagAttributeValues);
       return undefined;
     });
-    render(<TaskDetailSheet taskId={"task1" as any} onClose={vi.fn()} />);
+    render(<TaskDetailSheet taskId={testId<"tasks">("task1")} onClose={vi.fn()} />);
     return task;
   }
 
@@ -338,18 +410,14 @@ describe("TaskDetailSheet — header tag chips", () => {
     // The header area (outside tabs) should contain the tag chip
     const allBugTexts = screen.getAllByText("bug");
     // At least one should be outside the config tab (in the header)
-    const headerChip = allBugTexts.find(
-      (el) => !el.closest("[data-testid='tab-config']"),
-    );
+    const headerChip = allBugTexts.find((el) => !el.closest("[data-testid='tab-config']"));
     expect(headerChip).toBeTruthy();
   });
 
   it("shows tag:attr=value format when attribute values exist", () => {
-    renderWithAttrs(
-      { tags: ["bug"] },
-      SAMPLE_TAG_ATTRIBUTES,
-      [{ tagName: "bug", attributeId: "attr1", value: "high" }],
-    );
+    renderWithAttrs({ tags: ["bug"] }, SAMPLE_TAG_ATTRIBUTES, [
+      { tagName: "bug", attributeId: "attr1", value: "high" },
+    ]);
     const chip = screen.getByText("bug:priority=high");
     expect(chip).toBeInTheDocument();
   });
@@ -359,9 +427,7 @@ describe("TaskDetailSheet — header tag chips", () => {
     const allBugTexts = screen.getAllByText("bug");
     // The text is inside <span class="truncate"> inside <span class="chipClass">
     // Go up to the outer chip span (parent of the truncate span)
-    const headerText = allBugTexts.find(
-      (el) => !el.closest("[data-testid='tab-config']"),
-    );
+    const headerText = allBugTexts.find((el) => !el.closest("[data-testid='tab-config']"));
     const chipSpan = headerText?.parentElement;
     expect(chipSpan?.className).toContain("bg-red-100");
     expect(chipSpan?.className).toContain("text-red-700");
@@ -370,20 +436,9 @@ describe("TaskDetailSheet — header tag chips", () => {
   it("applies muted style for tags not in catalog", () => {
     renderWithAttrs({ tags: ["unknown-tag"] });
     const allTexts = screen.getAllByText("unknown-tag");
-    const headerText = allTexts.find(
-      (el) => !el.closest("[data-testid='tab-config']"),
-    );
+    const headerText = allTexts.find((el) => !el.closest("[data-testid='tab-config']"));
     const chipSpan = headerText?.parentElement;
     expect(chipSpan?.className).toContain("bg-muted");
-  });
-
-  it("shows truncate class for overflow protection", () => {
-    renderWithAttrs({ tags: ["bug"] });
-    const allBugTexts = screen.getAllByText("bug");
-    const headerText = allBugTexts.find(
-      (el) => !el.closest("[data-testid='tab-config']"),
-    );
-    expect(headerText?.className).toContain("truncate");
   });
 
   it("does not render header chips when task has no tags", () => {

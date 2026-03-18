@@ -1,13 +1,18 @@
 """Agent tracker — tracks subagent lifecycle."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from ..handler import BaseHandler
 
 
 class AgentTrackerHandler(BaseHandler):
-    events = [("SubagentStart", None), ("SubagentStop", None)]
+    events: ClassVar[list[tuple[str, str | None]]] = [
+        ("SubagentStart", None),
+        ("SubagentStop", None),
+    ]
 
     def handle(self) -> str | None:
         event = self.payload.get("hook_event_name", "")
@@ -26,7 +31,7 @@ class AgentTrackerHandler(BaseHandler):
 
         self.ctx.active_agents[agent_id] = {
             "type": agent_type,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
         }
         count = len(self.ctx.active_agents)
         return f"Agent '{agent_type}' started ({count} active)"

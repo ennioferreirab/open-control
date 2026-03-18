@@ -7,6 +7,7 @@
  * These are pure TypeScript helpers — NOT Convex functions.
  */
 
+import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 
 // ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ export type ActivityInsertCtx = {
         eventType: ActivityEventType;
         description: string;
         timestamp: string;
-      }
+      },
     ) => Promise<unknown>;
   };
 };
@@ -93,12 +94,10 @@ export type EntityGetCtx = {
 export async function requireEntity<T>(
   ctx: EntityGetCtx,
   id: Id<"tasks"> | Id<"steps">,
-  entityName: string
+  entityName: string,
 ): Promise<T> {
   const entity = await ctx.db.get(id);
   if (!entity) {
-    // Use dynamic import to avoid coupling to convex/values at module level
-    const { ConvexError } = await import("convex/values");
     throw new ConvexError(`${entityName} not found`);
   }
   return entity as T;
@@ -116,7 +115,7 @@ export function isTransitionAllowed(
   currentStatus: string,
   newStatus: string,
   transitionMap: Record<string, string[]>,
-  universalTargets: string[] = []
+  universalTargets: string[] = [],
 ): boolean {
   if (universalTargets.includes(newStatus)) {
     return true;
@@ -133,13 +132,11 @@ export function assertValidTransition(
   newStatus: string,
   transitionMap: Record<string, string[]>,
   universalTargets: string[] = [],
-  entityLabel: string = "Entity"
+  entityLabel: string = "Entity",
 ): void {
   if (!isTransitionAllowed(currentStatus, newStatus, transitionMap, universalTargets)) {
-    // ConvexError is imported synchronously here since this is a validation function
-    // that must throw synchronously
-    throw new Error(
-      `Cannot transition ${entityLabel} from '${currentStatus}' to '${newStatus}'`
+    throw new ConvexError(
+      `Cannot transition ${entityLabel} from '${currentStatus}' to '${newStatus}'`,
     );
   }
 }
@@ -160,7 +157,7 @@ export async function logActivity(
     eventType: ActivityEventType;
     description: string;
     timestamp?: string;
-  }
+  },
 ): Promise<void> {
   const timestamp = params.timestamp ?? new Date().toISOString();
   await ctx.db.insert("activities", {

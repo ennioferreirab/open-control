@@ -25,15 +25,11 @@ describe("ArtifactRenderer", () => {
 
     expect(screen.getByText("/output/invoice-summary.csv")).toBeInTheDocument();
     expect(screen.getByText("created")).toBeInTheDocument();
-    expect(
-      screen.getByText("Structured CSV with 47 invoice entries"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Structured CSV with 47 invoice entries")).toBeInTheDocument();
   });
 
   it("renders action badge with green styling for created", () => {
-    const artifacts: Artifact[] = [
-      { path: "/src/new-file.ts", action: "created" },
-    ];
+    const artifacts: Artifact[] = [{ path: "/src/new-file.ts", action: "created" }];
 
     render(<ArtifactRenderer artifacts={artifacts} />);
 
@@ -55,9 +51,7 @@ describe("ArtifactRenderer", () => {
   });
 
   it("renders action badge with red styling for deleted", () => {
-    const artifacts: Artifact[] = [
-      { path: "/src/old-file.ts", action: "deleted" },
-    ];
+    const artifacts: Artifact[] = [{ path: "/src/old-file.ts", action: "deleted" }];
 
     render(<ArtifactRenderer artifacts={artifacts} />);
 
@@ -81,9 +75,7 @@ describe("ArtifactRenderer", () => {
   });
 
   it("does not render description when absent", () => {
-    const artifacts: Artifact[] = [
-      { path: "/src/file.ts", action: "created" },
-    ];
+    const artifacts: Artifact[] = [{ path: "/src/file.ts", action: "created" }];
 
     render(<ArtifactRenderer artifacts={artifacts} />);
 
@@ -106,9 +98,7 @@ describe("ArtifactRenderer", () => {
   });
 
   it("does not render diff toggle for modified files without diff", () => {
-    const artifacts: Artifact[] = [
-      { path: "/src/modified.ts", action: "modified" },
-    ];
+    const artifacts: Artifact[] = [{ path: "/src/modified.ts", action: "modified" }];
 
     render(<ArtifactRenderer artifacts={artifacts} />);
 
@@ -167,9 +157,7 @@ describe("ArtifactRenderer", () => {
   });
 
   it("renders file path in monospace blue style", () => {
-    const artifacts: Artifact[] = [
-      { path: "/src/component.tsx", action: "created" },
-    ];
+    const artifacts: Artifact[] = [{ path: "/src/component.tsx", action: "created" }];
 
     render(<ArtifactRenderer artifacts={artifacts} />);
 
@@ -180,16 +168,9 @@ describe("ArtifactRenderer", () => {
 
   it("calls onArtifactClick when the artifact path is clicked", () => {
     const onArtifactClick = vi.fn();
-    const artifacts: Artifact[] = [
-      { path: "/output/report.md", action: "created" },
-    ];
+    const artifacts: Artifact[] = [{ path: "/output/report.md", action: "created" }];
 
-    render(
-      <ArtifactRenderer
-        artifacts={artifacts}
-        onArtifactClick={onArtifactClick}
-      />
-    );
+    render(<ArtifactRenderer artifacts={artifacts} onArtifactClick={onArtifactClick} />);
 
     fireEvent.click(screen.getByRole("button", { name: "/output/report.md" }));
 

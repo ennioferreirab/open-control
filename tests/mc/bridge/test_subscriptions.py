@@ -12,10 +12,12 @@ class TestSubscriptionManager:
     def test_subscribe_yields_converted_results(self):
         """subscribe() converts camelCase keys to snake_case."""
         client = MagicMock()
-        client.raw_client.subscribe.return_value = iter([
-            [{"_id": "1", "assignedAgent": "bob"}],
-            [{"_id": "1", "assignedAgent": "alice"}],
-        ])
+        client.raw_client.subscribe.return_value = iter(
+            [
+                [{"_id": "1", "assignedAgent": "bob"}],
+                [{"_id": "1", "assignedAgent": "alice"}],
+            ]
+        )
 
         manager = SubscriptionManager(client)
         results = list(manager.subscribe("tasks:list"))

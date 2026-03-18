@@ -115,7 +115,7 @@ async def _run_nanobot_turn(
         agent_name=agent_name,
         model=resolved_model,
     )
-    response = await loop._process_message(  # noqa: SLF001
+    response = await loop._process_message(
         InboundMessage(
             channel=channel,
             sender_id="audit-user",
@@ -167,7 +167,7 @@ async def audit_memory_cohesion(
         prompt=official_prompt,
         session_key=official_session_key,
     )
-    await official_loop._process_message(  # noqa: SLF001
+    await official_loop._process_message(
         InboundMessage(
             channel="telegram",
             sender_id="audit-user",

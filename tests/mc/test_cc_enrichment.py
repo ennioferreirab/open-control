@@ -1,7 +1,7 @@
 """Tests for CC-10: Context enrichment for CC task path."""
+
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -32,16 +32,18 @@ class TestEnrichCCDescription:
     @pytest.mark.asyncio
     async def test_enrich_appends_file_manifest(self):
         bridge = _make_bridge()
-        bridge.query = MagicMock(return_value={
-            "files": [
-                {
-                    "name": "report.pdf",
-                    "type": "application/pdf",
-                    "size": 1024,
-                    "subfolder": "attachments",
-                }
-            ]
-        })
+        bridge.query = MagicMock(
+            return_value={
+                "files": [
+                    {
+                        "name": "report.pdf",
+                        "type": "application/pdf",
+                        "size": 1024,
+                        "subfolder": "attachments",
+                    }
+                ]
+            }
+        )
         executor = _make_executor(bridge)
         result = await executor._enrich_cc_description("task1", "Base desc", None)
         assert "Task workspace:" in result
@@ -94,51 +96,67 @@ class TestEnrichCCDescription:
 
         def get_task_messages_side_effect(task_id: str):
             if task_id == "task-a":
-                return [{
-                    "author_name": "agent-a",
-                    "author_type": "agent",
-                    "timestamp": "2026-01-01T10:00:00Z",
-                    "content": "Task A done",
-                    "type": "step_completion",
-                    "artifacts": [{"path": "output/report-a.md", "action": "created"}],
-                }]
+                return [
+                    {
+                        "author_name": "agent-a",
+                        "author_type": "agent",
+                        "timestamp": "2026-01-01T10:00:00Z",
+                        "content": "Task A done",
+                        "type": "step_completion",
+                        "artifacts": [{"path": "output/report-a.md", "action": "created"}],
+                    }
+                ]
             if task_id == "task-b":
-                return [{
-                    "author_name": "agent-b",
-                    "author_type": "agent",
-                    "timestamp": "2026-01-01T10:05:00Z",
-                    "content": "Task B done",
-                    "type": "step_completion",
-                    "artifacts": [{"path": "output/report-b.md", "action": "created"}],
-                }]
+                return [
+                    {
+                        "author_name": "agent-b",
+                        "author_type": "agent",
+                        "timestamp": "2026-01-01T10:05:00Z",
+                        "content": "Task B done",
+                        "type": "step_completion",
+                        "artifacts": [{"path": "output/report-b.md", "action": "created"}],
+                    }
+                ]
             return []
 
         bridge.query = MagicMock(side_effect=query_side_effect)
         bridge.get_task_messages = MagicMock(side_effect=get_task_messages_side_effect)
 
         executor = _make_executor(bridge)
-        result = await executor._enrich_cc_description("task-merge", "Base desc", source_tasks["task-merge"])
+        result = await executor._enrich_cc_description(
+            "task-merge", "Base desc", source_tasks["task-merge"]
+        )
 
         assert "[Merged Task Origins]" in result
-        assert str(Path.home() / ".nanobot" / "tasks" / "task-a" / "attachments" / "source-a.pdf") in result
-        assert str(Path.home() / ".nanobot" / "tasks" / "task-b" / "output" / "source-b.md") in result
+        assert (
+            str(Path.home() / ".nanobot" / "tasks" / "task-a" / "attachments" / "source-a.pdf")
+            in result
+        )
+        assert (
+            str(Path.home() / ".nanobot" / "tasks" / "task-b" / "output" / "source-b.md") in result
+        )
         assert "[Source Thread A]" in result
         assert "[Source Thread B]" in result
 
     @pytest.mark.asyncio
     async def test_enrich_appends_thread_context(self):
         bridge = _make_bridge()
-        bridge.get_task_messages = MagicMock(return_value=[
-            {
-                "author": "user",
-                "authorType": "user",
-                "content": "Please help",
-                "createdAt": 1000,
-            }
-        ])
+        bridge.get_task_messages = MagicMock(
+            return_value=[
+                {
+                    "author": "user",
+                    "authorType": "user",
+                    "content": "Please help",
+                    "createdAt": 1000,
+                }
+            ]
+        )
         executor = _make_executor(bridge)
 
-        with patch("mc.contexts.execution.executor._build_thread_context", return_value="[Thread]\nuser: Please help"):
+        with patch(
+            "mc.contexts.execution.executor._build_thread_context",
+            return_value="[Thread]\nuser: Please help",
+        ):
             result = await executor._enrich_cc_description("task1", "Base desc", None)
 
         assert "[Thread]" in result or "Please help" in result
@@ -184,10 +202,12 @@ class TestEnrichCCDescription:
     @pytest.mark.asyncio
     async def test_convex_prompt_synced_to_agent_data(self):
         bridge = _make_bridge()
-        bridge.get_agent_by_name = MagicMock(return_value={
-            "prompt": "Convex prompt content",
-            "model": "cc/claude-sonnet-4-6",
-        })
+        bridge.get_agent_by_name = MagicMock(
+            return_value={
+                "prompt": "Convex prompt content",
+                "model": "cc/claude-sonnet-4-6",
+            }
+        )
         executor = _make_executor(bridge)
         agent_data = AgentData(
             name="test", display_name="Test", role="agent", backend="claude-code"
@@ -203,10 +223,11 @@ class TestEnrichCCDescription:
             output="done", session_id="s1", cost_usd=0.01, usage={}, is_error=False
         )
 
-        with patch("claude_code.workspace.CCWorkspaceManager") as MockWS, patch(
-            "claude_code.ipc_server.MCSocketServer"
-        ) as MockIPC, patch("claude_code.provider.ClaudeCodeProvider") as MockProv, patch(
-            "mc.infrastructure.orientation.load_orientation", return_value=None
+        with (
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWS,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIPC,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProv,
+            patch("mc.infrastructure.orientation.load_orientation", return_value=None),
         ):
             MockWS.return_value.prepare.return_value = mock_ws_ctx
             MockIPC.return_value.start = AsyncMock()
@@ -220,13 +241,15 @@ class TestEnrichCCDescription:
     @pytest.mark.asyncio
     async def test_variable_interpolation_applied(self):
         bridge = _make_bridge()
-        bridge.get_agent_by_name = MagicMock(return_value={
-            "prompt": "Hello {{name}}, you are {{role}}",
-            "variables": [
-                {"name": "name", "value": "Bot"},
-                {"name": "role", "value": "assistant"},
-            ],
-        })
+        bridge.get_agent_by_name = MagicMock(
+            return_value={
+                "prompt": "Hello {{name}}, you are {{role}}",
+                "variables": [
+                    {"name": "name", "value": "Bot"},
+                    {"name": "role", "value": "assistant"},
+                ],
+            }
+        )
         executor = _make_executor(bridge)
         agent_data = AgentData(
             name="test", display_name="Test", role="agent", backend="claude-code"
@@ -242,10 +265,11 @@ class TestEnrichCCDescription:
             output="done", session_id="s1", cost_usd=0.01, usage={}, is_error=False
         )
 
-        with patch("claude_code.workspace.CCWorkspaceManager") as MockWS, patch(
-            "claude_code.ipc_server.MCSocketServer"
-        ) as MockIPC, patch("claude_code.provider.ClaudeCodeProvider") as MockProv, patch(
-            "mc.infrastructure.orientation.load_orientation", return_value=None
+        with (
+            patch("claude_code.workspace.CCWorkspaceManager") as MockWS,
+            patch("claude_code.ipc_server.MCSocketServer") as MockIPC,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProv,
+            patch("mc.infrastructure.orientation.load_orientation", return_value=None),
         ):
             MockWS.return_value.prepare.return_value = mock_ws_ctx
             MockIPC.return_value.start = AsyncMock()
@@ -260,9 +284,11 @@ class TestEnrichCCDescription:
     async def test_convex_prompt_appears_in_claude_md(self, tmp_path):
         """Integration: Convex prompt synced to agent_data should appear in generated CLAUDE.md."""
         bridge = _make_bridge()
-        bridge.get_agent_by_name = MagicMock(return_value={
-            "prompt": "You are a specialist in data analysis.",
-        })
+        bridge.get_agent_by_name = MagicMock(
+            return_value={
+                "prompt": "You are a specialist in data analysis.",
+            }
+        )
         executor = _make_executor(bridge)
         agent_data = AgentData(
             name="analyst", display_name="Analyst", role="agent", backend="claude-code"
@@ -277,18 +303,24 @@ class TestEnrichCCDescription:
         )
 
         # Use real workspace manager but mock IPC/provider
-        with patch("claude_code.ipc_server.MCSocketServer") as MockIPC, \
-             patch("claude_code.provider.ClaudeCodeProvider") as MockProv, \
-             patch("mc.infrastructure.orientation.load_orientation", return_value=None), \
-             patch("claude_code.workspace.CCWorkspaceManager", return_value=ws_mgr), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]):
+        with (
+            patch("claude_code.ipc_server.MCSocketServer") as MockIPC,
+            patch("claude_code.provider.ClaudeCodeProvider") as MockProv,
+            patch("mc.infrastructure.orientation.load_orientation", return_value=None),
+            patch("claude_code.workspace.CCWorkspaceManager", return_value=ws_mgr),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+        ):
             MockIPC.return_value.start = AsyncMock()
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=mock_result)
 
             await executor._execute_cc_task(
-                "task1", "Test", "desc", "analyst", agent_data,
+                "task1",
+                "Test",
+                "desc",
+                "analyst",
+                agent_data,
                 needs_enrichment=False,
             )
 

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mock convex/react hooks
+// eslint-disable-next-line no-restricted-imports
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("../../convex/_generated/api", () => ({
   },
 }));
 
+// eslint-disable-next-line no-restricted-imports
 import { useQuery, useMutation } from "convex/react";
 import { ThreadInput } from "../../features/thread/components/ThreadInput";
 
@@ -28,8 +30,22 @@ const mockUseQuery = useQuery as ReturnType<typeof vi.fn>;
 const mockUseMutation = useMutation as ReturnType<typeof vi.fn>;
 
 const MOCK_AGENTS = [
-  { _id: "a1", name: "security-agent", displayName: "Security Agent", role: "security", enabled: true, isSystem: false },
-  { _id: "a2", name: "dev-agent", displayName: "Dev Agent", role: "developer", enabled: true, isSystem: false },
+  {
+    _id: "a1",
+    name: "security-agent",
+    displayName: "Security Agent",
+    role: "security",
+    enabled: true,
+    isSystem: false,
+  },
+  {
+    _id: "a2",
+    name: "dev-agent",
+    displayName: "Dev Agent",
+    role: "developer",
+    enabled: true,
+    isSystem: false,
+  },
 ];
 
 const MOCK_BOARD = { _id: "b1", enabledAgents: [] };
@@ -52,15 +68,26 @@ vi.mock("@/hooks/useFileUpload", () => ({
   }),
 }));
 
-function makeTask(overrides: Record<string, any> = {}) {
+import type { Doc } from "@/convex/_generated/dataModel";
+import { testId } from "@/tests/helpers/mockConvex";
+
+function makeTask(overrides: Record<string, unknown> = {}) {
   return {
-    _id: "t1",
+    _id: testId<"tasks">("t1"),
+    _creationTime: 1700000000000,
     boardId: "b1",
-    status: "open",
+    // Use "done" so the thread is not a reply-only thread (in_progress without human
+    // delegation hides the mention autocomplete via isReplyOnlyThread).
+    status: "done" as const,
     assignedAgent: "",
     isManual: false,
+    title: "Test Task",
+    trustLevel: "autonomous" as const,
+    createdAt: "2024-01-01T00:00:00.000Z",
+    updatedAt: "2024-01-01T00:00:00.000Z",
+    tags: [],
     ...overrides,
-  } as any;
+  } as unknown as Doc<"tasks">;
 }
 
 describe("AgentMentionAutocomplete (via ThreadInput)", () => {
@@ -80,7 +107,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
       return vi.fn();
     });
 
-    mockUseQuery.mockImplementation((ref: any, args: any) => {
+    mockUseQuery.mockImplementation((ref: unknown, args: unknown) => {
       const s = String(ref);
       if (s.includes("boards") && args !== "skip") return MOCK_BOARD;
       return undefined;
@@ -95,7 +122,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
   it("shows autocomplete portal when @ is typed", async () => {
     const user = userEvent.setup();
     render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
+    const textarea = screen.getByPlaceholderText("Reply to the thread...");
     await user.click(textarea);
     await user.type(textarea, "@");
     await waitFor(() => {
@@ -106,7 +133,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
   it("filters agents case-insensitively as user types after @", async () => {
     const user = userEvent.setup();
     render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
+    const textarea = screen.getByPlaceholderText("Reply to the thread...");
     await user.click(textarea);
     await user.type(textarea, "@sec");
     await waitFor(() => {
@@ -120,7 +147,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
   it("shows 'No matching agents' when filter has no results", async () => {
     const user = userEvent.setup();
     render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
+    const textarea = screen.getByPlaceholderText("Reply to the thread...");
     await user.click(textarea);
     await user.type(textarea, "@zzz");
     await waitFor(() => {
@@ -131,7 +158,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
   it("selects agent on click and closes autocomplete", async () => {
     const user = userEvent.setup();
     render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
+    const textarea = screen.getByPlaceholderText("Reply to the thread...");
     await user.click(textarea);
     await user.type(textarea, "@dev");
     await waitFor(() => {
@@ -149,7 +176,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
   it("navigates with ArrowDown/ArrowUp and selects with Enter", async () => {
     const user = userEvent.setup();
     render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
+    const textarea = screen.getByPlaceholderText("Reply to the thread...");
     await user.click(textarea);
     await user.type(textarea, "@");
     await waitFor(() => {
@@ -169,7 +196,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
   it("closes autocomplete on Escape", async () => {
     const user = userEvent.setup();
     render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
+    const textarea = screen.getByPlaceholderText("Reply to the thread...");
     await user.click(textarea);
     await user.type(textarea, "@");
     await waitFor(() => {
@@ -183,7 +210,12 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
 
   it("does NOT show autocomplete in plan-chat mode", async () => {
     const user = userEvent.setup();
-    render(<ThreadInput task={makeTask({ status: "review", awaitingKickoff: true })} mode="lead-agent" />);
+    render(
+      <ThreadInput
+        task={makeTask({ status: "review", awaitingKickoff: true })}
+        mode="lead-agent"
+      />,
+    );
     const textarea = screen.getByPlaceholderText(/Ask the Lead Agent to change the plan/i);
     await user.click(textarea);
     await user.type(textarea, "@");
@@ -191,26 +223,10 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
     expect(screen.queryByTestId("mention-autocomplete")).not.toBeInTheDocument();
   });
 
-  it("updates selectedAgent dropdown when mention is selected", async () => {
-    const user = userEvent.setup();
-    render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
-    await user.click(textarea);
-    await user.type(textarea, "@dev");
-    await waitFor(() => {
-      expect(screen.getByTestId("mention-option-dev-agent")).toBeInTheDocument();
-    });
-    await user.click(screen.getByTestId("mention-option-dev-agent"));
-    // The select trigger should now reflect the chosen agent
-    await waitFor(() => {
-      expect(screen.queryByTestId("mention-autocomplete")).not.toBeInTheDocument();
-    });
-  });
-
   it("submits message with mentioned agent", async () => {
     const user = userEvent.setup();
     render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
+    const textarea = screen.getByPlaceholderText("Reply to the thread...");
     await user.click(textarea);
     await user.type(textarea, "@dev");
     await waitFor(() => {
@@ -233,7 +249,7 @@ describe("AgentMentionAutocomplete (via ThreadInput)", () => {
   it("wraps around with keyboard navigation", async () => {
     const user = userEvent.setup();
     render(<ThreadInput task={makeTask()} />);
-    const textarea = screen.getByPlaceholderText("Send a message to the agent...");
+    const textarea = screen.getByPlaceholderText("Reply to the thread...");
     await user.click(textarea);
     await user.type(textarea, "@");
     await waitFor(() => {

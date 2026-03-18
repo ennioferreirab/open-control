@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TextIO
@@ -32,7 +33,7 @@ class NanobotInteractiveSessionConfig:
     memory_workspace: Path | None = None
 
     @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> "NanobotInteractiveSessionConfig":
+    def from_env(cls, env: dict[str, str] | None = None) -> NanobotInteractiveSessionConfig:
         source = env or os.environ
         session_id = _require_env(source, "MC_INTERACTIVE_SESSION_ID")
         task_id = _require_env(source, "MC_INTERACTIVE_TASK_ID")
@@ -222,7 +223,7 @@ def main() -> int:
         bridge.close()
 
 
-def _require_env(env: dict[str, str], key: str) -> str:
+def _require_env(env: Mapping[str, str], key: str) -> str:
     value = env.get(key, "").strip()
     if not value:
         raise RuntimeError(f"Missing required environment variable: {key}")

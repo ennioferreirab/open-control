@@ -2,12 +2,45 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Iterator
+from collections.abc import Iterator
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from mc.bridge.repositories.agents import AgentRepository
+    from mc.bridge.repositories.boards import BoardRepository
+    from mc.bridge.repositories.chats import ChatRepository
+    from mc.bridge.repositories.messages import MessageRepository
+    from mc.bridge.repositories.specs import SpecsRepository
+    from mc.bridge.repositories.steps import StepRepository
+    from mc.bridge.repositories.tasks import TaskRepository
+    from mc.bridge.subscriptions import SubscriptionManager
 
 
 class BridgeRepositoryFacadeMixin:
-    """Delegating façade methods for the ConvexBridge repositories."""
+    """Delegating façade methods for the ConvexBridge repositories.
+
+    Attribute stubs below are declared for type-checking only.
+    At runtime they are provided by ConvexBridge which hosts this mixin.
+    """
+
+    # -- Type-checking stubs: provided by ConvexBridge at runtime --
+    _tasks: TaskRepository
+    _steps: StepRepository
+    _messages: MessageRepository
+    _agents: AgentRepository
+    _boards: BoardRepository
+    _chats: ChatRepository
+    _specs: SpecsRepository
+    _subscriptions: SubscriptionManager
+
+    def _ensure_repos(self) -> None: ...
+
+    def _mutation_with_retry(
+        self, function_name: str, args: dict[str, Any] | None = None
+    ) -> Any: ...
+
+    def _log_state_transition(self, entity_type: str, description: str) -> None: ...
 
     def update_task_status(
         self,
@@ -271,10 +304,6 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._agents.get_agent_by_name(name)
 
-    def list_active_registry_view(self) -> list[dict[str, Any]]:
-        self._ensure_repos()
-        return self._agents.list_active_registry_view()
-
     def list_deleted_agents(self) -> list[dict[str, Any]]:
         self._ensure_repos()
         return self._agents.list_deleted_agents()
@@ -414,7 +443,7 @@ class BridgeRepositoryFacadeMixin:
         args: dict[str, Any] | None = None,
         poll_interval: float = 2.0,
         sleep_controller: Any | None = None,
-    ) -> "Any":
+    ) -> Any:
         self._ensure_repos()
         return self._subscriptions.async_subscribe(
             function_name,
@@ -433,7 +462,7 @@ class BridgeRepositoryFacadeMixin:
         args: dict[str, Any] = {
             "event_type": event_type,
             "description": description,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if task_id and not task_id.startswith("chat-"):
             args["task_id"] = task_id

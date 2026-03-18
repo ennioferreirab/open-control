@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { ParsedSearch, ParsedAttributeFilter } from "@/lib/searchParser";
 
@@ -46,6 +48,6 @@ export function useBoardFilters(externalSearch?: ParsedSearch): BoardFilters {
       hasAttributeFilters,
       setSearch: setInternalSearch,
     }),
-    [search, isSearchActive, hasFreeText, hasTagFilters, hasAttributeFilters]
+    [search, isSearchActive, hasFreeText, hasTagFilters, hasAttributeFilters],
   );
 }

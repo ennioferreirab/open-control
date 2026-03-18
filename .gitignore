@@ -33,3 +33,4 @@ CLAUDE.md.bkp
 .codex-tmp/
 output/playwright/*
 output/.DS_Store
+.vscode/

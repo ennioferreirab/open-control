@@ -2,12 +2,20 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
-import type { Doc } from "../convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 
 // Statuses where the user cannot interact with the task thread at all.
 const BLOCKED_STATUSES = ["retrying"];
+
+/** Imperative navigation API attached to textarea by AgentMentionAutocomplete */
+interface MentionNavElement {
+  navigateDown: () => void;
+  navigateUp: () => void;
+  selectFocused: () => boolean | void;
+  close: () => void;
+}
 
 export interface ThreadComposerState {
   content: string;
@@ -57,15 +65,18 @@ export function useThreadComposer(task: Doc<"tasks"> | null): ThreadComposerStat
   const postPlanMessage = useMutation(api.messages.postUserPlanMessage);
   const postComment = useMutation(api.messages.postComment);
   const restoreTask = useMutation(api.tasks.restore);
-  const board = useQuery(
-    api.boards.getById,
-    task?.boardId ? { boardId: task.boardId } : "skip",
-  );
+  const board = useQuery(api.boards.getById, task?.boardId ? { boardId: task.boardId } : "skip");
 
   // Keep refs in sync with state for stable closures
-  useEffect(() => { contentRef.current = content; }, [content]);
-  useEffect(() => { mentionStartIndexRef.current = mentionStartIndex; }, [mentionStartIndex]);
-  useEffect(() => { mentionQueryRef.current = mentionQuery; }, [mentionQuery]);
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
+  useEffect(() => {
+    mentionStartIndexRef.current = mentionStartIndex;
+  }, [mentionStartIndex]);
+  useEffect(() => {
+    mentionQueryRef.current = mentionQuery;
+  }, [mentionQuery]);
   useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
 
   // Sync selectedAgent when task.assignedAgent changes
@@ -75,12 +86,12 @@ export function useThreadComposer(task: Doc<"tasks"> | null): ThreadComposerStat
     }
   }, [task?.assignedAgent, isSubmitting]);
 
-  const taskAny = task as any;
-  const isPlanChatMode =
-    task?.status === "review" && taskAny?.awaitingKickoff === true;
+  const awaitingKickoff = task
+    ? (task as Doc<"tasks"> & { awaitingKickoff?: boolean }).awaitingKickoff
+    : undefined;
+  const isPlanChatMode = task?.status === "review" && awaitingKickoff === true;
   const isInProgress =
-    task?.status === "in_progress" ||
-    (task?.status === "review" && taskAny?.awaitingKickoff !== true);
+    task?.status === "in_progress" || (task?.status === "review" && awaitingKickoff !== true);
   const isBlocked = task ? BLOCKED_STATUSES.includes(task.status) : false;
 
   const canSend =
@@ -90,63 +101,57 @@ export function useThreadComposer(task: Doc<"tasks"> | null): ThreadComposerStat
 
   const filteredAgents = useSelectableAgents(board?.enabledAgents);
 
-  const handleTextChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const value = e.target.value;
-      setContent(value);
+  const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setContent(value);
 
-      const cursorPos = e.target.selectionStart ?? value.length;
+    const cursorPos = e.target.selectionStart ?? value.length;
 
-      let atIndex = -1;
-      for (let i = cursorPos - 1; i >= 0; i--) {
-        if (value[i] === "@") {
-          if (i === 0 || /\s/.test(value[i - 1])) {
-            atIndex = i;
-          }
-          break;
+    let atIndex = -1;
+    for (let i = cursorPos - 1; i >= 0; i--) {
+      if (value[i] === "@") {
+        if (i === 0 || /\s/.test(value[i - 1])) {
+          atIndex = i;
         }
-        if (/\s/.test(value[i])) break;
+        break;
       }
+      if (/\s/.test(value[i])) break;
+    }
 
-      if (atIndex >= 0) {
-        const query = value.slice(atIndex + 1, cursorPos);
-        if (/[^a-zA-Z0-9_-]/.test(query)) {
-          setMentionQuery(null);
-        } else {
-          setMentionStartIndex(atIndex);
-          setMentionQuery(query);
-        }
-      } else {
+    if (atIndex >= 0) {
+      const query = value.slice(atIndex + 1, cursorPos);
+      if (/[^a-zA-Z0-9_-]/.test(query)) {
         setMentionQuery(null);
+      } else {
+        setMentionStartIndex(atIndex);
+        setMentionQuery(query);
       }
-    },
-    [],
-  );
-
-  const handleMentionSelect = useCallback(
-    (agentName: string) => {
-      const currentContent = contentRef.current;
-      const startIdx = mentionStartIndexRef.current;
-      const mQuery = mentionQueryRef.current;
-      const before = currentContent.slice(0, startIdx);
-      const after = currentContent.slice(startIdx + 1 + (mQuery?.length ?? 0));
-      const newContent = `${before}@${agentName} ${after}`;
-      setContent(newContent);
-      setSelectedAgent(agentName);
+    } else {
       setMentionQuery(null);
+    }
+  }, []);
 
-      requestAnimationFrame(() => {
-        const el = textareaRef.current;
-        if (el) {
-          el.focus();
-          const pos = before.length + 1 + agentName.length + 1;
-          el.selectionStart = pos;
-          el.selectionEnd = pos;
-        }
-      });
-    },
-    [],
-  );
+  const handleMentionSelect = useCallback((agentName: string) => {
+    const currentContent = contentRef.current;
+    const startIdx = mentionStartIndexRef.current;
+    const mQuery = mentionQueryRef.current;
+    const before = currentContent.slice(0, startIdx);
+    const after = currentContent.slice(startIdx + 1 + (mQuery?.length ?? 0));
+    const newContent = `${before}@${agentName} ${after}`;
+    setContent(newContent);
+    setSelectedAgent(agentName);
+    setMentionQuery(null);
+
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        const pos = before.length + 1 + agentName.length + 1;
+        el.selectionStart = pos;
+        el.selectionEnd = pos;
+      }
+    });
+  }, []);
 
   const handleSend = useCallback(async () => {
     if (!task) return;
@@ -180,21 +185,29 @@ export function useThreadComposer(task: Doc<"tasks"> | null): ThreadComposerStat
       }
       setContent("");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to send message. Please try again.",
-      );
+      setError(err instanceof Error ? err.message : "Failed to send message. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   }, [
-    task, content, selectedAgent, inputMode, isPlanChatMode, isInProgress,
-    filteredAgents, postComment, postPlanMessage, sendMessage,
+    task,
+    content,
+    selectedAgent,
+    inputMode,
+    isPlanChatMode,
+    isInProgress,
+    filteredAgents,
+    postComment,
+    postPlanMessage,
+    sendMessage,
   ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (mentionQuery !== null) {
-        const nav = (textareaRef.current as any)?.__mentionNav;
+        const nav = (
+          textareaRef.current as (HTMLTextAreaElement & { __mentionNav?: MentionNavElement }) | null
+        )?.__mentionNav;
         if (nav) {
           if (e.key === "ArrowDown") {
             e.preventDefault();

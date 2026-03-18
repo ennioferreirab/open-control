@@ -25,9 +25,7 @@ describe("LoginPage", () => {
     render(<LoginPage />);
 
     expect(screen.getByLabelText("Access Token")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Sign In" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign In" })).toBeInTheDocument();
     expect(screen.getByText("Mission Control")).toBeInTheDocument();
     expect(screen.getByText("Enter your access token")).toBeInTheDocument();
   });

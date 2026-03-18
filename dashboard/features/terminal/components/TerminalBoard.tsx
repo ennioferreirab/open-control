@@ -21,7 +21,9 @@ function TerminalEntry({
 }) {
   return (
     <div className="relative flex-1 min-h-0">
-      <Suspense fallback={<div className="flex-1 p-4 text-xs text-muted-foreground">Loading...</div>}>
+      <Suspense
+        fallback={<div className="flex-1 p-4 text-xs text-muted-foreground">Loading...</div>}
+      >
         <TerminalPanel sessionId={sessionId} agentName={agentName} ipAddress={ipAddress} />
       </Suspense>
       <button

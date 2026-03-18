@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import patch
 
@@ -130,13 +131,12 @@ class TestParseUtcTimestamp:
         assert result.year == 2026
 
     def test_parses_naive_as_utc(self) -> None:
-        from datetime import timezone
 
         from mc.infrastructure.config import _parse_utc_timestamp
 
         result = _parse_utc_timestamp("2026-01-01T00:00:00")
         assert result is not None
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
 
     def test_returns_none_for_empty_string(self) -> None:
         from mc.infrastructure.config import _parse_utc_timestamp

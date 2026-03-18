@@ -3,21 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 import { getGatewaySleepRuntime, requestGatewaySleepMode } from "./settings";
 
 function getRuntimeHandler() {
-  return (getGatewaySleepRuntime as unknown as {
-    _handler: (
-      ctx: unknown,
-      args: Record<string, unknown>,
-    ) => Promise<Record<string, unknown> | null>;
-  })._handler;
+  return (
+    getGatewaySleepRuntime as unknown as {
+      _handler: (
+        ctx: unknown,
+        args: Record<string, unknown>,
+      ) => Promise<Record<string, unknown> | null>;
+    }
+  )._handler;
 }
 
 function getRequestHandler() {
-  return (requestGatewaySleepMode as unknown as {
-    _handler: (
-      ctx: unknown,
-      args: { mode: "sleep" | "active" },
-    ) => Promise<void>;
-  })._handler;
+  return (
+    requestGatewaySleepMode as unknown as {
+      _handler: (ctx: unknown, args: { mode: "sleep" | "active" }) => Promise<void>;
+    }
+  )._handler;
 }
 
 describe("settings.getGatewaySleepRuntime", () => {

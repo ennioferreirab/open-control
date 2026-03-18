@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import { getChatHandlerRuntime } from "./settings";
 
 function getHandler() {
-  return (getChatHandlerRuntime as unknown as {
-    _handler: (
-      ctx: unknown,
-      args: Record<string, unknown>,
-    ) => Promise<Record<string, unknown> | null>;
-  })._handler;
+  return (
+    getChatHandlerRuntime as unknown as {
+      _handler: (
+        ctx: unknown,
+        args: Record<string, unknown>,
+      ) => Promise<Record<string, unknown> | null>;
+    }
+  )._handler;
 }
 
 describe("settings.getChatHandlerRuntime", () => {

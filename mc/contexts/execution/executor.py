@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.completion_status import (
@@ -62,7 +61,7 @@ from mc.contexts.execution.output_artifacts import (  # noqa: F401
     _relocate_invalid_memory_files,
     _snapshot_output_dir,
 )
-from mc.contexts.execution.provider_errors import (  # noqa: F401
+from mc.contexts.execution.provider_errors import (
     PROVIDER_ERRORS,
 )
 from mc.contexts.execution.provider_errors import (
@@ -74,6 +73,7 @@ from mc.types import (
     ActivityEventType,
     AgentData,
     AuthorType,
+    CCTaskResult,
     LeadAgentExecutionError,
     MessageType,
     TaskStatus,
@@ -313,7 +313,7 @@ class TaskExecutor(CCExecutorMixin):
                     logger.debug("[executor] Claim denied for task %s", task_id)
                     continue
                 self._known_assigned_ids.add(task_id)
-                asyncio.create_task(self._pickup_task(task_data))
+                asyncio.create_task(self._pickup_task(task_data))  # noqa: RUF006
 
     async def _pickup_task(self, task_data: dict[str, Any]) -> None:
         """Transition assigned task to in_progress and start execution."""
@@ -336,7 +336,7 @@ class TaskExecutor(CCExecutorMixin):
         """
         return _load_agent_config_impl(agent_name)
 
-    def _load_agent_data(self, agent_name: str) -> "AgentData | None":
+    def _load_agent_data(self, agent_name: str) -> AgentData | None:
         """Load full AgentData from an agent's YAML config file.
 
         Returns the validated AgentData (including backend field) or None when
@@ -570,7 +570,7 @@ class TaskExecutor(CCExecutorMixin):
                     try:
                         await self._on_task_completed(task_id, "")
                     except Exception:
-                        pass
+                        logger.warning("[executor] Task completion callback failed", exc_info=True)
                 return
 
             result = execution_result.output
@@ -579,10 +579,11 @@ class TaskExecutor(CCExecutorMixin):
             artifacts = await asyncio.to_thread(_collect_output_artifacts, task_id, pre_snapshot)
 
             if req.runner_type == RunnerType.CLAUDE_CODE:
-                cc_result = SimpleNamespace(
+                cc_result = CCTaskResult(
                     output=result,
                     cost_usd=execution_result.cost_usd,
                     session_id=execution_result.session_id or "",
+                    usage={},
                     is_error=False,
                 )
                 await self._complete_cc_task(
@@ -733,7 +734,7 @@ class TaskExecutor(CCExecutorMixin):
                 try:
                     await self._on_task_completed(task_id, "")
                 except Exception:
-                    pass
+                    logger.warning("[executor] Task completion callback failed", exc_info=True)
         finally:
             # Allow re-pickup if task returns to assigned (e.g. after retry)
             self._known_assigned_ids.discard(task_id)

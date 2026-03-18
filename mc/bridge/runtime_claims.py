@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -17,7 +17,7 @@ def _owner_id(bridge: Any) -> str:
     if owner_id:
         return owner_id
     owner_id = f"runtime:{uuid4()}"
-    setattr(bridge, "_runtime_claim_owner_id", owner_id)
+    bridge._runtime_claim_owner_id = owner_id
     return owner_id
 
 
@@ -31,7 +31,7 @@ def acquire_runtime_claim(
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
 ) -> bool:
     """Acquire a persistent lease-backed claim for a runtime work item."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = bridge.mutation(
         "runtimeClaims:acquire",
         {

@@ -62,8 +62,10 @@ export async function PUT(
       delete merged.claude_code;
     } else {
       const cc: Record<string, unknown> = {};
-      if (updates.claude_code.permission_mode) cc.permission_mode = updates.claude_code.permission_mode;
-      if (updates.claude_code.max_budget_usd != null) cc.max_budget_usd = updates.claude_code.max_budget_usd;
+      if (updates.claude_code.permission_mode)
+        cc.permission_mode = updates.claude_code.permission_mode;
+      if (updates.claude_code.max_budget_usd != null)
+        cc.max_budget_usd = updates.claude_code.max_budget_usd;
       if (updates.claude_code.max_turns != null) cc.max_turns = updates.claude_code.max_turns;
       merged.claude_code = cc as AgentConfig["claude_code"];
     }
@@ -71,7 +73,7 @@ export async function PUT(
 
   // Remove undefined keys before serializing
   const clean = Object.fromEntries(
-    Object.entries(merged).filter(([, v]) => v !== undefined && v !== null)
+    Object.entries(merged).filter(([, v]) => v !== undefined && v !== null),
   );
 
   try {

@@ -24,14 +24,8 @@ interface AgentDraftDetailPanelProps {
   onBack: () => void;
 }
 
-export function AgentDraftDetailPanel({
-  draftGraph,
-  onPatch,
-  onBack,
-}: AgentDraftDetailPanelProps) {
-  const agents = Array.isArray(draftGraph.agents)
-    ? (draftGraph.agents as AgentEntry[])
-    : [];
+export function AgentDraftDetailPanel({ draftGraph, onPatch, onBack }: AgentDraftDetailPanelProps) {
+  const agents = Array.isArray(draftGraph.agents) ? (draftGraph.agents as AgentEntry[]) : [];
   const agent = agents[0] ?? {};
 
   const updateAgent = useCallback(
@@ -129,16 +123,9 @@ export function AgentDraftDetailPanel({
           </Label>
           <Textarea
             id="agent-responsibilities"
-            value={
-              Array.isArray(agent.responsibilities)
-                ? agent.responsibilities.join("\n")
-                : ""
-            }
+            value={Array.isArray(agent.responsibilities) ? agent.responsibilities.join("\n") : ""}
             onChange={(e) =>
-              updateAgent(
-                "responsibilities",
-                e.target.value.split("\n").filter(Boolean),
-              )
+              updateAgent("responsibilities", e.target.value.split("\n").filter(Boolean))
             }
             placeholder="One responsibility per line"
             rows={4}

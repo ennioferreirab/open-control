@@ -261,9 +261,7 @@ class TestPlanningWorkerDirectDelegateGuard:
             patch("mc.runtime.workers.planning.TaskPlanner") as mock_planner_class,
         ):
             mock_planner = MagicMock()
-            mock_planner.plan_task = AsyncMock(
-                return_value=MagicMock(steps=[], to_dict=lambda: {})
-            )
+            mock_planner.plan_task = AsyncMock(return_value=MagicMock(steps=[], to_dict=lambda: {}))
             mock_planner_class.return_value = mock_planner
             await worker.process_task(task)
 

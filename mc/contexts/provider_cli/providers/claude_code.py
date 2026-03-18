@@ -67,7 +67,7 @@ class ClaudeCodeCLIParser:
         if not chunk:
             return []
 
-        text = chunk if isinstance(chunk, str) else chunk.decode("utf-8", errors="replace")
+        text: str = chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
         events: list[ParsedCliEvent] = []
 
         for line in text.splitlines():
@@ -120,7 +120,7 @@ class ClaudeCodeCLIParser:
         Returns the command list that should be passed to ``start_session`` to
         launch a new process resuming the given provider session.
         """
-        return command_prefix + ["--resume", provider_session_id]
+        return [*command_prefix, "--resume", provider_session_id]
 
     async def stop(self, handle: ProviderProcessHandle) -> None:
         """Send SIGTERM to the Claude Code process via the supervisor."""

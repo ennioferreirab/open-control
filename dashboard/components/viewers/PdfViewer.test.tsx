@@ -40,14 +40,7 @@ vi.mock("react-pdf", () => ({
     width?: number;
     renderAnnotationLayer?: boolean;
     renderTextLayer?: boolean;
-  }) => (
-    <div
-      data-testid="pdf-page"
-      data-page={pageNumber}
-      data-scale={scale}
-      data-width={width}
-    />
-  ),
+  }) => <div data-testid="pdf-page" data-page={pageNumber} data-scale={scale} data-width={width} />,
   pdfjs: {
     GlobalWorkerOptions: { workerSrc: "" },
     version: "5.4.296",
@@ -118,7 +111,7 @@ class MockResizeObserver {
           devicePixelContentBoxSize: [],
         },
       ],
-      this
+      this,
     );
   }
   unobserve() {}
@@ -154,7 +147,7 @@ describe("PdfViewer", () => {
     render(<PdfViewer {...defaultProps} />);
     expect(screen.getByTestId("pdf-document")).toHaveAttribute(
       "data-file",
-      "blob:http://localhost/test-pdf"
+      "blob:http://localhost/test-pdf",
     );
   });
 
@@ -334,9 +327,7 @@ describe("PdfViewer", () => {
     render(<PdfViewer {...defaultProps} />);
     // Trigger load error via keydown with 'e'
     fireEvent.keyDown(screen.getByTestId("pdf-document"), { key: "e" });
-    expect(
-      screen.getByText("Unable to render this PDF.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Unable to render this PDF.")).toBeInTheDocument();
   });
 
   it("shows Download button in error state", () => {

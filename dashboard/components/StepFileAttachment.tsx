@@ -1,12 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
-import { Id } from "../convex/_generated/dataModel";
+import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Loader2, Paperclip } from "lucide-react";
 import { FileChip } from "./FileChip";
+import { useAddTaskFiles } from "@/hooks/useAddTaskFiles";
 
 export interface StepFileAttachmentProps {
   stepTempId: string;
@@ -26,7 +25,7 @@ export function StepFileAttachment({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const addTaskFiles = useMutation(api.tasks.addTaskFiles);
+  const addTaskFiles = useAddTaskFiles();
 
   const handleAttachClick = () => {
     fileInputRef.current?.click();
@@ -57,13 +56,9 @@ export function StepFileAttachment({
         files: uploadedFiles,
       });
 
-      const newFileNames: string[] = uploadedFiles.map(
-        (f: { name: string }) => f.name
-      );
+      const newFileNames: string[] = uploadedFiles.map((f: { name: string }) => f.name);
       const existingNames = new Set(attachedFiles);
-      const uniqueNewNames = newFileNames.filter(
-        (name) => !existingNames.has(name)
-      );
+      const uniqueNewNames = newFileNames.filter((name) => !existingNames.has(name));
       if (uniqueNewNames.length > 0) {
         onFilesAttached(stepTempId, uniqueNewNames);
       }
@@ -111,9 +106,7 @@ export function StepFileAttachment({
           )}
           Attach
         </Button>
-        {uploadError && (
-          <span className="text-xs text-red-500">{uploadError}</span>
-        )}
+        {uploadError && <span className="text-xs text-red-500">{uploadError}</span>}
       </div>
     </div>
   );

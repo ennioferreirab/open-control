@@ -6,16 +6,20 @@ import json
 import logging
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from mc.infrastructure.providers.factory import create_provider
 from mc.memory.policy import find_invalid_memory_files
 from mc.memory.store import HybridMemoryStore
 
+if TYPE_CHECKING:
+    from mc.bridge import ConvexBridge
+
 logger = logging.getLogger(__name__)
 MEMORY_CONSOLIDATION_MODEL = "tier:standard-medium"
 
 
-def resolve_consolidation_model(bridge: object | None = None) -> str | None:
+def resolve_consolidation_model(bridge: ConvexBridge | None = None) -> str | None:
     """Resolve the LLM model for memory consolidation with graceful fallback.
 
     Resolution order:

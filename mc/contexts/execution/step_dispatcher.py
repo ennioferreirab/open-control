@@ -69,8 +69,7 @@ def _coerce_step_run_result(value: Any) -> tuple[str, bool, str | None]:
         return value, False, None
     content = getattr(value, "content", None) or getattr(value, "output", "") or ""
     is_error = bool(
-        getattr(value, "is_error", False)
-        or (hasattr(value, "success") and not getattr(value, "success"))
+        getattr(value, "is_error", False) or (hasattr(value, "success") and not value.success)
     )
     error_message = getattr(value, "error_message", None)
     return content, is_error, error_message
@@ -373,7 +372,7 @@ class StepDispatcher:
             return_exceptions=True,
         )
 
-        for step, result in zip(steps, results):
+        for step, result in zip(steps, results, strict=False):
             if isinstance(result, Exception):
                 logger.error(
                     "[dispatcher] Step '%s' failed in parallel group: %s",
@@ -492,7 +491,7 @@ class StepDispatcher:
                 agent_model=agent_model,
                 reasoning_level=reasoning_level,
                 task_title=step_title,
-                task_description=execution_description,
+                task_description=execution_description or "",
                 agent_skills=agent_skills,
                 board_name=board_name,
                 memory_workspace=memory_workspace,

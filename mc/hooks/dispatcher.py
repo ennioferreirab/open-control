@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Central hook dispatcher for Claude Code events."""
+
 from __future__ import annotations
 
 import json

@@ -164,9 +164,7 @@ describe("SettingsPanel", () => {
   });
 
   it("prefers saved global orientation prompt over file fallback", async () => {
-    mockQueryResult = [
-      { key: "global_orientation_prompt", value: "Saved Convex orientation" },
-    ];
+    mockQueryResult = [{ key: "global_orientation_prompt", value: "Saved Convex orientation" }];
 
     render(<SettingsPanel />);
 

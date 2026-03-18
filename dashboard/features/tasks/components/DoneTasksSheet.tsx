@@ -4,7 +4,13 @@ import { CheckCircle2, Trash2, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useDoneTasksSheetData } from "@/features/tasks/hooks/useDoneTasksSheetData";
 
 interface DoneTasksSheetProps {
@@ -37,7 +43,9 @@ export function DoneTasksSheet({ open, onClose }: DoneTasksSheetProps) {
               </Badge>
             )}
           </SheetTitle>
-          <SheetDescription>All tasks that have been completed, including cleared tasks.</SheetDescription>
+          <SheetDescription>
+            All tasks that have been completed, including cleared tasks.
+          </SheetDescription>
         </SheetHeader>
 
         <ScrollArea className="flex-1">
@@ -45,7 +53,9 @@ export function DoneTasksSheet({ open, onClose }: DoneTasksSheetProps) {
             {doneHistory === undefined ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
             ) : doneHistory.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No completed tasks yet</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No completed tasks yet
+              </p>
             ) : (
               <div className="flex flex-col gap-3 pr-3">
                 {doneHistory.map((task) => {
@@ -77,7 +87,11 @@ export function DoneTasksSheet({ open, onClose }: DoneTasksSheetProps) {
                             On board
                           </Badge>
                         )}
-                        {task.assignedAgent && <span className="text-xs text-muted-foreground">{task.assignedAgent}</span>}
+                        {task.assignedAgent && (
+                          <span className="text-xs text-muted-foreground">
+                            {task.assignedAgent}
+                          </span>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         {isCleared ? (

@@ -18,7 +18,9 @@ def test_get_provider_model_returns_litellm_provider():
 
 def test_litellm_provider_returns_none_on_exception():
     from unittest.mock import patch
+
     from mc.memory.providers import LiteLLMProvider
+
     provider = LiteLLMProvider("some-model")
     with patch("litellm.embedding", side_effect=RuntimeError("API error")):
         result = provider.embed(["hello"])

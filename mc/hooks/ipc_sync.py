@@ -4,6 +4,7 @@ Hooks run as blocking shell commands (not async), so they need a synchronous
 client. This uses stdlib socket module — same JSON-RPC protocol as the async
 MCSocketClient in vendor/claude-code/claude_code/ipc_client.py.
 """
+
 from __future__ import annotations
 
 import json
@@ -42,14 +43,12 @@ class SyncIPCClient:
             while b"\n" not in data:
                 try:
                     chunk = sock.recv(4096)
-                except _socket.timeout as exc:
+                except TimeoutError as exc:
                     raise ConnectionError(
                         f"MC IPC socket timed out after {self._timeout}s"
                     ) from exc
                 if not chunk:
-                    raise ConnectionError(
-                        "MC IPC server closed connection without response"
-                    )
+                    raise ConnectionError("MC IPC server closed connection without response")
                 data += chunk
 
             return json.loads(data.decode())

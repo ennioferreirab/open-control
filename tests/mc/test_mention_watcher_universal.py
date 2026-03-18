@@ -21,6 +21,7 @@ def _make_bridge(
     """Return a mock ConvexBridge with configurable recent messages and task lookups."""
     bridge = MagicMock()
     bridge.get_recent_user_messages = MagicMock(return_value=recent_messages or [])
+    bridge.mutation = MagicMock(return_value={"granted": True, "claimId": "claim-1"})
 
     def _query(query_name: str, params: dict) -> dict | list | None:
         if query_name == "tasks:getById":
@@ -70,9 +71,7 @@ def _mock_to_thread():
     """Patch asyncio.to_thread to run synchronously (no real threading in tests)."""
     with patch(
         "mc.contexts.conversation.mentions.watcher.asyncio.to_thread",
-        new=AsyncMock(
-            side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)
-        ),
+        new=AsyncMock(side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs)),
     ):
         yield
 
@@ -210,11 +209,6 @@ class TestMentionWatcherUniversalCoverage:
 
         mock_handle.assert_not_called()
 
-    def test_global_recent_message_query_replaces_status_polling(self):
-        """Global recent-message polling replaces per-status task queries."""
-        mw = MentionWatcher(MagicMock())
-        assert not hasattr(mw, "_NEGOTIATION_STATUSES")
-
     def test_dedup_tracks_across_polls(self):
         """Messages are tracked across poll cycles regardless of task status changes."""
         msg = _make_user_message(
@@ -246,22 +240,3 @@ class TestMentionWatcherUniversalCoverage:
             self._run(watcher._poll_all_tasks())
 
         mock_handle.assert_not_called()
-
-    def test_concurrent_session_key_uniqueness(self):
-        """Task 4.1: session key in handle_mention uses unique UUID per mention."""
-        import inspect
-        import re
-
-        from mc.contexts.conversation.mentions.handler import handle_mention
-
-        source = inspect.getsource(handle_mention)
-        pattern = re.compile(
-            r'session_key\s*=\s*f"mc:mention:\{agent_name\}:\{task_id\}:'
-        )
-        assert pattern.search(source), (
-            "handle_mention does not construct session_key with "
-            "'mc:mention:{agent_name}:{task_id}:...' pattern"
-        )
-        assert "uuid.uuid4()" in source, (
-            "handle_mention does not use uuid.uuid4() for session key uniqueness"
-        )

@@ -2,11 +2,9 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from nanobot.bus.queue import MessageBus
-from nanobot.channels.manager import ChannelManager
 from nanobot.channels.base import BaseChannel
+from nanobot.channels.manager import ChannelManager
 
 
 class FakeChannel(BaseChannel):
@@ -26,8 +24,17 @@ class TestRegisterChannel:
     def test_register_channel_adds_to_dict(self) -> None:
         config = MagicMock()
         # Disable all channels in config so _init_channels is a no-op
-        for ch_name in ("telegram", "whatsapp", "discord", "feishu",
-                        "mochat", "dingtalk", "email", "slack", "qq"):
+        for ch_name in (
+            "telegram",
+            "whatsapp",
+            "discord",
+            "feishu",
+            "mochat",
+            "dingtalk",
+            "email",
+            "slack",
+            "qq",
+        ):
             getattr(config.channels, ch_name).enabled = False
 
         bus = MessageBus()
@@ -41,8 +48,17 @@ class TestRegisterChannel:
 
     def test_register_channel_appears_in_enabled_list(self) -> None:
         config = MagicMock()
-        for ch_name in ("telegram", "whatsapp", "discord", "feishu",
-                        "mochat", "dingtalk", "email", "slack", "qq"):
+        for ch_name in (
+            "telegram",
+            "whatsapp",
+            "discord",
+            "feishu",
+            "mochat",
+            "dingtalk",
+            "email",
+            "slack",
+            "qq",
+        ):
             getattr(config.channels, ch_name).enabled = False
 
         bus = MessageBus()

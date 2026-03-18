@@ -1,17 +1,9 @@
 "use client";
 
-import {
-  File,
-  FileCode,
-  FileText,
-  Image,
-  X,
-} from "lucide-react";
+import { File, FileCode, FileText, Image, X } from "lucide-react";
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
-const CODE_EXTS = new Set([
-  ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".sh",
-]);
+const CODE_EXTS = new Set([".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".sh"]);
 
 function getFileIconType(name: string): "pdf" | "image" | "code" | "generic" {
   const dotIdx = name.lastIndexOf(".");
@@ -58,11 +50,7 @@ export function FileChip({ name, size, onRemove, href }: FileChipProps) {
       <span className="min-w-0 truncate" title={name}>
         {name}
       </span>
-      {size != null && (
-        <span className="text-muted-foreground/60 shrink-0">
-          {humanSize(size)}
-        </span>
-      )}
+      {size != null && <span className="text-muted-foreground/60 shrink-0">{humanSize(size)}</span>}
       {onRemove && (
         <button
           onClick={(e) => {

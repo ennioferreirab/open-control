@@ -49,6 +49,7 @@ class TestSnapshotOutputDir:
         (nanobot_output / "data.json").write_text("{}")
 
         from mc.types import task_safe_id
+
         # The task_safe_id will transform the ID
         safe_id = task_safe_id("test_task")
         assert safe_id == "test_task"
@@ -62,20 +63,14 @@ class TestCollectOutputArtifacts:
     """Tests for collect_output_artifacts."""
 
     def test_no_output_dir_returns_empty(self) -> None:
-        result = collect_output_artifacts(
-            "nonexistent_task_zzz_12345", {}
-        )
+        result = collect_output_artifacts("nonexistent_task_zzz_12345", {})
         assert result == []
 
     def test_none_pre_snapshot(self) -> None:
-        result = collect_output_artifacts(
-            "nonexistent_task_zzz_12345", None
-        )
+        result = collect_output_artifacts("nonexistent_task_zzz_12345", None)
         assert result == []
 
-    def test_new_files_detected(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_new_files_detected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """New files (not in pre-snapshot) are marked as created."""
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
@@ -90,9 +85,7 @@ class TestCollectOutputArtifacts:
         assert result[0]["path"] == "output/report.pdf"
         assert "PDF" in result[0]["description"]
 
-    def test_modified_files_detected(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_modified_files_detected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Files with newer mtime are marked as modified."""
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 

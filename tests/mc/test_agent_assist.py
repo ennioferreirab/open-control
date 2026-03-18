@@ -15,7 +15,6 @@ from mc.cli.agent_assist import (
     validate_yaml_content,
 )
 
-
 # ---------------------------------------------------------------------------
 # extract_yaml_from_response
 # ---------------------------------------------------------------------------
@@ -191,9 +190,7 @@ class TestGenerateAgentYaml:
         provider = MagicMock()
         provider.chat = AsyncMock(return_value=mock_response)
 
-        result = await generate_agent_yaml(
-            provider, "create an agent", feedback="add more skills"
-        )
+        result = await generate_agent_yaml(provider, "create an agent", feedback="add more skills")
         assert "updated-agent" in result
 
         # Check that feedback was included in the system prompt
@@ -254,9 +251,7 @@ class TestCreateAgentWorkspace:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         create_agent_workspace("my-agent", "name: my-agent\nrole: V1\nprompt: Old.")
-        config_path = create_agent_workspace(
-            "my-agent", "name: my-agent\nrole: V2\nprompt: New."
-        )
+        config_path = create_agent_workspace("my-agent", "name: my-agent\nrole: V2\nprompt: New.")
         assert "V2" in config_path.read_text()
 
 
@@ -279,6 +274,6 @@ class TestCancellationFlow:
         assert parsed is not None
         assert errors == []
         # No workspace should exist — validation is in-memory only
-        agent_dir = Path.home() / ".nanobot" / "agents" / "temp-agent"
+        Path.home() / ".nanobot" / "agents" / "temp-agent"
         # We cannot assert non-existence absolutely (other tests may create it),
         # but the point is that validate_yaml_content itself creates nothing.

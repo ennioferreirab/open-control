@@ -7,7 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from mc.runtime.cron_delivery import PendingDeliveries
-from mc.types import AuthorType, MessageType, NANOBOT_AGENT_NAME, is_lead_agent
+from mc.types import NANOBOT_AGENT_NAME, AuthorType, MessageType, is_lead_agent
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _requeue_cron_task(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     cron_job_id: str,
     task_id: str,
     message: str,
@@ -45,7 +45,9 @@ async def _requeue_cron_task(
 
     current_status = task.get("status", "")
     if current_status in ("in_progress", "assigned", "deleted"):
-        logger.info("[gateway] Cron origin task %s is '%s' — skipping re-queue", task_id, current_status)
+        logger.info(
+            "[gateway] Cron origin task %s is '%s' — skipping re-queue", task_id, current_status
+        )
         return None
 
     agent_name = agent or task.get("assigned_agent") or NANOBOT_AGENT_NAME
@@ -85,7 +87,7 @@ async def _requeue_cron_task(
 
 
 async def on_cron_job(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     job: Any,
     pending_deliveries: PendingDeliveries,
     plan_negotiation_supervisor: Any | None = None,

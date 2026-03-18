@@ -13,23 +13,19 @@ from unittest.mock import MagicMock, patch
 
 def _make_executor(bridge=None):
     from mc.contexts.execution.executor import TaskExecutor
+
     return TaskExecutor(bridge or MagicMock())
 
 
 class TestMaybeInjectOrientation:
-
     def test_orientation_injected_for_non_lead_agent(self, tmp_path):
         """Orientation content is prepended for non-lead agents."""
         mc_dir = tmp_path / ".nanobot" / "mc"
         mc_dir.mkdir(parents=True)
-        (mc_dir / "agent-orientation.md").write_text(
-            "use your skills", encoding="utf-8"
-        )
+        (mc_dir / "agent-orientation.md").write_text("use your skills", encoding="utf-8")
         executor = _make_executor()
         with patch("pathlib.Path.home", return_value=tmp_path):
-            result = executor._maybe_inject_orientation(
-                "youtube-summarizer", "agent prompt"
-            )
+            result = executor._maybe_inject_orientation("youtube-summarizer", "agent prompt")
         assert result is not None
         assert "use your skills" in result
         assert "agent prompt" in result
@@ -38,14 +34,10 @@ class TestMaybeInjectOrientation:
         """lead-agent is exempt from the global orientation."""
         mc_dir = tmp_path / ".nanobot" / "mc"
         mc_dir.mkdir(parents=True)
-        (mc_dir / "agent-orientation.md").write_text(
-            "use your skills", encoding="utf-8"
-        )
+        (mc_dir / "agent-orientation.md").write_text("use your skills", encoding="utf-8")
         executor = _make_executor()
         with patch("pathlib.Path.home", return_value=tmp_path):
-            result = executor._maybe_inject_orientation(
-                "lead-agent", "lead-agent prompt"
-            )
+            result = executor._maybe_inject_orientation("lead-agent", "lead-agent prompt")
         assert result == "lead-agent prompt"
         assert "use your skills" not in (result or "")
 

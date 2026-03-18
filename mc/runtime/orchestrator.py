@@ -39,7 +39,7 @@ AUTO_TITLE_PROMPT = (
 
 
 async def generate_title_via_low_agent(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     description: str,
 ) -> str | None:
     """Generate a concise title by delegating to the low-agent system agent.

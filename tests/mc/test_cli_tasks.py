@@ -1,12 +1,12 @@
 """Unit tests for CLI task commands (Story 2.7)."""
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
-from mc.cli import mc_app, _get_bridge, _get_status_color
+from mc.cli import _get_bridge, _get_status_color, mc_app
 
 runner = CliRunner()
 
@@ -175,7 +175,7 @@ class TestTasksCreate:
 
         with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
             with patch("mc.bridge.time.sleep"):
-                result = runner.invoke(mc_app, ["tasks", "create", "Test"])
+                runner.invoke(mc_app, ["tasks", "create", "Test"])
 
         mock_client.close.assert_called_once()
 
@@ -253,7 +253,12 @@ class TestTasksList:
         mock_client.query.return_value = [
             {"_id": "1", "title": "Done task", "status": "done", "createdAt": "2026-01-01"},
             {"_id": "2", "title": "Inbox task", "status": "inbox", "createdAt": "2026-01-02"},
-            {"_id": "3", "title": "In progress task", "status": "in_progress", "createdAt": "2026-01-03"},
+            {
+                "_id": "3",
+                "title": "In progress task",
+                "status": "in_progress",
+                "createdAt": "2026-01-03",
+            },
         ]
 
         with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):

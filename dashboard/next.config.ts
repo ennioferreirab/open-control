@@ -5,9 +5,7 @@ const nextConfig: NextConfig = {
     config.watchOptions = {
       ...config.watchOptions,
       ignored: [
-        ...(Array.isArray(config.watchOptions?.ignored)
-          ? config.watchOptions.ignored
-          : []),
+        ...(Array.isArray(config.watchOptions?.ignored) ? config.watchOptions.ignored : []),
         "**/convex/_generated/**",
         "**/node_modules/**",
       ],

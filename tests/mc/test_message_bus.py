@@ -3,7 +3,6 @@
 import asyncio
 
 import pytest
-
 from nanobot.bus.queue import MessageBus
 
 

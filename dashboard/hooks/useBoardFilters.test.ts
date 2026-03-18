@@ -82,7 +82,7 @@ describe("useBoardFilters", () => {
     };
     const { result, rerender } = renderHook(
       ({ search }: { search: ParsedSearch }) => useBoardFilters(search),
-      { initialProps: { search: initial } }
+      { initialProps: { search: initial } },
     );
     expect(result.current.hasFreeText).toBe(true);
 

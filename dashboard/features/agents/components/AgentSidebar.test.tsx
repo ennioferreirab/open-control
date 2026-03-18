@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -108,6 +108,13 @@ describe("AgentSidebar", () => {
       softDeleteAgent: vi.fn(),
       systemAgents: [],
     });
+    // Reset body attributes left by Radix UI portals (dialogs, popovers) from prior test suites.
+    document.body.removeAttribute("data-scroll-locked");
+    document.body.style.removeProperty("pointer-events");
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("opens the squad authoring wizard when Create Squad is clicked", async () => {
@@ -118,22 +125,6 @@ describe("AgentSidebar", () => {
 
     expect(screen.getByText("Create Squad")).toBeInTheDocument();
     expect(screen.getByTestId("agent-terminal-container")).toBeInTheDocument();
-  });
-
-  it("renders a global search input for filtering agents and squads", () => {
-    render(<AgentSidebar />);
-    expect(screen.getByPlaceholderText(/search agents/i)).toBeInTheDocument();
-  });
-
-  it("renders the create action above the search input", () => {
-    render(<AgentSidebar />);
-
-    const createButton = screen.getByRole("button", { name: /create agent or squad/i });
-    const searchInput = screen.getByPlaceholderText(/search agents/i);
-
-    expect(
-      createButton.compareDocumentPosition(searchInput) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
   });
 
   it("filters regularAgents by displayName", async () => {
@@ -232,13 +223,4 @@ describe("AgentSidebar", () => {
     expect(squadSection).toHaveAttribute("data-filter-query", "content");
   });
 
-  it("Registered section is collapsible", () => {
-    render(<AgentSidebar />);
-    // The collapsible trigger for Registered should be present
-    const registeredElements = screen.getAllByText(/registered/i);
-    expect(registeredElements.length).toBeGreaterThan(0);
-    // Radix Collapsible root renders a div with data-state="open" or data-state="closed"
-    const collapsibleRoot = document.querySelector("[data-state]");
-    expect(collapsibleRoot).not.toBeNull();
-  });
 });

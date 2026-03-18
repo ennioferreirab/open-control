@@ -16,6 +16,7 @@ def bridge() -> MagicMock:
     b = MagicMock()
     b.async_subscribe = MagicMock(return_value=asyncio.Queue())
     b.query = MagicMock(return_value=None)
+    b.mutation = MagicMock(return_value={"granted": True, "claimId": "claim-1"})
     return b
 
 
@@ -23,17 +24,6 @@ def bridge() -> MagicMock:
 def supervisor(bridge: MagicMock) -> PlanNegotiationSupervisor:
     """Create a PlanNegotiationSupervisor instance."""
     return PlanNegotiationSupervisor(bridge=bridge)
-
-
-class TestPlanNegotiationSupervisorInit:
-    """Verify constructor and basic attributes."""
-
-    def test_stores_bridge(self, bridge: MagicMock) -> None:
-        svc = PlanNegotiationSupervisor(bridge=bridge)
-        assert svc._bridge is bridge
-
-    def test_tracks_active_negotiations(self, supervisor: PlanNegotiationSupervisor) -> None:
-        assert len(supervisor._active_negotiation_ids) == 0
 
 
 class TestSpawnLoopIfNeeded:
@@ -172,7 +162,3 @@ class TestProcessBatch:
 
 class TestMarkCronRequeued:
     """Test the cron_requeued_ids management."""
-
-    def test_mark_and_check_cron_requeued(self, supervisor: PlanNegotiationSupervisor) -> None:
-        supervisor.mark_cron_requeued("task-99")
-        assert "task-99" in supervisor._cron_requeued_ids

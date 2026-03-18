@@ -40,9 +40,16 @@ VALID_TRANSITIONS: dict[str, list[str]] = dict(_SPEC["taskTransitions"])
 # Universal targets: allowed from ANY source state
 UNIVERSAL_TARGETS: set[str] = set(_SPEC["taskUniversalTargets"])
 
+def _parse_transition_key(k: str) -> tuple[str, str]:
+    parts = k.split("->")
+    if len(parts) != 2:
+        raise ValueError(f"Invalid transition key: {k}")
+    return (parts[0].strip(), parts[1].strip())
+
+
 # Map (from, to) -> activity event type
 TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
-    tuple(k.split("->")): v  # type: ignore[misc]
+    _parse_transition_key(k): v
     for k, v in _SPEC["taskTransitionEvents"].items()
 }
 
@@ -51,7 +58,7 @@ STEP_VALID_TRANSITIONS: dict[str, list[str]] = dict(_SPEC["stepTransitions"])
 
 # Map (from, to) -> activity event type for step transitions
 STEP_TRANSITION_EVENT_MAP: dict[tuple[str, str], str] = {
-    tuple(k.split("->")): v  # type: ignore[misc]
+    _parse_transition_key(k): v
     for k, v in _SPEC["stepTransitionEvents"].items()
 }
 
@@ -69,9 +76,7 @@ def is_valid_transition(current_status: str, new_status: str) -> bool:
 def validate_transition(current_status: str, new_status: str) -> None:
     """Validate a state transition. Raises ValueError if invalid."""
     if not is_valid_transition(current_status, new_status):
-        raise ValueError(
-            f"Cannot transition from '{current_status}' to '{new_status}'"
-        )
+        raise ValueError(f"Cannot transition from '{current_status}' to '{new_status}'")
 
 
 def get_event_type(current_status: str, new_status: str) -> str:
@@ -97,9 +102,7 @@ def is_valid_step_transition(current_status: str, new_status: str) -> bool:
 def validate_step_transition(current_status: str, new_status: str) -> None:
     """Validate a step state transition. Raises ValueError if invalid."""
     if not is_valid_step_transition(current_status, new_status):
-        raise ValueError(
-            f"Cannot transition step from '{current_status}' to '{new_status}'"
-        )
+        raise ValueError(f"Cannot transition step from '{current_status}' to '{new_status}'")
 
 
 def get_step_event_type(current_status: str, new_status: str) -> str:

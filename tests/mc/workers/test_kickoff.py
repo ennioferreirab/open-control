@@ -23,7 +23,9 @@ async def _sync_to_thread(func, *args, **kwargs):
 
 def _make_bridge() -> MagicMock:
     bridge = MagicMock()
+    bridge.mutation.return_value = {"granted": True}
     bridge.update_task_status.return_value = None
+    bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.create_activity.return_value = None
     bridge.get_steps_by_task.return_value = []
     return bridge
@@ -51,17 +53,17 @@ def _make_plan_dict() -> dict:
     return {
         "steps": [
             {
-                "tempId": "step_1",
+                "temp_id": "step_1",
                 "title": "Do something",
                 "description": "Do something useful",
-                "assignedAgent": "nanobot",
-                "blockedBy": [],
-                "parallelGroup": 1,
+                "assigned_agent": "nanobot",
+                "blocked_by": [],
+                "parallel_group": 1,
                 "order": 1,
             }
         ],
-        "generatedAt": "2024-01-01T00:00:00Z",
-        "generatedBy": "lead-agent",
+        "generated_at": "2024-01-01T00:00:00Z",
+        "generated_by": "lead-agent",
     }
 
 
@@ -279,26 +281,26 @@ class TestKickoffWorkerResume:
             "execution_plan": {
                 "steps": [
                     {
-                        "tempId": "step_1",
+                        "temp_id": "step_1",
                         "title": "Do something",
                         "description": "Existing work",
-                        "assignedAgent": "nanobot",
-                        "blockedBy": [],
-                        "parallelGroup": 1,
+                        "assigned_agent": "nanobot",
+                        "blocked_by": [],
+                        "parallel_group": 1,
                         "order": 1,
                     },
                     {
-                        "tempId": "step_2",
+                        "temp_id": "step_2",
                         "title": "New follow-up",
                         "description": "Continue after the first step",
-                        "assignedAgent": "nanobot",
-                        "blockedBy": ["step_1"],
-                        "parallelGroup": 2,
+                        "assigned_agent": "nanobot",
+                        "blocked_by": ["step_1"],
+                        "parallel_group": 2,
                         "order": 2,
                     },
                 ],
-                "generatedAt": "2024-01-01T00:00:00Z",
-                "generatedBy": "lead-agent",
+                "generated_at": "2024-01-01T00:00:00Z",
+                "generated_by": "lead-agent",
             },
         }
 

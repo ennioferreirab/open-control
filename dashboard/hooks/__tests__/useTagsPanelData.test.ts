@@ -58,12 +58,8 @@ describe("useTagsPanelData", () => {
   it("returns tags and attributes from queries", () => {
     const { result } = renderHook(() => useTagsPanelData());
 
-    expect(result.current.tags).toEqual([
-      { _id: "tag1", name: "Bug", color: "red" },
-    ]);
-    expect(result.current.attributes).toEqual([
-      { _id: "attr1", name: "Priority", type: "text" },
-    ]);
+    expect(result.current.tags).toEqual([{ _id: "tag1", name: "Bug", color: "red" }]);
+    expect(result.current.attributes).toEqual([{ _id: "attr1", name: "Priority", type: "text" }]);
   });
 
   it("returns semantic functions for all mutations", () => {

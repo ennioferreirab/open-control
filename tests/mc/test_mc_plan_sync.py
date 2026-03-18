@@ -1,4 +1,5 @@
 """Tests for MC plan sync: SyncIPCClient + MCPlanSyncHandler."""
+
 from __future__ import annotations
 
 import json
@@ -20,6 +21,7 @@ def _short_sock_path(name: str) -> str:
 # ---------------------------------------------------------------------------
 # SyncIPCClient tests
 # ---------------------------------------------------------------------------
+
 
 class TestSyncIPCClient:
     """Tests for the synchronous IPC client."""
@@ -52,6 +54,7 @@ class TestSyncIPCClient:
         t.start()
 
         from mc.hooks.ipc_sync import SyncIPCClient
+
         client = SyncIPCClient(sock_path)
         result = client.request("report_progress", {"message": "hello"})
         assert result == {"status": "Progress reported"}
@@ -61,6 +64,7 @@ class TestSyncIPCClient:
     def test_request_raises_connection_error_when_no_socket(self):
         """Client raises ConnectionError when socket doesn't exist."""
         from mc.hooks.ipc_sync import SyncIPCClient
+
         client = SyncIPCClient(_short_sock_path("mc_ipc_nonexistent.sock"))
         with pytest.raises(ConnectionError):
             client.request("report_progress", {"message": "hello"})
@@ -77,6 +81,7 @@ class TestSyncIPCClient:
         def handle():
             conn, _ = server.accept()
             import time
+
             time.sleep(10)  # Don't respond
             conn.close()
             server.close()
@@ -85,6 +90,7 @@ class TestSyncIPCClient:
         t.start()
 
         from mc.hooks.ipc_sync import SyncIPCClient
+
         client = SyncIPCClient(sock_path, timeout=0.5)
         with pytest.raises(ConnectionError):
             client.request("report_progress", {"message": "hello"})
@@ -95,12 +101,14 @@ class TestSyncIPCClient:
 # MC context discovery tests
 # ---------------------------------------------------------------------------
 
+
 class TestMCContextDiscovery:
     """Tests for _discover_mc_context in MCPlanSyncHandler."""
 
     def _make_handler(self, payload):
-        from mc.hooks.handlers.mc_plan_sync import MCPlanSyncHandler
         from mc.hooks.context import HookContext
+        from mc.hooks.handlers.mc_plan_sync import MCPlanSyncHandler
+
         ctx = HookContext("test-session")
         return MCPlanSyncHandler(ctx, payload)
 
@@ -141,11 +149,14 @@ class TestMCContextDiscovery:
         sock_path = str(tmp_path / "env.sock")
         Path(sock_path).touch()
 
-        with patch.dict(os.environ, {
-            "MC_SOCKET_PATH": sock_path,
-            "AGENT_NAME": "env-agent",
-            "TASK_ID": "env-task",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "MC_SOCKET_PATH": sock_path,
+                "AGENT_NAME": "env-agent",
+                "TASK_ID": "env-task",
+            },
+        ):
             handler = self._make_handler({"cwd": str(tmp_path)})
             mc_ctx = handler._discover_mc_context()
             assert mc_ctx is not None
@@ -175,12 +186,14 @@ class TestMCContextDiscovery:
 # Plan write sync tests
 # ---------------------------------------------------------------------------
 
+
 class TestPlanWriteSync:
     """Tests for _handle_plan_write in MCPlanSyncHandler."""
 
     def _make_handler(self, payload):
-        from mc.hooks.handlers.mc_plan_sync import MCPlanSyncHandler
         from mc.hooks.context import HookContext
+        from mc.hooks.handlers.mc_plan_sync import MCPlanSyncHandler
+
         ctx = HookContext("test-session")
         return MCPlanSyncHandler(ctx, payload)
 
@@ -277,6 +290,7 @@ class TestPlanWriteSync:
 # Task completed sync tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def tracker_setup(tmp_path):
     """Create a tracker JSON for task completion tests."""
@@ -286,12 +300,30 @@ def tracker_setup(tmp_path):
         "plan_file": "docs/plans/my-plan.md",
         "created_at": "2026-03-04T12:00:00Z",
         "steps": [
-            {"id": 1, "name": "Setup", "order": 1, "status": "completed",
-             "blocked_by": [], "parallel_group": 1},
-            {"id": 2, "name": "Build API", "order": 2, "status": "pending",
-             "blocked_by": [1], "parallel_group": 2},
-            {"id": 3, "name": "Frontend", "order": 3, "status": "pending",
-             "blocked_by": [1, 2], "parallel_group": 3},
+            {
+                "id": 1,
+                "name": "Setup",
+                "order": 1,
+                "status": "completed",
+                "blocked_by": [],
+                "parallel_group": 1,
+            },
+            {
+                "id": 2,
+                "name": "Build API",
+                "order": 2,
+                "status": "pending",
+                "blocked_by": [1],
+                "parallel_group": 2,
+            },
+            {
+                "id": 3,
+                "name": "Frontend",
+                "order": 3,
+                "status": "pending",
+                "blocked_by": [1, 2],
+                "parallel_group": 3,
+            },
         ],
     }
     tracker_path = tracker_dir / "my-plan.json"
@@ -303,14 +335,15 @@ class TestTaskCompletedSync:
     """Tests for _handle_task_completed in MCPlanSyncHandler."""
 
     def _make_handler(self, payload):
-        from mc.hooks.handlers.mc_plan_sync import MCPlanSyncHandler
         from mc.hooks.context import HookContext
+        from mc.hooks.handlers.mc_plan_sync import MCPlanSyncHandler
+
         ctx = HookContext("test-session")
         return MCPlanSyncHandler(ctx, payload)
 
     def test_reports_step_completion_to_mc(self, tracker_setup):
         """Completing a task reports progress via IPC."""
-        tmp_path, tracker_dir, tracker_path = tracker_setup
+        tmp_path, _tracker_dir, _tracker_path = tracker_setup
         payload = {
             "hook_event_name": "TaskCompleted",
             "session_id": "test-session",
@@ -327,6 +360,7 @@ class TestTaskCompletedSync:
             return {"status": "Progress reported"}
 
         from mc.hooks.config import HookConfig
+
         config = HookConfig(tracker_dir=".claude/plan-tracker")
 
         with (
@@ -356,6 +390,7 @@ class TestTaskCompletedSync:
         mc_ctx = {"socket_path": "/tmp/fake.sock", "agent_name": "a", "task_id": "t"}
 
         from mc.hooks.config import HookConfig
+
         config = HookConfig(tracker_dir=".claude/plan-tracker")
 
         with (
@@ -378,6 +413,7 @@ class TestTaskCompletedSync:
         mc_ctx = {"socket_path": "/tmp/fake.sock", "agent_name": "a", "task_id": "t"}
 
         from mc.hooks.config import HookConfig
+
         config = HookConfig(tracker_dir=".claude/plan-tracker")
 
         with (
@@ -396,14 +432,15 @@ class TestTaskCompletedSync:
 # Integration: full dispatch test
 # ---------------------------------------------------------------------------
 
+
 class TestMCPlanSyncIntegration:
     """End-to-end test through the dispatcher."""
 
     def test_plan_write_dispatches_to_both_handlers(self, tmp_path):
         """PostToolUse/Write dispatches to both PlanTracker AND MCPlanSync."""
-        from mc.hooks.dispatcher import _dispatch
         from mc.hooks.config import HookConfig
         from mc.hooks.discovery import reset_cache
+        from mc.hooks.dispatcher import _dispatch
 
         plan_content = "### Task 1: Setup\n\n### Task 2: Build\n\n**Blocked by:** Task 1\n"
         plans_dir = tmp_path / "docs" / "plans"

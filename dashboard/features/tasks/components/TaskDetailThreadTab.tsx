@@ -114,9 +114,7 @@ export function TaskDetailThreadTab({
                       checked={filterStepIds?.has(step._id) ?? false}
                       onChange={() => toggleStep(step._id)}
                     />
-                    <span className="truncate">
-                      {step.title || step.description?.slice(0, 40)}
-                    </span>
+                    <span className="truncate">{step.title || step.description?.slice(0, 40)}</span>
                   </label>
                 ))}
               </div>
@@ -155,7 +153,9 @@ export function TaskDetailThreadTab({
           <p className="px-6 py-8 text-center text-sm text-muted-foreground">Loading messages...</p>
         ) : filteredMessages.length === 0 && !hasSourceThreads ? (
           <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-            {hasFilter ? "No messages for the selected steps." : "No messages yet. Agent activity will appear here."}
+            {hasFilter
+              ? "No messages for the selected steps."
+              : "No messages yet. Agent activity will appear here."}
           </p>
         ) : (
           <>
@@ -219,7 +219,9 @@ export function TaskDetailThreadTab({
             >
               {filteredMessages.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  {hasFilter ? "No messages for the selected steps." : "No messages yet. Agent activity will appear here."}
+                  {hasFilter
+                    ? "No messages for the selected steps."
+                    : "No messages yet. Agent activity will appear here."}
                 </p>
               )}
               {filteredMessages.map((msg) => (

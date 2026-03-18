@@ -26,9 +26,6 @@ export async function GET() {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return NextResponse.json({ channels: ["mc"] });
     }
-    return NextResponse.json(
-      { error: "Failed to read config" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to read config" }, { status: 500 });
   }
 }

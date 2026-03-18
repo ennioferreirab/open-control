@@ -3,6 +3,7 @@
 Discovers MC connection from .mcp.json in the CC workspace, then uses
 SyncIPCClient to call report_progress on the MC IPC server.
 """
+
 from __future__ import annotations
 
 import json
@@ -10,12 +11,12 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from ..config import get_config, get_project_root
 from ..handler import BaseHandler
 from ..ipc_sync import SyncIPCClient
-from .plan_tracker import is_plan_file, parse_plan_tasks, compute_parallel_groups
+from .plan_tracker import compute_parallel_groups, is_plan_file, parse_plan_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,10 @@ logger = logging.getLogger(__name__)
 class MCPlanSyncHandler(BaseHandler):
     """Syncs plan events to Mission Control via IPC."""
 
-    events = [("PostToolUse", "Write"), ("TaskCompleted", None)]
+    events: ClassVar[list[tuple[str, str | None]]] = [
+        ("PostToolUse", "Write"),
+        ("TaskCompleted", None),
+    ]
 
     def handle(self) -> str | None:
         mc_ctx = self._discover_mc_context()
@@ -58,12 +62,7 @@ class MCPlanSyncHandler(BaseHandler):
             if mcp_json.is_file():
                 try:
                     config = json.loads(mcp_json.read_text())
-                    env = (
-                        config
-                        .get("mcpServers", {})
-                        .get("nanobot", {})
-                        .get("env", {})
-                    )
+                    env = config.get("mcpServers", {}).get("nanobot", {}).get("env", {})
                     sp = env.get("MC_SOCKET_PATH")
                     if sp and Path(sp).exists():
                         return {
@@ -103,20 +102,24 @@ class MCPlanSyncHandler(BaseHandler):
         for s in steps:
             groups.setdefault(s["parallel_group"], []).append(s["id"])
         group_desc = ", ".join(
-            f"group {g}: [{','.join(str(i) for i in ids)}]"
-            for g, ids in sorted(groups.items())
+            f"group {g}: [{','.join(str(i) for i in ids)}]" for g, ids in sorted(groups.items())
         )
         task_word = "task" if total == 1 else "tasks"
-        summary = f"Plan detected: {total} {task_word} in {len(groups)} parallel group(s). {group_desc}"
+        summary = (
+            f"Plan detected: {total} {task_word} in {len(groups)} parallel group(s). {group_desc}"
+        )
 
         # Report to MC (non-fatal)
         try:
             ipc = SyncIPCClient(mc_ctx["socket_path"])
-            ipc.request("report_progress", {
-                "message": summary,
-                "agent_name": mc_ctx["agent_name"],
-                "task_id": mc_ctx.get("task_id"),
-            })
+            ipc.request(
+                "report_progress",
+                {
+                    "message": summary,
+                    "agent_name": mc_ctx["agent_name"],
+                    "task_id": mc_ctx.get("task_id"),
+                },
+            )
         except (ConnectionError, OSError) as exc:
             logger.debug("MC plan sync: IPC failed (non-fatal): %s", exc)
 
@@ -124,9 +127,8 @@ class MCPlanSyncHandler(BaseHandler):
 
     def _handle_task_completed(self, mc_ctx: dict[str, Any]) -> str | None:
         """Match completed task to a plan step and report progress to MC."""
-        subject = (
-            self.payload.get("task_subject", "")
-            or self.payload.get("task", {}).get("subject", "")
+        subject = self.payload.get("task_subject", "") or self.payload.get("task", {}).get(
+            "subject", ""
         )
         if not subject:
             return None
@@ -186,11 +188,14 @@ class MCPlanSyncHandler(BaseHandler):
             # Report to MC (non-fatal)
             try:
                 ipc = SyncIPCClient(mc_ctx["socket_path"])
-                ipc.request("report_progress", {
-                    "message": summary,
-                    "agent_name": mc_ctx["agent_name"],
-                    "task_id": mc_ctx.get("task_id"),
-                })
+                ipc.request(
+                    "report_progress",
+                    {
+                        "message": summary,
+                        "agent_name": mc_ctx["agent_name"],
+                        "task_id": mc_ctx.get("task_id"),
+                    },
+                )
             except (ConnectionError, OSError) as exc:
                 logger.debug("MC plan sync: IPC failed (non-fatal): %s", exc)
 

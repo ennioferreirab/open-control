@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X, Trash2, ExternalLink } from "lucide-react";
-import { parseCronToTable } from "@/lib/cron-parser";
+import { parseCronToTable } from "@/lib/cronParser";
 
 interface CronSchedule {
   kind: "at" | "every" | "cron";
@@ -104,8 +99,7 @@ function formatRelative(ms: number | null): string {
   const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
   if (abs < 60_000) return rtf.format(Math.round(diff / 1000), "seconds");
   if (abs < 3_600_000) return rtf.format(Math.round(diff / 60_000), "minutes");
-  if (abs < 86_400_000)
-    return rtf.format(Math.round(diff / 3_600_000), "hours");
+  if (abs < 86_400_000) return rtf.format(Math.round(diff / 3_600_000), "hours");
   return rtf.format(Math.round(diff / 86_400_000), "days");
 }
 
@@ -214,13 +208,16 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-w-4xl w-full max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
         <DialogHeader className="flex flex-row items-center justify-between px-6 py-4 border-b shrink-0">
           <div className="flex items-center gap-2">
-            <DialogTitle className="text-base font-medium">
-              Scheduled Cron Jobs
-            </DialogTitle>
+            <DialogTitle className="text-base font-medium">Scheduled Cron Jobs</DialogTitle>
             <div className="flex items-center gap-1 ml-4">
               {enabledChannels.map((ch) => (
                 <Badge key={ch} variant="outline" className="text-[10px] px-1.5 py-0">
@@ -244,17 +241,12 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
           {loading && (
             <div className="flex flex-col gap-2">
               {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-10 bg-muted animate-pulse rounded"
-                />
+                <div key={i} className="h-10 bg-muted animate-pulse rounded" />
               ))}
             </div>
           )}
 
-          {error && (
-            <p className="text-sm text-red-500 text-center py-8">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-500 text-center py-8">{error}</p>}
 
           {!loading && !error && jobs.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">
@@ -284,10 +276,7 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                     <td className="py-2 pr-4">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{job.name}</span>
-                        <Badge
-                          variant={job.enabled ? "default" : "secondary"}
-                          className="text-xs"
-                        >
+                        <Badge variant={job.enabled ? "default" : "secondary"} className="text-xs">
                           {job.enabled ? "enabled" : "disabled"}
                         </Badge>
                       </div>
@@ -296,29 +285,29 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                       {job.payload.agent ?? "—"}
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground text-xs">
-                      <div className="font-mono">
-                        {formatSchedule(job.schedule)}
-                      </div>
-                      {job.schedule.kind === "cron" && job.schedule.expr && (() => {
-                        const parsed = parseCronToTable(job.schedule.expr);
-                        if (!parsed) return null;
-                        return (
-                          <div className="mt-1 grid grid-cols-3 gap-x-3 text-[11px] text-muted-foreground">
-                            <div>
-                              <span className="font-medium text-foreground/70">Days</span>
-                              <div>{parsed.days}</div>
+                      <div className="font-mono">{formatSchedule(job.schedule)}</div>
+                      {job.schedule.kind === "cron" &&
+                        job.schedule.expr &&
+                        (() => {
+                          const parsed = parseCronToTable(job.schedule.expr);
+                          if (!parsed) return null;
+                          return (
+                            <div className="mt-1 grid grid-cols-3 gap-x-3 text-[11px] text-muted-foreground">
+                              <div>
+                                <span className="font-medium text-foreground/70">Days</span>
+                                <div>{parsed.days}</div>
+                              </div>
+                              <div>
+                                <span className="font-medium text-foreground/70">Hours</span>
+                                <div>{parsed.hours}</div>
+                              </div>
+                              <div>
+                                <span className="font-medium text-foreground/70">Minutes</span>
+                                <div>{parsed.minutes}</div>
+                              </div>
                             </div>
-                            <div>
-                              <span className="font-medium text-foreground/70">Hours</span>
-                              <div>{parsed.hours}</div>
-                            </div>
-                            <div>
-                              <span className="font-medium text-foreground/70">Minutes</span>
-                              <div>{parsed.minutes}</div>
-                            </div>
-                          </div>
-                        );
-                      })()}
+                          );
+                        })()}
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground text-xs">
                       {editingJob === job.id ? (
@@ -330,7 +319,9 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                           >
                             <option value="">— none —</option>
                             {enabledChannels.map((ch) => (
-                              <option key={ch} value={ch}>{ch}</option>
+                              <option key={ch} value={ch}>
+                                {ch}
+                              </option>
                             ))}
                           </select>
                           <div className="flex gap-1">
@@ -350,7 +341,13 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                                     setJobs((prev) =>
                                       prev.map((j) =>
                                         j.id === job.id
-                                          ? { ...j, payload: { ...j.payload, channel: editChannel || null } }
+                                          ? {
+                                              ...j,
+                                              payload: {
+                                                ...j.payload,
+                                                channel: editChannel || null,
+                                              },
+                                            }
                                           : j,
                                       ),
                                     );
@@ -367,7 +364,10 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                             </button>
                             <button
                               className="text-[10px] text-muted-foreground hover:underline"
-                              onClick={() => { setEditingJob(null); setSaveError(null); }}
+                              onClick={() => {
+                                setEditingJob(null);
+                                setSaveError(null);
+                              }}
                             >
                               cancel
                             </button>
@@ -386,11 +386,17 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                           {job.payload.channel ? (
                             <span className="flex items-center gap-1" title={job.payload.channel}>
                               {job.payload.channel === "telegram" ? (
-                                <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-[#229ED9]">
-                                  <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                  className="h-4 w-4 text-[#229ED9]"
+                                >
+                                  <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
                                 </svg>
                               ) : job.payload.channel === "mc" ? (
-                                <span className="inline-flex items-center justify-center h-5 px-1.5 rounded text-[10px] font-bold bg-foreground/10 text-foreground/70">MC</span>
+                                <span className="inline-flex items-center justify-center h-5 px-1.5 rounded text-[10px] font-bold bg-foreground/10 text-foreground/70">
+                                  MC
+                                </span>
                               ) : (
                                 <span className="text-xs">{job.payload.channel}</span>
                               )}
@@ -405,25 +411,27 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
                       {formatRelative(job.state.lastRunAtMs)}
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground text-xs">
-                      {job.enabled
-                        ? formatRelative(job.state.nextRunAtMs)
-                        : "—"}
+                      {job.enabled ? formatRelative(job.state.nextRunAtMs) : "—"}
                     </td>
                     <td className="py-2 pr-4">
                       {job.state.lastStatus ? (
-                        <StatusBadge
-                          status={job.state.lastStatus}
-                          error={job.state.lastError}
-                        />
+                        <StatusBadge status={job.state.lastStatus} error={job.state.lastError} />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </td>
                     <td className="py-2 pr-4">
                       {resolveTaskId(job) ? (
-                        <Button variant="ghost" size="icon" aria-label="Open related task"
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Open related task"
                           className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          onClick={() => { onClose(); onTaskClick(resolveTaskId(job)!); }}>
+                          onClick={() => {
+                            onClose();
+                            onTaskClick(resolveTaskId(job)!);
+                          }}
+                        >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Button>
                       ) : (
@@ -466,9 +474,7 @@ export function CronJobsModal({ open, onClose, onTaskClick }: Props) {
             <AlertDialogTitle>Delete &quot;{confirmDeleteJob?.name}&quot;?</AlertDialogTitle>
             <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
-          {deleteError && (
-            <p className="text-xs text-red-500 -mt-2">{deleteError}</p>
-          )}
+          {deleteError && <p className="text-xs text-red-500 -mt-2">{deleteError}</p>}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction

@@ -18,19 +18,16 @@ vi.mock("../convex/_generated/api", () => ({
 }));
 
 vi.mock("./FileChip", () => ({
-  FileChip: ({
-    name,
-    onRemove,
-  }: {
-    name: string;
-    onRemove?: () => void;
-  }) => {
+  FileChip: ({ name, onRemove }: { name: string; onRemove?: () => void }) => {
     const ext = name.split(".").pop()?.toLowerCase();
     const icon =
-      ext === "pdf" ? "icon-pdf" :
-      ["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext ?? "") ? "icon-image" :
-      ["py", "ts", "tsx", "js", "jsx", "go", "rs", "java", "sh"].includes(ext ?? "") ? "icon-code" :
-      "icon-generic";
+      ext === "pdf"
+        ? "icon-pdf"
+        : ["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext ?? "")
+          ? "icon-image"
+          : ["py", "ts", "tsx", "js", "jsx", "go", "rs", "java", "sh"].includes(ext ?? "")
+            ? "icon-code"
+            : "icon-generic";
 
     return (
       <div>
@@ -79,66 +76,36 @@ describe("StepFileAttachment", () => {
   });
 
   it("renders file list when files are attached", () => {
-    render(
-      <StepFileAttachment
-        {...defaultProps}
-        attachedFiles={["report.pdf", "data.csv"]}
-      />
-    );
+    render(<StepFileAttachment {...defaultProps} attachedFiles={["report.pdf", "data.csv"]} />);
     expect(screen.getByTitle("report.pdf")).toBeInTheDocument();
     expect(screen.getByTitle("data.csv")).toBeInTheDocument();
   });
 
   it("still renders Attach button when files are attached", () => {
-    render(
-      <StepFileAttachment
-        {...defaultProps}
-        attachedFiles={["report.pdf"]}
-      />
-    );
+    render(<StepFileAttachment {...defaultProps} attachedFiles={["report.pdf"]} />);
     expect(screen.getByRole("button", { name: /attach/i })).toBeInTheDocument();
   });
 
   it("shows FileText icon for PDF files", () => {
-    render(
-      <StepFileAttachment
-        {...defaultProps}
-        attachedFiles={["document.pdf"]}
-      />
-    );
+    render(<StepFileAttachment {...defaultProps} attachedFiles={["document.pdf"]} />);
     expect(screen.getByTitle("document.pdf")).toBeInTheDocument();
     expect(screen.getByTestId("icon-pdf")).toBeInTheDocument();
   });
 
   it("shows Image icon for image files", () => {
-    render(
-      <StepFileAttachment
-        {...defaultProps}
-        attachedFiles={["photo.png"]}
-      />
-    );
+    render(<StepFileAttachment {...defaultProps} attachedFiles={["photo.png"]} />);
     expect(screen.getByTitle("photo.png")).toBeInTheDocument();
     expect(screen.getByTestId("icon-image")).toBeInTheDocument();
   });
 
   it("shows FileCode icon for code files", () => {
-    render(
-      <StepFileAttachment
-        {...defaultProps}
-        attachedFiles={["script.py"]}
-      />
-    );
+    render(<StepFileAttachment {...defaultProps} attachedFiles={["script.py"]} />);
     expect(screen.getByTitle("script.py")).toBeInTheDocument();
     expect(screen.getByTestId("icon-code")).toBeInTheDocument();
   });
 
   it("shows File icon for other file types", () => {
-    render(
-      <StepFileAttachment
-        {...defaultProps}
-        attachedFiles={["data.xyz"]}
-      />
-    );
+    render(<StepFileAttachment {...defaultProps} attachedFiles={["data.xyz"]} />);
     expect(screen.getByTitle("data.xyz")).toBeInTheDocument();
     expect(screen.getByTestId("icon-generic")).toBeInTheDocument();
   });
@@ -150,7 +117,7 @@ describe("StepFileAttachment", () => {
         {...defaultProps}
         attachedFiles={["report.pdf"]}
         onFileRemoved={onFileRemoved}
-      />
+      />,
     );
 
     const removeButton = screen.getByLabelText("Remove report.pdf");
@@ -166,7 +133,7 @@ describe("StepFileAttachment", () => {
       () =>
         new Promise((resolve) => {
           resolveFetch = resolve;
-        })
+        }),
     );
 
     render(<StepFileAttachment {...defaultProps} />);
@@ -226,17 +193,18 @@ describe("StepFileAttachment", () => {
       ok: true,
       json: async () => ({
         files: [
-          { name: "report.pdf", type: "application/pdf", size: 1024, subfolder: "attachments", uploadedAt: "2026-01-01" },
+          {
+            name: "report.pdf",
+            type: "application/pdf",
+            size: 1024,
+            subfolder: "attachments",
+            uploadedAt: "2026-01-01",
+          },
         ],
       }),
     });
 
-    render(
-      <StepFileAttachment
-        {...defaultProps}
-        onFilesAttached={onFilesAttached}
-      />
-    );
+    render(<StepFileAttachment {...defaultProps} onFilesAttached={onFilesAttached} />);
 
     const fileInput = screen
       .getByLabelText("Attach files to step")
@@ -261,7 +229,13 @@ describe("StepFileAttachment", () => {
       ok: true,
       json: async () => ({
         files: [
-          { name: "report.pdf", type: "application/pdf", size: 1024, subfolder: "attachments", uploadedAt: "2026-01-01" },
+          {
+            name: "report.pdf",
+            type: "application/pdf",
+            size: 1024,
+            subfolder: "attachments",
+            uploadedAt: "2026-01-01",
+          },
         ],
       }),
     });
@@ -271,7 +245,7 @@ describe("StepFileAttachment", () => {
         {...defaultProps}
         attachedFiles={["report.pdf"]} // already attached
         onFilesAttached={onFilesAttached}
-      />
+      />,
     );
 
     const fileInput = screen

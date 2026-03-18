@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createDraft, list, listByStatus, publish } from "./reviewSpecs";
+import { createDraft, listByStatus, publish } from "./reviewSpecs";
 
 type InsertCall = {
   table: string;
@@ -57,6 +57,8 @@ describe("reviewSpecs.createDraft", () => {
     await handler(ctx, {
       name: "Standard Review",
       scope: "workflow",
+      criteria: [],
+      approvalThreshold: 0.7,
     });
 
     expect(inserts).toHaveLength(1);
@@ -72,15 +74,16 @@ describe("reviewSpecs.createDraft", () => {
     const { ctx, inserts } = makeCtx();
 
     const criteria = [
-      { name: "correctness", weight: 0.5, description: "Is the output correct?" },
-      { name: "style", weight: 0.3, description: "Does it follow style guidelines?" },
-      { name: "completeness", weight: 0.2, description: "Is it complete?" },
+      { id: "correctness", label: "Correctness", weight: 0.5, description: "Is the output correct?" },
+      { id: "style", label: "Style", weight: 0.3, description: "Does it follow style guidelines?" },
+      { id: "completeness", label: "Completeness", weight: 0.2, description: "Is it complete?" },
     ];
 
     await handler(ctx, {
       name: "Code Review",
       scope: "agent",
       criteria,
+      approvalThreshold: 0.7,
     });
 
     expect(inserts[0].value.criteria).toEqual(criteria);
@@ -95,26 +98,26 @@ describe("reviewSpecs.createDraft", () => {
     await handler(ctx, {
       name: "Security Review",
       scope: "workflow",
+      criteria: [],
+      approvalThreshold: 0.8,
       vetoConditions,
     });
 
     expect(inserts[0].value.vetoConditions).toEqual(vetoConditions);
   });
 
-  it("stores approval policy when provided", async () => {
+  it("stores approvalThreshold when provided", async () => {
     const handler = getHandler(createDraft);
     const { ctx, inserts } = makeCtx();
 
     await handler(ctx, {
       name: "Threshold Review",
       scope: "execution",
-      approvalPolicy: { minScore: 0.8, requiresHumanApproval: false },
+      criteria: [],
+      approvalThreshold: 0.8,
     });
 
-    expect(inserts[0].value.approvalPolicy).toEqual({
-      minScore: 0.8,
-      requiresHumanApproval: false,
-    });
+    expect(inserts[0].value.approvalThreshold).toBe(0.8);
   });
 
   it("stores reviewerPolicy when provided", async () => {
@@ -124,10 +127,12 @@ describe("reviewSpecs.createDraft", () => {
     await handler(ctx, {
       name: "Multi-reviewer",
       scope: "workflow",
-      reviewerPolicy: { type: "agent", agentName: "lead" },
+      criteria: [],
+      approvalThreshold: 0.7,
+      reviewerPolicy: "lead-agent",
     });
 
-    expect(inserts[0].value.reviewerPolicy).toEqual({ type: "agent", agentName: "lead" });
+    expect(inserts[0].value.reviewerPolicy).toBe("lead-agent");
   });
 
   it("sets createdAt and updatedAt on insert", async () => {
@@ -137,6 +142,8 @@ describe("reviewSpecs.createDraft", () => {
     await handler(ctx, {
       name: "Timestamped Review",
       scope: "agent",
+      criteria: [],
+      approvalThreshold: 0.7,
     });
 
     expect(typeof inserts[0].value.createdAt).toBe("string");
@@ -158,7 +165,7 @@ describe("reviewSpecs.publish", () => {
 
     expect(patches).toHaveLength(1);
     expect(patches[0].patch.status).toBe("published");
-    expect(typeof patches[0].patch.publishedAt).toBe("string");
+    expect(typeof patches[0].patch.updatedAt).toBe("string");
   });
 
   it("bumps version on publish", async () => {
@@ -199,41 +206,7 @@ describe("reviewSpecs.publish", () => {
   });
 });
 
-describe("reviewSpecs.list", () => {
-  it("returns all reviewSpecs", async () => {
-    const handler = getHandler(list);
-    const { ctx } = makeCtx({
-      _id: "review-spec-id",
-      name: "Standard Review",
-      status: "published",
-      version: 1,
-      scope: "workflow",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    const result = await handler(ctx, {});
-    expect(Array.isArray(result)).toBe(true);
-  });
-});
-
 describe("reviewSpecs.listByStatus", () => {
-  it("returns reviewSpecs filtered by the given status", async () => {
-    const handler = getHandler(listByStatus);
-    const { ctx } = makeCtx({
-      _id: "review-spec-id",
-      name: "Standard Review",
-      status: "draft",
-      version: 1,
-      scope: "workflow",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    const result = await handler(ctx, { status: "draft" });
-    expect(Array.isArray(result)).toBe(true);
-  });
-
   it("returns an empty array when no specs match the status", async () => {
     const handler = getHandler(listByStatus);
     const { ctx } = makeCtx();

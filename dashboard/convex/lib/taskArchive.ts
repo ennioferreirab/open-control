@@ -70,10 +70,7 @@ export async function listDoneTaskHistory(ctx: ArchiveQueryCtx): Promise<Doc<"ta
   return all;
 }
 
-export async function softDeleteTask(
-  ctx: ArchiveMutationCtx,
-  taskId: Id<"tasks">,
-): Promise<void> {
+export async function softDeleteTask(ctx: ArchiveMutationCtx, taskId: Id<"tasks">): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task) throw new ConvexError("Task not found");
   if (task.status === "deleted") {

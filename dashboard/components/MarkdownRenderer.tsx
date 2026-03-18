@@ -84,12 +84,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           code({ className: cls, children, ...props }) {
             const match = /language-(\w+)/.exec(cls || "");
             if (match) {
-              return (
-                <CodeBlock
-                  code={String(children).replace(/\n$/, "")}
-                  language={match[1]}
-                />
-              );
+              return <CodeBlock code={String(children).replace(/\n$/, "")} language={match[1]} />;
             }
             return (
               <code
@@ -123,14 +118,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
             );
           },
           h2({ children }) {
-            return (
-              <h2 className="text-sm font-semibold mb-2 mt-3 first:mt-0">{children}</h2>
-            );
+            return <h2 className="text-sm font-semibold mb-2 mt-3 first:mt-0">{children}</h2>;
           },
           h3({ children }) {
-            return (
-              <h3 className="text-sm font-medium mb-1 mt-2 first:mt-0">{children}</h3>
-            );
+            return <h3 className="text-sm font-medium mb-1 mt-2 first:mt-0">{children}</h3>;
           },
           blockquote({ children }) {
             return (
@@ -172,9 +163,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           },
           th({ children }) {
             return (
-              <th className="px-3 py-2 font-medium text-left border-b border-border">
-                {children}
-              </th>
+              <th className="px-3 py-2 font-medium text-left border-b border-border">{children}</th>
             );
           },
           td({ children }) {

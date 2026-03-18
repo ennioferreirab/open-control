@@ -132,7 +132,7 @@ def is_mention_message(content: str) -> bool:
 
 
 async def handle_mention(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     task_id: str,
     agent_name: str,
     query: str,
@@ -404,7 +404,7 @@ async def handle_mention(
         # End the session (mention is a one-shot interaction)
         # await loop.end_task_session(session_key)
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         response = (
             f"@{agent_name} timed out after {MENTION_TIMEOUT_SECONDS} seconds "
             "and could not respond."
@@ -441,7 +441,7 @@ async def handle_mention(
 
 
 async def handle_all_mentions(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     task_id: str,
     content: str,
     task_title: str = "",
@@ -487,7 +487,7 @@ async def handle_all_mentions(
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for (agent_name, _), result in zip(mentions, results):
+    for (agent_name, _), result in zip(mentions, results, strict=False):
         if isinstance(result, Exception):
             logger.error(
                 "[mention_handler] Failed to handle mention @%s on task %s: %s",

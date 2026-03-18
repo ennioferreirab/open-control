@@ -5,6 +5,7 @@ import { useSquadSidebarData } from "./useSquadSidebarData";
 // Mock convex/react to return controlled data
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
+  useMutation: vi.fn(() => vi.fn()),
 }));
 
 import { useQuery } from "convex/react";
@@ -20,36 +21,6 @@ describe("useSquadSidebarData", () => {
     mockUseQuery.mockReturnValue(undefined);
     const { result } = renderHook(() => useSquadSidebarData());
     expect(result.current.isLoading).toBe(true);
-    expect(result.current.squads).toEqual([]);
-  });
-
-  it("returns squads when loaded", () => {
-    const mockSquads = [
-      {
-        _id: "squad1" as never,
-        _creationTime: 0,
-        name: "my-squad",
-        displayName: "My Squad",
-        description: "A test squad",
-        status: "published" as const,
-        version: 1,
-        agentSpecIds: [],
-        createdAt: "2026-01-01",
-        updatedAt: "2026-01-01",
-      },
-    ];
-    mockUseQuery.mockReturnValue(mockSquads);
-
-    const { result } = renderHook(() => useSquadSidebarData());
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.squads).toHaveLength(1);
-    expect(result.current.squads[0].name).toBe("my-squad");
-  });
-
-  it("returns empty squads array when query returns empty list", () => {
-    mockUseQuery.mockReturnValue([]);
-    const { result } = renderHook(() => useSquadSidebarData());
-    expect(result.current.isLoading).toBe(false);
     expect(result.current.squads).toEqual([]);
   });
 

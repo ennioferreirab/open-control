@@ -60,8 +60,8 @@ async def execute_step_via_cc(
 
     Returns list of unblocked step IDs after completion.
     """
-    from mc.infrastructure.config import AGENTS_DIR
     from mc.infrastructure.agents.yaml_validator import validate_agent_file
+    from mc.infrastructure.config import AGENTS_DIR
 
     cc_model_name = extract_cc_model_name(agent_model)
 
@@ -88,13 +88,9 @@ async def execute_step_via_cc(
 
     # Try to enrich from Convex agent data (for claude_code_opts not in config.yaml)
     try:
-        convex_agent_raw = await asyncio.to_thread(
-            bridge.get_agent_by_name, agent_name
-        )
+        convex_agent_raw = await asyncio.to_thread(bridge.get_agent_by_name, agent_name)
         if convex_agent_raw:
-            agent_data_for_cc.display_name = convex_agent_raw.get(
-                "display_name", agent_name
-            )
+            agent_data_for_cc.display_name = convex_agent_raw.get("display_name", agent_name)
             agent_data_for_cc.role = convex_agent_raw.get("role", "agent")
             # Sync skills from Convex (same pattern as prompt/model)
             convex_skills = convex_agent_raw.get("skills")
@@ -112,16 +108,12 @@ async def execute_step_via_cc(
                 agent_data_for_cc.claude_code_opts = ClaudeCodeOpts(
                     max_budget_usd=cc_opts_raw.get("max_budget_usd"),
                     max_turns=cc_opts_raw.get("max_turns"),
-                    permission_mode=cc_opts_raw.get(
-                        "permission_mode", "acceptEdits"
-                    ),
+                    permission_mode=cc_opts_raw.get("permission_mode", "acceptEdits"),
                     allowed_tools=cc_opts_raw.get("allowed_tools"),
                     disallowed_tools=cc_opts_raw.get("disallowed_tools"),
                 )
     except Exception:
-        logger.warning(
-            "[dispatcher] Could not enrich agent data for CC routing"
-        )
+        logger.warning("[dispatcher] Could not enrich agent data for CC routing")
 
     # Build ExecutionRequest for the step
     request = ExecutionRequest(
@@ -154,8 +146,7 @@ async def execute_step_via_cc(
 
     if not engine_result.success:
         raise RuntimeError(
-            engine_result.error_message
-            or f"CC execution failed for step '{step_title}'"
+            engine_result.error_message or f"CC execution failed for step '{step_title}'"
         )
 
     output = engine_result.output
@@ -167,9 +158,7 @@ async def execute_step_via_cc(
             task_id,
             engine_result.memory_workspace,
         )
-    artifacts = await asyncio.to_thread(
-        collect_output_artifacts, task_id, pre_snapshot
-    )
+    artifacts = await asyncio.to_thread(collect_output_artifacts, task_id, pre_snapshot)
     try:
         await asyncio.to_thread(
             bridge.sync_task_output_files,
@@ -178,9 +167,7 @@ async def execute_step_via_cc(
             agent_name,
         )
     except Exception:
-        logger.exception(
-            "[dispatcher] Failed to sync output files for step %s", step_id
-        )
+        logger.exception("[dispatcher] Failed to sync output files for step %s", step_id)
 
     await asyncio.to_thread(
         bridge.post_step_completion,
@@ -202,9 +189,7 @@ async def execute_step_via_cc(
         task_id,
         agent_name,
     )
-    unblocked_ids = await asyncio.to_thread(
-        bridge.check_and_unblock_dependents, step_id
-    )
+    unblocked_ids = await asyncio.to_thread(bridge.check_and_unblock_dependents, step_id)
     return unblocked_ids if isinstance(unblocked_ids, list) else []
 
 

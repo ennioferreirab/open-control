@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
@@ -46,13 +45,13 @@ class AgentConfig(BaseModel):
     role: str
     prompt: str
     skills: list[str] = []
-    model: Optional[str] = None
-    display_name: Optional[str] = None
-    soul: Optional[str] = None
-    is_system: Optional[bool] = None
-    backend: Optional[str] = None
-    interactive_provider: Optional[str] = None
-    claude_code: Optional[dict] = None
+    model: str | None = None
+    display_name: str | None = None
+    soul: str | None = None
+    is_system: bool | None = None
+    backend: str | None = None
+    interactive_provider: str | None = None
+    claude_code: dict | None = None
 
     @field_validator("backend")
     @classmethod
@@ -240,15 +239,17 @@ def _parse_claude_code_opts(raw: dict) -> ClaudeCodeOpts:
     if budget is not None:
         try:
             budget = float(budget)
-        except (TypeError, ValueError):
-            raise ValueError(f"claude_code.max_budget_usd must be a number, got: {budget!r}")
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"claude_code.max_budget_usd must be a number, got: {budget!r}"
+            ) from exc
 
     turns = raw.get("max_turns")
     if turns is not None:
         try:
             turns = int(turns)
-        except (TypeError, ValueError):
-            raise ValueError(f"claude_code.max_turns must be an integer, got: {turns!r}")
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"claude_code.max_turns must be an integer, got: {turns!r}") from exc
 
     pm = raw.get("permission_mode", "acceptEdits")
     if not isinstance(pm, str):

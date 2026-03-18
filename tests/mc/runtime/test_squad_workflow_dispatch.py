@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mc.contexts.execution.step_dispatcher import StepDispatcher  # noqa: F401 used below
+from mc.contexts.execution.step_dispatcher import StepDispatcher
 from mc.runtime.workers.kickoff import KickoffResumeWorker
 from mc.types import ExecutionPlanStep, StepStatus
 

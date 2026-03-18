@@ -117,6 +117,8 @@ async def nanobot_memory_consolidation_hook(
 
     async def _consolidate() -> None:
         try:
+            if result.session_loop is None:
+                return
             await result.session_loop.end_task_session(result.session_id)
             _log_consolidation_event(
                 agent_name=request.agent_name,
@@ -194,6 +196,8 @@ def build_cc_task_memory_consolidation_hook(
 
         async def _consolidate() -> None:
             try:
+                if result.memory_workspace is None:
+                    return
                 model = resolve_consolidation_model(bridge)
                 if model is None:
                     _log_consolidation_event(
@@ -310,6 +314,8 @@ def build_interactive_memory_consolidation_hook(
 
         async def _consolidate() -> None:
             try:
+                if result.memory_workspace is None:
+                    return
                 model = resolve_consolidation_model(bridge)
                 if model is None:
                     _log_consolidation_event(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from filelock import FileLock
@@ -155,7 +155,7 @@ async def consolidate_history_and_memory(
             logger.warning("consolidate_history_and_memory: empty memory returned")
             return False
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         timestamp = now.strftime("%Y-%m-%d_%H%M%S")
 
         try:
@@ -167,11 +167,17 @@ async def consolidate_history_and_memory(
                     )
                     return False
 
-                tail_bytes = current_history_bytes[len(snapshot_history_bytes):]
+                tail_bytes = current_history_bytes[len(snapshot_history_bytes) :]
                 archive_block = _build_archive_block(history_text, len(snapshot_history_bytes), now)
-                existing_archive = archive_file.read_text(encoding="utf-8") if archive_file.exists() else ""
-                archive_prefix = "" if not existing_archive or existing_archive.endswith("\n") else "\n"
-                archive_file.write_text(existing_archive + archive_prefix + archive_block, encoding="utf-8")
+                existing_archive = (
+                    archive_file.read_text(encoding="utf-8") if archive_file.exists() else ""
+                )
+                archive_prefix = (
+                    "" if not existing_archive or existing_archive.endswith("\n") else "\n"
+                )
+                archive_file.write_text(
+                    existing_archive + archive_prefix + archive_block, encoding="utf-8"
+                )
 
                 if memory_text.strip():
                     archive_memory = memory_dir / f"MEMORY_{timestamp}.md"
@@ -200,4 +206,7 @@ async def consolidate_history_and_memory(
                 try:
                     snapshot_path.unlink(missing_ok=True)
                 except Exception:
-                    logger.debug("consolidate_history_and_memory: failed to delete snapshot %s", snapshot_path)
+                    logger.debug(
+                        "consolidate_history_and_memory: failed to delete snapshot %s",
+                        snapshot_path,
+                    )

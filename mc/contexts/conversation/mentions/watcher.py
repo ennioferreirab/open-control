@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from mc.bridge.runtime_claims import acquire_runtime_claim
@@ -59,7 +59,7 @@ class MentionWatcher:
 
     def __init__(
         self,
-        bridge: "ConvexBridge",
+        bridge: ConvexBridge,
         conversation_service: Any | None = None,
         sleep_controller: Any | None = None,
         *,
@@ -202,4 +202,4 @@ class MentionWatcher:
 
 def _now_iso() -> str:
     """Return current UTC time as ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

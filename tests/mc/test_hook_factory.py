@@ -19,6 +19,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -27,10 +28,10 @@ from mc.hooks.config import HookConfig, get_config, get_project_root
 from mc.hooks.context import HookContext, _safe_session_id
 from mc.hooks.handler import BaseHandler
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def hook_dirs(tmp_path: Path):
@@ -60,7 +61,9 @@ def hook_dirs(tmp_path: Path):
         yield tmp_path, tracker_dir, state_dir, plans_dir
 
 
-def _make_plan(plans_dir: Path, name: str = "test-plan.md", tasks: int = 3, blocked: bool = True) -> Path:
+def _make_plan(
+    plans_dir: Path, name: str = "test-plan.md", tasks: int = 3, blocked: bool = True
+) -> Path:
     """Create a test plan markdown file."""
     lines = ["# Test Plan\n"]
     for i in range(1, tasks + 1):
@@ -120,24 +123,31 @@ def _agent_event(event: str, agent_id: str, agent_type: str) -> dict:
 # BaseHandler tests
 # ---------------------------------------------------------------------------
 
+
 class TestBaseHandler:
     def test_matches_exact(self):
         class H(BaseHandler):
-            events = [("PostToolUse", "Write")]
+            events: ClassVar[list[tuple[str, str | None]]] = [("PostToolUse", "Write")]
+
         assert H.matches("PostToolUse", "Write") is True
         assert H.matches("PostToolUse", "Bash") is False
         assert H.matches("TaskCompleted", "Write") is False
 
     def test_matches_wildcard(self):
         class H(BaseHandler):
-            events = [("TaskCompleted", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [("TaskCompleted", None)]
+
         assert H.matches("TaskCompleted", "") is True
         assert H.matches("TaskCompleted", "anything") is True
         assert H.matches("PostToolUse", "") is False
 
     def test_matches_multi_events(self):
         class H(BaseHandler):
-            events = [("PostToolUse", "Write"), ("TaskCompleted", None)]
+            events: ClassVar[list[tuple[str, str | None]]] = [
+                ("PostToolUse", "Write"),
+                ("TaskCompleted", None),
+            ]
+
         assert H.matches("PostToolUse", "Write") is True
         assert H.matches("TaskCompleted", "x") is True
         assert H.matches("SubagentStart", "") is False
@@ -146,6 +156,7 @@ class TestBaseHandler:
 # ---------------------------------------------------------------------------
 # Config tests
 # ---------------------------------------------------------------------------
+
 
 class TestConfig:
     def test_defaults(self):
@@ -164,6 +175,7 @@ class TestConfig:
 # Context tests
 # ---------------------------------------------------------------------------
 
+
 class TestContext:
     def test_session_id_sanitization(self):
         assert _safe_session_id("normal-session-123") == "normal-session-123"
@@ -172,7 +184,7 @@ class TestContext:
         assert _safe_session_id("a/b\\c:d") == "a_b_c_d"
 
     def test_round_trip(self, hook_dirs):
-        root, _, state_dir, _ = hook_dirs
+        _root, _, _state_dir, _ = hook_dirs
         ctx = HookContext("test-rt")
         ctx.active_skill = "brainstorming"
         ctx.active_plan = "docs/plans/my-plan.md"
@@ -208,10 +220,12 @@ class TestContext:
 # Discovery tests
 # ---------------------------------------------------------------------------
 
+
 class TestDiscovery:
     def test_discovers_all_handlers(self):
         # Clear cache to force re-discovery
         import mc.hooks.discovery as disc
+
         disc.reset_cache()
         handlers = disc.discover_handlers()
         names = {h.__name__ for h in handlers}
@@ -224,6 +238,7 @@ class TestDiscovery:
 
     def test_cache_works(self):
         import mc.hooks.discovery as disc
+
         disc.reset_cache()
         h1 = disc.discover_handlers()
         h2 = disc.discover_handlers()
@@ -234,6 +249,7 @@ class TestDiscovery:
 # PlanTrackerHandler tests
 # ---------------------------------------------------------------------------
 
+
 class TestPlanTracker:
     def test_parse_plan_creates_tracker(self, hook_dirs):
         root, tracker_dir, _, plans_dir = hook_dirs
@@ -241,6 +257,7 @@ class TestPlanTracker:
         content = plan_path.read_text()
 
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
+
         ctx = HookContext("test")
         payload = _write_event("docs/plans/feature.md", content, root)
         handler = PlanTrackerHandler(ctx, payload)
@@ -263,6 +280,7 @@ class TestPlanTracker:
     def test_non_plan_file_returns_none(self, hook_dirs):
         root, _, _, _ = hook_dirs
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
+
         ctx = HookContext("test")
         payload = _write_event("src/main.py", "print('hi')", root)
         handler = PlanTrackerHandler(ctx, payload)
@@ -274,6 +292,7 @@ class TestPlanTracker:
         plan.write_text("# Just a title\nNo tasks here.")
 
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
+
         ctx = HookContext("test")
         payload = _write_event("docs/plans/empty.md", plan.read_text(), root)
         handler = PlanTrackerHandler(ctx, payload)
@@ -284,6 +303,7 @@ class TestPlanTracker:
         plan_path = _make_plan(plans_dir, "parallel.md", tasks=3, blocked=False)
 
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
+
         ctx = HookContext("test")
         payload = _write_event("docs/plans/parallel.md", plan_path.read_text(), root)
         handler = PlanTrackerHandler(ctx, payload)
@@ -318,12 +338,14 @@ class TestPlanTracker:
         assert data["steps"][1]["status"] == "pending"
 
     def test_completing_all_blockers_unblocks_task(self, hook_dirs):
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "unblock.md", tasks=3, blocked=True)
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
 
         ctx = HookContext("test")
-        PlanTrackerHandler(ctx, _write_event("docs/plans/unblock.md", plan_path.read_text(), root)).handle()
+        PlanTrackerHandler(
+            ctx, _write_event("docs/plans/unblock.md", plan_path.read_text(), root)
+        ).handle()
 
         # Complete Task 1
         PlanTrackerHandler(ctx, _task_completed_event("Task 1: Step 1 Name")).handle()
@@ -338,23 +360,29 @@ class TestPlanTracker:
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
 
         ctx = HookContext("test")
-        PlanTrackerHandler(ctx, _write_event("docs/plans/preserve.md", plan_path.read_text(), root)).handle()
+        PlanTrackerHandler(
+            ctx, _write_event("docs/plans/preserve.md", plan_path.read_text(), root)
+        ).handle()
         PlanTrackerHandler(ctx, _task_completed_event("Task 1: Step 1 Name")).handle()
 
         # Re-write the plan (simulates user editing)
-        PlanTrackerHandler(ctx, _write_event("docs/plans/preserve.md", plan_path.read_text(), root)).handle()
+        PlanTrackerHandler(
+            ctx, _write_event("docs/plans/preserve.md", plan_path.read_text(), root)
+        ).handle()
 
         data = json.loads((tracker_dir / "preserve.json").read_text())
         assert data["steps"][0]["status"] == "completed"  # preserved
         assert data["steps"][1]["status"] == "pending"
 
     def test_already_completed_is_noop(self, hook_dirs):
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "noop.md", tasks=2, blocked=False)
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
 
         ctx = HookContext("test")
-        PlanTrackerHandler(ctx, _write_event("docs/plans/noop.md", plan_path.read_text(), root)).handle()
+        PlanTrackerHandler(
+            ctx, _write_event("docs/plans/noop.md", plan_path.read_text(), root)
+        ).handle()
         PlanTrackerHandler(ctx, _task_completed_event("Task 1: Step 1 Name")).handle()
 
         # Complete again — should return None (no-op)
@@ -362,11 +390,12 @@ class TestPlanTracker:
         assert result is None
 
     def test_absolute_path_matching(self, hook_dirs):
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "abspath.md", tasks=2, blocked=False)
         abs_path = str(root / "docs" / "plans" / "abspath.md")
 
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
+
         ctx = HookContext("test")
         payload = _write_event(abs_path, plan_path.read_text(), root)
         result = PlanTrackerHandler(ctx, payload).handle()
@@ -375,12 +404,14 @@ class TestPlanTracker:
         assert "2 tasks" in result
 
     def test_no_match_task_returns_none(self, hook_dirs):
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "nomatch.md", tasks=2, blocked=False)
         from mc.hooks.handlers.plan_tracker import PlanTrackerHandler
 
         ctx = HookContext("test")
-        PlanTrackerHandler(ctx, _write_event("docs/plans/nomatch.md", plan_path.read_text(), root)).handle()
+        PlanTrackerHandler(
+            ctx, _write_event("docs/plans/nomatch.md", plan_path.read_text(), root)
+        ).handle()
 
         result = PlanTrackerHandler(ctx, _task_completed_event("Task 99: Nonexistent")).handle()
         assert result is None
@@ -390,9 +421,11 @@ class TestPlanTracker:
 # SkillTrackerHandler tests
 # ---------------------------------------------------------------------------
 
+
 class TestSkillTracker:
     def test_captures_skill(self, hook_dirs):
         from mc.hooks.handlers.skill_tracker import SkillTrackerHandler
+
         ctx = HookContext("test")
         payload = _skill_event("executing-plans")
         handler = SkillTrackerHandler(ctx, payload)
@@ -403,12 +436,14 @@ class TestSkillTracker:
 
     def test_empty_skill_returns_none(self, hook_dirs):
         from mc.hooks.handlers.skill_tracker import SkillTrackerHandler
+
         ctx = HookContext("test")
         payload = _skill_event("")
         assert SkillTrackerHandler(ctx, payload).handle() is None
 
     def test_skill_updates_context(self, hook_dirs):
         from mc.hooks.handlers.skill_tracker import SkillTrackerHandler
+
         ctx = HookContext("test")
         SkillTrackerHandler(ctx, _skill_event("brainstorming")).handle()
         assert ctx.active_skill == "brainstorming"
@@ -420,13 +455,20 @@ class TestSkillTracker:
 # PlanCaptureHandler tests
 # ---------------------------------------------------------------------------
 
+
 class TestPlanCapture:
     def test_captures_active_plan(self, hook_dirs):
         from mc.hooks.handlers.plan_capture import PlanCaptureHandler
+
         ctx = HookContext("test")
         ctx.active_plan = "docs/plans/my-feature.md"
-        payload = {"hook_event_name": "PostToolUse", "tool_name": "ExitPlanMode",
-                    "session_id": "test", "cwd": "/tmp", "tool_input": {}}
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "ExitPlanMode",
+            "session_id": "test",
+            "cwd": "/tmp",
+            "tool_input": {},
+        }
         result = PlanCaptureHandler(ctx, payload).handle()
         assert result == "Plan approved: docs/plans/my-feature.md"
 
@@ -437,9 +479,15 @@ class TestPlanCapture:
         tracker.write_text('{"plan_file":"docs/plans/recent-plan.md","steps":[]}')
 
         from mc.hooks.handlers.plan_capture import PlanCaptureHandler
+
         ctx = HookContext("test")
-        payload = {"hook_event_name": "PostToolUse", "tool_name": "ExitPlanMode",
-                    "session_id": "test", "cwd": str(root), "tool_input": {}}
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "ExitPlanMode",
+            "session_id": "test",
+            "cwd": str(root),
+            "tool_input": {},
+        }
 
         with (
             patch("mc.hooks.handlers.plan_capture.get_project_root", return_value=root),
@@ -454,10 +502,16 @@ class TestPlanCapture:
         root, tracker_dir, _, _ = hook_dirs
         # Empty tracker dir
         from mc.hooks.handlers.plan_capture import PlanCaptureHandler
+
         ctx = HookContext("test")
         ctx.active_plan = None
-        payload = {"hook_event_name": "PostToolUse", "tool_name": "ExitPlanMode",
-                    "session_id": "test", "cwd": str(root), "tool_input": {}}
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "ExitPlanMode",
+            "session_id": "test",
+            "cwd": str(root),
+            "tool_input": {},
+        }
 
         # Remove all files from tracker dir
         for f in tracker_dir.iterdir():
@@ -475,9 +529,11 @@ class TestPlanCapture:
 # AgentTrackerHandler tests
 # ---------------------------------------------------------------------------
 
+
 class TestAgentTracker:
     def test_start_tracks_agent(self, hook_dirs):
         from mc.hooks.handlers.agent_tracker import AgentTrackerHandler
+
         ctx = HookContext("test")
         payload = _agent_event("SubagentStart", "agent-abc", "Explore")
         result = AgentTrackerHandler(ctx, payload).handle()
@@ -488,6 +544,7 @@ class TestAgentTracker:
 
     def test_stop_removes_agent(self, hook_dirs):
         from mc.hooks.handlers.agent_tracker import AgentTrackerHandler
+
         ctx = HookContext("test")
         ctx.active_agents["agent-abc"] = {"type": "Explore", "started_at": "2026-01-01"}
 
@@ -499,6 +556,7 @@ class TestAgentTracker:
 
     def test_stop_unknown_agent_safe(self, hook_dirs):
         from mc.hooks.handlers.agent_tracker import AgentTrackerHandler
+
         ctx = HookContext("test")
         payload = _agent_event("SubagentStop", "nonexistent", "Plan")
         result = AgentTrackerHandler(ctx, payload).handle()
@@ -506,6 +564,7 @@ class TestAgentTracker:
 
     def test_multiple_agents(self, hook_dirs):
         from mc.hooks.handlers.agent_tracker import AgentTrackerHandler
+
         ctx = HookContext("test")
         AgentTrackerHandler(ctx, _agent_event("SubagentStart", "a1", "Explore")).handle()
         result = AgentTrackerHandler(ctx, _agent_event("SubagentStart", "a2", "Plan")).handle()
@@ -519,6 +578,7 @@ class TestAgentTracker:
 # Dispatcher integration tests
 # ---------------------------------------------------------------------------
 
+
 class TestDispatcher:
     def test_write_plan_end_to_end(self, hook_dirs):
         """Full flow: write plan → detect → create tracker."""
@@ -527,6 +587,7 @@ class TestDispatcher:
         payload = _write_event("docs/plans/e2e.md", plan_path.read_text(), root)
 
         from mc.hooks.dispatcher import _dispatch
+
         result = _dispatch(payload)
 
         assert result is not None
@@ -538,7 +599,7 @@ class TestDispatcher:
 
     def test_skill_then_completion_flow(self, hook_dirs):
         """Multi-event flow: skill → write plan → complete task."""
-        root, tracker_dir, _, plans_dir = hook_dirs
+        root, _tracker_dir, _, plans_dir = hook_dirs
         plan_path = _make_plan(plans_dir, "flow.md", tasks=2, blocked=False)
 
         from mc.hooks.dispatcher import _dispatch
@@ -557,6 +618,7 @@ class TestDispatcher:
 
     def test_non_matching_event_returns_none(self, hook_dirs):
         from mc.hooks.dispatcher import _dispatch
+
         payload = {
             "hook_event_name": "PostToolUse",
             "tool_name": "Bash",
@@ -569,6 +631,7 @@ class TestDispatcher:
 
     def test_agent_lifecycle(self, hook_dirs):
         from mc.hooks.dispatcher import _dispatch
+
         r1 = _dispatch(_agent_event("SubagentStart", "ag1", "Explore"))
         assert "1 active" in r1
         r2 = _dispatch(_agent_event("SubagentStop", "ag1", "Explore"))

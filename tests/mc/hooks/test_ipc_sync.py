@@ -1,4 +1,5 @@
 """Tests for mc.hooks.ipc_sync — SyncIPCClient with mocked sockets."""
+
 from __future__ import annotations
 
 import json
@@ -13,10 +14,10 @@ import pytest
 
 from mc.hooks.ipc_sync import SyncIPCClient
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def unix_socket_pair():
@@ -64,6 +65,7 @@ def _echo_server(server_sock: socket.socket, response: dict | None = None):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestSyncIPCClientInit:
     def test_stores_path_and_timeout(self):
@@ -157,6 +159,7 @@ class TestSyncIPCClientRequest:
             try:
                 conn, _ = server_sock.accept()
                 import time
+
                 time.sleep(3)  # longer than client timeout
                 conn.close()
             except Exception:

@@ -92,8 +92,8 @@ export interface SquadGraphInput {
 // Minimal db context type for testability
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DbContext = { db: any };
+import { ConvexError } from "convex/values";
+import type { DbWriter } from "./types";
 
 function validateReviewStep(step: SquadGraphWorkflowStepInput): void {
   if (step.type !== "review") {
@@ -101,13 +101,13 @@ function validateReviewStep(step: SquadGraphWorkflowStepInput): void {
   }
 
   if (!step.agentKey) {
-    throw new Error(`Review step "${step.key}" requires agentKey`);
+    throw new ConvexError(`Review step "${step.key}" requires agentKey`);
   }
   if (!step.reviewSpecId) {
-    throw new Error(`Review step "${step.key}" requires reviewSpecId`);
+    throw new ConvexError(`Review step "${step.key}" requires reviewSpecId`);
   }
   if (!step.onReject) {
-    throw new Error(`Review step "${step.key}" requires onReject`);
+    throw new ConvexError(`Review step "${step.key}" requires onReject`);
   }
 }
 
@@ -127,7 +127,7 @@ function validateReviewStep(step: SquadGraphWorkflowStepInput): void {
  *
  * This function does NOT create tasks or execute workflows.
  */
-export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput): Promise<string> {
+export async function publishSquadGraph(ctx: DbWriter, graph: SquadGraphInput): Promise<string> {
   const now = new Date().toISOString();
 
   await validateSquadGraph(ctx, graph);
@@ -139,13 +139,11 @@ export async function publishSquadGraph(ctx: DbContext, graph: SquadGraphInput):
     const lookupName = agent.reuseName ?? agent.name;
     const existingAgent = await ctx.db
       .query("agents")
-      .withIndex("by_name", (q: { eq: (field: string, value: string) => unknown }) =>
-        q.eq("name", lookupName),
-      )
+      .withIndex("by_name", (q) => q.eq("name", lookupName))
       .first();
 
-    const agentId =
-      existingAgent?._id ??
+    const agentId: string =
+      (existingAgent?._id as string | undefined) ??
       (await ctx.db.insert("agents", {
         name: agent.name,
         displayName: agent.displayName ?? agent.name,

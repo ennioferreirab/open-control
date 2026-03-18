@@ -5,14 +5,14 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.types import task_safe_id
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def _default_transition_idempotency_key(
 class TaskRepository:
     """Data access methods for task entities in Convex."""
 
-    def __init__(self, client: "BridgeClient"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def update_task_status(
@@ -255,7 +255,7 @@ class TaskRepository:
                         {
                             "event_type": "system_error",
                             "description": error_msg,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "timestamp": datetime.now(UTC).isoformat(),
                             "task_id": task_id,
                         },
                     )
@@ -304,7 +304,7 @@ class TaskRepository:
             return
 
         # Scan filesystem
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         fs_files: list[dict] = []
         try:
             for entry in output_dir.iterdir():
@@ -367,7 +367,7 @@ class TaskRepository:
                     {
                         "event_type": "agent_output",
                         "description": msg,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "task_id": task_id,
                     },
                 )
@@ -468,7 +468,7 @@ class TaskRepository:
                         "description": (
                             f"{agent_name} produced {len(truly_new)} file(s) via cron: {file_names}"
                         ),
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "task_id": parent_task_id,
                     },
                 )
@@ -478,5 +478,5 @@ class TaskRepository:
     @staticmethod
     def _log_state_transition(entity_type: str, description: str) -> None:
         """Log a state transition to local stdout via logging."""
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         logger.info("[MC] %s %s: %s", timestamp, entity_type, description)

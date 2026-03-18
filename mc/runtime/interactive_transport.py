@@ -16,8 +16,9 @@ import logging
 import os
 import time
 from collections import Counter
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from websockets.exceptions import ConnectionClosed
 
@@ -56,7 +57,7 @@ class InteractiveSocketTransport:
         self._resize_handler = resize_handler
         self._monotonic_time = monotonic_time
         self._active_websockets: dict[str, Any] = {}
-        self._pending_terminations: set[str] = {}
+        self._pending_terminations: set[str] = set()
         self._session_locks: dict[str, asyncio.Lock] = {}
         module_log_level = _resolve_transport_log_level()
         if module_log_level is not None:
@@ -71,7 +72,7 @@ class InteractiveSocketTransport:
         attach_token: str | None = None,
         timestamp_factory: Callable[[], str] | None = None,
     ) -> None:
-        now = timestamp_factory or (lambda: datetime.now(timezone.utc).isoformat())
+        now = timestamp_factory or (lambda: datetime.now(UTC).isoformat())
         input_batch: dict[str, dict[str, float | int] | None] = {"pending": None}
         connection_id = hex(id(websocket))
         attached = self._session_service.attach_session(
@@ -256,7 +257,7 @@ class InteractiveSocketTransport:
                 wait_closed = getattr(existing, "wait_closed", None)
                 if callable(wait_closed):
                     with contextlib.suppress(Exception):
-                        await asyncio.wait_for(wait_closed(), timeout=1)
+                        await asyncio.wait_for(wait_closed(), timeout=1)  # type: ignore[arg-type]
                 await asyncio.sleep(0)
             self._active_websockets[session_id] = websocket
 

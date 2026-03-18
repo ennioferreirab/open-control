@@ -13,7 +13,7 @@ function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
   const onRetry = vi.fn();
   const onOpenParentTask = vi.fn();
   const onStepClick = vi.fn();
-  const props: ComponentProps<typeof FlowStepNode> = {
+  const props = {
     id: "step-1",
     selected: false,
     type: "flowStep",
@@ -22,6 +22,8 @@ function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
     selectable: false,
     deletable: false,
     zIndex: 0,
+    position: { x: 0, y: 0 },
+    measured: { width: 0, height: 0 },
     data: {
       step: {
         tempId: "step-1",
@@ -40,7 +42,8 @@ function renderNode(overrides: Partial<FlowStepNodeType["data"]> = {}) {
       onStepClick,
       ...overrides,
     } as FlowStepNodeType["data"],
-  };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any as ComponentProps<typeof FlowStepNode>;
 
   render(<FlowStepNode {...props} />);
   return { onRetry, onOpenParentTask, onStepClick };

@@ -92,6 +92,9 @@ class InboxWorker:
     async def process_task(self, task_data: dict[str, Any]) -> None:
         """Handle an inbox task: generate auto-title then transition to planning or assigned."""
         task_id = task_data.get("id")
+        if not isinstance(task_id, str):
+            logger.warning("[inbox] Task missing 'id' field, skipping")
+            return
         if task_data.get("is_manual"):
             logger.info("[inbox] Skipping manual inbox task %s", task_id)
             return
@@ -146,9 +149,9 @@ class InboxWorker:
         # Layer 2 defense: bypass planning for workflow missions whose execution
         # plan was already compiled at launch time.  Routing them through
         # planning would overwrite the workflow plan with a lead-agent plan.
-        execution_plan = task_data.get("execution_plan") or task_data.get("executionPlan") or {}
+        execution_plan = task_data.get("execution_plan") or {}
         is_workflow_plan = is_workflow_generated_plan(execution_plan)
-        work_mode = task_data.get("work_mode") or task_data.get("workMode")
+        work_mode = task_data.get("work_mode")
 
         if is_workflow_owned_task(task_data) and is_workflow_plan:
             result = await asyncio.to_thread(

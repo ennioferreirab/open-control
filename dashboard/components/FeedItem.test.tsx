@@ -18,9 +18,7 @@ describe("FeedItem", () => {
 
   it("renders step_completed event with green checkmark icon", () => {
     const { container } = render(
-      <FeedItem
-        activity={{ ...baseActivity, eventType: "step_completed" } as never}
-      />
+      <FeedItem activity={{ ...baseActivity, eventType: "step_completed" } as never} />,
     );
 
     // CheckCircle2 icon is rendered — find by its SVG class h-3 w-3 text-green-500
@@ -31,9 +29,7 @@ describe("FeedItem", () => {
 
   it("renders step_crashed event with red border and X icon", () => {
     const { container } = render(
-      <FeedItem
-        activity={{ ...baseActivity, eventType: "step_crashed" } as never}
-      />
+      <FeedItem activity={{ ...baseActivity, eventType: "step_crashed" } as never} />,
     );
 
     // (a) the container has border-red-400 class
@@ -47,9 +43,7 @@ describe("FeedItem", () => {
 
   it("renders step_retrying event with amber refresh icon", () => {
     const { container } = render(
-      <FeedItem
-        activity={{ ...baseActivity, eventType: "step_retrying" } as never}
-      />
+      <FeedItem activity={{ ...baseActivity, eventType: "step_retrying" } as never} />,
     );
 
     // RefreshCw icon is rendered — has class text-amber-500
@@ -59,9 +53,7 @@ describe("FeedItem", () => {
 
   it("renders task-level event without step icon", () => {
     const { container } = render(
-      <FeedItem
-        activity={{ ...baseActivity, eventType: "task_created" } as never}
-      />
+      <FeedItem activity={{ ...baseActivity, eventType: "task_created" } as never} />,
     );
 
     // No step icon classes should be rendered (no green, blue, amber, emerald, or slate icon)
@@ -71,9 +63,7 @@ describe("FeedItem", () => {
 
   it("renders step_unblocked event without red border", () => {
     const { container } = render(
-      <FeedItem
-        activity={{ ...baseActivity, eventType: "step_unblocked" } as never}
-      />
+      <FeedItem activity={{ ...baseActivity, eventType: "step_unblocked" } as never} />,
     );
 
     // The container must NOT have border-red-400

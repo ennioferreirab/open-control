@@ -25,8 +25,8 @@ def get_iana_timezone() -> str | None:
 
 def build_agent_roster() -> str:
     """Build the human-readable roster injected into orientation templates."""
-    from mc.infrastructure.config import AGENTS_DIR
     from mc.infrastructure.agents.yaml_validator import validate_agent_file
+    from mc.infrastructure.config import AGENTS_DIR
 
     lines: list[str] = []
     if not AGENTS_DIR.is_dir():

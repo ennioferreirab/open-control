@@ -304,13 +304,13 @@ class TestAC4LowVendorImpact:
 
     def test_tool_specs_importable_from_mc(self):
         """mc.runtime.mcp.tool_specs is importable."""
-        from mc.runtime.mcp import tool_specs  # noqa: F401
+        from mc.runtime.mcp import tool_specs
 
         assert hasattr(tool_specs, "PHASE1_TOOLS")
 
     def test_bridge_importable_from_mc(self):
         """mc.runtime.mcp.bridge is importable."""
-        from mc.runtime.mcp import bridge  # noqa: F401
+        from mc.runtime.mcp import bridge
 
         assert hasattr(bridge, "list_tools")
         assert hasattr(bridge, "call_tool")

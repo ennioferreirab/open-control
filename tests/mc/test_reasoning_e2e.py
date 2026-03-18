@@ -17,9 +17,9 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from nanobot.providers.litellm_provider import LiteLLMProvider
 
 from mc.infrastructure.providers.tier_resolver import TierResolver
-from nanobot.providers.litellm_provider import LiteLLMProvider
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -54,10 +54,12 @@ def _make_bridge(reasoning_map: dict) -> MagicMock:
 
 def _fake_acompletion_response() -> MagicMock:
     resp = MagicMock()
-    resp.choices = [MagicMock(
-        message=MagicMock(content="ok", tool_calls=None),
-        finish_reason="stop",
-    )]
+    resp.choices = [
+        MagicMock(
+            message=MagicMock(content="ok", tool_calls=None),
+            finish_reason="stop",
+        )
+    ]
     resp.usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
     return resp
 
@@ -81,6 +83,7 @@ async def _call_provider(reasoning_level: str | None) -> dict:
 # ===========================================================================
 # 1. Settings → TierResolver → reasoning_level value
 # ===========================================================================
+
 
 class TestSettingsToReasoningLevel:
     """Changing tier_reasoning_levels in Convex is reflected by TierResolver."""
@@ -113,7 +116,8 @@ class TestSettingsToReasoningLevel:
 
         # Simulate user changing setting in the UI
         bridge.query.side_effect = lambda key, args: (
-            json.dumps(_DEFAULT_TIERS) if args.get("key") == "model_tiers"
+            json.dumps(_DEFAULT_TIERS)
+            if args.get("key") == "model_tiers"
             else json.dumps({"standard-medium": "max"})
         )
         resolver.invalidate_cache()
@@ -124,6 +128,7 @@ class TestSettingsToReasoningLevel:
 # ===========================================================================
 # 2. reasoning_level → acompletion kwargs
 # ===========================================================================
+
 
 class TestReasoningLevelToApiKwargs:
     """The resolved reasoning level reaches acompletion with the correct params.
@@ -165,6 +170,7 @@ class TestReasoningLevelToApiKwargs:
 # ===========================================================================
 # 3. Full chain: settings → TierResolver → acompletion kwargs
 # ===========================================================================
+
 
 class TestFullChainSettingsToApiCall:
     """Full integration: Convex settings → TierResolver → provider.chat() → acompletion.
@@ -215,9 +221,7 @@ class TestFullChainSettingsToApiCall:
         assert reasoning_level is None
 
         kwargs = await _call_provider(reasoning_level)
-        assert "thinking" not in kwargs, (
-            "No thinking param expected when reasoning is off"
-        )
+        assert "thinking" not in kwargs, "No thinking param expected when reasoning is off"
 
     @pytest.mark.asyncio
     async def test_changing_setting_changes_api_params(self) -> None:
@@ -239,7 +243,8 @@ class TestFullChainSettingsToApiCall:
 
         # Round 2: user changes setting to "max" → reasoning_effort = "high" (clamped on Sonnet 4.6)
         bridge.query.side_effect = lambda key, args: (
-            json.dumps(_DEFAULT_TIERS) if args.get("key") == "model_tiers"
+            json.dumps(_DEFAULT_TIERS)
+            if args.get("key") == "model_tiers"
             else json.dumps({"standard-medium": "max"})
         )
         resolver.invalidate_cache()
@@ -254,7 +259,8 @@ class TestFullChainSettingsToApiCall:
 
         # Round 3: user turns reasoning off
         bridge.query.side_effect = lambda key, args: (
-            json.dumps(_DEFAULT_TIERS) if args.get("key") == "model_tiers"
+            json.dumps(_DEFAULT_TIERS)
+            if args.get("key") == "model_tiers"
             else json.dumps({})  # empty = off
         )
         resolver.invalidate_cache()

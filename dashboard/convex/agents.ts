@@ -1,35 +1,57 @@
 import { internalMutation, mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
-import { interactiveProviderValidator } from "./schema";
+import { agentStatusValidator, interactiveProviderValidator } from "./schema";
 
 // ---------------------------------------------------------------------------
 // Agent metric helpers — callable from lifecycle completion paths
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AgentMetricDb = { query: (table: string) => any; patch: (id: any, value: Record<string, unknown>) => Promise<void> };
+/**
+ * Minimal db accessor subset needed by agent metric helpers.
+ * Defined as a structural interface (method shorthand) so both the real
+ * Convex DatabaseWriter and lightweight unit-test mocks satisfy it.
+ */
+export interface AgentMetricDb {
+  query(table: string): {
+    withIndex(
+      index: string,
+      cb: (q: { eq(k: string, v: unknown): unknown }) => unknown,
+    ): { first(): Promise<Record<string, unknown> | null> };
+  };
+  patch(id: unknown, value: Record<string, unknown>): Promise<void>;
+}
 
-export async function incrementAgentTaskMetric(db: AgentMetricDb, agentName: string): Promise<void> {
+export async function incrementAgentTaskMetric(
+  db: AgentMetricDb,
+  agentName: string,
+): Promise<void> {
   const agent = await db
     .query("agents")
     .withIndex("by_name", (q: { eq: (k: string, v: string) => unknown }) => q.eq("name", agentName))
     .first();
   if (!agent) return;
-  await db.patch(agent._id, {
-    tasksExecuted: (agent.tasksExecuted ?? 0) + 1,
+  const id = agent._id as string;
+  const current = (agent.tasksExecuted as number | undefined) ?? 0;
+  await db.patch(id, {
+    tasksExecuted: current + 1,
     lastTaskExecutedAt: new Date().toISOString(),
   });
 }
 
-export async function incrementAgentStepMetric(db: AgentMetricDb, agentName: string): Promise<void> {
+export async function incrementAgentStepMetric(
+  db: AgentMetricDb,
+  agentName: string,
+): Promise<void> {
   const agent = await db
     .query("agents")
     .withIndex("by_name", (q: { eq: (k: string, v: string) => unknown }) => q.eq("name", agentName))
     .first();
   if (!agent) return;
-  await db.patch(agent._id, {
-    stepsExecuted: (agent.stepsExecuted ?? 0) + 1,
+  const id = agent._id as string;
+  const current = (agent.stepsExecuted as number | undefined) ?? 0;
+  await db.patch(id, {
+    stepsExecuted: current + 1,
     lastStepExecutedAt: new Date().toISOString(),
   });
 }
@@ -52,10 +74,7 @@ export const listActiveRegistryView = query({
     // Filter: not deleted, not system, enabled, and delegatable role
     const active = allAgents.filter(
       (a) =>
-        !a.deletedAt &&
-        !a.isSystem &&
-        a.enabled !== false &&
-        !NON_DELEGATABLE_ROLES.has(a.role),
+        !a.deletedAt && !a.isSystem && a.enabled !== false && !NON_DELEGATABLE_ROLES.has(a.role),
     );
 
     // Resolve squad memberships
@@ -199,7 +218,7 @@ export const upsertByName = mutation({
 export const updateStatus = internalMutation({
   args: {
     agentName: v.string(),
-    status: v.string(),
+    status: agentStatusValidator,
   },
   handler: async (ctx, args) => {
     const agent = await ctx.db
@@ -213,7 +232,7 @@ export const updateStatus = internalMutation({
 
     const timestamp = new Date().toISOString();
     await ctx.db.patch(agent._id, {
-      status: args.status as "active" | "idle" | "crashed",
+      status: args.status,
       lastActiveAt: timestamp,
     });
   },
@@ -268,7 +287,7 @@ export const updateConfig = mutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.name}' not found`);
+      throw new ConvexError(`Agent '${args.name}' not found`);
     }
 
     const timestamp = new Date().toISOString();
@@ -310,12 +329,12 @@ export const setEnabled = mutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.agentName}' not found`);
+      throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
     // System agents cannot be disabled
     if (agent.isSystem) {
-      throw new Error(`Cannot change enabled state of system agent '${args.agentName}'`);
+      throw new ConvexError(`Cannot change enabled state of system agent '${args.agentName}'`);
     }
 
     const timestamp = new Date().toISOString();
@@ -345,11 +364,11 @@ export const softDeleteAgent = mutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.agentName}' not found`);
+      throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
     if (agent.isSystem) {
-      throw new Error(`Cannot delete system agent '${args.agentName}'`);
+      throw new ConvexError(`Cannot delete system agent '${args.agentName}'`);
     }
 
     const timestamp = new Date().toISOString();
@@ -386,11 +405,11 @@ export const archiveAgentData = internalMutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.agentName}' not found`);
+      throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
     if (!agent.deletedAt) {
-      throw new Error(
+      throw new ConvexError(
         `Agent '${args.agentName}' is not deleted — archive only applies to soft-deleted agents`,
       );
     }
@@ -415,11 +434,11 @@ export const restoreAgent = mutation({
       .first();
 
     if (!agent) {
-      throw new Error(`Agent '${args.agentName}' not found`);
+      throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
     if (!agent.deletedAt) {
-      throw new Error(`Agent '${args.agentName}' is not deleted`);
+      throw new ConvexError(`Agent '${args.agentName}' is not deleted`);
     }
 
     const timestamp = new Date().toISOString();
@@ -512,7 +531,7 @@ export const publishProjection = mutation({
       // Guard: refuse to publish to a soft-deleted agent. A deleted agent must
       // be explicitly restored before it can receive new projection data.
       if (existing.deletedAt) {
-        throw new Error(
+        throw new ConvexError(
           `Cannot publish projection to deleted agent '${args.name}' — restore it first.`,
         );
       }

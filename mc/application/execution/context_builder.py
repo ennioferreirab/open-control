@@ -217,7 +217,7 @@ class ContextBuilder:
     Both TaskExecutor and StepDispatcher delegate to this class.
     """
 
-    def __init__(self, bridge: "ConvexBridge") -> None:
+    def __init__(self, bridge: ConvexBridge) -> None:
         self._bridge = bridge
         self._tier_resolver: Any | None = None
 

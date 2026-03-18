@@ -1,4 +1,5 @@
 """Convention-based handler discovery."""
+
 from __future__ import annotations
 
 import importlib

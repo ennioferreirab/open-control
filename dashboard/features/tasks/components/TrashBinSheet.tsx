@@ -4,7 +4,13 @@ import { RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { STATUS_COLORS, type TaskStatus } from "@/lib/constants";
 import { useTrashBinSheetData } from "@/features/tasks/hooks/useTrashBinSheetData";
 
@@ -84,7 +90,9 @@ export function TrashBinSheet({ open, onClose }: TrashBinSheetProps) {
                       >
                         was: {prevStatus.replaceAll("_", " ")}
                       </Badge>
-                      {task.assignedAgent && <span className="text-xs text-muted-foreground">{task.assignedAgent}</span>}
+                      {task.assignedAgent && (
+                        <span className="text-xs text-muted-foreground">{task.assignedAgent}</span>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button

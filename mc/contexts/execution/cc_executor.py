@@ -69,6 +69,10 @@ class CCExecutorMixin:
     _on_task_completed: Any
     _ask_user_registry: Any
 
+    async def _handle_provider_error(
+        self, task_id: str, title: str, agent_name: str, exc: Exception
+    ) -> None: ...
+
     async def _enrich_cc_description(
         self,
         task_id: str,
@@ -77,10 +81,10 @@ class CCExecutorMixin:
     ) -> str:
         """Enrich CC task description with file manifest, thread context, and tag attributes."""
         description = description or ""
+        fresh_task: dict[str, Any] | None = None
         try:
             safe_id = task_safe_id(task_id)
             files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
-            fresh_task: dict[str, Any] | None = None
             try:
                 fresh_task = await asyncio.to_thread(
                     self._bridge.query, "tasks:getById", {"task_id": task_id}
@@ -169,7 +173,7 @@ class CCExecutorMixin:
         title: str,
         description: str | None,
         agent_name: str,
-        agent_data: "AgentData",
+        agent_data: AgentData,
         trust_level: str = "autonomous",
         task_data: dict | None = None,
         reasoning_level: str | None = None,
@@ -344,7 +348,7 @@ class CCExecutorMixin:
 
     # ── CC helper methods ─────────────────────────────────────────────────
 
-    async def _sync_cc_convex_agent(self, agent_name: str, agent_data: "AgentData") -> dict | None:
+    async def _sync_cc_convex_agent(self, agent_name: str, agent_data: AgentData) -> dict | None:
         """Sync Convex prompt, variables, model into agent_data. Returns convex_agent dict."""
         convex_agent: dict | None = None
         try:
@@ -505,7 +509,7 @@ class CCExecutorMixin:
         task_id: str,
         title: str,
         agent_name: str,
-        result: "CCTaskResult",
+        result: CCTaskResult,
         task_data: dict[str, Any] | None = None,
         trust_level: str = "autonomous",
     ) -> None:
@@ -609,7 +613,7 @@ class CCExecutorMixin:
         task_id: str,
         agent_name: str,
         user_message: str,
-        agent_data: "AgentData",
+        agent_data: AgentData,
     ) -> str | None:
         """Handle a user follow-up message in a CC agent's task thread."""
         from claude_code.ipc_server import MCSocketServer

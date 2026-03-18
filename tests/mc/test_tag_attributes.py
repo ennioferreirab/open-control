@@ -1,7 +1,5 @@
 """Tests for _build_tag_attributes_context in executor.py."""
 
-import pytest
-
 from mc.contexts.execution.executor import _build_tag_attributes_context
 
 
@@ -23,7 +21,14 @@ class TestBuildTagAttributesContextEmpty:
 
     def test_none_tags_returns_empty(self):
         """Falsy tags list returns empty."""
-        assert _build_tag_attributes_context([], [{"tag_name": "a", "attribute_id": "x", "value": "v"}], [{"id": "x", "name": "n"}]) == ""
+        assert (
+            _build_tag_attributes_context(
+                [],
+                [{"tag_name": "a", "attribute_id": "x", "value": "v"}],
+                [{"id": "x", "name": "n"}],
+            )
+            == ""
+        )
 
 
 class TestBuildTagAttributesContextBasic:

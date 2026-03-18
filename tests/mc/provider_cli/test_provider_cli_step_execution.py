@@ -196,7 +196,7 @@ class TestFullPathIntegration:
             return_value=[ParsedCliEvent(kind="result", text="Done!")]
         )
 
-        async def _fake_stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _fake_stream(h: ProviderProcessHandle):
             yield b'{"type": "result", "subtype": "success", "result": "Done!"}'
 
         mock_supervisor.stream_output = _fake_stream
@@ -447,7 +447,7 @@ class TestCompletionAndCrashProjection:
             return_value=[ParsedCliEvent(kind="result", text="Task complete")]
         )
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b'{"type": "result", "subtype": "success", "result": "Task complete"}'
 
         mock_supervisor.stream_output = _stream
@@ -472,7 +472,7 @@ class TestCompletionAndCrashProjection:
         mock_parser.start_session = AsyncMock(return_value=handle)
         mock_parser.parse_output = MagicMock(return_value=[])
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b""
 
         mock_supervisor.stream_output = _stream
@@ -498,7 +498,7 @@ class TestCompletionAndCrashProjection:
         error_event = ParsedCliEvent(kind="error", text="Tool execution failed: timeout")
         mock_parser.parse_output = MagicMock(return_value=[error_event])
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b'{"type": "result", "subtype": "error", "result": "Tool execution failed: timeout"}'
 
         mock_supervisor.stream_output = _stream
@@ -533,7 +533,7 @@ class TestCompletionAndCrashProjection:
 
         registry.update_status = _tracking_update  # type: ignore[method-assign]
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b"result"
 
         mock_supervisor.stream_output = _stream
@@ -574,7 +574,7 @@ class TestStrategyProjectorIntegration:
         ]
         mock_parser.parse_output = MagicMock(side_effect=[[e] for e in events])
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             for _ in events:
                 yield b"chunk"
 
@@ -623,7 +623,7 @@ class TestStrategyProjectorIntegration:
             return_value=[ParsedCliEvent(kind="result", text="Done")]
         )
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b"chunk"
 
         mock_supervisor.stream_output = _stream
@@ -670,7 +670,7 @@ class TestStrategySupervisionSinkIntegration:
         ]
         mock_parser.parse_output = MagicMock(side_effect=[[e] for e in events])
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             for _ in events:
                 yield b"chunk"
 
@@ -736,7 +736,7 @@ class TestStrategySupervisionSinkIntegration:
         )
         mock_parser.parse_output = MagicMock(return_value=[event])
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b"chunk"
 
         mock_supervisor.stream_output = _stream
@@ -795,7 +795,7 @@ class TestStrategySupervisionSinkIntegration:
             return_value=[ParsedCliEvent(kind="result", text="Done")]
         )
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b"chunk"
 
         mock_supervisor.stream_output = _stream
@@ -848,7 +848,7 @@ class TestProviderCliMetadataPersistenceToConvex:
         result_event = ParsedCliEvent(kind="result", text="Done")
         mock_parser.parse_output = MagicMock(side_effect=[[session_id_event], [result_event]])
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b"chunk1"
             yield b"chunk2"
 
@@ -901,7 +901,7 @@ class TestProviderCliMetadataPersistenceToConvex:
             return_value=[ParsedCliEvent(kind="result", text="Done")]
         )
 
-        async def _stream(h: ProviderProcessHandle):  # noqa: ANN001
+        async def _stream(h: ProviderProcessHandle):
             yield b"result"
 
         mock_supervisor.stream_output = _stream

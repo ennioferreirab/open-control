@@ -95,7 +95,10 @@ export function TaskDetailConfigTab({
               </div>
               <div className="space-y-2">
                 {(directMergeSources ?? []).map((source) => (
-                  <div key={source.taskId} className="flex items-center gap-2 text-sm text-foreground">
+                  <div
+                    key={source.taskId}
+                    className="flex items-center gap-2 text-sm text-foreground"
+                  >
                     <span className="min-w-0 flex-1">
                       {source.label}: {source.taskTitle}
                     </span>
@@ -198,7 +201,9 @@ export function TaskDetailConfigTab({
                     )}
                   </Button>
                 </div>
-                {addMergeSourceError && <p className="text-xs text-red-500">{addMergeSourceError}</p>}
+                {addMergeSourceError && (
+                  <p className="text-xs text-red-500">{addMergeSourceError}</p>
+                )}
               </div>
             </div>
           ) : (
@@ -220,7 +225,9 @@ export function TaskDetailConfigTab({
               />
               <div className="max-h-40 overflow-auto rounded-md border border-border">
                 {(mergeCandidates ?? []).length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-muted-foreground">No merge candidates found.</p>
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    No merge candidates found.
+                  </p>
                 ) : (
                   (mergeCandidates ?? []).map((candidate) => (
                     <button
@@ -234,7 +241,9 @@ export function TaskDetailConfigTab({
                     >
                       <span>{candidate.title}</span>
                       {candidate.description && (
-                        <span className="text-xs text-muted-foreground">{candidate.description}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {candidate.description}
+                        </span>
                       )}
                     </button>
                   ))
@@ -257,7 +266,9 @@ export function TaskDetailConfigTab({
                   {isCreatingMergeTask ? "Creating..." : "Create Manual Review Task"}
                 </Button>
               </div>
-              {createMergeTaskError && <p className="text-xs text-red-500">{createMergeTaskError}</p>}
+              {createMergeTaskError && (
+                <p className="text-xs text-red-500">{createMergeTaskError}</p>
+              )}
             </div>
           )}
           <div>
@@ -361,7 +372,9 @@ export function TaskDetailConfigTab({
                               disabled={isAssigned}
                             >
                               {color && (
-                                <span className={`h-2 w-2 flex-shrink-0 rounded-full ${color.dot}`} />
+                                <span
+                                  className={`h-2 w-2 flex-shrink-0 rounded-full ${color.dot}`}
+                                />
                               )}
                               <span className="flex-1">{catalogTag.name}</span>
                               {isAssigned && (

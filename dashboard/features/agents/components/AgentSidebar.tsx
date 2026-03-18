@@ -33,6 +33,7 @@ import { AgentAuthoringWizard } from "@/features/agents/components/AgentAuthorin
 import { SquadAuthoringWizard } from "@/features/agents/components/SquadAuthoringWizard";
 import { SquadSidebarSection } from "@/features/agents/components/SquadSidebarSection";
 import { SquadDetailSheet } from "@/features/agents/components/SquadDetailSheet";
+import { DeleteSquadDialog } from "@/features/agents/components/DeleteSquadDialog";
 import { useAgentSidebarData } from "@/features/agents/hooks/useAgentSidebarData";
 import { useSquadSidebarData } from "@/features/agents/hooks/useSquadSidebarData";
 import { useBoard } from "@/components/BoardContext";
@@ -72,6 +73,7 @@ export function AgentSidebar() {
     | { type: "squad"; displayName: string; id: Id<"squadSpecs"> }
     | null
   >(null);
+  const [deleteSquadTarget, setDeleteSquadTarget] = useState<Id<"squadSpecs"> | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -393,7 +395,22 @@ export function AgentSidebar() {
           <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:hidden">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground">{selectedItems.size} selected</span>
-              <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteDialog(true)}>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  const items = Array.from(selectedItems.values());
+                  const squadItem = items.find(
+                    (i): i is Extract<SelectableItem, { type: "squad" }> => i.type === "squad",
+                  );
+                  const hasAgents = items.some((i) => i.type === "agent");
+                  if (squadItem && !hasAgents && items.length === 1) {
+                    setDeleteSquadTarget(squadItem.id);
+                  } else {
+                    setShowBulkDeleteDialog(true);
+                  }
+                }}
+              >
                 Delete selected
               </Button>
             </div>
@@ -417,6 +434,15 @@ export function AgentSidebar() {
         squadId={selectedSquadId}
         boardId={activeBoardId ?? undefined}
         onClose={() => setSelectedSquadId(null)}
+      />
+      <DeleteSquadDialog
+        squadId={deleteSquadTarget}
+        onClose={() => setDeleteSquadTarget(null)}
+        onDeleted={() => {
+          setDeleteSquadTarget(null);
+          setSelectedItems(new Map());
+          setDeleteMode(false);
+        }}
       />
       <AlertDialog
         open={showBulkDeleteDialog}

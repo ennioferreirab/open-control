@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from mc.memory.index import MemoryIndex, SearchResult
 
@@ -160,12 +160,8 @@ def test_history_archive_is_indexed_with_snapshot_timestamps(tmp_path):
     assert rows
     assert any("Old deployment note" in row[0] for row in rows)
     assert any("Recent deployment note" in row[0] for row in rows)
-    assert (
-        min(row[1] for row in rows) == datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc).timestamp()
-    )
-    assert (
-        max(row[1] for row in rows) == datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc).timestamp()
-    )
+    assert min(row[1] for row in rows) == datetime(2026, 3, 1, 10, 0, tzinfo=UTC).timestamp()
+    assert max(row[1] for row in rows) == datetime(2026, 3, 5, 10, 0, tzinfo=UTC).timestamp()
 
 
 def test_history_archive_search_prefers_recent_snapshot(tmp_path):

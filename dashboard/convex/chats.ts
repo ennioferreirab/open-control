@@ -23,9 +23,7 @@ export const send = mutation({
     authorName: v.string(),
     authorType: v.union(v.literal("user"), v.literal("agent")),
     content: v.string(),
-    status: v.optional(
-      v.union(v.literal("pending"), v.literal("processing"), v.literal("done"))
-    ),
+    status: v.optional(v.union(v.literal("pending"), v.literal("processing"), v.literal("done"))),
     timestamp: v.string(),
   },
   handler: async (ctx, args) => {
@@ -59,11 +57,7 @@ export const listPending = query({
 export const updateStatus = internalMutation({
   args: {
     chatId: v.id("chats"),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("processing"),
-      v.literal("done")
-    ),
+    status: v.union(v.literal("pending"), v.literal("processing"), v.literal("done")),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.chatId, { status: args.status });

@@ -28,13 +28,19 @@ function FileIcon({ name }: { name: string }) {
   const dotIdx = name.lastIndexOf(".");
   const ext = dotIdx > 0 ? name.slice(dotIdx).toLowerCase() : "";
   if (ext === ".pdf") {
-    return <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="PDF file" />;
+    return (
+      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="PDF file" />
+    );
   }
   if (IMAGE_EXTS.has(ext)) {
-    return <Image className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Image file" />;
+    return (
+      <Image className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Image file" />
+    );
   }
   if (CODE_EXTS.has(ext)) {
-    return <FileCode className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Code file" />;
+    return (
+      <FileCode className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Code file" />
+    );
   }
   return <File className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Generic file" />;
 }

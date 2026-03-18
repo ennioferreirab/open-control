@@ -96,7 +96,7 @@ describe("getAvatarColor", () => {
 
   it("returns different colors for different names", () => {
     const colors = new Set(
-      ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"].map(getAvatarColor)
+      ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"].map(getAvatarColor),
     );
     // With 8 distinct names we expect at least a few different colors
     expect(colors.size).toBeGreaterThan(1);
@@ -117,25 +117,19 @@ describe("AgentSidebarItem", () => {
   });
 
   it("renders active status dot with blue styling", () => {
-    const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, status: "active" }} />
-    );
+    const { container } = render(<AgentSidebarItem agent={{ ...baseAgent, status: "active" }} />);
     const dot = container.querySelector(".bg-blue-500");
     expect(dot).not.toBeNull();
   });
 
   it("renders idle status dot with gray styling", () => {
-    const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, status: "idle" }} />
-    );
+    const { container } = render(<AgentSidebarItem agent={{ ...baseAgent, status: "idle" }} />);
     const dot = container.querySelector(".bg-muted-foreground");
     expect(dot).not.toBeNull();
   });
 
   it("renders crashed status dot with red styling", () => {
-    const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, status: "crashed" }} />
-    );
+    const { container } = render(<AgentSidebarItem agent={{ ...baseAgent, status: "crashed" }} />);
     const dot = container.querySelector(".bg-red-500");
     expect(dot).not.toBeNull();
   });
@@ -144,9 +138,7 @@ describe("AgentSidebarItem", () => {
     mockSidebarState = "collapsed";
     render(<AgentSidebarItem agent={baseAgent} />);
     const button = screen.getByTestId("menu-button");
-    expect(button.getAttribute("data-tooltip")).toBe(
-      "Code Monkey - Developer - active"
-    );
+    expect(button.getAttribute("data-tooltip")).toBe("Code Monkey - Developer - active");
   });
 
   it("does not show name/role text in collapsed mode", () => {
@@ -165,9 +157,7 @@ describe("AgentSidebarItem", () => {
   // --- Disabled (deactivated) agent tests ---
 
   it("renders solid red dot without glow when enabled is false", () => {
-    const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />
-    );
+    const { container } = render(<AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />);
     const dot = container.querySelector(".bg-red-500");
     expect(dot).not.toBeNull();
     // Should NOT have glow shadow
@@ -175,37 +165,27 @@ describe("AgentSidebarItem", () => {
   });
 
   it("renders dimmed text when agent is disabled", () => {
-    const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />
-    );
+    const { container } = render(<AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />);
     const textContainer = container.querySelector(".opacity-60");
     expect(textContainer).not.toBeNull();
     expect(textContainer!.className).toContain("text-muted-foreground");
   });
 
   it("shows Deactivated in tooltip when agent is disabled", () => {
-    render(
-      <AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />
-    );
+    render(<AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />);
     expect(screen.getByText("Code Monkey")).toBeInTheDocument();
   });
 
   it("shows Deactivated in tooltip in collapsed mode when disabled", () => {
     mockSidebarState = "collapsed";
-    render(
-      <AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />
-    );
+    render(<AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />);
     const button = screen.getByTestId("menu-button");
-    expect(button.getAttribute("data-tooltip")).toBe(
-      "Code Monkey - Developer - Deactivated"
-    );
+    expect(button.getAttribute("data-tooltip")).toBe("Code Monkey - Developer - Deactivated");
   });
 
   it("renders red dot in collapsed mode when disabled", () => {
     mockSidebarState = "collapsed";
-    const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />
-    );
+    const { container } = render(<AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />);
     const dot = container.querySelector(".bg-red-500");
     expect(dot).not.toBeNull();
     expect(dot!.className).not.toContain("shadow-[0_0_6px");
@@ -213,7 +193,7 @@ describe("AgentSidebarItem", () => {
 
   it("uses runtime status when enabled is true", () => {
     const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, enabled: true, status: "active" }} />
+      <AgentSidebarItem agent={{ ...baseAgent, enabled: true, status: "active" }} />,
     );
     const dot = container.querySelector(".bg-blue-500");
     expect(dot).not.toBeNull();
@@ -222,9 +202,7 @@ describe("AgentSidebarItem", () => {
   });
 
   it("uses runtime status when enabled is undefined (backward compat)", () => {
-    const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, status: "crashed" }} />
-    );
+    const { container } = render(<AgentSidebarItem agent={{ ...baseAgent, status: "crashed" }} />);
     const dot = container.querySelector(".bg-red-500");
     expect(dot).not.toBeNull();
     // Crashed has glow
@@ -232,9 +210,7 @@ describe("AgentSidebarItem", () => {
   });
 
   it("does not dim text when agent is enabled", () => {
-    const { container } = render(
-      <AgentSidebarItem agent={{ ...baseAgent, enabled: true }} />
-    );
+    const { container } = render(<AgentSidebarItem agent={{ ...baseAgent, enabled: true }} />);
     expect(container.querySelector(".opacity-60")).toBeNull();
   });
 });

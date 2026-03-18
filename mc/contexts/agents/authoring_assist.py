@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,8 @@ Always respond with a JSON object containing:
 Respond only with valid JSON.
 """
 
-class AuthoringMode(str, Enum):
+
+class AuthoringMode(StrEnum):
     """Authoring session mode."""
 
     AGENT = "agent"
@@ -173,4 +174,3 @@ async def build_agent_authoring_response(
     except Exception:
         logger.exception("Error calling LLM for agent authoring")
         return _make_fallback_response(AuthoringMode.AGENT, current_phase)
-

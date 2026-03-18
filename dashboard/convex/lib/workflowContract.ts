@@ -35,17 +35,11 @@ export const THREAD_MESSAGE_TYPES: readonly string[] = spec.threadMessageTypes;
  * Returns true if `toStatus` is reachable from `fromStatus` either via
  * the explicit transition map or via universal target statuses.
  */
-export function isValidTransition(
-  fromStatus: string,
-  toStatus: string,
-): boolean {
-  if (
-    (spec.taskUniversalTargets as readonly string[]).includes(toStatus)
-  ) {
+export function isValidTransition(fromStatus: string, toStatus: string): boolean {
+  if ((spec.taskUniversalTargets as readonly string[]).includes(toStatus)) {
     return true;
   }
-  const allowed =
-    (spec.taskTransitions as Record<string, string[]>)[fromStatus] ?? [];
+  const allowed = (spec.taskTransitions as Record<string, string[]>)[fromStatus] ?? [];
   return allowed.includes(toStatus);
 }
 
@@ -53,9 +47,7 @@ export function isValidTransition(
  * Return the list of statuses reachable from `status` (excluding universal targets).
  */
 export function getAllowedTransitions(status: string): string[] {
-  return [
-    ...((spec.taskTransitions as Record<string, string[]>)[status] ?? []),
-  ];
+  return [...((spec.taskTransitions as Record<string, string[]>)[status] ?? [])];
 }
 
 /**
@@ -70,12 +62,8 @@ export function getUniversalTransitions(): string[] {
  *
  * For universal targets, returns the universal target event.
  */
-export function getTaskTransitionEvent(
-  fromStatus: string,
-  toStatus: string,
-): string | undefined {
-  const universalEvent =
-    (spec.taskUniversalTargetEvents as Record<string, string>)[toStatus];
+export function getTaskTransitionEvent(fromStatus: string, toStatus: string): string | undefined {
+  const universalEvent = (spec.taskUniversalTargetEvents as Record<string, string>)[toStatus];
   if (universalEvent) {
     return universalEvent;
   }
@@ -90,12 +78,8 @@ export function getTaskTransitionEvent(
 /**
  * Check if a step state transition is valid.
  */
-export function isValidStepTransition(
-  fromStatus: string,
-  toStatus: string,
-): boolean {
-  const allowed =
-    (spec.stepTransitions as Record<string, string[]>)[fromStatus] ?? [];
+export function isValidStepTransition(fromStatus: string, toStatus: string): boolean {
+  const allowed = (spec.stepTransitions as Record<string, string[]>)[fromStatus] ?? [];
   return allowed.includes(toStatus);
 }
 
@@ -103,18 +87,13 @@ export function isValidStepTransition(
  * Return the list of step statuses reachable from `status`.
  */
 export function getStepAllowedTransitions(status: string): string[] {
-  return [
-    ...((spec.stepTransitions as Record<string, string[]>)[status] ?? []),
-  ];
+  return [...((spec.stepTransitions as Record<string, string[]>)[status] ?? [])];
 }
 
 /**
  * Return the activity event type for a step transition, or undefined if unmapped.
  */
-export function getStepTransitionEvent(
-  fromStatus: string,
-  toStatus: string,
-): string | undefined {
+export function getStepTransitionEvent(fromStatus: string, toStatus: string): string | undefined {
   const key = `${fromStatus}->${toStatus}`;
   return (spec.stepTransitionEvents as Record<string, string>)[key];
 }

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from mc.bridge.runtime_claims import acquire_runtime_claim
@@ -79,7 +79,7 @@ class TimeoutChecker:
 
     async def check_timeouts(self) -> bool:
         """Run a single timeout check cycle."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         found_work = False
 
         # Read global timeout settings
@@ -134,7 +134,7 @@ class TimeoutChecker:
 
         updated_at = datetime.fromisoformat(updated_at_str)
         if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=timezone.utc)
+            updated_at = updated_at.replace(tzinfo=UTC)
 
         elapsed = now - updated_at
         if elapsed > timedelta(minutes=timeout_minutes):
@@ -167,7 +167,7 @@ class TimeoutChecker:
         await asyncio.to_thread(
             self._bridge.mutation,
             "tasks:markStalled",
-            {"task_id": task_id, "stalled_at": datetime.now(timezone.utc).isoformat()},
+            {"task_id": task_id, "stalled_at": datetime.now(UTC).isoformat()},
         )
 
         # Activity event
@@ -209,7 +209,7 @@ class TimeoutChecker:
 
         updated_at = datetime.fromisoformat(updated_at_str)
         if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=timezone.utc)
+            updated_at = updated_at.replace(tzinfo=UTC)
 
         elapsed = now - updated_at
         if elapsed > timedelta(minutes=timeout_minutes):

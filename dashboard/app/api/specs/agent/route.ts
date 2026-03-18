@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 
-function getClient(): ConvexHttpClient {
-  const client = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-  (client as unknown as { setAdminAuth(token: string): void }).setAdminAuth(
-    process.env.CONVEX_ADMIN_KEY!,
-  );
+type AdminConvexClient = ConvexHttpClient & {
+  mutation(name: string, args: Record<string, unknown>): Promise<unknown>;
+  setAdminAuth(token: string): void;
+};
+
+function getClient(): AdminConvexClient {
+  const client = new ConvexHttpClient(
+    process.env.NEXT_PUBLIC_CONVEX_URL!,
+  ) as AdminConvexClient;
+  client.setAdminAuth(process.env.CONVEX_ADMIN_KEY!);
   return client;
 }
 
@@ -23,16 +28,14 @@ export async function POST(request: NextRequest) {
 
     const convex = getClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const specId = await (convex as any).mutation("agentSpecs:createDraft", {
+    const specId = await convex.mutation("agentSpecs:createDraft", {
       name,
       displayName,
       role,
       ...optional,
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (convex as any).mutation("agentSpecs:publish", { specId: String(specId) });
+    await convex.mutation("agentSpecs:publish", { specId: String(specId) });
 
     return NextResponse.json({ success: true, specId });
   } catch (error) {

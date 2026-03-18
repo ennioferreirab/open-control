@@ -81,7 +81,7 @@ def build_spec_payload_from_yaml(config_path: Path) -> dict[str, Any] | None:
 
 def migrate_agent(
     config_path: Path,
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     dry_run: bool = False,
     *,
     _prebuilt_payload: dict[str, Any] | None = None,
@@ -160,7 +160,7 @@ def migrate_agent(
 
 def migrate_all(
     agents_dir: Path,
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     dry_run: bool = False,
 ) -> MigrationResult:
     """Migrate all agents in a directory into Agent Spec V2 records.
@@ -214,7 +214,7 @@ def migrate_all(
             try:
                 existing = bridge.get_agent_spec_by_name(agent_name)
             except Exception:
-                pass
+                logger.warning("[spec_migration] Failed to lookup spec for agent '%s'", agent_name, exc_info=True)
 
         if existing is not None:
             logger.info("[migration] Skipping '%s' — spec already exists", agent_name)

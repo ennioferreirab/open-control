@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class AgentRepository:
     """Data access methods for agent entities in Convex."""
 
-    def __init__(self, client: "BridgeClient"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def sync_agent(self, agent_data: Any) -> Any:
@@ -240,5 +240,5 @@ class AgentRepository:
     @staticmethod
     def _log_state_transition(entity_type: str, description: str) -> None:
         """Log a state transition to local stdout via logging."""
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         logger.info("[MC] %s %s: %s", timestamp, entity_type, description)

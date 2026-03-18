@@ -1,7 +1,9 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 
-import { api } from "../convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import type { GatewaySleepRuntime } from "@/lib/gatewaySleepRuntime";
 
 const DEFAULT_AUTO_SLEEP_AFTER_SECONDS = 300;

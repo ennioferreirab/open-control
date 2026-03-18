@@ -19,13 +19,7 @@ export async function POST(
     );
   }
 
-  const attachmentsDir = join(
-    homedir(),
-    ".nanobot",
-    "tasks",
-    taskId,
-    "attachments",
-  );
+  const attachmentsDir = join(homedir(), ".nanobot", "tasks", taskId, "attachments");
 
   await mkdir(attachmentsDir, { recursive: true });
 
@@ -33,10 +27,7 @@ export async function POST(
   try {
     formData = await request.formData();
   } catch {
-    return NextResponse.json(
-      { error: "Failed to parse multipart form data" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Failed to parse multipart form data" }, { status: 400 });
   }
 
   const uploadedFiles: {
@@ -72,10 +63,7 @@ export async function POST(
       await rename(tmpPath, finalPath);
     } catch (err) {
       await rm(tmpPath, { force: true });
-      return NextResponse.json(
-        { error: `Failed to write file: ${safeName}` },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: `Failed to write file: ${safeName}` }, { status: 500 });
     }
 
     uploadedFiles.push({
@@ -110,17 +98,11 @@ export async function DELETE(
   const { subfolder, filename } = body;
 
   if (typeof subfolder !== "string" || typeof filename !== "string") {
-    return NextResponse.json(
-      { error: "Missing or invalid subfolder/filename" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Missing or invalid subfolder/filename" }, { status: 400 });
   }
 
   if (subfolder !== "attachments") {
-    return NextResponse.json(
-      { error: "Only attachments can be deleted" },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "Only attachments can be deleted" }, { status: 403 });
   }
 
   const safeName = basename(filename);
@@ -128,14 +110,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   }
 
-  const filePath = join(
-    homedir(),
-    ".nanobot",
-    "tasks",
-    taskId,
-    "attachments",
-    safeName,
-  );
+  const filePath = join(homedir(), ".nanobot", "tasks", taskId, "attachments", safeName);
 
   try {
     await unlink(filePath);
@@ -145,10 +120,7 @@ export async function DELETE(
       // Already gone — treat as success
       return NextResponse.json({ ok: true });
     }
-    return NextResponse.json(
-      { error: "Failed to delete file" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to delete file" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

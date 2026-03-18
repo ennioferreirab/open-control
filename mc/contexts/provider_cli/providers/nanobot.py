@@ -103,7 +103,7 @@ class NanobotCLIParser:
         if not chunk:
             return []
 
-        raw = chunk if isinstance(chunk, str) else chunk.decode("utf-8", errors="replace")
+        raw: str = chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else chunk
         events: list[ParsedCliEvent] = []
 
         for line in raw.splitlines():

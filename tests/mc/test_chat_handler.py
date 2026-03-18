@@ -338,7 +338,7 @@ class TestChatHandlerPollingLoop:
             # Wait for processing to happen (with timeout)
             try:
                 await asyncio.wait_for(processed.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             task.cancel()
             try:
@@ -381,7 +381,7 @@ class TestChatHandlerPollingLoop:
             task = asyncio.create_task(handler.run())
             try:
                 await asyncio.wait_for(second_poll_done.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             task.cancel()
             try:

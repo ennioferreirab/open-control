@@ -25,8 +25,8 @@ def build_executor_agent_roster() -> str:
 
 def load_agent_config(agent_name: str) -> tuple[str | None, str | None, list[str] | None]:
     """Load prompt, model, and skills from the agent's YAML config file."""
-    from mc.infrastructure.config import AGENTS_DIR
     from mc.infrastructure.agents.yaml_validator import validate_agent_file
+    from mc.infrastructure.config import AGENTS_DIR
 
     config_file = AGENTS_DIR / agent_name / "config.yaml"
     if not config_file.exists():
@@ -42,8 +42,8 @@ def load_agent_config(agent_name: str) -> tuple[str | None, str | None, list[str
 
 def load_agent_data(agent_name: str) -> AgentData | None:
     """Load validated AgentData from YAML config."""
-    from mc.infrastructure.config import AGENTS_DIR
     from mc.infrastructure.agents.yaml_validator import validate_agent_file
+    from mc.infrastructure.config import AGENTS_DIR
 
     config_path = AGENTS_DIR / agent_name / "config.yaml"
     if not config_path.exists():
@@ -54,8 +54,8 @@ def load_agent_data(agent_name: str) -> AgentData | None:
 
 def render_agent_roster() -> str:
     """Build a markdown roster of all available agents from AGENTS_DIR."""
-    from mc.infrastructure.config import AGENTS_DIR
     from mc.infrastructure.agents.yaml_validator import validate_agent_file
+    from mc.infrastructure.config import AGENTS_DIR
 
     lines: list[str] = ["## Available Agents\n"]
     if not AGENTS_DIR.is_dir():

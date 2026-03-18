@@ -13,9 +13,14 @@ describe("applyStepTransition", () => {
     const patches: Array<{ id: string; value: Record<string, unknown> }> = [];
     const inserts: Array<{ table: string; value: Record<string, unknown> }> = [];
 
+    const first = async () => null;
+    const withIndex = () => ({ first });
+    const query = () => ({ withIndex, collect: async () => [] });
+
     return {
       ctx: {
         db: {
+          query,
           patch: async (id: string, value: Record<string, unknown>) => {
             patches.push({ id, value });
           },

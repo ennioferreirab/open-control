@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
+import { api } from "@/convex/_generated/api";
 
 function getClient(): ConvexHttpClient {
   const client = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -23,8 +24,7 @@ export async function POST(request: NextRequest) {
 
     const convex = getClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const squadId = await (convex as any).mutation("squadSpecs:publishGraph", {
+    const squadId = await convex.mutation(api.squadSpecs.publishGraph, {
       graph: { squad, agents, workflows, reviewPolicy },
     });
 

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import json_repair
 
+from mc.domain.utils import as_positive_int
 from mc.types import (
     HUMAN_AGENT_NAME,
     LEAD_AGENT_NAME,
@@ -25,30 +26,101 @@ from mc.types import (
     ExecutionPlanStep,
     is_lead_agent,
 )
-from mc.domain.utils import as_positive_int
 
 logger = logging.getLogger(__name__)
 
 STOPWORDS = {
-    "a", "an", "the", "is", "are", "was", "were", "be", "been",
-    "to", "of", "in", "for", "on", "with", "at", "by", "from",
-    "and", "or", "but", "not", "this", "that", "it", "my", "your",
+    "a",
+    "an",
+    "the",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "to",
+    "of",
+    "in",
+    "for",
+    "on",
+    "with",
+    "at",
+    "by",
+    "from",
+    "and",
+    "or",
+    "but",
+    "not",
+    "this",
+    "that",
+    "it",
+    "my",
+    "your",
 }
 
 BATCH_ITEM_CUES = (
-    "video", "videos", "youtube", "file", "files", "url", "urls", "link",
-    "links", "document", "documents", "doc", "docs", "page", "pages",
-    "article", "articles", "channel", "channels", "source", "sources",
-    "commit", "commits", "issue", "issues", "ticket", "tickets",
-    "post", "posts", "episode", "episodes", "transcript", "transcripts",
-    "canal", "canais", "arquivo", "arquivos", "documento", "documentos",
-    "pagina", "paginas", "artigo", "artigos", "fonte", "fontes",
-    "tarefa", "tarefas", "transcricao", "transcricoes",
+    "video",
+    "videos",
+    "youtube",
+    "file",
+    "files",
+    "url",
+    "urls",
+    "link",
+    "links",
+    "document",
+    "documents",
+    "doc",
+    "docs",
+    "page",
+    "pages",
+    "article",
+    "articles",
+    "channel",
+    "channels",
+    "source",
+    "sources",
+    "commit",
+    "commits",
+    "issue",
+    "issues",
+    "ticket",
+    "tickets",
+    "post",
+    "posts",
+    "episode",
+    "episodes",
+    "transcript",
+    "transcripts",
+    "canal",
+    "canais",
+    "arquivo",
+    "arquivos",
+    "documento",
+    "documentos",
+    "pagina",
+    "paginas",
+    "artigo",
+    "artigos",
+    "fonte",
+    "fontes",
+    "tarefa",
+    "tarefas",
+    "transcricao",
+    "transcricoes",
 )
 
 ORDERING_CUES = (
-    "latest", "recent", "newest", "last", "top",
-    "ultimos", "ultimas", "mais recentes", "recentes",
+    "latest",
+    "recent",
+    "newest",
+    "last",
+    "top",
+    "ultimos",
+    "ultimas",
+    "mais recentes",
+    "recentes",
 )
 
 STANDARD_TOOLS = [
@@ -180,15 +252,11 @@ def _build_agent_roster(agents: list[AgentData]) -> str:
             continue
         skills_str = ", ".join(agent.skills) if agent.skills else "general"
         lines.append(
-            f"- **{agent.name}** -- {agent.role}\n"
-            f"  Skills: {skills_str}\n"
-            f"  Tools: {tools_str}"
+            f"- **{agent.name}** -- {agent.role}\n  Skills: {skills_str}\n  Tools: {tools_str}"
         )
     if not lines:
         lines.append(
-            f"- **nanobot** -- generalist executor\n"
-            f"  Skills: general\n"
-            f"  Tools: {tools_str}"
+            f"- **nanobot** -- generalist executor\n  Skills: general\n  Tools: {tools_str}"
         )
     # Virtual agent for human-in-the-loop steps (always available)
     lines.append(
@@ -220,10 +288,7 @@ def _normalize_plan_dependencies_and_groups(steps: list[ExecutionPlanStep]) -> N
 
     # Keep only valid, non-self dependencies.
     for step in steps:
-        invalid = [
-            dep for dep in step.blocked_by
-            if dep not in valid_ids or dep == step.temp_id
-        ]
+        invalid = [dep for dep in step.blocked_by if dep not in valid_ids or dep == step.temp_id]
         if invalid:
             logger.warning(
                 "[planner] Step '%s' had invalid blockedBy refs %s; dropping them",
@@ -231,8 +296,7 @@ def _normalize_plan_dependencies_and_groups(steps: list[ExecutionPlanStep]) -> N
                 invalid,
             )
         step.blocked_by = [
-            dep for dep in step.blocked_by
-            if dep in valid_ids and dep != step.temp_id
+            dep for dep in step.blocked_by if dep in valid_ids and dep != step.temp_id
         ]
 
     # All independent steps share the same group number.
@@ -295,9 +359,7 @@ def _require_step_fields(raw_steps: list[object]) -> None:
         ]
         if missing_fields:
             missing = ", ".join(missing_fields)
-            raise ValueError(
-                f"Plan step {index} is missing required fields: {missing}"
-            )
+            raise ValueError(f"Plan step {index} is missing required fields: {missing}")
 
 
 def parse_plan_payload(data: object) -> ExecutionPlan:
@@ -319,30 +381,25 @@ def parse_plan_payload(data: object) -> ExecutionPlan:
         )
         title = s.get("title") or s.get("description") or f"Step {index}"
         description = s.get("description") or title
-        assigned_agent = (
-            s.get("assigned_agent")
-            or s.get("assignedAgent")
-            or NANOBOT_AGENT_NAME
-        )
+        assigned_agent = s.get("assigned_agent") or s.get("assignedAgent") or NANOBOT_AGENT_NAME
         blocked_by = _as_string_list(
-            s.get("blocked_by")
-            or s.get("blockedBy")
-            or s.get("depends_on")
-            or s.get("dependsOn")
+            s.get("blocked_by") or s.get("blockedBy") or s.get("depends_on") or s.get("dependsOn")
         )
 
-        steps.append(ExecutionPlanStep(
-            temp_id=str(temp_id),
-            title=str(title),
-            description=str(description),
-            assigned_agent=str(assigned_agent),
-            blocked_by=blocked_by,
-            parallel_group=as_positive_int(
-                s.get("parallel_group", s.get("parallelGroup")),
-                default=1,
-            ),
-            order=as_positive_int(s.get("order"), default=index),
-        ))
+        steps.append(
+            ExecutionPlanStep(
+                temp_id=str(temp_id),
+                title=str(title),
+                description=str(description),
+                assigned_agent=str(assigned_agent),
+                blocked_by=blocked_by,
+                parallel_group=as_positive_int(
+                    s.get("parallel_group", s.get("parallelGroup")),
+                    default=1,
+                ),
+                order=as_positive_int(s.get("order"), default=index),
+            )
+        )
 
     _normalize_plan_dependencies_and_groups(steps)
 
@@ -386,7 +443,15 @@ def _normalize_plan_payload(data: object) -> dict[str, object]:
         return data
 
     # Some models wrap the actual plan in another object.
-    for key in ("plan", "execution_plan", "executionPlan", "updated_plan", "updatedPlan", "data", "result"):
+    for key in (
+        "plan",
+        "execution_plan",
+        "executionPlan",
+        "updated_plan",
+        "updatedPlan",
+        "data",
+        "result",
+    ):
         nested = data.get(key)
         if isinstance(nested, dict):
             nested_steps = nested.get("steps")
@@ -396,16 +461,21 @@ def _normalize_plan_payload(data: object) -> dict[str, object]:
             return {"steps": nested}
 
     # Last-resort: treat a single step object as a one-step plan.
-    if any(k in data for k in ("assignedAgent", "assigned_agent", "description", "title", "tempId", "step_id")):
+    if any(
+        k in data
+        for k in ("assignedAgent", "assigned_agent", "description", "title", "tempId", "step_id")
+    ):
         return {"steps": [data]}
 
     return data
 
 
-INLINE_PLANNING_SKILLS = frozenset({
-    "writing-plans",
-    "dispatching-parallel-agents",
-})
+INLINE_PLANNING_SKILLS = frozenset(
+    {
+        "writing-plans",
+        "dispatching-parallel-agents",
+    }
+)
 
 
 def _load_lead_agent_planning_skills() -> tuple[list[str], str]:
@@ -433,10 +503,7 @@ def _load_lead_agent_planning_skills() -> tuple[list[str], str]:
     if not configured_skills:
         return [], ""
 
-    inline_skill_names = [
-        name for name in configured_skills
-        if name in INLINE_PLANNING_SKILLS
-    ]
+    inline_skill_names = [name for name in configured_skills if name in INLINE_PLANNING_SKILLS]
     if not inline_skill_names:
         return configured_skills, ""
 

@@ -6,8 +6,9 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class RuntimeSleepController:
 
     def __init__(
         self,
-        bridge: "ConvexBridge",
+        bridge: ConvexBridge,
         *,
         time_fn: Callable[[], float] = time.monotonic,
         sleep_poll_interval_seconds: int = SLEEP_POLL_INTERVAL_SECONDS,
@@ -96,7 +97,7 @@ class RuntimeSleepController:
             delay = self.current_poll_interval(active_interval_seconds)
             try:
                 await asyncio.wait_for(event.wait(), timeout=delay)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return
             if self._mode == "active":
                 return
@@ -129,7 +130,7 @@ class RuntimeSleepController:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                pass
+                logger.debug("[sleep] Control poll failed", exc_info=True)
             await asyncio.sleep(CONTROL_POLL_INTERVAL_SECONDS)
 
     def runtime_payload(self) -> dict[str, Any]:
@@ -192,4 +193,4 @@ class RuntimeSleepController:
 
     @staticmethod
     def _utc_now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()

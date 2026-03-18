@@ -4,9 +4,7 @@ import type {
   SquadGraphWorkflowInput,
   SquadGraphWorkflowStepInput,
 } from "./squadGraphPublisher";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DbContext = { db: any };
+import type { DbWriter } from "./types";
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -23,7 +21,7 @@ function requireNonEmptyString(label: string, value: unknown): string {
   return value.trim();
 }
 
-async function loadAvailableSkills(ctx: DbContext): Promise<Set<string>> {
+async function loadAvailableSkills(ctx: DbWriter): Promise<Set<string>> {
   const skills = await ctx.db.query("skills").collect();
   return new Set(
     (skills as Array<Record<string, unknown>>)
@@ -33,15 +31,15 @@ async function loadAvailableSkills(ctx: DbContext): Promise<Set<string>> {
 }
 
 async function findExistingAgentByName(
-  ctx: DbContext,
+  ctx: DbWriter,
   name: string,
 ): Promise<{ _id: string; name: string } | null> {
-  return await ctx.db
+  const result = await ctx.db
     .query("agents")
-    .withIndex("by_name", (q: { eq: (field: string, value: string) => unknown }) =>
-      q.eq("name", name),
-    )
+    .withIndex("by_name", (q) => q.eq("name", name))
     .first();
+  if (!result) return null;
+  return result as { _id: string; name: string };
 }
 
 function validateAgentKeys(agents: SquadGraphAgentInput[]): Set<string> {
@@ -60,7 +58,7 @@ function validateAgentKeys(agents: SquadGraphAgentInput[]): Set<string> {
 }
 
 async function validateAgentContracts(
-  ctx: DbContext,
+  ctx: DbWriter,
   agents: SquadGraphAgentInput[],
   availableSkills: Set<string>,
 ): Promise<void> {
@@ -105,7 +103,7 @@ function validateStepAgentKeys(step: SquadGraphWorkflowStepInput, agentKeys: Set
 }
 
 async function validateReviewStepContracts(
-  ctx: DbContext,
+  ctx: DbWriter,
   workflow: SquadGraphWorkflowInput,
 ): Promise<void> {
   for (const step of workflow.steps) {
@@ -131,7 +129,7 @@ async function validateReviewStepContracts(
 }
 
 async function validateWorkflow(
-  ctx: DbContext,
+  ctx: DbWriter,
   workflow: SquadGraphWorkflowInput,
   agentKeys: Set<string>,
 ): Promise<void> {
@@ -160,7 +158,7 @@ async function validateWorkflow(
   await validateReviewStepContracts(ctx, workflow);
 }
 
-export async function validateSquadGraph(ctx: DbContext, graph: SquadGraphInput): Promise<void> {
+export async function validateSquadGraph(ctx: DbWriter, graph: SquadGraphInput): Promise<void> {
   requireSlug("Squad name", graph.squad.name);
   requireNonEmptyString(`Squad "${graph.squad.name}" displayName`, graph.squad.displayName);
 

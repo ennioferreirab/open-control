@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import Callable
+from collections.abc import Callable
 
 from mc.infrastructure.interactive.terminal_env import build_interactive_terminal_env
 

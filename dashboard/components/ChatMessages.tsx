@@ -39,9 +39,7 @@ export function ChatMessages({ agentName }: ChatMessagesProps) {
 
   // Check if the last message is from the user with status "processing"
   const isProcessing =
-    messages &&
-    messages.length > 0 &&
-    messages[messages.length - 1].status === "processing";
+    messages && messages.length > 0 && messages[messages.length - 1].status === "processing";
 
   if (messages === undefined) {
     return (
@@ -67,15 +65,10 @@ export function ChatMessages({ agentName }: ChatMessagesProps) {
         {messages.map((msg) => {
           const isUser = msg.authorType === "user";
           return (
-            <div
-              key={msg._id}
-              className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-            >
+            <div key={msg._id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-[85%] rounded-lg px-3 py-2 text-sm overflow-hidden ${
-                  isUser
-                    ? "bg-primary/10 text-foreground"
-                    : "bg-muted text-foreground"
+                  isUser ? "bg-primary/10 text-foreground" : "bg-muted text-foreground"
                 }`}
               >
                 <div className="flex items-center gap-1.5 mb-0.5">

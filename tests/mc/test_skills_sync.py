@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -25,7 +24,7 @@ def _make_skill_md(
     description: str,
     *,
     always: bool = False,
-    metadata: Optional[dict] = None,
+    metadata: dict | None = None,
     body: str = "# Skill content",
 ) -> str:
     """Build a SKILL.md string with frontmatter."""

@@ -23,7 +23,7 @@ def ensure_idempotency_key(
     """Attach a deterministic idempotencyKey to supported mutations."""
     if function_name not in SUPPORTED_MUTATIONS:
         return camel_args
-    if "idempotencyKey" in camel_args and camel_args["idempotencyKey"]:
+    if camel_args.get("idempotencyKey"):
         return camel_args
 
     payload = json.dumps(camel_args, sort_keys=True, separators=(",", ":"), default=str)

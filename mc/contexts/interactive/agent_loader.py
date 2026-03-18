@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from mc.application.execution.roster_builder import load_agent_data, sync_agent_from_convex
 from mc.types import AgentData
+
+if TYPE_CHECKING:
+    from mc.bridge import ConvexBridge
 
 
 def load_interactive_agent(
     agent_name: str,
     *,
     provider: str,
-    bridge: object | None,
+    bridge: ConvexBridge | None,
 ) -> AgentData | None:
     """Load agent data for interactive sessions, applying Convex overrides when available."""
 
     agent_data = load_agent_data(agent_name)
-    convex_agent = bridge.get_agent_by_name(agent_name) if bridge else None  # type: ignore[attr-defined]
+    convex_agent = bridge.get_agent_by_name(agent_name) if bridge else None
 
     if agent_data is None:
         if convex_agent is None:

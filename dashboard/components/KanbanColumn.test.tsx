@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { KanbanColumn } from "./KanbanColumn";
-import { Id } from "../convex/_generated/dataModel";
+import { Id } from "@/convex/_generated/dataModel";
 
 vi.mock("motion/react-client", () => ({
   div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => {

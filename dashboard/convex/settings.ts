@@ -1,7 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { isChatHandlerRuntime } from "../lib/chatSyncRuntime";
-import { isGatewaySleepRuntime } from "../lib/gatewaySleepRuntime";
+import { isChatHandlerRuntime, isGatewaySleepRuntime } from "./lib/runtimeGuards";
 
 function parseJson<T>(value: string | undefined | null): T | null {
   if (!value) {

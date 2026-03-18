@@ -12,7 +12,7 @@ import contextlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -67,7 +67,7 @@ class InteractiveRuntime:
     service: InteractiveSessionCoordinator
     transport: InteractiveSocketTransport
     supervisor: InteractiveExecutionSupervisor
-    server: "InteractiveSocketServer"
+    server: InteractiveSocketServer
     adapters: dict[str, Any]
 
 
@@ -144,7 +144,7 @@ class InteractiveSocketServer:
                     identity=identity,
                     agent=agent,
                     task_id=task_id,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     task_prompt=prompt,
                 )
                 session_id = session["session_id"]

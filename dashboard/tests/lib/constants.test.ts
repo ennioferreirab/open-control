@@ -5,16 +5,7 @@ describe("TAG_COLORS", () => {
   const STATIC_CLASS_PATTERN =
     /^(bg|text)-[a-z]+-\d+(?: (?:bg|text)-[a-z]+-\d+| dark:(?:bg|text)-[a-z]+-\d+)*$/;
 
-  const EXPECTED_COLORS = [
-    "blue",
-    "green",
-    "red",
-    "amber",
-    "violet",
-    "pink",
-    "orange",
-    "teal",
-  ];
+  const EXPECTED_COLORS = ["blue", "green", "red", "amber", "violet", "pink", "orange", "teal"];
 
   it("has exactly 8 colors", () => {
     expect(Object.keys(TAG_COLORS)).toHaveLength(8);
@@ -39,15 +30,11 @@ describe("TAG_COLORS", () => {
 
   it("bg classes use static Tailwind patterns (no dynamic interpolation)", () => {
     for (const [name, entry] of Object.entries(TAG_COLORS)) {
-      expect(entry.bg, `${name}.bg must be static Tailwind class`).toMatch(
-        STATIC_CLASS_PATTERN
-      );
+      expect(entry.bg, `${name}.bg must be static Tailwind class`).toMatch(STATIC_CLASS_PATTERN);
       expect(entry.text, `${name}.text must be static Tailwind class`).toMatch(
-        STATIC_CLASS_PATTERN
+        STATIC_CLASS_PATTERN,
       );
-      expect(entry.dot, `${name}.dot must be static Tailwind class`).toMatch(
-        STATIC_CLASS_PATTERN
-      );
+      expect(entry.dot, `${name}.dot must be static Tailwind class`).toMatch(STATIC_CLASS_PATTERN);
     }
   });
 

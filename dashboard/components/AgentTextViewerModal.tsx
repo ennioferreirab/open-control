@@ -1,6 +1,12 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +21,14 @@ interface AgentTextViewerModalProps {
   onSave?: (content: string) => Promise<void>;
 }
 
-export function AgentTextViewerModal({ open, onClose, title, content, editable, onSave }: AgentTextViewerModalProps) {
+export function AgentTextViewerModal({
+  open,
+  onClose,
+  title,
+  content,
+  editable,
+  onSave,
+}: AgentTextViewerModalProps) {
   const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState(content);
   const [saving, setSaving] = useState(false);
@@ -29,15 +42,21 @@ export function AgentTextViewerModal({ open, onClose, title, content, editable, 
     }
   }, [open, content]);
 
-  const handleOpenChange = useCallback((o: boolean) => {
-    if (!o) onClose();
-  }, [onClose]);
+  const handleOpenChange = useCallback(
+    (o: boolean) => {
+      if (!o) onClose();
+    },
+    [onClose],
+  );
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(editable ? draft : content).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
+    navigator.clipboard
+      .writeText(editable ? draft : content)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
   }, [content, draft, editable]);
 
   const handleSave = useCallback(async () => {
@@ -46,7 +65,10 @@ export function AgentTextViewerModal({ open, onClose, title, content, editable, 
     try {
       await onSave(draft);
       setSaved(true);
-      setTimeout(() => { setSaved(false); onClose(); }, 800);
+      setTimeout(() => {
+        setSaved(false);
+        onClose();
+      }, 800);
     } finally {
       setSaving(false);
     }
@@ -84,14 +106,20 @@ export function AgentTextViewerModal({ open, onClose, title, content, editable, 
           </Button>
           {editable && onSave ? (
             <>
-              <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+              <Button variant="outline" onClick={onClose} disabled={saving}>
+                Cancel
+              </Button>
               <Button onClick={handleSave} disabled={saving || saved}>
                 {saved ? (
                   <span className="flex items-center gap-1.5">
                     <Check className="h-4 w-4 text-green-500" />
                     Saved
                   </span>
-                ) : saving ? "Saving…" : "Save"}
+                ) : saving ? (
+                  "Saving…"
+                ) : (
+                  "Save"
+                )}
               </Button>
             </>
           ) : (

@@ -39,18 +39,14 @@ describe("TagsPanel", () => {
   it("shows empty state when no tags exist", () => {
     hookOverrides = { tags: [] };
     render(<TagsPanel />);
-    expect(
-      screen.getByText("No tags yet. Add your first tag below.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("No tags yet. Add your first tag below.")).toBeInTheDocument();
   });
 
   it("shows no list when tags are loading (undefined)", () => {
     hookOverrides = { tags: undefined };
     render(<TagsPanel />);
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("No tags yet. Add your first tag below.")
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No tags yet. Add your first tag below.")).not.toBeInTheDocument();
   });
 
   it("renders existing tags with name and delete button", () => {
@@ -107,9 +103,7 @@ describe("TagsPanel", () => {
     await userEvent.type(getByPlaceholderText("Tag name..."), "SomeTag");
     await userEvent.click(getByRole("button", { name: /^Add$/ }));
     await waitFor(() => {
-      expect(
-        screen.getByText("Failed to create tag. Please try again.")
-      ).toBeInTheDocument();
+      expect(screen.getByText("Failed to create tag. Please try again.")).toBeInTheDocument();
     });
   });
 
@@ -129,16 +123,12 @@ describe("TagsPanel", () => {
       tags: [{ _id: "id1", name: "Bug", color: "red" }] as never[],
     };
     render(<TagsPanel />);
-    await userEvent.click(
-      screen.getByRole("button", { name: /Delete tag Bug/i })
-    );
+    await userEvent.click(screen.getByRole("button", { name: /Delete tag Bug/i }));
     expect(mockRemoveTag).toHaveBeenCalledWith({ id: "id1" });
   });
 
   it("renders 8 color swatches in the color picker", () => {
     render(<TagsPanel />);
-    expect(
-      screen.getAllByRole("button", { name: /Select color/i })
-    ).toHaveLength(8);
+    expect(screen.getAllByRole("button", { name: /Select color/i })).toHaveLength(8);
   });
 });

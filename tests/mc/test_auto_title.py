@@ -1,7 +1,7 @@
 """Tests for auto-title generation in the orchestrator (via low-agent delegation)."""
 
 import json
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -13,11 +13,13 @@ async def test_generate_title_via_low_agent_calls_llm_with_low_tier():
     """Auto-title uses the model from low-agent (resolved from tier) when configured."""
     mock_bridge = MagicMock()
     mock_bridge.get_agent_by_name.return_value = {"model": "tier:standard-low"}
-    mock_bridge.query.return_value = json.dumps({
-        "standard-low": "anthropic/claude-haiku-3-5",
-        "standard-medium": "anthropic/claude-sonnet-4-6",
-        "standard-high": "anthropic/claude-opus-4-6",
-    })
+    mock_bridge.query.return_value = json.dumps(
+        {
+            "standard-low": "anthropic/claude-haiku-3-5",
+            "standard-medium": "anthropic/claude-sonnet-4-6",
+            "standard-high": "anthropic/claude-opus-4-6",
+        }
+    )
 
     mock_provider = MagicMock()
     mock_response = MagicMock()
@@ -53,10 +55,12 @@ async def test_generate_title_via_low_agent_falls_back_to_default_on_missing_tie
     """If tier resolves to null in model_tiers, falls back to default model (model=None)."""
     mock_bridge = MagicMock()
     mock_bridge.get_agent_by_name.return_value = {"model": "tier:standard-low"}
-    mock_bridge.query.return_value = json.dumps({
-        "standard-low": None,
-        "standard-medium": "anthropic/claude-sonnet-4-6",
-    })
+    mock_bridge.query.return_value = json.dumps(
+        {
+            "standard-low": None,
+            "standard-medium": "anthropic/claude-sonnet-4-6",
+        }
+    )
 
     mock_provider = MagicMock()
     mock_response = MagicMock()

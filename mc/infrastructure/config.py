@@ -19,6 +19,7 @@ import dataclasses
 import json
 import logging
 import os
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -136,7 +137,7 @@ def _parse_utc_timestamp(value: str) -> datetime | None:
 
     Returns None if parsing fails so the caller can skip gracefully.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     if not isinstance(value, str) or not value:
         return None
@@ -146,7 +147,7 @@ def _parse_utc_timestamp(value: str) -> datetime | None:
         dt = datetime.fromisoformat(normalised)
         # If parsed as naive (no tz), treat as UTC
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except (ValueError, AttributeError):
         return None

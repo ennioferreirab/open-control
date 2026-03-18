@@ -1,8 +1,6 @@
 """Integration test: registry is populated during CC task execution."""
 
-import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
 from mc.contexts.conversation.ask_user.registry import AskUserRegistry
 

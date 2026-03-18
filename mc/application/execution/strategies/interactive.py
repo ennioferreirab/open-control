@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from mc.application.execution.request import (
@@ -57,7 +57,7 @@ class InteractiveTuiRunnerStrategy:
             scope_id=request.task_id,
             surface="step",
         )
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         try:
             session = await self._session_coordinator.create_or_attach(

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createDraft, list, listByStatus, publish } from "./agentSpecs";
+import { createDraft, listByStatus, publish } from "./agentSpecs";
 
 type InsertCall = {
   table: string;
@@ -81,14 +81,14 @@ describe("agentSpecs.createDraft", () => {
       responsibilities: ["Write code", "Review PRs"],
       nonGoals: ["Manage infrastructure"],
       principles: ["Be concise", "Be accurate"],
-      voiceGuidance: "Speak like a senior engineer",
+      workingStyle: "Speak like a senior engineer",
       outputContract: "Always return structured JSON",
     });
 
     expect(inserts[0].value.responsibilities).toEqual(["Write code", "Review PRs"]);
     expect(inserts[0].value.nonGoals).toEqual(["Manage infrastructure"]);
     expect(inserts[0].value.principles).toEqual(["Be concise", "Be accurate"]);
-    expect(inserts[0].value.voiceGuidance).toBe("Speak like a senior engineer");
+    expect(inserts[0].value.workingStyle).toBe("Speak like a senior engineer");
     expect(inserts[0].value.outputContract).toBe("Always return structured JSON");
   });
 
@@ -121,7 +121,7 @@ describe("agentSpecs.publish", () => {
 
     expect(patches).toHaveLength(1);
     expect(patches[0].patch.status).toBe("published");
-    expect(typeof patches[0].patch.publishedAt).toBe("string");
+    expect(typeof patches[0].patch.compiledAt).toBe("string");
     expect(typeof patches[0].patch.updatedAt).toBe("string");
   });
 
@@ -177,45 +177,7 @@ describe("agentSpecs.publish", () => {
   });
 });
 
-describe("agentSpecs.list", () => {
-  it("returns all agentSpecs", async () => {
-    const handler = getHandler(list);
-    const existingSpec = {
-      _id: "spec-id-1",
-      name: "agent-1",
-      status: "published",
-      version: 1,
-      displayName: "Agent 1",
-      role: "A role",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const { ctx } = makeCtx(existingSpec);
-
-    const result = await handler(ctx, {});
-    expect(Array.isArray(result)).toBe(true);
-  });
-});
-
 describe("agentSpecs.listByStatus", () => {
-  it("returns agentSpecs filtered by the given status", async () => {
-    const handler = getHandler(listByStatus);
-    const existingSpec = {
-      _id: "spec-id-1",
-      name: "agent-1",
-      status: "published",
-      version: 1,
-      displayName: "Agent 1",
-      role: "A role",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const { ctx } = makeCtx(existingSpec);
-
-    const result = await handler(ctx, { status: "published" });
-    expect(Array.isArray(result)).toBe(true);
-  });
-
   it("returns an empty array when no specs match the status", async () => {
     const handler = getHandler(listByStatus);
     const { ctx } = makeCtx();

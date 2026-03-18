@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from mc.contexts.interactive.errors import (
     InteractiveSessionAttachError,
@@ -192,5 +193,5 @@ def _parse_timestamp(value: str) -> datetime:
     normalized = value.replace("Z", "+00:00")
     parsed = datetime.fromisoformat(normalized)
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)

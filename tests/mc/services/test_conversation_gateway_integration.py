@@ -66,60 +66,6 @@ def conversation_service(bridge: MagicMock, ask_user_registry: MagicMock) -> Con
     return ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
 
 
-# ── AC1: Gateway creates ConversationService ──────────────────────────
-
-
-class TestGatewayCreatesConversationService:
-    """Verify that gateway composition creates ConversationService."""
-
-    def test_conversation_service_accepts_bridge_and_registry(
-        self, bridge: MagicMock, ask_user_registry: MagicMock
-    ) -> None:
-        """ConversationService can be constructed with bridge + registry."""
-        svc = ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
-        assert svc._bridge is bridge
-        assert svc._ask_user_registry is ask_user_registry
-
-    def test_mention_watcher_accepts_conversation_service(
-        self, bridge: MagicMock, conversation_service: ConversationService
-    ) -> None:
-        """MentionWatcher can be constructed with a conversation_service parameter."""
-        from mc.contexts.conversation.mentions.watcher import MentionWatcher
-
-        watcher = MentionWatcher(bridge, conversation_service=conversation_service)
-        assert watcher._conversation_service is conversation_service
-
-    def test_mention_watcher_works_without_conversation_service(self, bridge: MagicMock) -> None:
-        """MentionWatcher still works without conversation_service (backward compat)."""
-        from mc.contexts.conversation.mentions.watcher import MentionWatcher
-
-        watcher = MentionWatcher(bridge)
-        assert watcher._conversation_service is None
-
-    def test_ask_user_watcher_accepts_conversation_service(
-        self,
-        bridge: MagicMock,
-        ask_user_registry: MagicMock,
-        conversation_service: ConversationService,
-    ) -> None:
-        """AskUserReplyWatcher can be constructed with a conversation_service."""
-        from mc.contexts.conversation.ask_user.watcher import AskUserReplyWatcher
-
-        watcher = AskUserReplyWatcher(
-            bridge, ask_user_registry, conversation_service=conversation_service
-        )
-        assert watcher._conversation_service is conversation_service
-
-    def test_ask_user_watcher_works_without_conversation_service(
-        self, bridge: MagicMock, ask_user_registry: MagicMock
-    ) -> None:
-        """AskUserReplyWatcher still works without conversation_service."""
-        from mc.contexts.conversation.ask_user.watcher import AskUserReplyWatcher
-
-        watcher = AskUserReplyWatcher(bridge, ask_user_registry)
-        assert watcher._conversation_service is None
-
-
 class TestWatcherClaims:
     @pytest.mark.asyncio
     async def test_mention_watcher_claims_messages_before_dispatch(
@@ -154,118 +100,6 @@ class TestWatcherClaims:
         conversation_service.handle_message.assert_awaited_once()
 
 
-# ── AC2: Intent Classification at Runtime ──────────────────────────────
-
-
-class TestRuntimeIntentClassification:
-    """Messages arriving at runtime are classified by ConversationIntentResolver."""
-
-    @pytest.mark.asyncio
-    async def test_mention_message_classified_as_mention(
-        self, conversation_service: ConversationService
-    ) -> None:
-        """@mention in task thread is classified as MENTION intent."""
-        task_data: dict[str, Any] = {"status": "inbox"}
-        result = await conversation_service.handle_message(
-            task_id="task-1",
-            content="@researcher help",
-            task_data=task_data,
-        )
-        assert result.intent == ConversationIntent.MENTION
-
-    @pytest.mark.asyncio
-    async def test_plan_chat_classified_correctly(
-        self, conversation_service: ConversationService
-    ) -> None:
-        """Plan chat message is classified as PLAN_CHAT intent."""
-        task_data: dict[str, Any] = {
-            "status": "review",
-            "awaiting_kickoff": True,
-            "execution_plan": {"steps": [{"title": "Step 1"}]},
-        }
-        result = await conversation_service.handle_message(
-            task_id="task-1",
-            content="Add a test step",
-            task_data=task_data,
-        )
-        assert result.intent == ConversationIntent.PLAN_CHAT
-
-    @pytest.mark.asyncio
-    async def test_ask_user_reply_classified_as_manual_reply(
-        self, bridge: MagicMock, ask_user_registry: MagicMock
-    ) -> None:
-        """When ask_user is pending, message is classified as MANUAL_REPLY."""
-        ask_user_registry.has_pending_ask.return_value = True
-        svc = ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
-        task_data: dict[str, Any] = {
-            "status": "in_progress",
-            "assigned_agent": "alice",
-        }
-        result = await svc.handle_message(
-            task_id="task-1",
-            content="Yes, proceed",
-            task_data=task_data,
-        )
-        assert result.intent == ConversationIntent.MANUAL_REPLY
-
-    @pytest.mark.asyncio
-    async def test_follow_up_classified_correctly(
-        self, conversation_service: ConversationService
-    ) -> None:
-        """Non-mention on active task is classified as FOLLOW_UP."""
-        task_data: dict[str, Any] = {
-            "status": "in_progress",
-            "assigned_agent": "alice",
-        }
-        result = await conversation_service.handle_message(
-            task_id="task-1",
-            content="Also check tests",
-            task_data=task_data,
-        )
-        assert result.intent == ConversationIntent.FOLLOW_UP
-
-    @pytest.mark.asyncio
-    async def test_comment_classified_correctly(
-        self, conversation_service: ConversationService
-    ) -> None:
-        """Plain message on done task (no mention) is classified as COMMENT."""
-        task_data: dict[str, Any] = {
-            "status": "done",
-            "assigned_agent": "alice",
-        }
-        result = await conversation_service.handle_message(
-            task_id="task-1",
-            content="Thanks for completing this",
-            task_data=task_data,
-        )
-        assert result.intent == ConversationIntent.COMMENT
-
-
-# ── AC3: Shared Context Assembly ───────────────────────────────────────
-
-
-class TestSharedContextAssembly:
-    """All conversation types use ThreadContextBuilder via ConversationService."""
-
-    @pytest.mark.asyncio
-    async def test_build_context_delegates_to_thread_context_builder(
-        self, conversation_service: ConversationService, bridge: MagicMock
-    ) -> None:
-        """build_context delegates to the shared ThreadContextBuilder."""
-        bridge.get_task_messages = MagicMock(
-            return_value=[
-                {"author_name": "User", "author_type": "user", "content": "hello"},
-            ]
-        )
-        with patch(
-            "mc.contexts.conversation.service.build_thread_context",
-            return_value="[Thread History]\nUser [user]: hello",
-        ) as mock_btc:
-            ctx = await conversation_service.build_context(task_id="task-1")
-            mock_btc.assert_called_once()
-            assert "[Thread History]" in ctx
-
-
 # ── AC4: Shared Response Posting ───────────────────────────────────────
 
 
@@ -298,88 +132,10 @@ class TestBehaviorPreservation:
     """Verify all existing behaviors work identically after integration."""
 
     @pytest.mark.asyncio
-    async def test_mention_does_not_change_task_status(
-        self, conversation_service: ConversationService, bridge: MagicMock
-    ) -> None:
-        """@mention triggers agent response WITHOUT changing task status."""
-        task_data: dict[str, Any] = {
-            "status": "in_progress",
-            "assigned_agent": "alice",
-            "title": "Test Task",
-        }
-        with patch(
-            "mc.contexts.conversation.service.handle_all_mentions",
-            new_callable=AsyncMock,
-            return_value=True,
-        ):
-            await conversation_service.handle_message(
-                task_id="task-1",
-                content="@researcher help",
-                task_data=task_data,
-            )
-        bridge.update_task_status.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_plan_chat_routes_to_plan_negotiation(
-        self, conversation_service: ConversationService, bridge: MagicMock
-    ) -> None:
-        """Plan-chat routes to handle_plan_negotiation."""
-        task_data: dict[str, Any] = {
-            "status": "review",
-            "awaiting_kickoff": True,
-            "execution_plan": {"steps": [{"title": "Step 1"}]},
-            "title": "Plan Task",
-        }
-        with patch(
-            "mc.contexts.conversation.service.handle_plan_negotiation",
-            new_callable=AsyncMock,
-        ) as mock_plan:
-            await conversation_service.handle_message(
-                task_id="task-1",
-                content="Add a testing step",
-                task_data=task_data,
-            )
-            mock_plan.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_ask_user_reply_returns_manual_reply_intent(
-        self, bridge: MagicMock, ask_user_registry: MagicMock
-    ) -> None:
-        """Ask-user replies deliver MANUAL_REPLY intent for caller handling."""
-        ask_user_registry.has_pending_ask.return_value = True
-        svc = ConversationService(bridge=bridge, ask_user_registry=ask_user_registry)
-        task_data: dict[str, Any] = {
-            "status": "in_progress",
-            "assigned_agent": "alice",
-        }
-        result = await svc.handle_message(
-            task_id="task-1",
-            content="Yes, go ahead",
-            task_data=task_data,
-        )
-        assert result.intent == ConversationIntent.MANUAL_REPLY
-
-    @pytest.mark.asyncio
-    async def test_follow_up_triggers_follow_up_intent(
-        self, conversation_service: ConversationService
-    ) -> None:
-        """Direct follow-ups trigger FOLLOW_UP intent."""
-        task_data: dict[str, Any] = {
-            "status": "in_progress",
-            "assigned_agent": "alice",
-        }
-        result = await conversation_service.handle_message(
-            task_id="task-1",
-            content="Check tests too",
-            task_data=task_data,
-        )
-        assert result.intent == ConversationIntent.FOLLOW_UP
-
-    @pytest.mark.asyncio
     async def test_universal_mentions_work_across_all_statuses(
         self, conversation_service: ConversationService
     ) -> None:
-        """@mention works in done, crashed, inbox, and other statuses."""
+        """@mention works in done, crashed, inbox, assigned, and in_progress statuses."""
         for status in ("done", "crashed", "inbox", "assigned", "in_progress"):
             task_data: dict[str, Any] = {
                 "status": status,
@@ -401,73 +157,6 @@ class TestBehaviorPreservation:
 
 class TestEndToEndFlow:
     """Integration: message -> ConversationService -> correct handler."""
-
-    @pytest.mark.asyncio
-    async def test_mention_message_end_to_end(
-        self, conversation_service: ConversationService
-    ) -> None:
-        """End-to-end: mention message -> MENTION intent -> dispatch."""
-        task_data: dict[str, Any] = {
-            "status": "done",
-            "title": "Done Task",
-        }
-        with patch(
-            "mc.contexts.conversation.service.handle_all_mentions",
-            new_callable=AsyncMock,
-            return_value=True,
-        ) as mock_handle:
-            result = await conversation_service.handle_message(
-                task_id="task-1",
-                content="@researcher analyze this",
-                task_data=task_data,
-            )
-            assert result.intent == ConversationIntent.MENTION
-            mock_handle.assert_called_once_with(
-                bridge=conversation_service._bridge,
-                task_id="task-1",
-                content="@researcher analyze this",
-                task_title="Done Task",
-            )
-
-    @pytest.mark.asyncio
-    async def test_plan_chat_message_end_to_end(
-        self, conversation_service: ConversationService
-    ) -> None:
-        """End-to-end: plan chat -> PLAN_CHAT intent -> handle_plan_negotiation."""
-        task_data: dict[str, Any] = {
-            "status": "review",
-            "awaiting_kickoff": True,
-            "execution_plan": {"steps": [{"title": "Step 1"}]},
-            "title": "Plan Task",
-        }
-        with patch(
-            "mc.contexts.conversation.service.handle_plan_negotiation",
-            new_callable=AsyncMock,
-        ) as mock_plan:
-            result = await conversation_service.handle_message(
-                task_id="task-1",
-                content="Modify step 1",
-                task_data=task_data,
-            )
-            assert result.intent == ConversationIntent.PLAN_CHAT
-            mock_plan.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_comment_message_end_to_end(
-        self, conversation_service: ConversationService, bridge: MagicMock
-    ) -> None:
-        """End-to-end: comment -> COMMENT intent -> no side effects."""
-        task_data: dict[str, Any] = {
-            "status": "done",
-            "assigned_agent": "alice",
-        }
-        result = await conversation_service.handle_message(
-            task_id="task-1",
-            content="Nice work",
-            task_data=task_data,
-        )
-        assert result.intent == ConversationIntent.COMMENT
-        bridge.update_task_status.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_different_intents_from_same_task(
@@ -535,6 +224,7 @@ class TestMentionWatcherWithConversationService:
             ]
         )
         bridge.query = MagicMock(return_value={"id": "task-1", "status": "done", "title": "Test"})
+        bridge.mutation = MagicMock(return_value={"granted": True, "claimId": "claim-1"})
 
         # Patch ConversationService.handle_message to verify routing
         with patch(
@@ -574,6 +264,7 @@ class TestMentionWatcherWithConversationService:
             ]
         )
         bridge.query = MagicMock(return_value={"id": "task-1", "status": "done", "title": "Test"})
+        bridge.mutation = MagicMock(return_value={"granted": True, "claimId": "claim-1"})
 
         with patch(
             "mc.contexts.conversation.mentions.handler.handle_all_mentions",

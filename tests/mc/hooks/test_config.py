@@ -1,4 +1,5 @@
 """Tests for mc.hooks.config — HookConfig dataclass and helpers."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,6 +30,7 @@ class TestHookConfig:
         """HookConfig is frozen — attribute assignment should raise."""
         config = HookConfig()
         import dataclasses
+
         with __import__("pytest").raises(dataclasses.FrozenInstanceError):
             config.plan_pattern = "other"  # type: ignore[misc]
 

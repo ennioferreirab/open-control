@@ -1,12 +1,10 @@
 """Unit tests for CLI agent commands (Story 3.4)."""
 
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
-from mc.cli import mc_app, _get_agent_status_color
+from mc.cli import _get_agent_status_color, mc_app
 
 runner = CliRunner()
 
@@ -93,9 +91,7 @@ class TestAgentsList:
         agents_dir = tmp_path / "agents"
         good = agents_dir / "good-agent"
         good.mkdir(parents=True)
-        (good / "config.yaml").write_text(
-            "name: good-agent\nrole: Dev\nprompt: You dev.\n"
-        )
+        (good / "config.yaml").write_text("name: good-agent\nrole: Dev\nprompt: You dev.\n")
         bad = agents_dir / "bad-agent"
         bad.mkdir()
         (bad / "config.yaml").write_text("invalid: yaml: content: [")

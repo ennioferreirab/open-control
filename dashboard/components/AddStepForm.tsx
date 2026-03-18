@@ -20,7 +20,7 @@ import { useBoardById } from "@/hooks/useBoardById";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 import { HUMAN_AGENT_NAME } from "@/lib/constants";
 import { getStatusMeta } from "./FlowStepNode";
-import type { Id } from "../convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export interface ExistingStep {
   id: string;

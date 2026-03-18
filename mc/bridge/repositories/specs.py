@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 
 class SpecsRepository:
     """Data access methods for Agent Spec V2 entities in Convex."""
 
-    def __init__(self, client: "BridgeClient") -> None:
+    def __init__(self, client: BridgeClientProtocol) -> None:
         self._client = client
 
     def create_agent_spec(

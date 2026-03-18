@@ -40,10 +40,7 @@ export async function DELETE(
   }
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
   const storePath = join(homedir(), ".nanobot", "cron", "jobs.json");
   const tmpPath = `${storePath}.tmp`;
@@ -84,7 +81,14 @@ export async function PATCH(
     }
 
     if (!job.payload) {
-      job.payload = { kind: "agent_turn", message: "", deliver: false, channel: null, to: null, taskId: null };
+      job.payload = {
+        kind: "agent_turn",
+        message: "",
+        deliver: false,
+        channel: null,
+        to: null,
+        taskId: null,
+      };
     }
     if ("channel" in body) job.payload.channel = body.channel ?? null;
     if ("to" in body) job.payload.to = body.to ?? null;
@@ -103,9 +107,6 @@ export async function PATCH(
     try {
       await unlink(tmpPath);
     } catch {}
-    return NextResponse.json(
-      { error: "Failed to update cron job" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to update cron job" }, { status: 500 });
   }
 }

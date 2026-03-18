@@ -58,7 +58,9 @@ function isValidFilename(subfolder: string, filename: string): boolean {
     return false;
   }
 
-  return filename.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+  return filename
+    .split("/")
+    .every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
 }
 
 export async function GET(
@@ -83,7 +85,11 @@ export async function GET(
   try {
     buffer = await readFile(filePath);
   } catch (err: unknown) {
-    const isNotFound = err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT";
+    const isNotFound =
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code: string }).code === "ENOENT";
     if (isNotFound) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }

@@ -10,7 +10,7 @@ import sqlite3
 import time
 import typing
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from mc.memory.policy import is_memory_markdown_file, iter_memory_markdown_files
@@ -177,6 +177,7 @@ class MemoryIndex:
                     """,
                     (canonical_path_str, content, start, end, created_at),
                 )
+                assert cur.lastrowid is not None
                 chunk_id = int(cur.lastrowid)
                 self._conn.execute(
                     "INSERT INTO chunks_fts(rowid, content) VALUES (?, ?)",
@@ -192,7 +193,7 @@ class MemoryIndex:
                     self._ensure_vec_table(self._conn, first_dim)
                     rows = [
                         (chunk_id, self._vector_literal(embedding))
-                        for chunk_id, embedding in zip(chunk_ids, embeddings)
+                        for chunk_id, embedding in zip(chunk_ids, embeddings, strict=False)
                         if len(embedding) == first_dim
                     ]
                     if rows:
@@ -260,7 +261,7 @@ class MemoryIndex:
         except ValueError:
             return time.time()
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.timestamp()
 
     def _prune_untracked_files(self, allowed_paths: set[str]) -> None:

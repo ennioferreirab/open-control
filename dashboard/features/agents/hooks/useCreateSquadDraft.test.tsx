@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockReactMutation } from "@/tests/helpers/mockConvex";
 
 // Mock convex/react before importing the hook
 vi.mock("convex/react", () => ({
@@ -26,7 +27,7 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("initializes with empty draft and not saving", () => {
-    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    const mockMutate = mockReactMutation(async () => "squad-spec-id-1");
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());
@@ -36,7 +37,7 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("updateDraft merges partial changes into draft state", () => {
-    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    const mockMutate = mockReactMutation(async () => "squad-spec-id-1");
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());
@@ -49,7 +50,7 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("publishDraft calls the publishGraph mutation — not a plain create", async () => {
-    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    const mockMutate = mockReactMutation(async () => "squad-spec-id-1");
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());
@@ -72,7 +73,7 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("publishDraft does not pass agentSpecIds: [] as a hardcoded empty array", async () => {
-    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    const mockMutate = mockReactMutation(async () => "squad-spec-id-1");
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());
@@ -95,7 +96,7 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("publishDraft passes a graph object to the mutation", async () => {
-    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    const mockMutate = mockReactMutation(async () => "squad-spec-id-1");
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());
@@ -121,7 +122,7 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("publishDraft returns null when name is empty", async () => {
-    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    const mockMutate = mockReactMutation(async () => "squad-spec-id-1");
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());
@@ -136,7 +137,7 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("publishDraft returns the draft name on success", async () => {
-    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    const mockMutate = mockReactMutation(async () => "squad-spec-id-1");
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());
@@ -159,7 +160,9 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("publishDraft returns null on mutation error", async () => {
-    const mockMutate = vi.fn().mockRejectedValue(new Error("Mutation failed"));
+    const mockMutate = mockReactMutation(async () => {
+      throw new Error("Mutation failed");
+    });
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());
@@ -177,7 +180,7 @@ describe("useCreateSquadDraft", () => {
   });
 
   it("publishDraft from draftGraph preserves prompt, model, skills, soul on agents", async () => {
-    const mockMutate = vi.fn().mockResolvedValue("squad-spec-id-1");
+    const mockMutate = mockReactMutation(async () => "squad-spec-id-1");
     mockUseMutation.mockReturnValue(mockMutate);
     const { result } = renderHook(() => useCreateSquadDraft());
     const draftGraph = {
@@ -213,7 +216,7 @@ describe("useCreateSquadDraft", () => {
     const pendingPromise = new Promise<string>((resolve) => {
       resolveMutation = resolve;
     });
-    const mockMutate = vi.fn().mockReturnValue(pendingPromise);
+    const mockMutate = mockReactMutation(() => pendingPromise);
     mockUseMutation.mockReturnValue(mockMutate);
 
     const { result } = renderHook(() => useCreateSquadDraft());

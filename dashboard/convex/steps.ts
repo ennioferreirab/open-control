@@ -16,7 +16,7 @@ import {
 } from "./lib/stepLifecycle";
 import { applyStepTransition, getStepStateVersion } from "./lib/stepTransitions";
 import { applyTaskTransition, getTaskStateVersion } from "./lib/taskTransitions";
-import { workflowStepTypeValidator } from "./schema";
+import { stepStatusValidator, workflowStepTypeValidator } from "./schema";
 import { logActivity } from "./lib/workflowHelpers";
 
 type ParentTaskTransitionStatus = "assigned" | "in_progress" | "review" | "done" | "crashed";
@@ -149,7 +149,7 @@ export const create = internalMutation({
     title: v.string(),
     description: v.string(),
     assignedAgent: v.string(),
-    status: v.optional(v.string()),
+    status: v.optional(stepStatusValidator),
     blockedBy: v.optional(v.array(v.id("steps"))),
     parallelGroup: v.number(),
     order: v.number(),
@@ -284,7 +284,7 @@ export const batchCreate = internalMutation({
 export const updateStatus = internalMutation({
   args: {
     stepId: v.id("steps"),
-    status: v.string(),
+    status: stepStatusValidator,
     errorMessage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

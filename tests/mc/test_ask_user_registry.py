@@ -1,8 +1,7 @@
 """Tests for AskUserRegistry — global registry of active AskUserHandler instances."""
 
 import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 from mc.contexts.conversation.ask_user.handler import AskUserHandler
 from mc.contexts.conversation.ask_user.registry import AskUserRegistry

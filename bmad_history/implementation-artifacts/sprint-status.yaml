@@ -1,0 +1,238 @@
+# generated: 2026-02-24
+# project: nanobot-ennio
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-02-24
+project: nanobot-ennio
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Task Creation & Execution Planning
+  epic-1: done
+  1-1-extend-convex-schema-for-task-step-hierarchy: done
+  1-2-add-supervision-mode-to-task-creation: done
+  1-3-register-general-agent-as-system-fallback: done
+  1-4-enforce-lead-agent-as-pure-orchestrator: done
+  1-5-generate-execution-plans: done
+  1-6-materialize-plans-into-step-records: done
+  1-7-render-step-cards-on-kanban-board: done
+  1-8-visualize-execution-plan: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Autonomous Execution & Agent Collaboration
+  epic-2: done
+  2-1-dispatch-steps-in-autonomous-mode: done
+  2-2-execute-steps-as-agent-subprocesses: done
+  2-3-auto-unblock-dependent-steps: done
+  2-4-build-unified-thread-per-task: done
+  2-5-post-structured-completion-messages: done
+  2-6-build-thread-context-for-agents: done
+  2-7-render-thread-view-in-real-time: done
+  epic-2-retrospective: optional
+
+  # Epic 3: Step Lifecycle & Error Recovery
+  epic-3: done
+  3-1-implement-step-status-state-machine: done
+  3-2-visualize-blocked-and-crashed-steps: done
+  3-3-post-crash-errors-with-recovery-instructions: done
+  3-4-retry-crashed-steps: done
+  3-5-extend-activity-feed-with-step-events: done
+  epic-3-retrospective: optional
+
+  # Epic 4: Pre-Kickoff Plan Review & Negotiation
+  epic-4: done
+  4-1-build-pre-kickoff-modal-shell: done
+  4-2-reassign-agents-to-steps: done
+  4-3-reorder-steps-and-edit-dependencies: done
+  4-4-attach-documents-to-steps: done
+  4-5-chat-with-lead-agent-for-plan-negotiation: done
+  4-6-approve-plan-and-kick-off: done
+  epic-4-retrospective: optional
+
+  # Epic 5: File Attachment & Viewing
+  epic-5: done
+  5-1-extend-schema-and-create-task-directories: done
+  5-2-upload-files-at-task-creation: done
+  5-3-build-files-tab-in-task-detail: done
+  5-4-attach-files-to-existing-tasks: done
+  5-5-file-indicators-on-task-cards: done
+  5-6-file-serving-api-route: done
+  5-7-viewer-modal-with-text-and-code-viewers: done
+  5-8-pdf-viewer: done
+  5-9-html-and-markdown-viewers: done
+  5-10-image-viewer: done
+  epic-5-retrospective: optional
+
+  # Epic 6: Agent File Integration
+  epic-6: done
+  6-1-inject-file-context-into-agent-task-context: done
+  6-2-bridge-manifest-sync-for-agent-output: done
+  6-3-lead-agent-file-aware-routing: done
+  epic-6-retrospective: optional
+
+  # Epic 7: Supervised Plan 2.0 — Interactive Canvas Experience
+  # Redesigns the supervised plan flow: removes PreKickoffModal,
+  # replaces with editable canvas in ExecutionPlanTab, human as
+  # first-class actor, Lead Agent via thread, and Pause/Resume.
+  epic-7: done
+  7-1-execution-plan-canvas: done
+  7-2-human-as-plan-actor: done
+  7-3-lead-agent-thread-negotiation: done
+  7-4-task-pause-resume: done
+  epic-7-retrospective: optional
+
+  # Epic 9: Task Enhancements & Search
+  epic-9: in-progress
+  9-4-text-search-tasks: done
+
+  # Epic 11: Model Tier System & CC Backend Config
+  epic-11: in-progress
+  11-1-implement-model-tiers: ready-for-dev
+  11-2-model-override-per-agent: ready-for-dev
+  11-3-cc-backend-config-dashboard: in-progress
+  11-4-migrate-anthropic-reasoning-api: done
+  11-5-sync-nanobot-model-on-startup: done
+
+  # Epic 10: Convex Security Hardening
+  # Converts backend-only mutations to internalMutation and hardens
+  # Python startup to require CONVEX_ADMIN_KEY for server-side auth.
+  epic-10: in-progress
+  10-1-lock-down-terminal-session-mutations: review
+  10-2-convert-backend-mutations-to-internal: review
+  10-3-harden-python-startup-admin-key: review
+  epic-10-retrospective: optional
+
+  # Epic 20: Architecture Stabilization Completion
+  # Closes remaining gaps from the MC Architecture Stabilization Plan v2:
+  # Wave 2 (ExecutionEngine sole path), Wave 3 (runtime integration),
+  # Wave 5 (hook abstraction), and god file decomposition.
+  epic-20: in-progress
+  20-1-integrate-cc-step-runner-and-chat-handler-into-execution-engine: review
+  20-2-wire-conversation-service-into-gateway-runtime: review
+  20-3-adopt-runtime-context-across-workers-and-services: review
+  20-4-semantic-hook-apis-and-test-decoupling: review
+  20-5-decompose-process-monitor: review
+  epic-20-retrospective: optional
+
+  # Epic 21: Architecture Convergence Migration
+  # Eliminates legacy ownership layers and compatibility wrappers so the
+  # documented backend/frontend architecture becomes the only architecture.
+  epic-21: in-progress
+  21-1-freeze-architecture-migration-baseline: ready-for-dev
+  21-2-make-conversation-own-ask-user-and-mentions: ready-for-dev
+  21-3-absorb-services-and-workers-into-canonical-owners: ready-for-dev
+  21-4-split-backend-runtime-and-execution-hotspots: ready-for-dev
+  21-5-migrate-dashboard-tasks-boards-and-thread-ownership: ready-for-dev
+  21-6-finish-dashboard-feature-ownership-migration: ready-for-dev
+  21-7-remove-final-compatibility-layers-and-run-full-regression: ready-for-dev
+  epic-21-retrospective: optional
+
+  # Epic 22: Architecture Cleanup and Decoupling in Root Repository
+  # Finishes the useful decoupling work still missing in the integrated root:
+  # removes backend compatibility roots, closes dashboard Convex boundaries,
+  # deletes ambiguous dashboard wrappers/hooks, and adds durable browser regression.
+  epic-22: done
+  22-1-remove-backend-legacy-compatibility-packages: done
+  22-2-close-dashboard-feature-convex-boundaries: done
+  22-3-delete-dashboard-legacy-wrappers-and-root-feature-hooks: done
+  22-4-split-hotspots-and-add-versioned-functional-regression: done
+  epic-22-retrospective: optional
+
+  # Epic 23: Selective Convergence Integration
+  # Pulls only the useful, simplifying pieces still stranded in the old
+  # architecture-convergence worktree, without reintroducing its regressions.
+  epic-23: done
+  23-1-extract-task-detail-tabs-and-shrink-task-detail-sheet: done
+  23-2-finish-dashboard-shell-feature-ownership-for-agents-activity-and-terminal: done
+  23-3-decouple-board-and-thread-shell-state-from-root-components: done
+  23-4-trim-backend-runtime-compat-seams-left-from-convergence: done
+  epic-23-retrospective: optional
+
+  # Epic 24: Final Gateway Salvage from architecture-convergence
+  # Rescues only the remaining useful runtime split from the old
+  # architecture-convergence worktree, then deletes that worktree.
+  epic-24: done
+  24-1-extract-final-runtime-seams-from-gateway-and-retire-convergence-worktree: done
+  epic-24-retrospective: optional
+
+  # Epic 26: Optional Hotspot Follow-Up
+  # Finishes the highest-value optional cleanup left after Epic 25:
+  # shrink the remaining dashboard/backend god files and reduce avoidable
+  # shared Convex coupling in the dashboard.
+  epic-26: done
+  26-1-split-dashboard-convex-task-hotspot: done
+  26-2-reduce-dashboard-shared-convex-coupling: done
+  26-3-reduce-backend-executor-and-bridge-hotspots: done
+  epic-26-retrospective: optional
+
+  # Epic 27: Interactive Agent TUI Sessions
+  # Adds a provider-agnostic interactive TUI runtime for native CLI terminals
+  # inside Mission Control, starting with Claude Code in Chat and extending to
+  # Codex on the same infrastructure without mixing with headless execution.
+  epic-27: done
+  27-1-build-interactive-session-runtime-foundation: done
+  27-2-add-claude-code-interactive-session-adapter: done
+  27-3-embed-interactive-tui-tab-in-chat-panel: done
+  27-4-generalize-interactive-adapter-contract-and-add-codex-adapter: done
+  27-5-harden-interactive-session-observability-security-and-reuse: done
+  27-6-build-interactive-supervision-contract-and-runtime-sink: done
+  27-7-add-claude-code-hook-supervision-and-ask-user-review-pauses: done
+  27-8-integrate-codex-app-server-supervision: done
+  27-9-make-interactive-tui-the-primary-step-execution-strategy: done
+  27-10-expose-live-attach-for-running-step-sessions: done
+  27-11-add-interactive-execution-migration-controls-and-metrics: done
+  27-12-bind-live-sessions-to-the-active-step-and-correct-agent: done
+  27-13-capture-canonical-interactive-results-and-post-them-to-the-thread: done
+  27-14-add-human-takeover-and-manual-step-done-for-live-execution: done
+  27-15-complete-interactive-memory-bootstrap-and-consolidation: done
+  27-16-add-nanobot-interactive-mc-live-support: done
+  27-17-validate-interactive-step-execution-parity-across-providers: done
+  epic-27-retrospective: optional
+
+  # Epic 33: Code Conventions Alignment
+  # Aligns the entire codebase with the new unified code conventions
+  # documented in agent_docs/code_conventions/. Focuses on naming contracts,
+  # type safety, error handling consistency, and formatting baseline.
+  epic-33: in-progress
+  33-1-python-type-and-enum-alignment: done
+  33-2-convex-error-handling-and-validators: done
+  33-3-convex-boundary-and-event-alignment: done
+  33-4-typescript-import-and-naming-alignment: done
+  33-5-run-formatters-and-linters: done
+  33-6-python-ruff-remaining-violations: ready-for-dev
+  33-7-python-pyright-type-errors: ready-for-dev
+  33-8-typescript-eslint-and-type-errors: ready-for-dev
+  epic-33-retrospective: optional

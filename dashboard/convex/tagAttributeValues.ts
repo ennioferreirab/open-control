@@ -24,9 +24,7 @@ export const upsert = mutation({
     // Find existing value for this (taskId, tagName, attributeId) combination
     const existing = await ctx.db
       .query("tagAttributeValues")
-      .withIndex("by_taskId_tagName", (q) =>
-        q.eq("taskId", taskId).eq("tagName", tagName)
-      )
+      .withIndex("by_taskId_tagName", (q) => q.eq("taskId", taskId).eq("tagName", tagName))
       .collect();
 
     const match = existing.find((v) => v.attributeId === attributeId);
@@ -57,9 +55,7 @@ export const removeByTaskAndTag = mutation({
   handler: async (ctx, { taskId, tagName }) => {
     const values = await ctx.db
       .query("tagAttributeValues")
-      .withIndex("by_taskId_tagName", (q) =>
-        q.eq("taskId", taskId).eq("tagName", tagName)
-      )
+      .withIndex("by_taskId_tagName", (q) => q.eq("taskId", taskId).eq("tagName", tagName))
       .collect();
     for (const val of values) {
       await ctx.db.delete(val._id);

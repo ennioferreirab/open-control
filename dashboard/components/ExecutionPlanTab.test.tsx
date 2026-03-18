@@ -253,11 +253,7 @@ describe("ExecutionPlanTab", () => {
     };
     const onViewModeChange = vi.fn();
     render(
-      <ExecutionPlanTab
-        executionPlan={plan}
-        viewMode="both"
-        onViewModeChange={onViewModeChange}
-      />,
+      <ExecutionPlanTab executionPlan={plan} viewMode="both" onViewModeChange={onViewModeChange} />,
     );
 
     expect(screen.getByTestId("execution-plan-view-switcher")).toBeInTheDocument();
@@ -807,7 +803,9 @@ describe("ExecutionPlanTab", () => {
 
       expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
       const updatedPlan = onLocalPlanChange.mock.calls[0][0];
-      const updatedStep = updatedPlan.steps.find((step: { tempId: string }) => step.tempId === "step_2");
+      const updatedStep = updatedPlan.steps.find(
+        (step: { tempId: string }) => step.tempId === "step_2",
+      );
       expect(updatedStep.blockedBy).toEqual([]);
     });
 
@@ -1153,7 +1151,9 @@ describe("ExecutionPlanTab", () => {
       );
 
       expect(screen.getByTestId("flow-node-add-sequential-__merge_alias__")).toBeInTheDocument();
-      expect(screen.queryByTestId("flow-node-add-parallel-__merge_alias__")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("flow-node-add-parallel-__merge_alias__"),
+      ).not.toBeInTheDocument();
       expect(screen.queryByTestId("flow-node-merge-paths-__merge_alias__")).not.toBeInTheDocument();
     });
 

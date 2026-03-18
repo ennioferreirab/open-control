@@ -25,7 +25,7 @@ class FakeWebSocket:
         self.close_calls: list[tuple[int, str]] = []
         self._closed_event: asyncio.Event = asyncio.Event()
 
-    def __aiter__(self) -> "FakeWebSocket":
+    def __aiter__(self) -> FakeWebSocket:
         return self
 
     async def __anext__(self) -> str | bytes:

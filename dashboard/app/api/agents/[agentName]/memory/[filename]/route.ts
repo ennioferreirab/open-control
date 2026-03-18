@@ -45,7 +45,7 @@ async function resolvePaths(
     // boards dir doesn't exist
   }
 
-  return { readPath: await fileExists(globalPath) ? globalPath : null, writePath: globalPath };
+  return { readPath: (await fileExists(globalPath)) ? globalPath : null, writePath: globalPath };
 }
 
 export async function GET(

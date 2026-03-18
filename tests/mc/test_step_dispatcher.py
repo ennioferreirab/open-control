@@ -640,7 +640,7 @@ class TestStepDispatcher:
     @pytest.mark.asyncio
     async def test_step_completion_calls_post_step_completion(self) -> None:
         """After a step runs successfully, post_step_completion is called (Story 2.5)."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Write Report", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Write Report", order=1)])
         dispatcher = StepDispatcher(bridge)
 
         snap_patch, collect_patch = _patch_executor_helpers()
@@ -667,7 +667,7 @@ class TestStepDispatcher:
     @pytest.mark.asyncio
     async def test_step_completion_passes_artifacts(self) -> None:
         """Artifacts collected are forwarded to post_step_completion."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
         dispatcher = StepDispatcher(bridge)
 
         fake_artifacts = [
@@ -697,7 +697,7 @@ class TestStepDispatcher:
     @pytest.mark.asyncio
     async def test_step_completion_no_artifacts_passes_none(self) -> None:
         """When no artifacts are produced, None is passed to post_step_completion."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
         dispatcher = StepDispatcher(bridge)
 
         snap_patch, collect_patch = _patch_executor_helpers()
@@ -742,7 +742,7 @@ class TestTaskFileManifestInjection:
     @pytest.mark.asyncio
     async def test_step_with_task_files_includes_manifest_in_description(self) -> None:
         """Task-level file manifest is injected into execution_description when task has files."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
         query_data = {
             "title": "Main Task",
             "status": "in_progress",
@@ -798,7 +798,7 @@ class TestTaskFileManifestInjection:
     @pytest.mark.asyncio
     async def test_step_without_task_files_does_not_include_manifest(self) -> None:
         """When a task has no files, no file manifest section appears in the description."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
         bridge.query.return_value = {"title": "Main Task", "status": "in_progress", "files": []}
         dispatcher = StepDispatcher(bridge)
 
@@ -829,7 +829,7 @@ class TestTaskFileManifestInjection:
     @pytest.mark.asyncio
     async def test_step_without_task_files_key_does_not_include_manifest(self) -> None:
         """When a task dict has no 'files' key, no file manifest section appears."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
         # Default _make_stateful_bridge returns {"title": "Main Task"} -- no 'files' key
         dispatcher = StepDispatcher(bridge)
 
@@ -860,7 +860,7 @@ class TestTaskFileManifestInjection:
     @pytest.mark.asyncio
     async def test_manifest_includes_human_readable_sizes(self) -> None:
         """Manifest summary includes human-readable sizes for various file sizes."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
         query_data = {
             "title": "Main Task",
             "status": "in_progress",
@@ -919,7 +919,7 @@ class TestTaskFileManifestInjection:
     @pytest.mark.asyncio
     async def test_manifest_single_file_correct_count(self) -> None:
         """A task with one file shows '1 file(s) in its manifest'."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Process", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Process", order=1)])
         query_data = {
             "title": "Main Task",
             "status": "in_progress",
@@ -1032,7 +1032,7 @@ class TestStepOutputFileSync:
         Regression guard: ensures future refactors cannot reorder these two calls
         without a test failure.
         """
-        bridge, state = _make_stateful_bridge([_step("step-1", "Report", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Report", order=1)])
         bridge.sync_task_output_files.return_value = None
 
         call_order: list[str] = []
@@ -1278,7 +1278,7 @@ class TestTaskLevelFileSummaryInDelegationContext:
         self,
     ) -> None:
         """AC #2: delegation context includes task-level file summary when task has files."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Analyze", order=1)])
         query_data = {
             "title": "Main Task",
             "status": "in_progress",
@@ -1338,7 +1338,7 @@ class TestTaskLevelFileSummaryInDelegationContext:
         self,
     ) -> None:
         """AC #3: no file summary noise when task has no file attachments."""
-        bridge, state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
+        bridge, _state = _make_stateful_bridge([_step("step-1", "Compute", order=1)])
         bridge.query.return_value = {"title": "Main Task", "status": "in_progress", "files": []}
         dispatcher = StepDispatcher(bridge)
 

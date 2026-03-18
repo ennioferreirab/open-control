@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from mc.contexts.provider_cli.types import ParsedCliEvent
 
@@ -47,7 +47,7 @@ class LiveStreamProjector:
         self._sequence += 1
         projected = ProjectedEvent(
             sequence=self._sequence,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             event=event,
             session_id=session_id,
         )

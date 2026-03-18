@@ -23,7 +23,7 @@ import asyncio
 import json
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mc.contexts.interaction.service import has_pending_execution_question
 from mc.contexts.planning.parser import parse_plan_payload
@@ -196,7 +196,7 @@ def _parse_negotiation_response(raw: str) -> dict[str, Any]:
 
 
 async def handle_plan_negotiation(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     task_id: str,
     user_message: str,
     current_plan: dict[str, Any],
@@ -409,7 +409,7 @@ async def handle_plan_negotiation(
                 ThreadMessageType.LEAD_AGENT_CHAT,
             )
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error(
             "[plan_negotiator] LLM timed out for task %s after %ds",
             task_id,
@@ -439,7 +439,7 @@ async def handle_plan_negotiation(
 
 
 async def create_initial_plan_from_message(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     task_id: str,
     user_message: str,
     *,
@@ -587,10 +587,10 @@ def _is_negotiable_status(task: dict[str, Any]) -> bool:
 
 
 async def start_plan_negotiation_loop(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     task_id: str,
     poll_interval: float = 2.0,
-    ask_user_registry: "Any | None" = None,
+    ask_user_registry: Any | None = None,
     sleep_controller: Any | None = None,
 ) -> None:
     """Subscribe to main thread messages for a task in review or in_progress status
@@ -632,7 +632,7 @@ async def start_plan_negotiation_loop(
     seen_ids_max = 1000
 
     while True:
-        messages = await queue.get()
+        messages = cast(list[dict[str, Any]], await queue.get())
 
         # Check for polling errors
         if isinstance(messages, dict) and messages.get("_error"):

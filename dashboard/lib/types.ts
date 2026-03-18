@@ -2,7 +2,7 @@
  * Shared types for plan editing and pre-kickoff workflow.
  */
 
-export type PlanStep = {
+export type EditablePlanStep = {
   tempId: string;
   title: string;
   description: string;
@@ -14,7 +14,7 @@ export type PlanStep = {
 };
 
 export type ExecutionPlan = {
-  steps: PlanStep[];
+  steps: EditablePlanStep[];
   generatedAt: string;
   generatedBy: "lead-agent";
 };

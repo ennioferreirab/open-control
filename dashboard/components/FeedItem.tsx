@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { CheckCircle2, XCircle, Play, ArrowRight, Unlock, RefreshCw, Activity } from "lucide-react";
-import { Doc } from "../convex/_generated/dataModel";
+import { Doc } from "@/convex/_generated/dataModel";
 
 interface FeedItemProps {
   activity: Doc<"activities">;
@@ -74,9 +74,7 @@ export function FeedItem({ activity }: FeedItemProps) {
           {formatTime(activity.timestamp)}
         </span>
         {activity.agentName && (
-          <span className="truncate text-xs font-medium text-foreground">
-            {activity.agentName}
-          </span>
+          <span className="truncate text-xs font-medium text-foreground">{activity.agentName}</span>
         )}
       </div>
       <p className="flex items-center gap-1 text-xs text-muted-foreground">

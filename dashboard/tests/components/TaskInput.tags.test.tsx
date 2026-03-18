@@ -70,9 +70,7 @@ describe("TaskInput tag selection", () => {
     await user.click(screen.getByText("Create"));
 
     await waitFor(() => {
-      expect(mockCreateTask).toHaveBeenCalledWith(
-        expect.objectContaining({ tags: ["bug"] })
-      );
+      expect(mockCreateTask).toHaveBeenCalledWith(expect.objectContaining({ tags: ["bug"] }));
     });
   });
 
@@ -84,9 +82,7 @@ describe("TaskInput tag selection", () => {
     await user.click(screen.getByText("Create"));
 
     await waitFor(() => {
-      expect(mockCreateTask).toHaveBeenCalledWith(
-        expect.objectContaining({ tags: undefined })
-      );
+      expect(mockCreateTask).toHaveBeenCalledWith(expect.objectContaining({ tags: undefined }));
     });
   });
 
@@ -104,10 +100,7 @@ describe("TaskInput tag selection", () => {
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Task title...")).toHaveValue("");
     });
-    expect(screen.getByRole("button", { name: "bug" })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    );
+    expect(screen.getByRole("button", { name: "bug" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("clears selected tags when switching to manual mode", () => {
@@ -120,9 +113,6 @@ describe("TaskInput tag selection", () => {
     fireEvent.click(screen.getByRole("button", { name: /Switch to manual mode/i }));
     fireEvent.click(screen.getByRole("button", { name: /Switch to AI mode/i }));
 
-    expect(screen.getByRole("button", { name: "bug" })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    );
+    expect(screen.getByRole("button", { name: "bug" })).toHaveAttribute("aria-pressed", "false");
   });
 });

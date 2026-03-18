@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Literal
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from mc.contexts.provider_cli.types import ProviderProcessHandle
 
@@ -93,7 +94,7 @@ class ProviderProcessSupervisor:
             pgid=pgid,
             cwd=cwd,
             command=command,
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(UTC).isoformat(),
         )
 
     async def stream_output(self, handle: ProviderProcessHandle) -> AsyncIterator[bytes]:

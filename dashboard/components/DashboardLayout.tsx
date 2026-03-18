@@ -1,12 +1,8 @@
 "use client";
 
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import { Id } from "../convex/_generated/dataModel";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { Id } from "@/convex/_generated/dataModel";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AgentSidebar } from "@/features/agents/components/AgentSidebar";
 import { ActivityFeedPanel } from "@/features/activity/components/ActivityFeedPanel";
 import { TaskInput } from "@/features/tasks/components/TaskInput";
@@ -29,10 +25,7 @@ import { BoardSettingsSheet } from "@/features/boards/components/BoardSettingsSh
 import { CronJobsModal } from "@/components/CronJobsModal";
 import { SearchBar } from "@/features/search/components/SearchBar";
 import { parseSearch } from "@/lib/searchParser";
-import {
-  useGatewaySleepRuntime,
-  useGatewaySleepCountdown,
-} from "@/hooks/useGatewaySleepRuntime";
+import { useGatewaySleepRuntime, useGatewaySleepCountdown } from "@/hooks/useGatewaySleepRuntime";
 import { useGatewaySleepModeRequest } from "@/features/settings/hooks/useGatewaySleepModeRequest";
 
 function useMediaQuery(query: string): boolean {
@@ -84,10 +77,8 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
       : gatewaySleepRuntime?.mode === "active"
         ? "border-emerald-200 bg-emerald-50 text-emerald-700"
         : "border-border bg-muted text-muted-foreground";
-  const gatewaySleepButtonLabel =
-    gatewaySleepRuntime?.mode === "sleep" ? "Wake now" : "Sleep now";
-  const gatewaySleepNextMode =
-    gatewaySleepRuntime?.mode === "sleep" ? "active" : "sleep";
+  const gatewaySleepButtonLabel = gatewaySleepRuntime?.mode === "sleep" ? "Wake now" : "Sleep now";
+  const gatewaySleepNextMode = gatewaySleepRuntime?.mode === "sleep" ? "active" : "sleep";
 
   return (
     <SidebarProvider defaultOpen={isXl} className="h-screen overflow-hidden">
@@ -177,7 +168,10 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
           </div>
         </div>
       </SidebarInset>
-      <ActivityFeedPanel collapsed={activityPanelCollapsed} onCollapse={() => setActivityPanelCollapsed(true)} />
+      <ActivityFeedPanel
+        collapsed={activityPanelCollapsed}
+        onCollapse={() => setActivityPanelCollapsed(true)}
+      />
       <TaskDetailSheet
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
@@ -201,14 +195,14 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
           <TagsPanel />
         </SheetContent>
       </Sheet>
-      <BoardSettingsSheet
-        open={boardSettingsOpen}
-        onClose={() => setBoardSettingsOpen(false)}
-      />
+      <BoardSettingsSheet open={boardSettingsOpen} onClose={() => setBoardSettingsOpen(false)} />
       <CronJobsModal
         open={cronOpen}
         onClose={() => setCronOpen(false)}
-        onTaskClick={(taskId) => { setCronOpen(false); setSelectedTaskId(taskId as Id<"tasks">); }}
+        onTaskClick={(taskId) => {
+          setCronOpen(false);
+          setSelectedTaskId(taskId as Id<"tasks">);
+        }}
       />
     </SidebarProvider>
   );

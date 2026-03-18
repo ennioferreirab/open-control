@@ -4,11 +4,7 @@ import { v, ConvexError } from "convex/values";
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
-      .query("tagAttributes")
-      .withIndex("by_name")
-      .order("asc")
-      .collect();
+    return await ctx.db.query("tagAttributes").withIndex("by_name").order("asc").collect();
   },
 });
 
@@ -25,13 +21,8 @@ export const create = mutation({
     }
 
     // Check for duplicate name (case-insensitive)
-    const existing = await ctx.db
-      .query("tagAttributes")
-      .withIndex("by_name")
-      .collect();
-    const duplicate = existing.find(
-      (a) => a.name.toLowerCase() === trimmed.toLowerCase()
-    );
+    const existing = await ctx.db.query("tagAttributes").withIndex("by_name").collect();
+    const duplicate = existing.find((a) => a.name.toLowerCase() === trimmed.toLowerCase());
     if (duplicate) {
       throw new ConvexError("Attribute already exists");
     }

@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from mc.infrastructure.orientation import load_orientation
 
 
@@ -87,15 +85,15 @@ class TestLoadOrientation:
         """The {agent_roster} placeholder is interpolated."""
         mc_dir = tmp_path / ".nanobot" / "mc"
         mc_dir.mkdir(parents=True)
-        (mc_dir / "agent-orientation.md").write_text(
-            "Agents:\n{agent_roster}", encoding="utf-8"
-        )
+        (mc_dir / "agent-orientation.md").write_text("Agents:\n{agent_roster}", encoding="utf-8")
 
-        with patch("mc.infrastructure.orientation.Path") as mock_path_cls, \
-             patch(
-                 "mc.infrastructure.orientation_helpers.build_agent_roster",
-                 return_value="- **bot** — helper",
-             ):
+        with (
+            patch("mc.infrastructure.orientation.Path") as mock_path_cls,
+            patch(
+                "mc.infrastructure.orientation_helpers.build_agent_roster",
+                return_value="- **bot** — helper",
+            ),
+        ):
             mock_path_cls.home.return_value = tmp_path
             result = load_orientation("test-agent")
 
@@ -107,15 +105,15 @@ class TestLoadOrientation:
         """The {host_timezone} placeholder is interpolated."""
         mc_dir = tmp_path / ".nanobot" / "mc"
         mc_dir.mkdir(parents=True)
-        (mc_dir / "agent-orientation.md").write_text(
-            "Timezone: {host_timezone}", encoding="utf-8"
-        )
+        (mc_dir / "agent-orientation.md").write_text("Timezone: {host_timezone}", encoding="utf-8")
 
-        with patch("mc.infrastructure.orientation.Path") as mock_path_cls, \
-             patch(
-                 "mc.infrastructure.orientation_helpers.get_iana_timezone",
-                 return_value="America/Vancouver",
-             ):
+        with (
+            patch("mc.infrastructure.orientation.Path") as mock_path_cls,
+            patch(
+                "mc.infrastructure.orientation_helpers.get_iana_timezone",
+                return_value="America/Vancouver",
+            ),
+        ):
             mock_path_cls.home.return_value = tmp_path
             result = load_orientation("test-agent")
 
@@ -127,15 +125,15 @@ class TestLoadOrientation:
         """When get_iana_timezone returns None, falls back to UTC."""
         mc_dir = tmp_path / ".nanobot" / "mc"
         mc_dir.mkdir(parents=True)
-        (mc_dir / "agent-orientation.md").write_text(
-            "TZ: {host_timezone}", encoding="utf-8"
-        )
+        (mc_dir / "agent-orientation.md").write_text("TZ: {host_timezone}", encoding="utf-8")
 
-        with patch("mc.infrastructure.orientation.Path") as mock_path_cls, \
-             patch(
-                 "mc.infrastructure.orientation_helpers.get_iana_timezone",
-                 return_value=None,
-             ):
+        with (
+            patch("mc.infrastructure.orientation.Path") as mock_path_cls,
+            patch(
+                "mc.infrastructure.orientation_helpers.get_iana_timezone",
+                return_value=None,
+            ),
+        ):
             mock_path_cls.home.return_value = tmp_path
             result = load_orientation("test-agent")
 

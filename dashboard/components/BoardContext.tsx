@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { Id } from "../convex/_generated/dataModel";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Id } from "@/convex/_generated/dataModel";
 import { useBoardProviderData } from "@/features/boards/hooks/useBoardProviderData";
 
 const LOCAL_STORAGE_KEY = "nanobot-active-board";
@@ -41,9 +34,7 @@ const BoardContext = createContext<BoardContextValue>({
 });
 
 export function BoardProvider({ children }: { children: React.ReactNode }) {
-  const [activeBoardId, setActiveBoardIdState] = useState<Id<"boards"> | null>(
-    null
-  );
+  const [activeBoardId, setActiveBoardIdState] = useState<Id<"boards"> | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [openTerminals, setOpenTerminals] = useState<TerminalEntry[]>([]);
 
@@ -52,7 +43,9 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   // On first load: restore from localStorage or fall back to default board
@@ -65,6 +58,7 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     if (stored && boards) {
       const found = boards.find((b) => b._id === stored);
       if (found) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional sync from localStorage
         setActiveBoardIdState(found._id as Id<"boards">);
         setInitialized(true);
         return;
@@ -102,19 +96,20 @@ export function BoardProvider({ children }: { children: React.ReactNode }) {
     setOpenTerminals([]);
   }, []);
 
-  const isDefaultBoard =
-    boards?.find((b) => b._id === activeBoardId)?.isDefault ?? true;
+  const isDefaultBoard = boards?.find((b) => b._id === activeBoardId)?.isDefault ?? true;
 
   return (
-    <BoardContext.Provider value={{
-      activeBoardId,
-      isDefaultBoard,
-      setActiveBoardId,
-      openTerminals,
-      toggleTerminal,
-      closeTerminal,
-      closeAllTerminals,
-    }}>
+    <BoardContext.Provider
+      value={{
+        activeBoardId,
+        isDefaultBoard,
+        setActiveBoardId,
+        openTerminals,
+        toggleTerminal,
+        closeTerminal,
+        closeAllTerminals,
+      }}
+    >
       {children}
     </BoardContext.Provider>
   );

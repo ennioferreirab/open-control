@@ -261,7 +261,9 @@ describe("Architecture: root wrapper cleanup stays converged", () => {
   });
 
   it("DashboardLayout imports canonical feature entry points directly", () => {
-    const content = readFileIfExists(path.join(DASHBOARD_ROOT, "components", "DashboardLayout.tsx"));
+    const content = readFileIfExists(
+      path.join(DASHBOARD_ROOT, "components", "DashboardLayout.tsx"),
+    );
     expect(content).not.toBeNull();
     expect(content).toContain(`from "@/features/agents/components/AgentSidebar"`);
     expect(content).toContain(`from "@/features/activity/components/ActivityFeedPanel"`);

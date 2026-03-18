@@ -51,10 +51,7 @@ describe("TaskInput layout", () => {
     render(<TaskInput />);
 
     expect(screen.getByTitle("Autonomous")).toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toHaveAttribute(
-      "data-selected-value",
-      "auto"
-    );
+    expect(screen.getByRole("combobox")).toHaveAttribute("data-selected-value", "auto");
     expect(screen.getByRole("button", { name: /Switch to manual mode/i })).toBeInTheDocument();
   });
 
@@ -75,10 +72,7 @@ describe("TaskInput layout", () => {
     fireEvent.click(screen.getByRole("button", { name: /Switch to AI mode/i }));
 
     expect(screen.getByTitle("Autonomous")).toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toHaveAttribute(
-      "data-selected-value",
-      "auto"
-    );
+    expect(screen.getByRole("combobox")).toHaveAttribute("data-selected-value", "auto");
     expect(screen.getByRole("button", { name: /Switch to manual mode/i })).toBeInTheDocument();
   });
 

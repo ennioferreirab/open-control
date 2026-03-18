@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { ActivityFeed } from "./ActivityFeed";
 import { FeedItem } from "./FeedItem";
-import type { Doc } from "../convex/_generated/dataModel";
+import type { Doc } from "@/convex/_generated/dataModel";
 
 // Stub scrollTo for jsdom
 beforeEach(() => {
@@ -18,16 +18,8 @@ vi.mock("convex/react", () => ({
 // Mock motion/react to render plain divs (avoids animation complexity in tests)
 vi.mock("motion/react", () => ({
   motion: {
-    div: ({
-      children,
-      ...props
-    }: React.PropsWithChildren<Record<string, unknown>>) => {
-      const {
-        initial: _initial,
-        animate: _animate,
-        transition: _transition,
-        ...htmlProps
-      } = props;
+    div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => {
+      const { initial: _initial, animate: _animate, transition: _transition, ...htmlProps } = props;
       return <div {...htmlProps}>{children}</div>;
     },
   },
@@ -35,10 +27,7 @@ vi.mock("motion/react", () => ({
 
 // Mock ShadCN ScrollArea to render a plain div (avoids Radix internals in tests)
 vi.mock("@/components/ui/scroll-area", () => ({
-  ScrollArea: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<Record<string, unknown>>) => {
+  ScrollArea: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => {
     const { className, ...rest } = props;
     return (
       <div className={className as string} {...rest}>
@@ -125,7 +114,7 @@ describe("ActivityFeed", () => {
       makeActivity({
         _id: `act${i}` as Activity["_id"],
         description: `Event ${i}`,
-      })
+      }),
     );
     mockUseQuery.mockReturnValue(hundredActivities);
     render(<ActivityFeed />);

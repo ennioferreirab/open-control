@@ -31,7 +31,7 @@ export function Select({
                   __value: value,
                   __onValueChange: onValueChange,
                 })
-              : child
+              : child,
           )
         : children}
     </div>
@@ -51,12 +51,7 @@ export function SelectTrigger({
   [key: string]: unknown;
 }>) {
   return (
-    <button
-      role="combobox"
-      aria-label={ariaLabel}
-      data-selected-value={_value}
-      {...rest}
-    >
+    <button role="combobox" aria-label={ariaLabel} data-selected-value={_value} {...rest}>
       {children}
     </button>
   );
@@ -83,7 +78,7 @@ export function SelectContent({
                   __value,
                   __onValueChange,
                 })
-              : child
+              : child,
           )
         : children}
     </div>

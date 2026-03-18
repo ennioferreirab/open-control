@@ -47,9 +47,7 @@ describe("usePlanEditorState", () => {
   });
 
   it("defaults activeTab to 'plan' when awaiting kickoff", () => {
-    const { result } = renderHook(() =>
-      usePlanEditorState(makePlan(), true),
-    );
+    const { result } = renderHook(() => usePlanEditorState(makePlan(), true));
     expect(result.current.activeTab).toBe("plan");
   });
 

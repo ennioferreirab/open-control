@@ -1,11 +1,8 @@
 """Unit tests for CLI status and docs commands (Story 7.5)."""
 
 import os
-import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
 from mc.cli import mc_app

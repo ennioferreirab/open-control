@@ -54,7 +54,7 @@ def register_sessions_command(mc_app: typer.Typer) -> None:
                 key = entry.get("key", "")
                 parts = key.split(":", 2)
                 if len(parts) == 3:
-                    _, agent_name_part, task_id_part = parts
+                    _, _agent_name_part, task_id_part = parts
                     if task_id_part == "latest":
                         latest_sessions.append(entry)
                     else:
@@ -296,6 +296,9 @@ def assist_agent():
         )
 
         if choice in ("y", ""):
+            if parsed is None:
+                console.print("[red]Error: parsing failed[/red]")
+                return
             _save_assisted_agent(parsed["name"], yaml_text, create_agent_workspace)
             return
         elif choice == "n":
@@ -308,11 +311,15 @@ def assist_agent():
                     "y",
                     "",
                 ):
+                    if parsed is None:
+                        console.print("[red]Error: parsing failed[/red]")
+                        return
                     _save_assisted_agent(parsed["name"], yaml_text, create_agent_workspace)
                 else:
                     console.print("Cancelled.")
                 return
             feedback = typer.prompt("What would you like to change?")
+            assert isinstance(feedback, str)
             if not feedback.strip():
                 console.print("No feedback provided. Cancelled.")
                 raise typer.Exit(0)
@@ -507,6 +514,9 @@ def register_init_command(mc_app: typer.Typer) -> None:
                         console.print(f"  [red]Error:[/red] {'; '.join(errors)}")
                         continue
 
+                    if yaml_text is None:
+                        console.print("[red]Error: parsing failed[/red]")
+                        continue
                     parsed = yaml.safe_load(yaml_text)
                     agent_name = parsed.get("name", "custom-agent")
                     agent_role = parsed.get("role", "Custom Agent")
@@ -643,7 +653,7 @@ def migrate_agents(
     if skipped:
         console.print(f"\n[dim]Skipped — already migrated ({len(skipped)}):[/dim]")
         for name in skipped:
-            console.print(f"  [dim]–[/dim] {name}")
+            console.print(f"  [dim]-[/dim] {name}")
 
     if errors:
         console.print(f"\n[red]Errors ({len(errors)}):[/red]")

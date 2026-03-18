@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json as _json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from mc.contexts.interactive.metrics import increment_interactive_metric
@@ -56,7 +56,7 @@ class InteractiveExecutionSupervisor:
         if not event.session_id:
             raise ValueError("Interactive supervision events require a session_id")
 
-        timestamp = event.occurred_at or datetime.now(timezone.utc).isoformat()
+        timestamp = event.occurred_at or datetime.now(UTC).isoformat()
         metadata = self._registry.get(event.session_id) or {}
         merged_event = self._merge_event_context(event, metadata)
         event_payload: dict[str, Any] = {"kind": merged_event.kind}
@@ -81,7 +81,7 @@ class InteractiveExecutionSupervisor:
         if merged_event.agent_name is not None:
             event_payload["agent_name"] = merged_event.agent_name
         updated_metadata = self._registry.record_supervision(
-            merged_event.session_id,
+            merged_event.session_id or "",
             event=event_payload,
             timestamp=timestamp,
         )
@@ -118,7 +118,7 @@ class InteractiveExecutionSupervisor:
             _set_if(activity_payload, "provider", event.provider)
             self._bridge.mutation("sessionActivityLog:append", activity_payload)
         except Exception:
-            pass  # Activity log write failure must not break supervision
+            logger.debug("[supervisor] Activity log write failed", exc_info=True)
         if _string_or_none(metadata.get("control_mode")) == "human":
             return updated_metadata
         current_control_mode = _string_or_none(updated_metadata.get("control_mode"))
@@ -134,7 +134,7 @@ class InteractiveExecutionSupervisor:
         content: str,
         source: str,
     ) -> dict[str, Any]:
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         metadata = self._registry.record_final_result(
             session_id,
             content=content,

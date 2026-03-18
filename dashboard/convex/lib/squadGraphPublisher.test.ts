@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { publishSquadGraph, type SquadGraphInput } from "./squadGraphPublisher";
+import type { DbWriter } from "./types";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -118,7 +119,7 @@ function makeCtx() {
   });
 
   return {
-    ctx: { db: { get, insert, patch, query } },
+    ctx: { db: { get, insert, patch, query } } as unknown as DbWriter,
     inserts,
     patches,
     existingAgents,

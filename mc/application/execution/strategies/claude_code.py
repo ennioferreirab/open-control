@@ -56,9 +56,7 @@ class _CCStrategyAdapter:
                 self._bridge = bridge
                 self._cron_service = cron_service
                 self._ask_user_registry = ask_user_registry
-                self._agent_gateway = SimpleNamespace(
-                    clear_retry_count=lambda _task_id: None
-                )
+                self._agent_gateway = SimpleNamespace(clear_retry_count=lambda _task_id: None)
                 self._on_task_completed = None
 
         self._delegate = _Adapter()
@@ -167,6 +165,7 @@ class ClaudeCodeRunnerStrategy:
         from claude_code.ipc_server import MCSocketServer
         from claude_code.provider import ClaudeCodeProvider
         from claude_code.workspace import CCWorkspaceManager
+
         from mc.infrastructure.orientation import load_orientation
 
         adapter = _CCStrategyAdapter(

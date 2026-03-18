@@ -11,7 +11,7 @@ import { AddStepForm, type AddStepData, type ExistingStep } from "@/components/A
 import { EditStepForm, type EditStepData } from "@/components/EditStepForm";
 import { Button } from "@/components/ui/button";
 import { stepsToNodesAndEdges, layoutWithDagre } from "@/lib/flowLayout";
-import type { ExecutionPlan, PlanStep } from "@/lib/types";
+import type { ExecutionPlan, EditablePlanStep } from "@/lib/types";
 import {
   insertSequentialStep,
   insertParallelStep,
@@ -232,9 +232,9 @@ function mergeStepsWithLiveData(
 }
 
 /**
- * Convert NormalizedStep[] to PlanStep[] for flowchart rendering.
+ * Convert NormalizedStep[] to EditablePlanStep[] for flowchart rendering.
  */
-function normalizedStepsToPlanSteps(steps: NormalizedStep[]): PlanStep[] {
+function normalizedStepsToPlanSteps(steps: NormalizedStep[]): EditablePlanStep[] {
   return steps.map((s) => ({
     tempId: s.stepId,
     title: s.title ?? "",
@@ -246,7 +246,7 @@ function normalizedStepsToPlanSteps(steps: NormalizedStep[]): PlanStep[] {
   }));
 }
 
-function nextTempId(steps: PlanStep[]): string {
+function nextTempId(steps: EditablePlanStep[]): string {
   const existingIds = new Set(steps.map((step) => step.tempId));
   const existingNums = steps
     .map((step) => step.tempId)
@@ -259,7 +259,7 @@ function nextTempId(steps: PlanStep[]): string {
   return `step_${nextNum}`;
 }
 
-function insertRootStepAfterMergeAlias(steps: PlanStep[]): PlanStep[] {
+function insertRootStepAfterMergeAlias(steps: EditablePlanStep[]): EditablePlanStep[] {
   const newId = nextTempId(steps);
   const maxOrder = steps.reduce((max, step) => Math.max(max, step.order), 0);
   const updatedSteps = steps.map((step) =>
@@ -477,7 +477,7 @@ export function ExecutionPlanTab({
   // Helper: apply a graph transformation and persist via onLocalPlanChange.
   // Uses editablePlanSteps (normalized IDs) so canvas node IDs match transform lookups.
   const applyGraphTransform = useCallback(
-    (transformFn: (steps: PlanStep[]) => PlanStep[]) => {
+    (transformFn: (steps: EditablePlanStep[]) => EditablePlanStep[]) => {
       if (!onLocalPlanChange) return;
       const currentPlan = executionPlan as ExecutionPlan | null;
       const updatedSteps = transformFn(editablePlanSteps);
@@ -670,7 +670,7 @@ export function ExecutionPlanTab({
           parallelGroup = maxGroup + 1;
         }
 
-        const newStep: PlanStep = {
+        const newStep: EditablePlanStep = {
           tempId,
           title: data.title,
           description: data.description,

@@ -1,6 +1,5 @@
-from typer.testing import CliRunner
-
 from nanobot.cli.commands import app
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

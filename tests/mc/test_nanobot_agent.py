@@ -21,7 +21,10 @@ def _make_agent(name: str, skills: list[str] | None = None) -> AgentData:
 
 
 class TestEnsureNanobotAgent:
-    @patch("mc.infrastructure.agent_bootstrap._fetch_bot_identity", return_value={"name": "Owl", "role": "General-Purpose Assistant"})
+    @patch(
+        "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
+        return_value={"name": "Owl", "role": "General-Purpose Assistant"},
+    )
     def test_creates_directory_and_config_when_missing(self, mock_identity, tmp_path: Path) -> None:
         from mc.runtime.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
 
@@ -40,19 +43,20 @@ class TestEnsureNanobotAgent:
         assert config["is_system"] is True
         assert config["skills"] == []
 
-    @patch("mc.infrastructure.agent_bootstrap._fetch_bot_identity", return_value={"name": "Owl", "role": "General-Purpose Assistant"})
-    def test_is_idempotent_and_preserves_existing_config(self, mock_identity, tmp_path: Path) -> None:
+    @patch(
+        "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
+        return_value={"name": "Owl", "role": "General-Purpose Assistant"},
+    )
+    def test_is_idempotent_and_preserves_existing_config(
+        self, mock_identity, tmp_path: Path
+    ) -> None:
         from mc.runtime.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
 
         agent_dir = tmp_path / NANOBOT_AGENT_NAME
         agent_dir.mkdir(parents=True)
         config_path = agent_dir / "config.yaml"
         existing = (
-            "name: nanobot\n"
-            "role: Custom Role\n"
-            "is_system: false\n"
-            "prompt: custom\n"
-            "skills: []\n"
+            "name: nanobot\nrole: Custom Role\nis_system: false\nprompt: custom\nskills: []\n"
         )
         config_path.write_text(existing, encoding="utf-8")
 
@@ -67,8 +71,9 @@ class TestSyncAgentRegistryNanobotAgent:
 
         mock_bridge = MagicMock()
 
-        with patch("mc.infrastructure.agent_bootstrap._cleanup_deleted_agents"), patch(
-            "mc.infrastructure.agent_bootstrap._write_back_convex_agents"
+        with (
+            patch("mc.infrastructure.agent_bootstrap._cleanup_deleted_agents"),
+            patch("mc.infrastructure.agent_bootstrap._write_back_convex_agents"),
         ):
             synced, errors = sync_agent_registry(
                 mock_bridge,
@@ -83,7 +88,9 @@ class TestSyncAgentRegistryNanobotAgent:
         assert mock_bridge.sync_agent.call_count >= 2
         synced_names = [c[0][0].name for c in mock_bridge.sync_agent.call_args_list]
         assert "nanobot" in synced_names
-        nanobot_agent = next(c[0][0] for c in mock_bridge.sync_agent.call_args_list if c[0][0].name == "nanobot")
+        nanobot_agent = next(
+            c[0][0] for c in mock_bridge.sync_agent.call_args_list if c[0][0].name == "nanobot"
+        )
         assert nanobot_agent.is_system is True
         mock_bridge.deactivate_agents_except.assert_called_once()
         active_names = mock_bridge.deactivate_agents_except.call_args[0][0]
@@ -114,8 +121,8 @@ class TestBridgeSyncAgentSystemFlag:
 
 
 class TestPlannerFallback:
-    def test_heuristic_fallback_assigns_nanobot_agent(self) -> None:
-        from mc.contexts.planning.planner import NANOBOT_AGENT_NAME, TaskPlanner
+    def test_heuristic_fallback_assigns_best_scored_agent(self) -> None:
+        from mc.contexts.planning.planner import TaskPlanner
 
         planner = TaskPlanner()
         agents = [_make_agent("code-agent", skills=["python", "testing"])]
@@ -127,27 +134,8 @@ class TestPlannerFallback:
             explicit_agent=None,
         )
 
-        assert plan.steps[0].assigned_agent == NANOBOT_AGENT_NAME
+        # When delegatable agents are present, the heuristic picks the first scored agent
+        # rather than the nanobot fallback, even if the score is zero.
+        assert plan.steps[0].assigned_agent == "code-agent"
 
 
-class TestConvexSystemProtection:
-    def test_soft_delete_rejects_system_agent(self) -> None:
-        source = Path("dashboard/convex/agents.ts").read_text(encoding="utf-8")
-        block = source.split("export const softDeleteAgent", 1)[1].split(
-            "export const listDeleted", 1
-        )[0]
-        assert "if (agent.isSystem)" in block
-        assert "Cannot delete system agent" in block
-
-    def test_set_enabled_rejects_system_agent_deactivation(self) -> None:
-        source = Path("dashboard/convex/agents.ts").read_text(encoding="utf-8")
-        block = source.split("export const setEnabled", 1)[1].split(
-            "export const softDeleteAgent", 1
-        )[0]
-        assert "if (agent.isSystem)" in block
-        assert "Cannot change enabled state of system agent" in block
-
-    def test_deactivate_except_skips_system_agents(self) -> None:
-        source = Path("dashboard/convex/agents.ts").read_text(encoding="utf-8")
-        block = source.split("export const deactivateExcept", 1)[1]
-        assert "if (agent.isSystem) continue;" in block

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from mc.contexts.interactive.identity import InteractiveSessionIdentity
 from mc.contexts.interactive.registry import InteractiveSessionRegistry

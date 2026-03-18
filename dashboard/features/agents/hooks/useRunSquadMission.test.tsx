@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockReactMutation } from "@/tests/helpers/mockConvex";
 
 // Mock convex/react before importing the hook
 vi.mock("convex/react", () => ({
@@ -38,7 +39,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("initializes with isLaunching=false", () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
 
     const { result } = renderHook(() => useRunSquadMission(MOCK_BOARD_ID, MOCK_SQUAD_ID));
@@ -47,7 +48,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("calls useMutation with the launchMission reference", () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
 
     renderHook(() => useRunSquadMission(MOCK_BOARD_ID, MOCK_SQUAD_ID));
@@ -56,7 +57,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("queries effective workflow id when board and squad are provided", () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
 
     renderHook(() => useRunSquadMission(MOCK_BOARD_ID, MOCK_SQUAD_ID));
@@ -68,7 +69,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("skips effective workflow query when boardId is null", () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
 
     renderHook(() => useRunSquadMission(null, MOCK_SQUAD_ID));
@@ -77,7 +78,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("skips effective workflow query when squadSpecId is null", () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
 
     renderHook(() => useRunSquadMission(MOCK_BOARD_ID, null));
@@ -86,7 +87,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("returns the effective workflow id from the query", () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
     mockUseQuery.mockReturnValue(MOCK_WORKFLOW_ID);
 
@@ -96,7 +97,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("returns null effectiveWorkflowId when boardId is null", () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
     mockUseQuery.mockReturnValue(MOCK_WORKFLOW_ID);
 
@@ -106,7 +107,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("launch calls the mutation with the provided args", async () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
 
     const { result } = renderHook(() => useRunSquadMission(MOCK_BOARD_ID, MOCK_SQUAD_ID));
@@ -126,7 +127,7 @@ describe("useRunSquadMission", () => {
   });
 
   it("launch returns the task id on success", async () => {
-    const mockLaunch = vi.fn().mockResolvedValue(MOCK_TASK_ID);
+    const mockLaunch = mockReactMutation(async () => MOCK_TASK_ID);
     mockUseMutation.mockReturnValue(mockLaunch);
 
     const { result } = renderHook(() => useRunSquadMission(MOCK_BOARD_ID, MOCK_SQUAD_ID));
@@ -145,7 +146,9 @@ describe("useRunSquadMission", () => {
   });
 
   it("launch returns null on mutation error", async () => {
-    const mockLaunch = vi.fn().mockRejectedValue(new Error("Launch failed"));
+    const mockLaunch = mockReactMutation(async () => {
+      throw new Error("Launch failed");
+    });
     mockUseMutation.mockReturnValue(mockLaunch);
 
     const { result } = renderHook(() => useRunSquadMission(MOCK_BOARD_ID, MOCK_SQUAD_ID));
@@ -169,7 +172,7 @@ describe("useRunSquadMission", () => {
       resolvePromise = resolve;
     });
 
-    const mockLaunch = vi.fn().mockReturnValue(pendingPromise);
+    const mockLaunch = mockReactMutation(() => pendingPromise);
     mockUseMutation.mockReturnValue(mockLaunch);
 
     const { result } = renderHook(() => useRunSquadMission(MOCK_BOARD_ID, MOCK_SQUAD_ID));

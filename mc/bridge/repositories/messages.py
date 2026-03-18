@@ -5,11 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mc.bridge.client import BridgeClient
+    from mc.bridge.client import BridgeClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def _content_digest(*parts: Any) -> str:
 class MessageRepository:
     """Data access methods for message entities in Convex."""
 
-    def __init__(self, client: "BridgeClient"):
+    def __init__(self, client: BridgeClientProtocol):
         self._client = client
 
     def get_task_messages(self, task_id: str) -> list[dict[str, Any]]:
@@ -66,7 +66,7 @@ class MessageRepository:
             "author_type": author_type,
             "content": content,
             "message_type": message_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if msg_type is not None:
             args["type"] = msg_type
@@ -174,7 +174,7 @@ class MessageRepository:
             "author_type": "system",
             "content": content,
             "message_type": "system_event",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if step_id is not None:
             args["step_id"] = step_id
@@ -188,5 +188,5 @@ class MessageRepository:
     @staticmethod
     def _log_state_transition(entity_type: str, description: str) -> None:
         """Log a state transition to local stdout via logging."""
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         logger.info("[MC] %s %s: %s", timestamp, entity_type, description)

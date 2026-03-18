@@ -9,7 +9,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +34,11 @@ interface BoardSelectorProps {
 type MemoryMode = "clean" | "with_history";
 
 function normalizeBoardName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-/, "");
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-/, "");
 }
 
 export function BoardSelector({ onOpenSettings }: BoardSelectorProps) {
@@ -44,7 +54,9 @@ export function BoardSelector({ onOpenSettings }: BoardSelectorProps) {
   const [agentMemoryModes, setAgentMemoryModes] = useState<AgentMemoryEntry[]>([]);
 
   const toggleAgent = (name: string) => {
-    setEnabledAgents((prev) => (prev.includes(name) ? prev.filter((entry) => entry !== name) : [...prev, name]));
+    setEnabledAgents((prev) =>
+      prev.includes(name) ? prev.filter((entry) => entry !== name) : [...prev, name],
+    );
   };
 
   const getAgentMode = (agentName: string): MemoryMode =>
@@ -76,7 +88,9 @@ export function BoardSelector({ onOpenSettings }: BoardSelectorProps) {
     setCreating(true);
     setCreateError("");
     try {
-      const relevantModes = agentMemoryModes.filter((entry) => enabledAgents.includes(entry.agentName));
+      const relevantModes = agentMemoryModes.filter((entry) =>
+        enabledAgents.includes(entry.agentName),
+      );
       const newId = await createBoard({
         name,
         displayName: dn,
@@ -122,7 +136,10 @@ export function BoardSelector({ onOpenSettings }: BoardSelectorProps) {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => setCreateOpen(true)} className="text-muted-foreground">
+            <DropdownMenuItem
+              onSelect={() => setCreateOpen(true)}
+              className="text-muted-foreground"
+            >
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               New board…
             </DropdownMenuItem>

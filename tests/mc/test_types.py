@@ -162,20 +162,20 @@ class TestExecutionPlanFromDict:
         data = {
             "steps": [
                 {
-                    "tempId": "step_1",
+                    "temp_id": "step_1",
                     "title": "Analyze",
                     "description": "Analyze requirements",
-                    "assignedAgent": "nanobot",
-                    "blockedBy": [],
-                    "parallelGroup": 1,
+                    "assigned_agent": "nanobot",
+                    "blocked_by": [],
+                    "parallel_group": 1,
                     "order": 1,
-                    "workflowStepId": "analyze-step",
-                    "workflowStepType": "agent",
-                    "agentId": "agent-123",
+                    "workflow_step_id": "analyze-step",
+                    "workflow_step_type": "agent",
+                    "agent_id": "agent-123",
                 }
             ],
-            "generatedAt": "2026-03-14T10:00:00Z",
-            "generatedBy": "workflow",
+            "generated_at": "2026-03-14T10:00:00Z",
+            "generated_by": "workflow",
         }
         plan = ExecutionPlan.from_dict(data)
         assert len(plan.steps) == 1
@@ -188,21 +188,21 @@ class TestExecutionPlanFromDict:
         data = {
             "steps": [
                 {
-                    "tempId": "step_2",
+                    "temp_id": "step_2",
                     "title": "Review",
                     "description": "Review output",
-                    "assignedAgent": "nanobot",
-                    "blockedBy": [],
-                    "parallelGroup": 1,
+                    "assigned_agent": "nanobot",
+                    "blocked_by": [],
+                    "parallel_group": 1,
                     "order": 2,
-                    "workflowStepId": "review-step",
-                    "workflowStepType": "review",
-                    "reviewSpecId": "review-spec-456",
-                    "onRejectStepId": "step_1",
+                    "workflow_step_id": "review-step",
+                    "workflow_step_type": "review",
+                    "review_spec_id": "review-spec-456",
+                    "on_reject_step_id": "step_1",
                 }
             ],
-            "generatedAt": "2026-03-14T10:00:00Z",
-            "generatedBy": "workflow",
+            "generated_at": "2026-03-14T10:00:00Z",
+            "generated_by": "workflow",
         }
         plan = ExecutionPlan.from_dict(data)
         step = plan.steps[0]
@@ -214,17 +214,17 @@ class TestExecutionPlanFromDict:
         data = {
             "steps": [
                 {
-                    "tempId": "step_1",
+                    "temp_id": "step_1",
                     "title": "Plain step",
                     "description": "No workflow metadata",
-                    "assignedAgent": "nanobot",
-                    "blockedBy": [],
-                    "parallelGroup": 1,
+                    "assigned_agent": "nanobot",
+                    "blocked_by": [],
+                    "parallel_group": 1,
                     "order": 1,
                 }
             ],
-            "generatedAt": "2026-03-14T10:00:00Z",
-            "generatedBy": "lead-agent",
+            "generated_at": "2026-03-14T10:00:00Z",
+            "generated_by": "lead-agent",
         }
         plan = ExecutionPlan.from_dict(data)
         step = plan.steps[0]
@@ -296,7 +296,7 @@ class TestExecutionPlanRoundTrip:
         assert s.on_reject_step_id is None
 
     def test_round_trip_review_spec_and_on_reject(self) -> None:
-        """reviewSpecId and onRejectStepId survive round-trip."""
+        """review_spec_id and on_reject_step_id survive round-trip."""
         step = ExecutionPlanStep(
             temp_id="step-review",
             title="Review",
@@ -315,12 +315,12 @@ class TestExecutionPlanRoundTrip:
         plan.generated_at = "2026-03-14T10:00:00Z"
 
         d = plan.to_dict()
-        # Verify camelCase keys in dict
-        assert d["steps"][0]["reviewSpecId"] == "review-spec-456"
-        assert d["steps"][0]["onRejectStepId"] == "step-analyze"
-        assert d["steps"][0]["workflowStepId"] == "review-step"
-        assert d["steps"][0]["workflowStepType"] == "review"
-        assert d["generatedBy"] == "workflow"
+        # Verify snake_case keys in dict (bridge converts to camelCase for Convex)
+        assert d["steps"][0]["review_spec_id"] == "review-spec-456"
+        assert d["steps"][0]["on_reject_step_id"] == "step-analyze"
+        assert d["steps"][0]["workflow_step_id"] == "review-step"
+        assert d["steps"][0]["workflow_step_type"] == "review"
+        assert d["generated_by"] == "workflow"
 
         restored = ExecutionPlan.from_dict(d)
         s = restored.steps[0]
@@ -343,24 +343,24 @@ class TestExecutionPlanRoundTrip:
         plan = ExecutionPlan(steps=[step])
         d = plan.to_dict()
         step_dict = d["steps"][0]
-        assert "workflowStepId" not in step_dict
-        assert "workflowStepType" not in step_dict
-        assert "agentId" not in step_dict
-        assert "agentSpecId" not in step_dict
-        assert "reviewSpecId" not in step_dict
-        assert "onRejectStepId" not in step_dict
+        assert "workflow_step_id" not in step_dict
+        assert "workflow_step_type" not in step_dict
+        assert "agent_id" not in step_dict
+        assert "agent_spec_id" not in step_dict
+        assert "review_spec_id" not in step_dict
+        assert "on_reject_step_id" not in step_dict
 
     def test_round_trip_generated_by_workflow(self) -> None:
-        """generatedBy='workflow' is always preserved in to_dict."""
+        """generated_by='workflow' is always preserved in to_dict."""
         plan = ExecutionPlan(steps=[], generated_by="workflow")
         d = plan.to_dict()
-        assert d["generatedBy"] == "workflow"
+        assert d["generated_by"] == "workflow"
 
     def test_round_trip_generated_by_lead_agent(self) -> None:
-        """generatedBy='lead-agent' is always preserved in to_dict."""
+        """generated_by='lead-agent' is always preserved in to_dict."""
         plan = ExecutionPlan(steps=[], generated_by="lead-agent")
         d = plan.to_dict()
-        assert d["generatedBy"] == "lead-agent"
+        assert d["generated_by"] == "lead-agent"
 
 
 class TestCCModelHelpers:

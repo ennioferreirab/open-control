@@ -20,6 +20,7 @@ import logging
 import os
 import shutil
 import tempfile
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -193,7 +194,7 @@ def ensure_nanobot_agent(agents_dir: Path) -> None:
                 logger.warning("Failed to symlink %s for nanobot agent: %s", item, e)
 
 
-def ensure_low_agent(bridge: "ConvexBridge") -> None:
+def ensure_low_agent(bridge: ConvexBridge) -> None:
     """Upsert the low-agent system agent to Convex.
 
     low-agent is a pure system agent (no YAML file on disk). It is always
@@ -243,7 +244,7 @@ def _restore_archived_files(agent_dir: Path, archive: dict) -> None:
         (sessions_dir / f"mc_task_{name}.jsonl").write_text(session_data, encoding="utf-8")
 
 
-def _cleanup_deleted_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
+def _cleanup_deleted_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
     """Archive local data for soft-deleted agents, then remove their folders.
 
     For each deleted agent that still has a local folder:
@@ -304,12 +305,12 @@ def _cleanup_deleted_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
         # settings:deleteByPrefix mutation.
 
 
-def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
+def _write_back_convex_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
     """Write-back Convex -> local for agents where Convex is newer.
 
     Both timestamps are compared as UTC-aware datetime objects.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     try:
         convex_agents = bridge.list_agents()
@@ -341,7 +342,7 @@ def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
             continue
 
         if config_path.is_file():
-            local_mtime = datetime.fromtimestamp(config_path.stat().st_mtime, tz=timezone.utc)
+            local_mtime = datetime.fromtimestamp(config_path.stat().st_mtime, tz=UTC)
             if convex_ts > local_mtime:
                 try:
                     bridge.write_agent_config(agent_data, agents_dir)
@@ -377,7 +378,7 @@ def _write_back_convex_agents(bridge: "ConvexBridge", agents_dir: Path) -> None:
                 logger.exception("Failed to restore archive for agent '%s'", name)
 
 
-def _sync_model_tiers(bridge: "ConvexBridge") -> None:
+def _sync_model_tiers(bridge: ConvexBridge) -> None:
     """Sync connected models list and seed default tiers on startup.
 
     - Writes available model identifiers to ``connected_models`` setting.
@@ -448,7 +449,7 @@ def _sync_model_tiers(bridge: "ConvexBridge") -> None:
             logger.info("[gateway] Model tiers up to date — no migration needed")
 
 
-def _sync_embedding_model(bridge: "ConvexBridge") -> None:
+def _sync_embedding_model(bridge: ConvexBridge) -> None:
     """Sync the memory embedding model setting from Convex to env/disk."""
     try:
         model = bridge.query("settings:get", {"key": "memory_embedding_model"})
@@ -478,10 +479,10 @@ def _sync_embedding_model(bridge: "ConvexBridge") -> None:
 
 
 def sync_agent_registry(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     agents_dir: Path,
     default_model: str | None = None,
-) -> tuple[list["AgentData"], dict[str, list[str]]]:
+) -> tuple[list[AgentData], dict[str, list[str]]]:
     """Sync agent YAML files to Convex agents table.
 
     Write-back first (Convex -> local), then validate, resolve models,
@@ -600,7 +601,7 @@ def _distribute_builtin_skills(workspace_skills_dir: Path, *source_dirs: Path) -
 
 
 def sync_skills(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     builtin_skills_dir: Path | None = None,
 ) -> list[str]:
     """Sync nanobot skills to Convex via SkillsLoader public API.
@@ -619,8 +620,10 @@ def sync_skills(
         / "skills.py"
     )
     spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load skill module from {_skills_path}")
     skills_mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(skills_mod)  # type: ignore[union-attr]
+    spec.loader.exec_module(skills_mod)
     skills_loader_cls = skills_mod.SkillsLoader
     default_dir = skills_mod.BUILTIN_SKILLS_DIR
 
@@ -686,7 +689,7 @@ def sync_skills(
     return synced_names
 
 
-def sync_nanobot_default_model(bridge: "ConvexBridge") -> bool:
+def sync_nanobot_default_model(bridge: ConvexBridge) -> bool:
     """Sync config.json default model from the canonical Convex system agent."""
     agent = bridge.get_agent_by_name(NANOBOT_AGENT_NAME)
     if not agent:

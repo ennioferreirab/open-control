@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from mc.bridge.key_conversion import _convert_keys_to_camel, _convert_keys_to_snake
 
@@ -23,9 +24,7 @@ class _BridgeClientAdapter:
     def mutation(self, function_name: str, args: dict[str, Any] | None = None) -> Any:
         return self._bridge.mutation(function_name, args)
 
-    def subscribe(
-        self, function_name: str, args: dict[str, Any] | None = None
-    ) -> Iterator[Any]:
+    def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         client = getattr(self._bridge, "_client", None)
         if client is None:
             return iter(())

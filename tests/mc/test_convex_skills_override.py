@@ -155,12 +155,17 @@ class TestExecutorSkillsOverride:
 
         req = _make_task_execution_request(agent_skills=["github", "memory"])
 
-        with _patch_task_context_builder(req), \
-             patch("mc.contexts.execution.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
-             patch.object(executor, "_load_agent_data", return_value=None), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
-             patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread):
+        with (
+            _patch_task_context_builder(req),
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                side_effect=fake_run_agent_on_task,
+            ),
+            patch.object(executor, "_load_agent_data", return_value=None),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread),
+        ):
             try:
                 await executor._execute_task(
                     task_id="task-1",
@@ -192,12 +197,17 @@ class TestExecutorSkillsOverride:
         yaml_skills = ["yaml-skill-1", "yaml-skill-2"]
         req = _make_task_execution_request(agent_skills=yaml_skills)
 
-        with _patch_task_context_builder(req), \
-             patch("mc.contexts.execution.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
-             patch.object(executor, "_load_agent_data", return_value=None), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
-             patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread):
+        with (
+            _patch_task_context_builder(req),
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                side_effect=fake_run_agent_on_task,
+            ),
+            patch.object(executor, "_load_agent_data", return_value=None),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread),
+        ):
             try:
                 await executor._execute_task(
                     task_id="task-1",
@@ -228,12 +238,17 @@ class TestExecutorSkillsOverride:
 
         req = _make_task_execution_request(agent_skills=[])
 
-        with _patch_task_context_builder(req), \
-             patch("mc.contexts.execution.executor._run_agent_on_task", side_effect=fake_run_agent_on_task), \
-             patch.object(executor, "_load_agent_data", return_value=None), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
-             patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread):
+        with (
+            _patch_task_context_builder(req),
+            patch(
+                "mc.contexts.execution.executor._run_agent_on_task",
+                side_effect=fake_run_agent_on_task,
+            ),
+            patch.object(executor, "_load_agent_data", return_value=None),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+            patch("mc.contexts.execution.executor.asyncio.to_thread", new=_sync_to_thread),
+        ):
             try:
                 await executor._execute_task(
                     task_id="task-1",
@@ -263,19 +278,21 @@ class TestStepDispatcherNanobotSkillsOverride:
         from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         bridge = _make_bridge()
-        bridge.get_steps_by_task = MagicMock(return_value=[
-            {
-                "id": "step-1",
-                "task_id": "task-1",
-                "title": "Test Step",
-                "description": "A test step",
-                "assigned_agent": "test-agent",
-                "status": "assigned",
-                "parallel_group": 1,
-                "order": 1,
-                "blocked_by": [],
-            }
-        ])
+        bridge.get_steps_by_task = MagicMock(
+            return_value=[
+                {
+                    "id": "step-1",
+                    "task_id": "task-1",
+                    "title": "Test Step",
+                    "description": "A test step",
+                    "assigned_agent": "test-agent",
+                    "status": "assigned",
+                    "parallel_group": 1,
+                    "order": 1,
+                    "blocked_by": [],
+                }
+            ]
+        )
         bridge.query = MagicMock(return_value={"title": "Main Task", "status": "in_progress"})
 
         dispatcher = StepDispatcher(bridge)
@@ -288,11 +305,16 @@ class TestStepDispatcherNanobotSkillsOverride:
 
         req = _make_step_execution_request(agent_skills=["github", "memory"])
 
-        with _patch_step_context_builder(req), \
-             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.contexts.execution.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]):
+        with (
+            _patch_step_context_builder(req),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                new=AsyncMock(side_effect=fake_run_step_agent),
+            ),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+        ):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert captured_skills.get("value") == ["github", "memory"]
@@ -303,19 +325,21 @@ class TestStepDispatcherNanobotSkillsOverride:
         from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         bridge = _make_bridge()
-        bridge.get_steps_by_task = MagicMock(return_value=[
-            {
-                "id": "step-1",
-                "task_id": "task-1",
-                "title": "Test Step",
-                "description": "A test step",
-                "assigned_agent": "test-agent",
-                "status": "assigned",
-                "parallel_group": 1,
-                "order": 1,
-                "blocked_by": [],
-            }
-        ])
+        bridge.get_steps_by_task = MagicMock(
+            return_value=[
+                {
+                    "id": "step-1",
+                    "task_id": "task-1",
+                    "title": "Test Step",
+                    "description": "A test step",
+                    "assigned_agent": "test-agent",
+                    "status": "assigned",
+                    "parallel_group": 1,
+                    "order": 1,
+                    "blocked_by": [],
+                }
+            ]
+        )
         bridge.query = MagicMock(return_value={"title": "Main Task", "status": "in_progress"})
 
         dispatcher = StepDispatcher(bridge)
@@ -329,11 +353,16 @@ class TestStepDispatcherNanobotSkillsOverride:
         yaml_skills = ["yaml-skill-1", "yaml-skill-2"]
         req = _make_step_execution_request(agent_skills=yaml_skills)
 
-        with _patch_step_context_builder(req), \
-             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.contexts.execution.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]):
+        with (
+            _patch_step_context_builder(req),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                new=AsyncMock(side_effect=fake_run_step_agent),
+            ),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+        ):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert captured_skills.get("value") == yaml_skills
@@ -344,19 +373,21 @@ class TestStepDispatcherNanobotSkillsOverride:
         from mc.contexts.execution.step_dispatcher import StepDispatcher
 
         bridge = _make_bridge()
-        bridge.get_steps_by_task = MagicMock(return_value=[
-            {
-                "id": "step-1",
-                "task_id": "task-1",
-                "title": "Test Step",
-                "description": "A test step",
-                "assigned_agent": "test-agent",
-                "status": "assigned",
-                "parallel_group": 1,
-                "order": 1,
-                "blocked_by": [],
-            }
-        ])
+        bridge.get_steps_by_task = MagicMock(
+            return_value=[
+                {
+                    "id": "step-1",
+                    "task_id": "task-1",
+                    "title": "Test Step",
+                    "description": "A test step",
+                    "assigned_agent": "test-agent",
+                    "status": "assigned",
+                    "parallel_group": 1,
+                    "order": 1,
+                    "blocked_by": [],
+                }
+            ]
+        )
         bridge.query = MagicMock(return_value={"title": "Main Task", "status": "in_progress"})
 
         dispatcher = StepDispatcher(bridge)
@@ -369,11 +400,16 @@ class TestStepDispatcherNanobotSkillsOverride:
 
         req = _make_step_execution_request(agent_skills=[])
 
-        with _patch_step_context_builder(req), \
-             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.contexts.execution.step_dispatcher._run_step_agent", new=AsyncMock(side_effect=fake_run_step_agent)), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]):
+        with (
+            _patch_step_context_builder(req),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                new=AsyncMock(side_effect=fake_run_step_agent),
+            ),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+        ):
             await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert captured_skills.get("value") == []
@@ -385,43 +421,43 @@ class TestStepDispatcherNanobotSkillsOverride:
 
 
 class TestStepDispatcherCCSkillsOverride:
-    """Test that step_dispatcher CC path overrides skills on agent_data_for_cc."""
+    """Test that step_dispatcher CC path passes skills through the unified pipeline."""
+
+    def _make_cc_step_bridge(self) -> MagicMock:
+        bridge = _make_bridge()
+        bridge.get_steps_by_task = MagicMock(
+            return_value=[
+                {
+                    "id": "step-1",
+                    "task_id": "task-1",
+                    "title": "Test Step",
+                    "description": "A test step",
+                    "assigned_agent": "test-agent",
+                    "status": "assigned",
+                    "parallel_group": 1,
+                    "order": 1,
+                    "blocked_by": [],
+                }
+            ]
+        )
+        bridge.query = MagicMock(return_value={"title": "Main Task", "status": "in_progress"})
+        return bridge
 
     @pytest.mark.asyncio
     async def test_convex_skills_override_in_cc_path(self):
-        """When Convex agent has skills, CC path should set agent_data_for_cc.skills."""
+        """When Convex agent has skills, CC path should pass skills via the unified request."""
         from mc.contexts.execution.step_dispatcher import StepDispatcher
 
-        convex_agent = {
-            "skills": ["github", "memory"],
-            "display_name": "Test Agent",
-            "role": "agent",
-        }
-        bridge = _make_bridge(convex_agent)
-        bridge.get_steps_by_task = MagicMock(return_value=[
-            {
-                "id": "step-1",
-                "task_id": "task-1",
-                "title": "Test Step",
-                "description": "A test step",
-                "assigned_agent": "test-agent",
-                "status": "assigned",
-                "parallel_group": 1,
-                "order": 1,
-                "blocked_by": [],
-            }
-        ])
-        bridge.query = MagicMock(return_value={"title": "Main Task", "status": "in_progress"})
-
+        bridge = self._make_cc_step_bridge()
         dispatcher = StepDispatcher(bridge)
 
-        captured_agent_data = {}
+        captured_agent_data: dict = {}
 
-        def capture_ws_prepare(agent_name, agent_data, task_id, **kw):
-            captured_agent_data["skills"] = list(agent_data.skills)
-            raise RuntimeError("abort-after-capture")  # Stop execution cleanly
+        async def fake_run_step_agent(**kwargs):
+            captured_agent_data["skills"] = kwargs.get("agent_skills")
+            return "step output"
 
-        # Build request with CC model detected
+        # Build request with CC model and skills from unified pipeline
         cc_agent = AgentData(
             name="test-agent",
             display_name="Test Agent",
@@ -437,54 +473,35 @@ class TestStepDispatcherCCSkillsOverride:
             agent_skills=["github", "memory"],
         )
 
-        with _patch_step_context_builder(req), \
-             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
-             patch("claude_code.workspace.CCWorkspaceManager") as mock_ws:
-            mock_ws.return_value.prepare.side_effect = capture_ws_prepare
-            try:
-                await dispatcher.dispatch_steps("task-1", ["step-1"])
-            except Exception:
-                pass  # Expected -- we abort after capture
+        with (
+            _patch_step_context_builder(req),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                new=AsyncMock(side_effect=fake_run_step_agent),
+            ),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert captured_agent_data.get("skills") == ["github", "memory"]
 
     @pytest.mark.asyncio
     async def test_cc_path_keeps_default_skills_when_convex_none(self):
-        """When Convex has no skills, CC path should keep default skills."""
+        """When Convex has no skills, CC path should keep default (None) skills."""
         from mc.contexts.execution.step_dispatcher import StepDispatcher
 
-        convex_agent = {
-            "display_name": "Test Agent",
-            "role": "agent",
-            # No "skills" key
-        }
-        bridge = _make_bridge(convex_agent)
-        bridge.get_steps_by_task = MagicMock(return_value=[
-            {
-                "id": "step-1",
-                "task_id": "task-1",
-                "title": "Test Step",
-                "description": "A test step",
-                "assigned_agent": "test-agent",
-                "status": "assigned",
-                "parallel_group": 1,
-                "order": 1,
-                "blocked_by": [],
-            }
-        ])
-        bridge.query = MagicMock(return_value={"title": "Main Task", "status": "in_progress"})
-
+        bridge = self._make_cc_step_bridge()
         dispatcher = StepDispatcher(bridge)
 
-        captured_agent_data = {}
+        captured_agent_data: dict = {}
 
-        def capture_ws_prepare(agent_name, agent_data, task_id, **kw):
-            captured_agent_data["skills"] = list(agent_data.skills)
-            raise RuntimeError("abort-after-capture")
+        async def fake_run_step_agent(**kwargs):
+            captured_agent_data["skills"] = kwargs.get("agent_skills")
+            return "step output"
 
-        # Build request with CC model but no skills override
+        # Build request with CC model but no skills override (None from unified pipeline)
         cc_agent = AgentData(
             name="test-agent",
             display_name="Test Agent",
@@ -498,55 +515,36 @@ class TestStepDispatcherCCSkillsOverride:
             agent=cc_agent,
         )
 
-        with _patch_step_context_builder(req), \
-             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
-             patch("claude_code.workspace.CCWorkspaceManager") as mock_ws:
-            mock_ws.return_value.prepare.side_effect = capture_ws_prepare
-            try:
-                await dispatcher.dispatch_steps("task-1", ["step-1"])
-            except Exception:
-                pass
+        with (
+            _patch_step_context_builder(req),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                new=AsyncMock(side_effect=fake_run_step_agent),
+            ),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
 
-        # Without Convex skills, agent_data_for_cc.skills should remain the default (empty list)
-        assert captured_agent_data.get("skills") == []
+        # Without Convex skills, agent_skills should remain None (no override)
+        assert captured_agent_data.get("skills") is None
 
     @pytest.mark.asyncio
     async def test_cc_path_empty_list_overrides(self):
-        """Empty list from Convex should override existing skills in CC path."""
+        """Empty list from Convex should be passed through as an explicit empty override."""
         from mc.contexts.execution.step_dispatcher import StepDispatcher
 
-        convex_agent = {
-            "skills": [],
-            "display_name": "Test Agent",
-            "role": "agent",
-        }
-        bridge = _make_bridge(convex_agent)
-        bridge.get_steps_by_task = MagicMock(return_value=[
-            {
-                "id": "step-1",
-                "task_id": "task-1",
-                "title": "Test Step",
-                "description": "A test step",
-                "assigned_agent": "test-agent",
-                "status": "assigned",
-                "parallel_group": 1,
-                "order": 1,
-                "blocked_by": [],
-            }
-        ])
-        bridge.query = MagicMock(return_value={"title": "Main Task", "status": "in_progress"})
-
+        bridge = self._make_cc_step_bridge()
         dispatcher = StepDispatcher(bridge)
 
-        captured_agent_data = {}
+        captured_agent_data: dict = {}
 
-        def capture_ws_prepare(agent_name, agent_data, task_id, **kw):
-            captured_agent_data["skills"] = list(agent_data.skills)
-            raise RuntimeError("abort-after-capture")
+        async def fake_run_step_agent(**kwargs):
+            captured_agent_data["skills"] = kwargs.get("agent_skills")
+            return "step output"
 
-        # Build request with CC model and empty skills override
+        # Build request with CC model and empty skills override from unified pipeline
         cc_agent = AgentData(
             name="test-agent",
             display_name="Test Agent",
@@ -562,15 +560,16 @@ class TestStepDispatcherCCSkillsOverride:
             agent_skills=[],
         )
 
-        with _patch_step_context_builder(req), \
-             patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread), \
-             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}), \
-             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]), \
-             patch("claude_code.workspace.CCWorkspaceManager") as mock_ws:
-            mock_ws.return_value.prepare.side_effect = capture_ws_prepare
-            try:
-                await dispatcher.dispatch_steps("task-1", ["step-1"])
-            except Exception:
-                pass
+        with (
+            _patch_step_context_builder(req),
+            patch("mc.contexts.execution.step_dispatcher.asyncio.to_thread", new=_sync_to_thread),
+            patch(
+                "mc.contexts.execution.step_dispatcher._run_step_agent",
+                new=AsyncMock(side_effect=fake_run_step_agent),
+            ),
+            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
+            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+        ):
+            await dispatcher.dispatch_steps("task-1", ["step-1"])
 
         assert captured_agent_data.get("skills") == []

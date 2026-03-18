@@ -24,7 +24,10 @@ describe("ImageViewer", () => {
     naturalHeight = 600,
   ) {
     Object.defineProperty(imgElement, "naturalWidth", { value: naturalWidth, configurable: true });
-    Object.defineProperty(imgElement, "naturalHeight", { value: naturalHeight, configurable: true });
+    Object.defineProperty(imgElement, "naturalHeight", {
+      value: naturalHeight,
+      configurable: true,
+    });
     fireEvent.load(imgElement);
   }
 

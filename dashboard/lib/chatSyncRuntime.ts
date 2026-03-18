@@ -8,9 +8,7 @@ export interface ChatHandlerRuntime {
   inFlight: number;
 }
 
-export function isChatHandlerRuntime(
-  value: unknown,
-): value is ChatHandlerRuntime {
+export function isChatHandlerRuntime(value: unknown): value is ChatHandlerRuntime {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -26,7 +24,6 @@ export function isChatHandlerRuntime(
     typeof runtime.pollIntervalSeconds === "number" &&
     typeof runtime.lastTransitionAt === "string" &&
     typeof runtime.inFlight === "number" &&
-    (runtime.lastWorkFoundAt === undefined ||
-      typeof runtime.lastWorkFoundAt === "string")
+    (runtime.lastWorkFoundAt === undefined || typeof runtime.lastWorkFoundAt === "string")
   );
 }

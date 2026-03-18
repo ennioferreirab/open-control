@@ -4,15 +4,13 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 const markdownRenderSpy = vi.hoisted(() => vi.fn());
 
 vi.mock("@/components/MarkdownRenderer", () => ({
-  MarkdownRenderer: ({
-    content,
-    className,
-  }: {
-    content: string;
-    className?: string;
-  }) => {
+  MarkdownRenderer: ({ content, className }: { content: string; className?: string }) => {
     markdownRenderSpy(content, className);
-    return <div data-testid="markdown-renderer-stub" className={className}>{content}</div>;
+    return (
+      <div data-testid="markdown-renderer-stub" className={className}>
+        {content}
+      </div>
+    );
   },
 }));
 
@@ -48,12 +46,8 @@ describe("ThreadMessage — lead_agent_chat", () => {
       type: "lead_agent_chat",
       content: "Stable markdown body",
     });
-    const firstSteps = [
-      { _id: "step-a", title: "First title" },
-    ] as never;
-    const secondSteps = [
-      { _id: "step-b", title: "Different title" },
-    ] as never;
+    const firstSteps = [{ _id: "step-a", title: "First title" }] as never;
+    const secondSteps = [{ _id: "step-b", title: "Different title" }] as never;
 
     const { rerender } = render(<ThreadMessage message={message as never} steps={firstSteps} />);
     expect(markdownRenderSpy).toHaveBeenCalledTimes(1);
@@ -142,12 +136,7 @@ describe("ThreadMessage — user_message", () => {
       artifacts: [{ path: "/output/result.md", action: "created" as const }],
     });
 
-    render(
-      <ThreadMessage
-        message={message as never}
-        onArtifactClick={onArtifactClick}
-      />
-    );
+    render(<ThreadMessage message={message as never} onArtifactClick={onArtifactClick} />);
 
     fireEvent.click(screen.getByRole("button", { name: "/output/result.md" }));
 

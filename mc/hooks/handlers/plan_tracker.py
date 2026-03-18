@@ -1,12 +1,14 @@
 """Plan tracker — parses plan files and tracks step completion."""
+
 from __future__ import annotations
 
 import fnmatch
 import json
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
 
 from ..config import get_config, get_project_root
 from ..handler import BaseHandler
@@ -18,7 +20,7 @@ def is_plan_file(file_path: str) -> bool:
     root_str = str(root)
     rel_path = file_path
     if file_path.startswith(root_str):
-        rel_path = file_path[len(root_str):].lstrip("/")
+        rel_path = file_path[len(root_str) :].lstrip("/")
     config = get_config()
     return fnmatch.fnmatch(rel_path, config.plan_pattern)
 
@@ -76,19 +78,24 @@ def compute_parallel_groups(tasks: list[dict]) -> list[dict]:
 
     steps = []
     for i, t in enumerate(tasks):
-        steps.append({
-            "id": t["id"],
-            "name": t["name"],
-            "order": i + 1,
-            "status": "pending",
-            "blocked_by": t["blocked_by"],
-            "parallel_group": group_of.get(t["id"], 1),
-        })
+        steps.append(
+            {
+                "id": t["id"],
+                "name": t["name"],
+                "order": i + 1,
+                "status": "pending",
+                "blocked_by": t["blocked_by"],
+                "parallel_group": group_of.get(t["id"], 1),
+            }
+        )
     return steps
 
 
 class PlanTrackerHandler(BaseHandler):
-    events = [("PostToolUse", "Write"), ("TaskCompleted", None)]
+    events: ClassVar[list[tuple[str, str | None]]] = [
+        ("PostToolUse", "Write"),
+        ("TaskCompleted", None),
+    ]
 
     def handle(self) -> str | None:
         event = self.payload.get("hook_event_name", "")
@@ -111,7 +118,7 @@ class PlanTrackerHandler(BaseHandler):
         rel_path = file_path
         root_str = str(root)
         if file_path.startswith(root_str):
-            rel_path = file_path[len(root_str):].lstrip("/")
+            rel_path = file_path[len(root_str) :].lstrip("/")
 
         # Check glob match
         if not fnmatch.fnmatch(rel_path, config.plan_pattern):
@@ -152,7 +159,7 @@ class PlanTrackerHandler(BaseHandler):
         # Write tracker
         tracker = {
             "plan_file": rel_path,
-            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "created_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "steps": steps,
         }
         tracker_path.write_text(json.dumps(tracker, indent=2))
@@ -165,9 +172,8 @@ class PlanTrackerHandler(BaseHandler):
 
     def _handle_task_completed(self) -> str | None:
         # Extract subject — handle both payload formats
-        subject = (
-            self.payload.get("task_subject", "")
-            or self.payload.get("task", {}).get("subject", "")
+        subject = self.payload.get("task_subject", "") or self.payload.get("task", {}).get(
+            "subject", ""
         )
         if not subject:
             return None
@@ -244,8 +250,7 @@ class PlanTrackerHandler(BaseHandler):
                 step = step_by_id[ids[0]]
                 if step["blocked_by"]:
                     descs.append(
-                        f"[{ids[0]}] blocked by "
-                        + ",".join(str(b) for b in step["blocked_by"])
+                        f"[{ids[0]}] blocked by " + ",".join(str(b) for b in step["blocked_by"])
                     )
                 else:
                     descs.append(f"[{ids[0]}]")

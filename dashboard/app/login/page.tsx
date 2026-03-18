@@ -43,9 +43,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle>Mission Control</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Enter your access token
-          </p>
+          <p className="text-sm text-muted-foreground">Enter your access token</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

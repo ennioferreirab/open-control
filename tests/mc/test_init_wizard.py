@@ -1,19 +1,17 @@
 """Tests for the init wizard business logic and CLI command."""
 
-import shutil
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 import yaml
+from nanobot.cli.commands import app
 from typer.testing import CliRunner
 
-from nanobot.cli.commands import app
 from mc.cli.init_wizard import (
     LEAD_AGENT_CONFIG,
     PRESETS,
     AgentPlan,
-    CreationResult,
     agent_exists,
     build_lead_agent_yaml,
     build_preset_yaml,
@@ -27,13 +25,16 @@ runner = CliRunner()
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tmp_agents_dir(tmp_path):
     """Redirect AGENTS_DIR to a temp directory for isolation."""
     agents = tmp_path / "agents"
     agents.mkdir()
-    with patch("mc.cli.init_wizard.AGENTS_DIR", agents), \
-         patch("mc.cli.agent_assist.Path") as mock_path_cls:
+    with (
+        patch("mc.cli.init_wizard.AGENTS_DIR", agents),
+        patch("mc.cli.agent_assist.Path") as mock_path_cls,
+    ):
         # Also patch create_agent_workspace's home so it writes to tmp
         mock_path_cls.home.return_value = tmp_path
         # Keep the rest of Path working normally by forwarding attribute access
@@ -54,6 +55,7 @@ def tmp_agents_dir_simple(tmp_path):
 # YAML generation tests
 # ---------------------------------------------------------------------------
 
+
 class TestBuildLeadAgentYaml:
     def test_valid_yaml(self):
         text = build_lead_agent_yaml()
@@ -71,6 +73,7 @@ class TestBuildLeadAgentYaml:
 
     def test_passes_agent_validation(self):
         from mc.cli.agent_assist import validate_yaml_content
+
         text = build_lead_agent_yaml()
         parsed, errors = validate_yaml_content(text)
         assert errors == []
@@ -91,6 +94,7 @@ class TestBuildPresetYaml:
     @pytest.mark.parametrize("preset", PRESETS, ids=[p.name for p in PRESETS])
     def test_passes_agent_validation(self, preset):
         from mc.cli.agent_assist import validate_yaml_content
+
         text = build_preset_yaml(preset)
         parsed, errors = validate_yaml_content(text)
         assert errors == [], f"Validation failed for {preset.name}: {errors}"
@@ -108,6 +112,7 @@ class TestBuildPresetYaml:
 # ---------------------------------------------------------------------------
 # Existence checks
 # ---------------------------------------------------------------------------
+
 
 class TestAgentExists:
     def test_returns_false_when_missing(self, tmp_agents_dir_simple):
@@ -133,12 +138,19 @@ class TestAgentExists:
 # create_agents
 # ---------------------------------------------------------------------------
 
+
 class TestCreateAgents:
     def test_skip_plan(self, tmp_agents_dir_simple):
-        plans = [AgentPlan(
-            name="skipped", role="Test", yaml_text="",
-            source="test", skip=True, skip_reason="test skip",
-        )]
+        plans = [
+            AgentPlan(
+                name="skipped",
+                role="Test",
+                yaml_text="",
+                source="test",
+                skip=True,
+                skip_reason="test skip",
+            )
+        ]
         results = create_agents(plans)
         assert len(results) == 1
         assert results[0].success is True
@@ -149,30 +161,39 @@ class TestCreateAgents:
         agents_dir.mkdir()
         yaml_text = build_lead_agent_yaml()
 
-        with patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir), \
-             patch("mc.cli.init_wizard.create_agent_workspace") as mock_create:
+        with (
+            patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir),
+            patch("mc.cli.init_wizard.create_agent_workspace") as mock_create,
+        ):
             config_path = agents_dir / "lead-agent" / "config.yaml"
             # Simulate workspace creation
             (agents_dir / "lead-agent").mkdir(parents=True)
             config_path.write_text(yaml_text)
             mock_create.return_value = config_path
 
-            plans = [AgentPlan(
-                name="lead-agent", role="Lead",
-                yaml_text=yaml_text, source="lead",
-            )]
+            plans = [
+                AgentPlan(
+                    name="lead-agent",
+                    role="Lead",
+                    yaml_text=yaml_text,
+                    source="lead",
+                )
+            ]
             results = create_agents(plans)
             assert len(results) == 1
             assert results[0].success is True
             assert results[0].path == str(config_path)
 
     def test_create_failure_returns_error(self, tmp_agents_dir_simple):
-        with patch("mc.cli.init_wizard.create_agent_workspace",
-                    side_effect=OSError("disk full")):
-            plans = [AgentPlan(
-                name="fail-agent", role="Test",
-                yaml_text="name: fail-agent\n", source="test",
-            )]
+        with patch("mc.cli.init_wizard.create_agent_workspace", side_effect=OSError("disk full")):
+            plans = [
+                AgentPlan(
+                    name="fail-agent",
+                    role="Test",
+                    yaml_text="name: fail-agent\n",
+                    source="test",
+                )
+            ]
             results = create_agents(plans)
             assert len(results) == 1
             assert results[0].success is False
@@ -193,14 +214,13 @@ class TestCreateAgents:
                 return config_path
             raise OSError("fail")
 
-        with patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir), \
-             patch("mc.cli.init_wizard.create_agent_workspace",
-                    side_effect=mock_create):
+        with (
+            patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir),
+            patch("mc.cli.init_wizard.create_agent_workspace", side_effect=mock_create),
+        ):
             plans = [
-                AgentPlan(name="developer", role="Dev",
-                          yaml_text=good_yaml, source="preset"),
-                AgentPlan(name="bad-agent", role="Bad",
-                          yaml_text="name: bad\n", source="test"),
+                AgentPlan(name="developer", role="Dev", yaml_text=good_yaml, source="preset"),
+                AgentPlan(name="bad-agent", role="Bad", yaml_text="name: bad\n", source="test"),
             ]
             results = create_agents(plans)
             assert results[0].success is True
@@ -210,6 +230,7 @@ class TestCreateAgents:
 # ---------------------------------------------------------------------------
 # CLI integration tests
 # ---------------------------------------------------------------------------
+
 
 class TestInitCLI:
     def test_help(self):
@@ -222,10 +243,12 @@ class TestInitCLI:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
 
-        with patch("mc.cli.AGENTS_DIR", agents_dir), \
-             patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir), \
-             patch("mc.cli._sync_to_convex"), \
-             patch("mc.cli.init_wizard.create_agent_workspace") as mock_create:
+        with (
+            patch("mc.cli.AGENTS_DIR", agents_dir),
+            patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir),
+            patch("mc.cli._sync_to_convex"),
+            patch("mc.cli.init_wizard.create_agent_workspace") as mock_create,
+        ):
             # Set up workspace creation to actually write the file
             def do_create(name, yaml_text):
                 d = agents_dir / name
@@ -235,9 +258,7 @@ class TestInitCLI:
 
             mock_create.side_effect = do_create
 
-            result = runner.invoke(
-                app, ["mc", "init", "--skip-presets", "--skip-custom", "--yes"]
-            )
+            result = runner.invoke(app, ["mc", "init", "--skip-presets", "--skip-custom", "--yes"])
             assert result.exit_code == 0
             assert "lead-agent" in result.stdout
             mock_create.assert_called_once()
@@ -250,12 +271,12 @@ class TestInitCLI:
         lead_dir.mkdir(parents=True)
         (lead_dir / "config.yaml").write_text(build_lead_agent_yaml())
 
-        with patch("mc.cli.AGENTS_DIR", agents_dir), \
-             patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir), \
-             patch("mc.cli.init_wizard.create_agent_workspace") as mock_create:
-            result = runner.invoke(
-                app, ["mc", "init", "--skip-presets", "--skip-custom", "--yes"]
-            )
+        with (
+            patch("mc.cli.AGENTS_DIR", agents_dir),
+            patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir),
+            patch("mc.cli.init_wizard.create_agent_workspace") as mock_create,
+        ):
+            result = runner.invoke(app, ["mc", "init", "--skip-presets", "--skip-custom", "--yes"])
             assert result.exit_code == 0
             assert "already exists" in result.stdout
             # Nothing to create → exit 0 with "Nothing to create"
@@ -276,14 +297,13 @@ class TestInitCLI:
             (d / "config.yaml").write_text(yaml_text)
             return d / "config.yaml"
 
-        with patch("mc.cli.AGENTS_DIR", agents_dir), \
-             patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir), \
-             patch("mc.cli._sync_to_convex"), \
-             patch("mc.cli.init_wizard.create_agent_workspace",
-                    side_effect=do_create):
-            result = runner.invoke(
-                app, ["mc", "init", "--skip-custom", "--yes"]
-            )
+        with (
+            patch("mc.cli.AGENTS_DIR", agents_dir),
+            patch("mc.cli.init_wizard.AGENTS_DIR", agents_dir),
+            patch("mc.cli._sync_to_convex"),
+            patch("mc.cli.init_wizard.create_agent_workspace", side_effect=do_create),
+        ):
+            result = runner.invoke(app, ["mc", "init", "--skip-custom", "--yes"])
             assert result.exit_code == 0
             # Should create lead + all 5 presets
             assert "lead-agent" in created_names

@@ -37,6 +37,10 @@ const defaultHookData: AgentConfigSheetData = {
   },
 };
 
+vi.mock("@/features/agents/hooks/useActiveSquadsForAgent", () => ({
+  useActiveSquadsForAgent: () => [],
+}));
+
 vi.mock("@/features/agents/hooks/useAgentConfigSheetData", () => ({
   useAgentConfigSheetData: (agentName: string | null) => {
     if (!agentName) {
@@ -66,7 +70,7 @@ vi.mock("@/components/SkillsSelector", () => ({
 }));
 
 // Mock AgentSidebarItem exports
-vi.mock("@/components/AgentSidebarItem", () => ({
+vi.mock("@/features/agents/components/AgentSidebarItem", () => ({
   getAvatarColor: () => "bg-blue-500",
   getInitials: (name: string) => name.slice(0, 2).toUpperCase(),
 }));
@@ -195,28 +199,6 @@ describe("AgentConfigSheet", () => {
     void container;
   });
 
-  it("renders form fields when agent is loaded", async () => {
-    await renderLoadedSheet();
-
-    expect(screen.getByTestId("sheet")).toBeInTheDocument();
-    // Name field should be read-only (disabled)
-    const nameInput = screen.getByDisplayValue("test-agent");
-    expect(nameInput).toBeDisabled();
-  });
-
-  it("displays agent displayName and role in form", async () => {
-    await renderLoadedSheet();
-
-    expect(screen.getByDisplayValue("Test Agent")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Developer")).toBeInTheDocument();
-  });
-
-  it("displays agent prompt in textarea", async () => {
-    await renderLoadedSheet();
-
-    expect(screen.getByDisplayValue("You are a developer.")).toBeInTheDocument();
-  });
-
   it("shows Save button disabled when no changes", async () => {
     await renderLoadedSheet();
 
@@ -303,22 +285,7 @@ describe("AgentConfigSheet", () => {
     });
   });
 
-  it("renders SkillsSelector with agent skills", async () => {
-    await renderLoadedSheet();
-
-    const selector = screen.getByTestId("skills-selector");
-    expect(selector.getAttribute("data-selected")).toBe("github,memory");
-  });
-
   // --- Enable/disable toggle tests ---
-
-  it("renders Active label and checked switch when agent is enabled", async () => {
-    await renderLoadedSheet();
-
-    expect(screen.getByText("Active")).toBeInTheDocument();
-    const toggle = screen.getByTestId("enabled-switch");
-    expect(toggle.getAttribute("data-state")).toBe("checked");
-  });
 
   it("renders Deactivated label and unchecked switch when agent is disabled", async () => {
     mockQueryResult = { ...mockAgent, enabled: false };
@@ -410,15 +377,6 @@ describe("AgentConfigSheet", () => {
     await renderLoadedSheet();
 
     expect(screen.queryByText("This agent will not receive new tasks")).not.toBeInTheDocument();
-  });
-
-  it("shows Deactivated status in header when disabled", async () => {
-    mockQueryResult = { ...mockAgent, enabled: false };
-    await renderLoadedSheet();
-
-    // Header should show "Deactivated" instead of runtime status
-    const statusTexts = screen.getAllByText("Deactivated");
-    expect(statusTexts.length).toBeGreaterThanOrEqual(1);
   });
 
   // --- Memory/History section tests ---

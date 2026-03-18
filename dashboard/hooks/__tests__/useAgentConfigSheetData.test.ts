@@ -60,9 +60,7 @@ describe("useAgentConfigSheetData", () => {
   });
 
   it("returns agent data when agentName is provided", () => {
-    const { result } = renderHook(() =>
-      useAgentConfigSheetData("test-agent"),
-    );
+    const { result } = renderHook(() => useAgentConfigSheetData("test-agent"));
 
     expect(result.current.agent).toBeDefined();
     expect(result.current.agent?.name).toBe("test-agent");
@@ -75,20 +73,13 @@ describe("useAgentConfigSheetData", () => {
   });
 
   it("parses connected models from JSON setting", () => {
-    const { result } = renderHook(() =>
-      useAgentConfigSheetData("test-agent"),
-    );
+    const { result } = renderHook(() => useAgentConfigSheetData("test-agent"));
 
-    expect(result.current.connectedModels).toEqual([
-      "claude-sonnet-4-6",
-      "claude-opus-4-6",
-    ]);
+    expect(result.current.connectedModels).toEqual(["claude-sonnet-4-6", "claude-opus-4-6"]);
   });
 
   it("parses model tiers from JSON setting", () => {
-    const { result } = renderHook(() =>
-      useAgentConfigSheetData("test-agent"),
-    );
+    const { result } = renderHook(() => useAgentConfigSheetData("test-agent"));
 
     expect(result.current.modelTiers).toEqual({
       "standard-low": "claude-haiku-4-5",
@@ -96,9 +87,7 @@ describe("useAgentConfigSheetData", () => {
   });
 
   it("updateConfig wraps the Convex mutation", async () => {
-    const { result } = renderHook(() =>
-      useAgentConfigSheetData("test-agent"),
-    );
+    const { result } = renderHook(() => useAgentConfigSheetData("test-agent"));
 
     await act(async () => {
       await result.current.updateConfig({
@@ -114,9 +103,7 @@ describe("useAgentConfigSheetData", () => {
   });
 
   it("setEnabled wraps the Convex mutation", async () => {
-    const { result } = renderHook(() =>
-      useAgentConfigSheetData("test-agent"),
-    );
+    const { result } = renderHook(() => useAgentConfigSheetData("test-agent"));
 
     await act(async () => {
       await result.current.setEnabled({

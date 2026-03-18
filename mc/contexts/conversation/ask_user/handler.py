@@ -21,7 +21,7 @@ def _transition_succeeded(result: object) -> bool:
 
 
 async def _transition_task(
-    bridge: "ConvexBridge",
+    bridge: ConvexBridge,
     task_id: str,
     to_status: str,
     *,
@@ -72,7 +72,7 @@ class AskUserHandler:
         questions: list[dict] | None = None,
         agent_name: str,
         task_id: str,
-        bridge: "ConvexBridge",
+        bridge: ConvexBridge,
     ) -> str:
         """Post question to thread, wait for a reply, and restore task state."""
         content = self._build_prompt(
@@ -152,7 +152,7 @@ class AskUserHandler:
 
         return answer
 
-    def _resolve_active_step_id(self, bridge: "ConvexBridge", task_id: str) -> str | None:
+    def _resolve_active_step_id(self, bridge: ConvexBridge, task_id: str) -> str | None:
         try:
             steps = bridge.get_steps_by_task(task_id)
         except Exception as exc:

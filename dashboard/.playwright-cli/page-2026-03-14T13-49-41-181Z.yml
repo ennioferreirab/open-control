@@ -1,494 +1,494 @@
 - generic:
-  - generic:
     - generic:
-      - generic:
         - generic:
-          - generic:
             - generic:
-              - img
-              - generic: Agents
-              - generic:
-                - button:
-                  - img
-                  - generic: Toggle Sidebar
-          - generic:
+                - generic:
+                    - generic:
+                        - generic:
+                            - img
+                            - generic: Agents
+                            - generic:
+                                - button:
+                                    - img
+                                    - generic: Toggle Sidebar
+                    - generic:
+                        - generic:
+                            - generic:
+                                - img
+                                - text: Squads
+                            - list:
+                                - listitem:
+                                    - button:
+                                        - generic: IN
+                                        - generic:
+                                            - generic: instagram
+                                            - generic: Desenvolver a identidade pessoal e o perfil da pessoa
+                        - generic:
+                            - generic:
+                                - text: Registered
+                                - button:
+                                    - img
+                            - list:
+                                - listitem:
+                                    - button:
+                                        - generic: YS
+                                        - generic:
+                                            - generic: Youtube Summarizer
+                                            - generic: YouTube Channel Video Summarizer
+                                - listitem:
+                                    - button:
+                                        - generic: IC
+                                        - generic:
+                                            - generic: Image Creator Agent
+                                            - generic: Image Creator with Design Guidelines
+                                - listitem:
+                                    - button:
+                                        - generic: CR
+                                        - generic:
+                                            - generic: Contracts Risk
+                                            - generic: Contracts and commercial risk strategist for B2B AI-native services
+                                - listitem:
+                                    - button:
+                                        - generic: DS
+                                        - generic:
+                                            - generic: Delivery Systems
+                                            - generic: Delivery systems strategist for 21-day AI proof-of-value engagements
+                                - listitem:
+                                    - button:
+                                        - generic: FP
+                                        - generic:
+                                            - generic: Finance Pricing
+                                            - generic: Finance and pricing strategist for 21-day AI proof-of-value offers
+                                - listitem:
+                                    - button:
+                                        - generic: MC
+                                        - generic:
+                                            - generic: Marketing Copy
+                                            - generic: Marketing copy strategist for AI-native consulting offers and proposals
+                                - listitem:
+                                    - button:
+                                        - generic: OS
+                                        - generic:
+                                            - generic: Offer Strategist
+                                            - generic: Offer strategist for AI-native consulting proofs of value
+                                - listitem:
+                                    - button:
+                                        - generic: SR
+                                        - generic:
+                                            - generic: Sales RevOps
+                                            - generic: Consultative sales and revenue operations strategist for 21-day proofs of value
+                                - listitem:
+                                    - button:
+                                        - generic: NL
+                                        - generic:
+                                            - generic: Nanobot Live
+                                            - generic: MC Interactive Nanobot
+                                - listitem:
+                                    - button:
+                                        - generic: NL
+                                        - generic:
+                                            - generic: Nanobot Live Proof
+                                            - generic: MC Interactive Nanobot
+                                - listitem:
+                                    - button:
+                                        - generic: NL
+                                        - generic:
+                                            - generic: Nanobot Live Proof 2
+                                            - generic: MC Interactive Nanobot
+                                - listitem:
+                                    - button:
+                                        - generic: NL
+                                        - generic:
+                                            - generic: Nanobot Live Proof 3
+                                            - generic: MC Interactive Nanobot
+                                - listitem:
+                                    - button:
+                                        - generic: NL
+                                        - generic:
+                                            - generic: Nanobot Live Proof 4
+                                            - generic: MC Interactive Nanobot
+                                - listitem:
+                                    - button:
+                                        - generic: NL
+                                        - generic:
+                                            - generic: Nanobot Live Proof 5
+                                            - generic: MC Interactive Nanobot
+                                - listitem:
+                                    - button:
+                                        - generic:
+                                            - img
+                                        - generic: Create
+                        - generic:
+                            - generic:
+                                - generic:
+                                    - img
+                                    - text: System
+                                    - img
+                                - generic:
+                                    - list:
+                                        - listitem:
+                                            - button:
+                                                - generic: LA
+                                                - generic:
+                                                    - generic: Lead Agent
+                                                    - generic: Lead Orchestrator
+                                        - listitem:
+                                            - button:
+                                                - generic: �O
+                                                - generic:
+                                                    - generic: 🦉 Owl
+                                                    - generic: Personal Assistant and Task Delegation Fallback
+                        - generic:
+                            - generic:
+                                - generic:
+                                    - img
+                                    - text: Remoto
+                                    - img
+                                - generic:
+                                    - list:
+                                        - listitem:
+                                            - button:
+                                                - generic:
+                                                    - img
+                                                - generic:
+                                                    - generic: 10.20.35.19
+                                                    - generic: HM
+                                        - listitem:
+                                            - button:
+                                                - generic:
+                                                    - img
+                                                - generic:
+                                                    - generic: 10.30.1.114
+                                                    - generic: PD
+                                        - listitem:
+                                            - button:
+                                                - generic:
+                                                    - img
+                                                - generic:
+                                                    - generic: 10.20.45.12
+                                                    - generic: DS
+                                        - listitem:
+                                            - button:
+                                                - generic:
+                                                    - img
+                                                - generic:
+                                                    - generic: 192.168.0.4
+                                                    - generic: Macnook
+                                        - listitem:
+                                            - button:
+                                                - generic:
+                                                    - img
+                                                - generic:
+                                                    - generic: 192.168.0.9
+                                                    - generic: Macbook
+                        - generic:
+                            - generic:
+                                - generic:
+                                    - img
+                                    - text: Deleted
+                                    - img
+        - main:
             - generic:
-              - generic:
-                - img
-                - text: Squads
-              - list:
-                - listitem:
-                  - button:
-                    - generic: IN
-                    - generic:
-                      - generic: instagram
-                      - generic: Desenvolver a identidade pessoal e o perfil da pessoa
-            - generic:
-              - generic:
-                - text: Registered
-                - button:
-                  - img
-              - list:
-                - listitem:
-                  - button:
-                    - generic: YS
-                    - generic:
-                      - generic: Youtube Summarizer
-                      - generic: YouTube Channel Video Summarizer
-                - listitem:
-                  - button:
-                    - generic: IC
-                    - generic:
-                      - generic: Image Creator Agent
-                      - generic: Image Creator with Design Guidelines
-                - listitem:
-                  - button:
-                    - generic: CR
-                    - generic:
-                      - generic: Contracts Risk
-                      - generic: Contracts and commercial risk strategist for B2B AI-native services
-                - listitem:
-                  - button:
-                    - generic: DS
-                    - generic:
-                      - generic: Delivery Systems
-                      - generic: Delivery systems strategist for 21-day AI proof-of-value engagements
-                - listitem:
-                  - button:
-                    - generic: FP
-                    - generic:
-                      - generic: Finance Pricing
-                      - generic: Finance and pricing strategist for 21-day AI proof-of-value offers
-                - listitem:
-                  - button:
-                    - generic: MC
-                    - generic:
-                      - generic: Marketing Copy
-                      - generic: Marketing copy strategist for AI-native consulting offers and proposals
-                - listitem:
-                  - button:
-                    - generic: OS
-                    - generic:
-                      - generic: Offer Strategist
-                      - generic: Offer strategist for AI-native consulting proofs of value
-                - listitem:
-                  - button:
-                    - generic: SR
-                    - generic:
-                      - generic: Sales RevOps
-                      - generic: Consultative sales and revenue operations strategist for 21-day proofs of value
-                - listitem:
-                  - button:
-                    - generic: NL
-                    - generic:
-                      - generic: Nanobot Live
-                      - generic: MC Interactive Nanobot
-                - listitem:
-                  - button:
-                    - generic: NL
-                    - generic:
-                      - generic: Nanobot Live Proof
-                      - generic: MC Interactive Nanobot
-                - listitem:
-                  - button:
-                    - generic: NL
-                    - generic:
-                      - generic: Nanobot Live Proof 2
-                      - generic: MC Interactive Nanobot
-                - listitem:
-                  - button:
-                    - generic: NL
-                    - generic:
-                      - generic: Nanobot Live Proof 3
-                      - generic: MC Interactive Nanobot
-                - listitem:
-                  - button:
-                    - generic: NL
-                    - generic:
-                      - generic: Nanobot Live Proof 4
-                      - generic: MC Interactive Nanobot
-                - listitem:
-                  - button:
-                    - generic: NL
-                    - generic:
-                      - generic: Nanobot Live Proof 5
-                      - generic: MC Interactive Nanobot
-                - listitem:
-                  - button:
-                    - generic:
-                      - img
-                    - generic: Create
-            - generic:
-              - generic:
                 - generic:
-                  - img
-                  - text: System
-                  - img
-                - generic:
-                  - list:
-                    - listitem:
-                      - button:
-                        - generic: LA
-                        - generic:
-                          - generic: Lead Agent
-                          - generic: Lead Orchestrator
-                    - listitem:
-                      - button:
-                        - generic: �O
-                        - generic:
-                          - generic: 🦉 Owl
-                          - generic: Personal Assistant and Task Delegation Fallback
-            - generic:
-              - generic:
-                - generic:
-                  - img
-                  - text: Remoto
-                  - img
-                - generic:
-                  - list:
-                    - listitem:
-                      - button:
-                        - generic:
-                          - img
-                        - generic:
-                          - generic: 10.20.35.19
-                          - generic: HM
-                    - listitem:
-                      - button:
-                        - generic:
-                          - img
-                        - generic:
-                          - generic: 10.30.1.114
-                          - generic: PD
-                    - listitem:
-                      - button:
-                        - generic:
-                          - img
-                        - generic:
-                          - generic: 10.20.45.12
-                          - generic: DS
-                    - listitem:
-                      - button:
-                        - generic:
-                          - img
-                        - generic:
-                          - generic: 192.168.0.4
-                          - generic: Macnook
-                    - listitem:
-                      - button:
-                        - generic:
-                          - img
-                        - generic:
-                          - generic: 192.168.0.9
-                          - generic: Macbook
-            - generic:
-              - generic:
-                - generic:
-                  - img
-                  - text: Deleted
-                  - img
-    - main:
-      - generic:
-        - generic:
-          - generic:
-            - heading [level=1]: Mission Control
-          - generic:
-            - generic:
-              - button:
-                - text: Default
-                - img
-              - button:
-                - img
-            - generic:
-              - generic:
-                - img
-                - textbox:
-                  - /placeholder: Search tasks…
-              - button:
-                - img
-          - generic:
-            - generic:
-              - generic: Gateway active · sleep in 0:48
-              - button: Sleep now
-            - button:
-              - img
-            - button:
-              - img
-            - button:
-              - img
-            - button:
-              - img
-        - generic:
-          - generic:
-            - generic:
-              - generic:
-                - generic:
-                  - textbox:
-                    - /placeholder: Task title...
-                  - generic:
-                    - textbox:
-                      - generic: Description...
-                - generic:
-                  - generic:
-                    - button: Create
-                    - button:
-                      - img
-                    - button:
-                      - img
-                      - generic: AI
-                  - generic:
-                    - button:
-                      - img
-                      - generic: Autonomous
-                    - combobox:
-                      - generic: Auto (Lead Agent)
-                      - img
-            - generic:
-              - button: Anatel
-              - button: Nanobot Mission Control
-              - button: Pessoal
-              - button: SEI Workflows
-              - button: Sprova
-              - button: UnB
-              - button: merged
-        - generic:
-          - generic:
-            - generic:
-              - generic:
-                - img
-                - generic: Favorites
-              - generic:
-                - generic:
-                  - generic: "?"
-                  - generic: Diretrizes da empresa
-                  - generic: done
-                  - img
-                - generic:
-                  - generic: "?"
-                  - generic: Roteiro Entrevista ClimaFlow
-                  - generic: inbox
-                  - img
-                - generic:
-                  - generic: "?"
-                  - generic: Vamos fazer um brainstorm paralelo juntando nossos agentes , os que fizerem sentido , e elencar os melhores nomes candidatos para a empresa
-                  - generic: done
-                  - img
-                - generic:
-                  - generic: "?"
-                  - generic: Criar logo da empresa Provit
-                  - generic: done
-                  - img
-            - generic:
-              - generic:
-                - generic:
-                  - generic:
-                    - heading [level=2]: Inbox
-                    - generic: "14"
-                  - generic:
                     - generic:
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Anatel
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: nano-mcontrol
-                            - generic: "4"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Nanobot Mission Control
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Sprova
-                            - generic: "2"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: UnB
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Untagged
-                            - generic: "5"
-                - generic:
-                  - generic:
-                    - heading [level=2]: Assigned
-                    - generic: "0"
-                  - generic:
-                    - paragraph: No tasks
-                - generic:
-                  - generic:
-                    - heading [level=2]: In Progress
-                    - generic: "10"
-                  - generic:
+                        - heading [level=1]: Mission Control
                     - generic:
-                      - generic:
                         - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Validate Nanobot Live support (proof 5)
-                            - generic: "1"
-                      - generic:
+                            - button:
+                                - text: Default
+                                - img
+                            - button:
+                                - img
                         - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Validate Nanobot Live support (proof 4)
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Validate Nanobot Live support (proof 3)
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Validate Nanobot Live support (proof 2)
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Validate Nanobot Live support (proof)
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Validate Nanobot Live support
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Story 27.14 Live takeover proof
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: "🌙 Executar skill dream: consolidar HISTORY.md, extrair fatos para MEMORY.md, remover entradas com mais de 7 dias."
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: nano-mcontrol
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Untagged
-                            - generic: "1"
-                - generic:
-                  - generic:
-                    - heading [level=2]: Review
-                    - generic: "4"
-                    - generic: "4"
-                  - generic:
+                            - generic:
+                                - img
+                                - textbox:
+                                    - /placeholder: Search tasks…
+                            - button:
+                                - img
                     - generic:
-                      - generic:
                         - generic:
-                          - button:
+                            - generic: Gateway active · sleep in 0:48
+                            - button: Sleep now
+                        - button:
                             - img
-                            - heading [level=3]: Sprova
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
+                        - button:
                             - img
-                            - heading [level=3]: Untagged
-                            - generic: "3"
+                        - button:
+                            - img
+                        - button:
+                            - img
                 - generic:
-                  - generic:
-                    - heading [level=2]: Done
-                    - generic: "38"
-                    - img
-                    - img
-                  - generic:
                     - generic:
-                      - generic:
                         - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: merged
-                            - generic: "3"
-                      - generic:
+                            - generic:
+                                - generic:
+                                    - textbox:
+                                        - /placeholder: Task title...
+                                    - generic:
+                                        - textbox:
+                                            - generic: Description...
+                                - generic:
+                                    - generic:
+                                        - button: Create
+                                        - button:
+                                            - img
+                                        - button:
+                                            - img
+                                            - generic: AI
+                                    - generic:
+                                        - button:
+                                            - img
+                                            - generic: Autonomous
+                                        - combobox:
+                                            - generic: Auto (Lead Agent)
+                                            - img
                         - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: nano-mcontrol
-                            - generic: "7"
-                      - generic:
+                            - button: Anatel
+                            - button: Nanobot Mission Control
+                            - button: Pessoal
+                            - button: SEI Workflows
+                            - button: Sprova
+                            - button: UnB
+                            - button: merged
+                - generic:
+                    - generic:
                         - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Nanobot Mission Control
-                            - generic: "3"
-                      - generic:
+                            - generic:
+                                - img
+                                - generic: Favorites
+                            - generic:
+                                - generic:
+                                    - generic: "?"
+                                    - generic: Diretrizes da empresa
+                                    - generic: done
+                                    - img
+                                - generic:
+                                    - generic: "?"
+                                    - generic: Roteiro Entrevista ClimaFlow
+                                    - generic: inbox
+                                    - img
+                                - generic:
+                                    - generic: "?"
+                                    - generic: Vamos fazer um brainstorm paralelo juntando nossos agentes , os que fizerem sentido , e elencar os melhores nomes candidatos para a empresa
+                                    - generic: done
+                                    - img
+                                - generic:
+                                    - generic: "?"
+                                    - generic: Criar logo da empresa Provit
+                                    - generic: done
+                                    - img
                         - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Pessoal, merged
-                            - generic: "1"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Sprova
-                            - generic: "2"
-                      - generic:
-                        - generic:
-                          - button:
-                            - img
-                            - heading [level=3]: Untagged
-                            - generic: "22"
-              - button:
-                - img
-  - button "Open Next.js Dev Tools" [ref=e612] [cursor=pointer]:
-    - generic [ref=e615]:
-      - text: Compiling
-      - generic [ref=e616]:
-        - generic [ref=e617]: .
-        - generic [ref=e618]: .
-        - generic [ref=e619]: .
-  - alert
-  - dialog "Create Squad" [active] [ref=e587]:
-    - generic [ref=e588]:
-      - heading "Create Squad" [level=2] [ref=e589]
-      - paragraph [ref=e590]: Chat with the AI to design and publish your squad blueprint. The preview on the right updates live as the architect proposes agents and workflows.
-    - generic [ref=e591]:
-      - generic [ref=e592]:
-        - generic [ref=e596]:
-          - generic [ref=e621]: "Crie um squad de LinkedIn Content com 2 agentes: Pesquisador de Audiência e Escritor de Posts. Workflow: pesquisar → escrever. Aprovo qualquer design que tenha esses 2 agentes."
-          - generic [ref=e623]:
-            - img [ref=e624]
-            - text: Thinking…
-        - generic [ref=e597]:
-          - textbox "Message" [disabled] [ref=e598]:
-            - /placeholder: Type your reply…
-          - button "Send" [disabled]:
-            - img
-      - generic [ref=e599]:
-        - generic [ref=e600]:
-          - paragraph [ref=e601]: Preview
-          - generic [ref=e602]: discovery
-        - paragraph [ref=e603]: No agents defined yet.
-    - button "Cancel" [ref=e605] [cursor=pointer]
-    - button "Close" [ref=e606] [cursor=pointer]:
-      - img [ref=e607]
-      - generic [ref=e610]: Close
+                            - generic:
+                                - generic:
+                                    - generic:
+                                        - heading [level=2]: Inbox
+                                        - generic: "14"
+                                    - generic:
+                                        - generic:
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Anatel
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: nano-mcontrol
+                                                        - generic: "4"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Nanobot Mission Control
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Sprova
+                                                        - generic: "2"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: UnB
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Untagged
+                                                        - generic: "5"
+                                - generic:
+                                    - generic:
+                                        - heading [level=2]: Assigned
+                                        - generic: "0"
+                                    - generic:
+                                        - paragraph: No tasks
+                                - generic:
+                                    - generic:
+                                        - heading [level=2]: In Progress
+                                        - generic: "10"
+                                    - generic:
+                                        - generic:
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Validate Nanobot Live support (proof 5)
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Validate Nanobot Live support (proof 4)
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Validate Nanobot Live support (proof 3)
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Validate Nanobot Live support (proof 2)
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Validate Nanobot Live support (proof)
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Validate Nanobot Live support
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Story 27.14 Live takeover proof
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: "🌙 Executar skill dream: consolidar HISTORY.md, extrair fatos para MEMORY.md, remover entradas com mais de 7 dias."
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: nano-mcontrol
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Untagged
+                                                        - generic: "1"
+                                - generic:
+                                    - generic:
+                                        - heading [level=2]: Review
+                                        - generic: "4"
+                                        - generic: "4"
+                                    - generic:
+                                        - generic:
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Sprova
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Untagged
+                                                        - generic: "3"
+                                - generic:
+                                    - generic:
+                                        - heading [level=2]: Done
+                                        - generic: "38"
+                                        - img
+                                        - img
+                                    - generic:
+                                        - generic:
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: merged
+                                                        - generic: "3"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: nano-mcontrol
+                                                        - generic: "7"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Nanobot Mission Control
+                                                        - generic: "3"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Pessoal, merged
+                                                        - generic: "1"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Sprova
+                                                        - generic: "2"
+                                            - generic:
+                                                - generic:
+                                                    - button:
+                                                        - img
+                                                        - heading [level=3]: Untagged
+                                                        - generic: "22"
+                            - button:
+                                - img
+    - button "Open Next.js Dev Tools" [ref=e612] [cursor=pointer]:
+        - generic [ref=e615]:
+            - text: Compiling
+            - generic [ref=e616]:
+                - generic [ref=e617]: .
+                - generic [ref=e618]: .
+                - generic [ref=e619]: .
+    - alert
+    - dialog "Create Squad" [active] [ref=e587]:
+        - generic [ref=e588]:
+            - heading "Create Squad" [level=2] [ref=e589]
+            - paragraph [ref=e590]: Chat with the AI to design and publish your squad blueprint. The preview on the right updates live as the architect proposes agents and workflows.
+        - generic [ref=e591]:
+            - generic [ref=e592]:
+                - generic [ref=e596]:
+                    - generic [ref=e621]: "Crie um squad de LinkedIn Content com 2 agentes: Pesquisador de Audiência e Escritor de Posts. Workflow: pesquisar → escrever. Aprovo qualquer design que tenha esses 2 agentes."
+                    - generic [ref=e623]:
+                        - img [ref=e624]
+                        - text: Thinking…
+                - generic [ref=e597]:
+                    - textbox "Message" [disabled] [ref=e598]:
+                        - /placeholder: Type your reply…
+                    - button "Send" [disabled]:
+                        - img
+            - generic [ref=e599]:
+                - generic [ref=e600]:
+                    - paragraph [ref=e601]: Preview
+                    - generic [ref=e602]: discovery
+                - paragraph [ref=e603]: No agents defined yet.
+        - button "Cancel" [ref=e605] [cursor=pointer]
+        - button "Close" [ref=e606] [cursor=pointer]:
+            - img [ref=e607]
+            - generic [ref=e610]: Close

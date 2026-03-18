@@ -63,7 +63,9 @@ class TierResolver:
                 if isinstance(parsed_r, dict):
                     self._reasoning_cache = parsed_r
                 else:
-                    logger.warning("[tier_resolver] tier_reasoning_levels is not a dict: %s", type(parsed_r))
+                    logger.warning(
+                        "[tier_resolver] tier_reasoning_levels is not a dict: %s", type(parsed_r)
+                    )
                     self._reasoning_cache = {}
             except (json.JSONDecodeError, TypeError) as exc:
                 logger.warning("[tier_resolver] Failed to parse tier_reasoning_levels: %s", exc)
@@ -89,7 +91,7 @@ class TierResolver:
 
         tier_name = extract_tier_name(model)
         if tier_name is None:
-            raise ValueError(f"Unknown tier: '{model[len('tier:'):]}'")
+            raise ValueError(f"Unknown tier: '{model[len('tier:') :]}'")
 
         # Refresh cache if stale
         if time.monotonic() - self._cache_time > self.CACHE_TTL:
@@ -105,9 +107,7 @@ class TierResolver:
 
         resolved = self._cache[tier_name]
         if resolved is None:
-            raise ValueError(
-                f"Tier '{tier_name}' is not configured (set to null)"
-            )
+            raise ValueError(f"Tier '{tier_name}' is not configured (set to null)")
 
         return resolved
 

@@ -41,8 +41,7 @@ export function AgentMentionAutocomplete({
   const filtered = agents.filter((a) => {
     const q = query.toLowerCase();
     return (
-      a.name.toLowerCase().startsWith(q) ||
-      (a.displayName || a.name).toLowerCase().startsWith(q)
+      a.name.toLowerCase().startsWith(q) || (a.displayName || a.name).toLowerCase().startsWith(q)
     );
   });
 
@@ -115,29 +114,28 @@ export function AgentMentionAutocomplete({
     }
   }, [anchorRef, query, inline]);
 
-  const listContent = filtered.length === 0 ? (
-    <div className="px-3 py-2 text-xs text-muted-foreground">No matching agents</div>
-  ) : (
-    filtered.map((agent, i) => (
-      <div
-        key={agent.name}
-        data-testid={`mention-option-${agent.name}`}
-        className={`px-3 py-1.5 text-sm cursor-pointer flex items-center justify-between ${
-          i === focusedIndex ? "bg-accent" : ""
-        }`}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          onSelect(agent.name);
-        }}
-        onMouseEnter={() => setFocusState({ index: i, query })}
-      >
-        <span>{agent.displayName || agent.name}</span>
-        {agent.role && (
-          <span className="text-xs text-muted-foreground ml-2">{agent.role}</span>
-        )}
-      </div>
-    ))
-  );
+  const listContent =
+    filtered.length === 0 ? (
+      <div className="px-3 py-2 text-xs text-muted-foreground">No matching agents</div>
+    ) : (
+      filtered.map((agent, i) => (
+        <div
+          key={agent.name}
+          data-testid={`mention-option-${agent.name}`}
+          className={`px-3 py-1.5 text-sm cursor-pointer flex items-center justify-between ${
+            i === focusedIndex ? "bg-accent" : ""
+          }`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onSelect(agent.name);
+          }}
+          onMouseEnter={() => setFocusState({ index: i, query })}
+        >
+          <span>{agent.displayName || agent.name}</span>
+          {agent.role && <span className="text-xs text-muted-foreground ml-2">{agent.role}</span>}
+        </div>
+      ))
+    );
 
   // Inline mode: render directly in flow, no portal
   if (inline) {
