@@ -216,13 +216,18 @@ function getProviderEventBody(
     return raw.rawJson;
   }
 
+  // Tool and skill events display toolInput separately — suppress body to avoid duplication
+  if (category === "tool" || category === "skill") {
+    return "";
+  }
+
   // Prefer rawText when canonical metadata is available (Story 2.1)
   const primary = normalizeText(raw.rawText ?? raw.summary ?? raw.error);
   if (primary) {
     return primary;
   }
 
-  if (category === "tool" || category === "skill" || category === "system") {
+  if (category === "system") {
     return "";
   }
 
