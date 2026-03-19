@@ -212,7 +212,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
   const isRunningHuman = normalizedStatus === "running" && step.assignedAgent === "human";
   const agentDisplay = isVisualOnly || step.assignedAgent === "human" ? null : step.assignedAgent;
   const showRetryButton =
-    !isEditMode &&
+    (!isEditMode || isPaused) &&
     !!onRetry &&
     ((normalizedStatus === "crashed" &&
       (stepErrorMessage === "Stopped by user" || stepErrorMessage === "Task paused" || isPaused)) ||
