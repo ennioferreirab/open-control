@@ -2,6 +2,7 @@
 
 > Generated: 2026-03-18
 > Branch: feat/design-audit
+> Screenshots: `docs/design-audit/screenshots/`
 
 ---
 
@@ -540,3 +541,98 @@ blue, green, red, amber, violet, pink, orange, teal — each with `bg`, `text`, 
 21. **12 Tailwind color families** in status system (teal, rose, violet, cyan, blue, amber, green, red, gray, slate, orange, pink, emerald) — all from default palette, not from theme CSS variables.
 22. **Agent status colors** defined inline in AgentSidebarItem instead of centralized constants.
 23. **Ad-hoc severity colors** in FeedItem, CronJobsModal, DashboardLayout, TaskDetailHeader, ProviderLiveEventRow — not using centralized constants.
+
+---
+
+## 14. Visual Catalog (Screenshots)
+
+All screenshots are in `docs/design-audit/screenshots/`. Each image documents the current visual state of a component for design book reference.
+
+### Dashboard Views
+
+| Screenshot | Description | Key Elements Visible |
+|-----------|-------------|---------------------|
+| `01-dashboard-full-light.png` | Full dashboard — light mode | Sidebar (240px, agent avatars with colored circles + initials, squad section, collapsible groups), Header (60px, "Mission Control" title, board selector dropdown, search bar, gateway status badge, icon buttons), Task input (title + description inputs, Create button, AI/Manual toggle, agent selector), Kanban board (5 columns: Inbox/Assigned/In Progress/Review/Done, colored dot indicators, collapsible tag groups with counts) |
+| `01-dashboard-full-dark.png` | Full dashboard — dark mode | Same layout. Dark backgrounds (#0c0a09), light text (#fafaf9), dark card surfaces for kanban columns, sidebar bg (#18181b). Gateway badge inverts to dark border. Agent avatar colors remain the same. |
+| `05-kanban-inbox-cards-light.png` | Kanban with task cards expanded | Task cards: white bg, violet left border (3px, `border-l-violet-500` for inbox), title (text-sm font-medium, 2-line clamp), tag chips (rounded-full, gray bg "open-control", violet bg "inbox"), star icon (unfilled), agent icon (unassigned), chevron expand, trash icon bottom-right |
+
+### Header & Navigation
+
+| Screenshot | Description | Key Elements Visible |
+|-----------|-------------|---------------------|
+| `02-header-bar.png` | Isolated header bar | "Mission Control" (text-xl font-bold), "Default" board selector (outline button + chevron), filter icon, Search input (border, rounded-md, placeholder "Search tasks..."), Gateway status badge (green border, green text "Gateway sleeping · sync in X:XX"), "Wake now" button, Clock/Tags/Settings/Activity icons (ghost buttons, h-9 w-9) |
+| `23-board-selector-light.png` | Board dropdown open | Dropdown menu showing board list, "New Board" option with plus icon. DropdownMenu styling: rounded-md border, bg-popover, shadow-md |
+
+### Sidebar
+
+| Screenshot | Description | Key Elements Visible |
+|-----------|-------------|---------------------|
+| `03-sidebar-agents-light.png` | Full sidebar | Bot icon + "Agents" title + toolbar (trash, panel icons). "Create" button (plus icon, sidebar menu button). Search input. **Squads section**: purple/violet avatars with 2-letter initials (IC, PP, DC), name + description (text-sm, text-xs muted). **Registered section**: collapsible with chevron, agents with colored circle avatars (CR=red, DS=blue, FP=purple, IC=cyan, MC=yellow, OS=green, SR=blue, YS=brown), idle status dots (gray). |
+
+### Task Input
+
+| Screenshot | Description | Key Elements Visible |
+|-----------|-------------|---------------------|
+| `04-task-input-light.png` | Task creation bar | Two-row layout: Title input (placeholder "Task title...", full width), Description input (placeholder "Description..."). Right side: "Create" button (bg-primary, text-primary-foreground, rounded-md), paperclip attach button (icon variant), AI toggle button (icon + "AI" text), Agent selector combobox ("Auto (Lead Agent)" with chevron) |
+
+### Task Detail Sheet
+
+| Screenshot | Description | Key Elements Visible |
+|-----------|-------------|---------------------|
+| `06-task-detail-thread-tab-light.png` | Empty thread tab (inbox task) | Sheet (right side, ~50vw): Title (text-lg font-semibold), status badge "inbox" (violet bg, rounded-md), tag chip "open-control" (secondary badge), description placeholder, trash icon. **Tabs**: Thread (active, bg-background shadow)/Execution Plan/Config/Files. Empty state: "No messages yet. Agent activity will appear here." **Thread input**: "Reply" label, agent selector combobox, textarea with placeholder, send button (disabled, icon), attach button |
+| `10-thread-tab-populated-light.png` | Thread with messages (Ifood task) | Sheet header: "done" badge (green bg), "Squad: Instagram Content Squad" + "Workflow: content-creation" outline badges. **Messages**: Step filter dropdown at top. Agent messages with colored avatar circles, name, timestamp. Message bubbles with markdown content (rendered paragraphs, bullet lists). Different bg colors by message type. Artifact links inline. |
+| `11-thread-tab-populated-dark.png` | Thread messages — dark mode | Same content. Dark bg (#0c0a09), message bubbles with dark variants, lighter text. Avatar colors unchanged. Tab bar bg-muted dark variant. |
+| `12-execution-plan-tab-light.png` | Execution plan with canvas | "7/7 steps completed" counter. View mode toggles: Both/Canvas/Lead Agent Conversation (pill-shaped ToggleGroup). **ReactFlow canvas**: Start node (rounded-full, green play icon) → FlowStepNodes (rounded-lg border bg-background, 220px wide, step title + agent name, green checkmark "Done" badge) → branching parallel paths → End node. Edges with bezier curves. Zoom controls (+-) bottom-left. |
+| `12-execution-plan-tab-dark.png` | Execution plan — dark mode | Dark canvas bg, nodes with dark bg-background, light text. Edges dark. Same layout. |
+| `07-task-detail-plan-tab-light.png` | Empty execution plan | "No steps yet" text, "Add Step" button (plus icon, outline style). View mode toggles visible but empty. |
+| `13-config-tab-light.png` | Config tab populated | **Merge section**: "MERGE WITH ANOTHER TASK" heading (text-xs uppercase tracking-wider), search input, merge candidate cards (title + description preview). "Generate Plan Then Send To Review" button (bg-green-600, custom color override). "Create Manual Review Task" button (outline). **Trust Level**: "autonomous" (text-sm font-bold). **Tags**: tag chip "open-control" with X remove, "+" add button. |
+| `08-task-detail-config-tab-light.png` | Config tab (inbox task) | Same layout but for inbox task. Shows merge candidates list and tag management. |
+| `14-files-tab-light.png` | Files tab with 7 files | **Output section**: File rows with icons (FileText for .md, Image for .svg), file name, source badge "output" (secondary), file size (text-xs muted). Rows separated by borders. |
+| `14-files-tab-dark.png` | Files tab — dark mode | Dark bg, file rows with dark borders, same icon and layout structure. |
+
+### Settings & Configuration
+
+| Screenshot | Description | Key Elements Visible |
+|-----------|-------------|---------------------|
+| `20-settings-panel-light.png` | Settings sheet | Sheet (right, 600px): "Settings" title, "Configure global system defaults" subtitle. **Theme**: 3 icons (sun/auto/monitor) in a toggle group. **Task Timeout**: labeled number input "30". **Inter-Agent Review Timeout**: "10". **Global Orientation Prompt**: monospace textarea with "Edit" pencil link. **Default LLM Model**: Select dropdown "Medium". **Auto Title**: Switch toggle (off). |
+| `20-settings-panel-dark.png` | Settings — dark mode | Dark bg, inputs with dark borders, select with dark bg. Theme icons visible. Same layout. |
+| `21-tags-panel-light.png` | Tags management sheet | Sheet (right, 400px): Tag list with colored dots (blue, green) + name + X remove button. **Attributes section**: attribute chips per tag. **Color picker**: 8 circle buttons (blue/green/red/amber/violet/pink/orange/teal). Create form with input + "Add Tag" button. |
+| `22-cron-jobs-modal-light.png` | Cron jobs modal | Dialog (max-w-4xl): Table layout with columns: Name, Schedule, Channel, Status. Cron entry with name (link, hover:underline), schedule string, channel badge, status badge (green "ok" or red "error"). Inline Telegram icon (#229ED9 brand color). Delete/edit actions. |
+
+### Agent & Squad Management
+
+| Screenshot | Description | Key Elements Visible |
+|-----------|-------------|---------------------|
+| `30-agent-config-light.png` | Agent config sheet | Sheet (right, 480px): Agent avatar circle (yellow "MC") with "idle" status dot. "Active" Switch toggle (on). **Form fields**: Name (input "marketing-copy"), Display Name ("Marketing Copy"), Role (input), Prompt (monospace textarea with "Edit" link), Soul (heading + textarea), Model (Select dropdown "Claude Code..."). Cancel/Save buttons at bottom. |
+| `30-agent-config-dark.png` | Agent config — dark mode | Dark bg, form inputs with dark borders, monospace text on dark bg. Same layout. |
+| `31-squad-detail-light.png` | Squad detail sheet | Sheet (right, 96vw): "Instagram Content Squad" title + "published" badge (dark). "Edit Squad"/"Run Mission" buttons. **Outcome** section: text description. **Agents (5)**: Grid of agent cards (rounded-xl border, Bot icon + name + role text, collapsible "1 skill" link). **Workflows section**: "content-creation" label. Tabbed: Workflow/Steps/Criteria. **ReactFlow canvas**: START node → sequential/parallel FlowStepNodes → END node. Step nodes show agent assignment. |
+| `31-squad-detail-dark.png` | Squad detail — dark mode | Dark bg, agent cards with dark borders, dark canvas. Same layout. |
+
+### Activity & Lists
+
+| Screenshot | Description | Key Elements Visible |
+|-----------|-------------|---------------------|
+| `40-activity-feed-light.png` | Activity feed panel open | Right panel (280px): "ACTIVITY" header with collapse icon. **Event list**: Each event has timestamp (text-xs muted), event type with colored label (green for registration, emerald for transitions, amber for steps), description text. Events: agent registrations, task status changes, step transitions. Scrollable with many entries. |
+| `41-done-tasks-sheet-light.png` | Done tasks sheet | Sheet (right, 480px): "Done Tasks" title with CheckCircle2 icon + count badge "30" (secondary). Task rows: title (text-sm), "On board" or "Cleared" badge (secondary), relative time, Restore button (RotateCcw icon) + Delete button (Trash2 icon). Scrollable list. |
+| `50-task-cards-inbox-light.png` | Inbox cards close-up | Multiple task cards in Inbox column. Cards show: title (2-line clamp), tag chips, status badge, star/agent/expand icons. Some cards have description paragraphs visible. Cards have violet left border for inbox status. |
+| `50-task-cards-done-light.png` | Done cards close-up | Done column cards with: green left border, title, step progress indicator (img + "X/X steps" text), "done" green badge, file count with paperclip icon, agent name. Cards more compact than inbox cards. |
+
+### Component Characteristics Summary
+
+| Component | Light Mode BG | Dark Mode BG | Border | Border Radius | Padding | Shadow |
+|-----------|--------------|-------------|--------|--------------|---------|--------|
+| Dashboard | `#ffffff` | `#0c0a09` | — | — | — | — |
+| Sidebar | `#fafafa` | `#18181b` | right border | — | p-2 | — |
+| Header | `#ffffff` | `#0c0a09` | bottom border | — | px-4 h-[60px] | — |
+| Task Card | `#ffffff` | `#0c0a09` | border + left-3px accent | rounded-xl | p-3 | shadow (hover: shadow-md) |
+| Sheet | `#ffffff` | `#0c0a09` | left border | — | p-0 (custom internal) | shadow-lg |
+| Dialog | `#ffffff` | `#0c0a09` | border | rounded-lg | p-6 | shadow-lg |
+| Input | transparent | transparent | border-input | rounded-md | px-3 py-1 h-9 | shadow-sm |
+| Button (default) | `#1c1917` | `#fafaf9` | — | rounded-md | px-4 py-2 h-9 | shadow |
+| Button (ghost) | transparent | transparent | — | rounded-md | px-4 py-2 h-9 | — |
+| Badge (status) | status-color-100 | status-color-950 | transparent | rounded-md | px-2.5 py-0.5 | — |
+| Tag Chip | tag-color-100 | tag-color-950 | — | rounded-full | px-2 py-0.5 | — |
+| Avatar Circle | hash-based color | hash-based color | — | rounded-full | — | — |
+| Tabs | bg-muted | bg-muted | — | rounded-lg | p-1 (list) | — |
+| Tab (active) | bg-background | bg-background | — | rounded-md | px-3 py-1 | shadow |
+| FlowStepNode | bg-background | bg-background | border | rounded-lg | px-3 py-2 | shadow-sm |
