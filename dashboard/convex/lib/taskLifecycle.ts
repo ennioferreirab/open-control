@@ -21,7 +21,15 @@ import {
 // Task State Machine Constants
 // ---------------------------------------------------------------------------
 
-/** Valid transition map: current_status -> [allowed_next_statuses] */
+/** Valid transition map: current_status -> [allowed_next_statuses]
+ *
+ * Notable transitions:
+ * - done -> assigned: a thread message on a completed task re-opens it for
+ *   the assigned agent to respond.
+ * - done -> in_progress: allows resuming completed tasks for continued work,
+ *   e.g. when retrying a completed step cascades the task back to active.
+ * - done -> review: re-opens the review gate without re-running execution.
+ */
 export const TASK_TRANSITIONS: Record<string, string[]> = {
   ready: ["in_progress", "failed"],
   failed: ["inbox"],

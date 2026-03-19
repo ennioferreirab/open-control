@@ -30,8 +30,11 @@ describe("isValidTaskTransition", () => {
   });
 
   it("rejects invalid transitions", () => {
-    expect(isValidTaskTransition("done", "in_progress")).toBe(false);
     expect(isValidTaskTransition("inbox", "done")).toBe(false);
+  });
+
+  it("allows done to in_progress transition", () => {
+    expect(isValidTaskTransition("done", "in_progress")).toBe(true);
   });
 
   it("allows universal targets from any state", () => {
@@ -69,8 +72,8 @@ describe("getTaskEventType", () => {
     expect(getTaskEventType("retrying", "crashed")).toBe("task_crashed");
   });
 
-  it("throws for unmapped transitions", () => {
-    expect(() => getTaskEventType("done", "in_progress")).toThrow(/No event type mapping/);
+  it("returns task_started for done to in_progress transition", () => {
+    expect(getTaskEventType("done", "in_progress")).toBe("task_started");
   });
 });
 

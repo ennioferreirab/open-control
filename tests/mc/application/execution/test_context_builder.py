@@ -34,13 +34,17 @@ def _make_mock_bridge(
     """Create a mock ConvexBridge with configurable return values."""
     bridge = MagicMock()
 
-    default_task = task_data or {
+    base_task = {
         "id": "task_123",
         "title": "Test Task",
         "description": "A test task",
         "files": [],
         "tags": [],
+        "board_id": "board_123",
     }
+    if task_data:
+        base_task.update(task_data)
+    default_task = base_task
 
     def mock_query(fn_name: str, args: dict) -> Any:
         if fn_name == "tasks:getById":
@@ -54,7 +58,7 @@ def _make_mock_bridge(
     bridge.query = mock_query
     bridge.get_agent_by_name = MagicMock(return_value=agent_data)
     bridge.get_task_messages = MagicMock(return_value=messages or [])
-    bridge.get_board_by_id = MagicMock(return_value=board_data)
+    bridge.get_board_by_id = MagicMock(return_value=board_data or {"name": "default"})
     bridge.get_steps_by_task = MagicMock(return_value=[])
 
     return bridge
@@ -233,6 +237,7 @@ class TestBuildTaskContext:
             "description": "Continue from merged context",
             "files": [],
             "tags": [],
+            "board_id": "board_123",
             "is_merge_task": True,
             "merge_source_task_ids": ["task_a", "task_b"],
             "merge_source_labels": ["A", "B"],
@@ -310,7 +315,7 @@ class TestBuildTaskContext:
         bridge.query = MagicMock(side_effect=query_side_effect)
         bridge.get_agent_by_name = MagicMock(return_value=None)
         bridge.get_task_messages = MagicMock(side_effect=message_side_effect)
-        bridge.get_board_by_id = MagicMock(return_value=None)
+        bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
         bridge.get_steps_by_task = MagicMock(return_value=[])
 
         builder = ContextBuilder(bridge)
@@ -350,6 +355,7 @@ class TestBuildTaskContext:
             "description": "Continue from merged context",
             "files": [],
             "tags": [],
+            "board_id": "board_123",
             "is_merge_task": True,
             "merge_source_task_ids": ["task_merge_1", "task_c"],
             "merge_source_labels": ["A", "B"],
@@ -414,7 +420,7 @@ class TestBuildTaskContext:
         bridge.query = MagicMock(side_effect=query_side_effect)
         bridge.get_agent_by_name = MagicMock(return_value=None)
         bridge.get_task_messages = MagicMock(side_effect=message_side_effect)
-        bridge.get_board_by_id = MagicMock(return_value=None)
+        bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
         bridge.get_steps_by_task = MagicMock(return_value=[])
 
         builder = ContextBuilder(bridge)

@@ -22,10 +22,9 @@ def bridge() -> MagicMock:
     b.deactivate_agents_except = MagicMock()
     b.list_deleted_agents = MagicMock(return_value=[])
     b.list_agents = MagicMock(return_value=[])
-    b.archive_agent_data = MagicMock()
+    b.backup_agent_memory = MagicMock()
     b.write_agent_config = MagicMock()
-    b.get_agent_archive = MagicMock(return_value=None)
-    b.clear_agent_archive = MagicMock()
+    b.get_agent_memory_backup = MagicMock(return_value=None)
     b.get_agent_by_name = MagicMock(return_value=None)
     return b
 
@@ -154,12 +153,12 @@ class TestSyncAgentRegistry:
 
 
 class TestCleanupDeletedAgents:
-    """Test cleanup_deleted_agents — archives and removes local folders."""
+    """Test cleanup_deleted_agents — backs up and removes local folders."""
 
-    def test_archives_and_removes_deleted_agent_folder(
+    def test_backs_up_and_removes_deleted_agent_folder(
         self, service: AgentSyncService, agents_dir: Path, bridge: MagicMock
     ) -> None:
-        """Deleted agents have their local data archived then removed."""
+        """Deleted agents have their local data backed up then removed."""
         agent_dir = agents_dir / "old-agent"
         agent_dir.mkdir()
         (agent_dir / "memory").mkdir()
@@ -169,7 +168,7 @@ class TestCleanupDeletedAgents:
 
         service.cleanup_deleted_agents()
 
-        bridge.archive_agent_data.assert_called_once()
+        bridge.backup_agent_memory.assert_called_once()
         assert not agent_dir.exists()
 
     def test_skips_agent_without_local_folder(
@@ -179,19 +178,19 @@ class TestCleanupDeletedAgents:
         bridge.list_deleted_agents.return_value = [{"name": "nonexistent"}]
 
         service.cleanup_deleted_agents()
-        bridge.archive_agent_data.assert_not_called()
+        bridge.backup_agent_memory.assert_not_called()
 
-    def test_does_not_delete_on_archive_failure(
+    def test_does_not_delete_on_backup_failure(
         self, service: AgentSyncService, agents_dir: Path, bridge: MagicMock
     ) -> None:
-        """If archiving fails, the local folder is NOT deleted."""
+        """If backup fails, the local folder is NOT deleted."""
         agent_dir = agents_dir / "fragile-agent"
         agent_dir.mkdir()
         (agent_dir / "memory").mkdir()
         (agent_dir / "memory" / "MEMORY.md").write_text("keep me")
 
         bridge.list_deleted_agents.return_value = [{"name": "fragile-agent"}]
-        bridge.archive_agent_data.side_effect = RuntimeError("Convex down")
+        bridge.backup_agent_memory.side_effect = RuntimeError("Convex down")
 
         service.cleanup_deleted_agents()
         assert agent_dir.exists()  # Not deleted
@@ -403,6 +402,7 @@ class TestWriteBackProjectionProtection:
         from mc.runtime.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
+        mock_bridge.get_agent_memory_backup.return_value = None
         mock_bridge.list_agents.return_value = [
             {
                 "name": "compiled-agent",

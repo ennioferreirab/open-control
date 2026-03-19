@@ -76,6 +76,14 @@ vi.mock("@/features/agents/components/AgentAuthoringWizard", () => ({
     open ? <div data-testid="agent-authoring-wizard" /> : null,
 }));
 
+vi.mock("@/features/agents/components/DeleteAgentsDialog", () => ({
+  DeleteAgentsDialog: () => null,
+}));
+
+vi.mock("@/features/agents/components/DeleteSquadDialog", () => ({
+  DeleteSquadDialog: () => null,
+}));
+
 vi.mock("@/features/agents/components/SquadDetailSheet", () => ({
   SquadDetailSheet: () => null,
 }));

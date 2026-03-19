@@ -139,6 +139,7 @@ class TestWriteBackConvexAgents:
                 "last_active_at": "2099-01-01T00:00:00+00:00",
             }
         ]
+        mock_bridge.get_agent_memory_backup.return_value = None
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 
@@ -166,6 +167,7 @@ class TestWriteBackConvexAgents:
                 "last_active_at": "2000-01-01T00:00:00+00:00",
             }
         ]
+        mock_bridge.get_agent_memory_backup.return_value = None
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 
@@ -184,6 +186,7 @@ class TestWriteBackConvexAgents:
                 "last_active_at": "2099-01-01T00:00:00+00:00",
             }
         ]
+        mock_bridge.get_agent_memory_backup.return_value = None
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 
@@ -207,6 +210,7 @@ class TestWriteBackConvexAgents:
         mock_bridge.list_agents.return_value = [
             {"name": "no-timestamp-agent", "role": "Worker", "prompt": "Hi."}
         ]
+        mock_bridge.get_agent_memory_backup.return_value = None
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 

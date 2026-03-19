@@ -135,10 +135,7 @@ async def pickup_task(
         # Check for pre-existing assigned steps (e.g. resumed from done).
         # If found, dispatch via StepDispatcher instead of legacy agent loop.
         steps = await asyncio.to_thread(executor._bridge.get_steps_by_task, task_id)
-        assigned_steps = [
-            s for s in steps
-            if s.get("status") == StepStatus.ASSIGNED
-        ]
+        assigned_steps = [s for s in steps if s.get("status") == StepStatus.ASSIGNED]
         if assigned_steps:
             logger.info(
                 "[executor] Task '%s' has %d assigned step(s) — routing to StepDispatcher",

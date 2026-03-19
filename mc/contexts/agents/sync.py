@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,34 +25,6 @@ logger = logging.getLogger(__name__)
 
 # Re-export gateway helpers that are used by the service but defined externally.
 # These are imported lazily or passed as dependencies to keep this module testable.
-
-
-def _read_file_or_none(path: Path) -> str | None:
-    """Return file content as a string, or None if the file does not exist."""
-    try:
-        return path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return None
-    except OSError:
-        logger.warning("Could not read file %s", path)
-        return None
-
-
-def _read_session_data(sessions_dir: Path) -> str | None:
-    """Read all .jsonl files in sessions_dir and concatenate their content."""
-    if not sessions_dir.is_dir():
-        return None
-    parts: list[str] = []
-    try:
-        for entry in sorted(sessions_dir.iterdir()):
-            if entry.is_file() and entry.suffix == ".jsonl":
-                content = _read_file_or_none(entry)
-                if content:
-                    parts.append(content)
-    except OSError:
-        logger.warning("Could not read sessions directory %s", sessions_dir)
-        return None
-    return "\n".join(parts) if parts else None
 
 
 # Lazy imports to avoid circular dependencies at module level.
@@ -281,50 +252,13 @@ class AgentSyncService:
     # ------------------------------------------------------------------
 
     def cleanup_deleted_agents(self) -> None:
-        """Archive local data for soft-deleted agents, then remove their folders.
+        """Back up and remove local data for soft-deleted agents.
 
-        Idempotent: if the local folder is already gone, no action is taken.
-        Fail-safe: if archiving fails for an agent, its local folder is NOT deleted.
+        Delegates to the canonical _cleanup_deleted_agents in agent_bootstrap.
         """
-        try:
-            deleted_agents = self._bridge.list_deleted_agents()
-        except Exception:
-            logger.exception("Failed to list deleted agents for cleanup")
-            return
+        from mc.infrastructure.agent_bootstrap import _cleanup_deleted_agents
 
-        for agent_data in deleted_agents:
-            name = agent_data.get("name")
-            if not name:
-                continue
-            agent_dir = self._agents_dir / name
-            if not agent_dir.is_dir():
-                continue  # Already cleaned up
-
-            memory = _read_file_or_none(agent_dir / "memory" / "MEMORY.md")
-            history = _read_file_or_none(agent_dir / "memory" / "HISTORY.md")
-            session = _read_session_data(agent_dir / "sessions")
-
-            if memory is None and history is None and session is None:
-                logger.info(
-                    "No archive data for agent '%s' — skipping archive call, proceeding to cleanup",
-                    name,
-                )
-            else:
-                try:
-                    self._bridge.archive_agent_data(name, memory, history, session)
-                    logger.info("Archived agent data for '%s'", name)
-                except Exception:
-                    logger.exception("Failed to archive agent '%s' — skipping cleanup", name)
-                    continue  # Don't delete if archive failed
-
-            try:
-                shutil.rmtree(agent_dir)
-                logger.info("Removed local folder for deleted agent '%s'", name)
-            except OSError:
-                logger.exception(
-                    "Failed to remove local folder for agent '%s' — will retry on next sync",
-                    name,
-                )
+        _cleanup_deleted_agents(self._bridge, self._agents_dir)
 
     # ------------------------------------------------------------------
     # Model Tier Sync

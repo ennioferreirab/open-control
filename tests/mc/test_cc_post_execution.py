@@ -31,6 +31,7 @@ def _make_bridge() -> MagicMock:
     bridge.update_task_status = MagicMock(return_value=None)
     bridge.mutation = MagicMock(return_value=None)
     bridge.sync_task_output_files = MagicMock(return_value=None)
+    bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
     return bridge
 
 
@@ -89,6 +90,7 @@ class TestTrustLevel:
                 "test",
                 agent_data,
                 trust_level="autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         status_calls = bridge.update_task_status.call_args_list
@@ -123,6 +125,7 @@ class TestTrustLevel:
                 "test",
                 agent_data,
                 trust_level="review",
+                task_data={"board_id": "board_001"},
             )
 
         status_calls = bridge.update_task_status.call_args_list
@@ -157,7 +160,9 @@ class TestArtifacts:
             agent_data = AgentData(
                 name="test", display_name="Test", role="agent", backend="claude-code"
             )
-            await executor._execute_cc_task("t1", "Title", "desc", "test", agent_data)
+            await executor._execute_cc_task(
+                "t1", "Title", "desc", "test", agent_data, task_data={"board_id": "board_001"}
+            )
 
         mock_snap.assert_called_once_with("t1")
         bridge.sync_task_output_files.assert_called_once()
@@ -191,7 +196,9 @@ class TestHeartbeat:
             agent_data = AgentData(
                 name="test", display_name="Test", role="agent", backend="claude-code"
             )
-            await executor._execute_cc_task("t1", "Title", "desc", "test", agent_data)
+            await executor._execute_cc_task(
+                "t1", "Title", "desc", "test", agent_data, task_data={"board_id": "board_001"}
+            )
 
         assert heartbeat_file.exists()
         content = heartbeat_file.read_text()
@@ -226,7 +233,9 @@ class TestProviderError:
             agent_data = AgentData(
                 name="test", display_name="Test", role="agent", backend="claude-code"
             )
-            await executor._execute_cc_task("t1", "Title", "desc", "test", agent_data)
+            await executor._execute_cc_task(
+                "t1", "Title", "desc", "test", agent_data, task_data={"board_id": "board_001"}
+            )
 
         mock_handle.assert_called_once()
 
@@ -261,6 +270,7 @@ class TestEffortLevel:
                 "test",
                 agent_data,
                 reasoning_level="max",
+                task_data={"board_id": "board_001"},
             )
 
         assert agent_data.claude_code_opts is not None
@@ -295,6 +305,7 @@ class TestEffortLevel:
                 "test",
                 agent_data,
                 reasoning_level="medium",
+                task_data={"board_id": "board_001"},
             )
 
         assert agent_data.claude_code_opts is not None
@@ -319,5 +330,3 @@ class TestEffortLevel:
         assert "--effort" in cmd
         effort_idx = cmd.index("--effort")
         assert cmd[effort_idx + 1] == "high"
-
-

@@ -2,11 +2,9 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from nanobot.bus.queue import MessageBus
-from nanobot.channels.manager import ChannelManager
 from nanobot.channels.base import BaseChannel
+from nanobot.channels.manager import ChannelManager
 
 
 class FakeChannel(BaseChannel):

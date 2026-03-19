@@ -12,7 +12,8 @@ import asyncio
 import json
 import logging
 import signal
-from typing import TYPE_CHECKING, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
+from typing import TYPE_CHECKING
 
 from claude_code.types import CCTaskResult, WorkspaceContext
 from mc.types import AgentData
@@ -131,6 +132,11 @@ class ClaudeCodeProvider:
     ) -> list[str]:
         """Build the CLI command list for this execution."""
         cmd = [self._cli, "-p", prompt, "--output-format", "stream-json", "--verbose"]
+
+        # Isolate agent sessions from host user settings (plugins, hooks, MCPs).
+        # Only load project-level settings written by CCWorkspaceManager.
+        cmd.extend(["--setting-sources", "project"])
+        cmd.extend(["--strict-mcp-config"])
         cmd.extend(["--mcp-config", str(workspace_ctx.mcp_config)])
 
         # Model: per-agent overrides global default
@@ -292,7 +298,7 @@ class ClaudeCodeProvider:
             proc.send_signal(signal.SIGTERM)
             try:
                 await asyncio.wait_for(proc.wait(), timeout=10)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("ClaudeCodeProvider: SIGTERM timed out — sending SIGKILL")
                 proc.kill()
                 await proc.wait()

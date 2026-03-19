@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
-from mc.contexts.routing.router import DirectDelegationRouter, RoutingDecision
+from mc.contexts.routing.router import DirectDelegationRouter
 
 
 def make_bridge(agents: list[dict]) -> MagicMock:

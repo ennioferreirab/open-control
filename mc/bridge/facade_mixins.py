@@ -318,23 +318,18 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._agents.list_deleted_agents()
 
-    def archive_agent_data(
+    def backup_agent_memory(
         self,
         name: str,
-        memory_content: str | None,
-        history_content: str | None,
-        session_data: str | None,
+        boards_data: list[dict[str, Any]],
+        global_data: dict[str, str | None] | None = None,
     ) -> None:
         self._ensure_repos()
-        self._agents.archive_agent_data(name, memory_content, history_content, session_data)
+        self._agents.backup_agent_memory(name, boards_data, global_data)
 
-    def get_agent_archive(self, name: str) -> dict[str, Any] | None:
+    def get_agent_memory_backup(self, name: str) -> dict[str, Any] | None:
         self._ensure_repos()
-        return self._agents.get_agent_archive(name)
-
-    def clear_agent_archive(self, name: str) -> None:
-        self._ensure_repos()
-        self._agents.clear_agent_archive(name)
+        return self._agents.get_agent_memory_backup(name)
 
     def deactivate_agents_except(self, active_names: list[str]) -> Any:
         self._ensure_repos()

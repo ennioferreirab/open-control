@@ -101,46 +101,37 @@ class AgentRepository:
             return []
         return result
 
-    def archive_agent_data(
+    def backup_agent_memory(
         self,
         name: str,
-        memory_content: str | None,
-        history_content: str | None,
-        session_data: str | None,
+        boards_data: list[dict[str, Any]],
+        global_data: dict[str, str | None] | None = None,
     ) -> None:
-        """Archive local agent files to Convex before deleting the local folder.
+        """Back up agent memory to Convex (board-scoped + optional global).
 
         Args:
             name: Agent name.
-            memory_content: Contents of MEMORY.md, or None if not present.
-            history_content: Contents of HISTORY.md, or None if not present.
-            session_data: Contents of session JSONL file(s), or None if not present.
+            boards_data: List of dicts with board_name, memory_content, history_content.
+            global_data: Optional dict with memory_content, history_content for global workspace (nanobot only).
         """
-        args: dict[str, Any] = {"agent_name": name}
-        if memory_content is not None:
-            args["memory_content"] = memory_content
-        if history_content is not None:
-            args["history_content"] = history_content
-        if session_data is not None:
-            args["session_data"] = session_data
-        self._client.mutation("agents:archiveAgentData", args)
+        args: dict[str, Any] = {
+            "agent_name": name,
+            "boards": boards_data,
+        }
+        if global_data:
+            if global_data.get("memory_content") is not None:
+                args["global_memory_content"] = global_data["memory_content"]
+            if global_data.get("history_content") is not None:
+                args["global_history_content"] = global_data["history_content"]
+        self._client.mutation("agents:upsertMemoryBackup", args)
 
-    def get_agent_archive(self, name: str) -> dict[str, Any] | None:
-        """Fetch archived memory/history/session data for an agent.
+    def get_agent_memory_backup(self, name: str) -> dict[str, Any] | None:
+        """Fetch memory backup data for an agent.
 
         Returns:
-            Dict with keys memory_content, history_content, session_data
-            (each str | None), or None if agent has no archived data.
+            Dict with boards array and optional global fields, or None if no backup.
         """
-        return self._client.query("agents:getArchive", {"agent_name": name})
-
-    def clear_agent_archive(self, name: str) -> None:
-        """Clear archived memory/history/session fields from the agent's Convex document.
-
-        Called after _restore_archived_files succeeds to free storage space and
-        prevent stale data from being re-archived if the agent is deleted again.
-        """
-        self._client.mutation("agents:clearAgentArchive", {"agent_name": name})
+        return self._client.query("agents:getMemoryBackup", {"agent_name": name})
 
     def deactivate_agents_except(self, active_names: list[str]) -> Any:
         """Set status to 'idle' for all agents NOT in the provided list.

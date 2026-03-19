@@ -55,7 +55,7 @@ Core task records with status lifecycle and execution plans.
 | `deletedAt` | `v.optional(v.string())` | Soft delete |
 | `previousStatus` | `v.optional(v.string())` | For restore |
 | `activeCronJobId` | `v.optional(v.string())` | Parent cron job |
-| `boardId` | `v.optional(v.id("boards"))` | |
+| `boardId` | `v.id("boards")` | Required |
 | `cronParentTaskId` | `v.optional(v.string())` | |
 | `sourceAgent` | `v.optional(v.string())` | |
 | `isMergeTask` | `v.optional(v.boolean())` | |
@@ -176,9 +176,7 @@ Agent registry with config, status, and metrics.
 | `lastStepExecutedAt` | `v.optional(v.string())` | |
 | `lastActiveAt` | `v.optional(v.string())` | |
 | `deletedAt` | `v.optional(v.string())` | Soft delete |
-| `memoryContent` | `v.optional(v.string())` | Archived memory |
-| `historyContent` | `v.optional(v.string())` | Archived history |
-| `sessionData` | `v.optional(v.string())` | Archived session |
+| `memoryBackup` | `v.optional(v.object({...}))` | Board-scoped memory backup (boards array + optional global) |
 | `compiledFromSpecId` | `v.optional(v.string())` | |
 | `compiledFromVersion` | `v.optional(v.number())` | |
 | `compiledAt` | `v.optional(v.string())` | |

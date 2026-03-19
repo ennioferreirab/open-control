@@ -1,8 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { testId } from "@/tests/helpers/mockConvex";
+import type { Id } from "@/convex/_generated/dataModel";
+
+// Stub scrollIntoView for jsdom (used by TaskDetailThreadTab on mount)
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 const user = userEvent.setup({ delay: null });
 
@@ -40,6 +46,24 @@ vi.mock("../../convex/_generated/api", () => ({
     executionQuestions: {
       getPendingForTask: "executionQuestions:getPendingForTask",
     },
+    agents: {
+      getByName: "agents:getByName",
+    },
+    boards: {
+      getById: "boards:getById",
+    },
+    interactiveSessions: {
+      listSessions: "interactiveSessions:listSessions",
+    },
+    sessionActivityLog: {
+      listForSession: "sessionActivityLog:listForSession",
+    },
+    skills: {
+      getByName: "skills:getByName",
+    },
+    squadSpecs: {
+      getAgentsSquadMemberships: "squadSpecs:getAgentsSquadMemberships",
+    },
   },
 }));
 
@@ -62,6 +86,12 @@ vi.mock("../../features/interactive/hooks/useProviderSession", () => ({
 }));
 
 // Mock child components that are not relevant to tag editing
+vi.mock("../../features/agents/components/AgentConfigSheet", () => ({
+  AgentConfigSheet: () => null,
+}));
+vi.mock("../../features/agents/components/SquadDetailSheet", () => ({
+  SquadDetailSheet: () => null,
+}));
 vi.mock("../../features/thread/components/ThreadMessage", () => ({
   ThreadMessage: () => null,
 }));
@@ -211,6 +241,7 @@ function makeTask(overrides: Record<string, unknown> = {}) {
     assignedAgent: "dev-agent",
     trustLevel: "autonomous",
     tags: ["bug", "feature"],
+    boardId: "board123" as Id<"boards">,
     createdAt: "2024-01-01T00:00:00.000Z",
     updatedAt: "2024-01-01T00:00:00.000Z",
     ...overrides,

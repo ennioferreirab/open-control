@@ -448,10 +448,12 @@ class TestTaskExecution:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
         mock_bridge.get_task.return_value = {
             "id": "task_001",
             "status": "in_progress",
             "state_version": 1,
+            "board_id": "board_001",
         }
 
         executor = TaskExecutor(mock_bridge)
@@ -466,7 +468,12 @@ class TestTaskExecution:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_001", "Test task", "Do testing", "test-agent", "autonomous"
+                "task_001",
+                "Test task",
+                "Do testing",
+                "test-agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         mock_bridge.transition_task_from_snapshot.assert_called()
@@ -485,6 +492,7 @@ class TestTaskExecution:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
         mock_bridge.get_task.return_value = {
             "id": "task_002",
             "status": "in_progress",
@@ -504,7 +512,12 @@ class TestTaskExecution:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_002", "Review task", "Do review", "test-agent", "human_approved"
+                "task_002",
+                "Review task",
+                "Do review",
+                "test-agent",
+                "human_approved",
+                task_data={"board_id": "board_001"},
             )
 
         mock_bridge.transition_task_from_snapshot.assert_called()
@@ -522,6 +535,7 @@ class TestTaskExecution:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
 
         executor = TaskExecutor(mock_bridge)
 
@@ -535,7 +549,12 @@ class TestTaskExecution:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_003", "Work task", "Do work", "test-agent", "autonomous"
+                "task_003",
+                "Work task",
+                "Do work",
+                "test-agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         mock_bridge.send_message.assert_any_call(
@@ -560,6 +579,7 @@ class TestTaskExecution:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
 
         executor = TaskExecutor(mock_bridge)
 
@@ -573,7 +593,12 @@ class TestTaskExecution:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_004", "Event task", "Test events", "test-agent", "autonomous"
+                "task_004",
+                "Event task",
+                "Test events",
+                "test-agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         mock_bridge.create_activity.assert_not_called()
@@ -588,6 +613,7 @@ class TestTaskExecution:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
 
         executor = TaskExecutor(mock_bridge)
 
@@ -604,7 +630,12 @@ class TestTaskExecution:
         ):
             mock_gw.handle_agent_crash = AsyncMock()
             await executor._execute_task(
-                "task_005", "Crash task", "Will crash", "crash-agent", "autonomous"
+                "task_005",
+                "Crash task",
+                "Will crash",
+                "crash-agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
             mock_gw.handle_agent_crash.assert_called_once_with(
                 "crash-agent", "task_005", crash_error
@@ -624,7 +655,9 @@ class TestLeadAgentExecutionGuards:
         from mc.contexts.execution.executor import TaskExecutor
         from mc.types import LeadAgentExecutionError
 
-        executor = TaskExecutor(MagicMock())
+        mock_bridge = MagicMock()
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
+        executor = TaskExecutor(mock_bridge)
 
         with pytest.raises(
             LeadAgentExecutionError,
@@ -636,6 +669,7 @@ class TestLeadAgentExecutionGuards:
                 None,
                 "lead-agent",
                 "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
     @pytest.mark.asyncio
@@ -675,6 +709,7 @@ class TestTrustLevelStatus:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
         mock_bridge.get_task.return_value = {
             "id": "task_006",
             "status": "in_progress",
@@ -694,7 +729,12 @@ class TestTrustLevelStatus:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_006", "Reviewed task", "For review", "review-agent", "agent_reviewed"
+                "task_006",
+                "Reviewed task",
+                "For review",
+                "review-agent",
+                "agent_reviewed",
+                task_data={"board_id": "board_001"},
             )
 
         mock_bridge.transition_task_from_snapshot.assert_called()
@@ -764,6 +804,7 @@ class TestKnownAssignedIdsCleanup:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
 
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_cleanup")
@@ -778,7 +819,12 @@ class TestKnownAssignedIdsCleanup:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_cleanup", "Cleanup test", None, "agent", "autonomous"
+                "task_cleanup",
+                "Cleanup test",
+                None,
+                "agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         assert "task_cleanup" not in executor._known_assigned_ids
@@ -793,6 +839,7 @@ class TestKnownAssignedIdsCleanup:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
 
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_crash_cleanup")
@@ -807,7 +854,14 @@ class TestKnownAssignedIdsCleanup:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
             patch.object(executor._agent_gateway, "handle_agent_crash", new_callable=AsyncMock),
         ):
-            await executor._execute_task("task_crash_cleanup", "Crash", None, "agent", "autonomous")
+            await executor._execute_task(
+                "task_crash_cleanup",
+                "Crash",
+                None,
+                "agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
+            )
 
         assert "task_crash_cleanup" not in executor._known_assigned_ids
 
@@ -1053,6 +1107,7 @@ class TestExecutorNoDuplicateActivity:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        mock_bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
 
         executor = TaskExecutor(mock_bridge)
 
@@ -1066,7 +1121,12 @@ class TestExecutorNoDuplicateActivity:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_no_dup_2", "No dup complete", None, "agent", "autonomous"
+                "task_no_dup_2",
+                "No dup complete",
+                None,
+                "agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         mock_bridge.create_activity.assert_not_called()
@@ -1346,35 +1406,27 @@ class TestBridgeAgentNameHandling:
 class TestCleanupDeletedAgents:
     """Test _cleanup_deleted_agents archives and removes local agent folders."""
 
-    def test_archives_and_removes_local_folder(self, tmp_path):
-        """Given a deleted agent with a local folder, archive its data and remove the folder."""
+    def test_backs_up_and_removes_local_folder(self, tmp_path):
+        """Given a deleted agent with a local folder, back up its data and remove the folder."""
         from mc.runtime.gateway import _cleanup_deleted_agents
 
         agent_dir = tmp_path / "test-agent"
         memory_dir = agent_dir / "memory"
-        sessions_dir = agent_dir / "sessions"
         memory_dir.mkdir(parents=True)
-        sessions_dir.mkdir()
         (memory_dir / "MEMORY.md").write_text("# Memory content", encoding="utf-8")
         (memory_dir / "HISTORY.md").write_text("# History content", encoding="utf-8")
-        (sessions_dir / "mc_task_test-agent.jsonl").write_text('{"msg":"hello"}', encoding="utf-8")
 
         mock_bridge = MagicMock()
         mock_bridge.list_deleted_agents.return_value = [{"name": "test-agent"}]
-        mock_bridge.archive_agent_data.return_value = None
+        mock_bridge.backup_agent_memory.return_value = None
 
         _cleanup_deleted_agents(mock_bridge, tmp_path)
 
-        mock_bridge.archive_agent_data.assert_called_once_with(
-            "test-agent",
-            "# Memory content",
-            "# History content",
-            '{"msg":"hello"}',
-        )
-        assert not agent_dir.exists(), "Local folder should be removed after successful archive"
+        mock_bridge.backup_agent_memory.assert_called_once()
+        assert not agent_dir.exists(), "Local folder should be removed after successful backup"
 
     def test_skips_if_no_local_folder(self, tmp_path):
-        """Deleted agent with no local folder: no archive call, no error."""
+        """Deleted agent with no local folder: no backup call, no error."""
         from mc.runtime.gateway import _cleanup_deleted_agents
 
         mock_bridge = MagicMock()
@@ -1382,10 +1434,10 @@ class TestCleanupDeletedAgents:
 
         _cleanup_deleted_agents(mock_bridge, tmp_path)
 
-        mock_bridge.archive_agent_data.assert_not_called()
+        mock_bridge.backup_agent_memory.assert_not_called()
 
-    def test_preserves_folder_on_archive_failure(self, tmp_path):
-        """If archive call fails, local folder must NOT be deleted (fail-safe)."""
+    def test_preserves_folder_on_backup_failure(self, tmp_path):
+        """If backup call fails, local folder must NOT be deleted (fail-safe)."""
         from mc.runtime.gateway import _cleanup_deleted_agents
 
         agent_dir = tmp_path / "fragile-agent"
@@ -1394,11 +1446,11 @@ class TestCleanupDeletedAgents:
 
         mock_bridge = MagicMock()
         mock_bridge.list_deleted_agents.return_value = [{"name": "fragile-agent"}]
-        mock_bridge.archive_agent_data.side_effect = RuntimeError("Convex unavailable")
+        mock_bridge.backup_agent_memory.side_effect = RuntimeError("Convex unavailable")
 
         _cleanup_deleted_agents(mock_bridge, tmp_path)
 
-        assert agent_dir.exists(), "Local folder should be preserved when archive fails"
+        assert agent_dir.exists(), "Local folder should be preserved when backup fails"
 
     def test_skips_agents_with_no_name(self, tmp_path):
         """Agent dicts without a 'name' key are silently skipped."""
@@ -1409,7 +1461,7 @@ class TestCleanupDeletedAgents:
 
         _cleanup_deleted_agents(mock_bridge, tmp_path)
 
-        mock_bridge.archive_agent_data.assert_not_called()
+        mock_bridge.backup_agent_memory.assert_not_called()
 
     def test_handles_list_failure_gracefully(self, tmp_path):
         """If list_deleted_agents raises, cleanup exits without crashing."""
@@ -1432,10 +1484,10 @@ class TestCleanupDeletedAgents:
         _cleanup_deleted_agents(mock_bridge, tmp_path)
         _cleanup_deleted_agents(mock_bridge, tmp_path)
 
-        mock_bridge.archive_agent_data.assert_not_called()
+        mock_bridge.backup_agent_memory.assert_not_called()
 
-    def test_skips_archive_call_when_no_content(self, tmp_path):
-        """If agent folder exists but has no memory/history/session files, archive is NOT called."""
+    def test_skips_backup_call_when_no_content(self, tmp_path):
+        """If agent folder exists but has no memory/history/session files, backup is NOT called."""
         from mc.runtime.gateway import _cleanup_deleted_agents
 
         agent_dir = tmp_path / "empty-agent"
@@ -1446,16 +1498,16 @@ class TestCleanupDeletedAgents:
 
         _cleanup_deleted_agents(mock_bridge, tmp_path)
 
-        mock_bridge.archive_agent_data.assert_not_called()
+        mock_bridge.backup_agent_memory.assert_not_called()
         assert not agent_dir.exists(), (
-            "Folder should still be removed when there is no content to archive"
+            "Folder should still be removed when there is no content to back up"
         )
 
     def test_continues_after_rmtree_failure(self, tmp_path):
         """If shutil.rmtree fails, logs error but continues cleanup for subsequent agents."""
         from mc.runtime.gateway import _cleanup_deleted_agents
 
-        # Give each agent a MEMORY.md so archive_agent_data is called (non-empty content)
+        # Give each agent a MEMORY.md so backup_agent_memory is called (non-empty content)
         for agent_name in ("agent-one", "agent-two"):
             memory_dir = tmp_path / agent_name / "memory"
             memory_dir.mkdir(parents=True)
@@ -1466,13 +1518,13 @@ class TestCleanupDeletedAgents:
             {"name": "agent-one"},
             {"name": "agent-two"},
         ]
-        mock_bridge.archive_agent_data.return_value = None
+        mock_bridge.backup_agent_memory.return_value = None
 
         with patch("shutil.rmtree", side_effect=[OSError("Permission denied"), None]):
             _cleanup_deleted_agents(mock_bridge, tmp_path)
 
-        # archive_agent_data called for both agents despite first rmtree failing
-        assert mock_bridge.archive_agent_data.call_count == 2
+        # backup_agent_memory called for both agents despite first rmtree failing
+        assert mock_bridge.backup_agent_memory.call_count == 2
 
 
 class TestRestoreArchivedFiles:
@@ -1528,11 +1580,11 @@ class TestRestoreArchivedFiles:
         assert not (agent_dir / "sessions").exists()
 
 
-class TestWriteBackRestoresArchive:
-    """Test _write_back_convex_agents calls get_agent_archive for new agents."""
+class TestWriteBackRestoresMemory:
+    """Test _write_back_convex_agents restores memory from backup."""
 
     def test_calls_restore_for_new_agent(self, tmp_path):
-        """When writing back a new agent (no local YAML), get_agent_archive is called."""
+        """When writing back a new agent (no local YAML), get_agent_memory_backup is called."""
         from mc.runtime.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
@@ -1546,14 +1598,14 @@ class TestWriteBackRestoresArchive:
             }
         ]
         mock_bridge.write_agent_config.return_value = None
-        mock_bridge.get_agent_archive.return_value = None  # No archive
+        mock_bridge.get_agent_memory_backup.return_value = None  # No backup
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 
-        mock_bridge.get_agent_archive.assert_called_once_with("restored-agent")
+        mock_bridge.get_agent_memory_backup.assert_called_once_with("restored-agent")
 
-    def test_restores_files_when_archive_present(self, tmp_path):
-        """When archive data exists, _restore_archived_files is called for the new agent."""
+    def test_restores_files_when_backup_present(self, tmp_path):
+        """When backup data exists, _restore_memory_from_backup is called for the new agent."""
         from mc.runtime.gateway import _write_back_convex_agents
 
         mock_bridge = MagicMock()
@@ -1567,10 +1619,9 @@ class TestWriteBackRestoresArchive:
             }
         ]
         mock_bridge.write_agent_config.return_value = None
-        mock_bridge.get_agent_archive.return_value = {
-            "memory_content": "# Memories",
-            "history_content": None,
-            "session_data": None,
+        mock_bridge.get_agent_memory_backup.return_value = {
+            "boards": [{"board_name": "default", "memory_content": "# Memories"}],
+            "last_backup_at": "2026-02-23T12:00:00Z",
         }
 
         # write_agent_config creates the dir
@@ -1578,15 +1629,13 @@ class TestWriteBackRestoresArchive:
         agent_dir.mkdir()
         (agent_dir / "memory").mkdir()
 
-        with patch("mc.infrastructure.agent_bootstrap._restore_archived_files") as mock_restore:
+        with patch("mc.infrastructure.agent_bootstrap._restore_memory_from_backup") as mock_restore:
             _write_back_convex_agents(mock_bridge, tmp_path)
 
         mock_restore.assert_called_once()
-        call_args = mock_restore.call_args[0]
-        assert call_args[0] == tmp_path / "restored-agent"
 
-    def test_does_not_call_restore_for_existing_agent(self, tmp_path):
-        """For agents with existing local YAML (update path), archive is NOT fetched."""
+    def test_restore_called_for_existing_agent_too(self, tmp_path):
+        """For agents with existing local YAML (update path), restore is also attempted."""
         from mc.runtime.gateway import _write_back_convex_agents
 
         # Create existing local YAML
@@ -1595,7 +1644,7 @@ class TestWriteBackRestoresArchive:
         config = agent_dir / "config.yaml"
         config.write_text("name: existing-agent\n")
 
-        # Convex timestamp older than local file
+        # Convex timestamp older than local file — no config update
         old_ts = "2020-01-01T00:00:00Z"
 
         mock_bridge = MagicMock()
@@ -1608,10 +1657,12 @@ class TestWriteBackRestoresArchive:
                 "skills": [],
             }
         ]
+        mock_bridge.get_agent_memory_backup.return_value = None
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 
-        mock_bridge.get_agent_archive.assert_not_called()
+        # Restore is now called for ALL agents (not just newly created)
+        mock_bridge.get_agent_memory_backup.assert_called_once_with("existing-agent")
 
 
 class TestSyncAgentRegistryCallsCleanup:

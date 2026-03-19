@@ -123,6 +123,7 @@ async def test_prepare_launch_passes_explicit_memory_workspace_to_cc_workspace_b
         agent=_agent(),
         task_id="task-123",
         task_prompt="Investigate failing test",
+        board_name="default",
         memory_workspace=Path("/tmp/board-memory"),
     )
 
@@ -149,6 +150,7 @@ async def test_prepare_launch_supports_resume_without_using_print_mode() -> None
         identity=_identity(),
         agent=_agent(),
         task_id="task-123",
+        board_name="default",
         resume_session_id="2f2dd2f2-1111-4444-8888-111122223333",
     )
 
@@ -176,6 +178,7 @@ async def test_interactive_and_headless_paths_diverge_after_shared_workspace_set
         identity=_identity(),
         agent=_agent(),
         task_id="task-123",
+        board_name="default",
     )
     headless_command = provider._build_command(
         "Investigate failing test",
@@ -207,6 +210,7 @@ async def test_prepare_launch_fails_with_actionable_error_when_claude_missing() 
             identity=_identity(),
             agent=_agent(),
             task_id="task-123",
+            board_name="default",
         )
 
 
@@ -227,6 +231,7 @@ async def test_prepare_launch_wraps_workspace_bootstrap_failures() -> None:
             identity=_identity(),
             agent=_agent(),
             task_id="task-123",
+            board_name="default",
         )
 
 
@@ -246,7 +251,9 @@ async def test_stop_session_stops_socket_server_when_present() -> None:
     )
     identity = _identity()
 
-    await adapter.prepare_launch(identity=identity, agent=_agent(), task_id="task-123")
+    await adapter.prepare_launch(
+        identity=identity, agent=_agent(), task_id="task-123", board_name="default"
+    )
     await adapter.stop_session(identity.session_key)
 
     socket_server.stop.assert_awaited_once_with()
@@ -281,6 +288,7 @@ async def test_prepare_launch_with_task_prompt_uses_bootstrap_input() -> None:
         agent=_agent(),
         task_id="task-123",
         task_prompt="Implement the login feature",
+        board_name="default",
     )
 
     assert "-p" not in launch.command
@@ -312,6 +320,7 @@ async def test_prepare_launch_without_task_prompt_produces_no_bootstrap_input() 
         agent=_agent(),
         task_id="task-123",
         task_prompt=None,
+        board_name="default",
     )
 
     assert launch.bootstrap_input is None
@@ -338,6 +347,7 @@ async def test_prepare_launch_with_whitespace_only_prompt_produces_no_bootstrap_
         agent=_agent(),
         task_id="task-123",
         task_prompt="   \n  ",
+        board_name="default",
     )
 
     assert launch.bootstrap_input is None
@@ -368,6 +378,7 @@ async def test_socket_server_is_started_for_ipc_observability() -> None:
         agent=_agent(),
         task_id="task-123",
         task_prompt="Implement the login feature",
+        board_name="default",
     )
 
     socket_server.start.assert_awaited_once_with(_workspace().socket_path)
@@ -393,6 +404,7 @@ async def test_task_prompt_is_stripped_before_bootstrap_input() -> None:
         agent=_agent(),
         task_id="task-123",
         task_prompt="  Implement the login feature  ",
+        board_name="default",
     )
 
     assert launch.bootstrap_input == "Implement the login feature"

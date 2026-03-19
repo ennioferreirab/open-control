@@ -57,7 +57,7 @@ vi.mock("@/hooks/useSelectableAgents", () => ({
 
 vi.mock("@/components/BoardContext", () => ({
   useBoard: () => ({
-    activeBoardId: undefined,
+    activeBoardId: "board-123",
   }),
 }));
 
@@ -131,7 +131,7 @@ describe("TaskInput", () => {
         title: "Research AI trends",
         description: undefined,
         tags: undefined,
-        boardId: undefined,
+        boardId: "board-123",
       });
     });
   });
@@ -150,7 +150,7 @@ describe("TaskInput", () => {
         title: "Escalate to reviewer",
         description: undefined,
         tags: undefined,
-        boardId: undefined,
+        boardId: "board-123",
         assignedAgent: "reviewer",
       });
     });
@@ -178,7 +178,7 @@ describe("TaskInput", () => {
         title: "Write release notes manually",
         description: undefined,
         tags: undefined,
-        boardId: undefined,
+        boardId: "board-123",
         isManual: true,
       });
     });
@@ -316,7 +316,7 @@ describe("TaskInput", () => {
         title: "Keyboard submit",
         description: undefined,
         tags: undefined,
-        boardId: undefined,
+        boardId: "board-123",
       });
     });
   });

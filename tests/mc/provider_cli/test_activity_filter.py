@@ -7,7 +7,6 @@ import pytest
 from mc.contexts.provider_cli.activity_filter import should_suppress_activity_event
 from mc.contexts.provider_cli.types import ParsedCliEvent
 
-
 # ---------------------------------------------------------------------------
 # Claude Code noise subtypes — should be suppressed
 # ---------------------------------------------------------------------------

@@ -136,7 +136,9 @@ def build_review_output_contract_context(
         # Find the matching step to show key:title
         for s in preceding_steps:
             if s.get("workflow_step_id") == on_reject_step_id:
-                recommended_return = f'"{on_reject_step_id}:{s.get("title", on_reject_step_id)}" | null'
+                recommended_return = (
+                    f'"{on_reject_step_id}:{s.get("title", on_reject_step_id)}" | null'
+                )
                 break
         else:
             recommended_return = f'"{on_reject_step_id}" | null'
@@ -370,6 +372,11 @@ class ContextBuilder:
             req.board_name = board_name
             req.memory_workspace = memory_workspace
             req.memory_mode = memory_mode
+        elif agent_name != NANOBOT_AGENT_NAME:
+            raise RuntimeError(
+                f"Task '{title}' has no board_id — non-nanobot agent '{agent_name}' "
+                "requires a board-scoped workspace. Assign a board to the task."
+            )
 
         memory_dir = str(req.memory_workspace / "memory") if req.memory_workspace else None
         artifacts_dir = None
@@ -593,6 +600,11 @@ class ContextBuilder:
             req.board_name = board_name
             req.memory_workspace = memory_workspace
             req.memory_mode = memory_mode
+        elif agent_name != NANOBOT_AGENT_NAME:
+            raise RuntimeError(
+                f"Task '{task_title}' has no board_id — non-nanobot agent '{agent_name}' "
+                "requires a board-scoped workspace. Assign a board to the task."
+            )
 
         raw_files = task_data.get("files") or []
         req.files = raw_files

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import type { Id } from "@/convex/_generated/dataModel";
 
 // Mock convex/react
 const mockCreateTask = vi.fn();
@@ -58,6 +59,7 @@ describe("useTaskInputData", () => {
       taskId = await result.current.createTask({
         title: "Test task",
         supervisionMode: "autonomous",
+        boardId: "board123" as Id<"boards">,
       });
     });
 
@@ -65,6 +67,7 @@ describe("useTaskInputData", () => {
     expect(mockCreateTask).toHaveBeenCalledWith({
       title: "Test task",
       supervisionMode: "autonomous",
+      boardId: "board123",
     });
   });
 

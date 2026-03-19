@@ -18,6 +18,7 @@ from mc.application.execution.request import (
     ExecutionRequest,
     ExecutionResult,
 )
+from mc.types import NANOBOT_AGENT_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,12 @@ class ClaudeCodeRunnerStrategy:
                 request.title,
             )
             board_name = resolved_board_name or board_name
+
+        if not board_name and request.agent_name != NANOBOT_AGENT_NAME:
+            raise RuntimeError(
+                f"Task '{request.title}' has no board — non-nanobot agent "
+                f"'{request.agent_name}' requires a board-scoped workspace."
+            )
 
         # Prepare workspace
         ws_mgr = CCWorkspaceManager()

@@ -83,6 +83,10 @@ vi.mock("@/components/AgentTextViewerModal", () => ({
   AgentTextViewerModal: () => null,
 }));
 
+vi.mock("@/features/agents/components/SkillDetailDialog", () => ({
+  SkillDetailDialog: () => null,
+}));
+
 // Mock ShadCN UI components
 vi.mock("@/components/ui/sheet", () => ({
   Sheet: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>

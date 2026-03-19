@@ -27,6 +27,10 @@ vi.mock("@/components/PromptEditModal", () => ({
   PromptEditModal: () => null,
 }));
 
+vi.mock("@/features/agents/components/SkillDetailDialog", () => ({
+  SkillDetailDialog: () => null,
+}));
+
 vi.mock("@/components/AgentTextViewerModal", () => ({
   AgentTextViewerModal: ({
     open,

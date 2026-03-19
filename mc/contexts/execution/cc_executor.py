@@ -388,7 +388,12 @@ class CCExecutorMixin:
         agent_name: str,
         title: str,
     ) -> tuple[str | None, str]:
-        """Resolve board-scoped workspace for CC. Returns (board_name, memory_mode)."""
+        """Resolve board-scoped workspace for CC. Returns (board_name, memory_mode).
+
+        Raises RuntimeError for non-nanobot agents when board_id is missing.
+        """
+        from mc.types import NANOBOT_AGENT_NAME
+
         _cc_board_name: str | None = None
         _cc_memory_mode: str = "clean"
         _board_id = (task_data or {}).get("board_id")
@@ -409,10 +414,17 @@ class CCExecutorMixin:
                         )
             except Exception:
                 logger.warning(
-                    "[executor] CC: failed to resolve board workspace for task '%s', using global workspace",
+                    "[executor] CC: failed to resolve board workspace for task '%s'",
                     title,
                     exc_info=True,
                 )
+                if agent_name != NANOBOT_AGENT_NAME:
+                    raise
+        elif agent_name != NANOBOT_AGENT_NAME:
+            raise RuntimeError(
+                f"Task '{title}' has no board_id — non-nanobot agent '{agent_name}' "
+                "requires a board-scoped workspace."
+            )
         return _cc_board_name, _cc_memory_mode
 
     async def _lookup_cc_session(self, agent_name: str, task_id: str) -> str | None:

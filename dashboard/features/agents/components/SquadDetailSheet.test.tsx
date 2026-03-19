@@ -8,6 +8,10 @@ vi.mock("@/features/agents/components/AgentConfigSheet", () => ({
     agentName ? <div data-testid="agent-config-overlay">Agent overlay: {agentName}</div> : null,
 }));
 
+vi.mock("@/features/agents/components/SkillDetailDialog", () => ({
+  SkillDetailDialog: () => null,
+}));
+
 vi.mock("@/features/agents/hooks/useUpdatePublishedSquad", () => ({
   useUpdatePublishedSquad: vi.fn(),
 }));

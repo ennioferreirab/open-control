@@ -77,6 +77,7 @@ def _make_mock_bridge(
         "id": "task-001",
         "title": "Test Task",
         "description": "A step task",
+        "board_id": "board_001",
         "files": [],
         "tags": [],
     }
@@ -342,6 +343,7 @@ class TestPromptPresenceFromCanonicalPath:
                 "id": "task-001",
                 "title": "Build feature",
                 "description": "A serious task",
+                "board_id": "board_001",
                 "files": [],
                 "tags": [],
             }

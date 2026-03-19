@@ -69,7 +69,7 @@ async def _run(args: argparse.Namespace) -> int:
             except StopAsyncIteration:
                 print("stream_eof")
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 print(f"chunk_timeout={args.chunk_timeout}")
                 break
 

@@ -15,7 +15,7 @@ export interface CreateTaskArgs {
   trustLevel?: string;
   reviewers?: string[];
   isManual?: boolean;
-  boardId?: Id<"boards">;
+  boardId: Id<"boards">;
   cronParentTaskId?: string;
   activeCronJobId?: string;
   sourceAgent?: string;
@@ -37,16 +37,10 @@ export async function createTask(
     : ((args.trustLevel ?? "autonomous") as "autonomous" | "human_approved");
   const supervisionMode = isManual ? "autonomous" : (args.supervisionMode ?? "autonomous");
 
-  let boardId = args.boardId;
-  if (!boardId) {
-    const defaultBoard = await ctx.db
-      .query("boards")
-      .withIndex("by_isDefault", (q) => q.eq("isDefault", true))
-      .first();
-    if (defaultBoard && !defaultBoard.deletedAt) {
-      boardId = defaultBoard._id;
-    }
+  if (!args.boardId) {
+    throw new ConvexError("Cannot create task: boardId is required");
   }
+  const boardId = args.boardId;
 
   // Determine routing mode:
   // - explicit routingMode from caller wins
@@ -66,7 +60,7 @@ export async function createTask(
     workMode: "direct_delegate",
     ...(routingMode ? { routingMode } : {}),
     ...(isManual ? { isManual: true } : {}),
-    ...(boardId ? { boardId } : {}),
+    boardId,
     ...(args.cronParentTaskId !== undefined ? { cronParentTaskId: args.cronParentTaskId } : {}),
     ...(args.activeCronJobId !== undefined ? { activeCronJobId: args.activeCronJobId } : {}),
     ...(args.sourceAgent ? { sourceAgent: args.sourceAgent } : {}),

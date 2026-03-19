@@ -495,7 +495,7 @@ class TestParityWithConvex:
             "assigned": ["in_progress", "assigned"],
             "in_progress": ["review", "done", "assigned"],
             "review": ["done", "assigned", "in_progress"],
-            "done": ["assigned"],
+            "done": ["assigned", "in_progress"],
             "retrying": ["in_progress", "crashed"],
             "crashed": ["inbox", "assigned"],
         }

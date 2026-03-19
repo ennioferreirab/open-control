@@ -221,7 +221,7 @@ export default defineSchema({
     deletedAt: v.optional(v.string()),
     previousStatus: v.optional(v.string()),
     activeCronJobId: v.optional(v.string()),
-    boardId: v.optional(v.id("boards")),
+    boardId: v.id("boards"),
     cronParentTaskId: v.optional(v.string()),
     sourceAgent: v.optional(v.string()),
     isMergeTask: v.optional(v.boolean()),
@@ -384,9 +384,17 @@ export default defineSchema({
     lastStepExecutedAt: v.optional(v.string()),
     lastActiveAt: v.optional(v.string()),
     deletedAt: v.optional(v.string()),
-    memoryContent: v.optional(v.string()),
-    historyContent: v.optional(v.string()),
-    sessionData: v.optional(v.string()),
+    memoryBackup: v.optional(v.object({
+      boards: v.array(v.object({
+        boardName: v.string(),
+        memoryContent: v.optional(v.string()),
+        historyContent: v.optional(v.string()),
+      })),
+      // Nanobot-only: global workspace backup (not board-scoped)
+      globalMemoryContent: v.optional(v.string()),
+      globalHistoryContent: v.optional(v.string()),
+      lastBackupAt: v.string(),
+    })),
     // Runtime projection metadata — set only when this record was compiled from an agentSpec.
     compiledFromSpecId: v.optional(v.string()),
     compiledFromVersion: v.optional(v.number()),

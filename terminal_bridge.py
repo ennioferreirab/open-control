@@ -17,15 +17,15 @@ from __future__ import annotations
 
 import argparse
 import atexit
-from datetime import datetime, timezone
 import os
 import signal
 import socket
 import subprocess
 import sys
-import time
 import threading
+import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 # ── Resolve project root ───────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ class TerminalBridge:
 
     def inject_input(self, text: str) -> None:
         """Inject input into Claude via tmux. Supports !!keys: protocol for TUI keystrokes."""
-        print(f"[bridge] Injecting input: {repr(text)}", flush=True)
+        print(f"[bridge] Injecting input: {text!r}", flush=True)
 
         if text.startswith("!!keys:"):
             # Parse key sequence: "!!keys:Up,Down,Enter" → individual keystrokes
@@ -272,7 +272,7 @@ class TerminalBridge:
             "output": output,
             "pending_input": "",
             "status": status,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         })
         print(f"[bridge] Output written to Convex ({len(output)} chars, status={status}).", flush=True)
 
@@ -288,7 +288,7 @@ class TerminalBridge:
             "session_id": self.session_id,
             "output": captured or self._last_good_output,
             "status": status,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         })
         print(f"[bridge] Status updated: {status}", flush=True)
 
@@ -301,7 +301,7 @@ class TerminalBridge:
         self.monitor_bridge.mutation("terminalSessions:upsert", {
             "session_id": self.session_id,
             "output": output,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "status": "idle",
         })
 
@@ -464,7 +464,7 @@ class TerminalBridge:
             self._wake()
             self._last_activity = time.time()
 
-            print(f"[input] New input detected: {repr(pending)}", flush=True)
+            print(f"[input] New input detected: {pending!r}", flush=True)
 
             if pending.startswith("!!keys:"):
                 # Keystroke: fire-and-forget, no wait, no deduplication
@@ -528,7 +528,7 @@ class TerminalBridge:
             self.bridge.mutation("terminalSessions:upsert", {
                 "session_id": self.session_id,
                 "output": self._last_good_output,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
                 "sleep_mode": False,
                 "wake_signal": False,
             })
@@ -546,7 +546,7 @@ class TerminalBridge:
             self.bridge.mutation("terminalSessions:upsert", {
                 "session_id": self.session_id,
                 "output": self._last_good_output,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
                 "sleep_mode": True,
             })
         except Exception as e:

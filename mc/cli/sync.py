@@ -115,7 +115,18 @@ def _run_sync(bridge, agents_dir: Path) -> None:
     except Exception as exc:
         _fail("Embedding model sync failed", exc, totals)
 
-    # 7. Default board
+    # 7. Memory backup
+    _header("Memory backup")
+    try:
+        from mc.infrastructure.agent_bootstrap import _backup_agent_memory
+
+        count = _backup_agent_memory(bridge, agents_dir)
+        console.print(f"  [green]✓[/green] {count} agent(s) backed up")
+        totals["ok"] += 1
+    except Exception as exc:
+        _fail("Memory backup failed", exc, totals)
+
+    # 8. Default board
     _header("Default board")
     try:
         bridge.ensure_default_board()
@@ -123,6 +134,20 @@ def _run_sync(bridge, agents_dir: Path) -> None:
         totals["ok"] += 1
     except Exception as exc:
         _fail("Default board failed", exc, totals)
+
+    # 9. Orphaned task cleanup (pre-production: delete tasks without boardId)
+    _header("Orphaned task cleanup")
+    try:
+        from mc.infrastructure.agent_bootstrap import cleanup_orphaned_tasks
+
+        deleted = cleanup_orphaned_tasks(bridge)
+        if deleted:
+            console.print(f"  [green]✓[/green] Deleted {deleted} orphaned task(s) without boardId")
+        else:
+            console.print("  [dim]—[/dim] No orphaned tasks found")
+        totals["ok"] += 1
+    except Exception as exc:
+        _fail("Orphaned task cleanup failed", exc, totals)
 
     # Summary
     console.print()

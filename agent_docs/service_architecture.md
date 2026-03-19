@@ -491,6 +491,13 @@ Defines the state machines for tasks and steps. Implemented in two adapters:
 | Python | `mc/domain/workflow_contract.py` | Transition validation, event mapping |
 | Convex/TS | `dashboard/convex/lib/workflowContract.ts` | Same rules, TypeScript side |
 
+**Notable task transitions:**
+- `done -> assigned`: thread message on a completed task re-opens it for the agent.
+- `done -> in_progress`: resuming completed tasks for continued work (e.g. step retry cascade).
+- `done -> review`: re-opens the review gate without re-running execution.
+
+See `dashboard/convex/lib/taskLifecycle.ts` `TASK_TRANSITIONS` for the full map.
+
 ### Key Conversion
 
 The bridge converts keys automatically between Python and Convex:

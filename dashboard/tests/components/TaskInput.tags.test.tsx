@@ -36,7 +36,7 @@ vi.mock("@/hooks/useSelectableAgents", () => ({
 
 vi.mock("@/components/BoardContext", () => ({
   useBoard: () => ({
-    activeBoardId: undefined,
+    activeBoardId: "board-123",
   }),
 }));
 

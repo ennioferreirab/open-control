@@ -91,6 +91,17 @@ def _make_stateful_bridge(
     bridge.increment_rejection_count.return_value = 1
     bridge.get_review_loop_limit.return_value = 5
 
+    # async_subscribe must return an async queue whose get() blocks forever.
+    # The monitor task is always cancelled after the step gather completes,
+    # so CancelledError propagates through the await.
+    async def _hanging_get():
+        fut: asyncio.Future[Any] = asyncio.get_event_loop().create_future()
+        await fut  # blocks until cancelled
+
+    mock_queue = MagicMock()
+    mock_queue.get = _hanging_get
+    bridge.async_subscribe.return_value = mock_queue
+
     return bridge, state
 
 
@@ -360,6 +371,20 @@ class TestStepDispatcher:
         bridge, state = _make_stateful_bridge(
             [_step("step-human-1", "Approve output", assigned_agent="human", order=1)]
         )
+        # After the first loop iteration dispatches the human step (which returns
+        # immediately without changing status), the loop re-checks task status.
+        # Return review on second query so the dispatcher exits the loop instead
+        # of infinitely re-dispatching the still-assigned human step.
+        _query_calls = 0
+
+        def _query_side_effect(*args, **kwargs):
+            nonlocal _query_calls
+            _query_calls += 1
+            if _query_calls <= 1:
+                return {"title": "Main Task", "status": "in_progress"}
+            return {"title": "Main Task", "status": "review"}
+
+        bridge.query.side_effect = _query_side_effect
         dispatcher = StepDispatcher(bridge)
 
         run_agent_mock = AsyncMock()
