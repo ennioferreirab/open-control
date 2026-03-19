@@ -11,9 +11,10 @@ import { useSkillsSelectorData } from "@/features/agents/hooks/useSkillsSelector
 interface SkillsSelectorProps {
   selected: string[];
   onChange: (skills: string[]) => void;
+  onViewSkill?: (name: string) => void;
 }
 
-export function SkillsSelector({ selected, onChange }: SkillsSelectorProps) {
+export function SkillsSelector({ selected, onChange, onViewSkill }: SkillsSelectorProps) {
   const skills = useSkillsSelectorData();
   const [search, setSearch] = useState("");
 
@@ -88,6 +89,7 @@ export function SkillsSelector({ selected, onChange }: SkillsSelectorProps) {
                 always={skill.always}
                 checked={true}
                 onToggle={() => handleToggle(skill.name, !!skill.always)}
+                onView={onViewSkill ? () => onViewSkill(skill.name) : undefined}
               />
             ))}
             {unselectedSkills.length > 0 && <Separator className="my-1" />}
@@ -104,6 +106,7 @@ export function SkillsSelector({ selected, onChange }: SkillsSelectorProps) {
             always={skill.always}
             checked={false}
             onToggle={() => handleToggle(skill.name, !!skill.always)}
+            onView={onViewSkill ? () => onViewSkill(skill.name) : undefined}
           />
         ))}
         {filteredSkills.length === 0 && (
@@ -125,6 +128,7 @@ function SkillRow({
   always,
   checked,
   onToggle,
+  onView,
 }: {
   name: string;
   description: string;
@@ -134,6 +138,7 @@ function SkillRow({
   always?: boolean;
   checked: boolean;
   onToggle: () => void;
+  onView?: () => void;
 }) {
   return (
     <label className="flex items-start gap-2 py-1.5 px-1 rounded hover:bg-muted/50 cursor-pointer">
@@ -146,7 +151,21 @@ function SkillRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {emoji && <span className="text-sm">{emoji}</span>}
-          <span className="text-sm font-medium">{name}</span>
+          {onView ? (
+            <button
+              type="button"
+              className="text-sm font-medium hover:underline text-left"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onView();
+              }}
+            >
+              {name}
+            </button>
+          ) : (
+            <span className="text-sm font-medium">{name}</span>
+          )}
           {always && <span className="text-[10px] text-muted-foreground">(always loaded)</span>}
           {available ? (
             <span

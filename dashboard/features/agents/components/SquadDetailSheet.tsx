@@ -23,6 +23,7 @@ import {
 import { useSquadDetailData } from "@/features/agents/hooks/useSquadDetailData";
 import { useUpdatePublishedSquad } from "@/features/agents/hooks/useUpdatePublishedSquad";
 import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
+import { SkillDetailDialog } from "@/features/agents/components/SkillDetailDialog";
 import { RunSquadMissionDialog } from "./RunSquadMissionDialog";
 import { SquadWorkflowCanvas } from "@/features/agents/components/SquadWorkflowCanvas";
 import type { EditableWorkflow } from "@/features/agents/components/SquadWorkflowEditor";
@@ -94,6 +95,7 @@ export function SquadDetailSheet({
   const [draft, setDraft] = useState<EditableSquadDraft | null>(null);
   const [editingWorkflowNameId, setEditingWorkflowNameId] = useState<string | null>(null);
   const [selectedOverlayAgentName, setSelectedOverlayAgentName] = useState<string | null>(null);
+  const [selectedSkillName, setSelectedSkillName] = useState<string | null>(null);
   const { isPublishing, publish } = useUpdatePublishedSquad();
 
   const canRunMission = squad?.status === "published" && !!boardId;
@@ -361,13 +363,21 @@ export function SquadDetailSheet({
                                 <CollapsibleContent className="border-t px-4 py-2">
                                   <div className="flex flex-wrap gap-1">
                                     {agent.skills.map((skill) => (
-                                      <Badge
+                                      <button
                                         key={skill}
-                                        variant="secondary"
-                                        className="text-[10px] font-normal"
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedSkillName(skill);
+                                        }}
                                       >
-                                        {skill}
-                                      </Badge>
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-[10px] font-normal cursor-pointer hover:bg-muted"
+                                        >
+                                          {skill}
+                                        </Badge>
+                                      </button>
                                     ))}
                                   </div>
                                 </CollapsibleContent>
@@ -522,6 +532,11 @@ export function SquadDetailSheet({
       <AgentConfigSheet
         agentName={selectedOverlayAgentName}
         onClose={() => setSelectedOverlayAgentName(null)}
+      />
+
+      <SkillDetailDialog
+        skillName={selectedSkillName}
+        onClose={() => setSelectedSkillName(null)}
       />
     </>
   );
