@@ -517,13 +517,18 @@ class CCWorkspaceManager:
         )
 
     def _map_skills(self, workspace: Path, skills: list[str]) -> None:
-        """Create symlinks under .claude/skills/ for each requested skill.
+        """Copy skill directories into .claude/skills/ for each requested skill.
+
+        Uses real copies (not symlinks) because Claude Code's Glob tool
+        does not traverse symlinked directories.
 
         Search order (first match wins):
           1. workspace/skills/<skill_name>
           2. self._root/workspace/skills/<skill_name>
           3. vendor builtin: vendor/nanobot/nanobot/skills/<skill_name>
         """
+        import shutil
+
         logger.info(
             "[skills] Mapping %d skill(s) for workspace %s: %s",
             len(skills),
@@ -533,10 +538,12 @@ class CCWorkspaceManager:
         skills_dir = workspace / ".claude" / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
 
-        # Clean up existing broken symlinks
+        # Clean up stale entries (broken symlinks from old code, or dirs
+        # whose source has changed).
         for entry in skills_dir.iterdir():
-            if entry.is_symlink() and not entry.resolve().exists():
-                logger.debug("Removing broken symlink: %s", entry)
+            if entry.is_symlink():
+                # Migrate: remove old symlinks so they get replaced by copies
+                logger.debug("Removing legacy symlink: %s", entry)
                 entry.unlink()
 
         _loader = None
@@ -565,27 +572,25 @@ class CCWorkspaceManager:
             if _loader and not _loader.is_skill_available(skill_name):
                 missing = _loader.get_missing_requirements(skill_name) or "unknown"
                 logger.warning(
-                    "Skill '%s' is unavailable (missing: %s) — skipping symlink",
+                    "Skill '%s' is unavailable (missing: %s) — skipping",
                     skill_name,
                     missing,
                 )
                 continue
 
-            link_path = skills_dir / skill_name
-            # Remove stale symlink pointing elsewhere before re-creating
-            if link_path.is_symlink():
-                if link_path.resolve() == target.resolve():
-                    continue  # Already correct
-                link_path.unlink()
-            elif link_path.exists():
-                logger.warning(
-                    "Skill path '%s' exists as a non-symlink — skipping symlink creation",
-                    link_path,
-                )
-                continue
+            dest_path = skills_dir / skill_name
+            # Re-copy if source is newer or dest doesn't exist
+            source_mtime = target.stat().st_mtime
+            if dest_path.exists():
+                dest_mtime = dest_path.stat().st_mtime
+                if dest_mtime >= source_mtime:
+                    logger.debug("[skills] '%s' already up-to-date", skill_name)
+                    continue
+                # Source is newer — remove stale copy
+                shutil.rmtree(dest_path)
 
-            link_path.symlink_to(target)
-            logger.info("[skills] Mapped '%s' → %s", skill_name, target)
+            shutil.copytree(target, dest_path)
+            logger.info("[skills] Copied '%s' → %s", skill_name, dest_path)
 
     def _find_skill(self, workspace: Path, skill_name: str) -> Path | None:
         """Return the first existing skill directory for *skill_name*, or None."""

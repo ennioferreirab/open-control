@@ -360,8 +360,8 @@ class TestSessionObservability:
 
 
 class TestSkillsMapping:
-    def test_symlink_created_for_existing_skill(self, tmp_path: Path) -> None:
-        """A symlink is created in .claude/skills/ for a skill found in workspace/skills/."""
+    def test_skill_copied_for_existing_skill(self, tmp_path: Path) -> None:
+        """A copy is created in .claude/skills/ for a skill found in workspace/skills/."""
         # Create a mock skill in the workspace skills directory
         workspace = tmp_path / "agents" / "test-agent"
         skill_dir = workspace / "skills" / "my-skill"
@@ -372,9 +372,10 @@ class TestSkillsMapping:
         agent = _make_agent(skills=["my-skill"])
         manager.prepare("test-agent", agent, "task123")
 
-        link = workspace / ".claude" / "skills" / "my-skill"
-        assert link.is_symlink()
-        assert link.resolve() == skill_dir.resolve()
+        dest = workspace / ".claude" / "skills" / "my-skill"
+        assert dest.is_dir()
+        assert not dest.is_symlink(), "Must be a real copy, not a symlink"
+        assert (dest / "SKILL.md").read_text() == "# My Skill"
 
     def test_global_skill_dir_used_as_fallback(self, tmp_path: Path) -> None:
         """Skills in root/workspace/skills/ are used when not in agent workspace."""
@@ -386,8 +387,9 @@ class TestSkillsMapping:
         agent = _make_agent(skills=["global-skill"])
         ctx = manager.prepare("test-agent", agent, "task123")
 
-        link = ctx.cwd / ".claude" / "skills" / "global-skill"
-        assert link.is_symlink()
+        dest = ctx.cwd / ".claude" / "skills" / "global-skill"
+        assert dest.is_dir()
+        assert (dest / "SKILL.md").read_text() == "# Global Skill"
 
     def test_vendor_skills_dir_injectable(self, tmp_path: Path) -> None:
         """vendor_skills_dir constructor parameter is used as the builtin skills fallback."""
@@ -400,20 +402,20 @@ class TestSkillsMapping:
         agent = _make_agent(skills=["vendor-skill"])
         ctx = manager.prepare("test-agent", agent, "task123")
 
-        link = ctx.cwd / ".claude" / "skills" / "vendor-skill"
-        assert link.is_symlink()
+        dest = ctx.cwd / ".claude" / "skills" / "vendor-skill"
+        assert dest.is_dir()
+        assert (dest / "SKILL.md").read_text() == "# Vendor Skill"
 
-    def test_broken_symlinks_cleaned_up(self, tmp_path: Path) -> None:
-        """Pre-existing broken symlinks in .claude/skills/ are removed."""
+    def test_legacy_symlinks_cleaned_up(self, tmp_path: Path) -> None:
+        """Pre-existing symlinks in .claude/skills/ are removed (migration from old code)."""
         workspace = tmp_path / "agents" / "test-agent"
         skills_dir = workspace / ".claude" / "skills"
         skills_dir.mkdir(parents=True)
 
-        # Create a broken symlink
+        # Create a legacy symlink (broken or not — both get removed)
         broken_link = skills_dir / "nonexistent-skill"
         broken_link.symlink_to(tmp_path / "does-not-exist")
         assert broken_link.is_symlink()
-        assert not broken_link.resolve().exists()
 
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent(skills=[])
@@ -436,7 +438,7 @@ class TestSkillsMapping:
         warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
         assert any("nonexistent-skill" in msg for msg in warning_messages)
 
-    def test_idempotent_skill_symlinks(self, tmp_path: Path) -> None:
+    def test_idempotent_skill_copies(self, tmp_path: Path) -> None:
         """Running prepare() twice with same skills doesn't error."""
         workspace = tmp_path / "agents" / "test-agent"
         skill_dir = workspace / "skills" / "my-skill"
@@ -450,8 +452,9 @@ class TestSkillsMapping:
         # Second call must not raise
         ctx = manager.prepare("test-agent", agent, "task2")
 
-        link = ctx.cwd / ".claude" / "skills" / "my-skill"
-        assert link.is_symlink()
+        dest = ctx.cwd / ".claude" / "skills" / "my-skill"
+        assert dest.is_dir()
+        assert (dest / "SKILL.md").read_text() == "# My Skill"
 
     def test_invalid_skill_name_with_slash_skipped(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -720,8 +723,8 @@ class TestSkillAvailabilityCheck:
         (skill_dir / "SKILL.md").write_text(skill_md_content)
         return skill_dir
 
-    def test_unavailable_skill_not_symlinked(self, tmp_path: Path) -> None:
-        """A skill whose binary requirement is missing must NOT have its symlink created."""
+    def test_unavailable_skill_not_copied(self, tmp_path: Path) -> None:
+        """A skill whose binary requirement is missing must NOT be copied."""
         vendor_dir = tmp_path / "vendor-skills"
         self._make_vendor_skill(
             vendor_dir,
@@ -733,12 +736,11 @@ class TestSkillAvailabilityCheck:
         agent = _make_agent(skills=["needs-nonexistent-bin"])
         ctx = manager.prepare("test-agent", agent, "task123")
 
-        link = ctx.cwd / ".claude" / "skills" / "needs-nonexistent-bin"
-        assert not link.exists(), "Symlink must not be created for an unavailable skill"
-        assert not link.is_symlink(), "Broken symlink must not be created for an unavailable skill"
+        dest = ctx.cwd / ".claude" / "skills" / "needs-nonexistent-bin"
+        assert not dest.exists(), "Skill must not be copied when requirements are unmet"
 
-    def test_available_skill_still_symlinked(self, tmp_path: Path) -> None:
-        """A skill with no requirements (always available) must have its symlink created normally."""
+    def test_available_skill_copied(self, tmp_path: Path) -> None:
+        """A skill with no requirements (always available) must be copied normally."""
         vendor_dir = tmp_path / "vendor-skills"
         self._make_vendor_skill(
             vendor_dir,
@@ -750,8 +752,9 @@ class TestSkillAvailabilityCheck:
         agent = _make_agent(skills=["no-requirements-skill"])
         ctx = manager.prepare("test-agent", agent, "task123")
 
-        link = ctx.cwd / ".claude" / "skills" / "no-requirements-skill"
-        assert link.is_symlink(), "Symlink must be created for an available skill"
+        dest = ctx.cwd / ".claude" / "skills" / "no-requirements-skill"
+        assert dest.is_dir(), "Skill must be copied for an available skill"
+        assert not dest.is_symlink(), "Must be a real copy, not a symlink"
 
     def test_unavailable_skill_logged_as_warning(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture

@@ -262,9 +262,9 @@ class TestSkillsSummary:
             f"Expected _map_skills before _generate_claude_md, got: {call_log}"
         )
 
-        # Also verify the symlink is in place
-        link = agent_workspace / ".claude" / "skills" / "test-skill"
-        assert link.is_symlink(), "Skill symlink was not created"
+        # Also verify the skill copy is in place
+        dest = agent_workspace / ".claude" / "skills" / "test-skill"
+        assert dest.is_dir(), "Skill was not copied"
 
 
 # ---------------------------------------------------------------------------
