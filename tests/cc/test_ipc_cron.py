@@ -1,11 +1,9 @@
 """Unit tests for the cron IPC handler in MCSocketServer."""
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-
 from claude_code.ipc_server import MCSocketServer
 
 pytestmark = pytest.mark.asyncio

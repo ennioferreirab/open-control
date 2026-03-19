@@ -33,7 +33,7 @@ vi.mock("@/hooks/useSelectableAgents", () => ({
   ],
 }));
 
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 
 const baseTask = {
   _id: "task1" as never,
@@ -44,6 +44,7 @@ const baseTask = {
   assignedAgent: "agent-alpha",
   trustLevel: "autonomous" as const,
   tags: [],
+  boardId: "board123" as Id<"boards">,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
 } as Doc<"tasks">;

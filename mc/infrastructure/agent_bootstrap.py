@@ -30,7 +30,6 @@ from mc.infrastructure.config import (
     _config_default_model,
     _parse_utc_timestamp,
     _read_file_or_none,
-    _read_session_data,
 )
 
 if TYPE_CHECKING:
@@ -218,7 +217,7 @@ def ensure_low_agent(bridge: ConvexBridge) -> None:
 
 
 def _restore_archived_files(agent_dir: Path, archive: dict) -> None:
-    """Write archived memory/history/session files back to disk.
+    """Write archived memory/history/session files back to disk (legacy compat).
 
     Args:
         agent_dir: Path to the agent's local directory (e.g. ~/.nanobot/agents/{name}/).
@@ -244,17 +243,165 @@ def _restore_archived_files(agent_dir: Path, archive: dict) -> None:
         (sessions_dir / f"mc_task_{name}.jsonl").write_text(session_data, encoding="utf-8")
 
 
+def _restore_memory_from_backup(bridge: ConvexBridge, agent_name: str, agent_dir: Path) -> None:
+    """Restore board-scoped memory from Convex backup when files are missing on disk.
+
+    Checks each board in the backup — if the board workspace memory directory
+    is missing locally, recreates it and writes MEMORY.md + HISTORY.md.
+    Also restores global workspace memory for nanobot.
+
+    Archive data is never cleared — it persists as a permanent backup.
+    """
+    try:
+        backup = bridge.get_agent_memory_backup(agent_name)
+    except Exception:
+        logger.warning("Failed to fetch memory backup for agent '%s'", agent_name, exc_info=True)
+        return
+
+    if not backup:
+        return
+
+    boards_root = Path.home() / ".nanobot" / "boards"
+    restored_count = 0
+
+    # Restore per-board memory
+    boards = backup.get("boards") or []
+    for board_entry in boards:
+        board_name = board_entry.get("board_name")
+        if not board_name:
+            continue
+        board_memory_dir = boards_root / board_name / "agents" / agent_name / "memory"
+        memory_file = board_memory_dir / "MEMORY.md"
+        history_file = board_memory_dir / "HISTORY.md"
+
+        # Only restore if memory directory or files are missing
+        if memory_file.exists() and history_file.exists():
+            continue
+
+        board_memory_dir.mkdir(parents=True, exist_ok=True)
+        # Also ensure sessions dir exists
+        (boards_root / board_name / "agents" / agent_name / "sessions").mkdir(
+            parents=True, exist_ok=True
+        )
+
+        mem = board_entry.get("memory_content")
+        if mem and not memory_file.exists():
+            memory_file.write_text(mem, encoding="utf-8")
+        hist = board_entry.get("history_content")
+        if hist and not history_file.exists():
+            history_file.write_text(hist, encoding="utf-8")
+
+        restored_count += 1
+        logger.info(
+            "Restored board memory for agent '%s' on board '%s'",
+            agent_name,
+            board_name,
+        )
+
+    # Restore global workspace memory (nanobot)
+    global_mem = backup.get("global_memory_content")
+    global_hist = backup.get("global_history_content")
+    if global_mem or global_hist:
+        global_memory_dir = agent_dir / "memory"
+        global_memory_dir.mkdir(parents=True, exist_ok=True)
+        if global_mem and not (global_memory_dir / "MEMORY.md").exists():
+            (global_memory_dir / "MEMORY.md").write_text(global_mem, encoding="utf-8")
+            restored_count += 1
+        if global_hist and not (global_memory_dir / "HISTORY.md").exists():
+            (global_memory_dir / "HISTORY.md").write_text(global_hist, encoding="utf-8")
+
+    if restored_count:
+        logger.info(
+            "Restored memory for agent '%s' from backup (%d items)", agent_name, restored_count
+        )
+
+
+def _backup_agent_memory(bridge: ConvexBridge, agents_dir: Path) -> int:
+    """Back up all agent memory to Convex.
+
+    Regular agents: scans board workspaces for MEMORY.md and HISTORY.md.
+    Nanobot: reads from global workspace.
+
+    Returns count of agents backed up.
+    """
+    from mc.infrastructure.boards import list_agent_board_workspaces
+
+    backed_up = 0
+
+    try:
+        convex_agents = bridge.list_agents()
+    except Exception:
+        logger.exception("Failed to list agents for memory backup")
+        return 0
+
+    for agent_data in convex_agents:
+        name = agent_data.get("name")
+        if not name:
+            continue
+        # Skip agents with no local directory (e.g. low-agent is Convex-only).
+        agent_dir = agents_dir / name
+        if not agent_dir.is_dir():
+            continue
+
+        try:
+            if name == NANOBOT_AGENT_NAME:
+                # Nanobot uses global workspace
+                workspace = Path.home() / ".nanobot" / "workspace"
+                global_mem = _read_file_or_none(workspace / "memory" / "MEMORY.md")
+                global_hist = _read_file_or_none(workspace / "memory" / "HISTORY.md")
+                if global_mem is not None or global_hist is not None:
+                    bridge.backup_agent_memory(
+                        name,
+                        boards_data=[],
+                        global_data={
+                            "memory_content": global_mem,
+                            "history_content": global_hist,
+                        },
+                    )
+                    backed_up += 1
+                    logger.info("Backed up nanobot global memory")
+            else:
+                # Regular agents — collect per-board memory
+                boards_data: list[dict[str, Any]] = []
+                board_workspaces = list_agent_board_workspaces(name)
+                for board_name, board_ws in board_workspaces:
+                    memory_dir = board_ws / "memory"
+                    mem = _read_file_or_none(memory_dir / "MEMORY.md")
+                    hist = _read_file_or_none(memory_dir / "HISTORY.md")
+                    if mem is not None or hist is not None:
+                        entry: dict[str, Any] = {"board_name": board_name}
+                        if mem is not None:
+                            entry["memory_content"] = mem
+                        if hist is not None:
+                            entry["history_content"] = hist
+                        boards_data.append(entry)
+
+                if boards_data:
+                    bridge.backup_agent_memory(name, boards_data)
+                    backed_up += 1
+                    logger.info(
+                        "Backed up memory for agent '%s' (%d boards)", name, len(boards_data)
+                    )
+        except Exception:
+            logger.exception("Failed to backup memory for agent '%s'", name)
+
+    return backed_up
+
+
 def _cleanup_deleted_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
-    """Archive local data for soft-deleted agents, then remove their folders.
+    """Archive local data for soft-deleted agents (board-scoped + global), then remove their folders.
 
     For each deleted agent that still has a local folder:
-    1. Read MEMORY.md, HISTORY.md, and session JSONL files.
-    2. Archive them to Convex (must succeed before deletion).
-    3. Delete the local folder.
+    1. Scan board workspaces for per-board MEMORY.md and HISTORY.md.
+    2. Read global agent memory (for fallback/nanobot).
+    3. Back up to Convex via upsertMemoryBackup (must succeed before deletion).
+    4. Delete local agent folder and board workspace directories.
 
     Idempotent: if the local folder is already gone, no action is taken.
-    Fail-safe: if archiving fails for an agent, its local folder is NOT deleted.
+    Fail-safe: if backup fails for an agent, its local folder is NOT deleted.
     """
+    from mc.infrastructure.boards import list_agent_board_workspaces
+
     try:
         deleted_agents = bridge.list_deleted_agents()
     except Exception:
@@ -269,23 +416,52 @@ def _cleanup_deleted_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
         if not agent_dir.is_dir():
             continue  # Already cleaned up — idempotent
 
-        memory = _read_file_or_none(agent_dir / "memory" / "MEMORY.md")
-        history = _read_file_or_none(agent_dir / "memory" / "HISTORY.md")
-        session = _read_session_data(agent_dir / "sessions")
+        # Collect board-scoped memory
+        boards_data: list[dict[str, Any]] = []
+        board_workspaces = list_agent_board_workspaces(name)
+        for board_name, board_ws in board_workspaces:
+            memory_dir = board_ws / "memory"
+            mem = _read_file_or_none(memory_dir / "MEMORY.md")
+            hist = _read_file_or_none(memory_dir / "HISTORY.md")
+            if mem is not None or hist is not None:
+                entry: dict[str, Any] = {"board_name": board_name}
+                if mem is not None:
+                    entry["memory_content"] = mem
+                if hist is not None:
+                    entry["history_content"] = hist
+                boards_data.append(entry)
 
-        if memory is None and history is None and session is None:
+        # Collect global agent memory (fallback)
+        global_mem = _read_file_or_none(agent_dir / "memory" / "MEMORY.md")
+        global_hist = _read_file_or_none(agent_dir / "memory" / "HISTORY.md")
+        global_data: dict[str, str | None] | None = None
+        if global_mem is not None or global_hist is not None:
+            global_data = {
+                "memory_content": global_mem,
+                "history_content": global_hist,
+            }
+
+        if not boards_data and global_data is None:
             logger.info(
-                "No archive data for agent '%s' — skipping archive call, proceeding to cleanup",
+                "No archive data for agent '%s' — skipping backup call, proceeding to cleanup",
                 name,
             )
         else:
             try:
-                bridge.archive_agent_data(name, memory, history, session)
-                logger.info("Archived agent data for '%s'", name)
+                bridge.backup_agent_memory(name, boards_data, global_data)
+                logger.info("Backed up agent memory for '%s' (%d boards)", name, len(boards_data))
             except Exception:
-                logger.exception("Failed to archive agent '%s' — skipping cleanup", name)
-                continue  # Don't delete if archive failed
+                logger.exception("Failed to backup agent '%s' — skipping cleanup", name)
+                continue  # Don't delete if backup failed
 
+        # Delete board workspace directories
+        for _board_name, board_ws in board_workspaces:
+            try:
+                shutil.rmtree(board_ws)
+            except OSError:
+                logger.warning("Failed to remove board workspace %s for agent '%s'", board_ws, name)
+
+        # Delete global agent directory
         try:
             shutil.rmtree(agent_dir)
             logger.info("Removed local folder for deleted agent '%s'", name)
@@ -295,20 +471,13 @@ def _cleanup_deleted_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
                 name,
             )
 
-        # TODO (CC-6 H1): Clean up cc_session:{name}:* keys from Convex settings
-        # when an agent is deleted. The bridge does not currently expose a
-        # settings:listByPrefix query, so we cannot enumerate and delete all
-        # session keys for this agent. This is a known gap — when
-        # settings:listByPrefix (or an equivalent bulk-delete mutation) is
-        # available, iterate over cc_session:{name}:* keys and call
-        # settings:set with value="" for each, or add a dedicated
-        # settings:deleteByPrefix mutation.
-
 
 def _write_back_convex_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
     """Write-back Convex -> local for agents where Convex is newer.
 
     Both timestamps are compared as UTC-aware datetime objects.
+    After writing config.yaml, checks if board memory directories are missing
+    and restores from Convex backup if available. Archive is never cleared.
     """
     from datetime import datetime
 
@@ -358,24 +527,9 @@ def _write_back_convex_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
                 logger.exception("Write-back failed for new agent '%s'", name)
                 continue
 
-            # Restore archived memory/history/session data if present (restore flow).
-            # Clear the archive fields from Convex after a successful restore to free
-            # storage and prevent stale data from being re-archived on a second delete.
-            try:
-                archive = bridge.get_agent_archive(name)
-                if archive:
-                    _restore_archived_files(agents_dir / name, archive)
-                    logger.info("Restored archived data for agent '%s'", name)
-                    try:
-                        bridge.clear_agent_archive(name)
-                    except Exception:
-                        logger.exception(
-                            "Failed to clear archive for agent '%s' — "
-                            "archive data remains in Convex",
-                            name,
-                        )
-            except Exception:
-                logger.exception("Failed to restore archive for agent '%s'", name)
+        # Restore memory from backup if board workspaces are missing on disk.
+        # Archive data is kept persistent — never cleared after restore.
+        _restore_memory_from_backup(bridge, name, agents_dir / name)
 
 
 def _sync_model_tiers(bridge: ConvexBridge) -> None:
@@ -837,3 +991,23 @@ def sync_nanobot_default_model(bridge: ConvexBridge) -> bool:
         convex_model,
     )
     return True
+
+
+def cleanup_orphaned_tasks(bridge: ConvexBridge) -> int:
+    """Delete tasks that lack a boardId (pre-production cleanup).
+
+    boardId is now a required field on tasks. Any existing tasks without it
+    are orphaned records from before the schema change and can be safely
+    deleted in a pre-production environment.
+
+    Returns the number of tasks deleted.
+    """
+    try:
+        result = bridge.mutation("tasks:deleteOrphanedTasks", {})
+        deleted = result if isinstance(result, int) else 0
+        if deleted:
+            logger.info("[cleanup] Deleted %d orphaned tasks without boardId", deleted)
+        return deleted
+    except Exception:
+        logger.warning("[cleanup] Failed to delete orphaned tasks", exc_info=True)
+        return 0

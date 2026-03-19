@@ -1426,10 +1426,10 @@ describe("retryStep", () => {
       completedAt: undefined,
     });
     expect(patchedById["task-1"]).toMatchObject({
-      status: "in_progress",
+      status: "assigned",
       stalledAt: undefined,
     });
-    expect(taskPatches.some((patch) => patch.status === "retrying")).toBe(true);
+    expect(taskPatches.some((patch) => patch.status === "assigned")).toBe(true);
     expect(taskPatches.some((patch) => patch.stalledAt === undefined)).toBe(true);
     expect(
       inserted.some(
@@ -1438,7 +1438,7 @@ describe("retryStep", () => {
     ).toBe(true);
   });
 
-  it("rejects retry for non-crashed steps", async () => {
+  it("rejects retry for non-retryable steps", async () => {
     const handler = getHandler();
     const ctx = {
       db: {
@@ -1446,7 +1446,7 @@ describe("retryStep", () => {
           _id: "step-1",
           taskId: "task-1",
           title: "Already done",
-          status: "completed",
+          status: "planned",
           assignedAgent: "nanobot",
         }),
         patch: async () => undefined,
@@ -1454,7 +1454,199 @@ describe("retryStep", () => {
       },
     };
 
-    await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(/not in crashed status/);
+    await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(/cannot be retried/);
+  });
+
+  it("retries completed step on paused task — step becomes assigned, task stays review", async () => {
+    const handler = getHandler();
+    const stepPatches: Record<string, unknown>[] = [];
+    const taskPatches: Record<string, unknown>[] = [];
+    const inserted: Array<{ table: string; value: Record<string, unknown> }> = [];
+    const receipts = new Map<string, unknown>();
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Completed step",
+      status: "completed",
+      assignedAgent: "nanobot",
+      stateVersion: 2,
+      blockedBy: [],
+    };
+    const task = {
+      _id: "task-1",
+      status: "review",
+      reviewPhase: "execution_pause",
+      stateVersion: 5,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => (id === "step-1" ? step : id === "task-1" ? task : null),
+        patch: async (id: string, patch: Record<string, unknown>) => {
+          if (id === "step-1") stepPatches.push(patch);
+          if (id === "task-1") taskPatches.push(patch);
+        },
+        insert: async (table: string, value: Record<string, unknown>) => {
+          inserted.push({ table, value });
+          if (table === "runtimeReceipts") receipts.set(value.idempotencyKey as string, value);
+          return `${table}-id`;
+        },
+        query: (table: string) => ({
+          withIndex: () => ({
+            collect: async () => (table === "steps" ? [step] : []),
+          }),
+        }),
+      },
+    };
+
+    const result = await handler(ctx, { stepId: "step-1" });
+    expect(result).toBe("task-1");
+
+    // Step should transition to assigned
+    expect(stepPatches.some((p) => p.status === "assigned")).toBe(true);
+
+    // Task should NOT transition (stays in review because paused)
+    expect(taskPatches.every((p) => p.status === undefined || p.status !== "assigned")).toBe(true);
+
+    // Activity and message should be logged
+    expect(
+      inserted.some(
+        ({ table, value }) => table === "activities" && value.eventType === "step_retrying",
+      ),
+    ).toBe(true);
+    expect(
+      inserted.some(
+        ({ table, value }) =>
+          table === "messages" && (value.content as string).includes("re-blocked"),
+      ),
+    ).toBe(true);
+  });
+
+  it("retries completed step on non-paused task — task transitions to assigned", async () => {
+    const handler = getHandler();
+    const stepPatches: Record<string, unknown>[] = [];
+    const taskPatches: Record<string, unknown>[] = [];
+    const receipts = new Map<string, unknown>();
+
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Completed step",
+      status: "completed",
+      assignedAgent: "nanobot",
+      stateVersion: 2,
+      blockedBy: [],
+    };
+    const task = {
+      _id: "task-1",
+      status: "in_progress",
+      stateVersion: 5,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => (id === "step-1" ? step : id === "task-1" ? task : null),
+        patch: async (id: string, patch: Record<string, unknown>) => {
+          if (id === "step-1") stepPatches.push(patch);
+          if (id === "task-1") taskPatches.push(patch);
+        },
+        insert: async (table: string, value: Record<string, unknown>) => {
+          if (table === "runtimeReceipts") receipts.set(value.idempotencyKey as string, value);
+          return `${table}-id`;
+        },
+        query: (table: string) => ({
+          withIndex: () => ({
+            collect: async () => (table === "steps" ? [step] : []),
+          }),
+        }),
+      },
+    };
+
+    const result = await handler(ctx, { stepId: "step-1" });
+    expect(result).toBe("task-1");
+
+    // Step should transition to assigned
+    expect(stepPatches.some((p) => p.status === "assigned")).toBe(true);
+
+    // Task should transition to assigned (not paused, so re-dispatch needed)
+    expect(taskPatches.some((p) => p.status === "assigned")).toBe(true);
+  });
+
+  it("cascade re-blocks transitive dependents when retrying completed step", async () => {
+    const handler = getHandler();
+    const patches: Record<string, Record<string, unknown>[]> = {
+      "step-A": [],
+      "step-B": [],
+      "step-C": [],
+    };
+    const receipts = new Map<string, unknown>();
+
+    const stepA = {
+      _id: "step-A",
+      taskId: "task-1",
+      title: "Step A",
+      status: "completed",
+      assignedAgent: "nanobot",
+      stateVersion: 1,
+      blockedBy: [],
+    };
+    const stepB = {
+      _id: "step-B",
+      taskId: "task-1",
+      title: "Step B",
+      status: "completed",
+      assignedAgent: "nanobot",
+      stateVersion: 1,
+      blockedBy: ["step-A"],
+    };
+    const stepC = {
+      _id: "step-C",
+      taskId: "task-1",
+      title: "Step C",
+      status: "completed",
+      assignedAgent: "nanobot",
+      stateVersion: 1,
+      blockedBy: ["step-B"],
+    };
+    const allSteps = [stepA, stepB, stepC];
+    const task = {
+      _id: "task-1",
+      status: "review",
+      reviewPhase: "execution_pause",
+      stateVersion: 3,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-A") return stepA;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, patch: Record<string, unknown>) => {
+          if (patches[id]) patches[id].push(patch);
+        },
+        insert: async (table: string, value: Record<string, unknown>) => {
+          if (table === "runtimeReceipts") receipts.set(value.idempotencyKey as string, value);
+          return `${table}-id`;
+        },
+        query: (table: string) => ({
+          withIndex: () => ({
+            collect: async () => (table === "steps" ? allSteps : []),
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, { stepId: "step-A" });
+
+    // Step A → assigned
+    expect(patches["step-A"].some((p) => p.status === "assigned")).toBe(true);
+    // Step B → blocked (cascade)
+    expect(patches["step-B"].some((p) => p.status === "blocked")).toBe(true);
+    // Step C → blocked (transitive cascade)
+    expect(patches["step-C"].some((p) => p.status === "blocked")).toBe(true);
   });
 });
 

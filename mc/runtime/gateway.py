@@ -30,13 +30,16 @@ from mc.contexts.execution.crash_recovery import AgentGateway  # noqa: F401
 from mc.infrastructure.agent_bootstrap import (  # noqa: F401
     _NANOBOT_AGENT_CONFIG,
     NANOBOT_AGENT_NAME,
+    _backup_agent_memory,
     _cleanup_deleted_agents,
     _distribute_builtin_skills,
     _fetch_bot_identity,
     _restore_archived_files,
+    _restore_memory_from_backup,
     _sync_embedding_model,
     _sync_model_tiers,
     _write_back_convex_agents,
+    cleanup_orphaned_tasks,
     ensure_low_agent,
     ensure_nanobot_agent,
     sync_agent_registry,
@@ -415,6 +418,24 @@ async def main() -> None:
             logger.info("[gateway] Default board ensured")
         except Exception:
             logger.exception("[gateway] Failed to ensure default board")
+
+        # Pre-production cleanup: delete tasks without boardId
+        try:
+            from mc.infrastructure.agent_bootstrap import cleanup_orphaned_tasks
+
+            cleanup_orphaned_tasks(bridge)
+        except Exception:
+            logger.exception("[gateway] Orphaned task cleanup failed")
+
+        # Backup agent memory to Convex
+        try:
+            from mc.infrastructure.agent_bootstrap import _backup_agent_memory
+
+            backed_up = _backup_agent_memory(bridge, agents_dir)
+            if backed_up:
+                logger.info("[gateway] Backed up memory for %d agent(s)", backed_up)
+        except Exception:
+            logger.exception("[gateway] Agent memory backup failed")
 
         await run_gateway(bridge)
     finally:

@@ -211,6 +211,12 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
   const isWaitingHuman = normalizedStatus === "waiting_human";
   const isRunningHuman = normalizedStatus === "running" && step.assignedAgent === "human";
   const agentDisplay = isVisualOnly || step.assignedAgent === "human" ? null : step.assignedAgent;
+  const showRetryButton =
+    !isEditMode &&
+    !!onRetry &&
+    ((normalizedStatus === "crashed" &&
+      (stepErrorMessage === "Stopped by user" || stepErrorMessage === "Task paused" || isPaused)) ||
+      (normalizedStatus === "completed" && isPaused));
 
   // Buttons visible class: always for leaf, on group-hover for non-leaf
   const btnVisibility = isLeafStep ? "opacity-100" : "opacity-0 group-hover:opacity-100";
@@ -334,7 +340,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
           </div>
         )}
 
-        {normalizedStatus === "crashed" && !isEditMode && onRetry && (stepErrorMessage === "Stopped by user" || stepErrorMessage === "Task paused" || isPaused) && (
+        {showRetryButton && (
           <div className="mt-1.5">
             <button
               type="button"

@@ -9,7 +9,6 @@ import sys
 import time
 from pathlib import Path
 
-
 CODEX_CLI_PATH = Path.home() / ".codex" / "auth.json"
 NANOBOT_TOKEN_PATH = Path.home() / "Library" / "Application Support" / "oauth-cli-kit" / "auth" / "codex.json"
 
@@ -57,13 +56,13 @@ def main() -> None:
     except Exception:
         pass
 
-    print(f"Sincronizado com sucesso!")
+    print("Sincronizado com sucesso!")
     print(f"  account_id : {account_id}")
     print(f"  token path : {NANOBOT_TOKEN_PATH}")
     now_ms = int(time.time() * 1000)
     ttl_h = (expires - now_ms) / 3_600_000
     if ttl_h < 0:
-        print(f"  expires    : já expirado (o nanobot fará refresh automático)")
+        print("  expires    : já expirado (o nanobot fará refresh automático)")
     else:
         print(f"  expires in : {ttl_h:.1f}h")
 

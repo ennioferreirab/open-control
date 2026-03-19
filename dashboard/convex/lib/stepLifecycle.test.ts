@@ -7,6 +7,7 @@ import {
   isValidStepTransition,
   resolveInitialStepStatus,
   findBlockedStepsReadyToUnblock,
+  findTransitiveDependents,
   resolveBlockedByIds,
   validateBatchSteps,
   logStepStatusChange,
@@ -164,6 +165,76 @@ describe("findBlockedStepsReadyToUnblock", () => {
     );
 
     expect(ready).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findTransitiveDependents
+// ---------------------------------------------------------------------------
+
+describe("findTransitiveDependents", () => {
+  it("returns transitive dependents in a linear chain", () => {
+    const steps = [
+      { _id: asStepId("A"), status: "completed", blockedBy: [] },
+      { _id: asStepId("B"), status: "completed", blockedBy: [asStepId("A")] },
+      { _id: asStepId("C"), status: "completed", blockedBy: [asStepId("B")] },
+    ];
+
+    const result = findTransitiveDependents(
+      asStepId("A"),
+      steps as Parameters<typeof findTransitiveDependents>[1],
+    );
+
+    expect(result).toEqual([asStepId("B"), asStepId("C")]);
+  });
+
+  it("handles diamond dependency graph", () => {
+    //   A
+    //  / \
+    // B   C
+    //  \ /
+    //   D
+    const steps = [
+      { _id: asStepId("A"), status: "completed", blockedBy: [] },
+      { _id: asStepId("B"), status: "completed", blockedBy: [asStepId("A")] },
+      { _id: asStepId("C"), status: "completed", blockedBy: [asStepId("A")] },
+      { _id: asStepId("D"), status: "completed", blockedBy: [asStepId("B"), asStepId("C")] },
+    ];
+
+    const result = findTransitiveDependents(
+      asStepId("A"),
+      steps as Parameters<typeof findTransitiveDependents>[1],
+    );
+
+    expect(result).toHaveLength(3);
+    expect(result).toContain(asStepId("B"));
+    expect(result).toContain(asStepId("C"));
+    expect(result).toContain(asStepId("D"));
+  });
+
+  it("returns empty for step with no dependents", () => {
+    const steps = [
+      { _id: asStepId("A"), status: "completed", blockedBy: [] },
+      { _id: asStepId("B"), status: "completed", blockedBy: [] },
+    ];
+
+    const result = findTransitiveDependents(
+      asStepId("A"),
+      steps as Parameters<typeof findTransitiveDependents>[1],
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty for isolated step", () => {
+    const steps = [{ _id: asStepId("A"), status: "completed", blockedBy: [] }];
+
+    const result = findTransitiveDependents(
+      asStepId("A"),
+      steps as Parameters<typeof findTransitiveDependents>[1],
+    );
+
+    expect(result).toEqual([]);
   });
 });
 

@@ -78,8 +78,20 @@ describe("FlowStepNode", () => {
     expect(screen.queryByRole("button", { name: "Retry step" })).not.toBeInTheDocument();
   });
 
-  it("does not show Retry step for non-crashed nodes", () => {
-    renderNode({ status: "completed" });
+  it("does not show Retry step for non-crashed/non-completed nodes", () => {
+    renderNode({ status: "running" });
+
+    expect(screen.queryByRole("button", { name: "Retry step" })).not.toBeInTheDocument();
+  });
+
+  it("shows Retry step for completed nodes when paused", () => {
+    renderNode({ status: "completed", isPaused: true, stepErrorMessage: undefined });
+
+    expect(screen.getByRole("button", { name: "Retry step" })).toBeInTheDocument();
+  });
+
+  it("does not show Retry step for completed nodes when not paused", () => {
+    renderNode({ status: "completed", isPaused: false, stepErrorMessage: undefined });
 
     expect(screen.queryByRole("button", { name: "Retry step" })).not.toBeInTheDocument();
   });

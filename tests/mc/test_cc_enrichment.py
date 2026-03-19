@@ -20,6 +20,7 @@ def _make_bridge():
     bridge.create_activity = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
     bridge.mutation = MagicMock(return_value=None)
+    bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
     return bridge
 
 
@@ -234,7 +235,14 @@ class TestEnrichCCDescription:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=mock_result)
 
-            await executor._execute_cc_task("task1", "Test", "desc", "test", agent_data)
+            await executor._execute_cc_task(
+                "task1",
+                "Test",
+                "desc",
+                "test",
+                agent_data,
+                task_data={"board_id": "board_001"},
+            )
 
         assert agent_data.prompt == "Convex prompt content"
 
@@ -276,7 +284,14 @@ class TestEnrichCCDescription:
             MockIPC.return_value.stop = AsyncMock()
             MockProv.return_value.execute_task = AsyncMock(return_value=mock_result)
 
-            await executor._execute_cc_task("task1", "Test", "desc", "test", agent_data)
+            await executor._execute_cc_task(
+                "task1",
+                "Test",
+                "desc",
+                "test",
+                agent_data,
+                task_data={"board_id": "board_001"},
+            )
 
         assert agent_data.prompt == "Hello Bot, you are assistant"
 
@@ -302,7 +317,12 @@ class TestEnrichCCDescription:
             output="done", session_id="s1", cost_usd=0.01, usage={}, is_error=False
         )
 
-        # Use real workspace manager but mock IPC/provider
+        # Use real workspace manager but mock IPC/provider.
+        # Patch _resolve_cc_board to return (None, "clean") so the workspace
+        # manager falls back to the non-board path under tmp_path.
+        async def _fake_resolve_board(td, an, t):
+            return (None, "clean")
+
         with (
             patch("claude_code.ipc_server.MCSocketServer") as MockIPC,
             patch("claude_code.provider.ClaudeCodeProvider") as MockProv,
@@ -310,6 +330,7 @@ class TestEnrichCCDescription:
             patch("claude_code.workspace.CCWorkspaceManager", return_value=ws_mgr),
             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
+            patch.object(executor, "_resolve_cc_board", side_effect=_fake_resolve_board),
         ):
             MockIPC.return_value.start = AsyncMock()
             MockIPC.return_value.stop = AsyncMock()
@@ -322,6 +343,7 @@ class TestEnrichCCDescription:
                 "analyst",
                 agent_data,
                 needs_enrichment=False,
+                task_data={"board_id": "board_001"},
             )
 
         # Convex prompt should have been synced to agent_data

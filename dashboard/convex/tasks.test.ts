@@ -172,7 +172,7 @@ describe("tasks.create", () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
-    const taskId = await handler(ctx, { title: "Draft release notes" });
+    const taskId = await handler(ctx, { title: "Draft release notes", boardId: "board-123" });
     expect(taskId).toBe("task-id-123");
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
@@ -191,6 +191,7 @@ describe("tasks.create", () => {
       isManual: true,
       assignedAgent: "coder",
       supervisionMode: "supervised",
+      boardId: "board-123",
     });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
@@ -212,6 +213,7 @@ describe("tasks.create", () => {
       title: "Validate release plan",
       assignedAgent: "reviewer",
       supervisionMode: "supervised",
+      boardId: "board-123",
     });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
@@ -227,7 +229,7 @@ describe("tasks.create", () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
-    await handler(ctx, { title: "Implement feature X" });
+    await handler(ctx, { title: "Implement feature X", boardId: "board-123" });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
@@ -239,7 +241,7 @@ describe("tasks.create", () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
-    await handler(ctx, { title: "Fix critical bug", assignedAgent: "coder" });
+    await handler(ctx, { title: "Fix critical bug", assignedAgent: "coder", boardId: "board-123" });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
@@ -251,7 +253,7 @@ describe("tasks.create", () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
-    await handler(ctx, { title: "Manual checklist", assignedAgent: "coder", isManual: true });
+    await handler(ctx, { title: "Manual checklist", assignedAgent: "coder", isManual: true, boardId: "board-123" });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
@@ -262,7 +264,7 @@ describe("tasks.create", () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
-    await handler(ctx, { title: "Open-ended research task" });
+    await handler(ctx, { title: "Open-ended research task", boardId: "board-123" });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
@@ -277,6 +279,7 @@ describe("tasks.create", () => {
       title: "Workflow-routed task",
       assignedAgent: "coder",
       routingMode: "workflow",
+      boardId: "board-123",
     });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
@@ -288,7 +291,7 @@ describe("tasks.create", () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
-    await handler(ctx, { title: "Write unit tests" });
+    await handler(ctx, { title: "Write unit tests", boardId: "board-123" });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
@@ -299,7 +302,7 @@ describe("tasks.create", () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
-    await handler(ctx, { title: "Implement feature X" });
+    await handler(ctx, { title: "Implement feature X", boardId: "board-123" });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
@@ -1026,7 +1029,13 @@ describe("tasks.pauseTask", () => {
       title: "Running Task",
     }));
 
-    const taskId = await handler({ db: { get, patch, insert } }, { taskId: "task-1" });
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn(async () => []),
+      })),
+    }));
+
+    const taskId = await handler({ db: { get, patch, insert, query } }, { taskId: "task-1" });
 
     expect(taskId).toBe("task-1");
     expect(patch).toHaveBeenCalledWith(
@@ -1081,7 +1090,7 @@ describe("tasks.pauseTask", () => {
 });
 
 describe("tasks.resumeTask", () => {
-  it("transitions paused task (review without awaitingKickoff) back to in_progress (happy path, AC 5)", async () => {
+  it("transitions paused task (review without awaitingKickoff) back to assigned (happy path, AC 5)", async () => {
     const handler = getResumeTaskHandler();
     const patch = vi.fn(async () => undefined);
     const insert = vi.fn(async () => "activity-1");
@@ -1093,13 +1102,18 @@ describe("tasks.resumeTask", () => {
       stateVersion: 1,
       // awaitingKickoff is NOT set — this is the paused state
     }));
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn(async () => []),
+      })),
+    }));
 
-    const taskId = await handler({ db: { get, patch, insert } }, { taskId: "task-1" });
+    const taskId = await handler({ db: { get, patch, insert, query } }, { taskId: "task-1" });
 
     expect(taskId).toBe("task-1");
     expect(patch).toHaveBeenCalledWith(
       "task-1",
-      expect.objectContaining({ status: "in_progress", stateVersion: 2 }),
+      expect.objectContaining({ status: "assigned", stateVersion: 2 }),
     );
     const patchArg = (patch as ReturnType<typeof vi.fn>).mock.calls[0][1];
     expect(patchArg.reviewPhase).toBeUndefined();
@@ -1174,15 +1188,20 @@ describe("tasks.resumeTask", () => {
       title: "Paused Task",
       reviewPhase: "execution_pause",
     }));
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn(async () => []),
+      })),
+    }));
 
     const updatedPlan = { steps: [{ tempId: "s1", title: "Step A" }] };
-    await handler({ db: { get, patch, insert } }, { taskId: "task-1", executionPlan: updatedPlan });
+    await handler({ db: { get, patch, insert, query } }, { taskId: "task-1", executionPlan: updatedPlan });
 
     expect(patch).toHaveBeenNthCalledWith(
       1,
       "task-1",
       expect.objectContaining({
-        status: "in_progress",
+        status: "assigned",
       }),
     );
     expect(patch).toHaveBeenNthCalledWith(

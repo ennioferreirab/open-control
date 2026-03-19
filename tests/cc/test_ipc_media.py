@@ -1,8 +1,9 @@
 """Unit tests for media support in send_message IPC handler."""
 from __future__ import annotations
-import asyncio
+
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from claude_code.ipc_server import MCSocketServer
 

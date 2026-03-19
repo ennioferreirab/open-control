@@ -1,9 +1,14 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
 import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+
+// Stub scrollIntoView for jsdom (used by TaskDetailThreadTab on mount)
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 // Mock convex/react
 const mockUseQuery = vi.fn();
@@ -239,6 +244,7 @@ const baseTask: TaskDoc = {
   assignedAgent: "agent-alpha",
   trustLevel: "autonomous" as const,
   tags: ["frontend"],
+  boardId: "board123" as Id<"boards">,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
 };

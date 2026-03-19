@@ -138,6 +138,11 @@ class ProviderCliRunnerStrategy:
 
         command.extend(rest_of_base)
 
+        # Isolate agent sessions from host user settings (plugins, hooks, MCPs).
+        # Only load project-level settings written by CCWorkspaceManager.
+        command.extend(["--setting-sources", "project"])
+        command.extend(["--strict-mcp-config"])
+
         # Agent-specific runtime flags (model, permissions, tools, MCP config)
         agent = request.agent
         if agent is not None:

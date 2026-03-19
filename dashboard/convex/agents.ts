@@ -391,12 +391,16 @@ export const listDeleted = query({
   },
 });
 
-export const archiveAgentData = internalMutation({
+export const upsertMemoryBackup = internalMutation({
   args: {
     agentName: v.string(),
-    memoryContent: v.optional(v.string()),
-    historyContent: v.optional(v.string()),
-    sessionData: v.optional(v.string()),
+    boards: v.array(v.object({
+      boardName: v.string(),
+      memoryContent: v.optional(v.string()),
+      historyContent: v.optional(v.string()),
+    })),
+    globalMemoryContent: v.optional(v.string()),
+    globalHistoryContent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const agent = await ctx.db
@@ -408,18 +412,14 @@ export const archiveAgentData = internalMutation({
       throw new ConvexError(`Agent '${args.agentName}' not found`);
     }
 
-    if (!agent.deletedAt) {
-      throw new ConvexError(
-        `Agent '${args.agentName}' is not deleted — archive only applies to soft-deleted agents`,
-      );
-    }
-
-    const patch: Record<string, unknown> = {};
-    if (args.memoryContent !== undefined) patch.memoryContent = args.memoryContent;
-    if (args.historyContent !== undefined) patch.historyContent = args.historyContent;
-    if (args.sessionData !== undefined) patch.sessionData = args.sessionData;
-
-    await ctx.db.patch(agent._id, patch);
+    await ctx.db.patch(agent._id, {
+      memoryBackup: {
+        boards: args.boards,
+        globalMemoryContent: args.globalMemoryContent,
+        globalHistoryContent: args.globalHistoryContent,
+        lastBackupAt: new Date().toISOString(),
+      },
+    });
   },
 });
 
@@ -442,8 +442,7 @@ export const restoreAgent = mutation({
     }
 
     const timestamp = new Date().toISOString();
-    // Only clear deletedAt — archive fields (memoryContent/historyContent/sessionData) are cleared
-    // by the Python write-back AFTER successfully restoring the files to disk.
+    // Only clear deletedAt — memoryBackup is kept as a persistent backup.
     await ctx.db.patch(agent._id, { deletedAt: undefined });
 
     await ctx.db.insert("activities", {
@@ -455,7 +454,7 @@ export const restoreAgent = mutation({
   },
 });
 
-export const getArchive = query({
+export const getMemoryBackup = query({
   args: {
     agentName: v.string(),
   },
@@ -469,41 +468,10 @@ export const getArchive = query({
       return null;
     }
 
-    const hasArchive =
-      agent.memoryContent != null || agent.historyContent != null || agent.sessionData != null;
-    if (!hasArchive) {
-      return null;
-    }
-
-    return {
-      memoryContent: agent.memoryContent ?? null,
-      historyContent: agent.historyContent ?? null,
-      sessionData: agent.sessionData ?? null,
-    };
+    return agent.memoryBackup ?? null;
   },
 });
 
-export const clearAgentArchive = internalMutation({
-  args: {
-    agentName: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const agent = await ctx.db
-      .query("agents")
-      .withIndex("by_name", (q) => q.eq("name", args.agentName))
-      .first();
-
-    if (!agent) {
-      return; // Agent may have been deleted again; silently skip
-    }
-
-    await ctx.db.patch(agent._id, {
-      memoryContent: undefined,
-      historyContent: undefined,
-      sessionData: undefined,
-    });
-  },
-});
 
 export const publishProjection = mutation({
   args: {
@@ -613,3 +581,4 @@ export const incrementStepMetric = internalMutation({
     await incrementAgentStepMetric(ctx.db as unknown as AgentMetricDb, args.agentName);
   },
 });
+

@@ -15,7 +15,7 @@ export interface CreateTaskArgs {
   supervisionMode?: "autonomous" | "supervised";
   reviewers?: string[];
   isManual?: boolean;
-  boardId?: Id<"boards">;
+  boardId: Id<"boards">;
   autoTitle?: boolean;
   files?: Array<{
     name: string;

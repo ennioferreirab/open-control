@@ -54,11 +54,11 @@ def test_parse_review_result_accepts_rejected_payload() -> None:
 def test_parse_review_result_extracts_json_from_prose() -> None:
     """Parser should extract JSON when agent wraps it in commentary."""
     result = parse_review_result(
-        'Here is my review:\n\n'
+        "Here is my review:\n\n"
         '{"verdict": "rejected", "issues": ["Missing data"], '
         '"strengths": ["Good structure"], "scores": {"accuracy": 0.3}, '
         '"vetoesTriggered": [], "recommendedReturnStep": "write"}'
-        '\n\nHope this helps!'
+        "\n\nHope this helps!"
     )
     assert result.verdict == "rejected"
     assert result.issues == ["Missing data"]
@@ -68,7 +68,7 @@ def test_parse_review_result_extracts_json_from_prose() -> None:
 def test_parse_review_result_handles_braces_in_strings() -> None:
     """JSON with braces inside string values must parse correctly."""
     result = parse_review_result(
-        'Review:\n'
+        "Review:\n"
         '{"verdict": "rejected", "issues": ["Fix {alignment} issue"], '
         '"strengths": [], "scores": {}, '
         '"vetoesTriggered": [], "recommendedReturnStep": null}'
@@ -80,11 +80,11 @@ def test_parse_review_result_handles_braces_in_strings() -> None:
 def test_parse_review_result_strips_markdown_fences_with_prose() -> None:
     """Markdown fences around JSON with trailing prose."""
     result = parse_review_result(
-        '```json\n'
+        "```json\n"
         '{"verdict": "approved", "issues": [], "strengths": ["Clean"], '
         '"scores": {"overall": 0.9}, "vetoesTriggered": [], '
         '"recommendedReturnStep": null}\n'
-        '```'
+        "```"
     )
     assert result.verdict == "approved"
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { TaskCard } from "@/features/tasks/components/TaskCard";
+import type { Id } from "@/convex/_generated/dataModel";
 
 // Mock motion/react-client to render plain divs
 vi.mock("motion/react-client", () => ({
@@ -32,6 +33,7 @@ const baseTask = {
   title: "Test task",
   status: "inbox" as const,
   trustLevel: "autonomous" as const,
+  boardId: "board123" as Id<"boards">,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
 };

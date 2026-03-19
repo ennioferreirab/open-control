@@ -14,11 +14,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from claude_code.types import CCTaskResult, ClaudeCodeOpts, WorkspaceContext
 
 from mc.contexts.execution.executor import TaskExecutor
 from mc.types import AgentData
-from claude_code.types import CCTaskResult, ClaudeCodeOpts, WorkspaceContext
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

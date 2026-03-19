@@ -352,9 +352,8 @@ Polling queries: `tasks:listByStatus` with each status filter.
 | `list_deleted_agents()` | `agents:listDeleted` | query |
 | `deactivate_agents_except(names)` | `agents:deactivateExcept` | mutation |
 | `update_agent_status(name, status)` | `agents:updateStatus` | mutation |
-| `archive_agent_data(...)` | `agents:archiveAgentData` | mutation |
-| `get_agent_archive(name)` | `agents:getArchive` | query |
-| `clear_agent_archive(name)` | `agents:clearAgentArchive` | mutation |
+| `backup_agent_memory(name, boards_data, global_data)` | `agents:upsertMemoryBackup` | mutation |
+| `get_agent_memory_backup(name)` | `agents:getMemoryBackup` | query |
 
 #### Other Namespaces
 

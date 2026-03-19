@@ -76,7 +76,7 @@ export const create = mutation({
     trustLevel: v.optional(v.string()),
     reviewers: v.optional(v.array(v.string())),
     isManual: v.optional(v.boolean()),
-    boardId: v.optional(v.id("boards")),
+    boardId: v.id("boards"),
     cronParentTaskId: v.optional(v.string()),
     activeCronJobId: v.optional(v.string()),
     sourceAgent: v.optional(v.string()),
@@ -801,5 +801,25 @@ export const patchRoutingDecision = internalMutation({
     if (args.routingMode !== undefined) patch.routingMode = args.routingMode;
     if (args.routingDecision !== undefined) patch.routingDecision = args.routingDecision;
     await ctx.db.patch(args.taskId, patch);
+  },
+});
+
+/**
+ * One-time cleanup: hard-delete tasks that lack a boardId.
+ * Pre-production only — these are orphaned records from before boardId
+ * became a required field.
+ */
+export const deleteOrphanedTasks = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("tasks").collect();
+    let deleted = 0;
+    for (const task of all) {
+      if (!task.boardId) {
+        await ctx.db.delete(task._id);
+        deleted++;
+      }
+    }
+    return deleted;
   },
 });

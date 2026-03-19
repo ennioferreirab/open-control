@@ -104,7 +104,8 @@ class TestInvalidTransitions:
         assert is_valid_transition(TaskStatus.DONE, TaskStatus.ASSIGNED) is True
 
     def test_done_to_in_progress(self) -> None:
-        assert is_valid_transition(TaskStatus.DONE, TaskStatus.IN_PROGRESS) is False
+        # done -> in_progress is valid (workflow spec allows resume)
+        assert is_valid_transition(TaskStatus.DONE, TaskStatus.IN_PROGRESS) is True
 
     def test_done_to_review(self) -> None:
         assert is_valid_transition(TaskStatus.DONE, TaskStatus.REVIEW) is False
@@ -128,8 +129,8 @@ class TestValidateTransition:
 
     def test_error_message_format(self) -> None:
         with pytest.raises(ValueError) as exc_info:
-            validate_transition(TaskStatus.DONE, TaskStatus.IN_PROGRESS)
-        assert "Cannot transition from 'done' to 'in_progress'" in str(exc_info.value)
+            validate_transition(TaskStatus.DONE, TaskStatus.INBOX)
+        assert "Cannot transition from 'done' to 'inbox'" in str(exc_info.value)
 
 
 # --- get_event_type tests ---

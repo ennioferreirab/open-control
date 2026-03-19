@@ -261,9 +261,7 @@ class StepDispatcher:
 
         # 2. Global setting
         try:
-            global_limit = await asyncio.to_thread(
-                self._bridge.get_review_loop_limit
-            )
+            global_limit = await asyncio.to_thread(self._bridge.get_review_loop_limit)
             return global_limit
         except Exception:
             logger.debug(
@@ -453,9 +451,7 @@ class StepDispatcher:
                 self._execute_step(task_id, step), name=f"step-{step_id}"
             )
 
-        monitor = asyncio.create_task(
-            self._monitor_step_cancellation(task_id, step_tasks)
-        )
+        monitor = asyncio.create_task(self._monitor_step_cancellation(task_id, step_tasks))
         try:
             results = await asyncio.gather(*step_tasks.values(), return_exceptions=True)
         finally:
@@ -707,9 +703,7 @@ class StepDispatcher:
                 )
 
                 # Resolve the limit: workflow spec → global setting → hardcoded 5
-                review_loop_limit = await self._resolve_review_loop_limit(
-                    task_id, task_data
-                )
+                review_loop_limit = await self._resolve_review_loop_limit(task_id, task_data)
 
                 if review_loop_limit != 0 and rejection_count >= review_loop_limit:
                     error_msg = (
@@ -746,9 +740,7 @@ class StepDispatcher:
 
                 # Resolve step key → Convex step ID.  on_reject_step_id stores
                 # the workflow step key (e.g. "write"), not the real Convex _id.
-                all_steps = await asyncio.to_thread(
-                    self._bridge.get_steps_by_task, task_id
-                )
+                all_steps = await asyncio.to_thread(self._bridge.get_steps_by_task, task_id)
                 resolved_target_id: str | None = None
                 target_step_title = reject_target_key
                 for s in all_steps:
@@ -779,14 +771,16 @@ class StepDispatcher:
                 )
 
                 # Post rejection feedback to task thread for visibility
-                issues_summary = "; ".join(review_result.issues[:3]) if review_result.issues else "see feedback"
+                issues_summary = (
+                    "; ".join(review_result.issues[:3]) if review_result.issues else "see feedback"
+                )
                 await asyncio.to_thread(
                     self._bridge.send_message,
                     task_id,
                     agent_name,
                     AuthorType.AGENT,
-                    f"Review rejected step \"{target_step_title}\". Issues: {issues_summary}. "
-                    f"Returning to \"{target_step_title}\" for revision. "
+                    f'Review rejected step "{target_step_title}". Issues: {issues_summary}. '
+                    f'Returning to "{target_step_title}" for revision. '
                     f"(rejection {rejection_count}/{review_loop_limit if review_loop_limit else '∞'})",
                     MessageType.REVIEW_FEEDBACK,
                 )

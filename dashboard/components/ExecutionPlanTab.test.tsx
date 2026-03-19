@@ -198,17 +198,17 @@ const makeStep = (overrides: Record<string, unknown> = {}) => ({
 describe("ExecutionPlanTab", () => {
   it("shows direct execution message when plan is null", () => {
     render(<ExecutionPlanTab executionPlan={null} />);
-    expect(screen.getByText(/Direct execution/)).toBeInTheDocument();
+    expect(screen.getByText(/No execution steps/)).toBeInTheDocument();
   });
 
   it("shows direct execution message when plan is undefined", () => {
     render(<ExecutionPlanTab executionPlan={undefined} />);
-    expect(screen.getByText(/Direct execution/)).toBeInTheDocument();
+    expect(screen.getByText(/No execution steps/)).toBeInTheDocument();
   });
 
   it("shows direct execution message when steps array is empty", () => {
     render(<ExecutionPlanTab executionPlan={{ steps: [], createdAt: "2026-01-01" }} />);
-    expect(screen.getByText(/Direct execution/)).toBeInTheDocument();
+    expect(screen.getByText(/No execution steps/)).toBeInTheDocument();
   });
 
   it("renders flow nodes for a 3-step plan", () => {

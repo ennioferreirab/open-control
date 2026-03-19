@@ -489,29 +489,45 @@ class TestAgentRepository:
         result = repo.list_deleted_agents()
         assert result == []
 
-    def test_archive_agent_data(self):
+    def test_backup_agent_memory(self):
         client = _make_client_mock()
         repo = AgentRepository(client)
-        repo.archive_agent_data("dev", "mem", "hist", "sess")
+        boards_data = [{"board_name": "default", "memory_content": "mem"}]
+        repo.backup_agent_memory("dev", boards_data)
 
         args = client.mutation.call_args[0][1]
         assert args["agent_name"] == "dev"
-        assert args["memory_content"] == "mem"
+        assert args["boards"] == boards_data
 
-    def test_get_agent_archive(self):
-        client = _make_client_mock()
-        client.query.return_value = {"memory_content": "data"}
-        repo = AgentRepository(client)
-
-        result = repo.get_agent_archive("dev")
-        assert result == {"memory_content": "data"}
-
-    def test_clear_agent_archive(self):
+    def test_backup_agent_memory_with_global(self):
         client = _make_client_mock()
         repo = AgentRepository(client)
-        repo.clear_agent_archive("dev")
+        repo.backup_agent_memory(
+            "nanobot",
+            boards_data=[],
+            global_data={"memory_content": "global_mem", "history_content": None},
+        )
 
-        client.mutation.assert_called_once_with("agents:clearAgentArchive", {"agent_name": "dev"})
+        args = client.mutation.call_args[0][1]
+        assert args["agent_name"] == "nanobot"
+        assert args["boards"] == []
+        assert args["global_memory_content"] == "global_mem"
+
+    def test_get_agent_memory_backup(self):
+        client = _make_client_mock()
+        client.query.return_value = {"boards": [], "last_backup_at": "2026-01-01"}
+        repo = AgentRepository(client)
+
+        result = repo.get_agent_memory_backup("dev")
+        assert result == {"boards": [], "last_backup_at": "2026-01-01"}
+
+    def test_get_agent_memory_backup_none(self):
+        client = _make_client_mock()
+        client.query.return_value = None
+        repo = AgentRepository(client)
+
+        result = repo.get_agent_memory_backup("dev")
+        assert result is None
 
     def test_deactivate_agents_except(self):
         client = _make_client_mock()

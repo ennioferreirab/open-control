@@ -96,6 +96,48 @@ export type StepWithDependencies = Pick<
 >;
 
 /**
+ * Walk the dependency graph forward from a given step and return all
+ * transitive dependent step IDs (BFS). Does NOT include `startStepId` itself.
+ */
+export function findTransitiveDependents(
+  startStepId: Id<"steps">,
+  steps: StepWithDependencies[],
+): Id<"steps">[] {
+  // Build forward adjacency: stepId → [steps that depend on it]
+  const dependents = new Map<string, Id<"steps">[]>();
+  for (const step of steps) {
+    for (const dep of step.blockedBy ?? []) {
+      const key = String(dep);
+      if (!dependents.has(key)) {
+        dependents.set(key, []);
+      }
+      dependents.get(key)!.push(step._id);
+    }
+  }
+
+  const visited = new Set<string>();
+  const queue: Id<"steps">[] = [startStepId];
+  visited.add(String(startStepId));
+  const result: Id<"steps">[] = [];
+
+  let head = 0;
+  while (head < queue.length) {
+    const current = queue[head++];
+    const children = dependents.get(String(current)) ?? [];
+    for (const child of children) {
+      const key = String(child);
+      if (!visited.has(key)) {
+        visited.add(key);
+        result.push(child);
+        queue.push(child);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Find blocked steps that are ready to be unblocked (all dependencies completed).
  */
 export function findBlockedStepsReadyToUnblock(steps: StepWithDependencies[]): Id<"steps">[] {

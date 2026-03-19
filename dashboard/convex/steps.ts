@@ -11,10 +11,11 @@ import {
   isValidStepStatus,
   resolveInitialStepStatus,
   findBlockedStepsReadyToUnblock,
+  findTransitiveDependents,
   resolveBlockedByIds,
   validateBatchSteps,
 } from "./lib/stepLifecycle";
-import { applyStepTransition, getStepStateVersion } from "./lib/stepTransitions";
+import { applyStepTransition, getStepStateVersion, resetStepForRetry } from "./lib/stepTransitions";
 import { applyTaskTransition, getTaskStateVersion } from "./lib/taskTransitions";
 import { stepStatusValidator, workflowStepTypeValidator } from "./schema";
 import { logActivity } from "./lib/workflowHelpers";
@@ -526,7 +527,7 @@ export const retryStep = mutation({
       throw new ConvexError("Step not found");
     }
 
-    const retryableStatuses = ["crashed", "running", "assigned"];
+    const retryableStatuses = ["crashed", "running", "assigned", "completed"];
     if (!retryableStatuses.includes(step.status)) {
       throw new ConvexError(
         `Step cannot be retried from status '${step.status}'. Expected: ${retryableStatuses.join(", ")}`,
@@ -543,6 +544,100 @@ export const retryStep = mutation({
     // For crashed tasks: use the original retrying → in_progress dance
     if (step.status === "crashed" && task.status === "crashed") {
       return await _retryCrashedStep(ctx, args.stepId, step, task, timestamp);
+    }
+
+    // For completed steps: transition to assigned and cascade re-block dependents
+    if (step.status === "completed") {
+      const transitionResult = await applyStepTransition(
+        ctx,
+        step as Parameters<typeof applyStepTransition>[1],
+        {
+          stepId: args.stepId,
+          fromStatus: "completed",
+          expectedStateVersion: getStepStateVersion(step),
+          toStatus: "assigned",
+          reason: "Manual retry initiated",
+          idempotencyKey: `retry:${String(args.stepId)}:${getStepStateVersion(step)}`,
+        },
+      );
+
+      if (transitionResult.kind === "conflict") {
+        throw new ConvexError(
+          `Step retry conflict for ${String(args.stepId)}: ${transitionResult.reason}`,
+        );
+      }
+
+      // Cascade: re-block all transitive dependents
+      const allSteps = await ctx.db
+        .query("steps")
+        .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
+        .collect();
+      const cascadableStatuses = ["completed", "assigned", "running"];
+      const dependentIds = findTransitiveDependents(args.stepId, allSteps);
+      for (const depId of dependentIds) {
+        const depStep = allSteps.find((s) => s._id === depId);
+        if (depStep && cascadableStatuses.includes(depStep.status)) {
+          await resetStepForRetry(
+            ctx,
+            depStep as Parameters<typeof resetStepForRetry>[1],
+            {
+              stepId: depId,
+              expectedStateVersion: getStepStateVersion(depStep),
+              toStatus: "blocked",
+              reason: `Cascade re-block: upstream step "${step.title}" retried`,
+              idempotencyKey: `cascade-reblock:${String(depId)}:${getStepStateVersion(depStep)}`,
+              suppressActivityLog: true,
+            },
+          );
+        }
+      }
+
+      await ctx.db.insert("activities", {
+        taskId: step.taskId,
+        agentName: step.assignedAgent,
+        eventType: "step_retrying",
+        description: `Manual retry initiated for step: "${step.title}"`,
+        timestamp,
+      });
+
+      await ctx.db.insert("messages", {
+        taskId: step.taskId,
+        stepId: args.stepId,
+        authorName: "System",
+        authorType: "system",
+        content: `Manual retry initiated for step "${step.title}". ${dependentIds.length} dependent step(s) re-blocked.`,
+        messageType: "system_event",
+        timestamp,
+      });
+
+      // If task is paused (review + execution_pause): leave task status unchanged
+      // Otherwise: move to assigned for re-dispatch
+      const isPaused = task.status === "review" && task.reviewPhase === "execution_pause";
+      if (!isPaused) {
+        const taskTransitionable = ["in_progress", "done", "review"] as const;
+        if (taskTransitionable.includes(task.status as (typeof taskTransitionable)[number])) {
+          await applyTaskTransition(
+            ctx,
+            task as Parameters<typeof applyTaskTransition>[1],
+            {
+              taskId: step.taskId,
+              fromStatus: task.status,
+              expectedStateVersion: getTaskStateVersion(task),
+              toStatus: "assigned",
+              reason: `Retry requested for step ${String(args.stepId)}`,
+              idempotencyKey: `retry-task:${String(step.taskId)}:${getTaskStateVersion(task)}:assigned`,
+              suppressActivityLog: true,
+            },
+          );
+        }
+      }
+
+      await ctx.db.patch(step.taskId, {
+        stalledAt: undefined,
+        updatedAt: timestamp,
+      });
+
+      return step.taskId;
     }
 
     // For running/assigned steps on an active task: reset step and move task

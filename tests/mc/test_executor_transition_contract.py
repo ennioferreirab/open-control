@@ -17,6 +17,7 @@ async def test_pickup_task_uses_canonical_transition_contract() -> None:
     bridge = MagicMock()
     bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.send_message = MagicMock()
+    bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
 
     task_data = {
         "id": "task-pickup",
@@ -26,6 +27,7 @@ async def test_pickup_task_uses_canonical_transition_contract() -> None:
         "state_version": 4,
         "assigned_agent": "agent-x",
         "trust_level": "autonomous",
+        "board_id": "board_001",
     }
 
     executor = TaskExecutor(bridge)
@@ -55,12 +57,14 @@ async def test_execute_task_completes_with_fresh_task_snapshot_transition() -> N
         "status": "in_progress",
         "state_version": 7,
         "trust_level": "autonomous",
+        "board_id": "board_001",
     }
     bridge.transition_task_from_snapshot.return_value = {"kind": "applied"}
     bridge.send_message = MagicMock()
     bridge.create_activity = MagicMock()
     bridge.get_agent_by_name = MagicMock(return_value=None)
     bridge.sync_task_output_files = MagicMock()
+    bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
 
     executor = TaskExecutor(bridge, on_task_completed=None)
 
@@ -84,6 +88,7 @@ async def test_execute_task_completes_with_fresh_task_snapshot_transition() -> N
                 "status": "in_progress",
                 "state_version": 1,
                 "trust_level": "autonomous",
+                "board_id": "board_001",
             },
         )
 

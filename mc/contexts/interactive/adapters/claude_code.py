@@ -76,6 +76,13 @@ class ClaudeCodeInteractiveAdapter:
         memory_workspace: Path | None = None,
         resume_session_id: str | None = None,
     ) -> InteractiveLaunchSpec:
+        from mc.types import NANOBOT_AGENT_NAME
+
+        if not board_name and agent.name != NANOBOT_AGENT_NAME:
+            raise InteractiveSessionBootstrapError(
+                f"Agent '{agent.name}' requires a board-scoped workspace — "
+                "no board_name provided for interactive session."
+            )
         await self.healthcheck(agent=agent)
 
         try:
@@ -129,7 +136,12 @@ class ClaudeCodeInteractiveAdapter:
         *,
         resume_session_id: str | None,
     ) -> list[str]:
-        cmd = [self._cli_path, "--mcp-config", str(workspace_ctx.mcp_config)]
+        cmd = [self._cli_path]
+
+        # Isolate agent sessions from host user settings (plugins, hooks, MCPs).
+        cmd.extend(["--setting-sources", "project"])
+        cmd.extend(["--strict-mcp-config"])
+        cmd.extend(["--mcp-config", str(workspace_ctx.mcp_config)])
 
         cc = agent.claude_code_opts
         permission_mode = (cc and cc.permission_mode) or "acceptEdits"

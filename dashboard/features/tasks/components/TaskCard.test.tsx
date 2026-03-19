@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { TaskCard } from "./TaskCard";
 
 const approveTaskMock = vi.hoisted(() => vi.fn());
@@ -44,6 +44,7 @@ function makeTask(overrides: Partial<Doc<"tasks">> = {}): Doc<"tasks"> {
     isManual: false,
     trustLevel: "autonomous" as const,
     tags: [],
+    boardId: "board123" as Id<"boards">,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
     ...overrides,

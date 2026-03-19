@@ -39,10 +39,10 @@ class MCSocketServer:
 
     def __init__(
         self,
-        bridge: "ConvexBridge | None",
-        bus: "MessageBus | None",
+        bridge: ConvexBridge | None,
+        bus: MessageBus | None,
         cron_service: Any | None = None,
-        interactive_supervisor: "InteractiveSupervisionSink | None" = None,
+        interactive_supervisor: InteractiveSupervisionSink | None = None,
     ) -> None:
         self._bridge = bridge
         self._bus = bus
@@ -71,7 +71,7 @@ class MCSocketServer:
         """Register a handler for a given IPC method name."""
         self._handlers[method] = handler
 
-    def set_ask_user_handler(self, handler: "AskUserHandler") -> None:
+    def set_ask_user_handler(self, handler: AskUserHandler) -> None:
         """Set the ask_user handler used by the ask_user IPC method."""
         self._ask_user_handler = handler
 
@@ -395,7 +395,7 @@ class MCSocketServer:
                 ),
                 timeout=120,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             response = (
                 f"ask_agent timed out after 120 seconds. "
                 f"Agent '{agent_name}' did not respond in time."

@@ -133,7 +133,14 @@ def tasks_create(
     bridge = _cli._get_bridge()
     try:
         tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
-        args: dict = {"title": title}
+
+        # boardId is required — fetch the default board
+        default_board = bridge.get_default_board()
+        if not default_board:
+            console.print("[red]Error:[/red] No default board exists. Create one first.")
+            raise typer.Exit(1)
+
+        args: dict = {"title": title, "board_id": default_board["_id"]}
         if description:
             args["description"] = description
         if tag_list:

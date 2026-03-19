@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { ThreadInput } from "@/features/thread/components/ThreadInput";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { getFunctionName } from "convex/server";
 
 // Track mutations by the stable Convex function name (e.g. "messages:postMentionMessage").
@@ -152,6 +153,7 @@ const baseTask = {
   status: "inbox" as const,
   assignedAgent: "coder",
   trustLevel: "autonomous" as const,
+  boardId: "board123" as Id<"boards">,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
 };

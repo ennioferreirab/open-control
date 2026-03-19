@@ -51,6 +51,7 @@ def _make_bridge() -> MagicMock:
     bridge.send_message = MagicMock(return_value=None)
     bridge.create_activity = MagicMock(return_value=None)
     bridge.update_task_status = MagicMock(return_value=None)
+    bridge.get_board_by_id = MagicMock(return_value={"name": "default"})
     return bridge
 
 
@@ -292,7 +293,14 @@ class TestExecuteCCTaskHappyPath:
                 "mc.contexts.execution.executor._relocate_invalid_memory_files", return_value=[]
             ) as mock_relocate,
         ):
-            await executor._execute_cc_task("t1", "My task", "desc", "my-cc-agent", agent_data)
+            await executor._execute_cc_task(
+                "t1",
+                "My task",
+                "desc",
+                "my-cc-agent",
+                agent_data,
+                task_data={"board_id": "board_001"},
+            )
 
         # Should send a work message
         bridge.send_message.assert_called_once()
@@ -335,7 +343,14 @@ class TestExecuteCCTaskHappyPath:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task("t1", "My title", "My description", "agent", agent_data)
+            await executor._execute_cc_task(
+                "t1",
+                "My title",
+                "My description",
+                "agent",
+                agent_data,
+                task_data={"board_id": "board_001"},
+            )
 
         assert len(captured) == 1
         assert "My title" in captured[0]
@@ -375,6 +390,7 @@ class TestExecuteCCTaskHappyPath:
                 "agent",
                 agent_data,
                 needs_enrichment=False,
+                task_data={"board_id": "board_001"},
             )
 
         assert captured[0] == "Title only"
@@ -398,7 +414,9 @@ class TestExecuteCCTaskFailures:
             patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
             patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
         ):
-            await executor._execute_cc_task("t1", "Failing task", None, "agent", agent_data)
+            await executor._execute_cc_task(
+                "t1", "Failing task", None, "agent", agent_data, task_data={"board_id": "board_001"}
+            )
 
         mock_crash.assert_awaited_once()
         crash_args = mock_crash.call_args[0]
@@ -421,7 +439,9 @@ class TestExecuteCCTaskFailures:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
         ):
-            await executor._execute_cc_task("t1", "IPC failure", None, "agent", agent_data)
+            await executor._execute_cc_task(
+                "t1", "IPC failure", None, "agent", agent_data, task_data={"board_id": "board_001"}
+            )
 
         mock_crash.assert_awaited_once()
         crash_args = mock_crash.call_args[0]
@@ -446,7 +466,9 @@ class TestExecuteCCTaskFailures:
             patch(_PATCH_PROVIDER, return_value=mock_provider),
             patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
         ):
-            await executor._execute_cc_task("t1", "Exec failure", None, "agent", agent_data)
+            await executor._execute_cc_task(
+                "t1", "Exec failure", None, "agent", agent_data, task_data={"board_id": "board_001"}
+            )
 
         mock_crash.assert_awaited_once()
         crash_args = mock_crash.call_args[0]
@@ -474,7 +496,9 @@ class TestExecuteCCTaskFailures:
             patch(_PATCH_PROVIDER, return_value=mock_provider),
             patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
         ):
-            await executor._execute_cc_task("t1", "Error result", None, "agent", agent_data)
+            await executor._execute_cc_task(
+                "t1", "Error result", None, "agent", agent_data, task_data={"board_id": "board_001"}
+            )
 
         mock_crash.assert_awaited_once()
         crash_args = mock_crash.call_args[0]
@@ -505,7 +529,9 @@ class TestIPCServerCleanup:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task("t1", "title", None, "agent", agent_data)
+            await executor._execute_cc_task(
+                "t1", "title", None, "agent", agent_data, task_data={"board_id": "board_001"}
+            )
 
         mock_ipc.stop.assert_awaited_once()
 
@@ -528,7 +554,9 @@ class TestIPCServerCleanup:
             patch(_PATCH_PROVIDER, return_value=mock_provider),
             patch.object(executor, "_crash_task", new_callable=AsyncMock),
         ):
-            await executor._execute_cc_task("t1", "title", None, "agent", agent_data)
+            await executor._execute_cc_task(
+                "t1", "title", None, "agent", agent_data, task_data={"board_id": "board_001"}
+            )
 
         mock_ipc.stop.assert_awaited_once()
 
@@ -569,7 +597,14 @@ class TestStreamCallback:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task("t1", "Stream task", "desc", "my-cc-agent", agent_data)
+            await executor._execute_cc_task(
+                "t1",
+                "Stream task",
+                "desc",
+                "my-cc-agent",
+                agent_data,
+                task_data={"board_id": "board_001"},
+            )
 
         assert len(captured_callback) == 1
 
@@ -611,7 +646,14 @@ class TestStreamCallback:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task("t1", "tool use task", None, "agent", agent_data)
+            await executor._execute_cc_task(
+                "t1",
+                "tool use task",
+                None,
+                "agent",
+                agent_data,
+                task_data={"board_id": "board_001"},
+            )
 
         await _drain_background_tasks()
 
@@ -649,7 +691,14 @@ class TestCostTracking:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task("t1", "Cost task", None, "my-cc-agent", agent_data)
+            await executor._execute_cc_task(
+                "t1",
+                "Cost task",
+                None,
+                "my-cc-agent",
+                agent_data,
+                task_data={"board_id": "board_001"},
+            )
 
         # Find the TASK_COMPLETED activity (posted in _complete_cc_task)
         activity_calls = bridge.create_activity.call_args_list
@@ -778,7 +827,12 @@ class TestOnTaskCompletedCallback:
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
             await executor._execute_cc_task(
-                "t42", "Successful task", "desc", "my-cc-agent", agent_data
+                "t42",
+                "Successful task",
+                "desc",
+                "my-cc-agent",
+                agent_data,
+                task_data={"board_id": "board_001"},
             )
 
         assert completed_task_ids == ["t42"]
@@ -810,7 +864,14 @@ class TestOnTaskCompletedCallback:
             patch(_PATCH_IPC_SRV, return_value=mock_ipc),
             patch(_PATCH_PROVIDER, return_value=mock_provider),
         ):
-            await executor._execute_cc_task("t43", "Error task", None, "my-cc-agent", agent_data)
+            await executor._execute_cc_task(
+                "t43",
+                "Error task",
+                None,
+                "my-cc-agent",
+                agent_data,
+                task_data={"board_id": "board_001"},
+            )
 
         assert completed_task_ids == []
 
@@ -1075,7 +1136,10 @@ class TestCCBoardScopedWorkspace:
 
     @pytest.mark.asyncio
     async def test_board_lookup_failure_falls_back_to_global_workspace(self):
-        """When get_board_by_id raises, _execute_cc_task uses global workspace (board_name=None)."""
+        """When get_board_by_id raises for nanobot agent, falls back to global workspace.
+
+        Only 'nanobot' is allowed to fall back; non-nanobot agents raise RuntimeError.
+        """
         bridge = _make_bridge()
         bridge.get_board_by_id = MagicMock(side_effect=RuntimeError("Convex unavailable"))
         bridge.get_agent_by_name = MagicMock(return_value=None)
@@ -1083,6 +1147,7 @@ class TestCCBoardScopedWorkspace:
 
         executor = _make_executor(bridge)
         agent_data = _cc_agent()
+        agent_data.name = "nanobot"
         ws_mock, ipc_mock, provider_mock = self._make_cc_mocks()
 
         with (
@@ -1094,7 +1159,7 @@ class TestCCBoardScopedWorkspace:
                 task_id="task-100",
                 title="Fallback task",
                 description=None,
-                agent_name="my-cc-agent",
+                agent_name="nanobot",
                 agent_data=agent_data,
                 task_data={"board_id": "board-xyz"},
                 needs_enrichment=False,

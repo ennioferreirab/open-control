@@ -200,3 +200,22 @@ def _setup_clean(memory_dir: Path, agent_name: str, board_name: str) -> None:
     # HISTORY.md always starts empty per board in clean mode
     if not history_md.exists():
         history_md.write_text("", encoding="utf-8")
+
+
+def list_agent_board_workspaces(agent_name: str) -> list[tuple[str, Path]]:
+    """Return list of (board_name, workspace_path) for all boards where the agent has a workspace.
+
+    Scans ~/.nanobot/boards/*/agents/{agent_name}/ for existing board workspaces.
+    """
+    boards_root = Path.home() / ".nanobot" / "boards"
+    if not boards_root.is_dir():
+        return []
+
+    results: list[tuple[str, Path]] = []
+    for board_dir in sorted(boards_root.iterdir()):
+        if not board_dir.is_dir():
+            continue
+        agent_ws = board_dir / "agents" / agent_name
+        if agent_ws.is_dir():
+            results.append((board_dir.name, agent_ws))
+    return results

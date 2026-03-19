@@ -15,6 +15,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _get_default_board_id(bridge: ConvexBridge) -> str:
+    """Fetch the default board ID. Raises if no default board exists."""
+    board = await asyncio.to_thread(bridge.get_default_board)
+    if not board:
+        raise RuntimeError("No default board exists — cannot create cron task")
+    return board["_id"]
+
+
 async def _requeue_cron_task(
     bridge: ConvexBridge,
     cron_job_id: str,
@@ -31,14 +39,24 @@ async def _requeue_cron_task(
             "[gateway] Could not fetch cron origin task %s — creating new task instead",
             task_id,
         )
-        create_args: dict[str, Any] = {"title": message, "active_cron_job_id": cron_job_id}
+        board_id = await _get_default_board_id(bridge)
+        create_args: dict[str, Any] = {
+            "title": message,
+            "active_cron_job_id": cron_job_id,
+            "board_id": board_id,
+        }
         if agent:
             create_args["assigned_agent"] = agent
         return await asyncio.to_thread(bridge.mutation, "tasks:create", create_args)
 
     if not task:
         logger.warning("[gateway] Cron origin task %s not found — creating new task", task_id)
-        create_args = {"title": message, "active_cron_job_id": cron_job_id}
+        board_id = await _get_default_board_id(bridge)
+        create_args = {
+            "title": message,
+            "active_cron_job_id": cron_job_id,
+            "board_id": board_id,
+        }
         if agent:
             create_args["assigned_agent"] = agent
         return await asyncio.to_thread(bridge.mutation, "tasks:create", create_args)
@@ -106,9 +124,11 @@ async def on_cron_job(
                 plan_negotiation_supervisor=plan_negotiation_supervisor,
             )
         else:
+            board_id = await _get_default_board_id(bridge)
             create_args: dict[str, Any] = {
                 "title": job.payload.message,
                 "active_cron_job_id": job.id,
+                "board_id": board_id,
             }
             if job.payload.agent:
                 create_args["assigned_agent"] = job.payload.agent

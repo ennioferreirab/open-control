@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -47,23 +47,20 @@ export function SkillDetailDialog({ skillName, onClose }: SkillDetailDialogProps
     clearError,
   } = useSkillDetail(skillName);
 
+  // Track which skill+file the edit state belongs to.
+  // When the key changes, derived state resets editing/saved without useEffect+setState.
+  const currentKey = `${skillName ?? ""}:${selectedFile ?? ""}`;
+  const [editStateKey, setEditStateKey] = useState(currentKey);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (!skillName) {
-      setEditing(false);
-      setSaved(false);
-    }
-  }, [skillName]);
-
-  // Reset edit state when switching files
-  useEffect(() => {
+  if (editStateKey !== currentKey) {
+    setEditStateKey(currentKey);
     setEditing(false);
     setSaved(false);
     clearError();
-  }, [selectedFile, clearError]);
+  }
 
   const handleSelectFile = useCallback(
     (path: string) => {

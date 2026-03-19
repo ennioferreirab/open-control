@@ -43,6 +43,18 @@ async def _to_thread_passthrough(fn: Any, *args: Any, **kwargs: Any) -> Any:
     return fn(*args, **kwargs)
 
 
+def _setup_board_aware_bridge(mock_bridge: MagicMock) -> None:
+    """Add board_id-related mocks so ContextBuilder does not raise for non-nanobot agents."""
+    mock_bridge.query.return_value = {
+        "title": "Test task",
+        "status": "in_progress",
+        "board_id": "board_001",
+    }
+    mock_bridge.get_board_by_id.return_value = {"name": "default"}
+    mock_bridge.get_task_messages.return_value = []
+    mock_bridge.get_task_tags.return_value = []
+
+
 # ---------------------------------------------------------------------------
 # Task 2 / 6.2: Provider errors are surfaced as system messages
 # ---------------------------------------------------------------------------
@@ -62,6 +74,7 @@ class TestProviderErrorHandling:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        _setup_board_aware_bridge(mock_bridge)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -79,7 +92,12 @@ class TestProviderErrorHandling:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_prov_err", "Test task", None, "test-agent", "autonomous"
+                "task_prov_err",
+                "Test task",
+                None,
+                "test-agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         # Should have written a system message containing the action
@@ -98,6 +116,7 @@ class TestProviderErrorHandling:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        _setup_board_aware_bridge(mock_bridge)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -113,7 +132,12 @@ class TestProviderErrorHandling:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_prov_act", "Activity task", None, "agent-x", "autonomous"
+                "task_prov_act",
+                "Activity task",
+                None,
+                "agent-x",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         # Should have created a system_error activity
@@ -132,6 +156,7 @@ class TestProviderErrorHandling:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        _setup_board_aware_bridge(mock_bridge)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -147,7 +172,12 @@ class TestProviderErrorHandling:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_crash_prov", "Crash task", None, "agent-z", "autonomous"
+                "task_crash_prov",
+                "Crash task",
+                None,
+                "agent-z",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         # Task should be transitioned to crashed
@@ -166,6 +196,7 @@ class TestProviderErrorHandling:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        _setup_board_aware_bridge(mock_bridge)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -186,7 +217,12 @@ class TestProviderErrorHandling:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_oauth", "OAuth task", None, "oauth-agent", "autonomous"
+                "task_oauth",
+                "OAuth task",
+                None,
+                "oauth-agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         # The system message should contain the login command
@@ -206,6 +242,7 @@ class TestProviderErrorHandling:
         mock_bridge.update_task_status = MagicMock()
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
+        _setup_board_aware_bridge(mock_bridge)
 
         executor = TaskExecutor(mock_bridge)
 
@@ -221,7 +258,14 @@ class TestProviderErrorHandling:
                 executor._agent_gateway, "handle_agent_crash", new_callable=AsyncMock
             ) as mock_crash,
         ):
-            await executor._execute_task("task_no_retry", "No retry", None, "agent", "autonomous")
+            await executor._execute_task(
+                "task_no_retry",
+                "No retry",
+                None,
+                "agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
+            )
             # handle_agent_crash should NOT be called for provider errors
             mock_crash.assert_not_called()
 
@@ -236,6 +280,7 @@ class TestProviderErrorHandling:
         mock_bridge.send_message = MagicMock()
         mock_bridge.create_activity = MagicMock()
         mock_bridge.get_agent_by_name = MagicMock(return_value=None)
+        _setup_board_aware_bridge(mock_bridge)
 
         executor = TaskExecutor(mock_bridge)
         executor._known_assigned_ids.add("task_prov_cleanup")
@@ -250,7 +295,12 @@ class TestProviderErrorHandling:
             patch("asyncio.to_thread", side_effect=_to_thread_passthrough),
         ):
             await executor._execute_task(
-                "task_prov_cleanup", "Cleanup", None, "agent", "autonomous"
+                "task_prov_cleanup",
+                "Cleanup",
+                None,
+                "agent",
+                "autonomous",
+                task_data={"board_id": "board_001"},
             )
 
         assert "task_prov_cleanup" not in executor._known_assigned_ids
@@ -570,6 +620,7 @@ class TestWriteBackTimestampComparison:
                 "last_active_at": "2099-01-01T00:00:00Z",
             }
         ]
+        mock_bridge.get_agent_memory_backup.return_value = None
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 
@@ -591,6 +642,7 @@ class TestWriteBackTimestampComparison:
                 "last_active_at": "not-a-timestamp",
             }
         ]
+        mock_bridge.get_agent_memory_backup.return_value = None
 
         # Should not raise
         _write_back_convex_agents(mock_bridge, tmp_path)
@@ -617,6 +669,7 @@ class TestWriteBackTimestampComparison:
                 "last_active_at": "2099-01-01T00:00:00",  # No timezone info
             }
         ]
+        mock_bridge.get_agent_memory_backup.return_value = None
 
         _write_back_convex_agents(mock_bridge, tmp_path)
 

@@ -1,10 +1,8 @@
 """Tests for MissionControlChannel."""
 
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.mission_control import MissionControlChannel
