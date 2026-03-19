@@ -121,6 +121,7 @@ _AGENT_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 from mc.cli.agents import agents_app, register_init_command, register_sessions_command  # noqa: E402
 from mc.cli.lifecycle import register_lifecycle_commands  # noqa: E402
 from mc.cli.schema_docs import register_docs_command  # noqa: E402
+from mc.cli.sync import register_sync_command  # noqa: E402
 from mc.cli.tasks import tasks_app  # noqa: E402
 
 mc_app.add_typer(tasks_app, name="tasks")
@@ -129,3 +130,4 @@ register_lifecycle_commands(mc_app)
 register_docs_command(mc_app)
 register_sessions_command(mc_app)
 register_init_command(mc_app)
+register_sync_command(mc_app)
