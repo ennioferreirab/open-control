@@ -10,6 +10,16 @@ export const list = query({
   },
 });
 
+export const getByName = query({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("skills")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+  },
+});
+
 export const upsertByName = internalMutation({
   args: {
     name: v.string(),

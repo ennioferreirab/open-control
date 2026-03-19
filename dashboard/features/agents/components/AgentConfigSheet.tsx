@@ -37,6 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Lock, Pencil, Trash2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SkillsSelector } from "@/components/SkillsSelector";
+import { SkillDetailDialog } from "@/features/agents/components/SkillDetailDialog";
 import { PromptEditModal, type PromptVariable } from "@/components/PromptEditModal";
 import { AgentTextViewerModal } from "@/components/AgentTextViewerModal";
 import { getAvatarColor, getInitials } from "@/features/agents/components/AgentSidebarItem";
@@ -150,6 +151,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
   const [variables, setVariables] = useState<PromptVariable[]>([]);
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [showSoulModal, setShowSoulModal] = useState(false);
+  const [viewingSkillName, setViewingSkillName] = useState<string | null>(null);
 
   // Memory/history state (read-only, not part of form dirty state)
   const [memory, setMemory] = useState<string | null>(null);
@@ -877,7 +879,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                 )}
 
                 {/* Skills */}
-                <SkillsSelector selected={skills} onChange={setSkills} />
+                <SkillsSelector selected={skills} onChange={setSkills} onViewSkill={setViewingSkillName} />
 
                 {/* Active Squads */}
                 {activeSquads.length > 0 && (
@@ -1081,6 +1083,10 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
             content={soul}
             editable
             onSave={handleSoulModalSave}
+          />
+          <SkillDetailDialog
+            skillName={viewingSkillName}
+            onClose={() => setViewingSkillName(null)}
           />
         </>
       )}
