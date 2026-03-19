@@ -279,3 +279,44 @@ export const getSquadAgentsWithMemberships = query({
     return results.filter((r) => r !== null);
   },
 });
+
+export const getAgentsSquadMemberships = query({
+  args: { agentNames: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    if (args.agentNames.length === 0) return [];
+
+    const allPublishedSquads = await ctx.db
+      .query("squadSpecs")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .collect();
+
+    const results = await Promise.all(
+      args.agentNames.map(async (name) => {
+        const agent = await ctx.db
+          .query("agents")
+          .withIndex("by_name", (q) => q.eq("name", name))
+          .first();
+        if (!agent) return null;
+
+        const memberOf = allPublishedSquads
+          .filter(
+            (s) =>
+              s.agentIds != null &&
+              s.agentIds.includes(agent._id),
+          )
+          .map((s) => ({
+            id: s._id,
+            displayName: s.displayName,
+          }));
+
+        return {
+          name: agent.name,
+          displayName: agent.displayName,
+          memberOf,
+        };
+      }),
+    );
+
+    return results.filter((r) => r !== null);
+  },
+});

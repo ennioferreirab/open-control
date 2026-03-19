@@ -33,6 +33,7 @@ import { AgentAuthoringWizard } from "@/features/agents/components/AgentAuthorin
 import { SquadAuthoringWizard } from "@/features/agents/components/SquadAuthoringWizard";
 import { SquadSidebarSection } from "@/features/agents/components/SquadSidebarSection";
 import { SquadDetailSheet } from "@/features/agents/components/SquadDetailSheet";
+import { DeleteAgentsDialog } from "@/features/agents/components/DeleteAgentsDialog";
 import { DeleteSquadDialog } from "@/features/agents/components/DeleteSquadDialog";
 import { useAgentSidebarData } from "@/features/agents/hooks/useAgentSidebarData";
 import { useSquadSidebarData } from "@/features/agents/hooks/useSquadSidebarData";
@@ -68,6 +69,7 @@ export function AgentSidebar() {
   const [deleteMode, setDeleteMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Map<string, SelectableItem>>(new Map());
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [showDeleteAgentsDialog, setShowDeleteAgentsDialog] = useState(false);
   const [itemToRestore, setItemToRestore] = useState<
     | { type: "agent"; displayName: string; name: string }
     | { type: "squad"; displayName: string; id: Id<"squadSpecs"> }
@@ -404,8 +406,11 @@ export function AgentSidebar() {
                     (i): i is Extract<SelectableItem, { type: "squad" }> => i.type === "squad",
                   );
                   const hasAgents = items.some((i) => i.type === "agent");
+                  const hasSquads = items.some((i) => i.type === "squad");
                   if (squadItem && !hasAgents && items.length === 1) {
                     setDeleteSquadTarget(squadItem.id);
+                  } else if (hasAgents && !hasSquads) {
+                    setShowDeleteAgentsDialog(true);
                   } else {
                     setShowBulkDeleteDialog(true);
                   }
@@ -434,6 +439,18 @@ export function AgentSidebar() {
         squadId={selectedSquadId}
         boardId={activeBoardId ?? undefined}
         onClose={() => setSelectedSquadId(null)}
+      />
+      <DeleteAgentsDialog
+        agents={Array.from(selectedItems.values())
+          .filter((i): i is Extract<SelectableItem, { type: "agent" }> => i.type === "agent")
+          .map((i) => ({ name: i.name, displayName: i.displayName }))}
+        open={showDeleteAgentsDialog}
+        onClose={() => setShowDeleteAgentsDialog(false)}
+        onDeleted={() => {
+          setShowDeleteAgentsDialog(false);
+          setSelectedItems(new Map());
+          setDeleteMode(false);
+        }}
       />
       <DeleteSquadDialog
         squadId={deleteSquadTarget}
