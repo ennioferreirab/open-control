@@ -84,6 +84,9 @@ export function ProviderLiveChatPanel({
   const lastEventId = filteredEvents[filteredEvents.length - 1]?.id ?? null;
   useEffect(() => {
     if (eventCount === 0) return;
+    // Skip auto-scroll while the user is selecting text to avoid breaking the selection
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
     if (!userScrolledRef.current || isAtBottomRef.current) {
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
