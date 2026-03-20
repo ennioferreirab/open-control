@@ -41,12 +41,15 @@ export function useGatewaySleepCountdown(
   }
 
   if (runtime.mode === "active") {
-    // Manual wake without idle timer — no countdown makes sense
-    if (runtime.reason === "manual" && !runtime.lastWorkFoundAt) return null;
-
-    const anchor = runtime.lastWorkFoundAt
-      ? new Date(runtime.lastWorkFoundAt).getTime()
-      : new Date(runtime.lastTransitionAt).getTime();
+    // Manual wake resets the idle timer at lastTransitionAt, so use that
+    // as anchor. Otherwise prefer lastWorkFoundAt (updated on every poll
+    // that finds work, even without a mode change).
+    const anchor =
+      runtime.reason === "manual"
+        ? new Date(runtime.lastTransitionAt).getTime()
+        : runtime.lastWorkFoundAt
+          ? new Date(runtime.lastWorkFoundAt).getTime()
+          : new Date(runtime.lastTransitionAt).getTime();
     const autoSleepAfterSeconds =
       runtime.configuredAutoSleepAfterSeconds ?? DEFAULT_AUTO_SLEEP_AFTER_SECONDS;
     const autoSleepAt = anchor + autoSleepAfterSeconds * 1000;
