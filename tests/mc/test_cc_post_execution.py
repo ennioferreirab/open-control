@@ -186,7 +186,10 @@ class TestHeartbeat:
             patch("mc.infrastructure.orientation.load_orientation", return_value=None),
             patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
             patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
-            patch("pathlib.Path.home", return_value=tmp_path),
+            patch(
+                "mc.contexts.execution.cc_executor.get_workspace_dir",
+                return_value=heartbeat_dir,
+            ),
         ):
             MockWS.return_value.prepare.return_value = _mock_ws_ctx()
             MockIPC.return_value.start = AsyncMock()

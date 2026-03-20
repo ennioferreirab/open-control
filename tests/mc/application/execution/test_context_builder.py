@@ -532,7 +532,13 @@ class TestBuildTaskContext:
             },
         )
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        agents_dir = tmp_path / "agents"
+        with patch(
+            "mc.infrastructure.boards.get_agents_dir", return_value=agents_dir
+        ), patch(
+            "mc.infrastructure.boards.get_boards_dir",
+            return_value=tmp_path / "boards",
+        ):
             builder = ContextBuilder(bridge)
             req = await builder.build_task_context(
                 task_id="task_123",
@@ -542,7 +548,7 @@ class TestBuildTaskContext:
             )
 
         assert req.board_name == "default"
-        assert req.memory_workspace == (tmp_path / ".nanobot" / "agents" / "test-agent")
+        assert req.memory_workspace == (agents_dir / "test-agent")
 
     @pytest.mark.asyncio
     @patch(
@@ -569,7 +575,13 @@ class TestBuildTaskContext:
             },
         )
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        boards_dir = tmp_path / "boards"
+        with patch(
+            "mc.infrastructure.boards.get_agents_dir",
+            return_value=tmp_path / "agents",
+        ), patch(
+            "mc.infrastructure.boards.get_boards_dir", return_value=boards_dir
+        ):
             builder = ContextBuilder(bridge)
             req = await builder.build_task_context(
                 task_id="task_123",
@@ -579,9 +591,7 @@ class TestBuildTaskContext:
             )
 
         assert req.board_name == "default"
-        assert req.memory_workspace == (
-            tmp_path / ".nanobot" / "boards" / "default" / "agents" / "test-agent"
-        )
+        assert req.memory_workspace == (boards_dir / "default" / "agents" / "test-agent")
 
 
 # ── Step Context Tests ───────────────────────────────────────────────────────
@@ -698,11 +708,11 @@ class TestBuildStepContext:
 
         req = await builder.build_step_context("task_123", step)
 
-        assert "[Review Output Contract]" in req.description
+        assert "[Review Output Contract" in req.description
         assert '"verdict": "approved" | "rejected"' in req.description
         assert '"recommendedReturnStep": "step_package" | null' in req.description
-        assert "Return ONLY a single JSON object" in req.description
-        assert "Do not write a separate review file" in req.description
+        assert "single raw JSON object" in req.description
+        assert "Do not write files" in req.description
 
     @pytest.mark.asyncio
     @patch(

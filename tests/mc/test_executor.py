@@ -106,13 +106,16 @@ class TestStepCompletionArtifact:
 
 
 def _make_home_patch(tmp_path: Path):
-    """Patch Path.home() to return tmp_path for both executor functions."""
-    # patch.object on the Path class used within the executor module.
-    # Since executor imports Path via `from pathlib import Path`, the class
-    # reference is shared, so patching pathlib.Path.home is sufficient.
-    from pathlib import Path as _Path
+    """Patch get_tasks_dir() to return tmp_path/.nanobot/tasks for executor functions.
 
-    return patch.object(_Path, "home", return_value=tmp_path)
+    The output_artifacts module uses get_tasks_dir() from runtime_home rather than
+    Path.home(), so we patch that function directly.
+    """
+    tasks_dir = tmp_path / ".nanobot" / "tasks"
+    return patch(
+        "mc.contexts.execution.output_artifacts.get_tasks_dir",
+        return_value=tasks_dir,
+    )
 
 
 class TestSnapshotOutputDir:

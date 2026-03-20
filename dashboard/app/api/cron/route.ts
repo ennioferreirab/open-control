@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
-import { join } from "path";
-import { homedir } from "os";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 type RawJob = Record<string, unknown>;
 
@@ -59,7 +58,7 @@ function normalizeJob(raw: RawJob): RawJob {
 }
 
 export async function GET() {
-  const storePath = join(homedir(), ".nanobot", "cron", "jobs.json");
+  const storePath = getRuntimePath("cron", "jobs.json");
   try {
     const content = await readFile(storePath, "utf-8");
     if (!content.trim()) return NextResponse.json({ jobs: [] });

@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, rename, unlink } from "fs/promises";
-import { join } from "path";
-import { homedir } from "os";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   const { jobId } = await params;
-  const storePath = join(homedir(), ".nanobot", "cron", "jobs.json");
+  const storePath = getRuntimePath("cron", "jobs.json");
   const tmpPath = `${storePath}.tmp`;
 
   try {
@@ -42,7 +41,7 @@ export async function DELETE(
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
-  const storePath = join(homedir(), ".nanobot", "cron", "jobs.json");
+  const storePath = getRuntimePath("cron", "jobs.json");
   const tmpPath = `${storePath}.tmp`;
 
   let body: { channel?: string | null; to?: string | null };

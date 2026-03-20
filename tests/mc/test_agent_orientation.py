@@ -8,6 +8,7 @@ Covers TaskExecutor._maybe_inject_orientation():
 5. orientation alone becomes prompt when agent has no config prompt
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
@@ -17,6 +18,15 @@ def _make_executor(bridge=None):
     return TaskExecutor(bridge or MagicMock())
 
 
+def _orientation_file_patch(tmp_path: Path):
+    """Patch get_runtime_path in orientation to use tmp_path as runtime home root."""
+    nanobot_home = tmp_path / ".nanobot"
+    return patch(
+        "mc.infrastructure.orientation.get_runtime_path",
+        side_effect=lambda *parts: nanobot_home.joinpath(*parts),
+    )
+
+
 class TestMaybeInjectOrientation:
     def test_orientation_injected_for_non_lead_agent(self, tmp_path):
         """Orientation content is prepended for non-lead agents."""
@@ -24,7 +34,7 @@ class TestMaybeInjectOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("use your skills", encoding="utf-8")
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("youtube-summarizer", "agent prompt")
         assert result is not None
         assert "use your skills" in result
@@ -36,7 +46,7 @@ class TestMaybeInjectOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("use your skills", encoding="utf-8")
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("lead-agent", "lead-agent prompt")
         assert result == "lead-agent prompt"
         assert "use your skills" not in (result or "")
@@ -44,7 +54,7 @@ class TestMaybeInjectOrientation:
     def test_no_error_when_orientation_file_missing(self, tmp_path):
         """No orientation file -> returns original prompt unchanged, no exception."""
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("some-agent", "my prompt")
         assert result == "my prompt"
 
@@ -54,7 +64,7 @@ class TestMaybeInjectOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("ORIENTATION", encoding="utf-8")
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("agent", "AGENT_PROMPT")
         assert result is not None
         assert result.index("ORIENTATION") < result.index("AGENT_PROMPT")
@@ -65,7 +75,7 @@ class TestMaybeInjectOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("rules", encoding="utf-8")
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("agent", None)
         assert result == "rules"
 
@@ -75,7 +85,7 @@ class TestMaybeInjectOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("", encoding="utf-8")
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("worker", "my prompt")
         assert result == "my prompt"
 
@@ -85,7 +95,7 @@ class TestMaybeInjectOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("   \n\n  ", encoding="utf-8")
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("worker", "my prompt")
         assert result == "my prompt"
 
@@ -95,7 +105,7 @@ class TestMaybeInjectOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("rules", encoding="utf-8")
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("worker", "")
         assert result == "rules"
 
@@ -105,6 +115,6 @@ class TestMaybeInjectOrientation:
         mc_dir.mkdir(parents=True)
         (mc_dir / "agent-orientation.md").write_text("O", encoding="utf-8")
         executor = _make_executor()
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("worker", "P")
         assert result == "O\n\n---\n\nP"

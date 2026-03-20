@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readdir, lstat } from "fs/promises";
 import { join, extname } from "path";
-import { homedir } from "os";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 const SKILL_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const MAX_DEPTH = 5;
@@ -15,7 +15,7 @@ const TEXT_EXTENSIONS = new Set([
 ]);
 
 function skillsDir(): string {
-  return join(homedir(), ".nanobot", "workspace", "skills");
+  return getRuntimePath("workspace", "skills");
 }
 
 export async function GET(

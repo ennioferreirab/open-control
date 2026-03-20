@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { join, dirname, normalize } from "path";
-import { homedir } from "os";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 const SKILL_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 function skillsDir(): string {
-  return join(homedir(), ".nanobot", "workspace", "skills");
+  return getRuntimePath("workspace", "skills");
 }
 
 function resolveSkillFilePath(skillName: string, filePath: string[]): string | null {

@@ -12,7 +12,22 @@ Covers:
 
 from __future__ import annotations
 
+import contextlib
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+
+@contextlib.contextmanager
+def _patch_runtime_home(tmp_path: Path):
+    """Patch runtime home helpers to use tmp_path as the nanobot home root."""
+    nanobot_home = tmp_path / ".nanobot"
+    boards_dir = nanobot_home / "boards"
+    agents_dir = nanobot_home / "agents"
+    with (
+        patch("mc.infrastructure.boards.get_agents_dir", return_value=agents_dir),
+        patch("mc.infrastructure.boards.get_boards_dir", return_value=boards_dir),
+    ):
+        yield
 
 # ---------------------------------------------------------------------------
 # Helper: make a fake task executor with a mock bridge
@@ -37,7 +52,7 @@ class TestResolveBoardWorkspace:
     def test_returns_correct_path(self, tmp_path):
         from mc.infrastructure.boards import resolve_board_workspace
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _patch_runtime_home(tmp_path):
             result = resolve_board_workspace("project-alpha", "dev-agent")
 
         expected = tmp_path / ".nanobot" / "boards" / "project-alpha" / "agents" / "dev-agent"
@@ -46,7 +61,7 @@ class TestResolveBoardWorkspace:
     def test_creates_memory_and_sessions_dirs(self, tmp_path):
         from mc.infrastructure.boards import resolve_board_workspace
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _patch_runtime_home(tmp_path):
             board_ws = resolve_board_workspace("my-board", "worker")
 
         assert (board_ws / "memory").exists()
@@ -55,7 +70,7 @@ class TestResolveBoardWorkspace:
     def test_creates_empty_memory_md_when_no_global(self, tmp_path):
         from mc.infrastructure.boards import resolve_board_workspace
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _patch_runtime_home(tmp_path):
             board_ws = resolve_board_workspace("my-board", "worker")
 
         memory_md = board_ws / "memory" / "MEMORY.md"
@@ -65,7 +80,7 @@ class TestResolveBoardWorkspace:
     def test_creates_empty_history_md(self, tmp_path):
         from mc.infrastructure.boards import resolve_board_workspace
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _patch_runtime_home(tmp_path):
             board_ws = resolve_board_workspace("my-board", "worker")
 
         history_md = board_ws / "memory" / "HISTORY.md"
@@ -80,7 +95,7 @@ class TestResolveBoardWorkspace:
         global_memory = global_memory_dir / "MEMORY.md"
         global_memory.write_text("# Global memories", encoding="utf-8")
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _patch_runtime_home(tmp_path):
             board_ws = resolve_board_workspace("sprint-1", "dev-agent")
 
         board_memory = board_ws / "memory" / "MEMORY.md"
@@ -102,7 +117,7 @@ class TestResolveBoardWorkspace:
         board_memory_dir.mkdir(parents=True)
         (board_memory_dir / "MEMORY.md").write_text("board-specific", encoding="utf-8")
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _patch_runtime_home(tmp_path):
             board_ws = resolve_board_workspace("sprint-1", "dev-agent")
 
         board_memory = board_ws / "memory" / "MEMORY.md"
@@ -111,7 +126,7 @@ class TestResolveBoardWorkspace:
     def test_idempotent_second_call(self, tmp_path):
         from mc.infrastructure.boards import resolve_board_workspace
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with _patch_runtime_home(tmp_path):
             ws1 = resolve_board_workspace("board-x", "agent-a")
             ws2 = resolve_board_workspace("board-x", "agent-a")
 
