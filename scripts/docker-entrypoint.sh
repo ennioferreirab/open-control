@@ -1,5 +1,5 @@
 #!/bin/bash
-# Container entrypoint for Open Mission Control.
+# Container entrypoint for Open Control.
 # Generates .env.local files and initializes Convex from the baked template
 # if this is a fresh start (no existing database volume).
 set -e

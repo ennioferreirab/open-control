@@ -1,5 +1,5 @@
 # =============================================================================
-# Open Mission Control — Multi-stage Dockerfile
+# Open Control — Multi-stage Dockerfile
 #
 # Runs all 4 processes (Convex, Next.js, MC Gateway, Nanobot Gateway) in one
 # container. Named stages allow extracting individual services later.
