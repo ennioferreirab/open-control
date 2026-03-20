@@ -362,29 +362,15 @@ class TestStepDispatcher:
         )
 
     @pytest.mark.asyncio
-    async def test_dispatch_human_step_stays_assigned_and_does_not_complete_task(self) -> None:
-        """Human steps must NEVER spawn a process, change status, or auto-complete.
+    async def test_dispatch_human_step_transitions_to_waiting_human(self) -> None:
+        """Human steps must transition to waiting_human and never spawn a process.
 
-        The dispatcher must leave the step in 'assigned' status and return
-        immediately — no status transition, no context building, no runner execution.
+        The dispatcher must set the step to waiting_human immediately so it
+        exits the dispatch loop — no context building, no runner execution.
         """
         bridge, state = _make_stateful_bridge(
             [_step("step-human-1", "Approve output", assigned_agent="human", order=1)]
         )
-        # After the first loop iteration dispatches the human step (which returns
-        # immediately without changing status), the loop re-checks task status.
-        # Return review on second query so the dispatcher exits the loop instead
-        # of infinitely re-dispatching the still-assigned human step.
-        _query_calls = 0
-
-        def _query_side_effect(*args, **kwargs):
-            nonlocal _query_calls
-            _query_calls += 1
-            if _query_calls <= 1:
-                return {"title": "Main Task", "status": "in_progress"}
-            return {"title": "Main Task", "status": "review"}
-
-        bridge.query.side_effect = _query_side_effect
         dispatcher = StepDispatcher(bridge)
 
         run_agent_mock = AsyncMock()
@@ -398,8 +384,8 @@ class TestStepDispatcher:
         ):
             await dispatcher.dispatch_steps("task-1", ["step-human-1"])
 
-        # Step must remain in 'assigned' — the dispatcher must NOT change its status
-        assert state["step-human-1"]["status"] == StepStatus.ASSIGNED
+        # Step must be in waiting_human — the dispatcher transitions it immediately
+        assert state["step-human-1"]["status"] == StepStatus.WAITING_HUMAN
         # The agent runner must NEVER be called for human steps
         run_agent_mock.assert_not_called()
         # No step completion posted
