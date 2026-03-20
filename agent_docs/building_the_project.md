@@ -29,6 +29,9 @@ The `Makefile` at the project root is the primary interface for all operations.
 | `make test` | Run all unit tests (Python + TypeScript) | No |
 | `make validate` | Lint + typecheck + unit tests | No |
 | `make takeover` | Stop any running stack, start from current tree (attached) | Restarts it |
+| `make docker-build` | Build Docker image | No |
+| `make docker-test` | Spin up isolated Docker test instance (auto-detects ports) | Own Convex |
+| `make docker-test-down` | Stop Docker test instance | — |
 | `make lint` | Ruff + ESLint | No |
 | `make typecheck` | Pyright + tsc | No |
 | `make format` | Format all code (Ruff + Prettier) | No |
@@ -65,11 +68,34 @@ Only **one** Convex local backend can run at a time (port 3210 is exclusive). Th
 
 The Convex local backend holds the **schema and functions** deployed to it. When you switch between main tree and a worktree, the deployed schema may differ. Running `make start` deploys the current tree's schema. Running it from a different tree overwrites the previous deployment.
 
-### Worktree Workflow
+### Worktree Workflow — Docker (preferred)
+
+Docker test instances are fully isolated — each worktree gets its own Convex, its own ports, no conflicts with the main stack or other worktrees.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ Worktree validation flow                                     │
+│ Docker worktree flow (no conflicts)                          │
+│                                                              │
+│  1. make validate          ← lint, types, unit tests         │
+│     (no Convex needed)                                       │
+│                                                              │
+│  2. make docker-test       ← auto-detects ports, starts      │
+│     (prints dashboard URL for human testing)                 │
+│                                                              │
+│  3. make docker-test-down  ← stops this worktree's instance  │
+│     (main stack is untouched)                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Requires:** Docker image built at least once (`make docker-build`). The image is shared across worktrees — only needs rebuilding when deps or Convex schema change.
+
+### Worktree Workflow — Native (legacy, conflicts)
+
+Without Docker, Convex local is a singleton. Only one stack can run at a time.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Native worktree flow (kills other stacks)                    │
 │                                                              │
 │  1. make validate          ← lint, types, unit tests         │
 │     (worktree-safe, no Convex needed)                        │
@@ -89,6 +115,7 @@ The Convex local backend holds the **schema and functions** deployed to it. When
 - `make takeover` from a worktree will kill the main tree's stack
 - After merging a worktree branch, always `make start` from main to redeploy the schema
 - Never run `npx convex dev --local` directly — use `make start` or `make takeover`
+- **Prefer `make docker-test`** when Docker is available — avoids all conflicts
 
 ## Environment Variables
 

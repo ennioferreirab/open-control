@@ -1,0 +1,45 @@
+services:
+  mc:
+    build: .
+    container_name: open-mc
+    ports:
+      - "${NEXT_PORT:-3000}:3000"
+      - "${CONVEX_PORT:-3210}:3210"
+      - "${CONVEX_SITE_PORT:-3211}:3211"
+      - "${INTERACTIVE_PORT:-8765}:8765"
+      - "${NANOBOT_PORT:-18790}:18790"
+    volumes:
+      - ~/.nanobot:/root/.nanobot          # Agent workspaces, config, memory
+      - ~/.claude:/root/.claude            # Claude Code settings
+      - convex-data:/app/dashboard/.convex/local  # Persist Convex across restarts
+    environment:
+      - MC_LOG_LEVEL=${MC_LOG_LEVEL:-INFO}
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - OPENROUTER_API_KEY
+      - MC_ACCESS_TOKEN
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -sf http://localhost:3000 && curl -sf http://localhost:3210/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  # Isolated test instance — different ports, no shared Convex volume.
+  # Each test container gets fresh Convex from the baked template.
+  mc-test:
+    build: .
+    profiles: [test]
+    ports:
+      - "${TEST_NEXT_PORT:-3001}:3000"
+      - "${TEST_CONVEX_PORT:-3220}:3210"
+    volumes:
+      - ~/.nanobot:/root/.nanobot:ro
+      - ~/.claude:/root/.claude:ro
+    environment:
+      - MC_LOG_LEVEL=${MC_LOG_LEVEL:-INFO}
+      - ANTHROPIC_API_KEY
+
+volumes:
+  convex-data:

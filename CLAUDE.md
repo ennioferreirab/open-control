@@ -50,12 +50,17 @@ All code, comments, commit messages, and docstrings in **English**.
 | Stop stack | `make down` |
 | Pre-commit validation (no Convex needed) | `make validate` |
 | Steal Convex from another worktree | `make takeover` or `make takeover PORT=300x` |
+| Docker: build image | `make docker-build` |
+| Docker: isolated test instance (auto ports) | `make docker-test` |
+| Docker: stop test instance | `make docker-test-down` |
 | Python tests | `uv run pytest` |
 | TypeScript tests | `cd dashboard && npm run test` |
 | Single TS test file | `cd dashboard && npx vitest run path/to/file.test.ts` |
 | Lint + typecheck | `make lint && make typecheck` |
 
-**Convex singleton:** only one local backend can run (port 3210). `make start` kills any existing instance. Never run `npx convex dev --local` directly. When using `make takeover` from a worktree, pass `PORT=300x` (e.g. `PORT=3001`) to run on a different port than the default 3000. If Convex prompts for login (non-interactive terminal error), run `cd dashboard && npx convex dev --local` once manually to authenticate, then retry `make takeover`.
+**Convex singleton (native):** only one local backend can run (port 3210). `make start` kills any existing instance. Never run `npx convex dev --local` directly. **Prefer `make docker-test`** from worktrees — it runs an isolated stack with its own Convex, no conflicts with the main stack or other worktrees.
+
+**Native worktree fallback:** when Docker is unavailable, use `make takeover PORT=300x` to steal Convex from the main tree. If Convex prompts for login (non-interactive terminal error), run `cd dashboard && npx convex dev --local` once manually to authenticate, then retry.
 
 ### Development Method — BMAD
 
@@ -76,8 +81,8 @@ All features follow the **BMAD method** (v6.0.1). Use `/bmad-help` to see next s
 6. **Code review with Opus** → `/@_bmad/bmm/workflows/4-implementation/code-review` — Always use Opus for code review. Reviews must find 3–10 issues.
 7. Run full test suite (`make validate`)
 8. Integration test — simulate real service interaction using backend functions
-9. `make takeover PORT=300x` on any available port (e.g. `PORT=3001`, `PORT=3002`) to avoid conflicting with the default port 3000
-10. Share the port URL with the human for manual testing
+9. `make docker-test` to spin up an isolated test instance (auto-detects free ports, prints dashboard URL)
+10. Share the dashboard URL with the human for manual testing. Stop with `make docker-test-down` when done.
 
 **MANDATORY AGENT DELEGATION:** The orchestrating agent (Opus) creates stories and reviews code. Implementation is ALWAYS delegated to Sonnet/GPT subagents. This is non-negotiable — it ensures separation of concerns and prevents context pollution.
 

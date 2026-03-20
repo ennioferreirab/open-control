@@ -9,13 +9,20 @@
 # make validate    Lint + typecheck + unit tests (worktree-safe)
 # make takeover    Stop any running stack, start from current tree
 #
+# make docker-build      Build the Docker image
+# make docker-up         Start the containerized stack
+# make docker-down       Stop the containerized stack
+# make docker-test       Spin up isolated test instance (auto-detects ports)
+# make docker-test-down  Stop the test instance
+#
 # make lint        Ruff + ESLint
 # make typecheck   Pyright + tsc
 # make format      Format all code
 # ──────────────────────────────────────────────────────────────────
 
 .PHONY: start up down status test validate takeover lint typecheck format \
-        test-py test-ts lint-py lint-ts typecheck-py typecheck-ts format-py format-ts
+        test-py test-ts lint-py lint-ts typecheck-py typecheck-ts format-py format-ts \
+        docker-build docker-up docker-down docker-test docker-test-down
 
 MC_CMD := uv run nanobot mc start
 
@@ -88,3 +95,22 @@ format-py:
 
 format-ts:
 	cd dashboard && npm run format
+
+# ─── Docker ──────────────────────────────────────────────────────
+
+docker-build:
+	docker build -t mc-test:latest .
+
+docker-up:
+	docker compose up -d
+
+docker-down:
+	docker compose down
+
+# Spin up an isolated test instance with auto-detected ports.
+# Safe to run from any worktree — each gets its own container + Convex.
+docker-test:
+	@bash scripts/docker-test.sh
+
+docker-test-down:
+	@bash scripts/docker-test.sh down
