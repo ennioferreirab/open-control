@@ -52,10 +52,16 @@ async function restoreTaskStepsFromTrash(
 }
 
 export async function listDeletedTasks(ctx: ArchiveQueryCtx): Promise<Doc<"tasks">[]> {
-  return await ctx.db
+  const tasks = await ctx.db
     .query("tasks")
     .withIndex("by_status", (q) => q.eq("status", "deleted"))
     .collect();
+  tasks.sort((a, b) => {
+    const aTime = a.deletedAt ? new Date(a.deletedAt).getTime() : 0;
+    const bTime = b.deletedAt ? new Date(b.deletedAt).getTime() : 0;
+    return bTime - aTime;
+  });
+  return tasks;
 }
 
 export async function listDoneTaskHistory(ctx: ArchiveQueryCtx): Promise<Doc<"tasks">[]> {
