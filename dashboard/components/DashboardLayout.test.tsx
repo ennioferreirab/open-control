@@ -162,13 +162,13 @@ describe("DashboardLayout", () => {
   it("renders dashboard content when width < 1024px", () => {
     window.matchMedia = createMatchMedia(800);
     render(<DashboardLayout />);
-    expect(screen.getByText("Mission Control")).toBeInTheDocument();
+    expect(screen.getByText("Open Control")).toBeInTheDocument();
   });
 
-  it("renders the Mission Control title on desktop", () => {
+  it("renders the Open Control title on desktop", () => {
     window.matchMedia = createMatchMedia(1280);
     render(<DashboardLayout />);
-    expect(screen.getByText("Mission Control")).toBeInTheDocument();
+    expect(screen.getByText("Open Control")).toBeInTheDocument();
   });
 
   it("renders the sidebar on desktop", () => {

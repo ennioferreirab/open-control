@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mission Control",
-  description: "Nanobot Mission Control Dashboard",
+  title: "Open Control",
+  description: "Open Control dashboard for multi-agent orchestration",
 };
 
 export default function RootLayout({

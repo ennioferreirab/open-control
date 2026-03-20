@@ -1,6 +1,6 @@
 # Dashboard
 
-The dashboard is the web UI for Mission Control.
+The dashboard is the web UI for Open Control.
 
 It is built with:
 

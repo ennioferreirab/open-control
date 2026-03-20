@@ -1,4 +1,4 @@
-# Mission Control — Design Book
+# Open Control — Design Book
 
 > **Direction**: Clean Command
 > **Reference**: Notion (clarity, typography, breathing room) + dark-first

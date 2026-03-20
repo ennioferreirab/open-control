@@ -93,7 +93,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
                 onClick={openTerminals.length > 0 ? closeAllTerminals : undefined}
               >
                 <span className="md:hidden">M</span>
-                <span className="hidden md:inline">Mission Control</span>
+                <span className="hidden md:inline">Open Control</span>
               </h1>
             </div>
             <div className="flex items-center gap-2 md:gap-3 flex-1 justify-center px-2 md:px-4 max-w-2xl">

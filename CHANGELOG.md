@@ -14,8 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Step dispatcher for parallel and sequential execution
 - Hybrid memory system (BM25 + vector search)
 - Hook system for extensible event handling
-- CLI for agent lifecycle management (`nanobot up/stop/status`)
+- CLI for agent lifecycle management (current compatibility commands include `nanobot up/stop/status`)
 - Next.js + Convex dashboard for task visualization
 - Ask-user subsystem for interactive human-in-the-loop
 - Mention system for cross-task agent communication
-- Support for Claude Code and nanobot agent backends
+- Support for Claude Code and the legacy nanobot runtime backend

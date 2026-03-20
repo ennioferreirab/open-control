@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("dashboard shell journey stays functional", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: /Mission Control/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Open Control/i })).toBeVisible();
 
   const taskTitle = `Playwright smoke ${Date.now()}`;
   await page.getByPlaceholder("Task title...").fill(taskTitle);
