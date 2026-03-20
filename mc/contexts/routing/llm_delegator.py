@@ -197,7 +197,7 @@ class LLMDelegationRouter:
         if target_agent not in candidate_names:
             raise RuntimeError(
                 f"LLM selected agent '{target_agent}' not found in active registry. "
-                f"Available: {sorted(candidate_names)}"
+                f"Available: {sorted(n for n in candidate_names if n is not None)}"
             )
 
         registry_snapshot = [{"name": a.get("name"), "role": a.get("role")} for a in registry]

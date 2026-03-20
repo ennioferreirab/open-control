@@ -1,8 +1,19 @@
-# Open Control
+<p align="center">
+  <img src="bento_hero.png" alt="Bento — Open Control mascot" width="700">
+</p>
 
-Open Control is an AI agent orchestration platform for running, observing, and
-coordinating multi-agent workflows from a Python backend and a realtime web
-dashboard.
+<h1 align="center">Open Control</h1>
+
+<p align="center">
+  AI agent orchestration platform — run, observe, and coordinate multi-agent workflows<br>
+  from a Python backend and a realtime web dashboard.
+</p>
+
+<p align="center">
+  <img src="bento_favicon.png" alt="Bento" width="80">
+</p>
+
+---
 
 This repository owns the orchestration layer, the dashboard, and the glue code
 that connects local runtime state to Convex. It currently depends on
@@ -106,6 +117,12 @@ workflow expectations.
 ## Security
 
 See [SECURITY.md](SECURITY.md) for how to report vulnerabilities responsibly.
+
+## Mascot
+
+**Bento** is the Open Control mascot — a black Shih Tzu who runs mission
+control. The dogs in the control room represent AI agents; the humans represent
+the people who work alongside them.
 
 ## License
 

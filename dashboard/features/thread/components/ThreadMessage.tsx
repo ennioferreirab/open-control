@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertTriangle, CheckCircle2, XCircle, MessageCircle } from "lucide-react";
 import { Doc } from "@/convex/_generated/dataModel";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
@@ -153,6 +153,7 @@ function ThreadMessageComponent({
   return (
     <div className={`flex w-full min-w-0 max-w-full gap-2 rounded-md p-2 ${styles.bg}`}>
       <Avatar className="h-6 w-6 shrink-0">
+        {message.authorName === "Bento" && <AvatarImage src="/bento.png" alt="Bento" />}
         <AvatarFallback className="text-xs">{getInitials(message.authorName)}</AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0 max-w-full overflow-hidden">

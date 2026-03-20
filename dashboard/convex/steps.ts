@@ -3,8 +3,6 @@ import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { incrementAgentStepMetric, type AgentMetricDb } from "./agents";
-
 import {
   type StepWithDependencies,
   type StepStatus,

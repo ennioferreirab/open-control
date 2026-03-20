@@ -30,7 +30,7 @@ claude-code-backend = { path = "vendor/claude-code", editable = true }
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 extend-exclude = ["vendor/nanobot", "mc/skills"]
 
 [tool.ruff.lint]
@@ -46,7 +46,7 @@ indent-style = "space"
 docstring-code-format = true
 
 [tool.pyright]
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"

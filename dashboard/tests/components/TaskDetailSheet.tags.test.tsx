@@ -13,7 +13,7 @@ beforeAll(() => {
 const user = userEvent.setup({ delay: null });
 
 // Mock convex/react hooks
-// eslint-disable-next-line no-restricted-imports
+ 
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),

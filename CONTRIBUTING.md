@@ -2,9 +2,9 @@
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - [uv](https://docs.astral.sh/uv/) package manager
-- Node.js 18+ (for dashboard)
+- Node.js 20+ (for dashboard)
 - Git
 
 ## Development Setup
@@ -22,41 +22,31 @@ uv sync
 
 ## Running Tests
 
+Run the full validation suite before opening a PR:
+
 ```bash
-# Python files you changed
-uv run ruff format --check path/to/file.py
-uv run ruff check path/to/file.py
+make validate
+```
 
-# Python guardrails
-uv run pytest tests/mc/test_architecture.py tests/mc/test_module_reorganization.py tests/mc/infrastructure/test_boundary.py
+This runs lint + typecheck + tests for both Python and the dashboard — the same checks CI runs.
 
-# Dashboard files you changed
-cd dashboard
-npm run format:file:check -- path/to/file.tsx
-npm run lint:file -- path/to/file.tsx
-npm run test:architecture
-cd ..
+To run individual checks:
+
+```bash
+make lint        # Ruff + ESLint + Prettier
+make typecheck   # Pyright + tsc
+make test        # Pytest + Vitest
 ```
 
 ## Local Formatting
 
 ```bash
-# Python files you changed
-uv run ruff format path/to/file.py
-
-# Dashboard files you changed
-cd dashboard && npm run format:file -- path/to/file.tsx
+make format
 ```
 
 ## Code Style
 
-This project uses [ruff](https://docs.astral.sh/ruff/) for Python linting and formatting, and ESLint + Prettier for the dashboard:
-
-```bash
-uv run ruff check path/to/file.py
-uv run ruff format path/to/file.py
-cd dashboard && npm run lint:file -- path/to/file.tsx && npm run format:file:check -- path/to/file.tsx
-```
+This project uses [ruff](https://docs.astral.sh/ruff/) for Python linting and formatting, and ESLint + Prettier for the dashboard.
 
 Key conventions:
 
@@ -84,7 +74,7 @@ Use TDD for every feature and bug fix:
 1. Write or update the failing test first.
 2. Run it and verify the failure is for the expected reason.
 3. Implement the minimum change needed to make it pass.
-4. Run the relevant baseline checks again before opening a PR.
+4. Run `make validate` before opening a PR.
 5. Always keep the architecture guardrail suites green.
 
 ## Pull Request Workflow
@@ -92,7 +82,7 @@ Use TDD for every feature and bug fix:
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
 3. Make your changes with tests first (TDD)
-4. Run the relevant changed-file baseline commands for Python and/or dashboard
+4. Run `make validate` and ensure it passes
 5. Ensure GitHub Actions is green before requesting review
 6. Commit with clear messages
 7. Push and open a Pull Request

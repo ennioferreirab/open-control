@@ -184,10 +184,10 @@ export const listByStatusLite = query({
       .withIndex("by_status", (q) => q.eq("status", args.status))
       .collect();
     return tasks.map(({
-      routingDecision, files, mergeSourceTaskIds, mergeSourceLabels,
-      mergedIntoTaskId, mergePreviousStatus, mergeLockedAt, isMergeTask,
-      stalledAt, isFavorite, deletedAt, previousStatus, sourceAgent,
-      squadSpecId, workflowSpecId,
+      routingDecision: _routingDecision, files: _files, mergeSourceTaskIds: _mergeSourceTaskIds, mergeSourceLabels: _mergeSourceLabels,
+      mergedIntoTaskId: _mergedIntoTaskId, mergePreviousStatus: _mergePreviousStatus, mergeLockedAt: _mergeLockedAt, isMergeTask: _isMergeTask,
+      stalledAt: _stalledAt, isFavorite: _isFavorite, deletedAt: _deletedAt, previousStatus: _previousStatus, sourceAgent: _sourceAgent,
+      squadSpecId: _squadSpecId, workflowSpecId: _workflowSpecId,
       ...rest
     }) => rest);
   },

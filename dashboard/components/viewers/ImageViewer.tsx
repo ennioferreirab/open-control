@@ -100,6 +100,7 @@ export function ImageViewer({ blobUrl, filename, onDownload }: Props) {
       <div className="flex-1 overflow-auto bg-muted/20 p-4">
         {scale === "fit" ? (
           <div className="flex items-center justify-center h-full">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={blobUrl}
               alt={filename}
@@ -110,6 +111,7 @@ export function ImageViewer({ blobUrl, filename, onDownload }: Props) {
           </div>
         ) : (
           <div className="min-h-full min-w-full inline-flex items-start justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={blobUrl}
               alt={filename}

@@ -1,6 +1,6 @@
 "use client";
 
-import { File, FileCode, FileText, Image, X } from "lucide-react";
+import { File, FileCode, FileText, Image as ImageIcon, X } from "lucide-react";
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
 const CODE_EXTS = new Set([".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".sh"]);
@@ -22,7 +22,7 @@ function FileIcon({ name }: { name: string }) {
     case "pdf":
       return <FileText className={cls} />;
     case "image":
-      return <Image className={cls} />;
+      return <ImageIcon className={cls} />;
     case "code":
       return <FileCode className={cls} />;
     default:

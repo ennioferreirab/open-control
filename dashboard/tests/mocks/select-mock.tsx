@@ -51,7 +51,7 @@ export function SelectTrigger({
   [key: string]: unknown;
 }>) {
   return (
-    <button role="combobox" aria-label={ariaLabel} data-selected-value={_value} {...rest}>
+    <button role="combobox" aria-label={ariaLabel} aria-controls="select-listbox" aria-expanded={false} data-selected-value={_value} {...rest}>
       {children}
     </button>
   );

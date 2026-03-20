@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,8 +25,11 @@ interface AgentDraftDetailPanelProps {
 }
 
 export function AgentDraftDetailPanel({ draftGraph, onPatch, onBack }: AgentDraftDetailPanelProps) {
-  const agents = Array.isArray(draftGraph.agents) ? (draftGraph.agents as AgentEntry[]) : [];
-  const agent = agents[0] ?? {};
+  const agents = useMemo(
+    () => (Array.isArray(draftGraph.agents) ? (draftGraph.agents as AgentEntry[]) : []),
+    [draftGraph.agents],
+  );
+  const agent = useMemo(() => agents[0] ?? {}, [agents]);
 
   const updateAgent = useCallback(
     (field: string, value: unknown) => {

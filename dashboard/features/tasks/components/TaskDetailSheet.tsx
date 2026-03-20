@@ -100,15 +100,12 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     canApprove,
     executionProvenance,
     taskStatus,
-    isWorkflowTask,
     hasUnexecutedSteps,
-    pendingExecutionQuestion,
   } = view;
 
   const {
     approve,
-    kickOff,
-    isKickingOff,
+    kickOff: _kickOff,
     kickOffError,
     savePlan,
     isSavingPlan,
@@ -267,17 +264,6 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     const currentTags = task.tags ?? [];
     if (currentTags.includes(tagToAdd)) return;
     updateTags(task._id, [...currentTags, tagToAdd]);
-  };
-
-  const handleKickOff = async () => {
-    if (!task || !isTaskLoaded) return;
-    try {
-      const planToSave = localPlan ?? taskExecutionPlan;
-      await kickOff(task._id, planToSave);
-      onClose();
-    } catch {
-      // error is set in the hook
-    }
   };
 
   const handleSavePlan = async () => {

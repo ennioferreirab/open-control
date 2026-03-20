@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ParsedSearch, ParsedAttributeFilter } from "@/lib/searchParser";
+import { ParsedSearch } from "@/lib/searchParser";
 
 export interface BoardFilters {
   /** The current parsed search state. */

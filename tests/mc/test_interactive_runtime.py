@@ -333,7 +333,7 @@ async def test_interactive_socket_server_passes_prompt_to_coordinator() -> None:
     load_agent = MagicMock(
         return_value=AgentData(
             name="nanobot",
-            display_name="Owl",
+            display_name="Bento",
             role="Assistant",
             backend="claude-code",
         )

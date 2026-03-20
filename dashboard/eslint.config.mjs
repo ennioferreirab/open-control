@@ -7,6 +7,18 @@ export default defineConfig([
   ...nextTypescript,
   globalIgnores(["convex/_generated"]),
   {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
+  {
     files: ["components/**/*.{ts,tsx}", "tests/components/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [

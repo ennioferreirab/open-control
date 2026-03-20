@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { testId } from "@/tests/helpers/mockConvex";
-
 import type { Id } from "./_generated/dataModel";
 
 import {

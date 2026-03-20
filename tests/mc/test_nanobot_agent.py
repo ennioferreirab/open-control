@@ -23,7 +23,7 @@ def _make_agent(name: str, skills: list[str] | None = None) -> AgentData:
 class TestEnsureNanobotAgent:
     @patch(
         "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
-        return_value={"name": "Owl", "role": "General-Purpose Assistant"},
+        return_value={"name": "Bento", "role": "General-Purpose Assistant"},
     )
     def test_creates_directory_and_config_when_missing(self, mock_identity, tmp_path: Path) -> None:
         from mc.runtime.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
@@ -45,7 +45,7 @@ class TestEnsureNanobotAgent:
 
     @patch(
         "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
-        return_value={"name": "Owl", "role": "General-Purpose Assistant"},
+        return_value={"name": "Bento", "role": "General-Purpose Assistant"},
     )
     def test_is_idempotent_and_preserves_existing_config(
         self, mock_identity, tmp_path: Path
@@ -104,7 +104,7 @@ class TestBridgeSyncAgentSystemFlag:
 
         agent = AgentData(
             name="nanobot",
-            display_name="Owl",
+            display_name="Bento",
             role="General-Purpose Assistant",
             prompt="hello",
             soul="# Soul",

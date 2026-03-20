@@ -11,15 +11,15 @@
 /** Minimal write-capable database context used by mutation helpers. */
 export interface DbWriter {
   db: {
-    // eslint-disable-next-line @typescript-eslint/method-signature-style
+     
     get(id: unknown): Promise<Record<string, unknown> | null>;
-    // eslint-disable-next-line @typescript-eslint/method-signature-style
+     
     insert(table: string, value: Record<string, unknown>): Promise<string>;
-    // eslint-disable-next-line @typescript-eslint/method-signature-style
+     
     patch(id: unknown, value: Record<string, unknown>): Promise<void>;
-    // eslint-disable-next-line @typescript-eslint/method-signature-style
+     
     delete(id: unknown): Promise<void>;
-    // eslint-disable-next-line @typescript-eslint/method-signature-style
+     
     query(table: string): {
       withIndex(
         index: string,
@@ -33,10 +33,10 @@ export interface DbWriter {
 /** Minimal read-only database context used by query helpers. */
 export interface DbReader {
   db: {
-    // eslint-disable-next-line @typescript-eslint/method-signature-style
+     
     get(id: unknown): Promise<Record<string, unknown> | null>;
     // eslint-disable name-spacing
-    // eslint-disable-next-line @typescript-eslint/method-signature-style
+     
     query(table: string): {
       withIndex(
         index: string,

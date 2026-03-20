@@ -69,6 +69,7 @@ export function AgentSidebarItem({
   const avatarColor = getAvatarColor(agent.name);
   const isDisabled = agent.enabled === false;
 
+  const isNanobot = agent.name === "nanobot";
   const isRemoteTerminal = agent.role === "remote-terminal";
   const { toggleTerminal, openTerminals } = useBoard();
 
@@ -120,11 +121,15 @@ export function AgentSidebarItem({
           className="!w-full !h-auto !p-2 flex items-center justify-center cursor-pointer"
         >
           <div className="relative">
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor}`}
-            >
-              {isRemoteTerminal ? <Terminal className="h-4 w-4" /> : initials}
-            </div>
+            {isNanobot ? (
+              <img src="/bento.png" alt="Bento" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+            ) : (
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor}`}
+              >
+                {isRemoteTerminal ? <Terminal className="h-4 w-4" /> : initials}
+              </div>
+            )}
             <span
               className={`absolute bottom-0 right-0 h-2 w-2 rounded-full ring-2 ring-sidebar transition-colors duration-200 ${statusStyle}`}
             />
@@ -143,11 +148,15 @@ export function AgentSidebarItem({
         onClick={handleClick}
         className={`!h-auto flex-1 ${isDeletedItem ? "opacity-50 cursor-default" : "cursor-pointer"} ${isTerminalOpen ? "bg-accent" : ""}`}
       >
-        <div
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor}`}
-        >
-          {isRemoteTerminal ? <Terminal className="h-4 w-4" /> : initials}
-        </div>
+        {isNanobot ? (
+          <img src="/bento.png" alt="Bento" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+        ) : (
+          <div
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor}`}
+          >
+            {isRemoteTerminal ? <Terminal className="h-4 w-4" /> : initials}
+          </div>
+        )}
         <div
           className={`flex flex-1 flex-col overflow-hidden ${isDisabled ? "text-muted-foreground opacity-60" : ""}`}
         >

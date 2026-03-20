@@ -6,14 +6,6 @@ import type { Doc, Id } from "../_generated/dataModel";
 const MERGE_BLOCKED_SOURCE_STATUSES = new Set(["in_progress", "retrying", "deleted"]);
 type TaskStatus = Doc<"tasks">["status"];
 
-type MergeCapableTask = Doc<"tasks"> & {
-  isMergeTask?: boolean;
-  mergeSourceTaskIds?: Id<"tasks">[] | string[];
-  mergeSourceLabels?: string[];
-  mergedIntoTaskId?: Id<"tasks">;
-  mergePreviousStatus?: TaskStatus;
-};
-
 type MergeTreeCtx = {
   db: {
     get: (id: Id<"tasks"> | string) => Promise<Doc<"tasks"> | null>;

@@ -34,3 +34,4 @@ CLAUDE.md.bkp
 output/playwright/*
 output/.DS_Store
 .vscode/
+.mcp.json

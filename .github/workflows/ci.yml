@@ -2,133 +2,97 @@ name: CI
 
 on:
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  python-baseline:
+  python-lint:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v6
 
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: uv sync --group dev
 
-      - name: Compute changed Python files
-        id: python-files
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin "${{ github.base_ref }}" --depth=1
-            files=$(git diff --name-only --diff-filter=ACMR FETCH_HEAD...HEAD -- '*.py')
-          else
-            files=$(git ls-files '*.py')
-          fi
-          {
-            echo "files<<EOF"
-            echo "$files"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+      - name: Check formatting
+        run: uv run ruff format --check mc/ tests/mc/
 
-      - name: Check changed Python formatting
-        if: steps.python-files.outputs.files != ''
-        shell: bash
-        run: |
-          printf '%s\n' "${{ steps.python-files.outputs.files }}" | xargs uv run ruff format --check
+      - name: Lint
+        run: uv run ruff check mc/ tests/mc/
 
-      - name: Lint changed Python files
-        if: steps.python-files.outputs.files != ''
-        shell: bash
-        run: |
-          printf '%s\n' "${{ steps.python-files.outputs.files }}" | xargs uv run ruff check
-
-      - name: Run Python architecture guardrails
-        run: uv run pytest tests/mc/test_architecture.py tests/mc/test_module_reorganization.py tests/mc/infrastructure/test_boundary.py
-
-  dashboard-baseline:
+  python-check:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Typecheck
+        run: uv run pyright mc/
+
+      - name: Test
+        run: uv run pytest
+
+  dashboard-lint:
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: dashboard
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
+          cache: npm
           cache-dependency-path: dashboard/package-lock.json
 
-      - name: Install dashboard dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Compute changed dashboard files
-        id: dashboard-files
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin "${{ github.base_ref }}" --depth=1
-            prettier_files=$(git diff --name-only --diff-filter=ACMR FETCH_HEAD...HEAD -- \
-              'dashboard/**/*.ts' \
-              'dashboard/**/*.tsx' \
-              'dashboard/**/*.js' \
-              'dashboard/**/*.mjs' \
-              'dashboard/**/*.json' \
-              'dashboard/**/*.md')
-            eslint_files=$(git diff --name-only --diff-filter=ACMR FETCH_HEAD...HEAD -- \
-              'dashboard/**/*.ts' \
-              'dashboard/**/*.tsx' \
-              'dashboard/**/*.js' \
-              'dashboard/**/*.mjs')
-          else
-            prettier_files=$(git ls-files \
-              'dashboard/**/*.ts' \
-              'dashboard/**/*.tsx' \
-              'dashboard/**/*.js' \
-              'dashboard/**/*.mjs' \
-              'dashboard/**/*.json' \
-              'dashboard/**/*.md')
-            eslint_files=$(git ls-files \
-              'dashboard/**/*.ts' \
-              'dashboard/**/*.tsx' \
-              'dashboard/**/*.js' \
-              'dashboard/**/*.mjs')
-          fi
-          {
-            echo "prettier_files<<EOF"
-            echo "$prettier_files"
-            echo "EOF"
-            echo "eslint_files<<EOF"
-            echo "$eslint_files"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+      - name: Check formatting
+        run: npx prettier --check .
 
-      - name: Check changed dashboard formatting
-        if: steps.dashboard-files.outputs.prettier_files != ''
-        shell: bash
-        run: |
-          printf '%s\n' "${{ steps.dashboard-files.outputs.prettier_files }}" | \
-            xargs npx prettier --check
+      - name: Lint
+        run: npx eslint . --max-warnings=0
 
-      - name: Lint changed dashboard files
-        if: steps.dashboard-files.outputs.eslint_files != ''
-        shell: bash
-        run: |
-          printf '%s\n' "${{ steps.dashboard-files.outputs.eslint_files }}" | \
-            xargs npx eslint --max-warnings=0
+  dashboard-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
 
-      - name: Run dashboard architecture guardrails
-        run: npm run test:architecture
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx vitest run

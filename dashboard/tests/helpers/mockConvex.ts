@@ -14,7 +14,7 @@ export function testId<T extends TableNames>(value: string): Id<T> {
  * The return type is a Mock so you can access `.mock.calls` etc., and it is
  * also assignable to ReactMutation via the cast.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export type ReactMutationMock = Mock & ReactMutation<FunctionReference<"mutation">>;
 
 export function mockReactMutation(impl: (...args: unknown[]) => unknown): ReactMutationMock {
