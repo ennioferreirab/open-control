@@ -194,6 +194,24 @@ If the skill includes scripts:
 - Ensure output matches expectations
 - Scripts should be executable (`chmod +x`)
 
+### Script Path Context
+
+Skills are mapped to `.claude/skills/<skill-name>/` in the agent's workspace.
+The agent's CWD is the workspace root, NOT the skill directory.
+
+When writing script usage examples in SKILL.md, use workspace-relative paths:
+
+    # CORRECT — agent runs from workspace root:
+    uv run python .claude/skills/<skill-name>/scripts/my_script.py --arg value
+
+    # WRONG — assumes CWD is the skill directory:
+    python scripts/my_script.py --arg value
+
+Include a note in Quick Start:
+
+> Scripts run from your agent workspace root. Prefix all script paths with
+> `.claude/skills/<skill-name>/`.
+
 ### Codex Provider Support
 
 If the skill targets the `codex` provider, create `agents/openai.yaml`. The

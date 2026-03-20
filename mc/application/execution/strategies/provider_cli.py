@@ -93,6 +93,66 @@ class ProviderCliRunnerStrategy:
         self._stream_idle_timeout_seconds = stream_idle_timeout_seconds
         self._exit_timeout_seconds = exit_timeout_seconds
 
+    async def _prepare_workspace(self, request: ExecutionRequest) -> str | None:
+        """Prepare the agent workspace and return the resolved cwd.
+
+        For CC agents, calls CCWorkspaceManager.prepare() to create
+        .claude/skills/, .claude/commands/, CLAUDE.md, and .mcp.json
+        in the agent's board-scoped workspace.
+
+        Returns the workspace path string, or None to fall back to self._cwd.
+        """
+        if not request.is_cc or request.agent is None:
+            return None
+
+        from claude_code.workspace import CCWorkspaceManager
+
+        from mc.infrastructure.orientation import load_orientation
+
+        agent_data = request.agent
+        # Apply synced skills from Convex (context_builder syncs
+        # agent_skills separately from the YAML-loaded agent object).
+        if request.agent_skills is not None:
+            agent_data.skills = request.agent_skills
+        board_name = request.board_name
+        memory_mode = "clean"
+
+        if board_name and self._bridge is not None:
+            try:
+                board_data = await asyncio.to_thread(
+                    self._bridge.get_board_by_name, board_name
+                )
+                if board_data:
+                    from mc.infrastructure.boards import get_agent_memory_mode
+
+                    memory_mode = get_agent_memory_mode(board_data, request.agent_name)
+            except Exception:
+                logger.debug(
+                    "[provider-cli-strategy] Failed to resolve memory mode for '%s'",
+                    request.agent_name,
+                    exc_info=True,
+                )
+
+        ws_mgr = CCWorkspaceManager()
+        orientation = load_orientation(request.agent_name, bridge=self._bridge)
+        ws_ctx = await asyncio.to_thread(
+            ws_mgr.prepare,
+            request.agent_name,
+            agent_data,
+            request.task_id,
+            orientation=orientation,
+            task_prompt=request.title,
+            board_name=board_name,
+            memory_mode=memory_mode,
+            memory_workspace=request.memory_workspace,
+        )
+        logger.info(
+            "[provider-cli-strategy] Workspace prepared for '%s': cwd=%s",
+            request.agent_name,
+            ws_ctx.cwd,
+        )
+        return str(ws_ctx.cwd)
+
     async def execute(self, request: ExecutionRequest) -> ExecutionResult:
         """Execute a task via the provider CLI backend.
 
@@ -350,18 +410,21 @@ class ProviderCliRunnerStrategy:
         mc_session_id: str,
         command: list[str],
         env: dict[str, str] | None = None,
+        cwd: str | None = None,
     ) -> Any:
+        effective_cwd = cwd or self._cwd
         logger.info(
-            "[provider-cli-strategy] Starting provider session '%s' (provider=%s)",
+            "[provider-cli-strategy] Starting provider session '%s' (provider=%s, cwd=%s)",
             mc_session_id,
             self._parser.provider_name,
+            effective_cwd,
         )
         try:
             handle = await asyncio.wait_for(
                 self._parser.start_session(
                     mc_session_id=mc_session_id,
                     command=command,
-                    cwd=self._cwd,
+                    cwd=effective_cwd,
                     env=env,
                 ),
                 timeout=self._startup_timeout_seconds,
@@ -454,6 +517,9 @@ class ProviderCliRunnerStrategy:
         """Core execution — raises on failure for the outer handler."""
         mc_session_id = f"{request.task_id}-{request.entity_id}"
 
+        # 0. Prepare agent workspace (skills, commands, CLAUDE.md, MCP config)
+        session_cwd = await self._prepare_workspace(request)
+
         # 1. Build the full command, injecting the bootstrap prompt
         command = self._build_command(request)
         runtime_env = self._build_runtime_env(request=request, mc_session_id=mc_session_id)
@@ -468,6 +534,7 @@ class ProviderCliRunnerStrategy:
             mc_session_id=mc_session_id,
             command=command,
             env=runtime_env,
+            cwd=session_cwd,
         )
 
         # 3. Register the session with bootstrap prompt metadata
@@ -691,7 +758,10 @@ class ProviderCliRunnerStrategy:
         request: ExecutionRequest,
         mc_session_id: str,
     ) -> dict[str, str]:
+        from mc.infrastructure.secrets import resolve_secret_env
+
         env: dict[str, str] = {
+            **resolve_secret_env(),
             "AGENT_NAME": request.agent_name,
             "TASK_ID": request.task_id,
             "MC_INTERACTIVE_SESSION_ID": mc_session_id,

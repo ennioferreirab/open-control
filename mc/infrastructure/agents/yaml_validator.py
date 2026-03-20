@@ -251,7 +251,7 @@ def _parse_claude_code_opts(raw: dict) -> ClaudeCodeOpts:
         except (TypeError, ValueError) as exc:
             raise ValueError(f"claude_code.max_turns must be an integer, got: {turns!r}") from exc
 
-    pm = raw.get("permission_mode", "acceptEdits")
+    pm = raw.get("permission_mode", "bypassPermissions")
     if not isinstance(pm, str):
         raise ValueError(f"claude_code.permission_mode must be a string, got: {pm!r}")
     if pm not in _VALID_PERMISSION_MODES:

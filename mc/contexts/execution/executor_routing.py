@@ -122,7 +122,7 @@ async def pickup_task(
             task_id,
             "System",
             AuthorType.SYSTEM,
-            f"Agent {agent_name} has started work on this task.",
+            "Task execution started.",
             MessageType.SYSTEM_EVENT,
         )
 
