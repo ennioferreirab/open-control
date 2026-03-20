@@ -10,6 +10,7 @@ import typer
 from rich.console import Console
 
 from mc.infrastructure.config import AGENTS_DIR
+from mc.infrastructure.runtime_home import get_runtime_path
 
 mc_app = typer.Typer(
     help="Open Control - multi-agent orchestration dashboard",
@@ -17,7 +18,7 @@ mc_app = typer.Typer(
 )
 
 console = Console()
-PID_FILE = Path.home() / ".nanobot" / "mc.pid"
+PID_FILE = get_runtime_path("mc.pid")
 
 
 def _find_dashboard_dir() -> Path:

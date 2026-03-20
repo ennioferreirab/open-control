@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from pathlib import Path
 from typing import Any, Protocol
+
+from mc.infrastructure.runtime_home import get_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ class LiteLLMProvider:
 
         # 2. Read from nanobot config.json providers section
         try:
-            config_path = Path.home() / ".nanobot" / "config.json"
+            config_path = get_config_path()
             if not config_path.exists():
                 return None
             config = json.loads(config_path.read_text(encoding="utf-8"))

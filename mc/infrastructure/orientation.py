@@ -8,8 +8,9 @@ and step_dispatcher.py into a single public function.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any
+
+from mc.infrastructure.runtime_home import get_runtime_path
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def load_orientation(agent_name: str, bridge: Any | None = None) -> str | None:
 
     Precedence:
     1. Saved ``global_orientation_prompt`` from Convex settings, if non-empty
-    2. ~/.nanobot/mc/agent-orientation.md fallback file
+    2. ``mc/agent-orientation.md`` in the configured runtime home (fallback file)
 
     Returns None if:
     - agent is lead-agent or nanobot
@@ -68,7 +69,7 @@ def load_orientation(agent_name: str, bridge: Any | None = None) -> str | None:
 
     orientation = _read_saved_orientation(bridge)
     if orientation is None:
-        orientation_path = Path.home() / ".nanobot" / "mc" / "agent-orientation.md"
+        orientation_path = get_runtime_path("mc", "agent-orientation.md")
         if not orientation_path.exists():
             return None
         orientation = orientation_path.read_text(encoding="utf-8").strip()

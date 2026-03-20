@@ -4,23 +4,24 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from typing import TYPE_CHECKING
+
+from mc.infrastructure.runtime_home import get_secrets_path
 
 if TYPE_CHECKING:
     from nanobot.config.schema import Config, ProviderConfig
     from nanobot.providers.registry import ProviderSpec
 
-_SECRETS_PATH = Path.home() / ".nanobot" / "secrets.json"
+_SECRETS_PATH = get_secrets_path()
 
 
 def _load_secrets_file() -> dict[str, str]:
-    """Load all key-value pairs from ``~/.nanobot/secrets.json``.
+    """Load all key-value pairs from the secrets file in the configured runtime home.
 
     Generic mechanism — any env var can be added and it will be injected
     into every agent environment automatically.
 
-    Example ``~/.nanobot/secrets.json``::
+    Example secrets file in the configured runtime home::
 
         {"APIFY_API_TOKEN": "apify_api_...", "SOME_OTHER_KEY": "value"}
     """
