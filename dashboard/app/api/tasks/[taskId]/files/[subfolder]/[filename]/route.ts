@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
-import { join } from "path";
-import { homedir } from "os";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 const TASK_ID_RE = /^[a-zA-Z0-9_-]+$/;
 const VALID_SUBFOLDERS = new Set(["attachments", "output"]);
@@ -79,7 +78,7 @@ export async function GET(
     return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   }
 
-  const filePath = join(homedir(), ".nanobot", "tasks", taskId, subfolder, filename);
+  const filePath = getRuntimePath("tasks", taskId, subfolder, filename);
 
   let buffer: Buffer;
   try {

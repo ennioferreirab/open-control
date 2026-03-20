@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
-import { join } from "path";
-import { homedir } from "os";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 export async function GET() {
-  const path = join(homedir(), ".nanobot", "mc", "agent-orientation.md");
+  const path = getRuntimePath("mc", "agent-orientation.md");
 
   try {
     const prompt = (await readFile(path, "utf-8")).trim();

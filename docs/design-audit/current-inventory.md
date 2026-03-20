@@ -1,4 +1,4 @@
-# Mission Control — Design Inventory (Dossie Completo)
+# Open Control — Design Inventory (Dossie Completo)
 
 > Generated: 2026-03-18
 > Branch: feat/design-audit
@@ -552,7 +552,7 @@ All screenshots are in `docs/design-audit/screenshots/`. Each image documents th
 
 | Screenshot | Description | Key Elements Visible |
 |-----------|-------------|---------------------|
-| `01-dashboard-full-light.png` | Full dashboard — light mode | Sidebar (240px, agent avatars with colored circles + initials, squad section, collapsible groups), Header (60px, "Mission Control" title, board selector dropdown, search bar, gateway status badge, icon buttons), Task input (title + description inputs, Create button, AI/Manual toggle, agent selector), Kanban board (5 columns: Inbox/Assigned/In Progress/Review/Done, colored dot indicators, collapsible tag groups with counts) |
+| `01-dashboard-full-light.png` | Full dashboard — light mode | Sidebar (240px, agent avatars with colored circles + initials, squad section, collapsible groups), Header (60px, "Open Control" title, board selector dropdown, search bar, gateway status badge, icon buttons), Task input (title + description inputs, Create button, AI/Manual toggle, agent selector), Kanban board (5 columns: Inbox/Assigned/In Progress/Review/Done, colored dot indicators, collapsible tag groups with counts) |
 | `01-dashboard-full-dark.png` | Full dashboard — dark mode | Same layout. Dark backgrounds (#0c0a09), light text (#fafaf9), dark card surfaces for kanban columns, sidebar bg (#18181b). Gateway badge inverts to dark border. Agent avatar colors remain the same. |
 | `05-kanban-inbox-cards-light.png` | Kanban with task cards expanded | Task cards: white bg, violet left border (3px, `border-l-violet-500` for inbox), title (text-sm font-medium, 2-line clamp), tag chips (rounded-full, gray bg "open-control", violet bg "inbox"), star icon (unfilled), agent icon (unassigned), chevron expand, trash icon bottom-right |
 
@@ -560,7 +560,7 @@ All screenshots are in `docs/design-audit/screenshots/`. Each image documents th
 
 | Screenshot | Description | Key Elements Visible |
 |-----------|-------------|---------------------|
-| `02-header-bar.png` | Isolated header bar | "Mission Control" (text-xl font-bold), "Default" board selector (outline button + chevron), filter icon, Search input (border, rounded-md, placeholder "Search tasks..."), Gateway status badge (green border, green text "Gateway sleeping · sync in X:XX"), "Wake now" button, Clock/Tags/Settings/Activity icons (ghost buttons, h-9 w-9) |
+| `02-header-bar.png` | Isolated header bar | "Open Control" (text-xl font-bold), "Default" board selector (outline button + chevron), filter icon, Search input (border, rounded-md, placeholder "Search tasks..."), Gateway status badge (green border, green text "Gateway sleeping · sync in X:XX"), "Wake now" button, Clock/Tags/Settings/Activity icons (ghost buttons, h-9 w-9) |
 | `23-board-selector-light.png` | Board dropdown open | Dropdown menu showing board list, "New Board" option with plus icon. DropdownMenu styling: rounded-md border, bg-popover, shadow-md |
 
 ### Sidebar

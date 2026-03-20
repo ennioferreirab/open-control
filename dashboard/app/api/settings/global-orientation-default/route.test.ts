@@ -49,4 +49,18 @@ describe("GET /api/settings/global-orientation-default", () => {
 
     expect(response.status).toBe(500);
   });
+
+  it("reads from OPEN_CONTROL_HOME when configured", async () => {
+    vi.stubEnv("OPEN_CONTROL_HOME", "/runtime/open-control");
+    mockReadFile.mockResolvedValue("Open Control instructions");
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+    expect(mockReadFile).toHaveBeenCalledWith(
+      "/runtime/open-control/mc/agent-orientation.md",
+      "utf-8",
+    );
+    vi.unstubAllEnvs();
+  });
 });

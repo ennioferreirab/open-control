@@ -256,7 +256,7 @@ Light mode: swap foreground ↔ muted (darker text on lighter bg).
 | Token | Size | Line Height | Letter Spacing | Weight | Use |
 |-------|------|-------------|----------------|--------|-----|
 | `--text-display` | 28px | 1.2 | -0.02em | 700 | Hero headings (rare) |
-| `--text-title` | 22px | 1.3 | -0.015em | 600 | Page titles ("Mission Control") |
+| `--text-title` | 22px | 1.3 | -0.015em | 600 | Page titles ("Open Control") |
 | `--text-heading` | 16px | 1.4 | -0.01em | 600 | Section headers, column titles |
 | `--text-body` | 15px | 1.5 | 0 | 400 | Default text, descriptions |
 | `--text-small` | 13px | 1.5 | 0 | 400 | Secondary info, card metadata |

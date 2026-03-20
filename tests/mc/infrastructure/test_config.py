@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 from datetime import UTC
 from pathlib import Path
@@ -20,6 +21,42 @@ class TestAgentsDir:
         from mc.infrastructure.config import AGENTS_DIR
 
         assert AGENTS_DIR == Path.home() / ".nanobot" / "agents"
+
+
+class TestRuntimeHome:
+    """Runtime home compatibility resolution."""
+
+    def test_prefers_open_control_home_env_var(self, tmp_path: Path) -> None:
+        import mc.infrastructure.runtime_home as runtime_home
+
+        with patch.dict(
+            os.environ,
+            {
+                "OPEN_CONTROL_HOME": str(tmp_path / "open-control"),
+                "NANOBOT_HOME": str(tmp_path / "nanobot"),
+            },
+            clear=True,
+        ):
+            importlib.reload(runtime_home)
+
+            assert runtime_home.get_runtime_home() == tmp_path / "open-control"
+            assert runtime_home.get_agents_dir() == tmp_path / "open-control" / "agents"
+
+    def test_falls_back_to_nanobot_home_env_var(self, tmp_path: Path) -> None:
+        import mc.infrastructure.runtime_home as runtime_home
+
+        with patch.dict(os.environ, {"NANOBOT_HOME": str(tmp_path / "nanobot")}, clear=True):
+            importlib.reload(runtime_home)
+
+            assert runtime_home.get_runtime_home() == tmp_path / "nanobot"
+
+    def test_defaults_to_legacy_nanobot_home(self) -> None:
+        import mc.infrastructure.runtime_home as runtime_home
+
+        with patch.dict(os.environ, {}, clear=True):
+            importlib.reload(runtime_home)
+
+            assert runtime_home.get_runtime_home() == Path.home() / ".nanobot"
 
 
 class TestResolveConvexUrl:

@@ -1,4 +1,4 @@
-"""Lifecycle and status commands for Mission Control."""
+"""Lifecycle and status commands for Open Control."""
 
 from __future__ import annotations
 
@@ -76,28 +76,28 @@ def _kill_stale_processes() -> None:
 
 
 def _stop_mc() -> None:
-    """Send SIGTERM to the running Mission Control process."""
+    """Send SIGTERM to the running Open Control process."""
     import mc.cli as _cli
 
     if not _cli.PID_FILE.exists():
-        _cli.console.print("Mission Control is not running.")
+        _cli.console.print("Open Control is not running.")
         raise typer.Exit(0)
 
     try:
         pid = int(_cli.PID_FILE.read_text().strip())
     except (ValueError, OSError):
-        _cli.console.print("Mission Control is not running (invalid PID file).")
+        _cli.console.print("Open Control is not running (invalid PID file).")
         _cli._cleanup_pid_file()
         raise typer.Exit(0) from None
 
     try:
         os.kill(pid, 0)
     except OSError:
-        _cli.console.print("Mission Control is not running (stale PID file).")
+        _cli.console.print("Open Control is not running (stale PID file).")
         _cli._cleanup_pid_file()
         raise typer.Exit(0) from None
 
-    _cli.console.print("[yellow]Stopping Mission Control...[/yellow]")
+    _cli.console.print("[yellow]Stopping Open Control...[/yellow]")
     os.kill(pid, signal.SIGTERM)
     _cli.console.print("[green]Shutdown signal sent.[/green]")
 
@@ -124,7 +124,7 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
             help="Use the hosted Convex development deployment instead of local.",
         ),
     ):
-        """Start Mission Control (dashboard + agent gateway + nanobot channels)."""
+        """Start Open Control (dashboard + agent gateway + nanobot channels)."""
         import mc.cli as _cli
         from mc.cli.process_manager import ProcessManager
 
@@ -145,14 +145,14 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
                 old_pid = int(_cli.PID_FILE.read_text().strip())
                 os.kill(old_pid, 0)
                 _cli.console.print(
-                    f"[yellow]Mission Control is already running (PID {old_pid}).[/yellow]"
+                    f"[yellow]Open Control is already running (PID {old_pid}).[/yellow]"
                 )
-                _cli.console.print("Run [bold]nanobot mc down[/bold] first.")
+                _cli.console.print("Run [bold]open-control mc down[/bold] first.")
                 raise typer.Exit(1)
             except (ValueError, OSError):
                 _cli._cleanup_pid_file()
 
-        _cli.console.print("[bold]Starting Mission Control...[/bold]")
+        _cli.console.print("[bold]Starting Open Control...[/bold]")
         _kill_stale_processes()
 
         _cli.PID_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -196,7 +196,7 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
             pm = ProcessManager(dashboard_dir=resolved_dir, convex_mode=convex_mode)
             try:
                 await pm.start()
-                _cli.console.print("[green]Mission Control is running[/green]")
+                _cli.console.print("[green]Open Control is running[/green]")
                 _cli.console.print("  Dashboard: [cyan]http://localhost:3000[/cyan]")
                 _cli.console.print(f"  Convex:    [cyan]{convex_mode}[/cyan]")
                 _cli.console.print("  Nanobot:   [cyan]channels + agent gateway[/cyan]")
@@ -213,23 +213,23 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
 
     @mc_app.command()
     def stop():
-        """Stop Mission Control gracefully."""
+        """Stop Open Control gracefully."""
         _stop_mc()
 
     @mc_app.command()
     def down():
-        """Bring down Mission Control and all services."""
+        """Bring down Open Control and all services."""
         _stop_mc()
         _kill_stale_processes()
 
     @mc_app.command()
     def status():
-        """Show Mission Control system health overview."""
+        """Show Open Control system health overview."""
         import mc.cli as _cli
 
         if not _cli.PID_FILE.exists():
             _cli.console.print(
-                "Mission Control is not running. Start with [bold]nanobot mc start[/bold]"
+                "Open Control is not running. Start with [bold]open-control mc start[/bold]"
             )
             raise typer.Exit(0)
 
@@ -238,13 +238,13 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
             os.kill(pid, 0)
         except (ValueError, OSError):
             _cli.console.print(
-                "Mission Control is not running (stale PID file). "
-                "Start with [bold]nanobot mc start[/bold]"
+                "Open Control is not running (stale PID file). "
+                "Start with [bold]open-control mc start[/bold]"
             )
             _cli._cleanup_pid_file()
             raise typer.Exit(0) from None
 
-        _cli.console.print("[bold green]Mission Control is running[/bold green]\n")
+        _cli.console.print("[bold green]Open Control is running[/bold green]\n")
 
         try:
             bridge = _cli._get_bridge()

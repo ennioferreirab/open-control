@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mkdir, readdir, rename, rm, stat, writeFile } from "fs/promises";
-import { homedir } from "os";
 import { basename, join } from "path";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 const BOARD_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -67,7 +67,7 @@ export async function GET(
     return NextResponse.json({ error: "Invalid boardName" }, { status: 400 });
   }
 
-  const artifactsDir = join(homedir(), ".nanobot", "boards", boardName, "artifacts");
+  const artifactsDir = getRuntimePath("boards", boardName, "artifacts");
 
   try {
     const files = await listArtifacts(artifactsDir);
@@ -102,7 +102,7 @@ export async function POST(
     return NextResponse.json({ error: "Failed to parse multipart form data" }, { status: 400 });
   }
 
-  const artifactsDir = join(homedir(), ".nanobot", "boards", boardName, "artifacts");
+  const artifactsDir = getRuntimePath("boards", boardName, "artifacts");
   await mkdir(artifactsDir, { recursive: true });
 
   const uploadedFiles: Array<{ name: string; path: string; size: number; type: string }> = [];

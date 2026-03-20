@@ -104,11 +104,13 @@ export const AUTHOR_TYPE = {
   SYSTEM: "system",
 } as const;
 
-// System agent names (agents that cannot be disabled, excluded from task routing)
+// System agent names (agents that cannot be disabled, excluded from task routing).
+// The internal `nanobot` key remains stored for compatibility during the rebrand.
 export const SYSTEM_AGENT_NAMES = new Set(["lead-agent", "mc-agent", "nanobot", "low-agent"]);
 
 // Agents hidden from user-facing selectors (dropdowns, mentions, sidebar).
-// nanobot is intentionally excluded — it can be delegated to and mentioned.
+// The internal `nanobot` system agent is intentionally excluded from this set so
+// it remains available where the compatibility runtime still exposes it.
 export const HIDDEN_AGENT_NAMES = new Set(["lead-agent", "mc-agent", "low-agent"]);
 
 // Virtual agent sentinel for human-in-the-loop steps.

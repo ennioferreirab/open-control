@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
-import { join } from "path";
-import { homedir } from "os";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 export async function GET() {
-  const configPath = join(homedir(), ".nanobot", "config.json");
+  const configPath = getRuntimePath("config.json");
   try {
     const content = await readFile(configPath, "utf-8");
     const config = JSON.parse(content) as {

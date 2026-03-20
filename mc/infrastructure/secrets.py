@@ -22,10 +22,7 @@ def _load_secrets_file() -> dict[str, str]:
 
     Example ``~/.nanobot/secrets.json``::
 
-        {
-          "APIFY_API_TOKEN": "apify_api_...",
-          "SOME_OTHER_KEY": "value"
-        }
+        {"APIFY_API_TOKEN": "apify_api_...", "SOME_OTHER_KEY": "value"}
     """
     if not _SECRETS_PATH.exists():
         return {}

@@ -1,4 +1,4 @@
-"""Boot: entry point that ensures vendor/nanobot is importable and exposes the CLI."""
+"""Boot the Open Control CLI while preserving nanobot runtime compatibility."""
 import sys
 from pathlib import Path
 
@@ -12,7 +12,7 @@ _cc_vendor = str(Path(__file__).parent / "vendor" / "claude-code")
 if _cc_vendor not in sys.path:
     sys.path.insert(0, _cc_vendor)
 
-# Re-export the CLI app (mc commands are registered inside nanobot.cli.commands)
+# Re-export the CLI app (mc commands are still registered inside nanobot.cli.commands)
 from nanobot.cli.commands import app as cli  # noqa: E402
 
 __all__ = ["cli"]

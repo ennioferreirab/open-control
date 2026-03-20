@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, mkdir } from "fs/promises";
-import { join, dirname } from "path";
-import { homedir } from "os";
+import { dirname } from "path";
 import yaml from "js-yaml";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -38,7 +38,7 @@ export async function PUT(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const configPath = join(homedir(), ".nanobot", "agents", agentName, "config.yaml");
+  const configPath = getRuntimePath("agents", agentName, "config.yaml");
 
   // Read existing config to preserve fields not being updated
   let existing: AgentConfig = { name: agentName };

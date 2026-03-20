@@ -1,4 +1,4 @@
-"""Lifecycle CLI tests for Mission Control startup flags."""
+"""Lifecycle CLI tests for Open Control startup flags."""
 
 from __future__ import annotations
 

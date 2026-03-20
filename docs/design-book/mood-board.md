@@ -1,4 +1,4 @@
-# Mission Control — Mood Board
+# Open Control — Mood Board
 
 > Direction: Notion-inspired, Professional & Reliable, Neutral pure, Comfortable density, Dark-first
 

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
-import { homedir } from "os";
-import { join } from "path";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 const BOARD_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -71,7 +70,7 @@ export async function GET(
   }
 
   const relativePath = path.join("/");
-  const filePath = join(homedir(), ".nanobot", "boards", boardName, "artifacts", relativePath);
+  const filePath = getRuntimePath("boards", boardName, "artifacts", relativePath);
 
   let buffer: Buffer;
   try {
