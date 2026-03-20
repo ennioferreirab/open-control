@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from typing import Any, Protocol, runtime_checkable
 
 from convex import ConvexClient
+
 from mc.bridge.key_conversion import _convert_keys_to_camel, _convert_keys_to_snake
 from mc.bridge.retry import mutation_with_retry
 
