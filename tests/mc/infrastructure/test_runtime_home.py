@@ -55,9 +55,7 @@ class TestOpenControlHomeOverride:
 class TestNanobotHomeOverride:
     """NANOBOT_HOME legacy env var override."""
 
-    def test_nanobot_home_override(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_nanobot_home_override(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """NANOBOT_HOME env var sets the runtime home when OPEN_CONTROL_HOME is absent."""
         from mc.infrastructure.runtime_home import get_runtime_home
 

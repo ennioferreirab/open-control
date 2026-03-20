@@ -24,7 +24,6 @@ from pathlib import Path  # noqa: F401
 from typing import Any
 
 from convex import ConvexClient
-
 from mc.bridge.adapter import _BridgeClientAdapter
 from mc.bridge.facade_mixins import BridgeRepositoryFacadeMixin
 from mc.bridge.idempotency import ensure_idempotency_key

@@ -122,7 +122,12 @@ export function AgentSidebarItem({
         >
           <div className="relative">
             {isNanobot ? (
-              <img src="/bento.png" alt="Bento" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src="/bento.png"
+                alt="Bento"
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+              />
             ) : (
               <div
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor}`}
@@ -149,7 +154,12 @@ export function AgentSidebarItem({
         className={`!h-auto flex-1 ${isDeletedItem ? "opacity-50 cursor-default" : "cursor-pointer"} ${isTerminalOpen ? "bg-accent" : ""}`}
       >
         {isNanobot ? (
-          <img src="/bento.png" alt="Bento" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src="/bento.png"
+            alt="Bento"
+            className="h-8 w-8 shrink-0 rounded-full object-cover"
+          />
         ) : (
           <div
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor}`}

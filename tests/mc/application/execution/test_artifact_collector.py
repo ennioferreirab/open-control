@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from mc.application.execution.artifact_collector import (
     _human_size,
     collect_output_artifacts,

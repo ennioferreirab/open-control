@@ -533,11 +533,12 @@ class TestBuildTaskContext:
         )
 
         agents_dir = tmp_path / "agents"
-        with patch(
-            "mc.infrastructure.boards.get_agents_dir", return_value=agents_dir
-        ), patch(
-            "mc.infrastructure.boards.get_boards_dir",
-            return_value=tmp_path / "boards",
+        with (
+            patch("mc.infrastructure.boards.get_agents_dir", return_value=agents_dir),
+            patch(
+                "mc.infrastructure.boards.get_boards_dir",
+                return_value=tmp_path / "boards",
+            ),
         ):
             builder = ContextBuilder(bridge)
             req = await builder.build_task_context(
@@ -576,11 +577,12 @@ class TestBuildTaskContext:
         )
 
         boards_dir = tmp_path / "boards"
-        with patch(
-            "mc.infrastructure.boards.get_agents_dir",
-            return_value=tmp_path / "agents",
-        ), patch(
-            "mc.infrastructure.boards.get_boards_dir", return_value=boards_dir
+        with (
+            patch(
+                "mc.infrastructure.boards.get_agents_dir",
+                return_value=tmp_path / "agents",
+            ),
+            patch("mc.infrastructure.boards.get_boards_dir", return_value=boards_dir),
         ):
             builder = ContextBuilder(bridge)
             req = await builder.build_task_context(

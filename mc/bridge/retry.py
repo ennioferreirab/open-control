@@ -19,7 +19,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from convex import ConvexClient
-
 from mc.bridge.idempotency import ensure_idempotency_key
 from mc.bridge.key_conversion import _convert_keys_to_camel, _convert_keys_to_snake
 
