@@ -16,6 +16,40 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_EXT_MIME: dict[str, str] = {
+    "pdf": "application/pdf",
+    "md": "text/markdown",
+    "markdown": "text/markdown",
+    "html": "text/html",
+    "htm": "text/html",
+    "txt": "text/plain",
+    "csv": "text/csv",
+    "json": "application/json",
+    "yaml": "text/yaml",
+    "yml": "text/yaml",
+    "xml": "application/xml",
+    "py": "text/x-python",
+    "ts": "text/typescript",
+    "tsx": "text/typescript",
+    "js": "text/javascript",
+    "jsx": "text/javascript",
+    "go": "text/x-go",
+    "rs": "text/x-rust",
+    "sh": "text/x-sh",
+    "bash": "text/x-sh",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "svg": "image/svg+xml",
+    "webp": "image/webp",
+    "mp4": "video/mp4",
+    "webm": "video/webm",
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "zip": "application/zip",
+}
+
 
 def _coerce_state_version(task_data: dict[str, Any]) -> int:
     raw_value = task_data.get("state_version", task_data.get("stateVersion", 0))
@@ -268,52 +302,31 @@ class TaskRepository:
     def sync_task_output_files(
         self, task_id: str, task_data: dict, agent_name: str = "agent"
     ) -> None:
-        """Scan output/ directory and sync file manifest in Convex.
+        """Scan output/ directory recursively and sync file manifest in Convex.
 
         - Adds new output files not yet in the manifest
         - Replaces the output section if stale entries exist
         - Creates activity event if new files were found
+        - Uses relative paths so subdirectory structure is preserved
         """
-        ext_mime: dict[str, str] = {
-            "pdf": "application/pdf",
-            "md": "text/markdown",
-            "markdown": "text/markdown",
-            "html": "text/html",
-            "htm": "text/html",
-            "txt": "text/plain",
-            "csv": "text/csv",
-            "json": "application/json",
-            "yaml": "text/yaml",
-            "yml": "text/yaml",
-            "xml": "application/xml",
-            "py": "text/x-python",
-            "ts": "text/typescript",
-            "tsx": "text/typescript",
-            "js": "text/javascript",
-            "jsx": "text/javascript",
-            "go": "text/x-go",
-            "rs": "text/x-rust",
-            "sh": "text/x-sh",
-            "bash": "text/x-sh",
-        }
-
         safe_id = task_safe_id(task_id)
         output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
 
         if not output_dir.exists():
             return
 
-        # Scan filesystem
+        # Scan filesystem recursively
         now = datetime.now(UTC).isoformat()
         fs_files: list[dict] = []
         try:
-            for entry in output_dir.iterdir():
+            for entry in output_dir.rglob("*"):
                 if entry.is_file():
                     ext = entry.suffix.lstrip(".").lower()
-                    mime = ext_mime.get(ext, "application/octet-stream")
+                    mime = _EXT_MIME.get(ext, "application/octet-stream")
+                    rel_name = str(entry.relative_to(output_dir))
                     fs_files.append(
                         {
-                            "name": entry.name,
+                            "name": rel_name,
                             "type": mime,
                             "size": entry.stat().st_size,
                             "subfolder": "output",
@@ -379,31 +392,9 @@ class TaskRepository:
     ) -> None:
         """Sync output files from a cron-triggered task to its parent task.
 
-        Fetches files from the source task's output/ directory and appends
-        any new filenames (append-only) to the parent task's output section.
+        Fetches files from the source task's output/ directory recursively
+        and appends any new filenames (append-only) to the parent task's output section.
         """
-        ext_mime: dict[str, str] = {
-            "pdf": "application/pdf",
-            "md": "text/markdown",
-            "markdown": "text/markdown",
-            "html": "text/html",
-            "htm": "text/html",
-            "txt": "text/plain",
-            "csv": "text/csv",
-            "json": "application/json",
-            "yaml": "text/yaml",
-            "yml": "text/yaml",
-            "xml": "application/xml",
-            "py": "text/x-python",
-            "ts": "text/typescript",
-            "tsx": "text/typescript",
-            "js": "text/javascript",
-            "jsx": "text/javascript",
-            "go": "text/x-go",
-            "rs": "text/x-rust",
-            "sh": "text/x-sh",
-            "bash": "text/x-sh",
-        }
         safe_source_id = re.sub(r"[^\w\-]", "_", source_task_id)
         source_output_dir = Path.home() / ".nanobot" / "tasks" / safe_source_id / "output"
         if not source_output_dir.exists():
@@ -411,13 +402,14 @@ class TaskRepository:
         now = datetime.utcnow().isoformat() + "Z"
         source_files: list[dict] = []
         try:
-            for entry in source_output_dir.iterdir():
+            for entry in source_output_dir.rglob("*"):
                 if entry.is_file():
                     ext = entry.suffix.lstrip(".").lower()
-                    mime = ext_mime.get(ext, "application/octet-stream")
+                    mime = _EXT_MIME.get(ext, "application/octet-stream")
+                    rel_name = str(entry.relative_to(source_output_dir))
                     source_files.append(
                         {
-                            "name": entry.name,
+                            "name": rel_name,
                             "type": mime,
                             "size": entry.stat().st_size,
                             "subfolder": "output",

@@ -2,12 +2,40 @@
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from nanobot.config.schema import Config, ProviderConfig
     from nanobot.providers.registry import ProviderSpec
+
+_SECRETS_PATH = Path.home() / ".nanobot" / "secrets.json"
+
+
+def _load_secrets_file() -> dict[str, str]:
+    """Load all key-value pairs from ``~/.nanobot/secrets.json``.
+
+    Generic mechanism — any env var can be added and it will be injected
+    into every agent environment automatically.
+
+    Example ``~/.nanobot/secrets.json``::
+
+        {
+          "APIFY_API_TOKEN": "apify_api_...",
+          "SOME_OTHER_KEY": "value"
+        }
+    """
+    if not _SECRETS_PATH.exists():
+        return {}
+    try:
+        data = json.loads(_SECRETS_PATH.read_text())
+        if not isinstance(data, dict):
+            return {}
+        return {k: str(v) for k, v in data.items() if v}
+    except (json.JSONDecodeError, OSError):
+        return {}
 
 
 def _known_secret_env_names() -> set[str]:
@@ -20,6 +48,8 @@ def _known_secret_env_names() -> set[str]:
             names.add(spec.env_key)
         for env_name, _ in spec.env_extras:
             names.add(env_name)
+    # Also include any names defined in config.json secrets
+    names.update(_load_secrets_file().keys())
     return names
 
 
@@ -75,6 +105,11 @@ def resolve_secret_env(config: Config | None = None) -> dict[str, str]:
 
     if "BRAVE_API_KEY" not in resolved and cfg.tools.web.search.api_key:
         resolved["BRAVE_API_KEY"] = cfg.tools.web.search.api_key
+
+    # Load generic secrets from config.json — fills anything not yet resolved
+    for key, value in _load_secrets_file().items():
+        if key not in resolved:
+            resolved[key] = value
 
     return resolved
 

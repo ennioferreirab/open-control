@@ -1,11 +1,21 @@
 "use client";
 
-import type { ChangeEventHandler, RefObject } from "react";
+import { useState, type ChangeEventHandler, type RefObject } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TabsContent } from "@/components/ui/tabs";
-import { File, FileCode, FileText, Image, Loader2, Paperclip, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  File,
+  FileCode,
+  FileText,
+  Folder,
+  Image,
+  Loader2,
+  Paperclip,
+  Trash2,
+} from "lucide-react";
 import type { DetailFileRef } from "@/features/tasks/hooks/useTaskDetailView";
 
 const formatSize = (bytes: number) =>
@@ -45,6 +55,148 @@ function FileIcon({ name }: { name: string }) {
   return <File className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-label="Generic file" />;
 }
 
+/** Get display name (last segment of the path). */
+function displayName(name: string) {
+  const idx = name.lastIndexOf("/");
+  return idx >= 0 ? name.slice(idx + 1) : name;
+}
+
+/**
+ * Group files into a folder tree (up to 2 levels deep).
+ * Returns { rootFiles, folders } where folders is a map of
+ * folderName -> { files, subfolders: Map<subName, files[]> }.
+ */
+function buildOutputTree(files: DetailFileRef[]) {
+  const rootFiles: DetailFileRef[] = [];
+  const folders = new Map<
+    string,
+    { files: DetailFileRef[]; subfolders: Map<string, DetailFileRef[]> }
+  >();
+
+  for (const file of files) {
+    const parts = file.name.split("/");
+    if (parts.length === 1) {
+      rootFiles.push(file);
+    } else if (parts.length === 2) {
+      const folder = parts[0]!;
+      if (!folders.has(folder)) {
+        folders.set(folder, { files: [], subfolders: new Map() });
+      }
+      folders.get(folder)!.files.push(file);
+    } else {
+      // 3+ segments — group under first two levels
+      const folder = parts[0]!;
+      const subfolder = parts[1]!;
+      if (!folders.has(folder)) {
+        folders.set(folder, { files: [], subfolders: new Map() });
+      }
+      const entry = folders.get(folder)!;
+      if (!entry.subfolders.has(subfolder)) {
+        entry.subfolders.set(subfolder, []);
+      }
+      entry.subfolders.get(subfolder)!.push(file);
+    }
+  }
+
+  return { rootFiles, folders };
+}
+
+function FolderTotalSize({ files }: { files: DetailFileRef[] }) {
+  const total = files.reduce((sum, f) => sum + f.size, 0);
+  return (
+    <span className="flex-shrink-0 text-xs text-muted-foreground">{formatSize(total)}</span>
+  );
+}
+
+function OutputFileRow({
+  file,
+  onOpenFile,
+  indent = 0,
+}: {
+  file: DetailFileRef;
+  onOpenFile: (file: DetailFileRef) => void;
+  indent?: number;
+}) {
+  return (
+    <div
+      key={getDisplayFileKey(file)}
+      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 animate-in fade-in duration-300"
+      style={indent > 0 ? { paddingLeft: `${indent * 16 + 8}px` } : undefined}
+      onClick={() => onOpenFile(file)}
+    >
+      <FileIcon name={file.name} />
+      <span className="min-w-0 flex-1 truncate text-sm">{displayName(file.name)}</span>
+      {file.sourceLabel && (
+        <Badge variant="secondary" className="text-[10px]">
+          {file.sourceLabel}
+        </Badge>
+      )}
+      <span className="flex-shrink-0 text-xs text-muted-foreground">
+        {formatSize(file.size)}
+      </span>
+    </div>
+  );
+}
+
+function OutputFolderGroup({
+  name,
+  files,
+  subfolders,
+  onOpenFile,
+  depth,
+}: {
+  name: string;
+  files: DetailFileRef[];
+  subfolders: Map<string, DetailFileRef[]>;
+  onOpenFile: (file: DetailFileRef) => void;
+  depth: number;
+}) {
+  const [open, setOpen] = useState(true);
+  const allFiles = [...files, ...[...subfolders.values()].flat()];
+
+  return (
+    <div>
+      <button
+        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50"
+        style={depth > 0 ? { paddingLeft: `${depth * 16 + 8}px` } : undefined}
+        onClick={() => setOpen(!open)}
+      >
+        <ChevronRight
+          className={`h-3.5 w-3.5 flex-shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+        />
+        <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-left font-medium">{name}</span>
+        <span className="flex-shrink-0 text-xs text-muted-foreground">
+          {allFiles.length} {allFiles.length === 1 ? "file" : "files"}
+        </span>
+        <FolderTotalSize files={allFiles} />
+      </button>
+      {open && (
+        <div className="flex flex-col gap-0.5">
+          {files.map((file) => (
+            <OutputFileRow
+              key={getDisplayFileKey(file)}
+              file={file}
+              onOpenFile={onOpenFile}
+              indent={depth + 1}
+            />
+          ))}
+          {[...subfolders.entries()].map(([subName, subFiles]) => (
+            <OutputFolderGroup
+              key={subName}
+              name={subName}
+              files={subFiles}
+              subfolders={new Map()}
+              onOpenFile={onOpenFile}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface TaskDetailFilesTabProps {
   displayFiles: DetailFileRef[];
   attachInputRef: RefObject<HTMLInputElement | null>;
@@ -72,6 +224,7 @@ export function TaskDetailFilesTab({
 }: TaskDetailFilesTabProps) {
   const attachments = displayFiles.filter((file) => file.subfolder === "attachments");
   const outputs = displayFiles.filter((file) => file.subfolder === "output");
+  const { rootFiles, folders } = buildOutputTree(outputs);
 
   return (
     <TabsContent value="files" className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col">
@@ -179,24 +332,23 @@ export function TaskDetailFilesTab({
               {outputs.length === 0 ? (
                 <p className="py-2 text-sm text-muted-foreground">No outputs yet.</p>
               ) : (
-                <div className="flex flex-col gap-1">
-                  {outputs.map((file) => (
-                    <div
+                <div className="flex flex-col gap-0.5">
+                  {rootFiles.map((file) => (
+                    <OutputFileRow
                       key={getDisplayFileKey(file)}
-                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 animate-in fade-in duration-300"
-                      onClick={() => onOpenFile(file)}
-                    >
-                      <FileIcon name={file.name} />
-                      <span className="min-w-0 flex-1 truncate text-sm">{file.name}</span>
-                      {file.sourceLabel && (
-                        <Badge variant="secondary" className="text-[10px]">
-                          {file.sourceLabel}
-                        </Badge>
-                      )}
-                      <span className="flex-shrink-0 text-xs text-muted-foreground">
-                        {formatSize(file.size)}
-                      </span>
-                    </div>
+                      file={file}
+                      onOpenFile={onOpenFile}
+                    />
+                  ))}
+                  {[...folders.entries()].map(([folderName, { files, subfolders }]) => (
+                    <OutputFolderGroup
+                      key={folderName}
+                      name={folderName}
+                      files={files}
+                      subfolders={subfolders}
+                      onOpenFile={onOpenFile}
+                      depth={0}
+                    />
                   ))}
                 </div>
               )}

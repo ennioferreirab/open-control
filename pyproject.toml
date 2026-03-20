@@ -30,7 +30,7 @@ claude-code-backend = { path = "vendor/claude-code", editable = true }
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["vendor/nanobot"]
+extend-exclude = ["vendor/nanobot", "mc/skills"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "RUF"]
@@ -49,7 +49,7 @@ pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
-exclude = ["vendor/nanobot", "**/__pycache__"]
+exclude = ["vendor/nanobot", "mc/skills", "**/__pycache__"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 
