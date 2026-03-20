@@ -1,4 +1,4 @@
-"""CLI commands for Mission Control lifecycle management."""
+"""CLI commands for Open Control lifecycle management."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from rich.console import Console
 from mc.infrastructure.config import AGENTS_DIR
 
 mc_app = typer.Typer(
-    help="Mission Control - multi-agent orchestration dashboard",
+    help="Open Control - multi-agent orchestration dashboard",
     no_args_is_help=True,
 )
 

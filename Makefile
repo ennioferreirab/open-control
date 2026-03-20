@@ -1,4 +1,4 @@
-# ─── Mission Control ──────────────────────────────────────────────
+# ─── Open Control ────────────────────────────────────────────────
 #
 # make start       Start attached — logs stream to terminal (Ctrl+C to stop)
 # make up          Start detached — runs in background, logs → /tmp/mc.log
@@ -18,6 +18,7 @@
         test-py test-ts lint-py lint-ts typecheck-py typecheck-ts format-py format-ts
 
 MC_CMD := uv run nanobot mc start
+PUBLIC_MC_CMD := uv run open-control mc start
 
 # ─── Stack lifecycle ──────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ start:
 	@$(MC_CMD)
 
 up:
-	@nohup $(MC_CMD) > /tmp/mc.log 2>&1 & echo "Mission Control started in background. Logs: /tmp/mc.log"
+	@nohup $(MC_CMD) > /tmp/mc.log 2>&1 & echo "Open Control started in background. Logs: /tmp/mc.log"
 
 down:
 	@uv run nanobot mc down
@@ -40,6 +41,10 @@ takeover: down
 	@sleep 2
 	@find mc/ -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@$(MC_CMD)
+
+# Public CLI note:
+# The preferred branded command is `$(PUBLIC_MC_CMD)`.
+# The current Make targets still execute `$(MC_CMD)` for runtime compatibility.
 
 # ─── Testing ──────────────────────────────────────────────────────
 # Unit tests are fully mocked — no Convex needed.

@@ -61,6 +61,7 @@ Open Control is the public product name for this repository.
 Until the compatibility migration is complete, the following legacy surfaces are
 still supported:
 
+- the new `open-control` CLI alias for public docs and packaging
 - the `nanobot` CLI name for current runtime commands
 - the `~/.nanobot` runtime home directory
 - upstream import paths exposed through `nanobot.*`

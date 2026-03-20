@@ -20,8 +20,8 @@ class TestStatusNotRunning:
             result = runner.invoke(mc_app, ["status"])
 
         assert result.exit_code == 0
-        assert "Mission Control is not running" in result.output
-        assert "nanobot mc start" in result.output
+        assert "Open Control is not running" in result.output
+        assert "open-control mc start" in result.output
 
     def test_stale_pid_file(self, tmp_path):
         fake_pid = tmp_path / "mc.pid"
@@ -65,7 +65,7 @@ class TestStatusRunning:
             with patch.dict(os.environ, {"CONVEX_URL": "https://test.convex.cloud"}):
                 result = runner.invoke(mc_app, ["status"])
 
-        assert "Mission Control is running" in result.output
+        assert "Open Control is running" in result.output
 
     @patch("mc.bridge.ConvexClient")
     def test_displays_dashboard_url(self, MockClient, tmp_path):

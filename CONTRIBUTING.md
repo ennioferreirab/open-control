@@ -16,7 +16,9 @@ uv sync
 ```
 
 > Runtime compatibility note: some local commands still use the legacy
-> `nanobot` CLI name until the public alias migration is complete.
+> `nanobot` CLI name until the public alias migration is complete. When the
+> package is installed, prefer `open-control mc ...` in user-facing docs and
+> examples.
 
 ## Running Tests
 
@@ -100,7 +102,8 @@ Use TDD for every feature and bug fix:
 ### New Agent Type
 
 1. Create agent YAML in the agents directory
-2. Register via `nanobot agents sync` (current compatibility command)
+2. Register via `open-control mc agents sync` when the public alias is available, or
+   `nanobot agents sync` as the current compatibility command
 3. Add tests in `tests/mc/`
 
 ### New Hook Handler
