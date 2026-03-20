@@ -11,3 +11,17 @@ build/
 node_modules/
 bridge/dist/
 workspace/
+
+# Docker-specific exclusions
+.venv/
+.claude/
+_bmad/
+_bmad-output/
+docs/
+tests/
+scripts/*.py
+dashboard/.convex/local/
+dashboard/.next/
+.ruff_cache/
+.pytest_cache/
+*.sqlite3
