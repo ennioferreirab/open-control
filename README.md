@@ -9,10 +9,6 @@
   from a Python backend and a realtime web dashboard.
 </p>
 
-<p align="center">
-  <img src="bento_favicon.png" alt="Bento" width="80">
-</p>
-
 ---
 
 This repository owns the orchestration layer, the dashboard, and the glue code
@@ -120,7 +116,7 @@ See [SECURITY.md](SECURITY.md) for how to report vulnerabilities responsibly.
 
 ## Mascot
 
-**Bento** is the Open Control mascot — a black Shih Tzu who runs mission
+**Bento** is the Open Control mascot a black Shih Tzu who runs mission
 control. The dogs in the control room represent AI agents; the humans represent
 the people who work alongside them.
 
