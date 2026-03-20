@@ -294,6 +294,23 @@ describe("GET /api/tasks/[taskId]/files/[subfolder]/[filename]", () => {
     );
   });
 
+  it("reads task files from OPEN_CONTROL_HOME when configured", async () => {
+    vi.stubEnv("OPEN_CONTROL_HOME", "/runtime/open-control");
+    const buf = Buffer.from("ok");
+    mockReadFile.mockResolvedValue(buf);
+
+    const res = await GET(
+      makeReq("task-1", "output", "result.txt"),
+      makeParams("task-1", "output", "result.txt"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockReadFile).toHaveBeenCalledWith(
+      "/runtime/open-control/tasks/task-1/output/result.txt",
+    );
+    vi.unstubAllEnvs();
+  });
+
   it("returns 400 for output filename containing path traversal", async () => {
     const res = await GET(
       makeReq("task-1", "output", "../etc/passwd"),

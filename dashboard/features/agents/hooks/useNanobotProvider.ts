@@ -5,8 +5,8 @@ import { api } from "@/convex/_generated/api";
 import { getInteractiveAgentProvider } from "@/features/interactive/hooks/useInteractiveAgentProvider";
 
 /**
- * Resolve the interactive provider for the nanobot system agent.
- * Returns a provider string (e.g. "claude-code", "codex") defaulting to "claude-code".
+ * Resolve the interactive provider for the internal Open Control core agent.
+ * The persisted system-agent key remains `nanobot` for compatibility.
  */
 export function useNanobotProvider(): string {
   const nanobotAgent = useQuery(api.agents.getByName, { name: "nanobot" });

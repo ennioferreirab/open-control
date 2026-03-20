@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mc.infrastructure.runtime_home import get_agents_dir
+
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
 
@@ -25,14 +27,14 @@ class RuntimeContext:
 
     Attributes:
         bridge: ConvexBridge instance for Convex communication.
-        agents_dir: Path to the agents directory (default: ~/.nanobot/agents).
+        agents_dir: Path to the agents directory (default: configured runtime home / agents).
         admin_key: The Convex admin key (resolved at startup).
         admin_url: The Convex deployment URL (resolved at startup).
         services: Optional dict for holding arbitrary service references.
     """
 
     bridge: ConvexBridge
-    agents_dir: Path = field(default_factory=lambda: Path.home() / ".nanobot" / "agents")
+    agents_dir: Path = field(default_factory=get_agents_dir)
     admin_key: str = ""
     admin_url: str = ""
     services: dict[str, Any] = field(default_factory=dict)

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
+import os
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestRuntimeContext:
@@ -22,6 +24,16 @@ class TestRuntimeContext:
         bridge = MagicMock()
         ctx = RuntimeContext(bridge=bridge)
         assert ctx.agents_dir == Path.home() / ".nanobot" / "agents"
+
+    def test_default_agents_dir_uses_open_control_home_override(self, tmp_path: Path) -> None:
+        import mc.infrastructure.runtime_context as runtime_context
+
+        with patch.dict(os.environ, {"OPEN_CONTROL_HOME": str(tmp_path / "open-control")}, clear=True):
+            importlib.reload(runtime_context)
+
+            bridge = MagicMock()
+            ctx = runtime_context.RuntimeContext(bridge=bridge)
+            assert ctx.agents_dir == tmp_path / "open-control" / "agents"
 
     def test_custom_agents_dir(self, tmp_path: Path) -> None:
         from mc.infrastructure.runtime_context import RuntimeContext

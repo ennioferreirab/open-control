@@ -26,15 +26,17 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datetime import datetime
 
+from mc.infrastructure.runtime_home import get_agents_dir
+
 logger = logging.getLogger(__name__)
 
-AGENTS_DIR = Path.home() / ".nanobot" / "agents"
+AGENTS_DIR = get_agents_dir()
 
 
 def _config_default_model() -> str:
     """Return the user's configured default model (with provider prefix).
 
-    Reads ``agents.defaults.model`` from ``~/.nanobot/config.json``.
+    Reads ``agents.defaults.model`` from the configured runtime home config.
     This is the single source of truth for the active model/provider.
     """
     from nanobot.config.loader import load_config

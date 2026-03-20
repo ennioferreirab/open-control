@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
-import { homedir } from "os";
 import { join } from "path";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 interface AgentConfig {
   name: string;
@@ -160,8 +160,8 @@ export async function POST(request: NextRequest) {
 
     const yamlText = toYaml(config);
 
-    // Write to ~/.nanobot/agents/{name}/config.yaml
-    const agentDir = join(homedir(), ".nanobot", "agents", config.name);
+    // Write to the configured runtime home agents directory.
+    const agentDir = getRuntimePath("agents", config.name);
     await mkdir(join(agentDir, "memory"), { recursive: true });
     await mkdir(join(agentDir, "skills"), { recursive: true });
     await writeFile(join(agentDir, "config.yaml"), yamlText, "utf-8");
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
 
       const soulContent = `# Soul
 
-I am ${displayName}, a nanobot agent.
+I am ${displayName}, an Open Control agent.
 
 ## Role
 ${config.role}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, readdir, writeFile, mkdir } from "fs/promises";
 import { join, dirname } from "path";
-import { homedir } from "os";
+import { getRuntimeHome } from "@/lib/runtimeHome";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const ALLOWED_FILENAMES = new Set(["MEMORY.md", "HISTORY.md"]);
@@ -25,14 +25,14 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 async function resolvePaths(
-  nanobotDir: string,
+  runtimeHome: string,
   agentName: string,
   filename: string,
 ): Promise<{ readPath: string | null; writePath: string }> {
-  const globalPath = join(nanobotDir, "agents", agentName, "memory", filename);
+  const globalPath = join(runtimeHome, "agents", agentName, "memory", filename);
 
   try {
-    const boardsDir = join(nanobotDir, "boards");
+    const boardsDir = join(runtimeHome, "boards");
     const boards = await readdir(boardsDir);
     for (const board of boards) {
       if (!AGENT_NAME_RE.test(board)) continue;
@@ -61,8 +61,8 @@ export async function GET(
     return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   }
 
-  const nanobotDir = join(homedir(), ".nanobot");
-  const { readPath } = await resolvePaths(nanobotDir, agentName, filename);
+  const runtimeHome = getRuntimeHome();
+  const { readPath } = await resolvePaths(runtimeHome, agentName, filename);
 
   if (!readPath) {
     return NextResponse.json({ error: "File not found" }, { status: 404 });
@@ -93,8 +93,8 @@ export async function PUT(
   }
 
   const body = await request.text();
-  const nanobotDir = join(homedir(), ".nanobot");
-  const { writePath } = await resolvePaths(nanobotDir, agentName, filename);
+  const runtimeHome = getRuntimeHome();
+  const { writePath } = await resolvePaths(runtimeHome, agentName, filename);
 
   try {
     await mkdir(dirname(writePath), { recursive: true });

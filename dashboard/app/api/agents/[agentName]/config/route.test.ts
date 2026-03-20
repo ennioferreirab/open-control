@@ -64,4 +64,30 @@ describe("PUT /api/agents/[agentName]/config", () => {
       "utf-8",
     );
   });
+
+  it("writes under OPEN_CONTROL_HOME when the override is configured", async () => {
+    vi.stubEnv("OPEN_CONTROL_HOME", "/runtime/open-control");
+    mockReadFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+
+    const req = new Request("http://localhost/api/agents/youtube-summarizer/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: "Summarizer",
+        prompt: "updated prompt",
+      }),
+    });
+
+    const res = await PUT(req as NextRequest, {
+      params: Promise.resolve({ agentName: "youtube-summarizer" }),
+    });
+
+    expect(res.status).toBe(204);
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      "/runtime/open-control/agents/youtube-summarizer/config.yaml",
+      expect.any(String),
+      "utf-8",
+    );
+    vi.unstubAllEnvs();
+  });
 });

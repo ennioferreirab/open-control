@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mkdir, rename, rm, unlink, writeFile } from "fs/promises";
 import { basename, join } from "path";
-import { homedir } from "os";
+import { getRuntimePath } from "@/lib/runtimeHome";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const TASK_ID_RE = /^[a-zA-Z0-9_-]+$/;
@@ -19,7 +19,7 @@ export async function POST(
     );
   }
 
-  const attachmentsDir = join(homedir(), ".nanobot", "tasks", taskId, "attachments");
+  const attachmentsDir = getRuntimePath("tasks", taskId, "attachments");
 
   await mkdir(attachmentsDir, { recursive: true });
 
@@ -110,7 +110,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   }
 
-  const filePath = join(homedir(), ".nanobot", "tasks", taskId, "attachments", safeName);
+  const filePath = getRuntimePath("tasks", taskId, "attachments", safeName);
 
   try {
     await unlink(filePath);
