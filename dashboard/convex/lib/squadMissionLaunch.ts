@@ -11,7 +11,7 @@
  * This module creates tasks AND compiles workflow specs into execution plans.
  */
 
-import { ConvexError } from "convex/values";
+import { ConvexError, type Infer } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
@@ -23,6 +23,7 @@ import {
   type WorkflowExecutionPlan,
 } from "./workflowExecutionCompiler";
 import { logTaskCreated } from "./taskLifecycle";
+import { taskFileMetadataValidator } from "../schema";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,6 +43,7 @@ export interface LaunchSquadMissionArgs {
   boardId: Id<"boards">;
   title: string;
   description?: string;
+  files?: Infer<typeof taskFileMetadataValidator>[];
 }
 
 /**
@@ -52,7 +54,7 @@ export interface LaunchSquadMissionArgs {
  * lifecycle, while still preserving the precompiled workflow execution plan.
  *
  * @param ctx  - Convex mutation context.
- * @param args - Launch args (squadSpecId, workflowSpecId, boardId, title, description).
+ * @param args - Launch args (squadSpecId, workflowSpecId, boardId, title, description, files).
  * @returns The created task ID.
  *
  * @throws ConvexError if squad spec does not exist or is not published.
@@ -119,6 +121,7 @@ export async function launchSquadMission(
     workflowSpecId: args.workflowSpecId,
     boardId: args.boardId,
     executionPlan: plan,
+    ...(args.files ? { files: args.files } : {}),
     stateVersion: 1,
     createdAt: now,
     updatedAt: now,

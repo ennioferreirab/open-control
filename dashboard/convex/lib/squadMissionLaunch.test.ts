@@ -342,6 +342,62 @@ describe("launchSquadMission", () => {
       }),
     ).rejects.toThrow("Agents not found");
   });
+
+  it("persists files metadata on the task when files are provided", async () => {
+    const { ctx, inserts } = makeLaunchCtx({
+      squadSpec: mockSquadSpec,
+      workflowSpec: mockWorkflowSpec,
+      agents: [mockAgent1, mockAgent2],
+    });
+
+    const files = [
+      {
+        name: "brief.pdf",
+        type: "application/pdf",
+        size: 204800,
+        subfolder: "attachments",
+        uploadedAt: "2026-03-20T10:00:00.000Z",
+      },
+      {
+        name: "notes.txt",
+        type: "text/plain",
+        size: 1024,
+        subfolder: "attachments",
+        uploadedAt: "2026-03-20T10:00:00.000Z",
+      },
+    ];
+
+    await launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
+      squadSpecId: "squad-id-1" as Parameters<typeof launchSquadMission>[1]["squadSpecId"],
+      workflowSpecId: "workflow-id-1" as Parameters<typeof launchSquadMission>[1]["workflowSpecId"],
+      boardId: "board-id-1" as Parameters<typeof launchSquadMission>[1]["boardId"],
+      title: "Mission with attachments",
+      files,
+    });
+
+    const taskInsert = inserts.find((i) => i.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert!.value.files).toEqual(files);
+  });
+
+  it("does not include files field on the task when files are not provided", async () => {
+    const { ctx, inserts } = makeLaunchCtx({
+      squadSpec: mockSquadSpec,
+      workflowSpec: mockWorkflowSpec,
+      agents: [mockAgent1, mockAgent2],
+    });
+
+    await launchSquadMission(ctx as unknown as Parameters<typeof launchSquadMission>[0], {
+      squadSpecId: "squad-id-1" as Parameters<typeof launchSquadMission>[1]["squadSpecId"],
+      workflowSpecId: "workflow-id-1" as Parameters<typeof launchSquadMission>[1]["workflowSpecId"],
+      boardId: "board-id-1" as Parameters<typeof launchSquadMission>[1]["boardId"],
+      title: "Mission without attachments",
+    });
+
+    const taskInsert = inserts.find((i) => i.table === "tasks");
+    expect(taskInsert).toBeDefined();
+    expect(taskInsert!.value.files).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   Dialog,
@@ -12,8 +12,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Paperclip, X } from "lucide-react";
 import { useRunSquadMission } from "@/features/agents/hooks/useRunSquadMission";
+
+const formatSize = (bytes: number) =>
+  bytes < 1024 * 1024
+    ? `${(bytes / 1024).toFixed(0)} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 interface RunSquadMissionDialogProps {
   open: boolean;
@@ -34,8 +41,10 @@ export function RunSquadMissionDialog({
 }: RunSquadMissionDialogProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { isLaunching, error, effectiveWorkflowId, launch } = useRunSquadMission(
+  const { isLaunching, error, uploadError, effectiveWorkflowId, launch } = useRunSquadMission(
     boardId,
     squadSpecId,
   );
@@ -45,19 +54,43 @@ export function RunSquadMissionDialog({
   const handleLaunch = async () => {
     if (!canLaunch || !effectiveWorkflowId) return;
 
-    const taskId = await launch({
-      squadSpecId,
-      workflowSpecId: effectiveWorkflowId,
-      boardId,
-      title: title.trim(),
-      description: description.trim() || undefined,
-    });
+    const fileMetadata =
+      pendingFiles.length > 0
+        ? pendingFiles.map((f) => ({
+            name: f.name,
+            type: f.type || "application/octet-stream",
+            size: f.size,
+            subfolder: "attachments",
+            uploadedAt: new Date().toISOString(),
+          }))
+        : undefined;
+
+    const taskId = await launch(
+      {
+        squadSpecId,
+        workflowSpecId: effectiveWorkflowId,
+        boardId,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        files: fileMetadata,
+      },
+      pendingFiles.length > 0 ? pendingFiles : undefined,
+    );
 
     if (taskId) {
       setTitle("");
       setDescription("");
+      setPendingFiles([]);
       onLaunched(taskId);
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+    }
+    // Reset so the same file can be re-selected
+    e.target.value = "";
   };
 
   return (
@@ -84,14 +117,38 @@ export function RunSquadMissionDialog({
 
           <div className="space-y-1">
             <Label htmlFor="mission-description">Description (optional)</Label>
-            <Input
+            <Textarea
               id="mission-description"
               placeholder="Provide context for the squad"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={isLaunching}
+              rows={3}
             />
           </div>
+
+          {/* Pending file chips */}
+          {pendingFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {pendingFiles.map((file, idx) => (
+                <span
+                  key={`${file.name}-${idx}`}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border"
+                >
+                  <Paperclip className="w-3 h-3 flex-shrink-0" />
+                  {file.name} ({formatSize(file.size)})
+                  <button
+                    type="button"
+                    aria-label={`Remove ${file.name}`}
+                    onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+                    className="ml-0.5 hover:text-foreground"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           {effectiveWorkflowId == null && effectiveWorkflowId !== undefined && (
             <p className="text-sm text-destructive">
@@ -101,9 +158,27 @@ export function RunSquadMissionDialog({
           )}
 
           {error && <p className="text-sm text-destructive">{error.message}</p>}
+          {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
         </div>
 
         <DialogFooter>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLaunching}
+            title="Attach files"
+          >
+            <Paperclip className="w-4 h-4" />
+          </Button>
+          <div className="flex-1" />
           <Button variant="outline" onClick={onClose} disabled={isLaunching}>
             Cancel
           </Button>

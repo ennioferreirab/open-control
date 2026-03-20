@@ -176,6 +176,23 @@ export const listByStatus = query({
   },
 });
 
+export const listByStatusLite = query({
+  args: { status: taskStatusValidator },
+  handler: async (ctx, args) => {
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", args.status))
+      .collect();
+    return tasks.map(({
+      routingDecision, files, mergeSourceTaskIds, mergeSourceLabels,
+      mergedIntoTaskId, mergePreviousStatus, mergeLockedAt, isMergeTask,
+      stalledAt, isFavorite, deletedAt, previousStatus, sourceAgent,
+      squadSpecId, workflowSpecId,
+      ...rest
+    }) => rest);
+  },
+});
+
 export const listDeleted = query({
   args: {},
   handler: async (ctx) => {
@@ -778,6 +795,7 @@ export const launchMission = mutation({
     boardId: v.id("boards"),
     title: v.string(),
     description: v.optional(v.string()),
+    files: taskFilesValidator,
   },
   handler: async (ctx, args) => {
     return await launchSquadMission(ctx, args);
