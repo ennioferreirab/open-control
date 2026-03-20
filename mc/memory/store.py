@@ -13,6 +13,7 @@ from pathlib import Path
 
 from nanobot.agent.memory import MemoryStore
 
+from mc.infrastructure.runtime_home import get_runtime_path
 from mc.memory.index import MemoryIndex
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class HybridMemoryStore(MemoryStore):
     def _read_settings() -> dict:
         """Read memory settings from ~/.nanobot/memory_settings.json."""
         try:
-            settings_path = Path.home() / ".nanobot" / "memory_settings.json"
+            settings_path = get_runtime_path("memory_settings.json")
             if not settings_path.exists():
                 return {}
             return json.loads(settings_path.read_text(encoding="utf-8"))

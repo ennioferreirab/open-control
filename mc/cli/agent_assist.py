@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from mc.infrastructure.agents.yaml_validator import AgentConfig, format_validation_errors
+from mc.infrastructure.runtime_home import get_agents_dir
 
 # ---------------------------------------------------------------------------
 # LLM System Prompt
@@ -198,7 +199,7 @@ def create_agent_workspace(name: str, yaml_text: str) -> Path:
     Returns:
         Path to the written config.yaml file.
     """
-    agent_dir = Path.home() / ".nanobot" / "agents" / name
+    agent_dir = get_agents_dir() / name
     agent_dir.mkdir(parents=True, exist_ok=True)
     (agent_dir / "memory").mkdir(exist_ok=True)
     (agent_dir / "skills").mkdir(exist_ok=True)

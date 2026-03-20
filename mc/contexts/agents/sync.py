@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import yaml
 
 from mc.infrastructure.agents.yaml_validator import validate_agent_file
+from mc.infrastructure.runtime_home import get_runtime_path
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
@@ -348,7 +349,7 @@ class AgentSyncService:
 
         # Persist to memory_settings.json
         try:
-            settings_path = Path.home() / ".nanobot" / "memory_settings.json"
+            settings_path = get_runtime_path("memory_settings.json")
             existing: dict = {}
             if settings_path.exists():
                 existing = json.loads(settings_path.read_text(encoding="utf-8"))

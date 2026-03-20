@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mc.infrastructure.runtime_home import get_agents_dir
 from mc.types import (
     ActivityEventType,
     AuthorType,
@@ -44,7 +45,7 @@ MENTION_TIMEOUT_SECONDS = 120
 
 def _known_agent_names() -> set[str]:
     """Return lowercase names of all agents with a config.yaml on disk."""
-    agents_dir = Path.home() / ".nanobot" / "agents"
+    agents_dir = get_agents_dir()
     if not agents_dir.is_dir():
         return set()
     return {

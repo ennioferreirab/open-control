@@ -8,7 +8,6 @@ No CLI interaction, no I/O — all user-facing prompts live in ``mc.cli``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import yaml
 
@@ -20,12 +19,13 @@ from mc.cli.agent_assist import (
     validate_yaml_content,
 )
 from mc.infrastructure.agents.yaml_validator import validate_agent_file
+from mc.infrastructure.runtime_home import get_agents_dir
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-AGENTS_DIR = Path.home() / ".nanobot" / "agents"
+AGENTS_DIR = get_agents_dir()
 
 LEAD_AGENT_CONFIG: dict = {
     "name": "lead-agent",

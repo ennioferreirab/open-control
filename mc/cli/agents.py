@@ -11,6 +11,8 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from mc.infrastructure.runtime_home import get_agents_dir
+
 console = Console()
 
 _AGENT_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -333,7 +335,7 @@ def _save_assisted_agent(agent_name, yaml_text, create_fn):
     import mc.cli as _cli
     from mc.infrastructure.agents.yaml_validator import validate_agent_file
 
-    agent_dir = Path.home() / ".nanobot" / "agents" / agent_name
+    agent_dir = get_agents_dir() / agent_name
     if agent_dir.exists():
         if not typer.confirm(f"Agent '{agent_name}' already exists. Overwrite?", default=False):
             console.print("Cancelled.")

@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import task_safe_id
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ def _human_size(b: int) -> str:
 def _snapshot_output_dir(task_id: str) -> dict[str, float]:
     """Capture {relative_path: mtime} for all files in the task's output dir."""
     safe_id = task_safe_id(task_id)
-    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir = get_tasks_dir() / safe_id / "output"
     snapshot: dict[str, float] = {}
     if output_dir.exists():
         for entry in output_dir.rglob("*"):
@@ -38,7 +39,7 @@ def _collect_output_artifacts(
 ) -> list[dict[str, Any]]:
     """Compare post-execution output dir against pre-snapshot to detect artifacts."""
     safe_id = task_safe_id(task_id)
-    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir = get_tasks_dir() / safe_id / "output"
     artifacts: list[dict[str, Any]] = []
     pre = pre_snapshot or {}
 
@@ -84,7 +85,7 @@ def _relocate_invalid_memory_files(task_id: str, workspace: Path) -> list[Path]:
         return []
 
     safe_id = task_safe_id(task_id)
-    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir = get_tasks_dir() / safe_id / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     moved: list[Path] = []

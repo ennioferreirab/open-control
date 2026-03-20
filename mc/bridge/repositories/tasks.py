@@ -6,9 +6,9 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import task_safe_id
 
 if TYPE_CHECKING:
@@ -274,7 +274,7 @@ class TaskRepository:
             task_id: Convex task _id (e.g. "jd7abc123xyz").
         """
         safe_task_id = task_safe_id(task_id)
-        task_dir = Path.home() / ".nanobot" / "tasks" / safe_task_id
+        task_dir = get_tasks_dir() / safe_task_id
         for subdir in ("attachments", "output"):
             path = task_dir / subdir
             try:
@@ -310,7 +310,7 @@ class TaskRepository:
         - Uses relative paths so subdirectory structure is preserved
         """
         safe_id = task_safe_id(task_id)
-        output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+        output_dir = get_tasks_dir() / safe_id / "output"
 
         if not output_dir.exists():
             return
@@ -396,7 +396,7 @@ class TaskRepository:
         and appends any new filenames (append-only) to the parent task's output section.
         """
         safe_source_id = re.sub(r"[^\w\-]", "_", source_task_id)
-        source_output_dir = Path.home() / ".nanobot" / "tasks" / safe_source_id / "output"
+        source_output_dir = get_tasks_dir() / safe_source_id / "output"
         if not source_output_dir.exists():
             return
         now = datetime.utcnow().isoformat() + "Z"

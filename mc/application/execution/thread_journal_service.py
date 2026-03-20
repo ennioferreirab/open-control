@@ -13,6 +13,7 @@ from mc.application.execution.background_tasks import (
     create_background_task,
     create_deduplicated_background_task,
 )
+from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.infrastructure.thread_journal_store import (
     ThreadCompactionState,
     ThreadJournalStore,
@@ -48,7 +49,7 @@ class ThreadJournalService:
         summarizer: Summarizer | None = None,
         bridge: Any | None = None,
     ) -> None:
-        self._base_tasks_dir = base_tasks_dir or (Path.home() / ".nanobot" / "tasks")
+        self._base_tasks_dir = base_tasks_dir or get_tasks_dir()
         self._recent_window_messages = recent_window_messages
         self._compaction_batch_messages = compaction_batch_messages
         self._compaction_trigger_messages = compaction_trigger_messages

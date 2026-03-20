@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from mc.infrastructure.runtime_home import get_workspace_dir
 
 
 def append_task_completion_heartbeat(
@@ -28,7 +28,7 @@ def append_task_completion_heartbeat(
         f"Please summarize this naturally and notify the user that the task is complete.\n"
     )
 
-    heartbeat_file = Path.home() / ".nanobot" / "workspace" / "HEARTBEAT.md"
+    heartbeat_file = get_workspace_dir() / "HEARTBEAT.md"
     lock = FileLock(str(heartbeat_file) + ".lock", timeout=10)
     with lock:
         with open(heartbeat_file, "a", encoding="utf-8") as f:

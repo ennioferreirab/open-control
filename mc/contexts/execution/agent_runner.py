@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from mc.contexts.execution.message_builder import build_task_message
 from mc.contexts.execution.session_keys import build_agent_session_key
+from mc.infrastructure.runtime_home import get_agents_dir, get_workspace_dir
 from mc.types import LeadAgentExecutionError, is_lead_agent
 
 if TYPE_CHECKING:
@@ -125,9 +126,9 @@ async def _run_agent_on_task(
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
 
-    workspace = Path.home() / ".nanobot" / "agents" / agent_name
+    workspace = get_agents_dir() / agent_name
     workspace.mkdir(parents=True, exist_ok=True)
-    global_skills_dir = Path.home() / ".nanobot" / "workspace" / "skills"
+    global_skills_dir = get_workspace_dir() / "skills"
     artifacts_workspace = None
     if board_name:
         from mc.artifacts import resolve_board_artifacts_workspace

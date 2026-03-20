@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import (
     task_safe_id,
 )
@@ -35,7 +36,7 @@ def _snapshot_output_dir(task_id: str) -> dict[str, float]:
     ``~/.nanobot/tasks/{safe_id}/output/report.pdf``.
     """
     safe_id = task_safe_id(task_id)
-    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir = get_tasks_dir() / safe_id / "output"
     snapshot: dict[str, float] = {}
     if output_dir.exists():
         for entry in output_dir.rglob("*"):
@@ -61,7 +62,7 @@ def _collect_output_artifacts(
     The ``path`` is relative to the task base directory (e.g., ``"output/report.pdf"``).
     """
     safe_id = task_safe_id(task_id)
-    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir = get_tasks_dir() / safe_id / "output"
     artifacts: list[dict[str, Any]] = []
     pre = pre_snapshot or {}
 
@@ -114,7 +115,7 @@ def _relocate_invalid_memory_files(task_id: str, workspace: Path) -> list[Path]:
         return []
 
     safe_id = task_safe_id(task_id)
-    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir = get_tasks_dir() / safe_id / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     moved: list[Path] = []
@@ -344,7 +345,7 @@ async def _enrich_nanobot_description(
 
     description = description or ""
     safe_id = task_safe_id(task_id)
-    files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
+    files_dir = str(get_tasks_dir() / safe_id)
     try:
         fresh_task = await asyncio.to_thread(bridge.query, "tasks:getById", {"task_id": task_id})
         raw_files = (fresh_task or {}).get("files") or []
@@ -363,7 +364,7 @@ async def _enrich_nanobot_description(
         }
         for f in raw_files
     ]
-    output_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id / "output")
+    output_dir = str(get_tasks_dir() / safe_id / "output")
     task_instruction = (
         f"Task workspace: {files_dir}\n"
         f"Save ALL output files (reports, summaries, generated content) "

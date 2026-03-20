@@ -33,6 +33,7 @@ from mc.application.execution.runtime import (
     relocate_invalid_memory_files,
     snapshot_output_dir,
 )
+from mc.infrastructure.runtime_home import get_tasks_dir, get_workspace_dir
 from mc.types import (
     ActivityEventType,
     AuthorType,
@@ -84,7 +85,7 @@ class CCExecutorMixin:
         fresh_task: dict[str, Any] | None = None
         try:
             safe_id = task_safe_id(task_id)
-            files_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id)
+            files_dir = str(get_tasks_dir() / safe_id)
             try:
                 fresh_task = await asyncio.to_thread(
                     self._bridge.query, "tasks:getById", {"task_id": task_id}
@@ -105,7 +106,7 @@ class CCExecutorMixin:
                 }
                 for f in raw_files
             ]
-            output_dir = str(Path.home() / ".nanobot" / "tasks" / safe_id / "output")
+            output_dir = str(get_tasks_dir() / safe_id / "output")
             task_instruction = (
                 f"Task workspace: {files_dir}\n"
                 f"Save ALL output files (reports, summaries, generated content) to: {output_dir}\n"
@@ -575,7 +576,7 @@ class CCExecutorMixin:
                 f"### Agent's Result:\n```\n{result_snippet}\n```\n\n"
                 f"Please summarize this naturally and notify the user that the task is complete.\n"
             )
-            heartbeat_file = Path.home() / ".nanobot" / "workspace" / "HEARTBEAT.md"
+            heartbeat_file = get_workspace_dir() / "HEARTBEAT.md"
 
             def _write_heartbeat() -> None:
                 lock = FileLock(str(heartbeat_file) + ".lock", timeout=10)

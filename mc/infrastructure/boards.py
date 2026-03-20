@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from mc.infrastructure.runtime_home import get_agents_dir, get_boards_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +36,7 @@ class MemoryWorkspaceResolution:
 
 
 def _resolve_global_agent_workspace(agent_name: str) -> Path:
-    workspace = Path.home() / ".nanobot" / "agents" / agent_name
+    workspace = get_agents_dir() / agent_name
     (workspace / "memory").mkdir(parents=True, exist_ok=True)
     (workspace / "sessions").mkdir(exist_ok=True)
     return workspace
@@ -76,7 +78,7 @@ def resolve_board_workspace(
     Returns:
         Path to ~/.nanobot/boards/{board_name}/agents/{agent_name}/
     """
-    board_workspace = Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
+    board_workspace = get_boards_dir() / board_name / "agents" / agent_name
     memory_dir = board_workspace / "memory"
     sessions_dir = board_workspace / "sessions"
     memory_dir.mkdir(parents=True, exist_ok=True)
@@ -120,7 +122,7 @@ def resolve_memory_workspace(
 
 def _setup_with_history(memory_dir: Path, agent_name: str, board_name: str) -> None:
     """Set up with_history mode: symlink board files to global agent memory."""
-    global_memory_dir = Path.home() / ".nanobot" / "agents" / agent_name / "memory"
+    global_memory_dir = get_agents_dir() / agent_name / "memory"
     global_memory_dir.mkdir(parents=True, exist_ok=True)
 
     for fname in ("MEMORY.md", "HISTORY.md", "memory-index.sqlite"):
@@ -167,7 +169,7 @@ def _setup_clean(memory_dir: Path, agent_name: str, board_name: str) -> None:
         memory_md.unlink()
 
     if not memory_md.exists():
-        global_memory = Path.home() / ".nanobot" / "agents" / agent_name / "memory" / "MEMORY.md"
+        global_memory = get_agents_dir() / agent_name / "memory" / "MEMORY.md"
         if global_memory.exists() and not global_memory.is_symlink():
             shutil.copy2(global_memory, memory_md)
             logger.info(
@@ -207,7 +209,7 @@ def list_agent_board_workspaces(agent_name: str) -> list[tuple[str, Path]]:
 
     Scans ~/.nanobot/boards/*/agents/{agent_name}/ for existing board workspaces.
     """
-    boards_root = Path.home() / ".nanobot" / "boards"
+    boards_root = get_boards_dir()
     if not boards_root.is_dir():
         return []
 

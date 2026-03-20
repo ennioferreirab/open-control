@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import task_safe_id
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def resolve_task_dirs(task_id: str) -> tuple[str, str]:
         Tuple of (files_dir, output_dir) as absolute path strings.
     """
     safe_id = task_safe_id(task_id)
-    base = Path.home() / ".nanobot" / "tasks" / safe_id
+    base = get_tasks_dir() / safe_id
     return str(base), str(base / "output")
 
 
@@ -192,14 +193,14 @@ def build_file_context(
 def build_absolute_file_path(task_id: str, subfolder: str, name: str) -> str:
     """Return absolute path for a task file entry."""
     safe_id = task_safe_id(task_id)
-    return str(Path.home() / ".nanobot" / "tasks" / safe_id / subfolder / name)
+    return str(get_tasks_dir() / safe_id / subfolder / name)
 
 
 def absolutize_artifact_path(task_id: str, path: str) -> str:
     """Resolve a task-relative artifact path into an absolute filesystem path."""
     safe_id = task_safe_id(task_id)
     normalized = path.lstrip("/")
-    return str(Path.home() / ".nanobot" / "tasks" / safe_id / normalized)
+    return str(get_tasks_dir() / safe_id / normalized)
 
 
 def _read_merge_field(task_data: dict[str, Any], snake_case: str, camel_case: str) -> Any:

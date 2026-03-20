@@ -31,6 +31,7 @@ from mc.infrastructure.config import (
     _parse_utc_timestamp,
     _read_file_or_none,
 )
+from mc.infrastructure.runtime_home import get_boards_dir, get_runtime_path, get_workspace_dir
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
@@ -144,7 +145,7 @@ def ensure_nanobot_agent(agents_dir: Path) -> None:
     agent_dir = agents_dir / NANOBOT_AGENT_NAME
     config_path = agent_dir / "config.yaml"
 
-    workspace = Path.home() / ".nanobot" / "workspace"
+    workspace = get_workspace_dir()
 
     # Fetch identity from Telegram — raises RuntimeError on failure (no fallback)
     identity = _fetch_bot_identity()
@@ -261,7 +262,7 @@ def _restore_memory_from_backup(bridge: ConvexBridge, agent_name: str, agent_dir
     if not backup:
         return
 
-    boards_root = Path.home() / ".nanobot" / "boards"
+    boards_root = get_boards_dir()
     restored_count = 0
 
     # Restore per-board memory
@@ -346,7 +347,7 @@ def _backup_agent_memory(bridge: ConvexBridge, agents_dir: Path) -> int:
         try:
             if name == NANOBOT_AGENT_NAME:
                 # Nanobot uses global workspace
-                workspace = Path.home() / ".nanobot" / "workspace"
+                workspace = get_workspace_dir()
                 global_mem = _read_file_or_none(workspace / "memory" / "MEMORY.md")
                 global_hist = _read_file_or_none(workspace / "memory" / "HISTORY.md")
                 if global_mem is not None or global_hist is not None:
@@ -619,7 +620,7 @@ def _sync_embedding_model(bridge: ConvexBridge) -> None:
 
     # Persist to memory_settings.json so standalone nanobot (Telegram) can read it
     try:
-        settings_path = Path.home() / ".nanobot" / "memory_settings.json"
+        settings_path = get_runtime_path("memory_settings.json")
         existing: dict = {}
         if settings_path.exists():
             existing = json.loads(settings_path.read_text(encoding="utf-8"))

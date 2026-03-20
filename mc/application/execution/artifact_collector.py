@@ -7,9 +7,9 @@ into a shared module used by both task and step execution paths.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any
 
+from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import task_safe_id
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def snapshot_output_dir(task_id: str) -> dict[str, float]:
         Dict mapping relative paths to modification times.
     """
     safe_id = task_safe_id(task_id)
-    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir = get_tasks_dir() / safe_id / "output"
     snapshot: dict[str, float] = {}
     if output_dir.exists():
         for entry in output_dir.rglob("*"):
@@ -62,7 +62,7 @@ def collect_output_artifacts(
         List of artifact dicts with path, action, and description/diff.
     """
     safe_id = task_safe_id(task_id)
-    output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+    output_dir = get_tasks_dir() / safe_id / "output"
     artifacts: list[dict[str, Any]] = []
     pre = pre_snapshot or {}
 

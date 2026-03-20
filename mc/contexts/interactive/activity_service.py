@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from mc.bridge.overflow import safe_string_for_convex
+from mc.infrastructure.runtime_home import get_tasks_dir
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,7 @@ def _resolve_overflow_dir(session_id: str) -> Path | None:
     """Return the overflow directory for large content, or None."""
     try:
         task_id = session_id.split("-")[0] if "-" in session_id else session_id
-        tasks_dir = Path.home() / ".nanobot" / "tasks"
-        return tasks_dir / task_id / "output" / "_overflow"
+        return get_tasks_dir() / task_id / "output" / "_overflow"
     except Exception:
         return None
 

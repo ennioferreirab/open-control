@@ -59,6 +59,7 @@ from mc.infrastructure.config import (  # noqa: F401
     _resolve_convex_url,
     filter_agent_fields,
 )
+from mc.infrastructure.runtime_home import get_runtime_path
 from mc.runtime.cron_delivery import build_on_task_completed_callback
 from mc.runtime.interactive import build_interactive_runtime
 from mc.runtime.orchestrator import TaskOrchestrator
@@ -127,7 +128,7 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     on_task_completed = build_on_task_completed_callback(config, pending_deliveries)
 
     # Cron service — when a job fires, create a task in Convex (enters normal MC flow)
-    cron_store_path = Path.home() / ".nanobot" / "cron" / "jobs.json"
+    cron_store_path = get_runtime_path("cron", "jobs.json")
     cron = CronService(cron_store_path)
 
     async def _handle_cron_job(job: Any) -> str | None:

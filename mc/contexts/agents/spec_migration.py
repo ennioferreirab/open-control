@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from mc.infrastructure.agents.yaml_validator import validate_agent_file
+from mc.infrastructure.runtime_home import get_agents_dir
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
@@ -260,7 +261,7 @@ Examples:
     parser.add_argument(
         "--agents-dir",
         type=Path,
-        default=Path.home() / ".nanobot" / "agents",
+        default=get_agents_dir(),
         help="Path to local agents directory (default: ~/.nanobot/agents)",
     )
     parser.add_argument(
