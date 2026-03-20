@@ -173,7 +173,7 @@ class ClaudeCodeProvider:
         perm = (
             (cc and cc.permission_mode)
             or (self._defaults and self._defaults.default_permission_mode)
-            or "acceptEdits"
+            or "bypassPermissions"
         )
         cmd.extend(["--permission-mode", perm])
 

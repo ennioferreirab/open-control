@@ -196,6 +196,7 @@ class CCWorkspaceManager:
             task_prompt=task_prompt,
             memory_workspace=memory_workspace,
             artifacts_workspace=artifacts_workspace,
+            task_id=task_id,
         )
 
         # H3: Validate socket path length (macOS limit ~104 chars)
@@ -243,6 +244,7 @@ class CCWorkspaceManager:
         task_prompt: str | None = None,
         memory_workspace: Path | None = None,
         artifacts_workspace: Path | None = None,
+        task_id: str | None = None,
     ) -> None:
         """Write CLAUDE.md with agent identity, context, and MCP tools guide.
 
@@ -272,11 +274,15 @@ class CCWorkspaceManager:
         parts.append("\n".join(identity_lines))
 
         # 2. Workspace guidance
+        task_dir = None
+        if task_id:
+            task_dir = str(Path.home() / ".nanobot" / "tasks" / task_id)
         parts.append(
             self._workspace_guidance(
                 workspace,
                 memory_workspace=effective_memory_workspace,
                 artifacts_workspace=artifacts_workspace,
+                task_dir=task_dir,
             )
         )
 
@@ -327,6 +333,7 @@ class CCWorkspaceManager:
             parts.append(
                 f"## Skills\n\n"
                 f"The following skills extend your capabilities. "
+                f"Skill definitions are at `.claude/skills/<skill-name>/SKILL.md`. "
                 f"To use a skill, read its SKILL.md file.\n\n"
                 f"{skills_summary}"
             )
@@ -487,12 +494,15 @@ class CCWorkspaceManager:
         *,
         memory_workspace: Path | None = None,
         artifacts_workspace: Path | None = None,
+        task_dir: str | None = None,
     ) -> str:
         """Build workspace guidance section.
 
         Args:
             workspace: The agent-specific workspace directory.
             memory_workspace: Effective memory workspace, if distinct.
+            artifacts_workspace: Board artifacts workspace, if applicable.
+            task_dir: Absolute path to the task directory (attachments + output).
 
         Returns:
             Workspace guidance section string.
@@ -507,17 +517,28 @@ class CCWorkspaceManager:
         artifacts_line = ""
         if artifacts_ws:
             artifacts_line = f"- Board artifacts: {artifacts_ws}\n"
+        if task_dir:
+            task_line = (
+                f"- Task files (attachments + output): {task_dir}\n"
+                f"  - Read input from: {task_dir}/attachments/\n"
+                f"  - Save output to: {task_dir}/output/\n"
+            )
+        else:
+            task_line = "- Task-specific deliverables stay in task output directories.\n"
         return (
             f"## Workspace\n\n"
             f"Your workspace is at: {ws}\n"
             f"- Long-term memory: {memory_ws}/memory/MEMORY.md\n"
             f"{artifacts_line}"
-            f"- Task-specific deliverables stay in task output directories.\n"
+            f"{task_line}"
             f"- Custom skills: .claude/skills/{{skill-name}}/SKILL.md\n"
         )
 
     def _map_skills(self, workspace: Path, skills: list[str]) -> None:
         """Copy skill directories into .claude/skills/ for each requested skill.
+
+        Also registers each skill as a CC slash command in .claude/commands/
+        so that the Skill tool can invoke them.
 
         Uses real copies (not symlinks) because Claude Code's Glob tool
         does not traverse symlinked directories.
@@ -537,6 +558,8 @@ class CCWorkspaceManager:
         )
         skills_dir = workspace / ".claude" / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
+        commands_dir = workspace / ".claude" / "commands"
+        commands_dir.mkdir(parents=True, exist_ok=True)
 
         # Clean up stale entries (broken symlinks from old code, or dirs
         # whose source has changed).
@@ -557,6 +580,8 @@ class CCWorkspaceManager:
             )
         except ImportError:
             pass
+
+        mapped_skills: list[str] = []
 
         for skill_name in skills:
             # C2: Validate skill name to prevent path traversal
@@ -585,12 +610,18 @@ class CCWorkspaceManager:
                 dest_mtime = dest_path.stat().st_mtime
                 if dest_mtime >= source_mtime:
                     logger.debug("[skills] '%s' already up-to-date", skill_name)
+                    mapped_skills.append(skill_name)
                     continue
                 # Source is newer — remove stale copy
                 shutil.rmtree(dest_path)
 
             shutil.copytree(target, dest_path)
+            mapped_skills.append(skill_name)
             logger.info("[skills] Copied '%s' → %s", skill_name, dest_path)
+
+        # Register each mapped skill as a CC slash command so the Skill tool
+        # can invoke them (e.g. /generate-image).
+        self._register_skill_commands(commands_dir, skills_dir, mapped_skills)
 
     def _find_skill(self, workspace: Path, skill_name: str) -> Path | None:
         """Return the first existing skill directory for *skill_name*, or None."""
@@ -603,6 +634,62 @@ class CCWorkspaceManager:
             if candidate.exists():
                 return candidate
         return None
+
+    @staticmethod
+    def _parse_skill_frontmatter(skill_md: Path) -> tuple[str, str]:
+        """Extract name and description from a SKILL.md YAML frontmatter.
+
+        Returns:
+            (name, description) tuple.  Falls back to the file's parent
+            directory name and an empty description if parsing fails.
+        """
+        import re
+
+        text = skill_md.read_text(encoding="utf-8", errors="replace")
+        m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
+        if not m:
+            return skill_md.parent.name, ""
+
+        block = m.group(1)
+        name = skill_md.parent.name
+        description = ""
+        for line in block.splitlines():
+            if line.startswith("name:"):
+                name = line.split(":", 1)[1].strip().strip("'\"")
+            elif line.startswith("description:"):
+                description = line.split(":", 1)[1].strip().strip("'\"")
+        return name, description
+
+    def _register_skill_commands(
+        self,
+        commands_dir: Path,
+        skills_dir: Path,
+        skill_names: list[str],
+    ) -> None:
+        """Create a CC slash command for each workspace skill.
+
+        Generates ``.claude/commands/{skill-name}.md`` so that
+        Claude Code's ``Skill`` tool can invoke workspace skills
+        via ``/skill-name``.
+        """
+        for skill_name in skill_names:
+            skill_md = skills_dir / skill_name / "SKILL.md"
+            if not skill_md.exists():
+                continue
+
+            name, description = self._parse_skill_frontmatter(skill_md)
+            # The command file tells CC to load the full SKILL.md
+            command_content = (
+                f"---\n"
+                f"name: '{name}'\n"
+                f"description: '{description}'\n"
+                f"---\n\n"
+                f"Read and follow the full skill definition at "
+                f".claude/skills/{skill_name}/SKILL.md\n"
+            )
+            cmd_path = commands_dir / f"{skill_name}.md"
+            cmd_path.write_text(command_content, encoding="utf-8")
+            logger.debug("[skills] Registered CC command for '%s'", skill_name)
 
     def _generate_mcp_json(
         self,
