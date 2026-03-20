@@ -126,15 +126,16 @@ def refresh_access_token(refresh_token: str) -> dict:
 
 def _save_tokens(token_data: dict) -> None:
     """Save token data to disk with 0600 permissions."""
-    _get_token_file().parent.mkdir(parents=True, exist_ok=True)
+    token_file = _get_token_file()
+    token_file.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "access_token": token_data["access_token"],
         "refresh_token": token_data.get("refresh_token", ""),
         "expires_at": int(time.time()) + token_data.get("expires_in", 3600),
         "scope": token_data.get("scope", SCOPES),
     }
-    _get_token_file().write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    os.chmod(_get_token_file(), 0o600)
+    token_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    os.chmod(token_file, 0o600)
 
 
 def _load_from_claude_code_keychain() -> dict | None:
@@ -175,10 +176,11 @@ def _load_tokens() -> dict | None:
     if keychain_tokens:
         return keychain_tokens
     # Fallback to local file
-    if not _get_token_file().exists():
+    token_file = _get_token_file()
+    if not token_file.exists():
         return None
     try:
-        return json.loads(_get_token_file().read_text(encoding="utf-8"))
+        return json.loads(token_file.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
 
