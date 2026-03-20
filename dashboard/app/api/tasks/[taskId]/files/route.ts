@@ -61,7 +61,7 @@ export async function POST(
     try {
       await writeFile(tmpPath, buffer);
       await rename(tmpPath, finalPath);
-    } catch (err) {
+    } catch {
       await rm(tmpPath, { force: true });
       return NextResponse.json({ error: `Failed to write file: ${safeName}` }, { status: 500 });
     }

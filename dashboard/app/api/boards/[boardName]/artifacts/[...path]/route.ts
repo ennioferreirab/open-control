@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
-import { join } from "path";
 import { getRuntimePath } from "@/lib/runtimeHome";
 
 const BOARD_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
