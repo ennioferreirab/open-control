@@ -28,7 +28,9 @@ class TestRuntimeContext:
     def test_default_agents_dir_uses_open_control_home_override(self, tmp_path: Path) -> None:
         import mc.infrastructure.runtime_context as runtime_context
 
-        with patch.dict(os.environ, {"OPEN_CONTROL_HOME": str(tmp_path / "open-control")}, clear=True):
+        with patch.dict(
+            os.environ, {"OPEN_CONTROL_HOME": str(tmp_path / "open-control")}, clear=True
+        ):
             importlib.reload(runtime_context)
 
             bridge = MagicMock()
