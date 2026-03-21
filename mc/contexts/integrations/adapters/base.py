@@ -1,3 +1,5 @@
+"""Abstract PlatformAdapter protocol for external integration providers."""
+
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
@@ -40,9 +42,7 @@ class PlatformAdapter(Protocol):
         self, external_id: str, final_status: str, summary: str | None = None
     ) -> None: ...
 
-    async def publish_labels(
-        self, external_id: str, labels: list[str]
-    ) -> None: ...
+    async def publish_labels(self, external_id: str, labels: list[str]) -> None: ...
 
     # --- Lifecycle ---
     async def validate_credentials(self) -> bool: ...

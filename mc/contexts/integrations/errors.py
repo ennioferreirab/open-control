@@ -1,3 +1,5 @@
+"""Typed error hierarchy for integration failures."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -23,3 +25,8 @@ class IntegrationError(Exception):
     platform: str
     retryable: bool
     raw_error: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Exception.__init__ was bypassed by the frozen dataclass constructor.
+        # Set Exception.args so str(e) returns a useful message.
+        object.__setattr__(self, "args", (self.message,))

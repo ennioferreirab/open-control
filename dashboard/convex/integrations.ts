@@ -4,7 +4,11 @@ import { ConvexError, v } from "convex/values";
 
 import { createTask } from "./lib/taskMetadata";
 import { logActivity } from "./lib/workflowHelpers";
-import { buildCommentMessagePayload, buildTaskCreationPayload } from "./lib/integrationSync";
+import {
+  buildCommentMessagePayload,
+  buildTaskCreationPayload,
+  validateInboundStatus,
+} from "./lib/integrationSync";
 
 // ---------------------------------------------------------------------------
 // integrationConfigs mutations
@@ -110,7 +114,12 @@ export const getConfigsByPlatform = internalQuery({
 });
 
 /**
- * Return all enabled integration configs.
+ * Return all enabled integration configs across all platforms.
+ *
+ * Full table scan + JS filter is acceptable here because integrationConfigs
+ * is a small table (one record per integration). No single-field index on
+ * `enabled` exists; the compound `by_platform_enabled` index requires a
+ * platform prefix.
  */
 export const getEnabledConfigs = internalQuery({
   args: {},
@@ -434,19 +443,16 @@ export const processInboundStatusChange = internalMutation({
       throw new ConvexError(`Task ${String(taskId)} referenced by mapping not found`);
     }
 
-    // Apply the status patch — the task is manual so no state machine enforced
+    // Validate the inbound status before applying
+    const validatedStatus = validateInboundStatus(args.newStatus) as
+      | "inbox"
+      | "assigned"
+      | "in_progress"
+      | "review"
+      | "done";
+
     await ctx.db.patch(taskId, {
-      status: args.newStatus as
-        | "inbox"
-        | "assigned"
-        | "in_progress"
-        | "review"
-        | "done"
-        | "failed"
-        | "retrying"
-        | "crashed"
-        | "deleted"
-        | "ready",
+      status: validatedStatus,
       updatedAt: now,
     });
 

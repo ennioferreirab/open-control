@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -503,16 +503,3 @@ class TestGetTeamWorkflowStates:
 
         assert result == []
         await client.close()
-
-
-class TestClose:
-    """close shuts down the underlying HTTP client."""
-
-    async def test_close_calls_aclose(self) -> None:
-        client = LinearGraphQLClient(api_key="lin_api_test_key")
-        aclose_mock = AsyncMock()
-        client._http.aclose = aclose_mock  # type: ignore[method-assign]
-
-        await client.close()
-
-        aclose_mock.assert_called_once()

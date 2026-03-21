@@ -11,12 +11,19 @@ import type { Doc, Id } from "../_generated/dataModel";
 // Minimal DB context types
 // ---------------------------------------------------------------------------
 
+/**
+ * Narrowed context for querying integrationMappings.
+ *
+ * The index range function types use `Record<string, unknown>` for the
+ * chained builder pattern. This is intentionally loose so that lib/ tests
+ * can supply a simple stub without importing the full Convex runtime.
+ */
 export type MappingQueryCtx = {
   db: {
     query: (table: "integrationMappings") => {
       withIndex: (
         indexName: string,
-        rangeFn: (q: unknown) => unknown,
+        rangeFn: (q: Record<string, unknown>) => unknown,
       ) => {
         first: () => Promise<Doc<"integrationMappings"> | null>;
         collect: () => Promise<Doc<"integrationMappings">[]>;
@@ -43,14 +50,18 @@ export async function findMappingByExternal(
 ): Promise<Doc<"integrationMappings"> | null> {
   return await ctx.db
     .query("integrationMappings")
-    .withIndex("by_config_external", (q) =>
-      (q as { eq: (field: string, value: unknown) => unknown })
+    .withIndex("by_config_external", (q) => {
+      // Convex index range builder uses chained .eq() calls.
+      // The narrowed MappingQueryCtx cannot fully type this chain,
+      // so we cast to the chained builder shape.
+      const builder = q as {
+        eq: (field: string, value: unknown) => typeof builder;
+      };
+      return builder
         .eq("configId", params.configId)
-        // @ts-expect-error: chained index builder — Convex types require cast
         .eq("externalType", params.externalType)
-        // @ts-expect-error: chained index builder — Convex types require cast
-        .eq("externalId", params.externalId),
-    )
+        .eq("externalId", params.externalId);
+    })
     .first();
 }
 
@@ -68,13 +79,14 @@ export async function findMappingByInternal(
 ): Promise<Doc<"integrationMappings"> | null> {
   return await ctx.db
     .query("integrationMappings")
-    .withIndex("by_config_internal", (q) =>
-      (q as { eq: (field: string, value: unknown) => unknown })
+    .withIndex("by_config_internal", (q) => {
+      const builder = q as {
+        eq: (field: string, value: unknown) => typeof builder;
+      };
+      return builder
         .eq("configId", params.configId)
-        // @ts-expect-error: chained index builder — Convex types require cast
         .eq("internalType", params.internalType)
-        // @ts-expect-error: chained index builder — Convex types require cast
-        .eq("internalId", params.internalId),
-    )
+        .eq("internalId", params.internalId);
+    })
     .first();
 }

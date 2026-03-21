@@ -115,21 +115,26 @@ class TestCustomMappingOverride:
 
 
 class TestEmptyCustomMapping:
-    def test_empty_inbound_custom_mapping_falls_back_to_default(self) -> None:
-        # {} is falsy — implementation falls back to DEFAULT_INBOUND_STATUS_MAP
-        assert resolve_status_inbound("triage", custom_mapping={}) == "inbox"
+    def test_empty_inbound_custom_mapping_returns_none(self) -> None:
+        # Explicit empty dict means "no mappings" — does NOT fall back to defaults
+        assert resolve_status_inbound("triage", custom_mapping={}) is None
 
-    def test_empty_outbound_custom_mapping_falls_back_to_default(self) -> None:
-        # {} is falsy — implementation falls back to DEFAULT_OUTBOUND_STATUS_MAP
-        assert resolve_status_outbound("done", custom_mapping={}) == "completed"
+    def test_empty_outbound_custom_mapping_returns_none(self) -> None:
+        # Explicit empty dict means "no mappings" — does NOT fall back to defaults
+        assert resolve_status_outbound("done", custom_mapping={}) is None
+
+    def test_none_custom_mapping_falls_back_to_default(self) -> None:
+        # None (the default) correctly falls back to DEFAULT_*_STATUS_MAP
+        assert resolve_status_inbound("triage", custom_mapping=None) == "inbox"
+        assert resolve_status_outbound("done", custom_mapping=None) == "completed"
 
 
 class TestOutboundMapCoversAllTaskStatuses:
     def test_all_task_statuses_have_outbound_mapping(self) -> None:
         """Every TaskStatus value must be present as a key in the default outbound map."""
         missing = [
-            status.value
-            for status in TaskStatus
-            if status.value not in DEFAULT_OUTBOUND_STATUS_MAP
+            status.value for status in TaskStatus if status.value not in DEFAULT_OUTBOUND_STATUS_MAP
         ]
-        assert missing == [], f"TaskStatus values missing from DEFAULT_OUTBOUND_STATUS_MAP: {missing}"
+        assert missing == [], (
+            f"TaskStatus values missing from DEFAULT_OUTBOUND_STATUS_MAP: {missing}"
+        )
