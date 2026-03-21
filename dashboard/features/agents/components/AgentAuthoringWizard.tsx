@@ -19,7 +19,10 @@ interface AgentAuthoringWizardProps {
 export function AgentAuthoringWizard({ open, onClose }: AgentAuthoringWizardProps) {
   const [generation, setGeneration] = useState(0);
   const [provider, setProvider] = useState<WizardProvider>("claude-code");
-  const scopeId = useMemo(() => `create-agent:${generation}-${crypto.randomUUID()}`, [generation]);
+  const scopeId = useMemo(
+    () => `create-agent:${generation}-${Math.random().toString(36).slice(2)}`,
+    [generation],
+  );
 
   const handleClose = () => {
     setGeneration((g) => g + 1);

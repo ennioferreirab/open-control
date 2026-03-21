@@ -21,7 +21,10 @@ interface SquadAuthoringWizardProps {
 export function SquadAuthoringWizard({ open, onClose }: SquadAuthoringWizardProps) {
   const [generation, setGeneration] = useState(0);
   const [provider, setProvider] = useState<WizardProvider>("claude-code");
-  const scopeId = useMemo(() => `create-squad:${generation}-${crypto.randomUUID()}`, [generation]);
+  const scopeId = useMemo(
+    () => `create-squad:${generation}-${Math.random().toString(36).slice(2)}`,
+    [generation],
+  );
 
   const handleClose = () => {
     setGeneration((g) => g + 1);
