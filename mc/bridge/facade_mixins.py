@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from mc.bridge.repositories.agents import AgentRepository
     from mc.bridge.repositories.boards import BoardRepository
     from mc.bridge.repositories.chats import ChatRepository
+    from mc.bridge.repositories.integrations import IntegrationRepository
     from mc.bridge.repositories.messages import MessageRepository
     from mc.bridge.repositories.settings import SettingsRepository
     from mc.bridge.repositories.specs import SpecsRepository
@@ -34,6 +35,7 @@ class BridgeRepositoryFacadeMixin:
     _chats: ChatRepository
     _settings: SettingsRepository
     _specs: SpecsRepository
+    _integrations: IntegrationRepository
     _subscriptions: SubscriptionManager
 
     def _ensure_repos(self) -> None: ...
@@ -437,6 +439,18 @@ class BridgeRepositoryFacadeMixin:
     def publish_squad_graph(self, graph: dict[str, Any]) -> Any:
         self._ensure_repos()
         return self._specs.publish_squad_graph(graph)
+
+    def get_enabled_integration_configs(self) -> list[dict[str, Any]]:
+        self._ensure_repos()
+        return self._integrations.get_enabled_configs()
+
+    def get_integration_configs_by_platform(self, platform: str) -> list[dict[str, Any]]:
+        self._ensure_repos()
+        return self._integrations.get_configs_by_platform(platform)
+
+    def get_outbound_pending(self, config_id: str, since_timestamp: str) -> dict[str, Any]:
+        self._ensure_repos()
+        return self._integrations.get_outbound_pending(config_id, since_timestamp)
 
     def subscribe(self, function_name: str, args: dict[str, Any] | None = None) -> Iterator[Any]:
         self._ensure_repos()

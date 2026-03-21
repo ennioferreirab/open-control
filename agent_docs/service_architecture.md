@@ -185,6 +185,21 @@ WebSocket server for live terminal sessions (PTY-backed).
 | Protocol | WebSocket |
 | Purpose | Dashboard live terminal, legacy interactive-tui execution |
 
+#### Integration Outbound Worker (`mc/runtime/integrations/outbound_worker.py`)
+
+Polls for MC state changes and publishes them to external platforms (e.g., Linear).
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| Poll interval | 10s (configurable `integration_poll_seconds`) | Sync cadence |
+| Sleep multiplier | 6× | Extends interval to 60s in sleep mode |
+
+**Startup behavior:** `IntegrationSyncService` runs at boot, loads all enabled integration configs from Convex, and creates adapter instances via `AdapterRegistry`. If no active integrations are found the worker is skipped entirely.
+
+**Pipeline:** `OutboundPipeline` reads pending messages and activities from Convex, maps them to external actions (comments, status updates), and publishes via the platform adapter. Echo suppression prevents re-publishing MC-originated comments (identified by `[MC]` prefix).
+
+**Inbound path:** `InboundPipeline` (`mc/contexts/integrations/pipeline/inbound.py`) normalizes webhook payloads from external platforms into canonical `IntegrationEvent` objects and deduplicates via an in-memory idempotency key set.
+
 #### Crash Recovery (`mc/contexts/execution/crash_recovery.py`)
 
 Handles agent process crashes during task execution. Called by `TaskExecutor` when execution fails — not a background loop.

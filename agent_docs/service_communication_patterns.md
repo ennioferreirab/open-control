@@ -1163,3 +1163,73 @@ blocked        → [assigned, crashed]
 ### Mention-Safe Statuses
 
 `["inbox", "assigned", "in_progress", "review", "done", "crashed", "retrying"]` — tasks in these statuses accept `@agent` mentions.
+
+---
+
+## 10. External Platform Integrations (Linear)
+
+### 10.1 Inbound — Webhook Flow
+
+```text
+Linear sends POST /api/integrations/linear/webhook
+  → Next.js route handler (dashboard/app/api/integrations/linear/webhook/route.ts)
+    → Validates HMAC-SHA256 signature (Linear-Signature header, via LinearAdapter.verify_webhook_signature)
+    → On success: writes raw payload to Convex via public mutation (integrations:recordWebhookEvent)
+  → MC Gateway InboxWorker detects new tasks naturally via existing polling
+```
+
+Key properties:
+
+| Property | Value |
+|----------|-------|
+| Signature algorithm | HMAC-SHA256 |
+| Signature header | `Linear-Signature` |
+| Loop prevention | Skip events with `actor.type == "application"` (our own app) |
+| MC comment prefix | `[MC]` — inbound pipeline skips these to prevent echo |
+
+### 10.2 Outbound — MC → Linear Sync
+
+```text
+MC Gateway boot:
+  IntegrationSyncService.initialize()
+    → bridge.get_enabled_integration_configs()
+    → For each config: AdapterRegistry.create_adapter(config)
+    → LinearAdapter created with LinearGraphQLClient(api_key)
+
+  If active_integrations > 0:
+    OutboundPipeline + IntegrationOutboundWorker spawned as asyncio task (10s poll)
+
+Each poll cycle (IntegrationOutboundWorker):
+  → bridge.get_enabled_integration_configs()  (re-reads, live config)
+  → For each config_id:
+      OutboundPipeline.process_outbound_batch(config_id, since_timestamp)
+        → bridge.get_outbound_pending(config_id, since)  → {messages, activities}
+        → For messages: adapter.publish_comment(external_id, body) → Linear GraphQL
+        → For activities: adapter.publish_status_change(external_id, mc_status, mapped_status)
+                             → resolves workflow state ID → Linear GraphQL updateIssue
+```
+
+| Property | Value |
+|----------|-------|
+| Poll interval | 10s active, 60s sleep (configurable `integration_poll_seconds`) |
+| GraphQL endpoint | `https://api.linear.app/graphql` |
+| Auth | Bearer token (api_key from Convex integrationConfigs) |
+| Workflow state cache | Per-team, in-memory, for the lifetime of the adapter instance |
+
+### 10.3 Inbound Pipeline — Deduplication
+
+`InboundPipeline` (`mc/contexts/integrations/pipeline/inbound.py`) is the normalizer for external webhooks:
+
+1. Looks up adapter by `integration_id` from `AdapterRegistry`
+2. Calls `adapter.normalize_webhook(raw_payload, headers)` → `list[IntegrationEvent]`
+3. Deduplicates via in-memory `_processed_keys: set[str]` (idempotency_key per event)
+
+| Component | File |
+|-----------|------|
+| `InboundPipeline` | `mc/contexts/integrations/pipeline/inbound.py` |
+| `OutboundPipeline` | `mc/contexts/integrations/pipeline/outbound.py` |
+| `IntegrationOutboundWorker` | `mc/runtime/integrations/outbound_worker.py` |
+| `IntegrationSyncService` | `mc/runtime/integrations/sync_service.py` |
+| `AdapterRegistry` | `mc/contexts/integrations/registry.py` |
+| `LinearAdapter` | `mc/contexts/integrations/adapters/linear.py` |
+| `LinearGraphQLClient` | `mc/contexts/integrations/adapters/linear_client.py` |

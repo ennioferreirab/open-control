@@ -37,6 +37,7 @@ from mc.bridge.key_conversion import (  # noqa: F401
 from mc.bridge.repositories.agents import AgentRepository
 from mc.bridge.repositories.boards import BoardRepository
 from mc.bridge.repositories.chats import ChatRepository
+from mc.bridge.repositories.integrations import IntegrationRepository
 from mc.bridge.repositories.messages import MessageRepository
 from mc.bridge.repositories.settings import SettingsRepository
 from mc.bridge.repositories.specs import SpecsRepository
@@ -79,6 +80,7 @@ class ConvexBridge(BridgeRepositoryFacadeMixin):
         self._chats = ChatRepository(adapter)
         self._settings = SettingsRepository(adapter)
         self._specs = SpecsRepository(adapter)
+        self._integrations = IntegrationRepository(adapter)
         self._subscriptions = SubscriptionManager(adapter)
 
     def _ensure_repos(self) -> None:
