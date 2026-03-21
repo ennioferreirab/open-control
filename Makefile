@@ -6,7 +6,7 @@
 # make status      Show system health
 #
 # make test        Unit tests only (no Convex needed, worktree-safe)
-# make validate    Lint + typecheck + unit tests (worktree-safe)
+# make check       Lint + typecheck + unit tests (worktree-safe)
 # make takeover    Stop any running stack, start from current tree
 #
 # make docker-build      Build the Docker image
@@ -21,7 +21,7 @@
 # make format       Format all code
 # ──────────────────────────────────────────────────────────────────
 
-.PHONY: install start up down status test validate takeover lint typecheck format \
+.PHONY: install start up down status test check takeover lint typecheck format \
         test-py test-ts lint-py lint-ts typecheck-py typecheck-ts format-py format-ts \
         docker-build docker-up docker-down docker-test docker-test-down
 
@@ -75,7 +75,7 @@ test-ts:
 # ─── Validation (pre-commit / pre-merge) ─────────────────────────
 # Runs everything that doesn't need a running stack.
 
-validate: lint typecheck test
+check: lint typecheck test
 
 # ─── Linting ──────────────────────────────────────────────────────
 

@@ -57,7 +57,7 @@ uses port `3210`.
 ### Validate changes
 
 ```bash
-make validate
+make check
 ```
 
 ## Compatibility Notes

@@ -48,7 +48,7 @@ All code, comments, commit messages, and docstrings in **English**.
 |--------|---------|
 | Start stack | `make start` |
 | Stop stack | `make down` |
-| Pre-commit validation (no Convex needed) | `make validate` |
+| Pre-commit validation (no Convex needed) | `make check` |
 | Steal Convex from another worktree | `make takeover` or `make takeover PORT=300x` |
 | Docker: build image | `make docker-build` |
 | Docker: isolated test instance (auto ports) | `make docker-test` |
@@ -79,7 +79,7 @@ All features follow the **BMAD method** (v6.0.1). Use `/bmad-help` to see next s
 4. **Delegate story execution to Sonnet subagents** — NEVER implement stories in the orchestrating session. Always spawn Sonnet (Claude) or GPT-5.4 Medium (Codex) agents via `dev-story`. Each agent receives the story file and implements independently.
 5. Dev agent executes → `/@_bmad/bmm/workflows/4-implementation/dev-story`
 6. **Code review with Opus** → `/@_bmad/bmm/workflows/4-implementation/code-review` — Always use Opus for code review. Reviews must find 3–10 issues.
-7. Run full test suite (`make validate`)
+7. Run full test suite (`make check`)
 8. Integration test — simulate real service interaction using backend functions
 9. `make docker-test` to spin up an isolated test instance (auto-detects free ports, prints dashboard URL)
 10. Share the dashboard URL with the human for manual testing. Stop with `make docker-test-down` when done.
@@ -104,7 +104,7 @@ All features follow the **BMAD method** (v6.0.1). Use `/bmad-help` to see next s
 **Workflow:**
 1. Create a worktree branch (e.g. `git worktree add .claude/worktrees/<feature-name> -b feat/<feature-name>`)
 2. Implement in the worktree
-3. Validate (`make validate`)
+3. Validate (`make check`)
 4. Merge to `main` when approved
 5. **Delete immediately** after merge: `git worktree remove .claude/worktrees/<feature-name>`
 

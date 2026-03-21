@@ -27,7 +27,7 @@ The `Makefile` at the project root is the primary interface for all operations.
 | `make down` | Stop everything | — |
 | `make status` | Show system health (agents, tasks) | Yes |
 | `make test` | Run all unit tests (Python + TypeScript) | No |
-| `make validate` | Lint + typecheck + unit tests | No |
+| `make check` | Lint + typecheck + unit tests | No |
 | `make takeover` | Stop any running stack, start from current tree (attached) | Restarts it |
 | `make docker-build` | Build Docker image | No |
 | `make docker-test` | Spin up isolated Docker test instance (auto-detects ports) | Own Convex |
@@ -76,7 +76,7 @@ Docker test instances are fully isolated — each worktree gets its own Convex, 
 ┌─────────────────────────────────────────────────────────────┐
 │ Docker worktree flow (no conflicts)                          │
 │                                                              │
-│  1. make validate          ← lint, types, unit tests         │
+│  1. make check          ← lint, types, unit tests         │
 │     (no Convex needed)                                       │
 │                                                              │
 │  2. make docker-test       ← auto-detects ports, starts      │
@@ -97,7 +97,7 @@ Without Docker, Convex local is a singleton. Only one stack can run at a time.
 ┌─────────────────────────────────────────────────────────────┐
 │ Native worktree flow (kills other stacks)                    │
 │                                                              │
-│  1. make validate          ← lint, types, unit tests         │
+│  1. make check          ← lint, types, unit tests         │
 │     (worktree-safe, no Convex needed)                        │
 │                                                              │
 │  2. If you need the dashboard to validate visually:          │
@@ -111,7 +111,7 @@ Without Docker, Convex local is a singleton. Only one stack can run at a time.
 ```
 
 **Key rules:**
-- `make validate` is always safe — runs without Convex
+- `make check` is always safe — runs without Convex
 - `make takeover` from a worktree will kill the main tree's stack
 - After merging a worktree branch, always `make start` from main to redeploy the schema
 - Never run `npx convex dev --local` directly — use `make start` or `make takeover`
@@ -130,7 +130,7 @@ The gateway reads `NEXT_PUBLIC_CONVEX_URL` (or falls back to parsing `dashboard/
 
 ## Baseline Checks
 
-Run `make validate` before committing. This runs lint + typecheck + unit tests without needing Convex.
+Run `make check` before committing. This runs lint + typecheck + unit tests without needing Convex.
 
 For test strategy and when to write tests, see [`running_tests.md`](running_tests.md).
 
