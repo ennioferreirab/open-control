@@ -44,7 +44,10 @@ export function MarkdownViewer({ content, source, taskId, sourceFile }: Markdown
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-6">
         {mode === "rendered" ? (
-          <div className="w-full min-w-0 max-w-full select-text text-sm leading-relaxed">
+          <div
+            className="w-full min-w-0 max-w-full select-text text-sm leading-relaxed"
+            data-md-print-content
+          >
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
