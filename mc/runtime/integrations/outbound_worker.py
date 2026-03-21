@@ -1,4 +1,5 @@
 """Outbound sync worker — polls MC events and syncs to external platforms."""
+
 from __future__ import annotations
 
 import asyncio
@@ -35,19 +36,27 @@ class IntegrationOutboundWorker:
         logger.info("[integration-outbound] Worker started (interval=%.1fs)", self._poll_interval)
         while True:
             try:
-                await self._poll_cycle()
+                found_work = await self._poll_cycle()
+                if self._sleep_controller is not None:
+                    if found_work:
+                        await self._sleep_controller.record_work_found()
+                    else:
+                        await self._sleep_controller.record_idle()
             except asyncio.CancelledError:
                 logger.info("[integration-outbound] Worker cancelled")
                 raise
             except Exception:
                 logger.exception("[integration-outbound] Poll cycle error")
 
-            interval = self._get_poll_interval()
-            await asyncio.sleep(interval)
+            if self._sleep_controller is not None:
+                await self._sleep_controller.wait_for_next_cycle(self._poll_interval)
+            else:
+                await asyncio.sleep(self._poll_interval)
 
-    async def _poll_cycle(self) -> None:
-        """Run one poll cycle across all enabled configs."""
+    async def _poll_cycle(self) -> bool:
+        """Run one poll cycle across all enabled configs. Returns True if work found."""
         configs = self._bridge.get_enabled_integration_configs()
+        found_work = False
 
         for config in configs:
             config_id = config.get("id", "")
@@ -60,21 +69,15 @@ class IntegrationOutboundWorker:
             try:
                 count = await self._pipeline.process_outbound_batch(config_id, since)
                 if count > 0:
+                    found_work = True
                     logger.info(
                         "[integration-outbound] Published %d events for config %s",
                         count,
                         config_id,
                     )
             except Exception:
-                logger.exception(
-                    "[integration-outbound] Failed processing config %s", config_id
-                )
+                logger.exception("[integration-outbound] Failed processing config %s", config_id)
 
             self._last_poll[config_id] = now
 
-    def _get_poll_interval(self) -> float:
-        """Respect sleep controller if available."""
-        if self._sleep_controller and hasattr(self._sleep_controller, "is_sleeping"):
-            if self._sleep_controller.is_sleeping:
-                return self._poll_interval * 6  # 60s in sleep mode
-        return self._poll_interval
+        return found_work

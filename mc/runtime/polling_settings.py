@@ -18,6 +18,7 @@ POLLING_DEFAULTS: dict[str, int] = {
     "chat_sleep_poll_seconds": 60,
     "mention_poll_seconds": 10,
     "timeout_check_seconds": 60,
+    "integration_poll_seconds": 10,
 }
 
 POLLING_BOUNDS: dict[str, tuple[int, int]] = {
@@ -28,6 +29,7 @@ POLLING_BOUNDS: dict[str, tuple[int, int]] = {
     "chat_sleep_poll_seconds": (5, 600),
     "mention_poll_seconds": (1, 120),
     "timeout_check_seconds": (10, 600),
+    "integration_poll_seconds": (5, 120),
 }
 
 

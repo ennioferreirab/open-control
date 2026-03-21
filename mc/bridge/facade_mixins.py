@@ -448,6 +448,22 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._integrations.get_configs_by_platform(platform)
 
+    def get_integration_mapping_by_external(
+        self, config_id: str, external_type: str, external_id: str
+    ) -> dict[str, Any] | None:
+        self._ensure_repos()
+        return self._integrations.get_mapping_by_external(config_id, external_type, external_id)
+
+    def get_integration_mapping_by_internal(
+        self, config_id: str, internal_type: str, internal_id: str
+    ) -> dict[str, Any] | None:
+        self._ensure_repos()
+        return self._integrations.get_mapping_by_internal(config_id, internal_type, internal_id)
+
+    def get_integration_mappings_by_internal_id(self, internal_id: str) -> list[dict[str, Any]]:
+        self._ensure_repos()
+        return self._integrations.get_mappings_by_internal_id(internal_id)
+
     def get_outbound_pending(self, config_id: str, since_timestamp: str) -> dict[str, Any]:
         self._ensure_repos()
         return self._integrations.get_outbound_pending(config_id, since_timestamp)

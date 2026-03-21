@@ -319,10 +319,13 @@ async def run_gateway(bridge: ConvexBridge) -> None:
             bridge,
             outbound_pipeline,
             sleep_controller=sleep_controller,
-            poll_interval_seconds=polling_cfg.get("integration_poll_seconds", 10),
+            poll_interval_seconds=polling_cfg["integration_poll_seconds"],
         )
         integration_outbound_task = asyncio.create_task(outbound_worker.run())
-        logger.info("[gateway] Integration outbound worker started (%d active)", active_integrations)
+        logger.info(
+            "[gateway] Integration outbound worker started (%d active)",
+            active_integrations,
+        )
     else:
         logger.info("[gateway] No active integrations — outbound worker skipped")
 
