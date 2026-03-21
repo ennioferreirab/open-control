@@ -146,7 +146,7 @@ class TestSyncIPCClientRequest:
         thread.start()
 
         client = SyncIPCClient(socket_path, timeout=5.0)
-        with pytest.raises(ConnectionError, match="closed connection|Connection reset"):
+        with pytest.raises(ConnectionError, match=r"closed connection|Connection reset"):
             client.request("test", {})
 
         thread.join(timeout=5.0)
