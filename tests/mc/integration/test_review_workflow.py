@@ -70,6 +70,7 @@ class _FakeStrategy(RunnerStrategy):
 
 @pytest.mark.integration
 @requires_convex
+@pytest.mark.integration
 class TestReviewWorkflowIntegration:
     """End-to-end review workflow: execution → rejection → re-execution → approval.
 
