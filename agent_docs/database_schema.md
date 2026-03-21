@@ -632,6 +632,80 @@ Tag attribute values on individual tasks.
 
 ---
 
+## Integration Tables (Linear Adapter V1)
+
+### `integrationConfigs`
+
+Per-platform integration configuration. One record per active integration (e.g., one Linear project → one board).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `platform` | `v.string()` | e.g., `"linear"` |
+| `name` | `v.string()` | Human-readable label |
+| `enabled` | `v.boolean()` | Toggle sync on/off |
+| `boardId` | `v.id("boards")` | Target board for inbound tasks |
+| `apiKey` | `v.string()` | Platform API key (store securely) |
+| `webhookSecret` | `v.optional(v.string())` | HMAC secret for webhook validation |
+| `webhookId` | `v.optional(v.string())` | Platform-side webhook registration ID |
+| `externalProjectId` | `v.optional(v.string())` | External project/team ID |
+| `externalProjectName` | `v.optional(v.string())` | Display name of external project |
+| `statusMapping` | `v.optional(v.any())` | JSON map: external status → MC status |
+| `syncDirection` | `v.union("inbound_only", "outbound_only", "bidirectional")` | |
+| `threadMirroring` | `v.optional(v.boolean())` | Mirror comments bidirectionally |
+| `syncAttachments` | `v.optional(v.boolean())` | |
+| `syncLabels` | `v.optional(v.boolean())` | |
+| `lastSyncAt` | `v.optional(v.string())` | ISO 8601, last successful sync |
+| `lastError` | `v.optional(v.string())` | Last sync error message |
+| `createdAt` | `v.string()` | ISO 8601 |
+| `updatedAt` | `v.string()` | ISO 8601 |
+
+**Indexes:** `by_platform` `["platform"]`, `by_platform_enabled` `["platform", "enabled"]`, `by_boardId` `["boardId"]`
+
+---
+
+### `integrationMappings`
+
+Bidirectional link between an external entity (e.g., Linear issue) and an internal entity (e.g., Convex task). One record per synced pair.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `configId` | `v.id("integrationConfigs")` | Parent config |
+| `platform` | `v.string()` | e.g., `"linear"` |
+| `externalId` | `v.string()` | External entity ID |
+| `externalType` | `v.string()` | e.g., `"issue"`, `"comment"` |
+| `internalId` | `v.string()` | Internal entity ID (string form of Convex ID) |
+| `internalType` | `v.string()` | e.g., `"task"`, `"message"` |
+| `externalUrl` | `v.optional(v.string())` | Link to the external entity |
+| `metadata` | `v.optional(v.any())` | Arbitrary sync metadata |
+| `createdAt` | `v.string()` | ISO 8601 |
+| `updatedAt` | `v.string()` | ISO 8601 |
+
+**Indexes:** `by_config_external` `["configId", "externalType", "externalId"]`, `by_config_internal` `["configId", "internalType", "internalId"]`, `by_platform_external` `["platform", "externalId", "externalType"]`, `by_internalId` `["internalId"]`
+
+---
+
+### `integrationEvents`
+
+Append-only audit log of inbound and outbound sync events. Used to track processing status and debug failures.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `configId` | `v.id("integrationConfigs")` | Parent config |
+| `eventId` | `v.string()` | Idempotency key (platform event ID) |
+| `eventType` | `v.string()` | e.g., `"issue.status_changed"`, `"comment.created"` |
+| `direction` | `v.union("inbound", "outbound")` | |
+| `status` | `v.union("pending", "processed", "failed", "skipped")` | |
+| `externalId` | `v.optional(v.string())` | External entity ID |
+| `internalId` | `v.optional(v.string())` | Internal entity ID |
+| `payload` | `v.optional(v.any())` | Raw event payload |
+| `errorMessage` | `v.optional(v.string())` | Error detail on failure |
+| `processedAt` | `v.optional(v.string())` | ISO 8601, set when status → processed |
+| `createdAt` | `v.string()` | ISO 8601 |
+
+**Indexes:** `by_eventId` `["eventId"]`, `by_config_status` `["configId", "status"]`, `by_config_direction` `["configId", "direction"]`
+
+---
+
 ## Table Relationships
 
 ```text
@@ -660,4 +734,8 @@ agents
 taskTags
   └── tagAttributes (attributeIds)
       └── tagAttributeValues (attributeId, taskId)
+
+integrationConfigs
+  ├── integrationMappings (configId)
+  └── integrationEvents (configId)
 ```

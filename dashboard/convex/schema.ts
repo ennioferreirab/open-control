@@ -79,6 +79,9 @@ export const activityEventTypeValidator = v.union(
   v.literal("step_status_changed"),
   v.literal("step_unblocked"),
   v.literal("step_retrying"),
+  v.literal("integration_sync_inbound"),
+  v.literal("integration_sync_outbound"),
+  v.literal("integration_sync_error"),
 );
 
 export const workflowRunStatusValidator = v.union(
@@ -750,4 +753,75 @@ export default defineSchema({
     .index("by_agentName", ["agentName"])
     .index("by_provider", ["provider"])
     .index("by_status", ["status"]),
+
+  // ---------------------------------------------------------------------------
+  // Integration Tables (Linear adapter V1)
+  // ---------------------------------------------------------------------------
+
+  integrationConfigs: defineTable({
+    platform: v.string(),
+    name: v.string(),
+    enabled: v.boolean(),
+    boardId: v.id("boards"),
+    apiKey: v.string(),
+    webhookSecret: v.optional(v.string()),
+    webhookId: v.optional(v.string()),
+    externalProjectId: v.optional(v.string()),
+    externalProjectName: v.optional(v.string()),
+    statusMapping: v.optional(v.any()),
+    syncDirection: v.union(
+      v.literal("inbound_only"),
+      v.literal("outbound_only"),
+      v.literal("bidirectional"),
+    ),
+    threadMirroring: v.optional(v.boolean()),
+    syncAttachments: v.optional(v.boolean()),
+    syncLabels: v.optional(v.boolean()),
+    lastSyncAt: v.optional(v.string()),
+    lastError: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_platform", ["platform"])
+    .index("by_platform_enabled", ["platform", "enabled"])
+    .index("by_boardId", ["boardId"]),
+
+  integrationMappings: defineTable({
+    configId: v.id("integrationConfigs"),
+    platform: v.string(),
+    externalId: v.string(),
+    externalType: v.string(),
+    internalId: v.string(),
+    internalType: v.string(),
+    externalUrl: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_config_external", ["configId", "externalType", "externalId"])
+    .index("by_config_internal", ["configId", "internalType", "internalId"])
+    .index("by_platform_external", ["platform", "externalId", "externalType"])
+    .index("by_internalId", ["internalId"]),
+
+  integrationEvents: defineTable({
+    configId: v.id("integrationConfigs"),
+    eventId: v.string(),
+    eventType: v.string(),
+    direction: v.union(v.literal("inbound"), v.literal("outbound")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processed"),
+      v.literal("failed"),
+      v.literal("skipped"),
+    ),
+    externalId: v.optional(v.string()),
+    internalId: v.optional(v.string()),
+    payload: v.optional(v.any()),
+    errorMessage: v.optional(v.string()),
+    processedAt: v.optional(v.string()),
+    createdAt: v.string(),
+  })
+    .index("by_eventId", ["eventId"])
+    .index("by_config_status", ["configId", "status"])
+    .index("by_config_direction", ["configId", "direction"]),
 });

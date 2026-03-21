@@ -55,7 +55,11 @@ export type ActivityEventType =
   | "step_completed"
   | "step_created"
   | "step_status_changed"
-  | "step_unblocked";
+  | "step_unblocked"
+  | "step_retrying"
+  | "integration_sync_inbound"
+  | "integration_sync_outbound"
+  | "integration_sync_error";
 
 // ---------------------------------------------------------------------------
 // Minimal DB context types for helpers (decoupled from full Convex ctx)

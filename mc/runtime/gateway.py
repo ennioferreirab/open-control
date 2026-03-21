@@ -297,6 +297,38 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     ask_user_watcher_task = asyncio.create_task(ask_user_watcher.run())
     sleep_control_task = asyncio.create_task(sleep_controller.watch_control())
 
+    # Integration outbound sync worker (Linear, etc.)
+    from mc.contexts.integrations.adapters.linear import create_linear_adapter
+    from mc.contexts.integrations.mapping_service import MappingService
+    from mc.contexts.integrations.pipeline.outbound import OutboundPipeline
+    from mc.contexts.integrations.registry import AdapterRegistry
+    from mc.runtime.integrations.outbound_worker import IntegrationOutboundWorker
+    from mc.runtime.integrations.sync_service import IntegrationSyncService
+
+    adapter_registry = AdapterRegistry()
+    adapter_registry.register_factory("linear", create_linear_adapter)
+
+    integration_sync = IntegrationSyncService(bridge, adapter_registry)
+    active_integrations = integration_sync.initialize()
+
+    integration_outbound_task = None
+    if active_integrations > 0:
+        mapping_service = MappingService(bridge)
+        outbound_pipeline = OutboundPipeline(bridge, adapter_registry, mapping_service)
+        outbound_worker = IntegrationOutboundWorker(
+            bridge,
+            outbound_pipeline,
+            sleep_controller=sleep_controller,
+            poll_interval_seconds=polling_cfg["integration_poll_seconds"],
+        )
+        integration_outbound_task = asyncio.create_task(outbound_worker.run())
+        logger.info(
+            "[gateway] Integration outbound worker started (%d active)",
+            active_integrations,
+        )
+    else:
+        logger.info("[gateway] No active integrations — outbound worker skipped")
+
     # Wait for shutdown signal
     await stop_event.wait()
     logger.info("[gateway] Agent Gateway stopping...")
@@ -314,6 +346,8 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     mention_task.cancel()
     ask_user_watcher_task.cancel()
     sleep_control_task.cancel()
+    if integration_outbound_task:
+        integration_outbound_task.cancel()
     for task in (
         inbox_task,
         review_task,
@@ -326,6 +360,11 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     ):
         try:
             await task
+        except asyncio.CancelledError:
+            pass
+    if integration_outbound_task:
+        try:
+            await integration_outbound_task
         except asyncio.CancelledError:
             pass
 

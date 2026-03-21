@@ -1,4 +1,5 @@
 .next
+.convex
 coverage
 node_modules
 convex/_generated

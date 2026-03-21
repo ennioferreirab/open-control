@@ -18,6 +18,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ModelTierSettings } from "@/features/settings/components/ModelTierSettings";
 import { useSettingsPanelState } from "@/features/settings/hooks/useSettingsPanelState";
 import { POLLING_FIELDS } from "@/features/settings/pollingFields";
+import { IntegrationSettings } from "@/features/integrations/components/IntegrationSettings";
 
 const TIER_OPTIONS = [
   { value: "tier:standard-low", label: "Low" },
@@ -384,6 +385,18 @@ export function SettingsPanel() {
             max={f.max}
           />
         ))}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold">Integrations</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Connect external tools to sync work items.
+          </p>
+        </div>
+        <IntegrationSettings />
       </div>
 
       <PromptEditModal
