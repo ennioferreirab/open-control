@@ -95,14 +95,13 @@ agent_docs/          Binding structural and engineering contracts
 - `dashboard/convex/` is the persistent state source of truth.
 - `dashboard/features/` groups UI and hooks by product area.
 
-Start with [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the owned-system
-overview.
-
 ## Vendor Boundary
 
 Open Control owns the orchestration layer, dashboard, repo docs, and local
 platform integration. `vendor/nanobot/` is an upstream git subtree and must not
-be edited without explicit approval.
+be edited without explicit approval. All modifications to the upstream nanobot
+code are documented in
+[`vendor/NANOBOT_PATCHES.md`](vendor/NANOBOT_PATCHES.md).
 
 ## Contributing
 
