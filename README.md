@@ -64,7 +64,7 @@ make check
 
 The [`agent_docs/`](agent_docs/) directory is the most important entry point for
 understanding how Open Control works. It contains the binding contracts that
-every AI agent — and every human contributor — must read before modifying a
+every AI agent and every human contributor must read before modifying a
 layer. While `CLAUDE.md` describes the full application in a single file,
 `agent_docs/` breaks it down into focused, self-contained references:
 
