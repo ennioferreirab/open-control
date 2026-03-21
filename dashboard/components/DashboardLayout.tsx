@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import { SettingsPanel } from "@/features/settings/components/SettingsPanel";
 import { TagsPanel } from "@/features/settings/components/TagsPanel";
-import { Settings, Tag, Clock, PanelRightOpen } from "lucide-react";
+import { Settings, Tag, Clock, PanelRightOpen, Search } from "lucide-react";
 import { BoardProvider, useBoard } from "@/components/BoardContext";
 import { BoardSelector } from "@/features/boards/components/BoardSelector";
 import { BoardSettingsSheet } from "@/features/boards/components/BoardSettingsSheet";
@@ -59,6 +59,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
   const [cronOpen, setCronOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activityPanelCollapsed, setActivityPanelCollapsed] = useState(true);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const parsedSearch = useMemo(() => parseSearch(searchQuery), [searchQuery]);
   const { openTerminals, closeAllTerminals } = useBoard();
@@ -96,11 +97,18 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
                 <span className="hidden md:inline">Open Control</span>
               </h1>
             </div>
-            <div className="flex items-center gap-2 md:gap-3 flex-1 justify-center px-2 md:px-4 max-w-2xl">
+            <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 justify-center px-2 md:px-4 max-w-2xl">
               <BoardSelector onOpenSettings={() => setBoardSettingsOpen(true)} />
-              <SearchBar onSearchChange={setSearchQuery} />
+              <SearchBar onSearchChange={setSearchQuery} className="hidden sm:flex" />
             </div>
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto">
+              <button
+                aria-label="Toggle search"
+                onClick={() => setMobileSearchOpen((prev) => !prev)}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors sm:hidden"
+              >
+                <Search className="h-4 w-4" />
+              </button>
               <div className="hidden items-center gap-2 md:flex">
                 <span
                   className={`rounded-full border px-2 py-1 text-[11px] font-medium ${gatewaySleepClasses}`}
@@ -151,6 +159,12 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
               )}
             </div>
           </header>
+
+          {mobileSearchOpen && (
+            <div className="border-b border-border px-4 py-2 sm:hidden">
+              <SearchBar onSearchChange={setSearchQuery} />
+            </div>
+          )}
 
           <div className="border-b border-border px-4 py-3">
             <TaskInput />

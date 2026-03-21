@@ -148,7 +148,7 @@ export function BoardSelector({ onOpenSettings }: BoardSelectorProps) {
         <button
           aria-label="Board settings"
           onClick={onOpenSettings}
-          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="hidden sm:inline-flex rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <Settings2 className="h-4 w-4" />
         </button>

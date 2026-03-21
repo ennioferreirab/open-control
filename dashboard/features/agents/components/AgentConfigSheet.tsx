@@ -476,7 +476,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
   return (
     <>
       <Sheet open={!!agentName} onOpenChange={(open) => !open && handleClose()}>
-        <SheetContent side="right" className="w-[480px] sm:w-[480px] flex flex-col p-0">
+        <SheetContent side="right" className="w-full sm:w-[480px] flex flex-col p-0">
           {isLoaded ? (
             <>
               <SheetHeader className="px-6 pt-6 pb-4">
@@ -504,7 +504,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
 
               <Separator />
 
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
                 {saveError && (
                   <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
                     <p className="text-sm text-destructive">{saveError}</p>
@@ -606,7 +606,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                         {variables.map((v) => (
                           <Tooltip key={v.name}>
                             <TooltipTrigger asChild>
-                              <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-mono font-semibold cursor-default">
+                              <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-mono font-semibold cursor-default max-w-full truncate">
                                 {`{{${v.name}}}`}
                               </span>
                             </TooltipTrigger>

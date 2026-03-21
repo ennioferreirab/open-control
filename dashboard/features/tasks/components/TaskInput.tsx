@@ -286,7 +286,7 @@ export function TaskInput() {
         />
 
         {/* Row 1: title (manual) or description (auto-title) + action buttons */}
-        <div className="flex gap-2 items-start">
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-start">
           {/* Left Column: Text Bars */}
           <div className="flex flex-col gap-1.5 flex-1 min-w-0">
             {!isAutoTitle ? (

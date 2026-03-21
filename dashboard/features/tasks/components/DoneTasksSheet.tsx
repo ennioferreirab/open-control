@@ -32,7 +32,7 @@ export function DoneTasksSheet({ open, onClose }: DoneTasksSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent side="right" className="flex w-[480px] flex-col p-0 sm:w-[480px] sm:max-w-none">
+      <SheetContent side="right" className="flex w-full flex-col p-0 sm:w-[480px] sm:max-w-none">
         <SheetHeader className="px-6 pb-4 pt-6">
           <SheetTitle className="flex items-center gap-2 text-lg font-semibold">
             <CheckCircle2 className="h-5 w-5" />
