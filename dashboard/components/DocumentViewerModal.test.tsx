@@ -173,6 +173,7 @@ vi.mock("@/components/ui/button", () => ({
 // Mock lucide-react icons so Button text is clean
 vi.mock("lucide-react", () => ({
   Download: () => <span data-testid="icon-download" />,
+  FileText: () => <span data-testid="icon-file-text" />,
   Minus: () => <span data-testid="icon-minus" />,
   Plus: () => <span data-testid="icon-plus" />,
   X: () => <span data-testid="icon-x" />,

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, Minus, Plus, X } from "lucide-react";
+import { Download, FileText, Minus, Plus, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useDocumentFetch } from "@/hooks/useDocumentFetch";
 import {
@@ -124,6 +124,51 @@ export function DocumentViewerModal({ taskId, source, file, onClose }: Props) {
     a.href = buildDocumentUrl(resolvedSource, file);
     a.download = file.name;
     a.click();
+  };
+
+  const handlePrintPdf = () => {
+    const rendered = document.querySelector("[data-md-print-content]");
+    if (!rendered) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    const title = file?.name?.replace(/\.(md|markdown)$/i, "") ?? "document";
+    printWindow.document.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${title}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 800px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; font-size: 14px; line-height: 1.7; }
+  h1 { font-size: 28px; font-weight: 700; margin: 32px 0 12px; border-bottom: 1px solid #e5e5e5; padding-bottom: 4px; }
+  h2 { font-size: 22px; font-weight: 600; margin: 28px 0 8px; }
+  h3 { font-size: 18px; font-weight: 600; margin: 24px 0 8px; }
+  h4, h5, h6 { font-size: 15px; font-weight: 600; margin: 20px 0 4px; }
+  p { margin: 0 0 8px; }
+  ul, ol { margin: 0 0 8px; padding-left: 20px; }
+  li { margin: 2px 0; }
+  code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+  pre { background: #f4f4f4; padding: 16px; border-radius: 6px; overflow-x: auto;
+    font-size: 13px; line-height: 1.5; margin: 8px 0; }
+  pre code { background: none; padding: 0; }
+  blockquote { border-left: 4px solid #e5e5e5; padding-left: 12px; margin: 8px 0; color: #666; font-style: italic; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { padding: 8px 12px; border: 1px solid #e5e5e5; text-align: left; }
+  th { background: #f9f9f9; font-weight: 600; }
+  hr { border: none; border-top: 1px solid #e5e5e5; margin: 16px 0; }
+  img { max-width: 100%; height: auto; border-radius: 4px; margin: 8px 0; }
+  a { color: #2563eb; text-decoration: none; }
+  strong { font-weight: 600; }
+  @media print {
+    body { margin: 0; padding: 20px; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+    a { color: #1a1a1a; }
+    img { break-inside: avoid; }
+    h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  }
+</style></head><body>${rendered.innerHTML}</body></html>`);
+    printWindow.document.close();
+    printWindow.addEventListener("afterprint", () => printWindow.close());
+    // Small delay to ensure images load before print dialog
+    setTimeout(() => printWindow.print(), 300);
   };
 
   const viewerType = file ? getViewerType(file.name) : "unsupported";
@@ -272,6 +317,12 @@ export function DocumentViewerModal({ taskId, source, file, onClose }: Props) {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0 ml-4">
+            {viewerType === "markdown" && (
+              <Button variant="ghost" size="sm" onClick={handlePrintPdf}>
+                <FileText className="h-3.5 w-3.5 mr-1.5" />
+                Save as PDF
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={handleDownload}>
               <Download className="h-3.5 w-3.5 mr-1.5" />
               Download
