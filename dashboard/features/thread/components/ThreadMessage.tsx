@@ -137,8 +137,7 @@ function ThreadMessageComponent({
   // Lead Agent messages have authorType "system" but should render as Markdown
   // (not plain italic text). Exclude lead_agent_chat from the isSystem flag
   // so they get MarkdownRenderer treatment.
-  const isLeadAgentMessage =
-    message.type === STRUCTURED_MESSAGE_TYPE.LEAD_AGENT_CHAT;
+  const isLeadAgentMessage = message.type === STRUCTURED_MESSAGE_TYPE.LEAD_AGENT_CHAT;
   const isSystem =
     !isLeadAgentMessage &&
     (message.authorType === "system" || message.messageType === "system_event");

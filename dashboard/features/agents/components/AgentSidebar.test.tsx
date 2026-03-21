@@ -230,5 +230,4 @@ describe("AgentSidebar", () => {
     const squadSection = screen.getByTestId("squad-sidebar-section");
     expect(squadSection).toHaveAttribute("data-filter-query", "content");
   });
-
 });

@@ -26,10 +26,7 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
   const [checkedAgents, setCheckedAgents] = useState<Map<string, boolean>>(new Map());
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const squad = useQuery(
-    api.squadSpecs.getById,
-    squadId !== null ? { id: squadId } : "skip",
-  );
+  const squad = useQuery(api.squadSpecs.getById, squadId !== null ? { id: squadId } : "skip");
 
   const agents = useQuery(
     api.squadSpecs.getSquadAgentsWithMemberships,
@@ -80,7 +77,15 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
     } finally {
       setIsDeleting(false);
     }
-  }, [squadId, isDeleting, archiveSquadMutation, agents, checkedAgents, softDeleteAgentMutation, onDeleted]);
+  }, [
+    squadId,
+    isDeleting,
+    archiveSquadMutation,
+    agents,
+    checkedAgents,
+    softDeleteAgentMutation,
+    onDeleted,
+  ]);
 
   const displayName = squad?.displayName ?? "";
   const agentList = agents ?? [];

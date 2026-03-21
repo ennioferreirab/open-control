@@ -19,6 +19,36 @@ from claude_code.types import CCTaskResult, ClaudeCodeOpts, WorkspaceContext
 from mc.contexts.execution.executor import TaskExecutor
 from mc.types import AgentData
 
+
+def _cc_execute_patches():
+    """Return a combined context manager that mocks all dependencies
+    that ``_execute_cc_task`` now requires beyond the three original
+    mocks (CCWorkspaceManager, MCSocketServer, ClaudeCodeProvider).
+
+    These cover board resolution, Convex agent sync, description enrichment,
+    output-dir snapshot, orientation loading, nanobot config loading, and
+    the ask-user handler.
+    """
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _patches():
+        with (
+            patch.object(TaskExecutor, "_resolve_cc_board", new_callable=AsyncMock, return_value=(None, "clean")),
+            patch.object(TaskExecutor, "_sync_cc_convex_agent", new_callable=AsyncMock, return_value=None),
+            patch.object(TaskExecutor, "_enrich_cc_description", new_callable=AsyncMock, side_effect=lambda tid, desc, td: desc or ""),
+            patch("mc.contexts.execution.cc_executor.snapshot_output_dir", return_value=set()),
+            patch("mc.contexts.execution.cc_executor.relocate_invalid_memory_files"),
+            patch("mc.contexts.execution.cc_executor.collect_output_artifacts", return_value=[]),
+            patch("mc.infrastructure.orientation.load_orientation", return_value=None),
+            patch("mc.contexts.conversation.ask_user.handler.AskUserHandler"),
+            patch("nanobot.config.loader.load_config") as mock_cfg,
+        ):
+            mock_cfg.return_value.claude_code.cli_path = "/usr/bin/claude"
+            mock_cfg.return_value.claude_code = MagicMock()
+            yield
+    return _patches()
+
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -196,6 +226,7 @@ class TestSessionLookupOnExecution:
         result = _cc_result(session_id="sess-stored-123")
 
         with (
+            _cc_execute_patches(),
             patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
             patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
             patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
@@ -233,6 +264,7 @@ class TestSessionLookupOnExecution:
         result = _cc_result(session_id="sess-new-456")
 
         with (
+            _cc_execute_patches(),
             patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
             patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
             patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
@@ -269,6 +301,7 @@ class TestSessionLookupOnExecution:
         result = _cc_result()
 
         with (
+            _cc_execute_patches(),
             patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
             patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
             patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,
@@ -555,6 +588,7 @@ class TestFreshSession:
         result = _cc_result(session_id="sess-brand-new")
 
         with (
+            _cc_execute_patches(),
             patch("claude_code.workspace.CCWorkspaceManager") as MockWsMgr,
             patch("claude_code.ipc_server.MCSocketServer") as MockIpc,
             patch("claude_code.provider.ClaudeCodeProvider") as MockProvider,

@@ -289,7 +289,9 @@ export function TaskDetailThreadTab({
           </>
         )}
       </ScrollArea>
-      {task && !isMergeLockedSource && <ThreadInput task={task} onMessageSent={handleMessageSent} />}
+      {task && !isMergeLockedSource && (
+        <ThreadInput task={task} onMessageSent={handleMessageSent} />
+      )}
     </TabsContent>
   );
 }

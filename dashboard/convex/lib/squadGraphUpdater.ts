@@ -131,9 +131,7 @@ export async function updatePublishedSquadGraph(
     .withIndex("by_squadSpecId", (q) => q.eq("squadSpecId", squadSpecId))
     .collect()) as Array<Record<string, unknown>>;
 
-  const existingWorkflowIds = new Set(
-    existingWorkflows.map((workflow) => workflow._id as string),
-  );
+  const existingWorkflowIds = new Set(existingWorkflows.map((workflow) => workflow._id as string));
   const keptWorkflowIds = new Set<string>();
 
   for (const workflow of graph.workflows) {

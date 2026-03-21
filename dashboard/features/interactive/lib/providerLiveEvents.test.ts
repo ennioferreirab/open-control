@@ -224,13 +224,21 @@ describe("canonical metadata support (Story 2.1)", () => {
 
   it("classifies tool_use sourceType with skill toolName as skill", () => {
     expect(
-      classifyProviderEventCategory({ kind: "text", toolName: "dispatch_agent", sourceType: "tool_use" }),
+      classifyProviderEventCategory({
+        kind: "text",
+        toolName: "dispatch_agent",
+        sourceType: "tool_use",
+      }),
     ).toBe("skill");
   });
 
   it("falls through to heuristic when sourceType is not recognized", () => {
     expect(
-      classifyProviderEventCategory({ kind: "turn_completed", toolName: undefined, sourceType: "unknown_future" }),
+      classifyProviderEventCategory({
+        kind: "turn_completed",
+        toolName: undefined,
+        sourceType: "unknown_future",
+      }),
     ).toBe("result");
   });
 
@@ -389,10 +397,7 @@ describe("buildGroupedTimeline", () => {
   });
 
   it("renders events without groupKey as standalone nodes", () => {
-    const events: ProviderLiveEvent[] = [
-      makeEvent({ id: "e1" }),
-      makeEvent({ id: "e2" }),
-    ];
+    const events: ProviderLiveEvent[] = [makeEvent({ id: "e1" }), makeEvent({ id: "e2" })];
     const nodes = buildGroupedTimeline(events);
     expect(nodes).toHaveLength(2);
     expect(nodes[0].isGroup).toBe(false);

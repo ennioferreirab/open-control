@@ -84,10 +84,11 @@ describe("useGatewaySleepCountdown", () => {
     expect(result.current).toBe("1:40");
   });
 
-  it("returns null for manual active mode without lastWorkFoundAt", () => {
+  it("returns countdown to auto-sleep for manual active mode using lastTransitionAt as anchor", () => {
     const now = new Date("2026-03-10T12:00:00Z").getTime();
     vi.setSystemTime(now);
 
+    // Manual wake 10s ago, default auto-sleep 300s → remaining 290s = 4:50
     const runtime: GatewaySleepRuntime = {
       mode: "active",
       pollIntervalSeconds: 5,
@@ -97,7 +98,7 @@ describe("useGatewaySleepCountdown", () => {
     };
 
     const { result } = renderHook(() => useGatewaySleepCountdown(runtime));
-    expect(result.current).toBeNull();
+    expect(result.current).toBe("4:50");
   });
 
   it("clamps to 0:00 when countdown has passed", () => {

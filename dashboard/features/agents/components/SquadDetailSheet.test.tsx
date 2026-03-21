@@ -254,54 +254,50 @@ describe("SquadDetailSheet", () => {
     expect(screen.getByText(/no agents defined/i)).toBeInTheDocument();
   });
 
-  it(
-    "publishes edited workflow data instead of showing a save action",
-    async () => {
-      mockUseSquadDetailData.mockReturnValue(makeLoadedState());
-      render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
+  it("publishes edited workflow data instead of showing a save action", async () => {
+    mockUseSquadDetailData.mockReturnValue(makeLoadedState());
+    render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
 
-      await userEvent.click(screen.getByRole("button", { name: /edit squad/i }));
-      await userEvent.click(screen.getByRole("button", { name: /edit workflow name/i }));
+    await userEvent.click(screen.getByRole("button", { name: /edit squad/i }));
+    await userEvent.click(screen.getByRole("button", { name: /edit workflow name/i }));
 
-      const workflowNameInput = screen.getByRole("textbox", { name: /workflow name/i });
-      const firstStepTitleInput = screen.getByLabelText(/step 1 title/i);
-      const reviewPolicyInput = screen.getByLabelText(/review policy/i);
+    const workflowNameInput = screen.getByRole("textbox", { name: /workflow name/i });
+    const firstStepTitleInput = screen.getByLabelText(/step 1 title/i);
+    const reviewPolicyInput = screen.getByLabelText(/review policy/i);
 
-      await userEvent.clear(workflowNameInput);
-      await userEvent.type(workflowNameInput, "Edited Workflow");
-      await userEvent.clear(firstStepTitleInput);
-      await userEvent.type(firstStepTitleInput, "Edited Review");
-      await userEvent.clear(reviewPolicyInput);
-      await userEvent.type(reviewPolicyInput, "Lead review and QA sign-off required");
+    await userEvent.clear(workflowNameInput);
+    await userEvent.type(workflowNameInput, "Edited Workflow");
+    await userEvent.clear(firstStepTitleInput);
+    await userEvent.type(firstStepTitleInput, "Edited Review");
+    await userEvent.clear(reviewPolicyInput);
+    await userEvent.type(reviewPolicyInput, "Lead review and QA sign-off required");
 
-      expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
 
-      await userEvent.click(screen.getByRole("button", { name: /publicar/i }));
+    await userEvent.click(screen.getByRole("button", { name: /publicar/i }));
 
-      expect(mockPublish).toHaveBeenCalledWith(
-        expect.objectContaining({
-          squadSpecId: MOCK_SQUAD_ID,
-          graph: expect.objectContaining({
-            reviewPolicy: "Lead review and QA sign-off required",
-            workflows: [
-              expect.objectContaining({
-                id: "wf-1",
-                name: "Edited Workflow",
-                steps: expect.arrayContaining([
-                  expect.objectContaining({
-                    key: "step-1",
-                    title: "Edited Review",
-                    type: "review",
-                  }),
-                ]),
-              }),
-            ],
-          }),
+    expect(mockPublish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        squadSpecId: MOCK_SQUAD_ID,
+        graph: expect.objectContaining({
+          reviewPolicy: "Lead review and QA sign-off required",
+          workflows: [
+            expect.objectContaining({
+              id: "wf-1",
+              name: "Edited Workflow",
+              steps: expect.arrayContaining([
+                expect.objectContaining({
+                  key: "step-1",
+                  title: "Edited Review",
+                  type: "review",
+                }),
+              ]),
+            }),
+          ],
         }),
-      );
-    },
-    15000,
-  );
+      }),
+    );
+  }, 15000);
 
   it("shows the workflow name inline with the workflows header and exposes a pencil action in edit mode", async () => {
     mockUseSquadDetailData.mockReturnValue(makeLoadedState());
@@ -316,41 +312,37 @@ describe("SquadDetailSheet", () => {
     expect(screen.getByRole("button", { name: /edit workflow name/i })).toBeInTheDocument();
   });
 
-  it(
-    "allows inserting a checkpoint step from squad editing",
-    async () => {
-      mockUseSquadDetailData.mockReturnValue(makeLoadedState());
-      render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
+  it("allows inserting a checkpoint step from squad editing", async () => {
+    mockUseSquadDetailData.mockReturnValue(makeLoadedState());
+    render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
 
-      await userEvent.click(screen.getByRole("button", { name: /edit squad/i }));
-      await userEvent.click(screen.getByRole("button", { name: /add step/i }));
+    await userEvent.click(screen.getByRole("button", { name: /edit squad/i }));
+    await userEvent.click(screen.getByRole("button", { name: /add step/i }));
 
-      await userEvent.clear(screen.getByLabelText(/step 3 title/i));
-      await userEvent.type(screen.getByLabelText(/step 3 title/i), "Quality Gate");
-      await userEvent.selectOptions(screen.getByLabelText(/step 3 type/i), "checkpoint");
+    await userEvent.clear(screen.getByLabelText(/step 3 title/i));
+    await userEvent.type(screen.getByLabelText(/step 3 title/i), "Quality Gate");
+    await userEvent.selectOptions(screen.getByLabelText(/step 3 type/i), "checkpoint");
 
-      await userEvent.click(screen.getByRole("button", { name: /publicar/i }));
+    await userEvent.click(screen.getByRole("button", { name: /publicar/i }));
 
-      expect(mockPublish).toHaveBeenCalledWith(
-        expect.objectContaining({
-          graph: expect.objectContaining({
-            workflows: [
-              expect.objectContaining({
-                steps: expect.arrayContaining([
-                  expect.objectContaining({
-                    key: expect.stringMatching(/^step-/),
-                    title: "Quality Gate",
-                    type: "checkpoint",
-                  }),
-                ]),
-              }),
-            ],
-          }),
+    expect(mockPublish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        graph: expect.objectContaining({
+          workflows: [
+            expect.objectContaining({
+              steps: expect.arrayContaining([
+                expect.objectContaining({
+                  key: expect.stringMatching(/^step-/),
+                  title: "Quality Gate",
+                  type: "checkpoint",
+                }),
+              ]),
+            }),
+          ],
         }),
-      );
-    },
-    15000,
-  );
+      }),
+    );
+  }, 15000);
 
   it("opens the agent as an overlay while keeping the squad visible underneath", async () => {
     mockUseSquadDetailData.mockReturnValue(makeLoadedState());

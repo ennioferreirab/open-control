@@ -394,11 +394,13 @@ export const listDeleted = query({
 export const upsertMemoryBackup = internalMutation({
   args: {
     agentName: v.string(),
-    boards: v.array(v.object({
-      boardName: v.string(),
-      memoryContent: v.optional(v.string()),
-      historyContent: v.optional(v.string()),
-    })),
+    boards: v.array(
+      v.object({
+        boardName: v.string(),
+        memoryContent: v.optional(v.string()),
+        historyContent: v.optional(v.string()),
+      }),
+    ),
     globalMemoryContent: v.optional(v.string()),
     globalHistoryContent: v.optional(v.string()),
   },
@@ -471,7 +473,6 @@ export const getMemoryBackup = query({
     return agent.memoryBackup ?? null;
   },
 });
-
 
 export const publishProjection = mutation({
   args: {
@@ -581,4 +582,3 @@ export const incrementStepMetric = internalMutation({
     await incrementAgentStepMetric(ctx.db as unknown as AgentMetricDb, args.agentName);
   },
 });
-

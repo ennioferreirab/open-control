@@ -187,7 +187,11 @@ export function ProviderLiveChatPanel({
       )}
 
       {/* Content area */}
-      <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
+      >
         {isLoading ? (
           <p className="text-xs text-zinc-500">Connecting to provider session…</p>
         ) : events.length === 0 ? (

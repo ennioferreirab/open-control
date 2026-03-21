@@ -122,7 +122,9 @@ export async function resumeTaskExecution(
   }
 
   if (task.status !== "review") {
-    throw new ConvexError(`Cannot resume task in status '${task.status}'. Expected: review or done`);
+    throw new ConvexError(
+      `Cannot resume task in status '${task.status}'. Expected: review or done`,
+    );
   }
   if (task.awaitingKickoff === true) {
     throw new ConvexError(

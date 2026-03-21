@@ -15,11 +15,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Bot, ChevronDown, Pencil, X } from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSquadDetailData } from "@/features/agents/hooks/useSquadDetailData";
 import { useUpdatePublishedSquad } from "@/features/agents/hooks/useUpdatePublishedSquad";
 import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
@@ -534,10 +530,7 @@ export function SquadDetailSheet({
         onClose={() => setSelectedOverlayAgentName(null)}
       />
 
-      <SkillDetailDialog
-        skillName={selectedSkillName}
-        onClose={() => setSelectedSkillName(null)}
-      />
+      <SkillDetailDialog skillName={selectedSkillName} onClose={() => setSelectedSkillName(null)} />
     </>
   );
 }

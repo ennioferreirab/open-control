@@ -605,10 +605,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                   <div className="min-h-0 flex-1 px-6 py-4 flex flex-col gap-3">
                     {liveSession.liveChoices.length > 1 && (
                       <div className="flex items-center gap-2">
-                        <label
-                          className="text-xs text-zinc-500"
-                          htmlFor="live-session-selector"
-                        >
+                        <label className="text-xs text-zinc-500" htmlFor="live-session-selector">
                           Session:
                         </label>
                         <select

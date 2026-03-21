@@ -313,9 +313,7 @@ export function ExecutionPlanTab({
   const [editStepError, setEditStepError] = useState<string | null>(null);
   const editFormRef = useRef<HTMLDivElement>(null);
   const shouldOverlayLiveSteps =
-    taskStatus !== "inbox" &&
-    (taskStatus !== "review" || isPaused) &&
-    (!isEditMode || isPaused);
+    taskStatus !== "inbox" && (taskStatus !== "review" || isPaused) && (!isEditMode || isPaused);
 
   const liveStepIdSet = useMemo(() => new Set(liveStepIds ?? []), [liveStepIds]);
 
@@ -827,11 +825,7 @@ export function ExecutionPlanTab({
 
   if (displaySteps.length === 0) {
     if (!canAddOrEdit) {
-      return (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          No execution steps
-        </p>
-      );
+      return <p className="text-sm text-muted-foreground text-center py-8">No execution steps</p>;
     }
     // canAddOrEdit: show empty state with Add Step button
     return (

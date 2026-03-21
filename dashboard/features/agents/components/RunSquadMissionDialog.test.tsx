@@ -150,13 +150,17 @@ describe("RunSquadMissionDialog", () => {
     fireEvent.click(launchButton);
 
     await waitFor(() => {
-      expect(mockLaunch).toHaveBeenCalledWith({
-        squadSpecId: MOCK_SQUAD_ID,
-        workflowSpecId: MOCK_WORKFLOW_ID,
-        boardId: MOCK_BOARD_ID,
-        title: "Mission Alpha",
-        description: undefined,
-      });
+      expect(mockLaunch).toHaveBeenCalledWith(
+        {
+          squadSpecId: MOCK_SQUAD_ID,
+          workflowSpecId: MOCK_WORKFLOW_ID,
+          boardId: MOCK_BOARD_ID,
+          title: "Mission Alpha",
+          description: undefined,
+          files: undefined,
+        },
+        undefined,
+      );
     });
   });
 

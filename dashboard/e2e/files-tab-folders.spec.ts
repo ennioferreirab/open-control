@@ -66,9 +66,7 @@ async function openTaskByTitle(page: Page, title: string) {
   await expect(searchInput).toBeVisible();
   await searchInput.fill(title);
 
-  const card = page
-    .getByRole("article", { name: new RegExp(escapeRegex(title)) })
-    .first();
+  const card = page.getByRole("article", { name: new RegExp(escapeRegex(title)) }).first();
 
   // Poll: expand collapsed tag groups until the card is visible
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -298,9 +296,11 @@ test.describe("Files tab — folder grouping & source task grouping", () => {
     await expect(deleteBtn).toBeVisible();
 
     // Expand source A to see source files
-    const sourceAHeader = page.getByRole("button", {
-      name: new RegExp(escapeRegex(state.sourceATitle)),
-    }).first();
+    const sourceAHeader = page
+      .getByRole("button", {
+        name: new RegExp(escapeRegex(state.sourceATitle)),
+      })
+      .first();
     await sourceAHeader.click();
     await expect(page.getByText("data.csv")).toBeVisible();
 
@@ -313,9 +313,11 @@ test.describe("Files tab — folder grouping & source task grouping", () => {
   test("collapse source group hides its file tree", async ({ page }) => {
     await goToMergeFilesTab(page);
 
-    const sourceAHeader = page.getByRole("button", {
-      name: new RegExp(escapeRegex(state.sourceATitle)),
-    }).first();
+    const sourceAHeader = page
+      .getByRole("button", {
+        name: new RegExp(escapeRegex(state.sourceATitle)),
+      })
+      .first();
 
     // Expand
     await sourceAHeader.click();

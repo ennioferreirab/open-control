@@ -57,7 +57,10 @@ test.describe("Squad mission with file attachments", () => {
     const runMissionBtn = sheet.getByRole("button", { name: /Run Mission/i });
     // Skip if the squad isn't published or no workflow is bound
     const runMissionVisible = await runMissionBtn.isVisible().catch(() => false);
-    test.skip(!runMissionVisible, "Run Mission button not visible — squad not published or no workflow bound");
+    test.skip(
+      !runMissionVisible,
+      "Run Mission button not visible — squad not published or no workflow bound",
+    );
 
     await runMissionBtn.click();
 
@@ -69,7 +72,9 @@ test.describe("Squad mission with file attachments", () => {
 
     const missionTitle = `E2E file attach ${Date.now()}`;
     await missionDialog.getByPlaceholder(/review q4 release plan/i).fill(missionTitle);
-    await missionDialog.getByPlaceholder(/provide context/i).fill("Automated e2e test with file attachment");
+    await missionDialog
+      .getByPlaceholder(/provide context/i)
+      .fill("Automated e2e test with file attachment");
 
     // ── 6. Attach a file via the hidden input ─────────────────────────
     const fileInput = missionDialog.locator('input[type="file"]');

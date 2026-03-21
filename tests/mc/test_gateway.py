@@ -1250,31 +1250,39 @@ class TestOrchestratorDeduplication:
 
 
 class TestBridgeAsyncSubscribe:
-    """Test bridge async_subscribe uses get_running_loop and reconnects."""
+    """Test bridge poll-loop retry, dedup, and error sentinel behaviour.
+
+    The live ``async_subscribe`` now uses WebSocket-based ``_subscribe_loop``.
+    These tests exercise the identical contract through the ``_poll_loop`` code
+    path, which is the fallback polling implementation and shares the same
+    dedup / retry / error-sentinel logic.
+    """
 
     @pytest.mark.asyncio
     async def test_poll_retries_on_query_error(self):
         """When query() raises, polling should retry and deliver data on success."""
-        from mc.bridge import ConvexBridge
+        from mc.bridge.subscriptions import SubscriptionManager
 
-        mock_client = MagicMock()
-        bridge = ConvexBridge.__new__(ConvexBridge)
-        bridge._client = mock_client
-
-        calls = []
+        calls: list[int] = []
 
         def fake_query(fn, args=None):
             calls.append(1)
-            n = len(calls)
-            if n <= 2:
+            if len(calls) <= 2:
                 raise ConnectionError("Connection lost")
             return [{"id": "task_1"}]
 
-        with patch.object(bridge, "query", side_effect=fake_query):
-            q = bridge.async_subscribe(
-                "tasks:listByStatus", {"status": "inbox"}, poll_interval=0.05
-            )
+        mock_client = MagicMock()
+        mock_client.query = fake_query
+        mgr = SubscriptionManager(mock_client)
+
+        q: asyncio.Queue = asyncio.Queue()
+        task = asyncio.create_task(
+            mgr._poll_loop("tasks:listByStatus", {"status": "inbox"}, 0.05, [q])
+        )
+        try:
             result = await asyncio.wait_for(q.get(), timeout=5.0)
+        finally:
+            task.cancel()
 
         assert result == [{"id": "task_1"}]
         assert len(calls) >= 3
@@ -1282,20 +1290,23 @@ class TestBridgeAsyncSubscribe:
     @pytest.mark.asyncio
     async def test_poll_exhausted_sends_error_sentinel(self):
         """When max consecutive errors are hit, push an error sentinel."""
-        from mc.bridge import ConvexBridge
-
-        mock_client = MagicMock()
-        bridge = ConvexBridge.__new__(ConvexBridge)
-        bridge._client = mock_client
+        from mc.bridge.subscriptions import SubscriptionManager
 
         def always_fail(fn, args=None):
             raise ConnectionError("Permanent failure")
 
-        with patch.object(bridge, "query", side_effect=always_fail):
-            q = bridge.async_subscribe(
-                "tasks:listByStatus", {"status": "inbox"}, poll_interval=0.01
-            )
+        mock_client = MagicMock()
+        mock_client.query = always_fail
+        mgr = SubscriptionManager(mock_client)
+
+        q: asyncio.Queue = asyncio.Queue()
+        task = asyncio.create_task(
+            mgr._poll_loop("tasks:listByStatus", {"status": "inbox"}, 0.01, [q])
+        )
+        try:
             result = await asyncio.wait_for(q.get(), timeout=10.0)
+        finally:
+            task.cancel()
 
         assert isinstance(result, dict)
         assert result.get("_error") is True
@@ -1304,13 +1315,9 @@ class TestBridgeAsyncSubscribe:
     @pytest.mark.asyncio
     async def test_deduplicates_identical_results(self):
         """Only enqueue changed poll results; suppress identical repeats."""
-        from mc.bridge import ConvexBridge
+        from mc.bridge.subscriptions import SubscriptionManager
 
-        mock_client = MagicMock()
-        bridge = ConvexBridge.__new__(ConvexBridge)
-        bridge._client = mock_client
-
-        calls = []
+        calls: list[int] = []
 
         def fake_query(fn, args=None):
             calls.append(1)
@@ -1321,12 +1328,19 @@ class TestBridgeAsyncSubscribe:
                 return [{"id": "task_1"}, {"id": "task_2"}]
             raise asyncio.CancelledError()
 
-        with patch.object(bridge, "query", side_effect=fake_query):
-            q = bridge.async_subscribe(
-                "tasks:listByStatus", {"status": "inbox"}, poll_interval=0.01
-            )
+        mock_client = MagicMock()
+        mock_client.query = fake_query
+        mgr = SubscriptionManager(mock_client)
+
+        q: asyncio.Queue = asyncio.Queue()
+        task = asyncio.create_task(
+            mgr._poll_loop("tasks:listByStatus", {"status": "inbox"}, 0.01, [q])
+        )
+        try:
             first = await asyncio.wait_for(q.get(), timeout=5.0)
             second = await asyncio.wait_for(q.get(), timeout=5.0)
+        finally:
+            task.cancel()
 
         assert first == [{"id": "task_1"}]
         assert second == [{"id": "task_1"}, {"id": "task_2"}]
@@ -1335,13 +1349,9 @@ class TestBridgeAsyncSubscribe:
     @pytest.mark.asyncio
     async def test_first_result_always_emitted(self):
         """First poll result should be enqueued even when it's an empty list."""
-        from mc.bridge import ConvexBridge
+        from mc.bridge.subscriptions import SubscriptionManager
 
-        mock_client = MagicMock()
-        bridge = ConvexBridge.__new__(ConvexBridge)
-        bridge._client = mock_client
-
-        calls = []
+        calls: list[int] = []
 
         def fake_query(fn, args=None):
             calls.append(1)
@@ -1349,11 +1359,18 @@ class TestBridgeAsyncSubscribe:
                 return []
             raise asyncio.CancelledError()
 
-        with patch.object(bridge, "query", side_effect=fake_query):
-            q = bridge.async_subscribe(
-                "tasks:listByStatus", {"status": "inbox"}, poll_interval=0.01
-            )
+        mock_client = MagicMock()
+        mock_client.query = fake_query
+        mgr = SubscriptionManager(mock_client)
+
+        q: asyncio.Queue = asyncio.Queue()
+        task = asyncio.create_task(
+            mgr._poll_loop("tasks:listByStatus", {"status": "inbox"}, 0.01, [q])
+        )
+        try:
             first = await asyncio.wait_for(q.get(), timeout=5.0)
+        finally:
+            task.cancel()
 
         assert first == []
 

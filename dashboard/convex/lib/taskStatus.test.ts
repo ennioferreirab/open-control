@@ -109,9 +109,7 @@ describe("pauseTaskExecution", () => {
     await pauseTaskExecution(ctx as never, "task-1" as never, makeTask() as never);
 
     // Only the task transition patch — no step patches
-    const stepPatches = patches.filter(
-      (p) => p.id === "step-done" || p.id === "step-assigned",
-    );
+    const stepPatches = patches.filter((p) => p.id === "step-done" || p.id === "step-assigned");
     expect(stepPatches).toEqual([]);
   });
 

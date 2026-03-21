@@ -140,9 +140,7 @@ function FileRow({
       data-testid="file-row"
     >
       <FileIcon name={file.name} />
-      <span className="min-w-0 flex-1 truncate text-sm">
-        {file.name.split("/").pop()}
-      </span>
+      <span className="min-w-0 flex-1 truncate text-sm">{file.name.split("/").pop()}</span>
       {!hideSourceLabel && file.sourceLabel && (
         <Badge variant="secondary" className="text-[10px]">
           {file.sourceLabel}
@@ -316,9 +314,7 @@ function SourceTaskGroup({
         <span className="min-w-0 flex-1 truncate text-left">
           <span className="text-xs text-muted-foreground/70">From: </span>
           <span className="font-medium">&ldquo;{title}&rdquo;</span>
-          {label && (
-            <span className="ml-1 text-xs text-muted-foreground/70">({label})</span>
-          )}
+          {label && <span className="ml-1 text-xs text-muted-foreground/70">({label})</span>}
         </span>
         <span className="flex-shrink-0 text-xs text-muted-foreground/70">
           {files.length} {files.length === 1 ? "file" : "files"}, {formatSize(totalSize)}
@@ -458,10 +454,7 @@ export function TaskDetailFilesTab({
               ) : (
                 <div className="flex flex-col gap-1">
                   {localOutputs.length > 0 && (
-                    <FileTreeSection
-                      files={localOutputs}
-                      onOpenFile={onOpenFile}
-                    />
+                    <FileTreeSection files={localOutputs} onOpenFile={onOpenFile} />
                   )}
                   {Array.from(outputSources.entries()).map(([sourceId, source]) => (
                     <SourceTaskGroup

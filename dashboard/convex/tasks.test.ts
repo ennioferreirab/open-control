@@ -253,7 +253,12 @@ describe("tasks.create", () => {
     const handler = getHandler();
     const { ctx, inserts } = makeCtx();
 
-    await handler(ctx, { title: "Manual checklist", assignedAgent: "coder", isManual: true, boardId: "board-123" });
+    await handler(ctx, {
+      title: "Manual checklist",
+      assignedAgent: "coder",
+      isManual: true,
+      boardId: "board-123",
+    });
 
     const taskInsert = inserts.find((entry) => entry.table === "tasks");
     expect(taskInsert).toBeDefined();
@@ -1195,7 +1200,10 @@ describe("tasks.resumeTask", () => {
     }));
 
     const updatedPlan = { steps: [{ tempId: "s1", title: "Step A" }] };
-    await handler({ db: { get, patch, insert, query } }, { taskId: "task-1", executionPlan: updatedPlan });
+    await handler(
+      { db: { get, patch, insert, query } },
+      { taskId: "task-1", executionPlan: updatedPlan },
+    );
 
     expect(patch).toHaveBeenNthCalledWith(
       1,

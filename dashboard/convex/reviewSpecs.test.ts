@@ -74,7 +74,12 @@ describe("reviewSpecs.createDraft", () => {
     const { ctx, inserts } = makeCtx();
 
     const criteria = [
-      { id: "correctness", label: "Correctness", weight: 0.5, description: "Is the output correct?" },
+      {
+        id: "correctness",
+        label: "Correctness",
+        weight: 0.5,
+        description: "Is the output correct?",
+      },
       { id: "style", label: "Style", weight: 0.3, description: "Does it follow style guidelines?" },
       { id: "completeness", label: "Completeness", weight: 0.2, description: "Is it complete?" },
     ];

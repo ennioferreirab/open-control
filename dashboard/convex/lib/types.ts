@@ -11,15 +11,14 @@
 /** Minimal write-capable database context used by mutation helpers. */
 export interface DbWriter {
   db: {
-     
     get(id: unknown): Promise<Record<string, unknown> | null>;
-     
+
     insert(table: string, value: Record<string, unknown>): Promise<string>;
-     
+
     patch(id: unknown, value: Record<string, unknown>): Promise<void>;
-     
+
     delete(id: unknown): Promise<void>;
-     
+
     query(table: string): {
       withIndex(
         index: string,
@@ -33,10 +32,9 @@ export interface DbWriter {
 /** Minimal read-only database context used by query helpers. */
 export interface DbReader {
   db: {
-     
     get(id: unknown): Promise<Record<string, unknown> | null>;
     // eslint-disable name-spacing
-     
+
     query(table: string): {
       withIndex(
         index: string,

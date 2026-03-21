@@ -24,15 +24,7 @@ describe("canSendThreadMessage", () => {
   });
 
   it("returns true for non-blocked statuses", () => {
-    const allowedStatuses = [
-      "inbox",
-      "assigned",
-      "ready",
-      "failed",
-      "review",
-      "done",
-      "crashed",
-    ];
+    const allowedStatuses = ["inbox", "assigned", "ready", "failed", "review", "done", "crashed"];
     for (const status of allowedStatuses) {
       expect(canSendThreadMessage(status)).toBe(true);
     }

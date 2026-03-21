@@ -879,7 +879,11 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                 )}
 
                 {/* Skills */}
-                <SkillsSelector selected={skills} onChange={setSkills} onViewSkill={setViewingSkillName} />
+                <SkillsSelector
+                  selected={skills}
+                  onChange={setSkills}
+                  onViewSkill={setViewingSkillName}
+                />
 
                 {/* Active Squads */}
                 {activeSquads.length > 0 && (

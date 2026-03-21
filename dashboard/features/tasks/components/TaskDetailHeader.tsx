@@ -324,28 +324,31 @@ export function TaskDetailHeader({
                 </Button>
               </>
             )}
-            {!isPaused && taskStatus === "done" && hasUnexecutedSteps && !manualPlanPrimaryAction && (
-              <Button
-                variant="default"
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
-                onClick={() => void onResume()}
-                disabled={isResuming}
-                data-testid="resume-done-button"
-              >
-                {isResuming ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                    Resuming...
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-3.5 w-3.5 mr-1" />
-                    Resume
-                  </>
-                )}
-              </Button>
-            )}
+            {!isPaused &&
+              taskStatus === "done" &&
+              hasUnexecutedSteps &&
+              !manualPlanPrimaryAction && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-2"
+                  onClick={() => void onResume()}
+                  disabled={isResuming}
+                  data-testid="resume-done-button"
+                >
+                  {isResuming ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                      Resuming...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-3.5 w-3.5 mr-1" />
+                      Resume
+                    </>
+                  )}
+                </Button>
+              )}
             {isAwaitingKickoff && (
               <Badge
                 variant="outline"

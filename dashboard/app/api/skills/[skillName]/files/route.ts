@@ -8,10 +8,28 @@ const MAX_DEPTH = 5;
 
 /** Extensions considered safe to read as UTF-8 text. */
 const TEXT_EXTENSIONS = new Set([
-  ".md", ".txt", ".yaml", ".yml", ".json", ".toml",
-  ".py", ".ts", ".js", ".tsx", ".jsx", ".sh", ".bash",
-  ".xml", ".html", ".css", ".csv", ".env", ".cfg", ".ini", ".conf",
-  "",  // extensionless files (e.g. Makefile, Dockerfile)
+  ".md",
+  ".txt",
+  ".yaml",
+  ".yml",
+  ".json",
+  ".toml",
+  ".py",
+  ".ts",
+  ".js",
+  ".tsx",
+  ".jsx",
+  ".sh",
+  ".bash",
+  ".xml",
+  ".html",
+  ".css",
+  ".csv",
+  ".env",
+  ".cfg",
+  ".ini",
+  ".conf",
+  "", // extensionless files (e.g. Makefile, Dockerfile)
 ]);
 
 function skillsDir(): string {

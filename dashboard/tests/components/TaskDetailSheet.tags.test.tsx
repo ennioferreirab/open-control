@@ -13,7 +13,7 @@ beforeAll(() => {
 const user = userEvent.setup({ delay: null });
 
 // Mock convex/react hooks
- 
+
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),

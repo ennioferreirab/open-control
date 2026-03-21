@@ -256,11 +256,7 @@ export const getSquadAgentsWithMemberships = query({
         }
 
         const memberOf = allPublishedSquads
-          .filter(
-            (s) =>
-              s.agentIds != null &&
-              s.agentIds.includes(agentId),
-          )
+          .filter((s) => s.agentIds != null && s.agentIds.includes(agentId))
           .map((s) => ({
             id: s._id,
             displayName: s.displayName,
@@ -299,11 +295,7 @@ export const getAgentsSquadMemberships = query({
         if (!agent) return null;
 
         const memberOf = allPublishedSquads
-          .filter(
-            (s) =>
-              s.agentIds != null &&
-              s.agentIds.includes(agent._id),
-          )
+          .filter((s) => s.agentIds != null && s.agentIds.includes(agent._id))
           .map((s) => ({
             id: s._id,
             displayName: s.displayName,

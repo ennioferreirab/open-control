@@ -92,9 +92,7 @@ export function computeUiFlags(task: TaskForFlags, steps: StepForFlags[]): UiFla
       reviewPhase === undefined &&
       !isAwaitingKickoff &&
       hasNonCompletedSteps);
-  const hasUnexecutedSteps = steps.some(
-    (s) => s.status !== "completed" && s.status !== "deleted",
-  );
+  const hasUnexecutedSteps = steps.some((s) => s.status !== "completed" && s.status !== "deleted");
 
   return {
     isAwaitingKickoff,

@@ -46,12 +46,7 @@ import {
   type ExecutionPlanInput,
 } from "./lib/taskPlanning";
 import { logActivity } from "./lib/workflowHelpers";
-import {
-  approveTask,
-  denyTaskReview,
-  moveManualTask,
-  retryTask,
-} from "./lib/taskReview";
+import { approveTask, denyTaskReview, moveManualTask, retryTask } from "./lib/taskReview";
 import { launchSquadMission } from "./lib/squadMissionLaunch";
 import { applyTaskTransition } from "./lib/taskTransitions";
 
@@ -183,13 +178,26 @@ export const listByStatusLite = query({
       .query("tasks")
       .withIndex("by_status", (q) => q.eq("status", args.status))
       .collect();
-    return tasks.map(({
-      routingDecision: _routingDecision, files: _files, mergeSourceTaskIds: _mergeSourceTaskIds, mergeSourceLabels: _mergeSourceLabels,
-      mergedIntoTaskId: _mergedIntoTaskId, mergePreviousStatus: _mergePreviousStatus, mergeLockedAt: _mergeLockedAt, isMergeTask: _isMergeTask,
-      stalledAt: _stalledAt, isFavorite: _isFavorite, deletedAt: _deletedAt, previousStatus: _previousStatus, sourceAgent: _sourceAgent,
-      squadSpecId: _squadSpecId, workflowSpecId: _workflowSpecId,
-      ...rest
-    }) => rest);
+    return tasks.map(
+      ({
+        routingDecision: _routingDecision,
+        files: _files,
+        mergeSourceTaskIds: _mergeSourceTaskIds,
+        mergeSourceLabels: _mergeSourceLabels,
+        mergedIntoTaskId: _mergedIntoTaskId,
+        mergePreviousStatus: _mergePreviousStatus,
+        mergeLockedAt: _mergeLockedAt,
+        isMergeTask: _isMergeTask,
+        stalledAt: _stalledAt,
+        isFavorite: _isFavorite,
+        deletedAt: _deletedAt,
+        previousStatus: _previousStatus,
+        sourceAgent: _sourceAgent,
+        squadSpecId: _squadSpecId,
+        workflowSpecId: _workflowSpecId,
+        ...rest
+      }) => rest,
+    );
   },
 });
 

@@ -93,7 +93,7 @@ class TestStalledTaskDetection:
         # No settings configured (use defaults)
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [stalled_task]
+            "tasks:listByStatusLite": [stalled_task]
             if args and args.get("status") == "in_progress"
             else [],
         }.get(fn, None)
@@ -130,7 +130,7 @@ class TestStalledTaskDetection:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [fresh_task]
+            "tasks:listByStatusLite": [fresh_task]
             if args and args.get("status") == "in_progress"
             else [],
         }.get(fn, None)
@@ -152,7 +152,7 @@ class TestStalledTaskDetection:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [stalled_task]
+            "tasks:listByStatusLite": [stalled_task]
             if args and args.get("status") == "in_progress"
             else [],
         }.get(fn, None)
@@ -188,7 +188,7 @@ class TestPerTaskTimeoutOverride:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatusLite": [task] if args and args.get("status") == "in_progress" else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -208,7 +208,7 @@ class TestPerTaskTimeoutOverride:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatusLite": [task] if args and args.get("status") == "in_progress" else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -241,7 +241,7 @@ class TestGlobalSettings:
                     return "20"
                 if key == "inter_agent_timeout_minutes":
                     return "10"
-            if fn == "tasks:listByStatus":
+            if fn == "tasks:listByStatusLite":
                 if args and args.get("status") == "in_progress":
                     return [task]
                 return []
@@ -266,7 +266,7 @@ class TestGlobalSettings:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": [task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatusLite": [task] if args and args.get("status") == "in_progress" else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -299,7 +299,7 @@ class TestReviewEscalation:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": (
+            "tasks:listByStatusLite": (
                 [review_task] if args and args.get("status") == "review" else []
             ),
         }.get(fn, None)
@@ -334,7 +334,7 @@ class TestReviewEscalation:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": (
+            "tasks:listByStatusLite": (
                 [review_task] if args and args.get("status") == "review" else []
             ),
         }.get(fn, None)
@@ -359,7 +359,7 @@ class TestReviewEscalation:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": (
+            "tasks:listByStatusLite": (
                 [review_task] if args and args.get("status") == "review" else []
             ),
         }.get(fn, None)
@@ -387,7 +387,7 @@ class TestReviewEscalation:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatus": (
+            "tasks:listByStatusLite": (
                 [review_task] if args and args.get("status") == "review" else []
             ),
         }.get(fn, None)

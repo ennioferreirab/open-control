@@ -41,7 +41,8 @@ function hasTruncationMarker(text: string): boolean {
 
 export function ProviderLiveEventRow({ event }: { event: ProviderLiveEvent }) {
   const isError = event.category === "error";
-  const isTruncated = hasTruncationMarker(event.body ?? "") || hasTruncationMarker(event.rawJson ?? "");
+  const isTruncated =
+    hasTruncationMarker(event.body ?? "") || hasTruncationMarker(event.rawJson ?? "");
   const timeLabel = event.timestamp
     ? new Date(event.timestamp).toLocaleTimeString([], {
         hour: "2-digit",
@@ -86,24 +87,25 @@ export function ProviderLiveEventRow({ event }: { event: ProviderLiveEvent }) {
         </div>
       )}
 
-      {event.body && (() => {
-        const prettyBody = tryPrettyJson(event.body);
-        if (prettyBody) {
+      {event.body &&
+        (() => {
+          const prettyBody = tryPrettyJson(event.body);
+          if (prettyBody) {
+            return (
+              <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300 whitespace-pre-wrap break-words">
+                {prettyBody}
+              </div>
+            );
+          }
           return (
-            <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300 whitespace-pre-wrap break-words">
-              {prettyBody}
+            <div className="mt-2 flex items-start gap-2 text-sm text-zinc-200">
+              {isError && <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />}
+              <div className="min-w-0 flex-1">
+                <MarkdownRenderer content={event.body} className="text-zinc-200" />
+              </div>
             </div>
           );
-        }
-        return (
-          <div className="mt-2 flex items-start gap-2 text-sm text-zinc-200">
-            {isError && <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />}
-            <div className="min-w-0 flex-1">
-              <MarkdownRenderer content={event.body} className="text-zinc-200" />
-            </div>
-          </div>
-        );
-      })()}
+        })()}
     </article>
   );
 }

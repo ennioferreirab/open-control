@@ -47,7 +47,7 @@ jobs:
         run: uv run pyright mc/
 
       - name: Test
-        run: uv run pytest
+        run: uv run pytest --timeout=30 --timeout-method=signal
 
   dashboard-lint:
     runs-on: ubuntu-latest

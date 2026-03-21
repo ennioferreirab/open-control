@@ -1059,10 +1059,22 @@ describe("TaskDetailSheet", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: /Files \(2\)/i }));
 
+    // Source task groups are collapsed by default — expand them to reveal file names.
+    // The group buttons contain curly-quoted titles rendered by multiple child spans,
+    // so we locate them by matching partial button text with a function matcher.
+    const sourceGroupButtons = screen.getAllByRole("button").filter(
+      (btn) => btn.textContent?.includes("From:"),
+    );
+    for (const btn of sourceGroupButtons) {
+      await userEvent.click(btn);
+    }
+
     expect(screen.getByText("source-a.pdf")).toBeInTheDocument();
     expect(screen.getByText("source-b.md")).toBeInTheDocument();
-    expect(screen.getAllByText("A").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("B").length).toBeGreaterThan(0);
+    // Source labels appear in the collapsed group headers as "(A)" and "(B)",
+    // not as standalone badges (hideSourceLabel is true inside source groups).
+    expect(screen.getByText("(A)")).toBeInTheDocument();
+    expect(screen.getByText("(B)")).toBeInTheDocument();
   }, 10000);
 
   it("opens merged source artifacts using the source thread task id", async () => {
@@ -1745,10 +1757,10 @@ describe("TaskDetailSheet", () => {
 
     expect(screen.getByRole("button", { name: "Squad: Proposal Squad" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Workflow: Easy Proposal Workflow" }),
+      screen.getByRole("button", { name: /Workflow: Easy Proposal Workflow/ }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Workflow: Easy Proposal Workflow" }));
+    await user.click(screen.getByRole("button", { name: /Workflow: Easy Proposal Workflow/ }));
 
     expect(screen.getByTestId("squad-detail-sheet")).toHaveTextContent("squad-id-1");
     expect(screen.getByTestId("squad-detail-sheet")).toHaveAttribute(
@@ -2020,6 +2032,14 @@ describe("TaskDetailSheet", () => {
     render(<TaskDetailSheet taskId={"task-c" as never} onClose={() => {}} />);
 
     await user.click(screen.getByRole("tab", { name: "Files (2)" }));
+
+    // Source task groups are collapsed by default — expand them to reveal file names.
+    const sourceGroupButtons = screen.getAllByRole("button").filter(
+      (btn) => btn.textContent?.includes("From:"),
+    );
+    for (const btn of sourceGroupButtons) {
+      await user.click(btn);
+    }
 
     await waitFor(() => {
       expect(screen.getAllByText("DIRETRIZES_EMPRESA.md")).toHaveLength(2);
@@ -2637,10 +2657,7 @@ describe("TaskDetailSheet — Live session selector", () => {
     mockDocumentViewerModal.mockReset();
   });
 
-  function buildDetailViewWithSteps(
-    task: Doc<"tasks">,
-    steps: Doc<"steps">[] = [],
-  ) {
+  function buildDetailViewWithSteps(task: Doc<"tasks">, steps: Doc<"steps">[] = []) {
     return {
       task,
       board: null,
