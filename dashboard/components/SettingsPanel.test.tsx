@@ -4,6 +4,12 @@ import { SettingsPanel } from "@/features/settings/components/SettingsPanel";
 
 vi.mock("@/components/ui/select", async () => import("../tests/mocks/select-mock"));
 
+// IntegrationSettings uses its own Convex queries/mutations that conflict
+// with the global useQuery mock. Stub it out to isolate SettingsPanel tests.
+vi.mock("@/features/integrations/components/IntegrationSettings", () => ({
+  IntegrationSettings: () => null,
+}));
+
 const mockSetMutation = vi.fn().mockResolvedValue(undefined);
 let mockQueryResult: Array<{ key: string; value: string }> | undefined = [];
 const mockFetch = vi.fn();

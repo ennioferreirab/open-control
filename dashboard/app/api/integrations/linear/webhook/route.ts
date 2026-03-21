@@ -83,7 +83,11 @@ export async function POST(request: Request) {
           tags: labels.map((l) => l.name),
           timestamp: now,
         });
-      } else if (action === "update" && payload.updatedFrom && ("state" in payload.updatedFrom || "stateId" in payload.updatedFrom)) {
+      } else if (
+        action === "update" &&
+        payload.updatedFrom &&
+        ("state" in payload.updatedFrom || "stateId" in payload.updatedFrom)
+      ) {
         // Only process events where the state actually changed
         const newState = data.state as { type?: string } | undefined;
         const stateType = newState?.type ?? "";

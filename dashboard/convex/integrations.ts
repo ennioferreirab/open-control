@@ -687,7 +687,9 @@ export const webhookProcessIssue = mutation({
 
     const { config, boardId } = await resolveLinearConfig(ctx);
     if (!boardId) {
-      throw new ConvexError("No board available for inbound issue. Configure a Linear integration or create a default board.");
+      throw new ConvexError(
+        "No board available for inbound issue. Configure a Linear integration or create a default board.",
+      );
     }
 
     const now = new Date().toISOString();
