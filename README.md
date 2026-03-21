@@ -74,27 +74,6 @@ still supported:
 
 These are compatibility details, not the intended public brand.
 
-## Repository Structure
-
-```text
-mc/                  Python backend for orchestration, runtime, and Convex bridge
-dashboard/           Next.js + Convex dashboard
-shared/              Cross-language workflow contracts
-tests/mc/            Python test suite
-vendor/nanobot/      Upstream runtime dependency - do not edit without approval
-vendor/claude-code/  Maintained integration layer for Claude Code
-agent_docs/          Binding structural and engineering contracts
-```
-
-## Architecture
-
-- `mc/runtime/` composes service startup, orchestration, and worker lifecycle.
-- `mc/contexts/` owns domain behavior such as conversation, execution, routing,
-  planning, and agents.
-- `mc/bridge/` is the Python-to-Convex integration boundary.
-- `dashboard/convex/` is the persistent state source of truth.
-- `dashboard/features/` groups UI and hooks by product area.
-
 ## Agent Docs — Harness Engineering
 
 The [`agent_docs/`](agent_docs/) directory is the most important entry point for
