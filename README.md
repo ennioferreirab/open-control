@@ -110,10 +110,6 @@ be edited without explicit approval.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation commands, and repo
 workflow expectations.
 
-## Security
-
-See [SECURITY.md](SECURITY.md) for how to report vulnerabilities responsibly.
-
 ## Mascot
 
 **Bento** is the Open Control mascot a black Shih Tzu who runs mission
