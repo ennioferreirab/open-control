@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="bento_hero.png" alt="Bento — Open Control mascot" width="700">
+  <img src="assets/bento_hero.png" alt="Bento — Open Control mascot" width="700">
 </p>
 
 <h1 align="center">Open Control</h1>
