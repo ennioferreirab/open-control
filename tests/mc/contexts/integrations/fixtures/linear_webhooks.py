@@ -1,4 +1,5 @@
 """Realistic Linear webhook payload fixtures for testing."""
+
 from __future__ import annotations
 
 
@@ -82,7 +83,8 @@ def issue_labels_changed_webhook(
         "webhookId": "webhook-004",
         "data": {
             "id": issue_id,
-            "labels": labels or [
+            "labels": labels
+            or [
                 {"id": "label-1", "name": "bug"},
                 {"id": "label-2", "name": "critical"},
             ],

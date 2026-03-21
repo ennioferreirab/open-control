@@ -1,4 +1,5 @@
 """Inbound pipeline — normalizes and deduplicates external events."""
+
 from __future__ import annotations
 
 import logging

@@ -1,4 +1,5 @@
 """Boot integration adapters from Convex config at gateway startup."""
+
 from __future__ import annotations
 
 import logging

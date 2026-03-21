@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+# Prefix used on outbound comments to identify MC-originated content.
+# Inbound comments starting with this prefix are skipped (loop prevention).
+MC_COMMENT_PREFIX = "[MC]"
+
 
 class IntegrationEventType(StrEnum):
     ITEM_CREATED = "item_created"

@@ -1,10 +1,12 @@
 """Outbound pipeline — detects MC events and publishes to external platforms."""
+
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
 
 from mc.contexts.integrations.capabilities import PlatformCapability
+from mc.contexts.integrations.events import MC_COMMENT_PREFIX
 from mc.contexts.integrations.status_mapping import resolve_status_outbound
 
 if TYPE_CHECKING:
@@ -13,9 +15,6 @@ if TYPE_CHECKING:
     from mc.contexts.integrations.registry import AdapterRegistry
 
 logger = logging.getLogger(__name__)
-
-# MC comment prefix to detect (and skip) inbound-originated messages
-MC_COMMENT_PREFIX = "[MC]"
 
 
 class OutboundPipeline:
@@ -31,9 +30,7 @@ class OutboundPipeline:
         self._adapter_registry = adapter_registry
         self._mapping_service = mapping_service
 
-    async def process_outbound_batch(
-        self, config_id: str, since_timestamp: str
-    ) -> int:
+    async def process_outbound_batch(self, config_id: str, since_timestamp: str) -> int:
         """Process outbound events for a config since a timestamp. Returns count published."""
         adapter = self._adapter_registry.get_adapter(config_id)
         if not adapter:

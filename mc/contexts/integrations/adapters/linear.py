@@ -13,6 +13,7 @@ from mc.contexts.integrations.capabilities import PlatformCapability
 from mc.contexts.integrations.config import IntegrationConfig
 from mc.contexts.integrations.errors import IntegrationError, IntegrationErrorKind
 from mc.contexts.integrations.events import (
+    MC_COMMENT_PREFIX,
     EventDirection,
     IntegrationEvent,
     IntegrationEventType,
@@ -20,9 +21,6 @@ from mc.contexts.integrations.events import (
 from mc.contexts.integrations.status_mapping import resolve_status_inbound
 
 logger = logging.getLogger(__name__)
-
-# Prefix for outbound comments to identify MC-originated content
-MC_COMMENT_PREFIX = "[MC]"
 
 
 class LinearAdapter:

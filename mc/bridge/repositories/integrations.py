@@ -1,4 +1,5 @@
 """Bridge repository for integration tables."""
+
 from __future__ import annotations
 
 import logging
@@ -44,9 +45,10 @@ class IntegrationRepository:
 
     def get_mappings_by_internal_id(self, internal_id: str) -> list[dict[str, Any]]:
         """Return all mappings for an internal ID."""
-        return self._client.query(
-            "integrations:getMappingsByInternalId", {"internal_id": internal_id}
-        ) or []
+        return (
+            self._client.query("integrations:getMappingsByInternalId", {"internal_id": internal_id})
+            or []
+        )
 
     def upsert_mapping(
         self,
@@ -106,9 +108,7 @@ class IntegrationRepository:
         """Mark an event as processed."""
         self._client.mutation("integrations:markEventProcessed", {"event_id": event_id})
 
-    def get_outbound_pending(
-        self, config_id: str, since_timestamp: str
-    ) -> dict[str, Any]:
+    def get_outbound_pending(self, config_id: str, since_timestamp: str) -> dict[str, Any]:
         """Return messages and activities since timestamp for mapped tasks."""
         return self._client.query(
             "integrations:getOutboundPending",
