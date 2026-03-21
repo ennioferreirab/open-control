@@ -20,6 +20,14 @@ def _make_agent(name: str, skills: list[str] | None = None) -> AgentData:
     )
 
 
+def _fake_workspace(tmp_path: Path) -> Path:
+    """Create a fake global workspace with SOUL.md for tests."""
+    ws = tmp_path / "_workspace"
+    ws.mkdir(parents=True, exist_ok=True)
+    (ws / "SOUL.md").write_text("# Test Soul", encoding="utf-8")
+    return ws
+
+
 class TestEnsureNanobotAgent:
     @patch(
         "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
@@ -28,7 +36,9 @@ class TestEnsureNanobotAgent:
     def test_creates_directory_and_config_when_missing(self, mock_identity, tmp_path: Path) -> None:
         from mc.runtime.gateway import NANOBOT_AGENT_NAME, ensure_nanobot_agent
 
-        ensure_nanobot_agent(tmp_path)
+        ws = _fake_workspace(tmp_path)
+        with patch("mc.infrastructure.agent_bootstrap.get_workspace_dir", return_value=ws):
+            ensure_nanobot_agent(tmp_path)
 
         agent_dir = tmp_path / NANOBOT_AGENT_NAME
         config_path = agent_dir / "config.yaml"
@@ -60,7 +70,9 @@ class TestEnsureNanobotAgent:
         )
         config_path.write_text(existing, encoding="utf-8")
 
-        ensure_nanobot_agent(tmp_path)
+        ws = _fake_workspace(tmp_path)
+        with patch("mc.infrastructure.agent_bootstrap.get_workspace_dir", return_value=ws):
+            ensure_nanobot_agent(tmp_path)
 
         assert config_path.read_text(encoding="utf-8") == existing
 
@@ -70,10 +82,16 @@ class TestSyncAgentRegistryNanobotAgent:
         from mc.runtime.gateway import sync_agent_registry
 
         mock_bridge = MagicMock()
+        ws = _fake_workspace(tmp_path)
 
         with (
             patch("mc.infrastructure.agent_bootstrap._cleanup_deleted_agents"),
             patch("mc.infrastructure.agent_bootstrap._write_back_convex_agents"),
+            patch(
+                "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
+                return_value={"name": "Bento", "role": "General-Purpose Assistant"},
+            ),
+            patch("mc.infrastructure.agent_bootstrap.get_workspace_dir", return_value=ws),
         ):
             synced, errors = sync_agent_registry(
                 mock_bridge,

@@ -1062,9 +1062,9 @@ describe("TaskDetailSheet", () => {
     // Source task groups are collapsed by default — expand them to reveal file names.
     // The group buttons contain curly-quoted titles rendered by multiple child spans,
     // so we locate them by matching partial button text with a function matcher.
-    const sourceGroupButtons = screen.getAllByRole("button").filter(
-      (btn) => btn.textContent?.includes("From:"),
-    );
+    const sourceGroupButtons = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.textContent?.includes("From:"));
     for (const btn of sourceGroupButtons) {
       await userEvent.click(btn);
     }
@@ -2034,9 +2034,9 @@ describe("TaskDetailSheet", () => {
     await user.click(screen.getByRole("tab", { name: "Files (2)" }));
 
     // Source task groups are collapsed by default — expand them to reveal file names.
-    const sourceGroupButtons = screen.getAllByRole("button").filter(
-      (btn) => btn.textContent?.includes("From:"),
-    );
+    const sourceGroupButtons = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.textContent?.includes("From:"));
     for (const btn of sourceGroupButtons) {
       await user.click(btn);
     }

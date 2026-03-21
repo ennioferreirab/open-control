@@ -188,7 +188,9 @@ class TestPerTaskTimeoutOverride:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatusLite": [task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatusLite": [task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -208,7 +210,9 @@ class TestPerTaskTimeoutOverride:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatusLite": [task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatusLite": [task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         await checker.check_timeouts()
@@ -266,7 +270,9 @@ class TestGlobalSettings:
 
         bridge.query.side_effect = lambda fn, args=None: {
             "settings:get": None,
-            "tasks:listByStatusLite": [task] if args and args.get("status") == "in_progress" else [],
+            "tasks:listByStatusLite": [task]
+            if args and args.get("status") == "in_progress"
+            else [],
         }.get(fn, None)
 
         await checker.check_timeouts()

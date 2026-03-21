@@ -132,7 +132,8 @@ class TestReviewWorkflowIntegration:
                 m for m in messages_after_exec if m.get("message_type") == MessageType.SYSTEM_EVENT
             ]
             assert any(
-                "started work" in m["content"].lower() or "execution started" in m["content"].lower()
+                "started work" in m["content"].lower()
+                or "execution started" in m["content"].lower()
                 for m in system_events
             ), (
                 f"Expected 'started work' or 'execution started' system event from executor pickup, "

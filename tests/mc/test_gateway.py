@@ -1692,6 +1692,10 @@ class TestSyncAgentRegistryCallsCleanup:
         mock_bridge = MagicMock()
         call_order = []
 
+        ws = tmp_path / "_workspace"
+        ws.mkdir(parents=True, exist_ok=True)
+        (ws / "SOUL.md").write_text("# Test", encoding="utf-8")
+
         with (
             patch(
                 "mc.infrastructure.agent_bootstrap._cleanup_deleted_agents",
@@ -1704,6 +1708,14 @@ class TestSyncAgentRegistryCallsCleanup:
             patch(
                 "mc.infrastructure.config._config_default_model",
                 return_value="anthropic/claude-haiku-4-5",
+            ),
+            patch(
+                "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
+                return_value={"name": "Bento", "role": "Assistant"},
+            ),
+            patch(
+                "mc.infrastructure.agent_bootstrap.get_workspace_dir",
+                return_value=ws,
             ),
         ):
             sync_agent_registry(mock_bridge, tmp_path)
