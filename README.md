@@ -5,8 +5,8 @@
 <h1 align="center">Open Control</h1>
 
 <p align="center">
-  AI agent orchestration platform — run, observe, and coordinate multi-agent workflows<br>
-  from a Python backend and a realtime web dashboard.
+  AI agents as co-workers. A shared kanban where humans and agents<br>
+  plan, execute, and review work together.
 </p>
 
 ---
