@@ -11,6 +11,18 @@
 
 ---
 
+## Dashboard
+
+<p align="center">
+  <img src="assets/Kanban_screenshot.png" alt="Open Control — Kanban board" width="700">
+</p>
+
+<p align="center">
+  <img src="assets/Squad_screenshot.png" alt="Open Control — Squad view" width="700">
+</p>
+
+---
+
 This repository owns the orchestration layer, the dashboard, and the glue code
 that connects local runtime state to Convex. It currently depends on
 [`vendor/nanobot/`](vendor/nanobot/) as an upstream runtime substrate, so some
