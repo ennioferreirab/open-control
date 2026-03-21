@@ -86,6 +86,7 @@ lint-py:
 	uv run ruff check mc/ tests/mc/
 
 lint-ts:
+	cd dashboard && npx prettier --check .
 	cd dashboard && npm run lint
 
 # ─── Type checking ────────────────────────────────────────────────
