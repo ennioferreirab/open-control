@@ -1,17 +1,19 @@
-"""Repo-owned MC MCP stdio bridge — runs as a separate stdio subprocess.
+"""MC MCP stdio bridge — the single MCP server for all MC tool access.
 
 Launched by: python -m mc.runtime.mcp.bridge
 Or via:      uv run python -m mc.runtime.mcp.bridge
 
 Environment variables:
-    MC_SOCKET_PATH  Path to the Unix socket served by MCSocketServer (required).
-    AGENT_NAME      Name of the calling agent (default: "agent").
-    TASK_ID         Convex task _id context (optional).
+    MC_SOCKET_PATH              Path to the Unix socket served by MCSocketServer (required).
+    AGENT_NAME                  Name of the calling agent (default: "agent").
+    TASK_ID                     Convex task _id context (optional).
+    MEMORY_WORKSPACE            Explicit memory workspace path (optional).
+    BOARD_NAME                  Board name for board-scoped workspaces (optional).
+    MC_INTERACTIVE_SESSION_ID   Session ID for Convex interaction service (optional).
+    CONVEX_URL                  Convex deployment URL (optional).
+    CONVEX_ADMIN_KEY            Convex admin key (optional).
 
-This bridge exposes the canonical Phase 1 MC tool surface and forwards tool
-calls to the existing MC IPC/runtime handlers via the Unix socket.
-
-Tool names are semantic and transport-agnostic (AC3).  Namespace identity is
+Tool names are semantic and transport-agnostic.  Namespace identity is
 carried by the MCP server identity, not by tool name suffixes.
 """
 
@@ -24,7 +26,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
-from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+from mc.runtime.mcp.tool_specs import MC_TOOLS
 
 # ---------------------------------------------------------------------------
 # Environment — read lazily at first use
@@ -49,6 +51,28 @@ def _get_interactive_session_id() -> str | None:
 
 def _get_step_id() -> str | None:
     return os.environ.get("STEP_ID") or None
+
+
+def _get_board_name() -> str | None:
+    return os.environ.get("BOARD_NAME") or None
+
+
+def _get_memory_workspace() -> str | None:
+    return os.environ.get("MEMORY_WORKSPACE") or None
+
+
+def _resolve_memory_workspace():
+    """Resolve the memory workspace path for search_memory, board-aware."""
+    from pathlib import Path
+
+    memory_workspace = _get_memory_workspace()
+    if memory_workspace:
+        return Path(memory_workspace)
+    agent_name = _get_agent_name()
+    board_name = _get_board_name()
+    if board_name:
+        return Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
+    return Path.home() / ".nanobot" / "agents" / agent_name
 
 
 def _get_convex_url() -> str | None:
@@ -126,14 +150,14 @@ def _build_interaction_context(provider: str = "mc"):
 
 
 # ---------------------------------------------------------------------------
-# Tool listing — uses the canonical Phase 1 surface
+# Tool listing — uses the canonical MC tool surface
 # ---------------------------------------------------------------------------
 
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
-    """Return the canonical Phase 1 MC tools exposed by this bridge."""
-    return PHASE1_TOOLS
+    """Return the canonical MC tools exposed by this bridge."""
+    return MC_TOOLS
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +369,30 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if "error" in result:
             return [TextContent(type="text", text=f"Error: {result['error']}")]
         return [TextContent(type="text", text=f"Squad published: {result.get('squad_id', 'ok')}")]
+
+    elif name == "search_memory":
+        query = arguments.get("query", "")
+        top_k = arguments.get("top_k", 5)
+        try:
+            from mc.memory import create_memory_store
+
+            workspace = _resolve_memory_workspace()
+            memory_dir = workspace / "memory"
+            if not memory_dir.exists():
+                return [TextContent(type="text", text="No memory directory found.")]
+            store = create_memory_store(workspace)
+            results = store.search(query, top_k=top_k)
+            if not results:
+                return [TextContent(type="text", text="No matching memories found.")]
+            return [TextContent(type="text", text=results)]
+        except ImportError:
+            return [
+                TextContent(
+                    type="text", text="Memory search not available (mc.memory not installed)."
+                )
+            ]
+        except Exception as e:
+            return [TextContent(type="text", text=f"Memory search error: {e}")]
 
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]

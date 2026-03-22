@@ -1,4 +1,7 @@
-"""Unit tests for the MCP bridge tool handlers with mocked IPC."""
+"""Unit tests for the MCP bridge tool handlers with mocked IPC.
+
+These tests verify the canonical MC MCP bridge (mc.runtime.mcp.bridge).
+"""
 
 from __future__ import annotations
 
@@ -34,7 +37,7 @@ def _make_mock_ipc(responses: dict) -> MagicMock:
 class TestAskUserTool:
     async def test_ask_user_returns_answer(self):
         """ask_user forwards question to IPC and returns the answer."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"ask_user": {"answer": "Yes!"}})
 
@@ -46,7 +49,7 @@ class TestAskUserTool:
 
     async def test_ask_user_with_options(self):
         """ask_user passes options to IPC."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         received_params: dict = {}
 
@@ -68,7 +71,7 @@ class TestAskUserTool:
 
     async def test_ask_user_with_structured_questions(self):
         """ask_user passes structured question arrays to IPC."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         received_params: dict = {}
 
@@ -106,7 +109,7 @@ class TestAskUserTool:
 
         M4: Verify the friendly error message is returned (not a raised exception).
         """
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         async def failing_request(method, params):
             raise ConnectionError("socket not found")
@@ -121,7 +124,7 @@ class TestAskUserTool:
         assert "Mission Control not reachable" in result[0].text
 
     async def test_ask_user_prefers_convex_interaction_service(self):
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         service = MagicMock()
         service.ask_user = MagicMock(return_value="Blue")
@@ -144,7 +147,7 @@ class TestAskUserTool:
 class TestSendMessageTool:
     async def test_send_message_returns_status(self):
         """send_message returns the IPC status string."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"send_message": {"status": "Message sent"}})
 
@@ -155,7 +158,7 @@ class TestSendMessageTool:
 
     async def test_send_message_passes_optional_channel(self):
         """send_message includes channel/chat_id in IPC params when given."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         received: dict = {}
 
@@ -175,7 +178,7 @@ class TestSendMessageTool:
         assert received["channel"] == "telegram"
 
     async def test_send_message_prefers_convex_interaction_service(self):
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         service = MagicMock()
         service.post_message = MagicMock(return_value=None)
@@ -191,7 +194,7 @@ class TestSendMessageTool:
 
     async def test_send_message_passes_media(self):
         """send_message includes media paths in IPC params when given."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         received: dict = {}
 
@@ -222,7 +225,7 @@ class TestSendMessageTool:
 class TestDelegateTaskTool:
     async def test_delegate_task_success(self):
         """delegate_task returns task_id and status on success."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"delegate_task": {"task_id": "abc123", "status": "created"}})
 
@@ -234,7 +237,7 @@ class TestDelegateTaskTool:
 
     async def test_delegate_task_error_propagated(self):
         """delegate_task surfaces IPC errors."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"delegate_task": {"error": "Self-delegation prevented"}})
 
@@ -253,7 +256,7 @@ class TestDelegateTaskTool:
         The bridge itself does not enforce this; the server-side handler does.
         We test that the server returns the correct error which the bridge surfaces.
         """
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         received: dict = {}
 
@@ -286,7 +289,7 @@ class TestDelegateTaskTool:
 class TestAskAgentTool:
     async def test_ask_agent_returns_response(self):
         """ask_agent returns the IPC response string."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"ask_agent": {"response": "The answer is 42."}})
 
@@ -299,7 +302,7 @@ class TestAskAgentTool:
 
     async def test_ask_agent_error_response(self):
         """ask_agent surfaces IPC errors in the result text."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"ask_agent": {"error": "Agent 'ghost' not found."}})
 
@@ -313,7 +316,7 @@ class TestAskAgentTool:
 
     async def test_ask_agent_passes_caller_and_task(self):
         """ask_agent passes AGENT_NAME and TASK_ID to IPC."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         received: dict = {}
 
@@ -344,7 +347,7 @@ class TestAskAgentTool:
 class TestListTools:
     async def test_list_tools_returns_all_expected(self):
         """list_tools returns all expected tools."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
         names = {t.name for t in tools}
@@ -356,11 +359,13 @@ class TestListTools:
             "ask_agent",
             "cron",
             "search_memory",
+            "create_agent_spec",
+            "publish_squad_graph",
         }
 
     async def test_tools_have_required_fields(self):
         """Each tool has name, description, and inputSchema."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
         for tool in tools:
@@ -370,7 +375,7 @@ class TestListTools:
 
     async def test_ask_user_schema_supports_structured_questions(self):
         """ask_user tool supports questionnaire-style structured prompts."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
         ask_user = next(tool for tool in tools if tool.name == "ask_user")
@@ -382,7 +387,7 @@ class TestListTools:
 
     async def test_ask_user_schema_has_no_top_level_one_of(self):
         """ask_user must not expose top-level oneOf because Claude rejects it."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
         ask_user = next(tool for tool in tools if tool.name == "ask_user")
@@ -391,7 +396,7 @@ class TestListTools:
 
     async def test_unknown_tool_returns_error_text(self):
         """Calling an unregistered tool name returns an error text content."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({})
 
@@ -409,7 +414,7 @@ class TestListTools:
 class TestCronTool:
     async def test_cron_list_returns_jobs(self):
         """cron list action returns the job listing from IPC."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"cron": {"result": "No scheduled jobs."}})
 
@@ -421,7 +426,7 @@ class TestCronTool:
 
     async def test_cron_add_returns_confirmation(self):
         """cron add action returns creation confirmation."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"cron": {"result": "Created job 'daily report' (id: abc123)"}})
 
@@ -441,7 +446,7 @@ class TestCronTool:
 
     async def test_cron_remove_returns_confirmation(self):
         """cron remove action returns removal confirmation."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         mock_ipc = _make_mock_ipc({"cron": {"result": "Removed job abc123"}})
 
@@ -453,7 +458,7 @@ class TestCronTool:
 
     async def test_cron_ipc_failure(self):
         """cron handles IPC ConnectionError gracefully."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         async def failing_request(method, params):
             raise ConnectionError("socket not found")
@@ -469,7 +474,7 @@ class TestCronTool:
 
     async def test_cron_in_tool_list(self):
         """list_tools includes the cron tool."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
         names = {t.name for t in tools}
@@ -485,7 +490,7 @@ class TestCronTool:
 class TestSearchMemoryBoardScope:
     async def test_search_memory_uses_board_workspace_when_set(self, tmp_path):
         """search_memory resolves board-scoped workspace when BOARD_NAME is set."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         from mc.memory.store import HybridMemoryStore
 
@@ -501,7 +506,7 @@ class TestSearchMemoryBoardScope:
 
     async def test_search_memory_uses_global_workspace_without_board(self, tmp_path):
         """search_memory falls back to global agent workspace when no BOARD_NAME."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         from mc.memory.store import HybridMemoryStore
 
@@ -519,7 +524,7 @@ class TestSearchMemoryBoardScope:
         """_resolve_memory_workspace constructs board-scoped path when BOARD_NAME set."""
         from pathlib import Path
 
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         with (
             patch.object(bridge_mod, "_get_agent_name", return_value="owl"),
@@ -534,7 +539,7 @@ class TestSearchMemoryBoardScope:
         """_resolve_memory_workspace constructs global path when no BOARD_NAME."""
         from pathlib import Path
 
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         with (
             patch.object(bridge_mod, "_get_agent_name", return_value="owl"),
@@ -549,7 +554,7 @@ class TestSearchMemoryBoardScope:
         """_resolve_memory_workspace uses the exact execution workspace when provided."""
         from pathlib import Path
 
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
 
         explicit_ws = Path("/tmp/custom-memory-workspace")
         with (
@@ -563,7 +568,7 @@ class TestSearchMemoryBoardScope:
 
     async def test_search_memory_finds_cc_consolidated_content(self, tmp_path):
         """search_memory must retrieve facts written by the CC consolidator."""
-        import claude_code.mcp_bridge as bridge_mod
+        import mc.runtime.mcp.bridge as bridge_mod
         from claude_code.memory_consolidator import CCMemoryConsolidator
 
         response = MagicMock()

@@ -732,7 +732,7 @@ async def test_strategy_uses_session_specific_mcp_config_copy(tmp_path: Path) ->
                 "mcpServers": {
                     "nanobot": {
                         "command": "uv",
-                        "args": ["run", "python", "-m", "claude_code.mcp_bridge"],
+                        "args": ["run", "python", "-m", "mc.runtime.mcp.bridge"],
                         "env": {
                             "TASK_ID": "shared-task",
                             "MC_SOCKET_PATH": "/tmp/shared.sock",

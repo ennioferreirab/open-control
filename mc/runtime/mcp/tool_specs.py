@@ -1,12 +1,8 @@
-"""Canonical Phase 1 MC tool surface definitions.
+"""Canonical MC MCP tool surface definitions.
 
-This module is the single source of truth for the Phase 1 MCP tool schemas
+This module is the single source of truth for the MCP tool schemas
 used by MC nanobot execution.  Names are semantic and transport-agnostic;
 namespace identity is carried by the MCP server identity, not by suffixes.
-
-Phase 1 tools:
-  ask_user, ask_agent, delegate_task, send_message, cron,
-  create_agent_spec, publish_squad_graph
 """
 
 from __future__ import annotations
@@ -14,10 +10,10 @@ from __future__ import annotations
 from mcp.types import Tool
 
 # ---------------------------------------------------------------------------
-# Phase 1 canonical tool specifications
+# Canonical tool specifications
 # ---------------------------------------------------------------------------
 
-PHASE1_TOOLS: list[Tool] = [
+MC_TOOLS: list[Tool] = [
     Tool(
         name="ask_user",
         description=(
@@ -399,4 +395,30 @@ PHASE1_TOOLS: list[Tool] = [
             "additionalProperties": False,
         },
     ),
+    Tool(
+        name="search_memory",
+        description=(
+            "Search agent memory and history for relevant past events, decisions, "
+            "and facts. Uses hybrid BM25 keyword + optional vector search."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query — keywords or natural language question.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of results to return (default: 5).",
+                    "minimum": 1,
+                    "maximum": 50,
+                },
+            },
+            "required": ["query"],
+        },
+    ),
 ]
+
+# Backward-compatibility alias — existing code may import PHASE1_TOOLS.
+PHASE1_TOOLS = MC_TOOLS

@@ -1,7 +1,7 @@
 """End-to-end integration tests: Codex provider + ask_user tool pipeline.
 
 Traces the full call chain that a nanobot MC task follows:
-  tool_specs (PHASE1_TOOLS) → MCPToolWrapper.to_schema() →
+  tool_specs (MC_TOOLS) → MCPToolWrapper.to_schema() →
   AdaptedProvider.adapt_tools() → OpenAICodexProvider.chat() →
   _convert_tools() → _request_codex(body)
 
@@ -22,7 +22,7 @@ from mc.infrastructure.providers.tool_adapters import (
     AdaptedProvider,
     CodexToolAdapter,
 )
-from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+from mc.runtime.mcp.tool_specs import MC_TOOLS
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,10 +31,10 @@ from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
 
 def _ask_user_input_schema() -> dict[str, Any]:
     """Return the canonical ask_user inputSchema from tool_specs."""
-    for tool in PHASE1_TOOLS:
+    for tool in MC_TOOLS:
         if tool.name == "ask_user":
             return dict(tool.inputSchema)
-    raise AssertionError("ask_user not found in PHASE1_TOOLS")
+    raise AssertionError("ask_user not found in MC_TOOLS")
 
 
 def _as_openai_tool(name: str, parameters: dict[str, Any]) -> dict[str, Any]:
@@ -259,7 +259,7 @@ class TestEndToEndCodexAskUser:
 
         # Build all Phase 1 tools as nanobot MCPToolWrapper would
         tools = []
-        for spec in PHASE1_TOOLS:
+        for spec in MC_TOOLS:
             tools.append(
                 _as_openai_tool(
                     f"mcp_mc_{spec.name}",
@@ -283,8 +283,8 @@ class TestEndToEndCodexAskUser:
             )
 
         codex_tools = captured_body.get("tools", [])
-        assert len(codex_tools) == len(PHASE1_TOOLS), (
-            f"Expected {len(PHASE1_TOOLS)} tools, got {len(codex_tools)}"
+        assert len(codex_tools) == len(MC_TOOLS), (
+            f"Expected {len(MC_TOOLS)} tools, got {len(codex_tools)}"
         )
 
         # No tool should have top-level combinators

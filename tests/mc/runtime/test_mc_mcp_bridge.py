@@ -1,4 +1,4 @@
-"""Tests for the repo-owned MC MCP bridge and canonical Phase 1 tool surface."""
+"""Tests for the MC MCP bridge and canonical tool surface."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 # AC1 / AC3: Canonical tool names
 # ---------------------------------------------------------------------------
 
-EXPECTED_PHASE1_TOOLS = {
+EXPECTED_MC_TOOLS = {
     "ask_user",
     "ask_agent",
     "delegate_task",
@@ -18,6 +18,7 @@ EXPECTED_PHASE1_TOOLS = {
     "cron",
     "create_agent_spec",
     "publish_squad_graph",
+    "search_memory",
 }
 
 # AC3: Transport-coupled names must never appear on the public surface.
@@ -40,54 +41,54 @@ def _make_mock_ipc(responses: dict) -> MagicMock:
 
 
 class TestToolSpecs:
-    """AC1 / AC3: tool_specs.py exposes exactly the Phase 1 canonical surface."""
+    """AC1 / AC3: tool_specs.py exposes exactly the MC canonical surface."""
 
     def test_phase1_tool_names_present(self):
-        """All 7 Phase 1 tools are defined in PHASE1_TOOLS."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        """All 7 MC tools are defined in MC_TOOLS."""
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        names = {t.name for t in PHASE1_TOOLS}
-        assert names == EXPECTED_PHASE1_TOOLS
+        names = {t.name for t in MC_TOOLS}
+        assert names == EXPECTED_MC_TOOLS
 
     def test_send_message_is_present_not_message(self):
         """send_message is present; 'message' is not."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        names = {t.name for t in PHASE1_TOOLS}
+        names = {t.name for t in MC_TOOLS}
         assert "send_message" in names
         assert "message" not in names
 
     def test_no_transport_coupled_names(self):
         """No forbidden transport-coupled names appear in the surface."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        names = {t.name for t in PHASE1_TOOLS}
+        names = {t.name for t in MC_TOOLS}
         assert names.isdisjoint(FORBIDDEN_TOOL_NAMES)
 
     def test_each_tool_has_description(self):
         """Every tool spec has a non-empty description."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        for tool in PHASE1_TOOLS:
+        for tool in MC_TOOLS:
             assert tool.description, f"Tool '{tool.name}' has no description"
 
     def test_each_tool_has_input_schema(self):
         """Every tool spec has an inputSchema dict."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        for tool in PHASE1_TOOLS:
+        for tool in MC_TOOLS:
             assert isinstance(tool.inputSchema, dict), (
                 f"Tool '{tool.name}' inputSchema must be a dict"
             )
 
     def test_phase1_tools_is_list(self):
-        """PHASE1_TOOLS is a list of Tool objects."""
+        """MC_TOOLS is a list of Tool objects."""
         from mcp.types import Tool
 
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        assert isinstance(PHASE1_TOOLS, list)
-        for item in PHASE1_TOOLS:
+        assert isinstance(MC_TOOLS, list)
+        for item in MC_TOOLS:
             assert isinstance(item, Tool)
 
 
@@ -97,17 +98,17 @@ class TestToolSpecs:
 
 
 class TestMCMcpBridgeListTools:
-    """AC2: The repo-owned MC MCP bridge lists exactly the Phase 1 tools."""
+    """AC2: The repo-owned MC MCP bridge lists exactly the MC tools."""
 
     pytestmark = pytest.mark.asyncio
 
     async def test_list_tools_returns_phase1_set(self):
-        """list_tools() returns all 7 Phase 1 tools."""
+        """list_tools() returns all 7 MC tools."""
         import mc.runtime.mcp.bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()
         names = {t.name for t in tools}
-        assert names == EXPECTED_PHASE1_TOOLS
+        assert names == EXPECTED_MC_TOOLS
 
     async def test_list_tools_excludes_forbidden_names(self):
         """list_tools() does not return any transport-coupled names."""
@@ -118,13 +119,13 @@ class TestMCMcpBridgeListTools:
         assert names.isdisjoint(FORBIDDEN_TOOL_NAMES)
 
     async def test_list_tools_uses_canonical_specs(self):
-        """Tools returned by list_tools() match the canonical PHASE1_TOOLS specs."""
+        """Tools returned by list_tools() match the canonical MC_TOOLS specs."""
         import mc.runtime.mcp.bridge as bridge_mod
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
         tools = await bridge_mod.list_tools()
         bridge_names = {t.name for t in tools}
-        canonical_names = {t.name for t in PHASE1_TOOLS}
+        canonical_names = {t.name for t in MC_TOOLS}
         assert bridge_names == canonical_names
 
     async def test_ask_user_schema_has_no_top_level_one_of(self):
@@ -261,7 +262,7 @@ class TestAC4LowVendorImpact:
         """mc.runtime.mcp.tool_specs is importable."""
         from mc.runtime.mcp import tool_specs
 
-        assert hasattr(tool_specs, "PHASE1_TOOLS")
+        assert hasattr(tool_specs, "MC_TOOLS")
 
     def test_bridge_importable_from_mc(self):
         """mc.runtime.mcp.bridge is importable."""
@@ -272,27 +273,27 @@ class TestAC4LowVendorImpact:
 
 
 class TestSpecToolsRegistration:
-    """Verify create_agent_spec and publish_squad_graph are in PHASE1_TOOLS."""
+    """Verify create_agent_spec and publish_squad_graph are in MC_TOOLS."""
 
     def test_create_agent_spec_tool_present(self):
-        """create_agent_spec tool is registered in PHASE1_TOOLS."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        """create_agent_spec tool is registered in MC_TOOLS."""
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        names = {t.name for t in PHASE1_TOOLS}
+        names = {t.name for t in MC_TOOLS}
         assert "create_agent_spec" in names
 
     def test_publish_squad_graph_tool_present(self):
-        """publish_squad_graph tool is registered in PHASE1_TOOLS."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        """publish_squad_graph tool is registered in MC_TOOLS."""
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        names = {t.name for t in PHASE1_TOOLS}
+        names = {t.name for t in MC_TOOLS}
         assert "publish_squad_graph" in names
 
     def test_create_agent_spec_has_required_fields_in_schema(self):
         """create_agent_spec schema requires name, displayName, role."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        tool = next(t for t in PHASE1_TOOLS if t.name == "create_agent_spec")
+        tool = next(t for t in MC_TOOLS if t.name == "create_agent_spec")
         required = tool.inputSchema.get("required", [])
         assert "name" in required
         assert "displayName" in required
@@ -300,9 +301,9 @@ class TestSpecToolsRegistration:
 
     def test_publish_squad_graph_has_required_fields_in_schema(self):
         """publish_squad_graph schema requires squad, agents, workflows."""
-        from mc.runtime.mcp.tool_specs import PHASE1_TOOLS
+        from mc.runtime.mcp.tool_specs import MC_TOOLS
 
-        tool = next(t for t in PHASE1_TOOLS if t.name == "publish_squad_graph")
+        tool = next(t for t in MC_TOOLS if t.name == "publish_squad_graph")
         required = tool.inputSchema.get("required", [])
         assert "squad" in required
         assert "agents" in required

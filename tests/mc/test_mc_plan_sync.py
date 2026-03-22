@@ -126,7 +126,7 @@ class TestMCContextDiscovery:
             "mcpServers": {
                 "nanobot": {
                     "command": "uv",
-                    "args": ["run", "python", "-m", "claude_code.mcp_bridge"],
+                    "args": ["run", "python", "-m", "mc.runtime.mcp.bridge"],
                     "env": {
                         "MC_SOCKET_PATH": sock_path,
                         "AGENT_NAME": "test-agent",

@@ -4,7 +4,7 @@ Prepares per-agent workspaces for Claude Code execution:
   - Creates directory structure (memory/, sessions/)
   - Generates CLAUDE.md with agent identity and MCP tools guide
   - Maps skill symlinks into .claude/skills/
-  - Generates .mcp.json pointing at the claude_code.mcp_bridge subprocess
+  - Generates .mcp.json pointing at the mc.runtime.mcp.bridge subprocess
 """
 
 from __future__ import annotations
@@ -46,6 +46,8 @@ Use these tools via the `mcp__mc__` prefix:
 - **mcp__mc__ask_agent** — Ask a specific agent a question and get a reply.
 - **mcp__mc__cron** — Schedule reminders and recurring tasks (add/list/remove).
 - **mcp__mc__search_memory** — Search agent memory and history for relevant past events and decisions.
+- **mcp__mc__create_agent_spec** — Create a V2 agent specification in Mission Control.
+- **mcp__mc__publish_squad_graph** — Publish a complete squad blueprint (agents + workflows) to Mission Control.
 
 ### CRITICAL: User Interaction Rules
 
@@ -712,7 +714,7 @@ class CCWorkspaceManager:
             "mcpServers": {
                 "openmc": {
                     "command": "uv",
-                    "args": ["run", "python", "-m", "claude_code.mcp_bridge"],
+                    "args": ["run", "python", "-m", "mc.runtime.mcp.bridge"],
                     "env": env,
                 }
             }
