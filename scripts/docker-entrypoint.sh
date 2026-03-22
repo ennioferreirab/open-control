@@ -27,8 +27,11 @@ EOF
 if [ ! -f /app/dashboard/.convex/local/default/convex_local_backend.sqlite3 ]; then
     echo "[entrypoint] Initializing fresh Convex from template..."
     mkdir -p /app/dashboard/.convex/local
-    cp -r /app/dashboard/.convex-template/local/default /app/dashboard/.convex/local/default
+    cp -r /app/.convex-template/local/default /app/dashboard/.convex/local/default
 fi
+
+# Remove stale PID file from previous container run
+rm -f /root/.nanobot/mc.pid
 
 # Start the full stack — use venv binary directly (no uv run overhead)
 exec /app/.venv/bin/nanobot mc start "$@"

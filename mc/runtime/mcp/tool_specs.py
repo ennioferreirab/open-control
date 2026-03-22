@@ -320,7 +320,28 @@ MC_TOOLS: list[Tool] = [
                             "role": {"type": "string", "description": "Agent role."},
                             "displayName": {
                                 "type": "string",
-                                "description": "Optional human-readable name.",
+                                "description": "Human-readable name (required for new agents).",
+                            },
+                            "prompt": {
+                                "type": "string",
+                                "description": "System prompt for the agent (required for new agents).",
+                            },
+                            "model": {
+                                "type": "string",
+                                "description": "Model identifier (required for new agents, e.g. 'tier:standard-low').",
+                            },
+                            "skills": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of skill names (required for new agents).",
+                            },
+                            "soul": {
+                                "type": "string",
+                                "description": "Soul/personality description (required for new agents).",
+                            },
+                            "reuseName": {
+                                "type": "string",
+                                "description": "Name of existing agent to reuse (skips displayName/prompt/model/skills/soul).",
                             },
                         },
                         "required": ["key", "name", "role"],

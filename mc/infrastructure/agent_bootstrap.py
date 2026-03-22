@@ -185,6 +185,10 @@ def ensure_nanobot_agent(agents_dir: Path) -> None:
         if agent_path.is_dir() and not agent_path.is_symlink() and not any(agent_path.iterdir()):
             shutil.rmtree(agent_path)
 
+        # Remove broken symlinks before recreating
+        if agent_path.is_symlink() and not agent_path.exists():
+            agent_path.unlink()
+
         # Create symlink if missing
         if not agent_path.exists():
             try:
@@ -304,6 +308,9 @@ def _restore_memory_from_backup(bridge: ConvexBridge, agent_name: str, agent_dir
     global_hist = backup.get("global_history_content")
     if global_mem or global_hist:
         global_memory_dir = agent_dir / "memory"
+        # Remove broken symlinks left over from previous runs
+        if global_memory_dir.is_symlink() and not global_memory_dir.exists():
+            global_memory_dir.unlink()
         global_memory_dir.mkdir(parents=True, exist_ok=True)
         if global_mem and not (global_memory_dir / "MEMORY.md").exists():
             (global_memory_dir / "MEMORY.md").write_text(global_mem, encoding="utf-8")

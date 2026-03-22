@@ -1,32 +1,25 @@
 # ─── Open Control ────────────────────────────────────────────────
 #
 # make start       Start attached — logs stream to terminal (Ctrl+C to stop)
-# make up          Start detached — runs in background, logs → /tmp/mc.log
+# make up          Start detached — runs in background
 # make down        Stop everything
-# make status      Show system health
 #
 # make test        Unit tests only (no Convex needed, worktree-safe)
 # make check       Lint + typecheck + unit tests (worktree-safe)
-# make takeover    Stop any running stack, start from current tree
 #
-# make docker-build      Build the Docker image
-# make docker-up         Start the containerized stack
-# make docker-down       Stop the containerized stack
 # make docker-test       Spin up isolated test instance (auto-detects ports)
 # make docker-test-down  Stop the test instance
 #
-# make install      Install all dependencies (Python + Node)
+# make install      Install local dependencies (for make check)
 # make lint         Ruff + ESLint
 # make typecheck    Pyright + tsc
 # make format       Format all code
 # ──────────────────────────────────────────────────────────────────
 
-.PHONY: install start up down status test check takeover lint typecheck format \
-        test-py test-ts lint-py lint-ts typecheck-py typecheck-ts format-py format-ts \
-        docker-build docker-up docker-down docker-test docker-test-down
-
-MC_CMD := uv run nanobot mc start
-PUBLIC_MC_CMD := uv run open-control mc start
+.PHONY: install start up down test check \
+        test-py test-ts lint lint-py lint-ts typecheck typecheck-py typecheck-ts \
+        format format-py format-ts \
+        docker-test docker-test-down
 
 # ─── Setup ───────────────────────────────────────────────────────
 
@@ -34,35 +27,20 @@ install:
 	uv sync --group dev
 	cd dashboard && npm ci
 
-# ─── Stack lifecycle ──────────────────────────────────────────────
+# ─── Stack lifecycle (Docker Compose) ────────────────────────────
 
 start:
-	@$(MC_CMD)
+	@docker compose up --build
 
 up:
-	@nohup $(MC_CMD) > /tmp/mc.log 2>&1 & echo "Open Control started in background. Logs: /tmp/mc.log"
+	@docker compose up --build -d
 
 down:
-	@uv run nanobot mc down
-
-status:
-	@uv run nanobot mc status
-
-# Stop any running MC instance, then start from current directory.
-# Use this from a worktree to take over the Convex local backend.
-# Purges __pycache__ so stale .pyc from deleted modules are not loaded.
-takeover: down
-	@sleep 2
-	@find mc/ -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	@$(MC_CMD)
-
-# Public CLI note:
-# The preferred branded command is `$(PUBLIC_MC_CMD)`.
-# The current Make targets still execute `$(MC_CMD)` for runtime compatibility.
+	@docker compose down
 
 # ─── Testing ──────────────────────────────────────────────────────
 # Unit tests are fully mocked — no Convex needed.
-# Safe to run from worktrees without touching the running stack.
+# Safe to run locally without Docker.
 
 test: test-py test-ts
 
@@ -109,19 +87,8 @@ format-py:
 format-ts:
 	cd dashboard && npm run format
 
-# ─── Docker ──────────────────────────────────────────────────────
+# ─── Docker (isolated test instances) ────────────────────────────
 
-docker-build:
-	docker build -t mc-test:latest .
-
-docker-up:
-	docker compose up -d
-
-docker-down:
-	docker compose down
-
-# Spin up an isolated test instance with auto-detected ports.
-# Safe to run from any worktree — each gets its own container + Convex.
 docker-test:
 	@bash scripts/docker-test.sh
 

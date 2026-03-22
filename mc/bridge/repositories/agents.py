@@ -181,8 +181,12 @@ class AgentRepository:
         name = agent_data["name"]
         agent_dir = agents_dir / name
         agent_dir.mkdir(parents=True, exist_ok=True)
-        (agent_dir / "memory").mkdir(exist_ok=True)
-        (agent_dir / "skills").mkdir(exist_ok=True)
+        for subdir in ("memory", "skills"):
+            p = agent_dir / subdir
+            # Remove broken symlinks left over from previous runs
+            if p.is_symlink() and not p.exists():
+                p.unlink()
+            p.mkdir(exist_ok=True)
         config_path = agent_dir / "config.yaml"
 
         config: dict[str, Any] = {

@@ -73,6 +73,11 @@ server.tool(
           name: z.string(),
           role: z.string(),
           displayName: z.string().optional(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          skills: z.array(z.string()).optional(),
+          soul: z.string().optional(),
+          reuseName: z.string().optional(),
         }),
       )
       .describe("Agents in the squad"),

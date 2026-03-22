@@ -1,0 +1,30 @@
+# Dev overrides — auto-merged with docker-compose.yml by Docker Compose.
+# Adds source bind mounts for hot reload and dev-specific environment.
+services:
+  mc:
+    entrypoint: ["/app/scripts/docker-entrypoint-dev.sh"]
+    volumes:
+      # Source code (hot reload)
+      - ./mc:/app/mc
+      - ./dashboard:/app/dashboard
+      - ./vendor:/app/vendor
+      - ./shared:/app/shared
+      - ./agent_docs:/app/agent_docs
+      - ./boot.py:/app/boot.py
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - ./scripts:/app/scripts
+      # Mask host node_modules with container's named volume
+      - node_modules:/app/dashboard/node_modules
+      # Persist Convex data
+      - convex-data:/app/dashboard/.convex/local
+      # Runtime data
+      - ~/.nanobot:/root/.nanobot
+      - ~/.claude:/root/.claude
+    environment:
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+
+volumes:
+  node_modules:
+  convex-data:

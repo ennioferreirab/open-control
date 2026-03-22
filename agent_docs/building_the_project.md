@@ -2,135 +2,137 @@
 
 ## Prerequisites
 
-| Tool | Version | Install |
-|------|---------|---------|
-| Python | 3.11+ | — |
-| Node.js | 18+ | — |
-| `uv` | latest | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Git | — | — |
+| Tool | Required for | Install |
+|------|-------------|---------|
+| Docker Desktop | Running the stack | docker.com |
+| Python 3.11+ + `uv` | `make check` (local lint/tests) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| Node.js 18+ | `make check` (local lint/tests) | nodejs.org |
+
+Docker is the only requirement for running the full stack. Python and Node are only needed for local lint/typecheck/test (`make check`).
 
 ## Initial Setup
 
 ```bash
-uv sync                          # Python deps (includes vendor/ editable installs)
-cd dashboard && npm install      # Node deps
+make install    # Local Python + Node deps (for make check)
+make start      # Build image + start stack (first run ~2min, then ~5s)
 ```
 
 ## Makefile Targets
 
-The `Makefile` at the project root is the primary interface for all operations.
-
-| Target | What it does | Needs Convex? |
+| Target | What it does | Needs Docker? |
 |--------|-------------|---------------|
-| `make start` | Start attached — logs stream to terminal, Ctrl+C to stop | Starts it |
-| `make up` | Start detached — runs in background, logs → `/tmp/mc.log` | Starts it |
-| `make down` | Stop everything | — |
-| `make status` | Show system health (agents, tasks) | Yes |
+| `make start` | Start attached — logs stream to terminal, Ctrl+C to stop | Yes |
+| `make up` | Start detached — runs in background | Yes |
+| `make down` | Stop everything | Yes |
 | `make test` | Run all unit tests (Python + TypeScript) | No |
 | `make check` | Lint + typecheck + unit tests | No |
-| `make takeover` | Stop any running stack, start from current tree (attached) | Restarts it |
-| `make docker-build` | Build Docker image | No |
-| `make docker-test` | Spin up isolated Docker test instance (auto-detects ports) | Own Convex |
-| `make docker-test-down` | Stop Docker test instance | — |
+| `make docker-test` | Spin up isolated Docker test instance (auto-detects ports) | Yes |
+| `make docker-test-down` | Stop Docker test instance | Yes |
 | `make lint` | Ruff + ESLint | No |
 | `make typecheck` | Pyright + tsc | No |
 | `make format` | Format all code (Ruff + Prettier) | No |
 
 Sub-targets: `test-py`, `test-ts`, `lint-py`, `lint-ts`, `typecheck-py`, `typecheck-ts`, `format-py`, `format-ts`.
 
+Other useful commands (run directly):
+
+```bash
+docker compose logs -f          # Tail logs (if detached)
+docker compose restart mc       # Restart after Python changes (~3s)
+docker compose ps               # Check stack status
+docker compose exec mc bash     # Shell into container
+docker compose down -v          # Stop + wipe Convex data (fresh start)
+```
+
 ## Stack Architecture
 
-The system is **four cooperating processes** managed by `ProcessManager` (`mc/cli/process_manager.py`). See [`service_architecture.md`](service_architecture.md) for full details.
+The system runs **four cooperating processes** inside a Docker container, managed by `ProcessManager` (`mc/cli/process_manager.py`). See [`service_architecture.md`](service_architecture.md) for full details.
 
 ```bash
 make start
-# Starts in order:
-#   1. Convex local backend  (:3210, kills existing if port occupied)
+# Docker Compose builds image (if needed) and starts container.
+# Inside container, processes start in order:
+#   1. Convex local backend  (:3210)
 #   2. Next.js frontend      (:3000)
 #   3. MC Gateway             (event loop, IPC socket, all workers)
 #   4. Nanobot Gateway        (channels: Telegram, Slack, etc.)
 ```
 
-### Ports & Sockets
+### Ports
 
-| Process | Address | Protocol |
-|---------|---------|----------|
-| Convex local backend | `localhost:3210` | WebSocket |
+| Process | Host Port | Protocol |
+|---------|-----------|----------|
 | Next.js frontend | `localhost:3000` | HTTP |
+| Convex local backend | `localhost:3210` | WebSocket |
+| Convex site | `localhost:3211` | HTTP |
 | Interactive runtime | `localhost:8765` | WebSocket |
-| Agent IPC | `/tmp/mc-agent.sock` | Unix socket |
+| Nanobot gateway | `localhost:18790` | HTTP |
 
-## Convex Local Backend — Singleton Constraint
+### Hot Reload
 
-Only **one** Convex local backend can run at a time (port 3210 is exclusive). The `ProcessManager` handles this automatically — it kills any process on `:3210` before starting Convex. But you must understand the implications for worktrees.
+| Layer | Auto-reload? | Mechanism |
+|-------|-------------|-----------|
+| Next.js (dashboard/) | Yes | Webpack HMR via polling |
+| Convex functions (dashboard/convex/) | Yes | `convex dev --local` file watcher |
+| Python (mc/) | No | `docker compose restart mc` (~3s) |
 
-### Why This Matters
+Source code is bind-mounted from the host. Edit files normally — changes are reflected in the container.
 
-The Convex local backend holds the **schema and functions** deployed to it. When you switch between main tree and a worktree, the deployed schema may differ. Running `make start` deploys the current tree's schema. Running it from a different tree overwrites the previous deployment.
+## Docker Development Details
 
-### Worktree Workflow — Docker (preferred)
+### First Run
 
-Docker test instances are fully isolated — each worktree gets its own Convex, its own ports, no conflicts with the main stack or other worktrees.
+First `make start` builds the Docker image (~2min) and installs Node dependencies into a named volume (~30s). Subsequent starts take ~5s.
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ Docker worktree flow (no conflicts)                          │
-│                                                              │
-│  1. make check          ← lint, types, unit tests         │
-│     (no Convex needed)                                       │
-│                                                              │
-│  2. make docker-test       ← auto-detects ports, starts      │
-│     (prints dashboard URL for human testing)                 │
-│                                                              │
-│  3. make docker-test-down  ← stops this worktree's instance  │
-│     (main stack is untouched)                                │
-└─────────────────────────────────────────────────────────────┘
+### Dependency Changes
+
+When `pyproject.toml` or `dashboard/package.json` changes:
+
+```bash
+# Python deps changed
+docker compose exec mc uv sync --frozen
+
+# Node deps changed
+docker compose exec mc bash -c "cd /app/dashboard && npm ci"
+
+# Or just restart — the dev entrypoint re-syncs Python deps automatically
+docker compose restart mc
 ```
 
-**Requires:** Docker image built at least once (`make docker-build`). The image is shared across worktrees — only needs rebuilding when deps or Convex schema change.
+### Convex Schema Reset
 
-### Worktree Workflow — Native (legacy, conflicts)
+If a breaking schema change causes errors, wipe the Convex volume and restart:
 
-Without Docker, Convex local is a singleton. Only one stack can run at a time.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ Native worktree flow (kills other stacks)                    │
-│                                                              │
-│  1. make check          ← lint, types, unit tests         │
-│     (worktree-safe, no Convex needed)                        │
-│                                                              │
-│  2. If you need the dashboard to validate visually:          │
-│     make takeover           ← stops main, starts worktree    │
-│     (validates in browser at localhost:3000)                  │
-│                                                              │
-│  3. When done:                                               │
-│     make down               ← stop worktree stack            │
-│     (go to main tree, make start to restore)                 │
-└─────────────────────────────────────────────────────────────┘
+```bash
+docker compose down -v    # -v removes named volumes (Convex data + node_modules)
+make start                # Fresh start with template database
 ```
 
-**Key rules:**
-- `make check` is always safe — runs without Convex
-- `make takeover` from a worktree will kill the main tree's stack
-- After merging a worktree branch, always `make start` from main to redeploy the schema
-- Never run `npx convex dev --local` directly — use `make start` or `make takeover`
-- **Prefer `make docker-test`** when Docker is available — avoids all conflicts
+### Worktree Workflow
+
+Each worktree can use `make docker-test` for isolated instances (own Convex, own ports):
+
+```bash
+make check              # lint, types, unit tests (no Docker needed)
+make docker-test        # auto-detects ports, starts isolated stack
+make docker-test-down   # stops this worktree's instance
+```
 
 ## Environment Variables
 
-Primary config lives in `dashboard/.env.local` (auto-created by `convex dev`):
+The dev entrypoint generates `.env.local` files automatically. No manual env setup needed.
+
+For custom overrides, set env vars in `docker-compose.override.yml` or pass them via shell:
 
 ```bash
-CONVEX_DEPLOYMENT=anonymous:anonymous-dashboard
-NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
+MC_LOG_LEVEL=DEBUG make start
 ```
 
-The gateway reads `NEXT_PUBLIC_CONVEX_URL` (or falls back to parsing `dashboard/.env.local`). See [`service_communication_patterns.md`](service_communication_patterns.md) for all env vars and IPC details.
+See [`service_communication_patterns.md`](service_communication_patterns.md) for all env vars and IPC details.
 
 ## Baseline Checks
 
-Run `make check` before committing. This runs lint + typecheck + unit tests without needing Convex.
+Run `make check` before committing. This runs lint + typecheck + unit tests locally without Docker.
 
 For test strategy and when to write tests, see [`running_tests.md`](running_tests.md).
 
