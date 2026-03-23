@@ -144,8 +144,8 @@ vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
     readOnly?: boolean;
     taskId?: string;
     onLocalPlanChange?: (plan: unknown) => void;
-    viewMode?: "both" | "canvas" | "conversation";
-    onViewModeChange?: (mode: "both" | "canvas" | "conversation") => void;
+    viewMode?: "canvas" | "steps";
+    onViewModeChange?: (mode: "canvas" | "steps") => void;
     onClearPlan?: () => void;
     isClearingPlan?: boolean;
     onOpenLive?: (stepId: string) => void;
@@ -157,18 +157,15 @@ vi.mock("@/features/tasks/components/ExecutionPlanTab", () => ({
       data-is-paused={isPaused ? "true" : "false"}
       data-read-only={readOnly ? "true" : "false"}
       data-task-id={taskId}
-      data-view-mode={viewMode ?? "both"}
+      data-view-mode={viewMode ?? "canvas"}
     >
       {onViewModeChange && (
         <div data-testid="mock-plan-view-switcher">
-          <button type="button" onClick={() => onViewModeChange("both")}>
-            Both
-          </button>
           <button type="button" onClick={() => onViewModeChange("canvas")}>
             Canvas
           </button>
-          <button type="button" onClick={() => onViewModeChange("conversation")}>
-            Lead Agent Conversation
+          <button type="button" onClick={() => onViewModeChange("steps")}>
+            Steps
           </button>
         </div>
       )}

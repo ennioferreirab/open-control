@@ -246,13 +246,17 @@ describe("ExecutionPlanTab", () => {
     };
     const onViewModeChange = vi.fn();
     render(
-      <ExecutionPlanTab executionPlan={plan} viewMode="both" onViewModeChange={onViewModeChange} />,
+      <ExecutionPlanTab
+        executionPlan={plan}
+        viewMode="canvas"
+        onViewModeChange={onViewModeChange}
+      />,
     );
 
     expect(screen.getByTestId("execution-plan-view-switcher")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("execution-plan-view-conversation"));
-    expect(onViewModeChange).toHaveBeenCalledWith("conversation");
+    fireEvent.click(screen.getByTestId("execution-plan-view-steps"));
+    expect(onViewModeChange).toHaveBeenCalledWith("steps");
   });
 
   it("renders a clean button next to the view switcher when provided", () => {
@@ -265,7 +269,7 @@ describe("ExecutionPlanTab", () => {
     render(
       <ExecutionPlanTab
         executionPlan={plan}
-        viewMode="both"
+        viewMode="canvas"
         onViewModeChange={vi.fn()}
         onClearPlan={onClearPlan}
       />,
@@ -284,12 +288,12 @@ describe("ExecutionPlanTab", () => {
     expect(screen.getByTestId("react-flow-readonly")).toBeInTheDocument();
   });
 
-  it("hides the canvas body when view mode is conversation", () => {
+  it("hides the canvas body when view mode is steps", () => {
     const plan = {
       steps: [makeStep({ stepId: "s1", title: "First", description: "Step one" })],
       createdAt: "2026-01-01",
     };
-    render(<ExecutionPlanTab executionPlan={plan} viewMode="conversation" />);
+    render(<ExecutionPlanTab executionPlan={plan} viewMode="steps" />);
 
     expect(screen.queryByTestId("react-flow-readonly")).not.toBeInTheDocument();
     expect(screen.getByText("0/1 steps completed")).toBeInTheDocument();

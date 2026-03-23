@@ -155,7 +155,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     },
     [setActiveTab],
   );
-  const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("both");
+  const [planViewMode, setPlanViewMode] = useState<ExecutionPlanViewMode>("canvas");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [filterStepIds, setFilterStepIds] = useState<Set<string>>(new Set());
   const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
@@ -204,7 +204,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const canRemoveDirectSources = directSourceCount > 2;
 
   useEffect(() => {
-    setPlanViewMode("both");
+    setPlanViewMode("canvas");
     setFilterStepIds(new Set());
     setSelectedLiveStepId(null);
     setSelectedAgentName(null);

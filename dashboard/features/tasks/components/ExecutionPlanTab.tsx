@@ -62,7 +62,7 @@ interface MergeAliasDisplay {
   description: string;
 }
 
-export type ExecutionPlanViewMode = "both" | "canvas" | "conversation";
+export type ExecutionPlanViewMode = "canvas" | "steps";
 
 interface ExecutionPlanTabProps {
   executionPlan:
@@ -292,7 +292,7 @@ export function ExecutionPlanTab({
   onLocalPlanChange,
   readOnly = false,
   mergeAlias,
-  viewMode = "both",
+  viewMode = "canvas",
   onViewModeChange,
   onClearPlan,
   isClearingPlan = false,
@@ -401,15 +401,14 @@ export function ExecutionPlanTab({
   const isLiveMode = taskStatus === "in_progress" || taskStatus === "done";
   const canAddOrEdit = !readOnly && (isReviewMode || isLiveMode);
   const canEditCanvas = !readOnly && isReviewMode && !!onLocalPlanChange;
-  const showCanvasContent = viewMode !== "conversation";
+  const showCanvasContent = viewMode === "canvas";
 
   const renderViewControls = () => {
     if (!onViewModeChange && !onClearPlan) return null;
 
     const modes: Array<{ label: string; value: ExecutionPlanViewMode }> = [
-      { label: "Both", value: "both" },
       { label: "Canvas", value: "canvas" },
-      { label: "Lead Agent Conversation", value: "conversation" },
+      { label: "Steps", value: "steps" },
     ];
 
     return (
@@ -611,7 +610,7 @@ export function ExecutionPlanTab({
           onOpenLive: isVisualOnly ? undefined : onOpenLive,
           isLiveStep: Boolean(
             liveStepIdSet.has(n.id) ||
-            (matchedDisplayStep?.liveId != null && liveStepIdSet.has(matchedDisplayStep.liveId)),
+              (matchedDisplayStep?.liveId != null && liveStepIdSet.has(matchedDisplayStep.liveId)),
           ),
         },
       };
