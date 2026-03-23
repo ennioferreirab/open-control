@@ -402,7 +402,7 @@ export function ExecutionPlanTab({
   const isLiveMode = taskStatus === "in_progress" || taskStatus === "done";
   const canAddOrEdit = !readOnly && (isReviewMode || isLiveMode);
   const canEditCanvas = !readOnly && isReviewMode && !!onLocalPlanChange;
-  const showCanvasContent = viewMode === "canvas";
+  const showCanvas = viewMode === "canvas";
 
   const renderViewControls = () => {
     if (!onViewModeChange && !onClearPlan) return null;
@@ -864,11 +864,9 @@ export function ExecutionPlanTab({
             )}
           </div>
         )}
-        {showCanvasContent ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            No steps yet &mdash; use &ldquo;Add Step&rdquo; to build a plan
-          </p>
-        ) : null}
+        <p className="text-sm text-muted-foreground text-center py-8">
+          No steps yet &mdash; use &ldquo;Add Step&rdquo; to build a plan
+        </p>
       </div>
     );
   }
@@ -931,7 +929,7 @@ export function ExecutionPlanTab({
         </div>
       )}
 
-      {showCanvasContent ? (
+      {showCanvas ? (
         <div className="flex-1 min-h-[300px] rounded-md border border-border bg-muted/20">
           <ReactFlow
             nodes={flowNodes}
