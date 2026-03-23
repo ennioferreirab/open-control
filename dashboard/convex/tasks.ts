@@ -409,7 +409,7 @@ const executionPlanSchema = v.object({
     }),
   ),
   generatedAt: v.string(),
-  generatedBy: v.literal("lead-agent"),
+  generatedBy: v.union(v.literal("lead-agent"), v.literal("workflow")),
 });
 
 /**
