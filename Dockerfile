@@ -77,6 +77,9 @@ COPY scripts/init-convex.sh scripts/init-convex.sh
 # Re-sync so uv sees real source (editable installs point to actual code)
 RUN uv sync --frozen
 
+# Install Claude Code CLI — required by provider-cli strategy to spawn agent sessions
+RUN npm install -g @anthropic-ai/claude-code
+
 # Create config directory
 RUN mkdir -p /root/.nanobot
 
