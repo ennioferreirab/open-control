@@ -590,6 +590,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       onViewModeChange={setPlanViewMode}
                       onClearPlan={canClearPlan ? handleClearPlan : undefined}
                       isClearingPlan={isClearingPlan}
+                      onSavePlan={handleSavePlan}
+                      isSavingPlan={isSavingPlan}
+                      hasUnsavedChanges={!!localPlan}
                       onOpenLive={liveSession.liveStepIds.length > 0 ? handleOpenLive : undefined}
                       liveStepIds={liveSession.liveStepIds}
                     />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef } from "react";
-import { Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { ReactFlow, Background, Controls, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -83,6 +83,9 @@ interface ExecutionPlanTabProps {
   onViewModeChange?: (mode: ExecutionPlanViewMode) => void;
   onClearPlan?: () => void;
   isClearingPlan?: boolean;
+  onSavePlan?: () => void | Promise<void>;
+  isSavingPlan?: boolean;
+  hasUnsavedChanges?: boolean;
   onOpenLive?: (stepId: string) => void;
   liveStepIds?: string[];
 }
@@ -297,6 +300,9 @@ export function ExecutionPlanTab({
   onViewModeChange,
   onClearPlan,
   isClearingPlan = false,
+  onSavePlan,
+  isSavingPlan = false,
+  hasUnsavedChanges = false,
   onOpenLive,
   liveStepIds,
 }: ExecutionPlanTabProps) {
@@ -405,7 +411,7 @@ export function ExecutionPlanTab({
   const showCanvas = viewMode === "canvas";
 
   const renderViewControls = () => {
-    if (!onViewModeChange && !onClearPlan) return null;
+    if (!onViewModeChange && !onClearPlan && !onSavePlan) return null;
 
     const modes: Array<{ label: string; value: ExecutionPlanViewMode }> = [
       { label: "Canvas", value: "canvas" },
@@ -433,6 +439,26 @@ export function ExecutionPlanTab({
               </Button>
             ))}
           </div>
+        ) : null}
+        {hasUnsavedChanges && onSavePlan ? (
+          <Button
+            type="button"
+            variant="success"
+            size="sm"
+            className="h-7 rounded-full px-3 text-xs font-medium"
+            data-testid="execution-plan-save-button"
+            disabled={isSavingPlan}
+            onClick={() => void onSavePlan()}
+          >
+            {isSavingPlan ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Plan"
+            )}
+          </Button>
         ) : null}
         {onClearPlan ? (
           <Button
