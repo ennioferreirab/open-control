@@ -81,7 +81,7 @@ npx convex dev --local
 |----------|-------|
 | Entry point | `boot.py` → `mc.cli` → `mc.runtime.gateway` |
 | Start command | `mc start` or `nanobot mc start` |
-| Long-running | Yes — async event loop with polling |
+| Long-running | Yes — async event loop with subscriptions plus targeted polling |
 | HTTP server | **No** — communicates with Convex via SDK only |
 
 ### Role
@@ -122,29 +122,41 @@ Subscribes to `in_progress` tasks. Runs agents via `ExecutionEngine`, syncs outp
 
 #### Chat Handler (`mc/contexts/conversation/chat_handler.py`)
 
-Polls for pending direct-chat messages (not task-thread messages). Routes them to `ExecutionEngine` for agent response.
+Subscribes to pending direct-chat messages (not task-thread messages) via
+`chats:listPending`. Routes useful non-remote-terminal messages to
+`ExecutionEngine` for agent response and keeps the runtime state payload in
+Convex synchronized with active/sleep transitions.
 
 | State | Poll interval |
 |-------|---------------|
-| Active | 5s (configurable `chat_active_poll_seconds`) |
-| Sleep | 60s (configurable `chat_sleep_poll_seconds`) |
+| Active runtime payload | 5s (configurable `chat_active_poll_seconds`) |
+| Sleep runtime payload | 60s (configurable `chat_sleep_poll_seconds`) |
 
 #### Mention Watcher (`mc/contexts/conversation/mentions/watcher.py`)
 
-Polls all tasks for `@agent` mention patterns in user messages. Deduplicates via in-memory `_seen_message_ids` set (max 5000). Routes detected mentions through `ConversationService` for intent classification.
+Subscribes to a bounded Convex watcher feed of recent user messages and routes
+detected `@agent` mentions through `ConversationService` for intent
+classification. Deduplicates via in-memory `_seen_message_ids` set (max 5000)
+and performs a one-shot gap fill with `messages:listRecentUserMessages` only
+when a full bounded snapshot indicates a reconnect or burst may have skipped
+older unseen messages.
 
 | Setting | Value |
 |---------|-------|
-| Poll interval | 10s (configurable `mention_poll_seconds`) |
-| Overlap window | 30s (for clock drift) |
+| Feed limit | 50 recent user messages |
+| Gap fill | One-shot bounded `messages:listRecentUserMessages` query when bounded snapshot continuity is uncertain |
 
 #### Ask-User Reply Watcher (`mc/contexts/conversation/ask_user/watcher.py`)
 
-Watches task threads for user replies to pending `ask_user()` calls. Only polls threads of tasks with active asks (tracked by `AskUserRegistry`).
+Watches task threads for user replies to pending `ask_user()` calls. Uses
+registry change notifications plus one bounded
+`messages:listRecentByTaskForAskUser` subscription per active ask task,
+instead of re-querying full active threads on an interval.
 
 | Setting | Value |
 |---------|-------|
-| Poll interval | 1.5s (hardcoded, tight for low latency) |
+| Feed | `messages:listRecentByTaskForAskUser` subscription per active ask |
+| Activation | `AskUserRegistry` change notifications |
 
 #### Plan Negotiation Supervisor (`mc/contexts/planning/supervisor.py`)
 
@@ -187,16 +199,22 @@ WebSocket server for live terminal sessions (PTY-backed).
 
 #### Integration Outbound Worker (`mc/runtime/integrations/outbound_worker.py`)
 
-Polls for MC state changes and publishes them to external platforms (e.g., Linear).
+Subscribes to enabled integration configs and maintains one bounded outbound
+feed subscription per enabled config. Publishes mapped messages and status
+activities to external platforms (e.g., Linear), with one-shot gap fill via
+`integrations:getOutboundPending` when a bounded snapshot indicates overflow.
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| Poll interval | 10s (configurable `integration_poll_seconds`) | Sync cadence |
-| Sleep multiplier | 6× | Extends interval to 60s in sleep mode |
+| Feed limit | 50 items per config feed | Bound recent outbound snapshot size |
+| Gap fill | `integrations:getOutboundPending` | Recover missed items after reconnect or burst |
 
 **Startup behavior:** `IntegrationSyncService` runs at boot, loads all enabled integration configs from Convex, and creates adapter instances via `AdapterRegistry`. If no active integrations are found the worker is skipped entirely.
 
-**Pipeline:** `OutboundPipeline` reads pending messages and activities from Convex, maps them to external actions (comments, status updates), and publishes via the platform adapter. Echo suppression prevents re-publishing MC-originated comments (identified by `[MC]` prefix).
+**Pipeline:** `OutboundPipeline` publishes prepared outbound payloads from the
+subscription feeds, mapping them to external actions (comments, status
+updates). Echo suppression prevents re-publishing MC-originated comments
+(identified by `[MC]` prefix).
 
 **Inbound path:** `InboundPipeline` (`mc/contexts/integrations/pipeline/inbound.py`) normalizes webhook payloads from external platforms into canonical `IntegrationEvent` objects and deduplicates via an in-memory idempotency key set.
 

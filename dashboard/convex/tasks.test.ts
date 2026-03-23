@@ -11,6 +11,7 @@ import {
   createMergedTask,
   kickOff,
   launchMission,
+  listByStatusLite,
   manualMove,
   pauseTask,
   removeMergeSource,
@@ -136,6 +137,14 @@ function getRemoveMergeSourceHandler() {
 function getSearchMergeCandidatesHandler() {
   return (
     searchMergeCandidates as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown[]>;
+    }
+  )._handler;
+}
+
+function getListByStatusLiteHandler() {
+  return (
+    listByStatusLite as unknown as {
       _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown[]>;
     }
   )._handler;
@@ -822,9 +831,13 @@ describe("tasks.searchMergeCandidates", () => {
     ];
 
     const get = vi.fn(async (id: string) => tasks.find((task) => task._id === id) ?? null);
-    const query = vi.fn(() => ({
-      collect: vi.fn(async () => tasks),
-    }));
+    const take = vi.fn(async () => tasks);
+    const order = vi.fn(() => ({ take }));
+    const withIndex = vi.fn((indexName: string) => {
+      expect(indexName).toBe("by_updatedAt");
+      return { order };
+    });
+    const query = vi.fn(() => ({ withIndex }));
 
     const results = await handler(
       { db: { get, query } },
@@ -832,6 +845,103 @@ describe("tasks.searchMergeCandidates", () => {
     );
 
     expect(results.map((task) => (task as { _id: string })._id)).toEqual(["task-e", "task-f"]);
+  });
+
+  it("uses a bounded updatedAt index window when the query is blank", async () => {
+    const handler = getSearchMergeCandidatesHandler();
+    const take = vi.fn(async (limit: number) => {
+      expect(limit).toBe(100);
+      return [
+        {
+          _id: "task-fresh",
+          title: "Fresh task",
+          description: "Ready to merge",
+          status: "done",
+          updatedAt: "2026-03-23T13:00:00Z",
+        },
+      ];
+    });
+    const order = vi.fn((direction: string) => {
+      expect(direction).toBe("desc");
+      return { take };
+    });
+    const withIndex = vi.fn((indexName: string) => {
+      expect(indexName).toBe("by_updatedAt");
+      return { order };
+    });
+    const collect = vi.fn(async () => {
+      throw new Error("global collect should not run for blank searches");
+    });
+    const query = vi.fn((table: string) => {
+      expect(table).toBe("tasks");
+      return { withIndex, collect };
+    });
+    const get = vi.fn(async () => null);
+
+    const results = await handler(
+      { db: { get, query } },
+      { query: "   ", excludeTaskId: "task-excluded" },
+    );
+
+    expect(results).toEqual([
+      {
+        _id: "task-fresh",
+        title: "Fresh task",
+        description: "Ready to merge",
+      },
+    ]);
+    expect(collect).not.toHaveBeenCalled();
+  });
+});
+
+describe("tasks.listByStatusLite", () => {
+  it("removes heavyweight fields that runtime consumers do not need", async () => {
+    const handler = getListByStatusLiteHandler();
+    const collect = vi.fn(async () => [
+      {
+        _id: "task-1",
+        title: "Investigate timeout",
+        description: "Keep this",
+        status: "review",
+        assignedAgent: "coder",
+        trustLevel: "autonomous",
+        reviewers: ["reviewer"],
+        taskTimeout: 120,
+        interAgentTimeout: 60,
+        awaitingKickoff: true,
+        reviewPhase: "plan_review",
+        isManual: false,
+        createdAt: "2026-03-23T12:00:00Z",
+        updatedAt: "2026-03-23T13:00:00Z",
+        stateVersion: 9,
+        executionPlan: { huge: true },
+        routingDecision: { reason: "large" },
+        files: [{ name: "spec.md" }],
+      },
+    ]);
+    const withIndex = vi.fn(() => ({ collect }));
+    const query = vi.fn(() => ({ withIndex }));
+
+    const results = await handler({ db: { query } }, { status: "review" });
+    expect(results).toEqual([
+      {
+        _id: "task-1",
+        title: "Investigate timeout",
+        description: "Keep this",
+        status: "review",
+        assignedAgent: "coder",
+        trustLevel: "autonomous",
+        reviewers: ["reviewer"],
+        taskTimeout: 120,
+        interAgentTimeout: 60,
+        awaitingKickoff: true,
+        reviewPhase: "plan_review",
+        isManual: false,
+        createdAt: "2026-03-23T12:00:00Z",
+        updatedAt: "2026-03-23T13:00:00Z",
+        stateVersion: 9,
+      },
+    ]);
   });
 });
 

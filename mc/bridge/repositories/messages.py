@@ -30,11 +30,16 @@ class MessageRepository:
         result = self._client.query("messages:listByTask", {"task_id": task_id})
         return result if isinstance(result, list) else []
 
-    def get_recent_user_messages(self, since_timestamp: str) -> list[dict[str, Any]]:
+    def get_recent_user_messages(
+        self, since_timestamp: str, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """Fetch all user messages created since the given ISO timestamp."""
+        args: dict[str, Any] = {"since_timestamp": since_timestamp}
+        if limit is not None:
+            args["limit"] = limit
         result = self._client.query(
             "messages:listRecentUserMessages",
-            {"since_timestamp": since_timestamp},
+            args,
         )
         return result if isinstance(result, list) else []
 

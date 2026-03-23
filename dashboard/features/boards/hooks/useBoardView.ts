@@ -36,16 +36,17 @@ export interface BoardViewData {
 }
 
 export function useBoardView(filters: BoardFilters): BoardViewData {
-  const { activeBoardId, isDefaultBoard } = useBoard();
+  const { activeBoardId } = useBoard();
   const clearAllDone = useMutation(api.tasks.clearAllDone);
 
-  const boardView = useQuery(api.boards.getBoardView, {
+  const boardViewArgs = {
     ...(activeBoardId ? { boardId: activeBoardId } : {}),
-    includeNoBoardId: isDefaultBoard || !activeBoardId,
     freeText: filters.hasFreeText ? filters.search.freeText : undefined,
     tagFilters: filters.hasTagFilters ? filters.search.tagFilters : undefined,
     attributeFilters: filters.hasAttributeFilters ? filters.search.attributeFilters : undefined,
-  }) as BoardViewReadModel | null | undefined;
+  };
+
+  const boardView = useQuery(api.boards.getBoardView, boardViewArgs) as BoardViewReadModel | null | undefined;
 
   const tasks = boardView?.tasks;
   const allSteps = boardView?.allSteps;

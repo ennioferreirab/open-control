@@ -50,7 +50,7 @@ RUNTIME_SETTINGS_KEY = "chat_handler_runtime"
 
 
 class ChatHandler:
-    """Polls for pending chat messages and dispatches them to agents."""
+    """Subscribes to pending chat messages and dispatches them to agents."""
 
     def __init__(
         self,
@@ -68,43 +68,49 @@ class ChatHandler:
         self._sleep_poll_interval = sleep_poll_interval_seconds
         self._mode: str = "sleep"
         self._in_flight = 0
+        self._queued_chat_ids: set[str] = set()
         self._last_transition_at = self._utc_now()
         self._last_work_found_at: str | None = None
         self._remote_terminal_cache: dict[str, bool] = {}
 
     async def run(self) -> None:
-        """Polling loop with adaptive sleep/active intervals."""
+        """Subscription loop with adaptive runtime state persistence."""
         logger.info("[chat] ChatHandler started")
         await self._persist_runtime(force=True)
         while True:
             try:
-                if self._sleep_controller is not None and self._sleep_controller.mode == "sleep":
-                    await self._sleep_controller.wait_for_next_cycle(self._active_poll_interval)
-                pending = await asyncio.to_thread(self._bridge.get_pending_chat_messages)
-                useful_pending = await self._filter_useful_pending(pending or [])
-                for msg in useful_pending:
-                    self._dispatch_message(msg)
-                if useful_pending:
-                    if self._sleep_controller is not None:
-                        await self._sleep_controller.record_work_found()
-                    await self._persist_runtime(
-                        mode="active",
-                        work_found=True,
-                    )
-                elif self._mode == "active" and self._in_flight == 0:
-                    if self._sleep_controller is not None:
-                        await self._sleep_controller.record_idle()
-                        await self._persist_runtime(mode=self._sleep_controller.mode)
-                    else:
-                        await self._persist_runtime(mode="sleep")
+                queue = self._bridge.async_subscribe("chats:listPending", {})
+                while True:
+                    pending = await queue.get()
+                    if pending is None:
+                        continue
+                    if isinstance(pending, dict) and pending.get("_error") is True:
+                        logger.warning(
+                            "[chat] Pending chat subscription failed: %s",
+                            pending.get("message", "unknown error"),
+                        )
+                        break
+                    useful_pending = await self._filter_useful_pending(pending or [])
+                    for msg in useful_pending:
+                        self._dispatch_message(msg)
+                    if useful_pending:
+                        if self._sleep_controller is not None:
+                            await self._sleep_controller.record_work_found()
+                        await self._persist_runtime(
+                            mode="active",
+                            work_found=True,
+                        )
+                    elif self._mode == "active" and self._in_flight == 0:
+                        if self._sleep_controller is not None:
+                            await self._sleep_controller.record_idle()
+                            await self._persist_runtime(mode=self._sleep_controller.mode)
+                        else:
+                            await self._persist_runtime(mode="sleep")
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception("[chat] Error polling pending chats")
-            if self._sleep_controller is not None:
-                await self._sleep_controller.wait_for_next_cycle(self._active_poll_interval)
-            else:
-                await asyncio.sleep(self._current_poll_interval())
+                logger.exception("[chat] Error handling pending chat subscription")
+                await asyncio.sleep(1)
 
     def _current_poll_interval(self) -> int:
         if self._mode == "active":
@@ -192,13 +198,20 @@ class ChatHandler:
         return is_remote_terminal
 
     def _dispatch_message(self, msg: dict[str, Any]) -> None:
+        chat_id = str(msg.get("id") or "")
+        if not chat_id or chat_id in self._queued_chat_ids:
+            return
+        self._queued_chat_ids.add(chat_id)
         self._in_flight += 1
         create_background_task(self._process_with_tracking(msg))
 
     async def _process_with_tracking(self, msg: dict[str, Any]) -> None:
+        chat_id = str(msg.get("id") or "")
         try:
             await self._process_chat_message(msg)
         finally:
+            if chat_id:
+                self._queued_chat_ids.discard(chat_id)
             self._in_flight = max(0, self._in_flight - 1)
 
     async def _process_chat_message(self, msg: dict[str, Any]) -> None:

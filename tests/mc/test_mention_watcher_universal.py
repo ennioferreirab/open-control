@@ -1,7 +1,7 @@
 """Tests for MentionWatcher universal coverage across all task statuses (Story 13.3).
 
 Verifies that the MentionWatcher processes @mentions on tasks in ALL statuses,
-using the global messages:listRecentUserMessages query.
+using the global watcher feed for recent user messages.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ def _make_bridge(
     """Return a mock ConvexBridge with configurable recent messages and task lookups."""
     bridge = MagicMock()
     bridge.get_recent_user_messages = MagicMock(return_value=recent_messages or [])
+    bridge.async_subscribe = MagicMock()
     bridge.mutation = MagicMock(return_value={"granted": True, "claimId": "claim-1"})
 
     def _query(query_name: str, params: dict) -> dict | list | None:
@@ -176,6 +177,74 @@ class TestMentionWatcherUniversalCoverage:
             self._run(watcher._poll_all_tasks())
 
         mock_handle.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_uses_subscription_feed_and_processes_mentions() -> None:
+    """MentionWatcher consumes the native Convex subscription feed."""
+    task = _make_task("task_sub", "in_progress")
+    msg = _make_user_message("msg_sub_1", "@researcher help me", task_id="task_sub")
+    queue: asyncio.Queue[list[dict]] = asyncio.Queue()
+    await queue.put([msg])
+
+    bridge = _make_bridge(task_by_id={"task_sub": task})
+    bridge.async_subscribe.return_value = queue
+    watcher = MentionWatcher(bridge)
+
+    with patch(
+        "mc.contexts.conversation.mentions.handler.handle_all_mentions",
+        new=AsyncMock(return_value=True),
+    ) as mock_handle:
+        run_task = asyncio.create_task(watcher.run())
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        run_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await run_task
+
+    bridge.async_subscribe.assert_called_once_with(
+        "messages:listRecentUserMessagesForWatcher",
+        {"limit": watcher._feed_limit},
+        sleep_controller=watcher._sleep_controller,
+    )
+    mock_handle.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_gap_fill_uses_bounded_recent_query() -> None:
+    """Gap fill should request a bounded recent-user query instead of an unbounded collect."""
+    bridge = _make_bridge(
+        recent_messages=[],
+        task_by_id={"task-gap": _make_task("task-gap", "in_progress")},
+    )
+    watcher = MentionWatcher(bridge)
+    watcher._last_processed_at = watcher._startup_at.replace(year=2025)
+    watcher._feed_limit = 2
+
+    full_snapshot = [
+        {
+            "id": "msg-2",
+            "task_id": "task-gap",
+            "author_type": "user",
+            "content": "@researcher latest",
+            "timestamp": "2026-03-23T12:00:02Z",
+        },
+        {
+            "id": "msg-3",
+            "task_id": "task-gap",
+            "author_type": "user",
+            "content": "@researcher newest",
+            "timestamp": "2026-03-23T12:00:03Z",
+        },
+    ]
+
+    with patch.object(watcher, "_process_messages", new=AsyncMock(return_value=False)):
+        await watcher._process_feed_snapshot(full_snapshot)
+
+    bridge.get_recent_user_messages.assert_called_once_with(
+        watcher._last_processed_at.isoformat(),
+        limit=watcher._feed_limit,
+    )
 
     def test_first_poll_marks_messages_as_seen(self):
         """Messages seen on first poll are tracked in _seen_message_ids."""

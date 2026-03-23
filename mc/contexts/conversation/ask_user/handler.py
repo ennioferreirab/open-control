@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from mc.contexts.interactive.metrics import increment_interactive_metric
@@ -52,6 +53,11 @@ class AskUserHandler:
         self._pending_ask: dict[str, asyncio.Future[str]] = {}
         self._task_to_request: dict[str, str] = {}
         self._request_to_step: dict[str, str] = {}
+        self._state_change_callback: Callable[[], None] | None = None
+
+    def set_state_change_callback(self, callback: Callable[[], None] | None) -> None:
+        """Register a callback invoked when pending-ask state changes."""
+        self._state_change_callback = callback
 
     def has_pending_ask(self, task_id: str) -> bool:
         request_id = self._task_to_request.get(task_id)
@@ -95,6 +101,8 @@ class AskUserHandler:
         future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
         self._pending_ask[request_id] = future
         self._task_to_request[task_id] = request_id
+        if self._state_change_callback is not None:
+            self._state_change_callback()
         step_id = await asyncio.to_thread(self._resolve_active_step_id, bridge, task_id)
         if step_id is not None:
             self._request_to_step[request_id] = step_id
@@ -128,6 +136,8 @@ class AskUserHandler:
             self._pending_ask.pop(request_id, None)
             self._task_to_request.pop(task_id, None)
             step_id = self._request_to_step.pop(request_id, None)
+            if self._state_change_callback is not None:
+                self._state_change_callback()
 
         try:
             result = await _transition_task(
