@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { Check, Lock, Pencil, Trash2, X } from "lucide-react";
+import { Check, Pencil, Trash2, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SkillsSelector } from "@/components/SkillsSelector";
 import { SkillDetailDialog } from "@/features/agents/components/SkillDetailDialog";
@@ -114,7 +114,6 @@ interface AgentConfigSheetProps {
 }
 
 interface FormErrors {
-  role?: string;
   prompt?: string;
 }
 
@@ -148,6 +147,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
   const [showSoulModal, setShowSoulModal] = useState(false);
   const [viewingSkillName, setViewingSkillName] = useState<string | null>(null);
   const [showSkillsPicker, setShowSkillsPicker] = useState(false);
+  const [isEditingDisplayName, setIsEditingDisplayName] = useState(false);
 
   // Memory/history state (read-only, not part of form dirty state)
   const [memory, setMemory] = useState<string | null>(null);
@@ -346,15 +346,12 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
   // Validation
   const validate = useCallback((): boolean => {
     const newErrors: FormErrors = {};
-    if (!role.trim()) {
-      newErrors.role = "Agent role cannot be empty.";
-    }
     if (!prompt.trim()) {
       newErrors.prompt = "Agent prompt cannot be empty.";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [role, prompt]);
+  }, [prompt]);
 
   const handleSave = useCallback(async () => {
     if (!validate() || !agentName) return;
@@ -474,7 +471,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
       <Sheet open={!!agentName} onOpenChange={(open) => !open && handleClose()}>
         <SheetContent
           side="right"
-          className="w-full md:w-[50vw] lg:w-[720px] flex flex-col p-0 overflow-hidden"
+          className="w-[96vw] sm:max-w-6xl flex flex-col p-0 overflow-hidden"
         >
           {isLoaded ? (
             <>
@@ -483,41 +480,77 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                   <div
                     className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-medium text-white ${getAvatarColor(agent.name)}`}
                   >
-                    {getInitials(agent.displayName)}
+                    {getInitials(displayName || agent.displayName)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <SheetTitle className="text-title">{agent.displayName}</SheetTitle>
+                    {isEditingDisplayName ? (
+                      <Input
+                        autoFocus
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") setIsEditingDisplayName(false);
+                          if (e.key === "Escape") {
+                            setDisplayName(agent.displayName ?? "");
+                            setIsEditingDisplayName(false);
+                          }
+                        }}
+                        onBlur={() => setIsEditingDisplayName(false)}
+                        className="h-8 text-lg font-semibold -ml-2 px-2"
+                      />
+                    ) : (
+                      <SheetTitle className="text-title flex items-center gap-2">
+                        {displayName || agent.displayName}
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingDisplayName(true)}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label="Edit display name"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </SheetTitle>
+                    )}
                     <SheetDescription asChild>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-caption text-muted-foreground">@{agent.name}</span>
-                        {agent.enabled === false ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-500">
-                            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                            Deactivated
-                          </span>
-                        ) : (agent.status as AgentStatus) === "active" ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-500">
-                            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                            Active
-                          </span>
-                        ) : (agent.status as AgentStatus) === "crashed" ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-500">
-                            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                            Crashed
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                            {agent.status ?? "Idle"}
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-caption text-muted-foreground">@{agent.name}</span>
                     </SheetDescription>
                   </div>
                 </div>
+                <div className="flex items-center gap-3 mt-3">
+                  {agent.enabled === false ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-500">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                      Deactivated
+                    </span>
+                  ) : (agent.status as AgentStatus) === "active" ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-500">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                      Active
+                    </span>
+                  ) : (agent.status as AgentStatus) === "crashed" ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-500">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                      Crashed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                      {agent.status ?? "Idle"}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="agent-enabled-toggle"
+                      checked={enabled}
+                      onCheckedChange={(checked) => setEnabledState(checked)}
+                      disabled={isSystemAgent}
+                    />
+                    <label htmlFor="agent-enabled-toggle" className="text-xs text-muted-foreground">
+                      Enabled
+                    </label>
+                  </div>
+                </div>
               </SheetHeader>
-
-              <Separator />
 
               <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-8 py-6 space-y-8">
                 {saveError && (
@@ -526,71 +559,200 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                   </div>
                 )}
 
-                {/* Active toggle */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label
-                      htmlFor="agent-enabled-toggle"
-                      className="text-caption text-muted-foreground"
-                    >
-                      {isSystemAgent ? "ACTIVE (SYSTEM)" : enabled ? "ACTIVE" : "DEACTIVATED"}
-                    </label>
-                    <Switch
-                      id="agent-enabled-toggle"
-                      checked={enabled}
-                      onCheckedChange={(checked) => setEnabledState(checked)}
-                      disabled={isSystemAgent}
-                    />
+                {/* Model Configuration */}
+                <div className="space-y-3">
+                  <h3 className="text-micro uppercase tracking-wider text-muted-foreground">
+                    MODEL CONFIGURATION
+                  </h3>
+                  <div className="inline-flex items-center rounded-full border border-border p-1 gap-0.5">
+                    {(
+                      [
+                        { value: "default", label: "Default" },
+                        { value: "tier", label: "Tier" },
+                        { value: "cc", label: "Claude Code" },
+                        { value: "custom", label: "Custom" },
+                      ] as { value: ModelMode; label: string }[]
+                    ).map((mode) => (
+                      <button
+                        key={mode.value}
+                        type="button"
+                        onClick={() => {
+                          if (mode.value === "default") {
+                            setModelMode("default");
+                            setTierLevel("");
+                            setCustomModel("");
+                          } else if (mode.value === "custom") {
+                            setModelMode("custom");
+                            setTierLevel("");
+                          } else if (mode.value === "cc") {
+                            setModelMode("cc");
+                            setTierLevel("");
+                            setReasoningLevel("");
+                            setCustomModel("claude-sonnet-4-6");
+                            setCcPermissionMode("bypassPermissions");
+                          } else {
+                            setModelMode("tier");
+                            setReasoningLevel("");
+                            setCustomModel("");
+                          }
+                        }}
+                        className={cn(
+                          "h-8 rounded-full px-4 text-xs font-medium transition-colors",
+                          modelMode === mode.value
+                            ? "bg-secondary text-foreground border border-primary"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
                   </div>
-                  {isSystemAgent ? (
-                    <p className="text-xs text-muted-foreground">
-                      System agents cannot be deactivated
-                    </p>
-                  ) : !enabled ? (
-                    <p className="text-xs text-muted-foreground">
-                      This agent will not receive new tasks
-                    </p>
-                  ) : null}
+
+                  {modelMode === "tier" && (
+                    <div className="space-y-2">
+                      <label className="text-caption text-muted-foreground">Model Tier</label>
+                      <Select
+                        value={tierLevel || "__none__"}
+                        onValueChange={(value) => {
+                          setTierLevel(value === "__none__" ? "" : value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select tier level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TIER_LEVEL_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {modelMode === "cc" && (
+                    <div className="space-y-2">
+                      <label className="text-caption text-muted-foreground">CC Model</label>
+                      <Select
+                        value={customModel || "__none__"}
+                        onValueChange={(value) => {
+                          setCustomModel(value === "__none__" ? "" : value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Claude Code model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__" disabled>
+                            Select a model...
+                          </SelectItem>
+                          {CC_MODEL_OPTIONS.map((m) => (
+                            <SelectItem key={m} value={m}>
+                              {m}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {modelMode === "custom" && (
+                    <div className="space-y-2">
+                      <label className="text-caption text-muted-foreground">Reasoning</label>
+                      <Select
+                        value={reasoningLevel || "__off__"}
+                        onValueChange={(val) => setReasoningLevel(val === "__off__" ? "" : val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__off__">Off</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="max">Max</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Reasoning, if model supports it
+                      </p>
+                    </div>
+                  )}
+
+                  {modelMode === "custom" && (
+                    <Select
+                      value={customModel || "__none__"}
+                      onValueChange={(value) => {
+                        setCustomModel(value === "__none__" ? "" : value);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a connected model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__" disabled>
+                          Select a model...
+                        </SelectItem>
+                        {connectedModels.map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {modelMode === "default" && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-muted text-muted-foreground font-normal"
+                    >
+                      System Default
+                    </Badge>
+                  )}
+                  {modelMode === "tier" &&
+                    tierLevel &&
+                    (() => {
+                      const fullTier = `standard-${tierLevel}`;
+                      const tierLabel = tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1);
+                      const resolvedModel = modelTiers[fullTier];
+                      const isConfigured = resolvedModel != null && resolvedModel !== "";
+                      return isConfigured ? (
+                        <Badge
+                          variant="secondary"
+                          className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-normal"
+                        >
+                          {tierLabel} &rarr; {resolvedModel}
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="secondary"
+                          className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal"
+                        >
+                          {tierLabel} (not configured)
+                        </Badge>
+                      );
+                    })()}
+                  {modelMode === "custom" && customModel && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal"
+                    >
+                      Custom: {customModel}
+                    </Badge>
+                  )}
+                  {modelMode === "cc" && customModel && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-normal"
+                    >
+                      Claude Code: cc/{customModel}
+                    </Badge>
+                  )}
                 </div>
 
-                {/* Name (read-only) */}
-                <div className="space-y-2">
-                  <label className="text-caption text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
-                    Name
-                    <Lock className="h-3 w-3 text-muted-foreground" />
-                  </label>
-                  <Input value={agent.name} disabled className="bg-muted" />
-                </div>
-
-                {/* Display Name */}
-                <div className="space-y-2">
-                  <label className="text-caption text-muted-foreground uppercase tracking-wider">
-                    Display Name
-                  </label>
-                  <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-                </div>
-
-                {/* Role */}
-                <div className="space-y-2">
-                  <label className="text-caption text-muted-foreground uppercase tracking-wider">
-                    Role
-                  </label>
-                  <Input
-                    value={role}
-                    onChange={(e) => {
-                      setRole(e.target.value);
-                      if (errors.role) setErrors((prev) => ({ ...prev, role: undefined }));
-                    }}
-                    onBlur={() => {
-                      if (!role.trim())
-                        setErrors((prev) => ({ ...prev, role: "Agent role cannot be empty." }));
-                    }}
-                    className={errors.role ? "border-red-500" : ""}
-                  />
-                  {errors.role && <p className="text-xs text-red-500">{errors.role}</p>}
-                </div>
-
-                {/* Prompt */}
+                {/* System Prompt */}
                 <div className="space-y-2">
                   <h3 className="text-micro uppercase tracking-wider text-muted-foreground">
                     SYSTEM PROMPT
@@ -669,264 +831,6 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                   )}
                 </div>
 
-                {/* Model */}
-                <div className="space-y-3">
-                  <h3 className="text-micro uppercase tracking-wider text-muted-foreground">
-                    MODEL CONFIGURATION
-                  </h3>
-                  <div className="inline-flex items-center rounded-full border border-border p-1 gap-0.5">
-                    {(
-                      [
-                        { value: "default", label: "Default" },
-                        { value: "tier", label: "Tier" },
-                        { value: "cc", label: "Claude Code" },
-                        { value: "custom", label: "Custom" },
-                      ] as { value: ModelMode; label: string }[]
-                    ).map((mode) => (
-                      <button
-                        key={mode.value}
-                        type="button"
-                        onClick={() => {
-                          if (mode.value === "default") {
-                            setModelMode("default");
-                            setTierLevel("");
-                            setCustomModel("");
-                          } else if (mode.value === "custom") {
-                            setModelMode("custom");
-                            setTierLevel("");
-                          } else if (mode.value === "cc") {
-                            setModelMode("cc");
-                            setTierLevel("");
-                            setReasoningLevel("");
-                            setCustomModel("claude-sonnet-4-6");
-                            setCcPermissionMode("bypassPermissions");
-                          } else {
-                            // tier — keep existing tierLevel or reset
-                            setModelMode("tier");
-                            setReasoningLevel("");
-                            setCustomModel("");
-                          }
-                        }}
-                        className={cn(
-                          "h-8 rounded-full px-4 text-xs font-medium transition-colors",
-                          modelMode === mode.value
-                            ? "bg-secondary text-foreground border border-primary"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {modelMode === "tier" && (
-                    <div className="space-y-2">
-                      <label className="text-caption text-muted-foreground uppercase tracking-wider">
-                        Tier Level
-                      </label>
-                      <Select
-                        value={tierLevel || "__none__"}
-                        onValueChange={(value) => {
-                          setTierLevel(value === "__none__" ? "" : value);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select tier level" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TIER_LEVEL_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {modelMode === "custom" && (
-                    <div className="space-y-2">
-                      <label className="text-caption text-muted-foreground uppercase tracking-wider">
-                        Reasoning
-                      </label>
-                      <Select
-                        value={reasoningLevel || "__off__"}
-                        onValueChange={(val) => setReasoningLevel(val === "__off__" ? "" : val)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__off__">Off</SelectItem>
-                          <SelectItem value="low">Low</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="max">Max</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Reasoning, if model supports it
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Custom model selector — only visible in custom mode */}
-                  {modelMode === "custom" && (
-                    <Select
-                      value={customModel || "__none__"}
-                      onValueChange={(value) => {
-                        setCustomModel(value === "__none__" ? "" : value);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a connected model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__" disabled>
-                          Select a model...
-                        </SelectItem>
-                        {connectedModels.map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {m}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {/* Visual indicator badge */}
-                  {modelMode === "default" && (
-                    <Badge
-                      variant="secondary"
-                      className="bg-muted text-muted-foreground font-normal"
-                    >
-                      System Default
-                    </Badge>
-                  )}
-                  {modelMode === "tier" &&
-                    tierLevel &&
-                    (() => {
-                      const fullTier = `standard-${tierLevel}`;
-                      const tierLabel = tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1);
-                      const resolvedModel = modelTiers[fullTier];
-                      const isConfigured = resolvedModel != null && resolvedModel !== "";
-                      return isConfigured ? (
-                        <Badge
-                          variant="secondary"
-                          className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-normal"
-                        >
-                          {tierLabel} &rarr; {resolvedModel}
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="secondary"
-                          className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal"
-                        >
-                          {tierLabel} (not configured)
-                        </Badge>
-                      );
-                    })()}
-                  {modelMode === "custom" && customModel && (
-                    <Badge
-                      variant="secondary"
-                      className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-normal"
-                    >
-                      Custom: {customModel}
-                    </Badge>
-                  )}
-                  {modelMode === "cc" && customModel && (
-                    <Badge
-                      variant="secondary"
-                      className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-normal"
-                    >
-                      Claude Code: cc/{customModel}
-                    </Badge>
-                  )}
-                </div>
-
-                {modelMode === "cc" && (
-                  <div className="space-y-4 border-t pt-6">
-                    <h3 className="text-micro uppercase tracking-wider text-muted-foreground">
-                      CLAUDE CODE SETTINGS
-                    </h3>
-
-                    <div className="space-y-2">
-                      <label className="text-caption text-muted-foreground uppercase tracking-wider">
-                        CC Model
-                      </label>
-                      <Select
-                        value={customModel || "__none__"}
-                        onValueChange={(value) => {
-                          setCustomModel(value === "__none__" ? "" : value);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Claude Code model" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__" disabled>
-                            Select a model...
-                          </SelectItem>
-                          {CC_MODEL_OPTIONS.map((m) => (
-                            <SelectItem key={m} value={m}>
-                              {m}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-caption text-muted-foreground uppercase tracking-wider">
-                        Permission Mode
-                      </label>
-                      <Select value={ccPermissionMode} onValueChange={setCcPermissionMode}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bypassPermissions">
-                            Bypass - all tools run without approval
-                          </SelectItem>
-                          <SelectItem value="acceptEdits">
-                            Accept Edits - file edits auto-approved
-                          </SelectItem>
-                          <SelectItem value="default">
-                            Default - follows system CC defaults
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-caption text-muted-foreground uppercase tracking-wider">
-                        Max Budget (USD)
-                      </label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        placeholder="No limit"
-                        value={ccMaxBudget}
-                        onChange={(e) => setCcMaxBudget(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-caption text-muted-foreground uppercase tracking-wider">
-                        Max Turns
-                      </label>
-                      <Input
-                        type="number"
-                        min={1}
-                        step={1}
-                        placeholder="No limit"
-                        value={ccMaxTurns}
-                        onChange={(e) => setCcMaxTurns(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-
                 {/* Skills */}
                 <div className="space-y-3">
                   <h3 className="text-micro uppercase tracking-wider text-muted-foreground">
@@ -974,6 +878,56 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                     </Popover>
                   </div>
                 </div>
+
+                {/* Claude Code Settings */}
+                {modelMode === "cc" && (
+                  <div className="space-y-4">
+                    <h3 className="text-micro uppercase tracking-wider text-muted-foreground">
+                      CLAUDE CODE SETTINGS
+                    </h3>
+
+                    <div className="space-y-2">
+                      <label className="text-caption text-muted-foreground">Permission Mode</label>
+                      <Select value={ccPermissionMode} onValueChange={setCcPermissionMode}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bypassPermissions">Bypass Permissions</SelectItem>
+                          <SelectItem value="acceptEdits">Accept Edits</SelectItem>
+                          <SelectItem value="default">Default</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-caption text-muted-foreground">
+                          Max Budget (USD)
+                        </label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          placeholder="No limit"
+                          value={ccMaxBudget}
+                          onChange={(e) => setCcMaxBudget(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-caption text-muted-foreground">Max Turns</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          step={1}
+                          placeholder="No limit"
+                          value={ccMaxTurns}
+                          onChange={(e) => setCcMaxTurns(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Active Squads */}
                 {activeSquads.length > 0 && (
