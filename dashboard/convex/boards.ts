@@ -215,17 +215,6 @@ export const getBoardView = query({
           .collect()
       : await ctx.db.query("tasks").collect();
 
-    if (args.boardId && args.includeNoBoardId) {
-      const unscopedTasks = (await ctx.db.query("tasks").collect()).filter((task) => !task.boardId);
-      const seen = new Set(boardTasks.map((task) => task._id));
-      for (const task of unscopedTasks) {
-        if (!seen.has(task._id)) {
-          boardTasks.push(task);
-          seen.add(task._id);
-        }
-      }
-    }
-
     const activeTasks = boardTasks.filter((task) => task.status !== "deleted");
     let filteredTasks = filterTasks(activeTasks, args.freeText, args.tagFilters);
 

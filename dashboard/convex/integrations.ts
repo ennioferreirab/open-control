@@ -611,6 +611,107 @@ export const getOutboundPending = internalQuery({
   },
 });
 
+export const listRecentOutboundPendingByConfig = internalQuery({
+  args: {
+    configId: v.id("integrationConfigs"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.max(1, Math.min(args.limit ?? 50, 200));
+    const perTaskLimit = Math.min(limit + 1, 201);
+    const mappings = await ctx.db
+      .query("integrationMappings")
+      .withIndex("by_config_internal", (q) =>
+        q.eq("configId", args.configId).eq("internalType", "task"),
+      )
+      .collect();
+
+    if (mappings.length === 0) {
+      return {
+        messages: [],
+        activities: [],
+        messageWindowFull: false,
+        activityWindowFull: false,
+      };
+    }
+
+    const internalIds = new Set(mappings.map((mapping) => mapping.internalId));
+    const mappingByInternalId = new Map(mappings.map((mapping) => [mapping.internalId, mapping]));
+    const [messageBatches, activityBatches] = await Promise.all([
+      Promise.all(
+        mappings.map(async (mapping) => ({
+          internalId: mapping.internalId,
+          items: await ctx.db
+            .query("messages")
+            .withIndex("by_taskId_timestamp", (q) => q.eq("taskId", mapping.internalId))
+            .order("desc")
+            .take(perTaskLimit),
+        })),
+      ),
+      Promise.all(
+        mappings.map(async (mapping) => ({
+          internalId: mapping.internalId,
+          items: await ctx.db
+            .query("activities")
+            .withIndex("by_taskId_timestamp", (q) => q.eq("taskId", mapping.internalId))
+            .order("desc")
+            .take(perTaskLimit),
+        })),
+      ),
+    ]);
+
+    const messageWindowFull =
+      messageBatches.some((batch) => batch.items.length === perTaskLimit) ||
+      messageBatches.reduce((count, batch) => count + batch.items.filter((item) => item.authorType === "user").length, 0) >
+        limit;
+    const activityWindowFull =
+      activityBatches.some((batch) => batch.items.length === perTaskLimit) ||
+      activityBatches.reduce((count, batch) => count + batch.items.length, 0) > limit;
+
+    const recentMessages = messageBatches
+      .flatMap((batch) => batch.items)
+      .filter((message) => message.authorType === "user" && internalIds.has(String(message.taskId)))
+      .sort((left, right) => String(right.timestamp).localeCompare(String(left.timestamp)))
+      .slice(0, limit);
+    const recentActivities = activityBatches
+      .flatMap((batch) => batch.items)
+      .filter((activity) => activity.taskId !== undefined && internalIds.has(String(activity.taskId)))
+      .sort((left, right) => String(right.timestamp).localeCompare(String(left.timestamp)))
+      .slice(0, limit);
+
+    return {
+      messages: recentMessages
+        .reverse()
+        .map((message) => ({
+          message: {
+            id: message._id,
+            taskId: message.taskId,
+            authorName: message.authorName,
+            authorType: message.authorType,
+            content: message.content,
+            type: message.type,
+            timestamp: message.timestamp,
+          },
+          mapping: mappingByInternalId.get(String(message.taskId))!,
+        })),
+      activities: recentActivities
+        .reverse()
+        .map((activity) => ({
+          activity: {
+            id: activity._id,
+            taskId: activity.taskId,
+            eventType: activity.eventType,
+            description: activity.description,
+            timestamp: activity.timestamp,
+          },
+          mapping: mappingByInternalId.get(String(activity.taskId!))!,
+        })),
+      messageWindowFull,
+      activityWindowFull,
+    };
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Public mutations — called by webhook API route (with admin auth)
 // ---------------------------------------------------------------------------

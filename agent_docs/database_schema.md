@@ -73,8 +73,12 @@ Core task records with status lifecycle and execution plans.
 | `createdAt` | `v.string()` | |
 | `updatedAt` | `v.string()` | |
 
-**Indexes:** `by_status` `["status"]`, `by_boardId` `["boardId"]`
-**Search indexes:** `search_title` on `"title"` filter `["boardId"]`, `search_description` on `"description"` filter `["boardId"]`
+**Indexes:** `by_status` `["status"]`, `by_boardId` `["boardId"]`, `by_updatedAt` `["updatedAt"]`
+**Search indexes:** `search_title` on `"title"` filter `["boardId"]`, `search_description` on `"description"` filter `["boardId"]`, `search_title_global` on `"title"`, `search_description_global` on `"description"`
+
+`tasks:listByStatusLite` intentionally returns a projected runtime snapshot rather than the full task
+document. It excludes heavy fields such as `executionPlan`, `routingDecision`, `files`, and merge
+metadata so Python runtime consumers can subscribe cheaply.
 
 ---
 
@@ -128,7 +132,7 @@ Unified task thread for all communication.
 | `leadAgentConversation` | `v.optional(v.boolean())` | |
 | `timestamp` | `v.string()` | |
 
-**Indexes:** `by_taskId` `["taskId"]`, `by_authorType_timestamp` `["authorType", "timestamp"]`
+**Indexes:** `by_taskId` `["taskId"]`, `by_taskId_timestamp` `["taskId", "timestamp"]`, `by_authorType_timestamp` `["authorType", "timestamp"]`
 
 ---
 
@@ -144,7 +148,7 @@ Event log for all system state changes.
 | `description` | `v.string()` | |
 | `timestamp` | `v.string()` | |
 
-**Indexes:** `by_taskId` `["taskId"]`, `by_timestamp` `["timestamp"]`
+**Indexes:** `by_taskId` `["taskId"]`, `by_taskId_timestamp` `["taskId", "timestamp"]`, `by_timestamp` `["timestamp"]`
 
 ---
 

@@ -286,9 +286,11 @@ class BridgeRepositoryFacadeMixin:
             idempotency_key=idempotency_key,
         )
 
-    def get_recent_user_messages(self, since_timestamp: str) -> list[dict[str, Any]]:
+    def get_recent_user_messages(
+        self, since_timestamp: str, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
         self._ensure_repos()
-        return self._messages.get_recent_user_messages(since_timestamp)
+        return self._messages.get_recent_user_messages(since_timestamp, limit=limit)
 
     def post_system_error(
         self,

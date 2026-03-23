@@ -886,4 +886,50 @@ describe("getBoardView", () => {
     expect(columns.length).toBeGreaterThan(0);
     expect(columns.find((c) => c.status === "inbox")?.label).toBe("Inbox");
   });
+
+  it("does not fall back to a global tasks scan when a boardId is provided", async () => {
+    const handler = getHandler();
+    const board = { _id: "board-1", name: "main", displayName: "Main" };
+    const boardScopedTasks = [
+      {
+        _id: "t1",
+        boardId: "board-1",
+        status: "inbox",
+        title: "Scoped",
+        trustLevel: "autonomous",
+        tags: [],
+      },
+    ];
+    const globalCollect = vi.fn(async () => {
+      throw new Error("global task collect should not run");
+    });
+    const boardCollect = vi.fn(async () => boardScopedTasks);
+    const query = vi.fn((table: string) => {
+      if (table === "tasks") {
+        return {
+          collect: globalCollect,
+          withIndex: vi.fn((indexName: string) => {
+            expect(indexName).toBe("by_boardId");
+            return { collect: boardCollect };
+          }),
+        };
+      }
+      return {
+        collect: vi.fn(async () => (table === "taskTags" ? [] : [])),
+        withIndex: vi.fn(() => ({
+          collect: vi.fn(async () => []),
+        })),
+      };
+    });
+
+    const result = (await handler(
+      { db: { get: vi.fn(async () => board), query } },
+      { boardId: "board-1", includeNoBoardId: true },
+    )) as Record<string, unknown>;
+
+    expect(result.tasks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ _id: "t1", title: "Scoped" })]),
+    );
+    expect(globalCollect).not.toHaveBeenCalled();
+  });
 });

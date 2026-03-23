@@ -1,4 +1,4 @@
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
@@ -101,14 +101,56 @@ async function maybeAnswerPendingExecutionQuestion(
 }
 
 export const listRecentUserMessages = query({
-  args: { sinceTimestamp: v.string() },
+  args: { sinceTimestamp: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const query = ctx.db.query("messages").withIndex("by_authorType_timestamp", (q) =>
+      q.eq("authorType", "user").gte("timestamp", args.sinceTimestamp),
+    );
+    if (args.limit === undefined) {
+      return await query.collect();
+    }
+    const limit = Math.max(1, Math.min(args.limit, 200));
+    return await query.order("desc").take(limit).then((messages) => messages.reverse());
+  },
+});
+
+export const listRecentUserMessagesForWatcher = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = Math.max(1, Math.min(args.limit ?? 50, 200));
+    const messages = await ctx.db
       .query("messages")
-      .withIndex("by_authorType_timestamp", (q) =>
-        q.eq("authorType", "user").gte("timestamp", args.sinceTimestamp),
-      )
-      .collect();
+      .withIndex("by_authorType_timestamp", (q) => q.eq("authorType", "user"))
+      .order("desc")
+      .take(limit);
+
+    return messages.reverse().map((message) => ({
+      id: message._id,
+      taskId: message.taskId,
+      authorType: message.authorType,
+      content: message.content,
+      timestamp: message.timestamp,
+    }));
+  },
+});
+
+export const listRecentByTaskForAskUser = internalQuery({
+  args: { taskId: v.id("tasks"), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = Math.max(1, Math.min(args.limit ?? 50, 200));
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_taskId_timestamp", (q) => q.eq("taskId", args.taskId))
+      .order("desc")
+      .take(limit);
+
+    return messages.reverse().map((message) => ({
+      id: message._id,
+      taskId: message.taskId,
+      authorType: message.authorType,
+      content: message.content,
+      timestamp: message.timestamp,
+    }));
   },
 });
 

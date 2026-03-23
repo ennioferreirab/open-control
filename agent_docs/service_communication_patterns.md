@@ -297,6 +297,10 @@ The Python side uses two modes, both in `mc/bridge/subscriptions.py`:
 | PlanNegotiationSupervisor | `tasks:listByStatus` | `review` (shared loop) |
 | PlanNegotiationSupervisor | `tasks:listByStatus` | `in_progress` (shared loop) |
 | PlanNegotiation (per-task) | `messages:listByTask` | per `task_id` |
+| ChatHandler | `chats:listPending` | pending direct chats |
+| MentionWatcher | `messages:listRecentUserMessagesForWatcher` | bounded recent-user-message feed |
+| AskUserReplyWatcher | `messages:listRecentByTaskForAskUser` | per active ask task |
+| IntegrationOutboundWorker | `integrations:getEnabledConfigs` + `integrations:listRecentOutboundPendingByConfig` | enabled configs + per-config outbound feeds |
 
 The `review` and `in_progress` loops each serve two consumers via fan-out. Consumers that don't need heavy fields (`executionPlan`, `routingDecision`, `files`, merge fields) use `tasks:listByStatusLite`.
 
@@ -336,6 +340,8 @@ Subscription queries: `tasks:listByStatus` (inbox, needs full doc) and `tasks:li
 |---------------|-----------------|------|
 | `get_task_messages(task_id)` | `messages:listByTask` | query |
 | `get_recent_user_messages(since)` | `messages:listRecentUserMessages` | query |
+| MentionWatcher subscription | `messages:listRecentUserMessagesForWatcher` | internalQuery |
+| AskUserReplyWatcher subscription | `messages:listRecentByTaskForAskUser` | internalQuery |
 | `send_message(...)` | `messages:create` | internalMutation |
 | `post_step_completion(...)` | `messages:postStepCompletion` | internalMutation |
 | `post_lead_agent_message(...)` | `messages:postLeadAgentMessage` | internalMutation |
@@ -638,6 +644,10 @@ The MC Gateway uses **native Convex WebSocket subscriptions** for real-time upda
 
 All tasks are independent. No `gather()` or `TaskGroup`. Each has its own error handling — one task crashing does not affect others. Shutdown: explicit `.cancel()` on each task followed by `await`, suppressing `CancelledError`.
 
+| ChatHandler subscription | `chats:listPending` | query |
+| IntegrationOutboundWorker config subscription | `integrations:getEnabledConfigs` | internalQuery |
+| IntegrationOutboundWorker feed subscription | `integrations:listRecentOutboundPendingByConfig` | internalQuery |
+
 ### 5.2 All Subscription & Polling Loops
 
 > **Subscription (preferred):** Uses `async_subscribe()` → `_subscribe_loop` with native Convex WebSocket. Zero queries when idle.
@@ -654,8 +664,9 @@ All tasks are independent. No `gather()` or `TaskGroup`. Each has its own error 
 | PlanNegotiationSupervisor | `tasks:listByStatus {in_progress}` | Subscription (shared) | Yes |
 | PlanNegotiation (per-task) | `messages:listByTask {task_id}` | Subscription | Yes |
 | ChatHandler | `chats:listPending` | Subscription | Yes |
-| MentionWatcher | `messages:listRecentUserMessages` | Subscription | Yes |
-| AskUserReplyWatcher | `messages:listByTask` (per active ask) | Subscription | Yes |
+| MentionWatcher | `messages:listRecentUserMessagesForWatcher {limit}` | Subscription | Yes |
+| AskUserReplyWatcher | `messages:listRecentByTaskForAskUser` (per active ask) | Subscription | Yes |
+| IntegrationOutboundWorker | `integrations:getEnabledConfigs` + `integrations:listRecentOutboundPendingByConfig` | Subscription | Yes |
 | TimeoutChecker | `tasks:listByStatusLite` (2 queries) | Polling (one-shot) | Yes |
 | SleepController | `settings:getGatewaySleepControl` | Polling (1s control) | N/A |
 
@@ -683,8 +694,8 @@ Two modes: `active` and `sleep`. With real subscriptions, the sleep controller n
 
 ```text
 1. Dashboard/user calls Convex mutation (e.g., tasks:create)
-2. Poll loop queries tasks:listByStatus on timer
-3. Result differs from last → pushed to consumer queue
+2. Convex subscription publishes an updated query snapshot
+3. Changed result → pushed to consumer queue
 4. Worker unblocks (queue.get()), calls process_batch()
 5. Worker checks dedup (known_ids + runtime claim)
 6. Worker processes task → Convex mutations → state change
@@ -952,7 +963,8 @@ Three routing modes, selected during inbox processing (`mc/runtime/workers/inbox
 ```text
 User writes "@researcher summarize this"
   → Any message mutation (postMentionMessage, sendThreadMessage, postUserReply, etc.)
-  → MentionWatcher polls messages:listRecentUserMessages (10s, with 30s overlap window)
+  → MentionWatcher receives `messages:listRecentUserMessagesForWatcher {limit: 50}` subscription snapshot
+  → If the bounded snapshot is full and starts after the last processed timestamp, run one-shot bounded gap fill via `messages:listRecentUserMessages`
   → Detects new message, checks _seen_message_ids
   → acquire_runtime_claim(claim_kind="mention-message", entity_id=msg_id)
   → ConversationIntentResolver.resolve(content, task_data)
@@ -982,10 +994,10 @@ User writes "@researcher summarize this"
    e. Creates REVIEW_REQUESTED activity event
    f. await future  ← blocks agent execution
 
-3. AskUserReplyWatcher polls every 1.5s:
-   a. For each task in registry.active_task_ids()
-   b. Queries messages:listByTask
-   c. Finds new user message
+3. AskUserReplyWatcher reacts to registry changes:
+   a. AskUserRegistry notifies when a task gains or loses a pending ask
+   b. Watcher opens `messages:listRecentByTaskForAskUser` subscription for each active ask task
+   c. Finds new user message in the live snapshot
    d. Classifies intent (skips if MENTION)
    e. acquire_runtime_claim(claim_kind="ask-user-reply")
    f. registry.deliver_reply(task_id, content)
@@ -1197,21 +1209,21 @@ MC Gateway boot:
     → LinearAdapter created with LinearGraphQLClient(api_key)
 
   If active_integrations > 0:
-    OutboundPipeline + IntegrationOutboundWorker spawned as asyncio task (10s poll)
+    OutboundPipeline + IntegrationOutboundWorker spawned as asyncio task
 
-Each poll cycle (IntegrationOutboundWorker):
-  → bridge.get_enabled_integration_configs()  (re-reads, live config)
-  → For each config_id:
-      OutboundPipeline.process_outbound_batch(config_id, since_timestamp)
-        → bridge.get_outbound_pending(config_id, since)  → {messages, activities}
-        → For messages: adapter.publish_comment(external_id, body) → Linear GraphQL
-        → For activities: adapter.publish_status_change(external_id, mc_status, mapped_status)
+IntegrationOutboundWorker runtime:
+  → subscribes to `integrations:getEnabledConfigs`
+  → for each enabled config_id, opens `integrations:listRecentOutboundPendingByConfig`
+  → when a bounded feed reports a full window, runs one-shot gap fill via `bridge.get_outbound_pending(config_id, since)`
+  → OutboundPipeline.publish_pending(config_id, payload)
+      → For messages: adapter.publish_comment(external_id, body) → Linear GraphQL
+      → For activities: adapter.publish_status_change(external_id, mc_status, mapped_status)
                              → resolves workflow state ID → Linear GraphQL updateIssue
 ```
 
 | Property | Value |
 |----------|-------|
-| Poll interval | 10s active, 60s sleep (configurable `integration_poll_seconds`) |
+| Feed limit | 50 items per config feed |
 | GraphQL endpoint | `https://api.linear.app/graphql` |
 | Auth | Bearer token (api_key from Convex integrationConfigs) |
 | Workflow state cache | Per-team, in-memory, for the lifetime of the adapter instance |

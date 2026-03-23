@@ -216,4 +216,13 @@ describe("useBoardView", () => {
     const { result } = renderHook(() => useBoardView(inactiveFilters()));
     expect(result.current.allSteps).toHaveLength(1);
   });
+
+  it("does not send the retired includeNoBoardId flag to getBoardView", () => {
+    renderHook(() => useBoardView(inactiveFilters()));
+
+    expect(mockUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "boards.getBoardView" }),
+      {},
+    );
+  });
 });

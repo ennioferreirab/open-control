@@ -245,6 +245,7 @@ export default defineSchema({
   })
     .index("by_status", ["status"])
     .index("by_boardId", ["boardId"])
+    .index("by_updatedAt", ["updatedAt"])
     .searchIndex("search_title", {
       searchField: "title",
       filterFields: ["boardId"],
@@ -252,6 +253,12 @@ export default defineSchema({
     .searchIndex("search_description", {
       searchField: "description",
       filterFields: ["boardId"],
+    })
+    .searchIndex("search_title_global", {
+      searchField: "title",
+    })
+    .searchIndex("search_description_global", {
+      searchField: "description",
     }),
 
   steps: defineTable({
@@ -335,6 +342,7 @@ export default defineSchema({
     timestamp: v.string(),
   })
     .index("by_taskId", ["taskId"])
+    .index("by_taskId_timestamp", ["taskId", "timestamp"])
     .index("by_authorType_timestamp", ["authorType", "timestamp"]),
 
   runtimeClaims: defineTable({
@@ -418,6 +426,7 @@ export default defineSchema({
     timestamp: v.string(),
   })
     .index("by_taskId", ["taskId"])
+    .index("by_taskId_timestamp", ["taskId", "timestamp"])
     .index("by_timestamp", ["timestamp"]),
 
   skills: defineTable({

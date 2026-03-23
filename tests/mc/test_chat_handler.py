@@ -25,12 +25,21 @@ def _make_bridge() -> MagicMock:
     """Create a mock ConvexBridge with chat helper methods."""
     bridge = MagicMock()
     bridge.get_pending_chat_messages = MagicMock(return_value=[])
+    bridge.async_subscribe = MagicMock()
     bridge.send_chat_response = MagicMock()
     bridge.mark_chat_processing = MagicMock()
     bridge.mark_chat_done = MagicMock()
     bridge.query = MagicMock(return_value=None)
     bridge.mutation = MagicMock()
     return bridge
+
+
+def _make_subscription_queue(*snapshots: object) -> asyncio.Queue[object]:
+    """Build an asyncio queue preloaded with subscription snapshots."""
+    queue: asyncio.Queue[object] = asyncio.Queue()
+    for snapshot in snapshots:
+        queue.put_nowait(snapshot)
+    return queue
 
 
 def _make_pending_msg(
@@ -256,141 +265,106 @@ class TestProcessChatMessageErrors:
 
 
 class TestChatHandlerPollingLoop:
-    """Test the polling loop behavior."""
+    """Test the subscription loop behavior."""
 
     @pytest.mark.asyncio
-    async def test_run_waits_for_sleep_controller_before_first_poll(self):
-        """When the shared controller is sleeping, polling pauses until wake."""
+    async def test_run_subscribes_without_falling_back_to_query_polling(self):
+        """The handler consumes the pending-chat subscription feed."""
         from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
-
-        gate = asyncio.Event()
-
-        class SleepController:
-            mode = "sleep"
-
-            async def wait_for_next_cycle(self, _delay):
-                await gate.wait()
-
-            async def record_work_found(self):
-                return None
-
-            async def record_idle(self):
-                return None
-
-            def current_poll_interval(self, active_interval):
-                return active_interval
-
-        controller = SleepController()
-        handler = ChatHandler(bridge, sleep_controller=controller)
+        bridge.async_subscribe.return_value = _make_subscription_queue([])
+        handler = ChatHandler(bridge)
 
         task = asyncio.create_task(handler.run())
         await asyncio.sleep(0.05)
-        assert bridge.get_pending_chat_messages.call_count == 0
-
-        controller.mode = "active"
-        gate.set()
-
-        for _ in range(20):
-            if bridge.get_pending_chat_messages.call_count > 0:
-                break
-            await asyncio.sleep(0.01)
 
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
 
-        assert bridge.get_pending_chat_messages.call_count > 0
+        bridge.async_subscribe.assert_called_once_with("chats:listPending", {})
+        bridge.get_pending_chat_messages.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_run_polls_and_dispatches(self):
-        """The run() loop polls for pending messages and processes them."""
+    async def test_run_subscribes_and_dispatches(self):
+        """The run() loop consumes pending snapshots and processes them."""
         from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         handler = ChatHandler(bridge)
 
         msg = _make_pending_msg()
-        call_count = 0
         processed = asyncio.Event()
-
-        def fake_get_pending():
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return [msg]
-            return []
-
-        bridge.get_pending_chat_messages = fake_get_pending
+        bridge.async_subscribe.return_value = _make_subscription_queue([msg], [])
 
         async def mock_process(m):
             processed.set()
 
         handler._process_chat_message = mock_process
 
-        # Patch both polling intervals to 0 so the loop iterates fast
-        with (
-            patch("mc.contexts.conversation.chat_handler.ACTIVE_POLL_INTERVAL_SECONDS", 0),
-            patch("mc.contexts.conversation.chat_handler.SLEEP_POLL_INTERVAL_SECONDS", 0),
-        ):
-            task = asyncio.create_task(handler.run())
-            # Wait for processing to happen (with timeout)
-            try:
-                await asyncio.wait_for(processed.wait(), timeout=5.0)
-            except TimeoutError:
-                pass
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        task = asyncio.create_task(handler.run())
+        try:
+            await asyncio.wait_for(processed.wait(), timeout=5.0)
+        except TimeoutError:
+            pass
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
         assert processed.is_set()
 
     @pytest.mark.asyncio
-    async def test_run_handles_poll_error_gracefully(self):
-        """Errors during polling don't crash the loop."""
+    async def test_run_deduplicates_pending_chat_ids_across_repeated_snapshots(self):
+        """A pending chat should only be dispatched once until processing finishes."""
         from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
+        msg = _make_pending_msg()
+        bridge.async_subscribe.return_value = _make_subscription_queue([msg], [msg], [])
+        handler = ChatHandler(bridge)
 
-        call_count = 0
-        second_poll_done = asyncio.Event()
+        processed: list[str] = []
+        gate = asyncio.Event()
 
-        def failing_get_pending():
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("Convex down")
-            # Second call succeeds -- proves loop survived the error
-            second_poll_done.set()
-            return []
+        async def mock_process(pending_msg):
+            processed.append(pending_msg["id"])
+            await gate.wait()
 
-        bridge.get_pending_chat_messages = failing_get_pending
+        handler._process_chat_message = mock_process
 
-        with (
-            patch("mc.contexts.conversation.chat_handler.ACTIVE_POLL_INTERVAL_SECONDS", 0),
-            patch("mc.contexts.conversation.chat_handler.SLEEP_POLL_INTERVAL_SECONDS", 0),
-        ):
-            handler = ChatHandler(
-                bridge,
-                active_poll_interval_seconds=0,
-                sleep_poll_interval_seconds=0,
-            )
-            task = asyncio.create_task(handler.run())
-            try:
-                await asyncio.wait_for(second_poll_done.wait(), timeout=5.0)
-            except TimeoutError:
-                pass
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        task = asyncio.create_task(handler.run())
+        await asyncio.sleep(0.05)
+        gate.set()
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
 
-        # The loop survived the error and polled again
-        assert call_count >= 2
+        assert processed == ["chat123"]
+
+    @pytest.mark.asyncio
+    async def test_run_handles_subscription_error_gracefully(self):
+        """Subscription failures trigger a reconnect instead of crashing the loop."""
+        from mc.contexts.conversation.chat_handler import ChatHandler
+
+        bridge = _make_bridge()
+        first_queue = _make_subscription_queue({"_error": True, "message": "Convex down"})
+        second_queue = _make_subscription_queue([])
+        bridge.async_subscribe.side_effect = [first_queue, second_queue]
+
+        handler = ChatHandler(bridge)
+        task = asyncio.create_task(handler.run())
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        assert bridge.async_subscribe.call_count >= 2
 
     @pytest.mark.asyncio
     async def test_run_publishes_sleep_runtime_on_start(self):
@@ -454,14 +428,7 @@ class TestChatHandlerPollingLoop:
 
         bridge = _make_bridge()
         msg = _make_pending_msg(agent_name="worker-agent")
-        polls = [[msg], [], []]
-
-        def get_pending():
-            if polls:
-                return polls.pop(0)
-            return []
-
-        bridge.get_pending_chat_messages = get_pending
+        bridge.async_subscribe.return_value = _make_subscription_queue([msg], [], [])
         bridge.get_agent_by_name = MagicMock(
             return_value={"name": "worker-agent", "role": "developer"}
         )
@@ -473,26 +440,25 @@ class TestChatHandlerPollingLoop:
             processed.set()
 
         handler._process_chat_message = mock_process
+        task = asyncio.create_task(handler.run())
+        await asyncio.wait_for(processed.wait(), timeout=5.0)
 
-        real_sleep = asyncio.sleep
-        sleep_calls = 0
+        for _ in range(50):
+            runtime_payloads = [
+                json.loads(call.args[1]["value"])
+                for call in bridge.mutation.call_args_list
+                if call.args and call.args[0] == "settings:set"
+            ]
+            modes = [payload["mode"] for payload in runtime_payloads]
+            if modes[:3] == ["sleep", "active", "sleep"]:
+                break
+            await asyncio.sleep(0.01)
 
-        async def fake_sleep(_delay):
-            nonlocal sleep_calls
-            sleep_calls += 1
-            await real_sleep(0)
-            if sleep_calls >= 3:
-                raise asyncio.CancelledError
-
-        with patch(
-            "mc.contexts.conversation.chat_handler.asyncio.sleep",
-            new=AsyncMock(side_effect=fake_sleep),
-        ):
-            with pytest.raises(asyncio.CancelledError):
-                await handler.run()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
 
         assert processed.is_set()
-
         runtime_payloads = [
             json.loads(call.args[1]["value"])
             for call in bridge.mutation.call_args_list

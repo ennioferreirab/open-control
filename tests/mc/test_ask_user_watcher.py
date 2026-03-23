@@ -121,3 +121,39 @@ class TestAskUserReplyWatcher:
         await watcher._poll_once()
 
         assert not future2.done()
+
+    @pytest.mark.asyncio
+    async def test_run_subscribes_to_active_task_threads(self, bridge, registry):
+        loop = asyncio.get_running_loop()
+        handler = AskUserHandler()
+        future = loop.create_future()
+        handler._pending_ask["req-123"] = future
+        handler._task_to_request["task-abc"] = "req-123"
+        registry.register("task-abc", handler)
+
+        queue: asyncio.Queue[object] = asyncio.Queue()
+        queue.put_nowait(
+            [
+                {"_id": "msg-0", "author_type": "user", "content": "Old reply"},
+            ]
+        )
+        queue.put_nowait(
+            [
+                {"_id": "msg-0", "author_type": "user", "content": "Old reply"},
+                {"_id": "msg-1", "author_type": "user", "content": "Blue"},
+            ]
+        )
+        bridge.async_subscribe = MagicMock(return_value=queue)
+
+        watcher = AskUserReplyWatcher(bridge, registry)
+        task = asyncio.create_task(watcher.run())
+        await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        bridge.async_subscribe.assert_called_once_with(
+            "messages:listRecentByTaskForAskUser",
+            {"task_id": "task-abc", "limit": watcher._feed_limit},
+        )
+        assert future.result() == "Blue"

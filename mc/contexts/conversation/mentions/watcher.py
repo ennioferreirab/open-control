@@ -1,10 +1,10 @@
 """
 Conversation-owned mention watcher for task-thread @mentions.
 
-Polls for new user messages across ALL tasks regardless of status and dispatches
-@mention handling when a message contains @agent-name patterns. This is the
-single, authoritative handler for @mentions across all task statuses (inbox,
-assigned, in_progress, review, done, crashed, retrying, etc.).
+Subscribes to new user messages across ALL tasks regardless of status and
+dispatches @mention handling when a message contains @agent-name patterns.
+This is the single, authoritative handler for @mentions across all task
+statuses (inbox, assigned, in_progress, review, done, crashed, retrying, etc.).
 
 The PlanNegotiator skips @mention messages (leaving them for this watcher),
 so there is no double-processing.
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from mc.bridge.runtime_claims import acquire_runtime_claim
@@ -26,14 +26,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# How often to poll for new messages (seconds)
+# Compatibility knob kept for configuration/tests. The live watcher now uses
+# a reactive Convex subscription rather than timer-based polling.
 POLL_INTERVAL_SECONDS = 10
 
 # Max seen message IDs to keep in memory before pruning
 _SEEN_IDS_MAX = 5000
 
-# Overlap window to handle clock drift between Python and Convex (seconds)
-_OVERLAP_SECONDS = 30
+# Bounded snapshot size for the mention watcher subscription feed.
+_FEED_LIMIT = 50
 
 
 def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
@@ -47,10 +48,12 @@ def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
 
 
 class MentionWatcher:
-    """Polls all user messages globally and dispatches @mention handling.
+    """Consumes the global user-message feed and dispatches @mention handling.
 
-    Uses a single query (messages:listRecentUserMessages) per cycle instead
-    of polling per-status + per-task. Deduplicates via _seen_message_ids.
+    The steady-state path is a native Convex subscription backed by a bounded
+    watcher feed. A one-shot gap-fill query is used only when a full bounded
+    snapshot indicates the subscription may have skipped older messages during
+    reconnects or bursts. Deduplication is enforced via _seen_message_ids.
 
     When a ``conversation_service`` is provided (Story 20.2), @mention
     detections are routed through ConversationService.handle_message()
@@ -69,56 +72,82 @@ class MentionWatcher:
         self._conversation_service = conversation_service
         self._sleep_controller = sleep_controller
         self._poll_interval = poll_interval_seconds
+        self._feed_limit = _FEED_LIMIT
         self._seen_message_ids: set[str] = set()
-        self._startup_timestamp: str = _now_iso()
-        self._last_poll_timestamp: str | None = None
+        self._startup_at = datetime.now(UTC)
+        self._last_processed_at = self._startup_at
 
     async def run(self) -> None:
-        """Main polling loop: watch for @mentions in all task threads."""
+        """Main subscription loop: watch for @mentions in all task threads."""
         logger.info("[mention_watcher] MentionWatcher started")
 
         while True:
             try:
-                if self._sleep_controller is not None and self._sleep_controller.mode == "sleep":
-                    await self._sleep_controller.wait_for_next_cycle(self._poll_interval)
-                found_work = await self._poll_all_tasks()
-                if self._sleep_controller is not None:
-                    if found_work:
-                        await self._sleep_controller.record_work_found()
-                    else:
-                        await self._sleep_controller.record_idle()
+                queue = self._bridge.async_subscribe(
+                    "messages:listRecentUserMessagesForWatcher",
+                    {"limit": self._feed_limit},
+                    sleep_controller=self._sleep_controller,
+                )
+                while True:
+                    snapshot = await queue.get()
+                    if snapshot is None:
+                        continue
+                    if isinstance(snapshot, dict) and snapshot.get("_error") is True:
+                        logger.warning(
+                            "[mention_watcher] Watcher feed subscription failed: %s",
+                            snapshot.get("message", "unknown error"),
+                        )
+                        break
+                    await self._process_feed_snapshot(snapshot)
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception("[mention_watcher] Error in polling loop")
-            if self._sleep_controller is not None:
-                await self._sleep_controller.wait_for_next_cycle(self._poll_interval)
-            else:
-                await asyncio.sleep(self._poll_interval)
+                logger.exception("[mention_watcher] Error in subscription loop")
+                await asyncio.sleep(1)
 
     async def _poll_all_tasks(self) -> bool:
-        """Poll recent user messages globally and check for @mentions."""
-        if self._last_poll_timestamp:
-            base = datetime.fromisoformat(self._last_poll_timestamp)
-            since = (base - timedelta(seconds=_OVERLAP_SECONDS)).isoformat()
-        else:
-            since = self._startup_timestamp
-
-        self._last_poll_timestamp = _now_iso()
-
+        """One-shot compatibility path for tests and manual gap fills."""
         messages = await asyncio.to_thread(
             self._bridge.get_recent_user_messages,
-            since,
+            self._last_processed_at.isoformat(),
         )
+        return await self._process_messages(messages)
 
+    async def _process_feed_snapshot(self, snapshot: object) -> bool:
+        """Process one bounded subscription snapshot, filling gaps when needed."""
+        if not isinstance(snapshot, list):
+            return False
+
+        messages = [msg for msg in snapshot if isinstance(msg, dict)]
         if not messages:
             return False
 
+        if self._needs_gap_fill(messages):
+            gap_messages = await asyncio.to_thread(
+                self._bridge.get_recent_user_messages,
+                self._last_processed_at.isoformat(),
+                limit=self._feed_limit,
+            )
+            await self._process_messages(gap_messages)
+
+        return await self._process_messages(messages)
+
+    async def _process_messages(self, messages: list[dict[str, Any]]) -> bool:
+        """Process message docs in ascending order and dispatch @mentions."""
+        if not messages:
+            return False
         found_work = False
+        latest_seen_at = self._last_processed_at
 
         for msg in messages:
+            msg_timestamp = _parse_iso(msg.get("timestamp"))
+            if msg_timestamp is not None and msg_timestamp < self._startup_at:
+                continue
+
             msg_id = msg.get("_id") or msg.get("id") or ""
             if not msg_id or msg_id in self._seen_message_ids:
+                if msg_timestamp is not None and msg_timestamp > latest_seen_at:
+                    latest_seen_at = msg_timestamp
                 continue
             claimed = await asyncio.to_thread(
                 acquire_runtime_claim,
@@ -130,8 +159,12 @@ class MentionWatcher:
             )
             if not claimed:
                 logger.debug("[mention_watcher] Claim denied for message %s", msg_id)
+                if msg_timestamp is not None and msg_timestamp > latest_seen_at:
+                    latest_seen_at = msg_timestamp
                 continue
             self._seen_message_ids.add(msg_id)
+            if msg_timestamp is not None and msg_timestamp > latest_seen_at:
+                latest_seen_at = msg_timestamp
 
             content = msg.get("content", "")
             if not content.strip():
@@ -197,9 +230,33 @@ class MentionWatcher:
                 if msg.get("_id") or msg.get("id")
             }
             self._seen_message_ids = current_ids
+        self._last_processed_at = latest_seen_at
         return found_work
+
+    def _needs_gap_fill(self, messages: list[dict[str, Any]]) -> bool:
+        """Detect when a bounded snapshot may have skipped older unseen messages."""
+        if len(messages) < self._feed_limit:
+            return False
+        oldest_timestamp = _parse_iso(messages[0].get("timestamp"))
+        if oldest_timestamp is None:
+            return False
+        return oldest_timestamp > self._last_processed_at
 
 
 def _now_iso() -> str:
     """Return current UTC time as ISO 8601 string."""
     return datetime.now(UTC).isoformat()
+
+
+def _parse_iso(value: object) -> datetime | None:
+    """Parse an ISO 8601 timestamp, accepting both Z and offset variants."""
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)

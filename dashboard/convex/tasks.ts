@@ -96,6 +96,58 @@ export const getById = query({
   },
 });
 
+const MERGE_CANDIDATE_WINDOW = 100;
+const MERGE_CANDIDATE_SEARCH_WINDOW = 25;
+const MERGE_CANDIDATE_LIMIT = 10;
+
+function projectMergeCandidate(task: {
+  _id: Id<"tasks">;
+  title: string;
+  description?: string;
+}) {
+  return {
+    _id: task._id,
+    title: task.title,
+    description: task.description,
+  };
+}
+
+function projectRuntimeTaskSnapshot(task: {
+  _id: Id<"tasks">;
+  title: string;
+  description?: string;
+  status: string;
+  assignedAgent?: string;
+  trustLevel: string;
+  reviewers?: string[];
+  taskTimeout?: number;
+  interAgentTimeout?: number;
+  awaitingKickoff?: boolean;
+  reviewPhase?: string;
+  isManual?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  stateVersion?: number;
+}) {
+  return {
+    _id: task._id,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    assignedAgent: task.assignedAgent,
+    trustLevel: task.trustLevel,
+    reviewers: task.reviewers,
+    taskTimeout: task.taskTimeout,
+    interAgentTimeout: task.interAgentTimeout,
+    awaitingKickoff: task.awaitingKickoff,
+    reviewPhase: task.reviewPhase,
+    isManual: task.isManual,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    stateVersion: task.stateVersion,
+  };
+}
+
 export const searchMergeCandidates = query({
   args: {
     query: v.string(),
@@ -104,7 +156,6 @@ export const searchMergeCandidates = query({
   },
   handler: async (ctx, args) => {
     const normalized = args.query.trim().toLowerCase();
-    const tasks = await ctx.db.query("tasks").collect();
     const targetTask = args.targetTaskId ? await ctx.db.get(args.targetTaskId) : null;
     const targetLineage =
       targetTask?.isMergeTask === true
@@ -113,6 +164,26 @@ export const searchMergeCandidates = query({
             targetTask.mergeSourceTaskIds as Id<"tasks">[] | undefined,
           )
         : new Set<string>();
+    const tasks = normalized
+      ? await Promise.all([
+          ctx.db
+            .query("tasks")
+            .withSearchIndex("search_title_global", (q) => q.search("title", normalized))
+            .take(MERGE_CANDIDATE_SEARCH_WINDOW),
+          ctx.db
+            .query("tasks")
+            .withSearchIndex("search_description_global", (q) =>
+              q.search("description", normalized),
+            )
+            .take(MERGE_CANDIDATE_SEARCH_WINDOW),
+        ]).then(([titleMatches, descriptionMatches]) => {
+          const deduped = new Map<Id<"tasks">, (typeof titleMatches)[number]>();
+          for (const task of [...titleMatches, ...descriptionMatches]) {
+            deduped.set(task._id, task);
+          }
+          return Array.from(deduped.values());
+        })
+      : await ctx.db.query("tasks").withIndex("by_updatedAt").order("desc").take(MERGE_CANDIDATE_WINDOW);
     const filtered = [];
     for (const task of tasks) {
       if (task._id === args.excludeTaskId) continue;
@@ -131,16 +202,17 @@ export const searchMergeCandidates = query({
         }
         if (hasLineageOverlap(candidateLineage, targetLineage)) continue;
       }
-      if (
-        normalized &&
-        !task.title.toLowerCase().includes(normalized) &&
-        !(task.description ?? "").toLowerCase().includes(normalized)
-      ) {
-        continue;
+      if (!normalized || task.title.toLowerCase().includes(normalized) || (task.description ?? "").toLowerCase().includes(normalized)) {
+        filtered.push(projectMergeCandidate(task));
       }
-      filtered.push(task);
     }
-    return filtered.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 10);
+    return filtered
+      .sort((a, b) => {
+        const aTask = tasks.find((task) => task._id === a._id);
+        const bTask = tasks.find((task) => task._id === b._id);
+        return String(bTask?.updatedAt ?? "").localeCompare(String(aTask?.updatedAt ?? ""));
+      })
+      .slice(0, MERGE_CANDIDATE_LIMIT);
   },
 });
 
@@ -178,26 +250,7 @@ export const listByStatusLite = query({
       .query("tasks")
       .withIndex("by_status", (q) => q.eq("status", args.status))
       .collect();
-    return tasks.map(
-      ({
-        routingDecision: _routingDecision,
-        files: _files,
-        mergeSourceTaskIds: _mergeSourceTaskIds,
-        mergeSourceLabels: _mergeSourceLabels,
-        mergedIntoTaskId: _mergedIntoTaskId,
-        mergePreviousStatus: _mergePreviousStatus,
-        mergeLockedAt: _mergeLockedAt,
-        isMergeTask: _isMergeTask,
-        stalledAt: _stalledAt,
-        isFavorite: _isFavorite,
-        deletedAt: _deletedAt,
-        previousStatus: _previousStatus,
-        sourceAgent: _sourceAgent,
-        squadSpecId: _squadSpecId,
-        workflowSpecId: _workflowSpecId,
-        ...rest
-      }) => rest,
-    );
+    return tasks.map(projectRuntimeTaskSnapshot);
   },
 });
 

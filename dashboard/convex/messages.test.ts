@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   create,
+  listRecentByTaskForAskUser,
+  listRecentUserMessagesForWatcher,
   postMentionMessage,
   postLeadAgentMessage,
   postStepCompletion,
@@ -67,6 +69,22 @@ function getReplyHandler() {
   return (
     postUserReply as unknown as {
       _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
+    }
+  )._handler;
+}
+
+function getWatcherFeedHandler() {
+  return (
+    listRecentUserMessagesForWatcher as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown[]>;
+    }
+  )._handler;
+}
+
+function getAskUserFeedHandler() {
+  return (
+    listRecentByTaskForAskUser as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown[]>;
     }
   )._handler;
 }
@@ -266,6 +284,141 @@ describe("messages.postMentionMessage", () => {
     });
 
     expect(result).toBe("msg-id-123");
+  });
+});
+
+describe("messages.listRecentUserMessagesForWatcher", () => {
+  it("returns a bounded ascending snapshot of recent user messages with minimal fields", async () => {
+    const handler = getWatcherFeedHandler();
+    const take = vi.fn(async (limit: number) => {
+      expect(limit).toBe(2);
+      return [
+        {
+          _id: "msg-3",
+          taskId: "task-2",
+          authorType: "user",
+          content: "@alice latest",
+          timestamp: "2026-03-23T13:00:03Z",
+          ignored: "heavy-field",
+        },
+        {
+          _id: "msg-2",
+          taskId: "task-1",
+          authorType: "user",
+          content: "@bob recent",
+          timestamp: "2026-03-23T13:00:02Z",
+          ignored: "heavy-field",
+        },
+      ];
+    });
+    const order = vi.fn((direction: string) => {
+      expect(direction).toBe("desc");
+      return { take };
+    });
+    const withIndex = vi.fn((indexName: string, apply?: (q: { eq: (field: string, value: string) => unknown }) => unknown) => {
+      expect(indexName).toBe("by_authorType_timestamp");
+      apply?.({
+        eq: (field: string, value: string) => {
+          expect(field).toBe("authorType");
+          expect(value).toBe("user");
+          return {};
+        },
+      });
+      return { order };
+    });
+    const query = vi.fn((table: string) => {
+      expect(table).toBe("messages");
+      return { withIndex };
+    });
+
+    const results = await handler({ db: { query } }, { limit: 2 });
+
+    expect(results).toEqual([
+      {
+        id: "msg-2",
+        taskId: "task-1",
+        authorType: "user",
+        content: "@bob recent",
+        timestamp: "2026-03-23T13:00:02Z",
+      },
+      {
+        id: "msg-3",
+        taskId: "task-2",
+        authorType: "user",
+        content: "@alice latest",
+        timestamp: "2026-03-23T13:00:03Z",
+      },
+    ]);
+  });
+});
+
+describe("messages.listRecentByTaskForAskUser", () => {
+  it("returns a bounded ascending snapshot of recent task messages with minimal fields", async () => {
+    const handler = getAskUserFeedHandler();
+    const take = vi.fn(async (limit: number) => {
+      expect(limit).toBe(2);
+      return [
+        {
+          _id: "msg-3",
+          taskId: "task-1",
+          authorType: "user",
+          content: "Newest",
+          timestamp: "2026-03-23T13:00:03Z",
+          type: "user_message",
+        },
+        {
+          _id: "msg-2",
+          taskId: "task-1",
+          authorType: "agent",
+          content: "Older",
+          timestamp: "2026-03-23T13:00:02Z",
+          type: "work",
+        },
+      ];
+    });
+    const order = vi.fn((direction: string) => {
+      expect(direction).toBe("desc");
+      return { take };
+    });
+    const withIndex = vi.fn(
+      (
+        indexName: string,
+        apply?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+      ) => {
+        expect(indexName).toBe("by_taskId_timestamp");
+        apply?.({
+          eq: (field: string, value: string) => {
+            expect(field).toBe("taskId");
+            expect(value).toBe("task-1");
+            return {};
+          },
+        });
+        return { order };
+      },
+    );
+    const query = vi.fn((table: string) => {
+      expect(table).toBe("messages");
+      return { withIndex };
+    });
+
+    const results = await handler({ db: { query } }, { taskId: "task-1", limit: 2 });
+
+    expect(results).toEqual([
+      {
+        id: "msg-2",
+        taskId: "task-1",
+        authorType: "agent",
+        content: "Older",
+        timestamp: "2026-03-23T13:00:02Z",
+      },
+      {
+        id: "msg-3",
+        taskId: "task-1",
+        authorType: "user",
+        content: "Newest",
+        timestamp: "2026-03-23T13:00:03Z",
+      },
+    ]);
   });
 });
 
