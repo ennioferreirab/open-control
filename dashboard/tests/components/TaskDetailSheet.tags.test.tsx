@@ -116,6 +116,7 @@ vi.mock("motion/react-client", () => ({
 }));
 vi.mock("motion/react", () => ({
   useReducedMotion: () => false,
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 // Mock Radix Popover to be testable in jsdom
@@ -456,25 +457,22 @@ describe("TaskDetailSheet — header tag chips", () => {
   it("uses tag color from catalog for header chips", () => {
     renderWithAttrs({ tags: ["bug"] });
     const allBugTexts = screen.getAllByText("bug");
-    // The text is inside <span class="truncate"> inside <span class="chipClass">
-    // Go up to the outer chip span (parent of the truncate span)
-    const headerText = allBugTexts.find((el) => !el.closest("[data-testid='tab-config']"));
-    const chipSpan = headerText?.parentElement;
-    expect(chipSpan?.className).toContain("bg-red-100");
-    expect(chipSpan?.className).toContain("text-red-700");
+    // TagChip renders label as direct text child of the outer <span> with color classes
+    const headerChip = allBugTexts.find((el) => !el.closest("[data-testid='tab-config']"));
+    expect(headerChip?.className).toContain("bg-red-100");
+    expect(headerChip?.className).toContain("text-red-700");
   });
 
   it("applies muted style for tags not in catalog", () => {
     renderWithAttrs({ tags: ["unknown-tag"] });
     const allTexts = screen.getAllByText("unknown-tag");
-    const headerText = allTexts.find((el) => !el.closest("[data-testid='tab-config']"));
-    const chipSpan = headerText?.parentElement;
-    expect(chipSpan?.className).toContain("bg-muted");
+    const headerChip = allTexts.find((el) => !el.closest("[data-testid='tab-config']"));
+    expect(headerChip?.className).toContain("bg-muted");
   });
 
   it("does not render header chips when task has no tags", () => {
     renderWithAttrs({ tags: [] });
     // Status badge should still be there
-    expect(screen.getByText("in progress")).toBeInTheDocument();
+    expect(screen.getByText(/in progress/i)).toBeInTheDocument();
   });
 });

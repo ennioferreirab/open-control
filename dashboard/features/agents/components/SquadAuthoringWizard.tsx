@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +21,8 @@ interface SquadAuthoringWizardProps {
 export function SquadAuthoringWizard({ open, onClose }: SquadAuthoringWizardProps) {
   const [generation, setGeneration] = useState(0);
   const [provider, setProvider] = useState<WizardProvider>("claude-code");
-  const scopeId = useMemo(() => {
-    const id =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2) + Date.now().toString(36);
-    return `create-squad:${generation}-${id}`;
-  }, [generation]);
+  const reactId = useId();
+  const scopeId = `create-squad:${generation}-${reactId}`;
 
   const handleClose = () => {
     setGeneration((g) => g + 1);

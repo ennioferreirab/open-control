@@ -14,21 +14,17 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const prefersReducedMotion = useReducedMotion();
 
-  // Close on Escape
+  // Close on Escape + reset query when opening
   useEffect(() => {
+    if (!isOpen) return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- reset on open is intentional */
+    setQuery("");
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    if (isOpen) {
-      document.addEventListener("keydown", handleKeyDown);
-      return () => document.removeEventListener("keydown", handleKeyDown);
-    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
-
-  // Reset query when opening
-  useEffect(() => {
-    if (isOpen) setQuery("");
-  }, [isOpen]);
 
   return (
     <AnimatePresence>

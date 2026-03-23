@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SquadWorkflowCanvas } from "./SquadWorkflowCanvas";
 
@@ -119,9 +119,10 @@ describe("SquadWorkflowCanvas", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: "Steps" }));
 
-    expect(screen.getByTestId("squad-workflow-steps-list")).toBeInTheDocument();
-    expect(screen.getByTestId("workflow-step-row-step-1")).toBeInTheDocument();
-    expect(screen.getByTestId("workflow-step-row-step-2")).toBeInTheDocument();
+    const stepsList = screen.getByTestId("squad-workflow-steps-list");
+    expect(stepsList).toBeInTheDocument();
+    expect(within(stepsList).getByText("Review")).toBeInTheDocument();
+    expect(within(stepsList).getByText("Revise")).toBeInTheDocument();
   });
 
   it("shows validation criteria in the criteria tab and lets edit mode change it", async () => {

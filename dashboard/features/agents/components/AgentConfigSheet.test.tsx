@@ -303,7 +303,7 @@ describe("AgentConfigSheet", () => {
   it("renders a Soul section with preview text", async () => {
     render(<AgentConfigSheet agentName="designer-agent" onClose={vi.fn()} />);
 
-    expect(await screen.findByText("Soul")).toBeInTheDocument();
+    expect(await screen.findByText("SOUL")).toBeInTheDocument();
     expect(screen.getByText(/Balance craft, clarity, and systems thinking/)).toBeInTheDocument();
   });
 
@@ -314,7 +314,8 @@ describe("AgentConfigSheet", () => {
     const saveButton = screen.getByRole("button", { name: /^save$/i });
     expect(saveButton).toBeDisabled();
 
-    await user.type(screen.getByLabelText("Prompt"), " with stronger system rationale");
+    const promptTextarea = screen.getByRole("textbox");
+    await user.type(promptTextarea, " with stronger system rationale");
 
     expect(saveButton).toBeEnabled();
   });
@@ -327,7 +328,7 @@ describe("AgentConfigSheet", () => {
     expect(saveButton).toBeDisabled();
 
     const selects = screen.getAllByRole("combobox");
-    await user.selectOptions(selects[2], "claude-opus-4-6");
+    await user.selectOptions(selects[1], "claude-opus-4-6");
 
     expect(saveButton).toBeEnabled();
   });

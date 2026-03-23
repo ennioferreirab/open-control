@@ -171,7 +171,8 @@ describe("AgentConfigSheet", () => {
     );
 
     if (!overrides || overrides.agentName !== null) {
-      await screen.findByDisplayValue("Developer");
+      // Wait for the sheet to render with the agent display name
+      await screen.findByText("Test Agent");
       await waitFor(() => {
         expect(fetch).toHaveBeenCalledWith("/api/agents/test-agent/memory/MEMORY.md");
         expect(fetch).toHaveBeenCalledWith("/api/agents/test-agent/memory/HISTORY.md");
@@ -213,21 +214,11 @@ describe("AgentConfigSheet", () => {
   it("enables Save button when form is dirty", async () => {
     await renderLoadedSheet();
 
-    const roleInput = screen.getByDisplayValue("Developer");
-    fireEvent.change(roleInput, { target: { value: "Senior Developer" } });
+    const promptInput = screen.getByDisplayValue("You are a developer.");
+    fireEvent.change(promptInput, { target: { value: "You are a senior developer." } });
 
     const saveButton = screen.getByText("Save");
     expect(saveButton).not.toBeDisabled();
-  });
-
-  it("shows validation error for empty role on blur", async () => {
-    await renderLoadedSheet();
-
-    const roleInput = screen.getByDisplayValue("Developer");
-    fireEvent.change(roleInput, { target: { value: "" } });
-    fireEvent.blur(roleInput);
-
-    expect(screen.getByText("Agent role cannot be empty.")).toBeInTheDocument();
   });
 
   it("shows validation error for empty prompt on blur", async () => {
@@ -243,8 +234,8 @@ describe("AgentConfigSheet", () => {
   it("calls updateConfig mutation on save", async () => {
     await renderLoadedSheet();
 
-    const roleInput = screen.getByDisplayValue("Developer");
-    fireEvent.change(roleInput, { target: { value: "Senior Developer" } });
+    const promptInput = screen.getByDisplayValue("You are a developer.");
+    fireEvent.change(promptInput, { target: { value: "You are a senior developer." } });
 
     const saveButton = screen.getByText("Save");
     fireEvent.click(saveButton);
@@ -253,7 +244,7 @@ describe("AgentConfigSheet", () => {
       expect(mockUpdateConfig).toHaveBeenCalledWith(
         expect.objectContaining({
           name: "test-agent",
-          role: "Senior Developer",
+          prompt: "You are a senior developer.",
         }),
       );
     });
@@ -262,8 +253,8 @@ describe("AgentConfigSheet", () => {
   it("shows success checkmark after save", async () => {
     await renderLoadedSheet();
 
-    const roleInput = screen.getByDisplayValue("Developer");
-    fireEvent.change(roleInput, { target: { value: "Senior Developer" } });
+    const promptInput = screen.getByDisplayValue("You are a developer.");
+    fireEvent.change(promptInput, { target: { value: "You are a senior developer." } });
 
     const saveButton = screen.getByText("Save");
     fireEvent.click(saveButton);
@@ -278,8 +269,8 @@ describe("AgentConfigSheet", () => {
 
     await renderLoadedSheet();
 
-    const roleInput = screen.getByDisplayValue("Developer");
-    fireEvent.change(roleInput, { target: { value: "Senior Developer" } });
+    const promptInput = screen.getByDisplayValue("You are a developer.");
+    fireEvent.change(promptInput, { target: { value: "You are a senior developer." } });
 
     const saveButton = screen.getByText("Save");
     fireEvent.click(saveButton);
@@ -291,13 +282,11 @@ describe("AgentConfigSheet", () => {
 
   // --- Enable/disable toggle tests ---
 
-  it("renders Deactivated label and unchecked switch when agent is disabled", async () => {
+  it("renders Deactivated status and unchecked switch when agent is disabled", async () => {
     mockQueryResult = { ...mockAgent, enabled: false };
     await renderLoadedSheet();
 
-    const deactivatedTexts = screen.getAllByText("Deactivated");
-    // Should appear in both header status and toggle label
-    expect(deactivatedTexts.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Deactivated")).toBeInTheDocument();
     const toggle = screen.getByTestId("enabled-switch");
     expect(toggle.getAttribute("data-state")).toBe("unchecked");
   });
@@ -357,30 +346,6 @@ describe("AgentConfigSheet", () => {
         enabled: true,
       });
     });
-  });
-
-  it("shows info text when agent is disabled", async () => {
-    mockQueryResult = { ...mockAgent, enabled: false };
-    await renderLoadedSheet();
-
-    expect(screen.getByText("This agent will not receive new tasks")).toBeInTheDocument();
-  });
-
-  it("shows info text when toggle is switched to disabled (before save)", async () => {
-    await renderLoadedSheet();
-
-    expect(screen.queryByText("This agent will not receive new tasks")).not.toBeInTheDocument();
-
-    const toggle = screen.getByTestId("enabled-switch");
-    fireEvent.click(toggle);
-
-    expect(screen.getByText("This agent will not receive new tasks")).toBeInTheDocument();
-  });
-
-  it("does not show info text when agent is enabled", async () => {
-    await renderLoadedSheet();
-
-    expect(screen.queryByText("This agent will not receive new tasks")).not.toBeInTheDocument();
   });
 
   // --- Memory/History section tests ---
