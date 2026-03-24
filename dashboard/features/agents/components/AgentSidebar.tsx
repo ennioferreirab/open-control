@@ -30,6 +30,7 @@ import { AgentSidebarItem } from "@/features/agents/components/AgentSidebarItem"
 import { CreateAuthoringDialog } from "@/features/agents/components/CreateAuthoringDialog";
 import { AgentAuthoringWizard } from "@/features/agents/components/AgentAuthoringWizard";
 import { SquadAuthoringWizard } from "@/features/agents/components/SquadAuthoringWizard";
+import { WorkflowAuthoringWizard } from "@/features/agents/components/WorkflowAuthoringWizard";
 import { SquadSidebarSection } from "@/features/agents/components/SquadSidebarSection";
 import { DeleteAgentsDialog } from "@/features/agents/components/DeleteAgentsDialog";
 import { DeleteSquadDialog } from "@/features/agents/components/DeleteSquadDialog";
@@ -60,6 +61,7 @@ export function AgentSidebar({ onSelectAgent, onSelectSquad }: AgentSidebarProps
   const [showCreateChooser, setShowCreateChooser] = useState(false);
   const [showAgentWizard, setShowAgentWizard] = useState(false);
   const [showSquadWizard, setShowSquadWizard] = useState(false);
+  const [showWorkflowWizard, setShowWorkflowWizard] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
   const [systemOpen, setSystemOpen] = useState(true);
   const [registeredOpen, setRegisteredOpen] = useState(true);
@@ -177,10 +179,10 @@ export function AgentSidebar({ onSelectAgent, onSelectSquad }: AgentSidebarProps
               <SidebarMenuItem>
                 <SidebarMenuButton
                   size="lg"
-                  tooltip="Create Agent or Squad"
+                  tooltip="Create"
                   onClick={() => setShowCreateChooser(true)}
                   className="!h-auto cursor-pointer group-data-[collapsible=icon]:justify-center"
-                  aria-label="Create Agent or Squad"
+                  aria-label="Create"
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40">
                     <Plus className="h-4 w-4 text-muted-foreground" />
@@ -426,9 +428,14 @@ export function AgentSidebar({ onSelectAgent, onSelectSquad }: AgentSidebarProps
         onClose={() => setShowCreateChooser(false)}
         onSelectAgent={() => setShowAgentWizard(true)}
         onSelectSquad={() => setShowSquadWizard(true)}
+        onSelectWorkflow={() => setShowWorkflowWizard(true)}
       />
       <AgentAuthoringWizard open={showAgentWizard} onClose={() => setShowAgentWizard(false)} />
       <SquadAuthoringWizard open={showSquadWizard} onClose={() => setShowSquadWizard(false)} />
+      <WorkflowAuthoringWizard
+        open={showWorkflowWizard}
+        onClose={() => setShowWorkflowWizard(false)}
+      />
       <DeleteAgentsDialog
         agents={Array.from(selectedItems.values())
           .filter((i): i is Extract<SelectableItem, { type: "agent" }> => i.type === "agent")
