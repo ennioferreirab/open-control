@@ -409,12 +409,17 @@ assignments are complete and that no agent will launch "empty-handed".
 2. For each assigned agent, list the skills from its roster entry (Phase 4).
 3. Cross-reference each skill against the current `availableSkills` list (re-fetch
    context if any skills were created during this flow).
-4. Flag any of the following problems:
+4. For each workflow step of type `review`, verify it includes `reviewSpecId`
+   (from `availableReviewSpecs`) and `onReject` routing policy.
+5. Flag any of the following problems:
    - **No skills assigned** — agent has `skills: []` or skills were omitted.
    - **Skill not found** — skill name is not in `availableSkills`.
    - **Provider mismatch** — skill exists but does not support the target provider.
    - **Capability gap** — the step's purpose (from Phase 5) requires a capability
      identified in Phase 2, but no assigned skill covers it.
+   - **Missing reviewSpecId** — a `review` step has no `reviewSpecId` or uses a
+     fabricated ID not in `availableReviewSpecs`.
+   - **Missing onReject** — a `review` step has no `onReject` routing policy.
 
 Present the audit result using this format:
 
@@ -429,14 +434,17 @@ Step [research] → agent:researcher (Rafa Researcher)
 Step [draft] → agent:writer (Wanda Writer)
   ✓ writing — available, provider OK
 
-Step [review] → agent:reviewer (Rita Reviewer)
-  ✗ editorial-review — NOT FOUND in availableSkills
-    → Action: create via /create-skill-mc, then sync
+Step [review] → review:reviewer (Rita Reviewer)
+  ✓ editorial-review — available, provider OK
+  ✗ reviewSpecId — MISSING (required for review steps)
+    → Action: select from availableReviewSpecs or create one
+  ✗ onReject — MISSING (required for review steps)
+    → Action: define routing policy (e.g., "return_to_step:draft")
 
 Step [approve] → human
   (no agent — skip)
 
-Summary: 1 issue(s) found
+Summary: 2 issue(s) found
 ═══════════════════════════════════════
 ```
 
@@ -452,6 +460,11 @@ Summary: 1 issue(s) found
     skill or choose an alternative.
   - **Capability gap:** identify which skill would fill the gap — reuse from
     `availableSkills` or create a new one.
+  - **Missing reviewSpecId:** select a real ID from `availableReviewSpecs`. If
+    none is suitable, ask the user whether to switch to `checkpoint`/`human` or
+    create a review spec first.
+  - **Missing onReject:** define the routing policy — which step to return to on
+    rejection (e.g., `"return_to_step:draft"`).
 
 Do NOT proceed to publish until the audit shows zero issues. Re-run the audit
 after every resolution to confirm the fix.
@@ -571,20 +584,55 @@ Report the created squad ID and any follow-up recommendation, such as testing th
 
 ## Contract Rules
 
-New agents must publish with:
+These rules are enforced by the validator — violating them causes a publish
+failure. Do not attempt to publish without satisfying every rule.
+
+### Agent fields (all required for new agents)
 
 - `name`
 - `displayName`
 - `role`
 - `prompt`
 - `model`
-- `skills`
+- `skills` (array — may be empty `[]` but must be explicit)
 - `soul`
 
-Workflow rules:
+### Workflow step rules
 
 - `agent` and `review` steps must reference a valid `agentKey`
-- `review` steps must include `reviewSpecId`
-- `review` steps must include `onReject`
+- `review` steps **must** include `reviewSpecId` — a real ID from
+  `availableReviewSpecs`, never a fabricated string
+- `review` steps **must** include `onReject` — the routing policy on rejection
 
-Publish is the last step. Never publish a squad that still has unresolved skill gaps.
+A `review` step without `reviewSpecId` or `onReject` will be rejected by the
+validator with:
+
+```
+Error: Review step "{key}" requires reviewSpecId
+```
+
+Example of a valid review step in the publish payload:
+
+```json
+{
+  "key": "review",
+  "type": "review",
+  "agentKey": "reviewer",
+  "title": "Review the draft",
+  "reviewSpecId": "k57a2dz1h3m9q0v7w8x6y5z4a1b2c3d4",
+  "onReject": "return_to_step:draft",
+  "dependsOn": ["draft"]
+}
+```
+
+### Pre-publish checklist
+
+Before building the publish payload, verify:
+
+1. Every agent has all 7 required fields
+2. Every `review` step has `reviewSpecId` (from `availableReviewSpecs`) and `onReject`
+3. Every `agent`/`review` step references a valid `agentKey` from the roster
+4. Phase 6 audit passed with zero issues
+
+Publish is the last step. Never publish a squad that still has unresolved skill
+gaps or missing required fields.
