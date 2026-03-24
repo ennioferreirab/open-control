@@ -15,7 +15,8 @@ This flow is terminal-first and skills-first:
 3. Reuse existing agents and skills where possible.
 4. Create missing skills before publish when they do not already exist.
 5. Design the minimum viable roster and workflow.
-6. Publish only after the graph is complete.
+6. Audit skill coverage — verify every agent has the skills it needs.
+7. Publish only after the audit passes with zero issues.
 
 Ask 1-2 questions at a time. Keep the flow structured, but do not dump a long questionnaire up front.
 
@@ -397,7 +398,73 @@ Workflow: "default"
   4. [approve]  human - "Approve for publish" (depends on: review)
 ```
 
-## Phase 6: Review and Publish
+## Phase 6: Skill Coverage Audit
+
+After the workflow is stable, audit every agent-step to confirm that skill
+assignments are complete and that no agent will launch "empty-handed".
+
+### Procedure
+
+1. For each workflow step of type `agent` or `review`, identify the assigned agent.
+2. For each assigned agent, list the skills from its roster entry (Phase 4).
+3. Cross-reference each skill against the current `availableSkills` list (re-fetch
+   context if any skills were created during this flow).
+4. Flag any of the following problems:
+   - **No skills assigned** — agent has `skills: []` or skills were omitted.
+   - **Skill not found** — skill name is not in `availableSkills`.
+   - **Provider mismatch** — skill exists but does not support the target provider.
+   - **Capability gap** — the step's purpose (from Phase 5) requires a capability
+     identified in Phase 2, but no assigned skill covers it.
+
+Present the audit result using this format:
+
+```text
+═══════════════════════════════════════
+  Skill Coverage Audit
+═══════════════════════════════════════
+Step [research] → agent:researcher (Rafa Researcher)
+  ✓ research-synthesis — available, provider OK
+  ✓ interviewing — available, provider OK
+
+Step [draft] → agent:writer (Wanda Writer)
+  ✓ writing — available, provider OK
+
+Step [review] → agent:reviewer (Rita Reviewer)
+  ✗ editorial-review — NOT FOUND in availableSkills
+    → Action: create via /create-skill-mc, then sync
+
+Step [approve] → human
+  (no agent — skip)
+
+Summary: 1 issue(s) found
+═══════════════════════════════════════
+```
+
+### Resolution
+
+- If all checks pass, proceed to Phase 7.
+- If any issue is found, resolve it before continuing:
+  - **No skills assigned:** go back to Phase 4 and assign skills. Ask the user
+    which skills the agent needs for its step.
+  - **Skill not found:** create via `/create-skill-mc`, sync, re-fetch context,
+    then re-run the audit.
+  - **Provider mismatch:** ask the user whether to add provider support to the
+    skill or choose an alternative.
+  - **Capability gap:** identify which skill would fill the gap — reuse from
+    `availableSkills` or create a new one.
+
+Do NOT proceed to publish until the audit shows zero issues. Re-run the audit
+after every resolution to confirm the fix.
+
+After all issues are resolved, re-fetch context one final time:
+
+```bash
+curl -s http://localhost:3000/api/specs/squad/context
+```
+
+Confirm all agent skills appear in `availableSkills` before moving on.
+
+## Phase 7: Review and Publish
 
 Before publish, present a final summary with:
 
