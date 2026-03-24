@@ -249,7 +249,12 @@ cause confusion and fragmentation. Only create a new agent when NO existing
 agent is a credible match for the required capability.
 
 Before proposing any roster, you MUST produce a Reuse Assessment for every
-required capability identified in Phase 2:
+required capability identified in Phase 2. Evaluate each capability against
+the `activeAgents` list from the context loaded in the "Load Context First"
+step above.
+
+The example below uses hypothetical agents for illustration — your actual
+assessment must reference the real agents returned by the context endpoint:
 
 ```text
 Reuse Assessment:
@@ -260,6 +265,10 @@ Reuse Assessment:
   Capability "long-form drafting":
     Match: post-writer (90% fit) — has writing skill, same model target
     Recommendation: REUSE
+
+  Capability "social distribution":
+    Match: content-scheduler (55% fit) — has scheduling skill, but no social-specific tools
+    Recommendation: ASK — present to user for decision
 
   Capability "editorial review":
     Match: none — no existing agent with editorial-review skill
