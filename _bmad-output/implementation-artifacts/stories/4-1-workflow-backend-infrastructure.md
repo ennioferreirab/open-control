@@ -3,7 +3,7 @@
 ## Story
 As a skill author, I need API endpoints and a Convex mutation to create standalone workflows linked to existing squads, so that the new `/create-workflow-mc` skill can publish workflows independently of squad creation.
 
-## Status: done
+## Status: ready-for-dev
 
 ## Context
 Currently workflows can only be created atomically through `squadSpecs:publishGraph` (squad graph publish). We need a standalone path: a Convex mutation `workflowSpecs:publishStandalone` and two Next.js API endpoints (`GET /api/specs/workflow/context` and `POST /api/specs/workflow`).
@@ -82,10 +82,6 @@ Currently workflows can only be created atomically through `squadSpecs:publishGr
 - Integration test via the API endpoint with curl or test client
 
 ## Dev Agent Record
-- Model: claude-sonnet-4-6
-- Completion notes: All tasks implemented. `publishStandalone` added as a public `mutation` (not `internalMutation`) so it can be referenced via `api.workflowSpecs.publishStandalone` in the POST route. `agents:listByIds` exists as a public query (confirmed in agents.ts:337). Both API routes follow exact patterns from squad equivalents. TypeScript errors in new files are pre-existing environment issues (same errors appear in squad routes). Lint/typecheck require Docker since node_modules are not installed locally. Step id generation uses a counter (`step-1`, `step-2`, ...) instead of UUID since `crypto` is not available in Convex mutations.
-- Files modified:
-  - `dashboard/convex/workflowSpecs.ts` (added `publishStandalone` mutation, added `mutation` import)
-  - `dashboard/app/api/specs/workflow/context/route.ts` (created)
-  - `dashboard/app/api/specs/workflow/route.ts` (created)
-  - `_bmad-output/implementation-artifacts/stories/4-1-workflow-backend-infrastructure.md` (status updated)
+- Model: (to be filled by dev agent)
+- Completion notes: (to be filled by dev agent)
+- Files modified: (to be filled by dev agent)

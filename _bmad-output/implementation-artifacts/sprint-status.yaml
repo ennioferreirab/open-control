@@ -34,3 +34,11 @@ development_status:
   2-2-live-step-session-navigation: ready-for-dev
   2-3-live-chronological-grouped-rendering: ready-for-dev
   epic-2-retrospective: optional
+
+  epic-4: backlog
+  4-1-workflow-backend-infrastructure: ready-for-dev
+  4-2-create-workflow-skill: ready-for-dev
+  4-3-squad-skill-agent-reuse: ready-for-dev
+  4-4-workflow-authoring-ui: ready-for-dev
+  4-5-agent-docs-workflow-paradigm: ready-for-dev
+  epic-4-retrospective: optional
