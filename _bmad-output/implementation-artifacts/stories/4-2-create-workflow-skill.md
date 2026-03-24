@@ -3,25 +3,25 @@
 ## Story
 As a user, I want a `/create-workflow-mc` skill that guides me through designing a workflow for an existing squad, so I can create execution flows independently of squad creation.
 
-## Status: ready-for-dev
+## Status: done
 
 ## Context
 The current `/create-squad-mc` skill bundles squad + agents + workflow creation into one flow. The new `/create-workflow-mc` skill provides a lighter, workflow-focused experience: select a squad, review its agents, design steps, and publish. This is the skill invoked by the `WorkflowAuthoringWizard` terminal.
 
 ## Acceptance Criteria
-- [ ] Skill file exists at `mc/skills/create-workflow-mc/SKILL.md`
-- [ ] Phase 1 fetches context from `GET /api/specs/workflow/context` and presents published squads
-- [ ] Phase 1 allows selecting an existing squad or creating a new one inline via `/create-squad-mc`
-- [ ] Phase 2 displays the selected squad's agent roster for reference
-- [ ] Phase 3 guides step design using only agents from the selected squad
-- [ ] Phase 3 enforces review step contracts (real reviewSpecId, onReject)
-- [ ] Phase 4 shows final summary and publishes via `POST /api/specs/workflow`
-- [ ] Skill uses `disable-model-invocation: true` frontmatter
-- [ ] Asks 1-2 questions at a time (same interactive pattern as create-squad-mc)
+- [x] Skill file exists at `mc/skills/create-workflow-mc/SKILL.md`
+- [x] Phase 1 fetches context from `GET /api/specs/workflow/context` and presents published squads
+- [x] Phase 1 allows selecting an existing squad or creating a new one inline via `/create-squad-mc`
+- [x] Phase 2 displays the selected squad's agent roster for reference
+- [x] Phase 3 guides step design using only agents from the selected squad
+- [x] Phase 3 enforces review step contracts (real reviewSpecId, onReject)
+- [x] Phase 4 shows final summary and publishes via `POST /api/specs/workflow`
+- [x] Skill uses `disable-model-invocation: true` frontmatter
+- [x] Asks 1-2 questions at a time (same interactive pattern as create-squad-mc)
 
 ## Tasks
 
-- [ ] **Create `mc/skills/create-workflow-mc/SKILL.md`** — Full skill definition
+- [x] **Create `mc/skills/create-workflow-mc/SKILL.md`** — Full skill definition
 
   Frontmatter:
   ```yaml
@@ -130,6 +130,6 @@ The current `/create-squad-mc` skill bundles squad + agents + workflow creation 
 - Verify publish succeeds by checking the workflow appears in squad detail sheet
 
 ## Dev Agent Record
-- Model: (to be filled by dev agent)
-- Completion notes: (to be filled by dev agent)
-- Files modified: (to be filled by dev agent)
+- Model: claude-sonnet-4-6
+- Completion notes: Created `mc/skills/create-workflow-mc/SKILL.md` following the create-squad-mc conventions. The skill has 4 phases: Intent & Squad Selection (fetches workflow context, presents published squads with agent/workflow counts, handles inline squad creation via /create-squad-mc then refreshes context), Agent Roster Review (displays squad agents with agentKeys in table format, blocks if no agents), Step Design (guides step creation one at a time with contract enforcement for review steps — real reviewSpecId from availableReviewSpecs, onReject required, agentKey must be from squad roster), and Review & Publish (shows full summary with the exact blueprint format, then POSTs to /api/specs/workflow). Uses `disable-model-invocation: true` frontmatter. Enforces all contract rules including slug validation and prohibiting fabricated reviewSpecId values.
+- Files modified: `mc/skills/create-workflow-mc/SKILL.md` (created), `_bmad-output/implementation-artifacts/stories/4-2-create-workflow-skill.md` (updated)
