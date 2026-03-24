@@ -242,6 +242,47 @@ skills manually — the skill wizard handles structure, validation, and sync.
 
 Only after capabilities and skills are resolved, design the roster.
 
+### Agent Reuse Priority (Mandatory)
+
+ALWAYS prefer reusing existing agents over creating new ones. Too many agents
+cause confusion and fragmentation. Only create a new agent when NO existing
+agent is a credible match for the required capability.
+
+Before proposing any roster, you MUST produce a Reuse Assessment for every
+required capability identified in Phase 2. Evaluate each capability against
+the `activeAgents` list from the context loaded in the "Load Context First"
+step above.
+
+The example below uses hypothetical agents for illustration — your actual
+assessment must reference the real agents returned by the context endpoint:
+
+```text
+Reuse Assessment:
+  Capability "audience research":
+    Match: researcher-agent (85% fit) — has research-synthesis skill, used in content squads
+    Recommendation: REUSE
+
+  Capability "long-form drafting":
+    Match: post-writer (90% fit) — has writing skill, same model target
+    Recommendation: REUSE
+
+  Capability "social distribution":
+    Match: content-scheduler (55% fit) — has scheduling skill, but no social-specific tools
+    Recommendation: ASK — present to user for decision
+
+  Capability "editorial review":
+    Match: none — no existing agent with editorial-review skill
+    Recommendation: CREATE NEW
+```
+
+Rules:
+- A match of 60%+ fit means REUSE. Present the candidate and confirm with the user.
+- A partial match (40-59%) means ASK — show the candidate and let the user decide.
+- Below 40% or no match means CREATE NEW is acceptable.
+- **Hard rule:** if you would create 3 or more new agents, STOP. List all
+  proposed new agents, explain why existing agents cannot be reused for each,
+  and get explicit user confirmation before proceeding.
+
 Minimize agent count. Reuse existing agents whenever the fit is credible.
 
 Every squad role needs:
@@ -273,7 +314,7 @@ Do not use joke names that obscure the agent's purpose.
 
 ### Reuse Rules
 
-When a plausible reuse candidate exists:
+Reuse is the default. For every capability, the Reuse Assessment above determines the action:
 
 1. Show the candidate and explain why it matches.
 2. Ask whether to reuse it.
