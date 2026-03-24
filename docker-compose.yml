@@ -35,6 +35,9 @@ services:
       - MC_ACCESS_TOKEN
       - CLAUDE_CODE_BUBBLEWRAP=1 # Allow --permission-mode bypassPermissions as root (container is the sandbox)
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      # Browser-facing URLs — pinned in Docker env so mc-test .env.local overwrite can't break mc
+      - NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:${CONVEX_PORT:-3210}
+      - NEXT_PUBLIC_INTERACTIVE_PORT=${INTERACTIVE_PORT:-8765}
     healthcheck:
       test: [ "CMD", "sh", "-c", "curl -sf http://localhost:3000 && curl -sf http://localhost:3210/version" ]
       interval: 30s
