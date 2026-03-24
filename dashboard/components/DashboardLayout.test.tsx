@@ -68,7 +68,7 @@ vi.mock("@/features/terminal/components/TerminalBoard", () => ({
 
 vi.mock("@/components/BoardContext", () => ({
   BoardProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
-  useBoard: () => ({ openTerminals: [] }),
+  useBoard: () => ({ openTerminals: [], activeBoardId: null, closeAllTerminals: () => {} }),
 }));
 
 vi.mock("@/features/boards/components/BoardSelector", () => ({
@@ -85,6 +85,22 @@ vi.mock("@/features/boards/components/BoardSettingsSheet", () => ({
 
 vi.mock("@/components/CronJobsModal", () => ({
   CronJobsModal: () => null,
+}));
+
+vi.mock("@/features/agents/components/AgentConfigSheet", () => ({
+  AgentConfigSheet: () => null,
+}));
+
+vi.mock("@/features/agents/components/SquadDetailSheet", () => ({
+  SquadDetailSheet: () => null,
+}));
+
+vi.mock("@/components/CommandPalette", () => ({
+  CommandPalette: () => null,
+}));
+
+vi.mock("@/components/MobileTabBar", () => ({
+  MobileTabBar: () => null,
 }));
 
 vi.mock("@/hooks/useGatewaySleepRuntime", () => ({

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { Id } from "@/convex/_generated/dataModel";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AgentSidebar } from "@/features/agents/components/AgentSidebar";
+import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
+import { SquadDetailSheet } from "@/features/agents/components/SquadDetailSheet";
 import { ActivityFeedPanel } from "@/features/activity/components/ActivityFeedPanel";
 import { TaskInput } from "@/features/tasks/components/TaskInput";
 import { KanbanBoard } from "@/features/boards/components/KanbanBoard";
@@ -28,6 +30,7 @@ import { parseSearch } from "@/lib/searchParser";
 import { useGatewaySleepRuntime, useGatewaySleepCountdown } from "@/hooks/useGatewaySleepRuntime";
 import { useGatewaySleepModeRequest } from "@/features/settings/hooks/useGatewaySleepModeRequest";
 import { CommandPalette } from "@/components/CommandPalette";
+import type { CommandPaletteAction } from "@/hooks/useCommandPaletteSearch";
 import { MobileTabBar } from "@/components/MobileTabBar";
 
 function useMediaQuery(query: string): boolean {
@@ -55,6 +58,8 @@ function useHydrated(): boolean {
 
 function DashboardContent({ isXl }: { isXl: boolean }) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [selectedSquadId, setSelectedSquadId] = useState<Id<"squadSpecs"> | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
@@ -64,6 +69,33 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState("board");
+
+  const handleCommandPaletteAction = useCallback((action: CommandPaletteAction) => {
+    setCommandPaletteOpen(false);
+    switch (action.type) {
+      case "openTask":
+        setSelectedTaskId(action.taskId);
+        break;
+      case "openAgent":
+        setSelectedAgent(action.agentName);
+        break;
+      case "openSquad":
+        setSelectedSquadId(action.squadId);
+        break;
+      case "openSettings":
+        setSettingsOpen(true);
+        break;
+      case "openTags":
+        setTagsOpen(true);
+        break;
+      case "openCronJobs":
+        setCronOpen(true);
+        break;
+      case "openBoardSettings":
+        setBoardSettingsOpen(true);
+        break;
+    }
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -79,7 +111,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
   }, []);
 
   const parsedSearch = useMemo(() => parseSearch(searchQuery), [searchQuery]);
-  const { openTerminals, closeAllTerminals } = useBoard();
+  const { openTerminals, closeAllTerminals, activeBoardId } = useBoard();
   const gatewaySleepRuntime = useGatewaySleepRuntime();
   const gatewaySleepCountdown = useGatewaySleepCountdown(gatewaySleepRuntime);
   const requestGatewaySleepMode = useGatewaySleepModeRequest();
@@ -100,7 +132,7 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
 
   return (
     <SidebarProvider defaultOpen={isXl} className="h-screen overflow-hidden">
-      <AgentSidebar />
+      <AgentSidebar onSelectAgent={setSelectedAgent} onSelectSquad={setSelectedSquadId} />
       <SidebarInset className="h-screen min-w-0 overflow-hidden">
         <div className="flex h-screen flex-col overflow-hidden bg-background">
           <header className="flex h-14 items-center justify-between border-b border-border px-4">
@@ -212,6 +244,16 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
         onClose={() => setSelectedTaskId(null)}
         onTaskOpen={(taskId) => setSelectedTaskId(taskId)}
       />
+      <AgentConfigSheet
+        agentName={selectedAgent}
+        onClose={() => setSelectedAgent(null)}
+        onOpenSquad={(id) => setSelectedSquadId(id)}
+      />
+      <SquadDetailSheet
+        squadId={selectedSquadId}
+        boardId={activeBoardId ?? undefined}
+        onClose={() => setSelectedSquadId(null)}
+      />
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
         <SheetContent side="right" className="w-full sm:w-[600px] p-0">
           <SheetHeader className="sr-only">
@@ -239,7 +281,11 @@ function DashboardContent({ isXl }: { isXl: boolean }) {
           setSelectedTaskId(taskId as Id<"tasks">);
         }}
       />
-      <CommandPalette isOpen={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onAction={handleCommandPaletteAction}
+      />
       <MobileTabBar
         activeTab={mobileTab}
         onTabChange={(tab) => {

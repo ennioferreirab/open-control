@@ -26,25 +26,27 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { AgentConfigSheet } from "@/features/agents/components/AgentConfigSheet";
 import { AgentSidebarItem } from "@/features/agents/components/AgentSidebarItem";
 import { CreateAuthoringDialog } from "@/features/agents/components/CreateAuthoringDialog";
 import { AgentAuthoringWizard } from "@/features/agents/components/AgentAuthoringWizard";
 import { SquadAuthoringWizard } from "@/features/agents/components/SquadAuthoringWizard";
 import { SquadSidebarSection } from "@/features/agents/components/SquadSidebarSection";
-import { SquadDetailSheet } from "@/features/agents/components/SquadDetailSheet";
 import { DeleteAgentsDialog } from "@/features/agents/components/DeleteAgentsDialog";
 import { DeleteSquadDialog } from "@/features/agents/components/DeleteSquadDialog";
 import { useAgentSidebarData } from "@/features/agents/hooks/useAgentSidebarData";
 import { useSquadSidebarData } from "@/features/agents/hooks/useSquadSidebarData";
-import { useBoard } from "@/components/BoardContext";
 import type { Id } from "@/convex/_generated/dataModel";
 
 type SelectableItem =
   | { type: "agent"; name: string; displayName: string }
   | { type: "squad"; id: Id<"squadSpecs">; displayName: string };
 
-export function AgentSidebar() {
+interface AgentSidebarProps {
+  onSelectAgent: (name: string | null) => void;
+  onSelectSquad: (id: Id<"squadSpecs"> | null) => void;
+}
+
+export function AgentSidebar({ onSelectAgent, onSelectSquad }: AgentSidebarProps) {
   const {
     deletedAgents,
     isAgentsLoading,
@@ -55,12 +57,9 @@ export function AgentSidebar() {
     systemAgents,
   } = useAgentSidebarData();
   const { archiveSquad, archivedSquads, unarchiveSquad } = useSquadSidebarData();
-  const { activeBoardId } = useBoard();
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [showCreateChooser, setShowCreateChooser] = useState(false);
   const [showAgentWizard, setShowAgentWizard] = useState(false);
   const [showSquadWizard, setShowSquadWizard] = useState(false);
-  const [selectedSquadId, setSelectedSquadId] = useState<Id<"squadSpecs"> | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [systemOpen, setSystemOpen] = useState(true);
   const [registeredOpen, setRegisteredOpen] = useState(true);
@@ -204,7 +203,7 @@ export function AgentSidebar() {
             />
           </div>
           <SquadSidebarSection
-            onSelectSquad={(id) => setSelectedSquadId(id)}
+            onSelectSquad={(id) => onSelectSquad(id)}
             deleteMode={deleteMode}
             selectedSquadIds={selectedSquadIds}
             filterQuery={filterQuery}
@@ -242,7 +241,7 @@ export function AgentSidebar() {
                       <AgentSidebarItem
                         key={agent._id}
                         agent={agent}
-                        onClick={() => setSelectedAgent(agent.name)}
+                        onClick={() => onSelectAgent(agent.name)}
                         selectable={deleteMode}
                         selected={selectedItems.has(`agent:${agent.name}`)}
                         onToggleSelect={() =>
@@ -279,7 +278,7 @@ export function AgentSidebar() {
                         <AgentSidebarItem
                           key={agent._id}
                           agent={agent}
-                          onClick={() => setSelectedAgent(agent.name)}
+                          onClick={() => onSelectAgent(agent.name)}
                         />
                       ))}
                     </SidebarMenu>
@@ -308,7 +307,7 @@ export function AgentSidebar() {
                         <AgentSidebarItem
                           key={agent._id}
                           agent={agent}
-                          onClick={() => setSelectedAgent(agent.name)}
+                          onClick={() => onSelectAgent(agent.name)}
                           selectable={deleteMode}
                           selected={selectedItems.has(`agent:${agent.name}`)}
                           onToggleSelect={() =>
@@ -422,11 +421,6 @@ export function AgentSidebar() {
           </SidebarFooter>
         )}
       </Sidebar>
-      <AgentConfigSheet
-        agentName={selectedAgent}
-        onClose={() => setSelectedAgent(null)}
-        onOpenSquad={(id) => setSelectedSquadId(id)}
-      />
       <CreateAuthoringDialog
         open={showCreateChooser}
         onClose={() => setShowCreateChooser(false)}
@@ -435,11 +429,6 @@ export function AgentSidebar() {
       />
       <AgentAuthoringWizard open={showAgentWizard} onClose={() => setShowAgentWizard(false)} />
       <SquadAuthoringWizard open={showSquadWizard} onClose={() => setShowSquadWizard(false)} />
-      <SquadDetailSheet
-        squadId={selectedSquadId}
-        boardId={activeBoardId ?? undefined}
-        onClose={() => setSelectedSquadId(null)}
-      />
       <DeleteAgentsDialog
         agents={Array.from(selectedItems.values())
           .filter((i): i is Extract<SelectableItem, { type: "agent" }> => i.type === "agent")
