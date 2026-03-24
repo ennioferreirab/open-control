@@ -123,6 +123,11 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
             "--cloud",
             help="Use the hosted Convex development deployment instead of local.",
         ),
+        no_nanobot: bool = typer.Option(
+            False,
+            "--no-nanobot",
+            help="Skip the nanobot gateway (channel integrations). Also set via MC_SKIP_NANOBOT=1.",
+        ),
     ):
         """Start Open Control (dashboard + agent gateway + nanobot channels)."""
         import mc.cli as _cli
@@ -193,13 +198,20 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
                 pass
 
         async def _run():
-            pm = ProcessManager(dashboard_dir=resolved_dir, convex_mode=convex_mode)
+            pm = ProcessManager(
+                dashboard_dir=resolved_dir,
+                convex_mode=convex_mode,
+                skip_nanobot=no_nanobot,
+            )
             try:
                 await pm.start()
                 _cli.console.print("[green]Open Control is running[/green]")
                 _cli.console.print("  Dashboard: [cyan]http://localhost:3000[/cyan]")
                 _cli.console.print(f"  Convex:    [cyan]{convex_mode}[/cyan]")
-                _cli.console.print("  Nanobot:   [cyan]channels + agent gateway[/cyan]")
+                if no_nanobot or os.environ.get("MC_SKIP_NANOBOT") == "1":
+                    _cli.console.print("  Nanobot:   [yellow]skipped[/yellow]")
+                else:
+                    _cli.console.print("  Nanobot:   [cyan]channels + agent gateway[/cyan]")
                 await pm.wait()
             finally:
                 await pm.stop()

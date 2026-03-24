@@ -68,8 +68,10 @@ services:
       - ./scripts:/app/scripts
       - ./pyproject.toml:/app/pyproject.toml
       - ./uv.lock:/app/uv.lock
-      # Mask host node_modules with container's named volume
+      # Mask host node_modules and .next with container's named volumes
+      # (avoids lock conflicts with the main mc service)
       - node-modules-test:/app/dashboard/node_modules
+      - next-build-test:/app/dashboard/.next
       # Separate persistent state (no conflict with dev instance)
       - convex-data-test:/app/dashboard/.convex/local
       - ~/.nanobot:/root/.nanobot
@@ -88,6 +90,7 @@ services:
       - NEXT_PUBLIC_INTERACTIVE_PORT=${TEST_INTERACTIVE_PORT:-8865}
       - INTERACTIVE_HOST=0.0.0.0
       - CLAUDE_CODE_SETTING_SOURCES=project
+      - MC_SKIP_NANOBOT=1
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
     healthcheck:
@@ -102,3 +105,4 @@ volumes:
   convex-data-test:
   node-modules:
   node-modules-test:
+  next-build-test:

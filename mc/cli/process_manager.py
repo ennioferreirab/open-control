@@ -62,6 +62,7 @@ class ProcessManager:
         project_root: str | Path | None = None,
         convex_mode: str = "local",
         on_crash: Callable[[str, int], Awaitable[None]] | None = None,
+        skip_nanobot: bool = False,
     ):
         """
         Initialize the process manager.
@@ -81,6 +82,7 @@ class ProcessManager:
             raise ValueError(f"Unsupported convex_mode: {convex_mode}")
         self._convex_mode = convex_mode
         self._on_crash = on_crash
+        self._skip_nanobot = skip_nanobot or os.environ.get("MC_SKIP_NANOBOT", "") == "1"
         self._processes: list[ManagedProcess] = []
         self._running = False
         self._monitor_task: asyncio.Task | None = None
@@ -231,7 +233,7 @@ class ProcessManager:
         convex_args = ["run", "dev:backend"]
         if self._convex_mode == "local":
             convex_args.extend(["--", "--local"])
-        return [
+        configs = [
             ProcessConfig(
                 label="convex",
                 command="npm",
@@ -257,14 +259,20 @@ class ProcessManager:
                 args=["-m", "mc.runtime.gateway"],
                 cwd=self._project_root,
             ),
-            ProcessConfig(
-                label="nanobot",
-                command=venv_python,
-                args=["-m", "nanobot", "gateway"],
-                cwd=self._project_root,
-                critical=False,
-            ),
         ]
+        if not self._skip_nanobot:
+            configs.append(
+                ProcessConfig(
+                    label="nanobot",
+                    command=venv_python,
+                    args=["-m", "nanobot", "gateway"],
+                    cwd=self._project_root,
+                    critical=False,
+                ),
+            )
+        else:
+            logger.info("[MC] Skipping nanobot gateway (MC_SKIP_NANOBOT=1)")
+        return configs
 
     def _build_process_env(self, config: ProcessConfig) -> dict[str, str]:
         """Build child process environment, including local Convex overrides."""
