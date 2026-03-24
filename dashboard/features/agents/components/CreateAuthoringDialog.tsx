@@ -35,7 +35,7 @@ export function CreateAuthoringDialog({
             multi-agent teams; workflows define execution flows for squads.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-3 gap-4 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
           <Button
             variant="outline"
             className="flex h-auto flex-col items-center gap-3 p-6"
