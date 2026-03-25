@@ -129,6 +129,10 @@ Never skip the red phase. A fix without a test that first proves the failure is 
 
 Never add silent fallbacks that mask failures. Fail explicitly with clear errors. Only add fallbacks if explicitly requested.
 
+### Docker Volumes — NEVER Delete
+
+**NEVER run `docker volume rm` on any project volume.** Convex data, agent memory, task history, and squad definitions live in Docker volumes. Deleting a volume destroys all persistent state with no recovery. If Convex fails to start, investigate the root cause (port conflicts, stale locks, resource limits) — do NOT delete the volume as a shortcut.
+
 ### Vendor Boundary
 
 `vendor/nanobot/` is an upstream git subtree. **Do NOT edit** without explicit permission. `vendor/claude-code/` is our code — follows project conventions.

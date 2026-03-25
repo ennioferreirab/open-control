@@ -271,7 +271,7 @@ describe("publishSquadGraph", () => {
           },
         ],
       }),
-    ).rejects.toThrow('Review step "review" requires reviewSpecId');
+    ).rejects.toThrow('Review step "review"');
   });
 
   it("rejects review steps that reference an unknown review spec", async () => {
@@ -518,34 +518,6 @@ describe("publishSquadGraph - canonical agent fields", () => {
 });
 
 describe("publishSquadGraph - skills-first validation", () => {
-  it("rejects a new agent without displayName", async () => {
-    const { ctx } = makeCtx();
-
-    await expect(
-      publishSquadGraph(ctx, {
-        ...GRAPH_FIXTURE,
-        agents: [
-          {
-            key: "writer",
-            name: "post-writer",
-            role: "Writer",
-            prompt: "Write",
-            model: "sonnet",
-            skills: [],
-            soul: "Soul",
-          },
-        ],
-        workflows: [
-          {
-            key: "default",
-            name: "Default Workflow",
-            steps: [{ key: "draft", type: "agent", agentKey: "writer" }],
-          },
-        ],
-      }),
-    ).rejects.toThrow('New agent "post-writer" requires displayName');
-  });
-
   it("rejects a new agent without prompt", async () => {
     const { ctx } = makeCtx();
 

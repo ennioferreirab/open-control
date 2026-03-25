@@ -379,7 +379,7 @@ export default defineSchema({
 
   agents: defineTable({
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     role: v.string(),
     prompt: v.optional(v.string()),
     soul: v.optional(v.string()),
@@ -507,7 +507,7 @@ export default defineSchema({
 
   agentSpecs: defineTable({
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     role: v.string(),
     purpose: v.optional(v.string()),
     nonGoals: v.optional(v.array(v.string())),
@@ -537,7 +537,7 @@ export default defineSchema({
 
   squadSpecs: defineTable({
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     description: v.optional(v.string()),
     outcome: v.optional(v.string()),
     reviewPolicy: v.optional(v.string()),

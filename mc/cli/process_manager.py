@@ -242,7 +242,7 @@ class ProcessManager:
                 env={"NODE_OPTIONS": "--max-old-space-size=1536"},
                 critical=False,
                 restart_on_crash=True,
-                port=3210,
+                port=3210 if self._convex_mode == "local" else None,
             ),
             ProcessConfig(
                 label="dashboard",

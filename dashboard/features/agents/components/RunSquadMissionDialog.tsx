@@ -27,7 +27,7 @@ interface RunSquadMissionDialogProps {
   onClose: () => void;
   onLaunched: (taskId: Id<"tasks">) => void;
   squadSpecId: Id<"squadSpecs">;
-  squadDisplayName: string;
+  squadDisplayName: string | undefined;
   boardId: Id<"boards">;
 }
 

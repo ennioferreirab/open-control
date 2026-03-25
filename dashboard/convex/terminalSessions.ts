@@ -132,7 +132,7 @@ export const registerTerminal = internalMutation({
   args: {
     sessionId: v.string(),
     agentName: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     ipAddress: v.string(),
   },
   handler: async (ctx, args) => {
@@ -196,7 +196,7 @@ export const registerTerminal = internalMutation({
     await ctx.db.insert("activities", {
       agentName: args.agentName,
       eventType: "agent_connected",
-      description: `Remote terminal '${args.displayName}' connected from ${args.ipAddress}`,
+      description: `Remote terminal '${args.displayName ?? args.agentName}' connected from ${args.ipAddress}`,
       timestamp,
     });
   },

@@ -83,8 +83,8 @@ export function filterResults(
   query: string,
   categoryFilter: CategoryFilter,
   tasks: Array<{ _id: Id<"tasks">; title: string; status: string }>,
-  agents: Array<{ _id: string; name: string; displayName: string }>,
-  squads: Array<{ _id: Id<"squadSpecs">; name: string; displayName: string }>,
+  agents: Array<{ _id: string; name: string; displayName?: string }>,
+  squads: Array<{ _id: Id<"squadSpecs">; name: string; displayName?: string }>,
 ): SearchResultGroup[] {
   const q = query.trim().toLowerCase();
 
@@ -126,14 +126,14 @@ export function filterResults(
       .filter(
         (a) =>
           !SYSTEM_AGENT_NAMES.has(a.name) &&
-          (a.displayName.toLowerCase().includes(q) ||
+          ((a.displayName ?? "").toLowerCase().includes(q) ||
             a.name.toLowerCase().includes(q) ||
             `@${a.name}`.toLowerCase().includes(q)),
       )
       .map((a) => ({
         id: `agent:${a._id}`,
         category: "agent" as const,
-        title: a.displayName,
+        title: a.name,
         subtitle: `@${a.name}`,
         icon: Bot,
         action: { type: "openAgent" as const, agentName: a.name },
@@ -146,11 +146,13 @@ export function filterResults(
   // Squads
   if (categoryFilter === "all" || categoryFilter === "squad") {
     const squadResults: SearchResult[] = squads
-      .filter((s) => s.displayName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+      .filter(
+        (s) => (s.displayName ?? "").toLowerCase().includes(q) || s.name.toLowerCase().includes(q),
+      )
       .map((s) => ({
         id: `squad:${s._id}`,
         category: "squad" as const,
-        title: s.displayName,
+        title: s.name,
         subtitle: s.name,
         icon: Users,
         action: { type: "openSquad" as const, squadId: s._id },

@@ -30,7 +30,7 @@
       "operations": ["publish"],
       "properties": {
         "name":        { "type": "string", "required": true,  "description": "Squad name slug." },
-        "displayName": { "type": "string", "required": true,  "description": "Human-readable squad name." },
+        "displayName": { "type": "string", "required": false, "description": "Human-readable squad name. Optional — UI generates initials from name slug if omitted." },
         "description": { "type": "string", "description": "Optional squad description." },
         "outcome":     { "type": "string", "description": "Optional desired outcome statement." }
       }
@@ -44,7 +44,7 @@
         "key":         { "type": "string", "required": true,  "description": "Local key used in workflow steps." },
         "name":        { "type": "string", "required": true,  "description": "Agent name slug." },
         "role":        { "type": "string", "required": true,  "description": "Agent role." },
-        "displayName": { "type": "string", "description": "Human-readable name (required for new agents)." },
+        "displayName": { "type": "string", "description": "Human-readable name. Optional — UI generates initials from name slug if omitted." },
         "prompt":      { "type": "string", "description": "System prompt (required for new agents)." },
         "model":       { "type": "string", "description": "Model identifier (required for new agents)." },
         "skills":      { "type": "string[]", "description": "List of skill names (required for new agents)." },
@@ -84,9 +84,9 @@
       "agentKey":    { "type": "string", "description": "Agent key for this step." },
       "title":       { "type": "string", "description": "Step title." },
       "description": { "type": "string", "description": "Step description." },
-      "dependsOn":   { "type": "string[]", "description": "Step keys this step depends on." },
+      "dependsOn":   { "type": "string[]", "description": "Step keys this step depends on.", "validation": "each item must reference a valid step key within the same workflow" },
       "reviewSpecId": { "type": "string", "description": "Review spec ID (required for review steps)." },
-      "onReject":    { "type": "string", "description": "Step to return to on rejection (required for review steps)." }
+      "onReject":    { "type": "string", "description": "Step to return to on rejection (required for review steps).", "validation": "must reference a valid step key within the same workflow" }
     }
   }
 }

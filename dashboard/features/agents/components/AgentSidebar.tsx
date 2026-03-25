@@ -39,8 +39,8 @@ import { useSquadSidebarData } from "@/features/agents/hooks/useSquadSidebarData
 import type { Id } from "@/convex/_generated/dataModel";
 
 type SelectableItem =
-  | { type: "agent"; name: string; displayName: string }
-  | { type: "squad"; id: Id<"squadSpecs">; displayName: string };
+  | { type: "agent"; name: string; displayName: string | undefined }
+  | { type: "squad"; id: Id<"squadSpecs">; displayName: string | undefined };
 
 interface AgentSidebarProps {
   onSelectAgent: (name: string | null) => void;
@@ -72,19 +72,19 @@ export function AgentSidebar({ onSelectAgent, onSelectSquad }: AgentSidebarProps
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [showDeleteAgentsDialog, setShowDeleteAgentsDialog] = useState(false);
   const [itemToRestore, setItemToRestore] = useState<
-    | { type: "agent"; displayName: string; name: string }
-    | { type: "squad"; displayName: string; id: Id<"squadSpecs"> }
+    | { type: "agent"; displayName: string | undefined; name: string }
+    | { type: "squad"; displayName: string | undefined; id: Id<"squadSpecs"> }
     | null
   >(null);
   const [deleteSquadTarget, setDeleteSquadTarget] = useState<Id<"squadSpecs"> | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  function matchesAgentFilter(q: string, displayName: string, name: string): boolean {
+  function matchesAgentFilter(q: string, displayName: string | undefined, name: string): boolean {
     if (!q) return true;
     const lower = q.toLowerCase();
     return (
-      displayName.toLowerCase().includes(lower) ||
+      (displayName ?? "").toLowerCase().includes(lower) ||
       name.toLowerCase().includes(lower) ||
       `@${name}`.toLowerCase().includes(lower)
     );
@@ -366,7 +366,7 @@ export function AgentSidebar({ onSelectAgent, onSelectSquad }: AgentSidebarProps
                           </div>
                           <div className="flex flex-1 flex-col overflow-hidden">
                             <span className="truncate text-sm font-medium text-sidebar-foreground">
-                              {squad.displayName}
+                              {squad.name}
                             </span>
                             <span className="truncate text-xs text-sidebar-foreground/70">
                               squad
@@ -382,7 +382,7 @@ export function AgentSidebar({ onSelectAgent, onSelectSquad }: AgentSidebarProps
                             })
                           }
                           className="shrink-0 px-2 text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={`Restore ${squad.displayName}`}
+                          aria-label={`Restore ${squad.name}`}
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
                         </button>

@@ -648,7 +648,7 @@ describe("squadSpecs.updatePublishedGraph", () => {
           ],
         },
       }),
-    ).rejects.toThrow('Review step "review" has invalid onReject target "missing-step"');
+    ).rejects.toThrow('invalid onReject target "missing-step"');
 
     expect(patches).toHaveLength(0);
   });

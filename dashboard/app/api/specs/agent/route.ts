@@ -19,18 +19,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, displayName, role, ...optional } = body;
 
-    if (!name || !displayName || !role) {
-      return NextResponse.json(
-        { error: "name, displayName, and role are required" },
-        { status: 400 },
-      );
+    if (!name || !role) {
+      return NextResponse.json({ error: "name and role are required" }, { status: 400 });
     }
 
     const convex = getClient();
 
     const specId = await convex.mutation("agentSpecs:createDraft", {
       name,
-      displayName,
+      ...(displayName !== undefined ? { displayName } : {}),
       role,
       ...optional,
     });

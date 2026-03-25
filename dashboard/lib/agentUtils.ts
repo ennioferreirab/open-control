@@ -10,17 +10,32 @@ const AVATAR_COLORS = [
 ];
 
 /**
- * Get 2-character initials from an agent name.
- * If multi-word: first letter of first two words.
- * If single word: first 2 characters.
+ * Get 2-character initials from an agent name or display name.
+ * Handles slug format ("brand-reviewer" → "BR"), space-separated ("Brand Reviewer" → "BR"),
+ * and single words ("orchestrator" → "OR"). Returns "??" for empty/null/undefined input.
  */
-export function getInitials(displayName: string): string {
-  const words = displayName.trim().split(/\s+/);
-  const first = (s: string) => [...s][0] ?? "";
-  if (words.length >= 2) {
-    return (first(words[0]) + first(words[1])).toUpperCase();
+export function getInitials(nameOrDisplayName: string | undefined | null): string {
+  if (!nameOrDisplayName) return "??";
+  const name = nameOrDisplayName.trim();
+  if (!name) return "??";
+
+  // Handle slug format: "brand-reviewer" → "BR", "code-monkey" → "CM"
+  if (name.includes("-")) {
+    const parts = name.split("-").filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].substring(0, 2).toUpperCase();
   }
-  return [...displayName].slice(0, 2).join("").toUpperCase();
+
+  // Handle space-separated: "Brand Reviewer" → "BR"
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+
+  // Single word: "orchestrator" → "OR"
+  return name.substring(0, 2).toUpperCase();
 }
 
 /**

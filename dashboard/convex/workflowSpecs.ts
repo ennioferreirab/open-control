@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 
 import { specStatusValidator, workflowStepTypeValidator } from "./schema";
 import { publishWorkflowStandalone } from "./lib/workflowStandalonePublisher";
+import { validateWorkflowStepReferences } from "./lib/validators/workflowReferences";
 
 type WorkflowStepRecord = {
   id: string;
@@ -10,6 +11,7 @@ type WorkflowStepRecord = {
   agentId?: string;
   reviewSpecId?: string;
   onReject?: string;
+  dependsOn?: string[];
 };
 
 function validateReviewSteps(steps: WorkflowStepRecord[] | undefined): void {
@@ -92,6 +94,15 @@ export const publish = internalMutation({
       throw new ConvexError("Can only publish specs in draft status");
     }
     validateReviewSteps(spec.steps as WorkflowStepRecord[] | undefined);
+    const stepsForRefValidation = ((spec.steps as WorkflowStepRecord[] | undefined) ?? []).map(
+      (s) => ({
+        key: s.id,
+        type: s.type,
+        dependsOn: s.dependsOn,
+        onReject: s.onReject,
+      }),
+    );
+    validateWorkflowStepReferences(stepsForRefValidation, `workflow spec '${args.specId}'`);
     const now = new Date().toISOString();
     await ctx.db.patch(args.specId, {
       status: "published",

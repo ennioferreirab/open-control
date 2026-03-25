@@ -8,7 +8,7 @@ import { updatePublishedSquadGraph } from "./lib/squadGraphUpdater";
 export const createDraft = internalMutation({
   args: {
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     description: v.optional(v.string()),
     agentIds: v.optional(v.array(v.id("agents"))),
     defaultWorkflowSpecId: v.optional(v.id("workflowSpecs")),
@@ -140,7 +140,7 @@ export const publishGraph = mutation({
     graph: v.object({
       squad: v.object({
         name: v.string(),
-        displayName: v.string(),
+        displayName: v.optional(v.string()),
         description: v.optional(v.string()),
         outcome: v.optional(v.string()),
       }),
@@ -190,7 +190,7 @@ export const updatePublishedGraph = mutation({
     graph: v.object({
       squad: v.object({
         name: v.string(),
-        displayName: v.string(),
+        displayName: v.optional(v.string()),
         description: v.optional(v.string()),
         outcome: v.optional(v.string()),
       }),
@@ -259,6 +259,7 @@ export const getSquadAgentsWithMemberships = query({
           .filter((s) => s.agentIds != null && s.agentIds.includes(agentId))
           .map((s) => ({
             id: s._id,
+            name: s.name,
             displayName: s.displayName,
             isCurrentSquad: s._id === args.squadSpecId,
           }));
@@ -298,6 +299,7 @@ export const getAgentsSquadMemberships = query({
           .filter((s) => s.agentIds != null && s.agentIds.includes(agent._id))
           .map((s) => ({
             id: s._id,
+            name: s.name,
             displayName: s.displayName,
           }));
 

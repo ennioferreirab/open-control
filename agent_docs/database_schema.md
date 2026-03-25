@@ -161,7 +161,7 @@ Agent registry with config, status, and metrics.
 | Field | Type | Notes |
 |-------|------|-------|
 | `name` | `v.string()` | Unique identifier |
-| `displayName` | `v.string()` | |
+| `displayName` | `v.optional(v.string())` | Optional — UI displays `name` (slug) as primary identifier |
 | `role` | `v.string()` | |
 | `prompt` | `v.optional(v.string())` | |
 | `soul` | `v.optional(v.string())` | |
@@ -453,7 +453,7 @@ Agent specification templates (draft → published → archived).
 | Field | Type | Notes |
 |-------|------|-------|
 | `name` | `v.string()` | |
-| `displayName` | `v.string()` | |
+| `displayName` | `v.optional(v.string())` | Optional — UI displays `name` (slug) as primary identifier |
 | `role` | `v.string()` | |
 | `purpose` | `v.optional(v.string())` | |
 | `nonGoals` | `v.optional(v.array(v.string()))` | |
@@ -487,7 +487,7 @@ Squad specification templates defining teams of agents.
 | Field | Type | Notes |
 |-------|------|-------|
 | `name` | `v.string()` | |
-| `displayName` | `v.string()` | |
+| `displayName` | `v.optional(v.string())` | Optional — UI displays `name` (slug) as primary identifier |
 | `description` | `v.optional(v.string())` | |
 | `outcome` | `v.optional(v.string())` | |
 | `reviewPolicy` | `v.optional(v.string())` | |

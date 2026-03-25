@@ -25,7 +25,9 @@ function makeCtx(existingAgent?: {
   const inserts: Record<string, unknown>[] = [];
 
   const first = vi.fn(async () => existingAgent ?? null);
-  const withIndex = vi.fn(() => ({ first }));
+  // unique() is used by validateSkillReferences — return a valid available skill by default
+  const unique = vi.fn(async () => ({ name: "mock-skill", available: true }));
+  const withIndex = vi.fn(() => ({ first, unique }));
   const query = vi.fn(() => ({ withIndex }));
   const patch = vi.fn(async (id: string, p: Record<string, unknown>) => {
     patches.push({ id, patch: p });

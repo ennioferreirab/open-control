@@ -131,7 +131,7 @@ export function AgentMentionAutocomplete({
           }}
           onMouseEnter={() => setFocusState({ index: i, query })}
         >
-          <span>{agent.displayName || agent.name}</span>
+          <span>{agent.name}</span>
           {agent.role && <span className="text-xs text-muted-foreground ml-2">{agent.role}</span>}
         </div>
       ))

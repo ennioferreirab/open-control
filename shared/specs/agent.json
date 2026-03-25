@@ -25,11 +25,11 @@
 
   "fields": {
     "name":              { "type": "string",   "required": true, "description": "Agent name slug (unique identifier)." },
-    "displayName":       { "type": "string",   "required": true, "description": "Human-readable display name.", "operations": ["create"] },
+    "displayName":       { "type": "string",   "required": false, "description": "Human-readable display name. Optional — UI generates initials from name slug if omitted.", "operations": ["create"] },
     "role":              { "type": "string",   "required": true, "description": "Agent role description." },
     "prompt":            { "type": "string",   "description": "System prompt for the agent." },
     "soul":              { "type": "string",   "description": "Soul/personality description (SOUL.md content)." },
-    "skills":            { "type": "string[]", "description": "List of skill names the agent uses." },
+    "skills":            { "type": "string[]", "description": "List of skill names the agent uses.", "validation": "each item must exist as an available skill in the skills table" },
     "model":             { "type": "string",   "description": "Model identifier (e.g. 'tier:standard-low')." },
     "responsibilities":  { "type": "string[]", "description": "What this agent is responsible for.", "operations": ["create"] },
     "nonGoals":          { "type": "string[]", "description": "What this agent explicitly does NOT do.", "operations": ["create"] },

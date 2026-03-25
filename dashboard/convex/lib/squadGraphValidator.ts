@@ -5,6 +5,7 @@ import type {
   SquadGraphWorkflowStepInput,
 } from "./squadGraphPublisher";
 import type { DbWriter } from "./types";
+import { validateWorkflowStepReferences } from "./validators/workflowReferences";
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -69,7 +70,6 @@ async function validateAgentContracts(
         throw new Error(`Reused agent "${agent.reuseName}" was not found`);
       }
     } else {
-      requireNonEmptyString(`New agent "${agent.name}" requires displayName`, agent.displayName);
       requireNonEmptyString(`New agent "${agent.name}" requires prompt`, agent.prompt);
       requireNonEmptyString(`New agent "${agent.name}" requires model`, agent.model);
 
@@ -148,19 +148,15 @@ async function validateWorkflow(
 
   for (const step of workflow.steps) {
     validateStepAgentKeys(step, agentKeys);
-    for (const dependency of step.dependsOn ?? []) {
-      if (!stepKeys.has(dependency)) {
-        throw new Error(`Workflow step "${step.key}" depends on unknown step "${dependency}"`);
-      }
-    }
   }
+
+  validateWorkflowStepReferences(workflow.steps, `workflow '${workflow.key}'`);
 
   await validateReviewStepContracts(ctx, workflow);
 }
 
 export async function validateSquadGraph(ctx: DbWriter, graph: SquadGraphInput): Promise<void> {
   requireSlug("Squad name", graph.squad.name);
-  requireNonEmptyString(`Squad "${graph.squad.name}" displayName`, graph.squad.displayName);
 
   const agentKeys = validateAgentKeys(graph.agents);
   const availableSkills = await loadAvailableSkills(ctx);

@@ -206,7 +206,7 @@ export function ThreadInput({ task, onMessageSent, mode = "default" }: ThreadInp
               <SelectContent>
                 {filteredAgents?.map((agent) => (
                   <SelectItem key={agent._id} value={agent.name} className="text-xs">
-                    {agent.displayName || agent.name}
+                    {agent.name}
                   </SelectItem>
                 ))}
               </SelectContent>

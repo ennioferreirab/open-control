@@ -77,7 +77,7 @@ export interface SquadGraphWorkflowInput {
 export interface SquadGraphInput {
   squad: {
     name: string;
-    displayName: string;
+    displayName?: string;
     description?: string;
     outcome?: string;
     [key: string]: unknown;

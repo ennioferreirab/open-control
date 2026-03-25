@@ -21,7 +21,7 @@ export interface UpdatePublishedSquadArgs {
   graph: {
     squad: {
       name: string;
-      displayName: string;
+      displayName?: string;
       description?: string;
       outcome?: string;
     };

@@ -6,7 +6,7 @@ import { specStatusValidator } from "./schema";
 export const createDraft = internalMutation({
   args: {
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     role: v.string(),
     responsibilities: v.optional(v.array(v.string())),
     nonGoals: v.optional(v.array(v.string())),

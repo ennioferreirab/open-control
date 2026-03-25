@@ -433,7 +433,7 @@ export function SquadWorkflowCanvas(props: SquadWorkflowCanvasProps) {
                   <option value="">Unassigned</option>
                   {agents.map((agent) => (
                     <option key={agent._id} value={agent.name}>
-                      {agent.displayName}
+                      {agent.name}
                     </option>
                   ))}
                 </select>

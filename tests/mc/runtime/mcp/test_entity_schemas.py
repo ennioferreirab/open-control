@@ -40,7 +40,7 @@ class TestToolGeneration:
         tool = generate_tool("agent", "create")
         required = tool.inputSchema.get("required", [])
         assert "name" in required
-        assert "displayName" in required
+        assert "displayName" not in required
         assert "role" in required
         assert "prompt" not in required
 

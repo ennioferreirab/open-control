@@ -26,7 +26,7 @@ Ask what this agent should do and if a preset is close.
 
 Then collect identity:
 - **Name** — slug format (`^[a-z0-9]+(-[a-z0-9]+)*$`). Suggest one from their description.
-- **Display Name** — human-readable. Auto-generate from name if omitted.
+- **Display Name** — human-readable. Optional — if omitted, the UI generates initials from the name slug (e.g., `brand-reviewer` → "BR").
 - **Role** — one specific sentence. "Developer" is too vague; "Python backend developer focused on API design" is better.
 
 Confirm before proceeding.
@@ -115,13 +115,13 @@ A response of `{"success": true, "specId": "..."}` means it worked. Report the r
 | Field | Type | Rules |
 |-------|------|-------|
 | `name` | string | Lowercase slug: `^[a-z0-9]+(-[a-z0-9]+)*$` |
-| `displayName` | string | Human-readable name |
 | `role` | string | Brief role description |
 
 ### Optional
-| Field | Type |
-|-------|------|
-| `responsibilities` | string[] |
+| Field | Type | Notes |
+|-------|------|-------|
+| `displayName` | string | Human-readable name. If omitted, UI generates initials from slug. |
+| `responsibilities` | string[] | |
 | `nonGoals` | string[] |
 | `principles` | string[] |
 | `workingStyle` | string |

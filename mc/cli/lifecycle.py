@@ -116,12 +116,12 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
         local: bool = typer.Option(
             False,
             "--local",
-            help="Use a local Convex deployment explicitly (default behavior).",
+            help="Use a local Convex backend instead of cloud.",
         ),
         cloud: bool = typer.Option(
             False,
             "--cloud",
-            help="Use the hosted Convex development deployment instead of local.",
+            help="Use the hosted Convex cloud deployment (default behavior).",
         ),
         no_nanobot: bool = typer.Option(
             False,
@@ -138,7 +138,7 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
         resolved_dir = Path(dashboard_dir) if dashboard_dir else _cli._find_dashboard_dir()
-        convex_mode = "cloud" if cloud else "local"
+        convex_mode = "local" if local else "cloud"
 
         if not resolved_dir.is_dir():
             _cli.console.print(f"[red]Dashboard directory not found: {resolved_dir}[/red]")

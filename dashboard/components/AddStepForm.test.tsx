@@ -90,10 +90,10 @@ describe("AddStepForm", () => {
     fireEvent.click(trigger);
 
     // orchestrator-agent should not appear in options
-    expect(screen.queryByText("Orchestrator Agent")).not.toBeInTheDocument();
+    expect(screen.queryByText("orchestrator-agent")).not.toBeInTheDocument();
     // Regular agents should appear
-    expect(screen.getByText("Agent A")).toBeInTheDocument();
-    expect(screen.getByText("Agent B")).toBeInTheDocument();
+    expect(screen.getByText("agent-a")).toBeInTheDocument();
+    expect(screen.getByText("agent-b")).toBeInTheDocument();
   });
 
   it("initializes blockedByIds from defaultBlockedByIds prop", () => {
@@ -136,7 +136,7 @@ describe("AddStepForm", () => {
     // Select agent
     const trigger = screen.getByTestId("add-step-agent-select");
     fireEvent.click(trigger);
-    fireEvent.click(screen.getByText("Agent A"));
+    fireEvent.click(screen.getByText("agent-a"));
 
     // Submit
     const addButton = screen.getByTestId("add-step-submit");

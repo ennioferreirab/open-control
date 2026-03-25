@@ -16,7 +16,7 @@ import {
 
 interface AgentToDelete {
   name: string;
-  displayName: string;
+  displayName: string | undefined;
 }
 
 interface DeleteAgentsDialogProps {
@@ -90,15 +90,13 @@ export function DeleteAgentsDialog({ agents, open, onClose, onDeleted }: DeleteA
                             key={agent.name}
                             className="border-b last:border-0 hover:bg-muted/30 transition-colors"
                           >
-                            <td className="px-3 py-2 font-medium">{agent.displayName}</td>
+                            <td className="px-3 py-2 font-medium">{agent.name}</td>
                             <td className="px-3 py-2">
                               {agent.memberOf.length > 0 ? (
                                 agent.memberOf.map((s, i) => (
                                   <span key={String(s.id)}>
                                     {i > 0 && ", "}
-                                    <span className="text-amber-500 font-medium">
-                                      {s.displayName}
-                                    </span>
+                                    <span className="text-amber-500 font-medium">{s.name}</span>
                                   </span>
                                 ))
                               ) : (
@@ -118,7 +116,7 @@ export function DeleteAgentsDialog({ agents, open, onClose, onDeleted }: DeleteA
                 <p>
                   Are you sure you want to delete{" "}
                   {agents.length === 1 ? (
-                    <strong>{agents[0].displayName}</strong>
+                    <strong>{agents[0].name}</strong>
                   ) : (
                     <>{agents.length} agents</>
                   )}

@@ -55,8 +55,8 @@
       "type":         { "type": "string", "required": true, "enum": ["agent", "human", "review", "system"], "description": "Step type." },
       "agentKey":     { "type": "string", "description": "Agent key from the squad roster." },
       "reviewSpecId": { "type": "string", "description": "Review spec ID (required for review steps)." },
-      "onReject":     { "type": "string", "description": "Step to return to on rejection (required for review steps)." },
-      "dependsOn":    { "type": "string[]", "description": "Step keys this step depends on." },
+      "onReject":     { "type": "string", "description": "Step to return to on rejection (required for review steps).", "validation": "must be a valid step.id within the same workflow" },
+      "dependsOn":    { "type": "string[]", "description": "Step keys this step depends on.", "validation": "each item must be a valid step.id within the same workflow" },
       "description":  { "type": "string", "description": "Optional step description." }
     }
   }

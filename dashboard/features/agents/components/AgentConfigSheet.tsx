@@ -480,7 +480,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                   <div
                     className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-medium text-white ${getAvatarColor(agent.name)}`}
                   >
-                    {getInitials(displayName || agent.displayName)}
+                    {getInitials(agent.name)}
                   </div>
                   <div className="flex-1 min-w-0">
                     {isEditingDisplayName ? (
@@ -500,7 +500,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                       />
                     ) : (
                       <SheetTitle className="text-title flex items-center gap-2">
-                        {displayName || agent.displayName}
+                        {agent.name}
                         <button
                           type="button"
                           onClick={() => setIsEditingDisplayName(true)}
@@ -948,7 +948,7 @@ export function AgentConfigSheet({ agentName, onClose, onOpenSquad }: AgentConfi
                                 SQUAD_COLORS[i % SQUAD_COLORS.length],
                               )}
                             />
-                            {squad.displayName}
+                            {squad.name}
                           </button>
                           <span className="text-caption text-muted-foreground">
                             {"role" in squad && squad.role ? String(squad.role) : "Member"}

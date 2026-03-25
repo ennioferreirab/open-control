@@ -22,22 +22,16 @@ Ask 1-2 questions at a time. Keep the flow structured, but do not dump a long qu
 
 ## Load Context First
 
-Before deep discovery, fetch the current squad-authoring context:
+Before deep discovery, fetch both the squad-authoring context and the full skills
+catalog. You need both — squad context provides agents, review specs, and models;
+the skills endpoint provides the complete and up-to-date skills catalog.
 
 ```bash
 curl -s http://localhost:3000/api/specs/squad/context
-```
-
-For skills-only queries (e.g., checking if a skill exists, verifying after sync),
-use the dedicated skills endpoint instead — it is lighter and more focused:
-
-```bash
 curl -s http://localhost:3000/api/specs/skills
-# or filter to available only:
-curl -s http://localhost:3000/api/specs/skills?available=true
 ```
 
-Expected shape:
+### Squad context shape
 
 ```json
 {
@@ -50,29 +44,6 @@ Expected shape:
       "model": "claude-sonnet-4-6",
       "skills": ["writing", "editing"],
       "soul": "..."
-    }
-  ],
-  "availableSkills": [
-    {
-      "name": "writing",
-      "description": "Create clear written content",
-      "source": "workspace",
-      "always": false,
-      "supportedProviders": ["claude-code", "nanobot"],
-      "requires": null,
-      "metadata": { "categories": ["content"] }
-    }
-  ],
-  "knownSkills": [
-    {
-      "name": "skill-creator",
-      "description": "Create new skills",
-      "source": "builtin",
-      "available": true,
-      "always": false,
-      "supportedProviders": ["claude-code", "codex", "nanobot"],
-      "requires": null,
-      "metadata": null
     }
   ],
   "availableReviewSpecs": [
@@ -89,27 +60,49 @@ Expected shape:
 }
 ```
 
-How to use it:
+### Skills catalog shape
+
+```json
+{
+  "skills": [
+    {
+      "name": "writing",
+      "description": "Create clear written content",
+      "source": "workspace",
+      "available": true,
+      "always": false,
+      "supportedProviders": ["claude-code", "nanobot"],
+      "requires": null,
+      "metadata": { "categories": ["content"] }
+    }
+  ]
+}
+```
+
+Skills have `available: true` when usable, or `available: false` with `requires`
+explaining what is missing.
+
+### How to use the loaded context
 
 - Use `activeAgents` to identify reuse candidates.
-- Use `availableSkills` when assigning skills to a new agent right now.
-- Use `knownSkills` to distinguish:
-  - already usable
-  - exists but is unavailable because requirements are missing
-  - does not exist yet
+- Use the skills catalog to assign skills, check availability, and verify
+  provider compatibility.
+- Use `available: false` skills to distinguish skills that exist but are
+  unavailable because requirements are missing — do not create duplicates.
 - Use `availableReviewSpecs` when designing any `review` workflow step. Never
   invent a textual `reviewSpecId`.
 - Use `supportedProviders` to confirm whether a skill is already adapted for the
   provider this squad will run on.
 - Use `availableModels` for every new agent.
 
-If you create a missing skill during the flow, verify it was registered:
+If you create a missing skill during the flow, refresh the skills catalog to
+confirm registration:
 
 ```bash
 curl -s http://localhost:3000/api/specs/skills
 ```
 
-Then continue with the refreshed skills catalog.
+Then continue with the refreshed catalog.
 
 ## Phase 1: Intent
 
@@ -118,7 +111,7 @@ Understand what the squad is for.
 Collect:
 
 - `squad.name` - required slug: `^[a-z0-9]+(-[a-z0-9]+)*$`
-- `squad.displayName` - required human name
+- `squad.displayName` - optional human name (UI generates from name slug if omitted)
 - `squad.description` - optional
 - `squad.outcome` - optional but strongly recommended
 
@@ -181,8 +174,8 @@ Resolve every required skill before finalizing the squad.
 
 For each required skill:
 
-1. If it exists in `availableSkills`, reuse it.
-2. If it exists in `knownSkills` but is unavailable:
+1. If it exists in the skills catalog with `available: true`, reuse it.
+2. If it exists in the skills catalog with `available: false`:
    - explain why it is unavailable using `requires`
    - ask whether to satisfy the requirement now or choose a different skill
    - do not create a duplicate skill with the same purpose
@@ -297,7 +290,7 @@ Every squad role needs:
 
 - `key` - workflow reference key
 - `name` - stable functional slug
-- `displayName` - memorable human-facing name
+- `displayName` - optional human-facing name (UI generates initials from slug if omitted)
 - `role` - short role summary
 - `prompt`
 - `model`
@@ -489,13 +482,13 @@ assignments are complete and that no agent will launch "empty-handed".
 
 1. For each workflow step of type `agent` or `review`, identify the assigned agent.
 2. For each assigned agent, list the skills from its roster entry (Phase 4).
-3. Cross-reference each skill against the current `availableSkills` list (re-fetch
-   context if any skills were created during this flow).
+3. Cross-reference each skill against the current skills catalog (re-fetch via
+   `/api/specs/skills` if any skills were created during this flow).
 4. For each workflow step of type `review`, verify it includes `reviewSpecId`
    (from `availableReviewSpecs`) and `onReject` routing policy.
 5. Flag any of the following problems:
    - **No skills assigned** — agent has `skills: []` or skills were omitted.
-   - **Skill not found** — skill name is not in `availableSkills`.
+   - **Skill not found** — skill name is not in the skills catalog.
    - **Provider mismatch** — skill exists but does not support the target provider.
    - **Capability gap** — the step's purpose (from Phase 5) requires a capability
      identified in Phase 2, but no assigned skill covers it.
@@ -536,12 +529,12 @@ Summary: 2 issue(s) found
 - If any issue is found, resolve it before continuing:
   - **No skills assigned:** go back to Phase 4 and assign skills. Ask the user
     which skills the agent needs for its step.
-  - **Skill not found:** create via `/create-skill-mc`, sync, re-fetch context,
-    then re-run the audit.
+  - **Skill not found:** create via `/create-skill-mc`, re-fetch skills catalog
+    (`/api/specs/skills`), then re-run the audit.
   - **Provider mismatch:** ask the user whether to add provider support to the
     skill or choose an alternative.
   - **Capability gap:** identify which skill would fill the gap — reuse from
-    `availableSkills` or create a new one.
+    the skills catalog or create a new one.
   - **Missing reviewSpecId:** select a real ID from `availableReviewSpecs`. If
     none is suitable, create a new review spec using the procedure in Phase 5
     ("Creating a Review Spec"), then re-fetch context and use the new ID.
@@ -551,13 +544,15 @@ Summary: 2 issue(s) found
 Do NOT proceed to publish until the audit shows zero issues. Re-run the audit
 after every resolution to confirm the fix.
 
-After all issues are resolved, re-fetch skills one final time:
+After all issues are resolved, re-fetch both context and skills one final time:
 
 ```bash
-curl -s http://localhost:3000/api/specs/skills?available=true
+curl -s http://localhost:3000/api/specs/squad/context
+curl -s http://localhost:3000/api/specs/skills
 ```
 
-Confirm all agent skills appear in the returned list before moving on.
+Confirm all agent skills appear in the skills catalog and all review spec IDs
+are valid in `availableReviewSpecs` before moving on.
 
 ## Phase 7: Review and Publish
 
@@ -669,15 +664,18 @@ Report the created squad ID and any follow-up recommendation, such as testing th
 These rules are enforced by the validator — violating them causes a publish
 failure. Do not attempt to publish without satisfying every rule.
 
-### Agent fields (all required for new agents)
+### Agent fields for new agents
 
+Required:
 - `name`
-- `displayName`
 - `role`
 - `prompt`
 - `model`
 - `skills` (array — may be empty `[]` but must be explicit)
 - `soul`
+
+Optional:
+- `displayName` (UI generates initials from name slug if omitted)
 
 ### Workflow step rules
 
@@ -711,7 +709,7 @@ Example of a valid review step in the publish payload:
 
 Before building the publish payload, verify:
 
-1. Every agent has all 7 required fields
+1. Every agent has all required fields: `name`, `role`, `prompt`, `model`, `skills`, `soul`
 2. Every `review` step has `reviewSpecId` (from `availableReviewSpecs`) and `onReject`
 3. Every `agent`/`review` step references a valid `agentKey` from the roster
 4. Phase 6 audit passed with zero issues
