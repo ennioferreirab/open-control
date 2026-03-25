@@ -5,13 +5,7 @@ import { ReactNode, useMemo } from "react";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 
 function getConvexUrl(): string {
-  if (typeof window === "undefined") {
-    return process.env.NEXT_PUBLIC_CONVEX_URL!;
-  }
-  // Derive from current hostname so Tailscale / remote access works
-  const hostname = window.location.hostname;
-  const convexPort = new URL(process.env.NEXT_PUBLIC_CONVEX_URL!).port || "3210";
-  return `http://${hostname}:${convexPort}`;
+  return process.env.NEXT_PUBLIC_CONVEX_URL!;
 }
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {

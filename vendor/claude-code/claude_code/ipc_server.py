@@ -63,6 +63,14 @@ class MCSocketServer:
         self.register("emit_supervision_event", self._handle_emit_supervision_event)
         self.register("create_agent_spec", self._handle_create_agent_spec)
         self.register("publish_squad_graph", self._handle_publish_squad_graph)
+        self.register("publish_workflow", self._handle_publish_workflow)
+        self.register("create_review_spec", self._handle_create_review_spec)
+        self.register("list_skills", self._handle_list_skills)
+        self.register("register_skill", self._handle_register_skill)
+        self.register("update_agent", self._handle_update_agent)
+        self.register("delete_skill", self._handle_delete_skill)
+        self.register("archive_squad", self._handle_archive_squad)
+        self.register("archive_workflow", self._handle_archive_workflow)
 
     # ── Registration ──────────────────────────────────────────────────
 
@@ -526,6 +534,8 @@ class MCSocketServer:
         review_policy_ref: str | None = None,
         skills: list[str] | None = None,
         model: str | None = None,
+        prompt: str | None = None,
+        soul: str | None = None,
         agent_name: str = "agent",
         task_id: str | None = None,
     ) -> dict[str, Any]:
@@ -552,6 +562,8 @@ class MCSocketServer:
                 review_policy_ref=review_policy_ref,
                 skills=skills,
                 model=model,
+                prompt=prompt,
+                soul=soul,
             )
             if spec_id:
                 await asyncio.to_thread(self._bridge.publish_agent_spec, spec_id)
@@ -575,4 +587,208 @@ class MCSocketServer:
             return {"squad_id": str(squad_id) if squad_id else "ok"}
         except Exception as exc:
             logger.exception("publish_squad_graph failed")
+            return {"error": str(exc)}
+
+    async def _handle_publish_workflow(
+        self,
+        squad_spec_id: str,
+        workflow: dict[str, Any],
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Publish a standalone workflow to an existing squad via the bridge."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            wf_id = await asyncio.to_thread(
+                self._bridge.publish_workflow, squad_spec_id, workflow
+            )
+            return {"workflow_spec_id": str(wf_id) if wf_id else "ok"}
+        except Exception as exc:
+            logger.exception("publish_workflow failed")
+            return {"error": str(exc)}
+
+    async def _handle_create_review_spec(
+        self,
+        name: str,
+        scope: str,
+        criteria: list[dict[str, Any]],
+        approval_threshold: float,
+        veto_conditions: list[str] | None = None,
+        feedback_contract: str | None = None,
+        reviewer_policy: str | None = None,
+        rejection_routing_policy: str | None = None,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create and publish a review specification via the bridge."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            spec_id = await asyncio.to_thread(
+                self._bridge.create_review_spec,
+                name=name,
+                scope=scope,
+                criteria=criteria,
+                approval_threshold=approval_threshold,
+                veto_conditions=veto_conditions,
+                feedback_contract=feedback_contract,
+                reviewer_policy=reviewer_policy,
+                rejection_routing_policy=rejection_routing_policy,
+            )
+            return {"spec_id": str(spec_id) if spec_id else "ok"}
+        except Exception as exc:
+            logger.exception("create_review_spec failed")
+            return {"error": str(exc)}
+
+    async def _handle_list_skills(
+        self,
+        available_only: bool = False,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """List all registered skills via the bridge."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            skills = await asyncio.to_thread(self._bridge.list_skills, available_only)
+            return {"skills": skills}
+        except Exception as exc:
+            logger.exception("list_skills failed")
+            return {"error": str(exc)}
+
+    async def _handle_register_skill(
+        self,
+        name: str,
+        description: str,
+        content: str,
+        source: str = "workspace",
+        supported_providers: list[str] | None = None,
+        available: bool = True,
+        always: bool = False,
+        requires: str | None = None,
+        metadata: str | None = None,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Register or update a skill — writes to disk then Convex."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            from mc.infrastructure.skill_disk_writer import write_skill_to_disk
+
+            # Write to disk first (fail fast before Convex mutation)
+            await asyncio.to_thread(
+                write_skill_to_disk,
+                name=name,
+                description=description,
+                content=content,
+                always=always,
+                metadata=metadata,
+            )
+            await asyncio.to_thread(
+                self._bridge.register_skill,
+                name=name,
+                description=description,
+                content=content,
+                source=source,
+                supported_providers=supported_providers,
+                available=available,
+                always=always,
+                requires=requires,
+                metadata=metadata,
+            )
+            return {"name": name}
+        except Exception as exc:
+            logger.exception("register_skill failed")
+            return {"error": str(exc)}
+
+    async def _handle_update_agent(
+        self,
+        name: str,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+        **updates: Any,
+    ) -> dict[str, Any]:
+        """Update an agent's configuration via the bridge."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            # Filter out IPC metadata keys
+            config_updates = {
+                k: v
+                for k, v in updates.items()
+                if k not in ("agent_name", "task_id") and v is not None
+            }
+            await asyncio.to_thread(self._bridge.update_agent, name, **config_updates)
+            return {"name": name}
+        except Exception as exc:
+            logger.exception("update_agent failed")
+            return {"error": str(exc)}
+
+    async def _handle_delete_skill(
+        self,
+        name: str,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Delete a skill — removes from Convex and disk."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            await asyncio.to_thread(self._bridge.delete_skill, name)
+            # Best-effort disk cleanup
+            try:
+                from mc.infrastructure.runtime_home import get_runtime_path
+
+                skill_dir = get_runtime_path("workspace", "skills", name)
+                if skill_dir.exists():
+                    import shutil
+
+                    shutil.rmtree(skill_dir)
+            except Exception:
+                pass  # Disk cleanup is best-effort
+            return {"name": name}
+        except Exception as exc:
+            logger.exception("delete_skill failed")
+            return {"error": str(exc)}
+
+    async def _handle_archive_squad(
+        self,
+        squad_spec_id: str,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Archive a squad via the bridge."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            await asyncio.to_thread(self._bridge.archive_squad, squad_spec_id)
+            return {"squad_spec_id": squad_spec_id}
+        except Exception as exc:
+            logger.exception("archive_squad failed")
+            return {"error": str(exc)}
+
+    async def _handle_archive_workflow(
+        self,
+        workflow_spec_id: str,
+        agent_name: str = "agent",
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Archive a workflow via the bridge."""
+        del agent_name, task_id
+        if not self._bridge:
+            return {"error": "No MC connection available."}
+        try:
+            await asyncio.to_thread(self._bridge.archive_workflow, workflow_spec_id)
+            return {"workflow_spec_id": workflow_spec_id}
+        except Exception as exc:
+            logger.exception("archive_workflow failed")
             return {"error": str(exc)}

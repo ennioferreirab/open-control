@@ -511,7 +511,9 @@ class TestMcpConfigGeneration:
         server = data["mcpServers"]["openmc"]
 
         assert server["command"] == "uv"
-        assert server["args"] == ["run", "python", "-m", "mc.runtime.mcp.bridge"]
+        assert server["args"][:2] == ["run", "--project"]
+        # args[2] is the resolved project root path (varies per host)
+        assert server["args"][3:] == ["python", "-m", "mc.runtime.mcp.bridge"]
         assert "env" in server
 
     def test_mcp_json_env_vars(self, tmp_path: Path) -> None:

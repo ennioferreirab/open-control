@@ -26,6 +26,7 @@ services:
       - node-modules:/app/dashboard/node_modules
       # Persistent state
       - ~/.nanobot:/root/.nanobot
+      - ~/.convex:/root/.convex
       - convex-data:/app/dashboard/.convex/local
     environment:
       - MC_LOG_LEVEL=${MC_LOG_LEVEL:-INFO}
@@ -35,8 +36,17 @@ services:
       - MC_ACCESS_TOKEN
       - CLAUDE_CODE_BUBBLEWRAP=1 # Allow --permission-mode bypassPermissions as root (container is the sandbox)
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      # Convex cloud config (passed from host .env.local)
+      - CONVEX_DEPLOYMENT
+      - CONVEX_URL
+      - CONVEX_SITE_URL
+      - CONVEX_ADMIN_KEY
+      - NEXT_PUBLIC_CONVEX_URL=${NEXT_PUBLIC_CONVEX_URL:-${CONVEX_URL}}
+      - NEXT_PUBLIC_CONVEX_SITE_URL=${NEXT_PUBLIC_CONVEX_SITE_URL:-${CONVEX_SITE_URL}}
+      - NEXT_PUBLIC_INTERACTIVE_PORT=${INTERACTIVE_PORT:-8765}
+      - INTERACTIVE_HOST=0.0.0.0
     healthcheck:
-      test: [ "CMD", "sh", "-c", "curl -sf http://localhost:3000 && curl -sf http://localhost:3210/version" ]
+      test: [ "CMD", "sh", "-c", "curl -sf http://localhost:3000" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -68,11 +78,14 @@ services:
       - ./scripts:/app/scripts
       - ./pyproject.toml:/app/pyproject.toml
       - ./uv.lock:/app/uv.lock
-      # Mask host node_modules with container's named volume
+      # Mask host node_modules and .next with container's named volumes
+      # (avoids lock conflicts with the main mc service)
       - node-modules-test:/app/dashboard/node_modules
+      - next-build-test:/app/dashboard/.next
       # Separate persistent state (no conflict with dev instance)
       - convex-data-test:/app/dashboard/.convex/local
       - ~/.nanobot:/root/.nanobot
+      - ~/.convex:/root/.convex
       - ~/.claude:/root/.claude
       - ~/.claude.json:/root/.host-claude.json:ro
     environment:
@@ -83,15 +96,21 @@ services:
       - MC_ACCESS_TOKEN
       - CLAUDE_CODE_BUBBLEWRAP=1
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
-      - CONVEX_URL=http://127.0.0.1:3210
-      - NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:${TEST_CONVEX_PORT:-3310}
+      # Convex cloud config (same as mc service)
+      - CONVEX_DEPLOYMENT
+      - CONVEX_URL
+      - CONVEX_SITE_URL
+      - CONVEX_ADMIN_KEY
+      - NEXT_PUBLIC_CONVEX_URL=${NEXT_PUBLIC_CONVEX_URL:-${CONVEX_URL}}
+      - NEXT_PUBLIC_CONVEX_SITE_URL=${NEXT_PUBLIC_CONVEX_SITE_URL:-${CONVEX_SITE_URL}}
       - NEXT_PUBLIC_INTERACTIVE_PORT=${TEST_INTERACTIVE_PORT:-8865}
       - INTERACTIVE_HOST=0.0.0.0
       - CLAUDE_CODE_SETTING_SOURCES=project
+      - MC_SKIP_NANOBOT=1
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
     healthcheck:
-      test: [ "CMD", "sh", "-c", "curl -sf http://localhost:3000 && curl -sf http://localhost:3210/version" ]
+      test: [ "CMD", "sh", "-c", "curl -sf http://localhost:3000" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -102,3 +121,4 @@ volumes:
   convex-data-test:
   node-modules:
   node-modules-test:
+  next-build-test:

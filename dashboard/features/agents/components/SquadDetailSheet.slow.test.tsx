@@ -254,7 +254,7 @@ describe("SquadDetailSheet", () => {
     expect(screen.getByText(/no agents defined/i)).toBeInTheDocument();
   });
 
-  it("allows inserting a checkpoint step from squad editing", async () => {
+  it("allows inserting a human gate step from squad editing", async () => {
     mockUseSquadDetailData.mockReturnValue(makeLoadedState());
     render(<SquadDetailSheet squadId={MOCK_SQUAD_ID} onClose={vi.fn()} />);
 
@@ -263,7 +263,7 @@ describe("SquadDetailSheet", () => {
 
     await userEvent.clear(screen.getByLabelText(/step 3 title/i));
     await userEvent.type(screen.getByLabelText(/step 3 title/i), "Quality Gate");
-    await userEvent.selectOptions(screen.getByLabelText(/step 3 type/i), "checkpoint");
+    await userEvent.selectOptions(screen.getByLabelText(/step 3 type/i), "human");
 
     await userEvent.click(screen.getByRole("button", { name: /publicar/i }));
 
@@ -276,7 +276,7 @@ describe("SquadDetailSheet", () => {
                 expect.objectContaining({
                   key: expect.stringMatching(/^step-/),
                   title: "Quality Gate",
-                  type: "checkpoint",
+                  type: "human",
                 }),
               ]),
             }),

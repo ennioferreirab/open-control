@@ -106,24 +106,23 @@ describe("AgentSidebarItem", () => {
     mockSidebarState = "expanded";
   });
 
-  it("renders avatar, name, role, and status dot in expanded mode", () => {
+  it("renders avatar initials and name in expanded mode", () => {
     render(<AgentSidebarItem agent={baseAgent} />);
     expect(screen.getByText("CM")).toBeInTheDocument();
-    expect(screen.getByText("Code Monkey")).toBeInTheDocument();
-    expect(screen.getByText("Developer")).toBeInTheDocument();
+    expect(screen.getByText("code-monkey")).toBeInTheDocument();
   });
 
   it("provides tooltip content in collapsed mode", () => {
     mockSidebarState = "collapsed";
     render(<AgentSidebarItem agent={baseAgent} />);
     const button = screen.getByTestId("menu-button");
-    expect(button.getAttribute("data-tooltip")).toBe("Code Monkey - Developer - active");
+    expect(button.getAttribute("data-tooltip")).toBe("code-monkey - Developer - active");
   });
 
   it("does not show name/role text in collapsed mode", () => {
     mockSidebarState = "collapsed";
     render(<AgentSidebarItem agent={baseAgent} />);
-    expect(screen.queryByText("Code Monkey")).not.toBeInTheDocument();
+    expect(screen.queryByText("code-monkey")).not.toBeInTheDocument();
     expect(screen.queryByText("Developer")).not.toBeInTheDocument();
   });
 
@@ -133,6 +132,6 @@ describe("AgentSidebarItem", () => {
     mockSidebarState = "collapsed";
     render(<AgentSidebarItem agent={{ ...baseAgent, enabled: false }} />);
     const button = screen.getByTestId("menu-button");
-    expect(button.getAttribute("data-tooltip")).toBe("Code Monkey - Developer - Deactivated");
+    expect(button.getAttribute("data-tooltip")).toBe("code-monkey - Developer - Deactivated");
   });
 });

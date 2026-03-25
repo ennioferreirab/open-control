@@ -84,7 +84,7 @@ describe("SquadSidebarSection", () => {
       unarchiveSquad: vi.fn(),
     });
     render(<SquadSidebarSection onSelectSquad={vi.fn()} />);
-    expect(screen.getByText("Alpha Squad")).toBeInTheDocument();
+    expect(screen.getByText("alpha-squad")).toBeInTheDocument();
   });
 
   it("calls onSelectSquad when a squad item is clicked", async () => {
@@ -110,7 +110,7 @@ describe("SquadSidebarSection", () => {
       unarchiveSquad: vi.fn(),
     });
     render(<SquadSidebarSection onSelectSquad={handleSelect} />);
-    await userEvent.click(screen.getByText("Alpha Squad"));
+    await userEvent.click(screen.getByText("alpha-squad"));
     expect(handleSelect).toHaveBeenCalledWith("sq1");
   });
 });

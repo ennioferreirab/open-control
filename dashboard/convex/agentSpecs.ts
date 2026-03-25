@@ -6,7 +6,7 @@ import { specStatusValidator } from "./schema";
 export const createDraft = internalMutation({
   args: {
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     role: v.string(),
     responsibilities: v.optional(v.array(v.string())),
     nonGoals: v.optional(v.array(v.string())),
@@ -18,6 +18,8 @@ export const createDraft = internalMutation({
     toolPolicy: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),
     model: v.optional(v.string()),
+    prompt: v.optional(v.string()),
+    soul: v.optional(v.string()),
     executionPolicy: v.optional(v.string()),
     memoryPolicy: v.optional(v.string()),
     reviewPolicyRef: v.optional(v.string()),
@@ -38,6 +40,8 @@ export const createDraft = internalMutation({
       toolPolicy: args.toolPolicy,
       skills: args.skills,
       model: args.model,
+      prompt: args.prompt,
+      soul: args.soul,
       executionPolicy: args.executionPolicy,
       memoryPolicy: args.memoryPolicy,
       reviewPolicyRef: args.reviewPolicyRef,

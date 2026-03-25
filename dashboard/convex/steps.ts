@@ -18,23 +18,88 @@ import { applyTaskTransition, getTaskStateVersion } from "./lib/taskTransitions"
 import { stepStatusValidator, workflowStepTypeValidator } from "./schema";
 import { logActivity } from "./lib/workflowHelpers";
 
-type ParentTaskTransitionStatus = "assigned" | "in_progress" | "review" | "done" | "crashed";
+type ParentTaskTransitionStatus = "assigned" | "in_progress" | "done" | "crashed";
+
+/**
+ * Unblock dependents whose blockers are all completed and return a
+ * snapshot of all task steps.  Shared core for both manual (UI) and
+ * bridge (Python) completion paths.
+ */
+async function unblockReadyDependents(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+  timestamp: string,
+  statusOverride?: { stepId: Id<"steps">; status: StepStatus },
+): Promise<{ unblockedIds: Id<"steps">[]; currentTaskSteps: StepWithDependencies[] }> {
+  const allTaskSteps = await ctx.db
+    .query("steps")
+    .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+    .collect();
+  const currentTaskSteps: StepWithDependencies[] = allTaskSteps.map((s) => ({
+    _id: s._id,
+    status: (statusOverride && s._id === statusOverride.stepId
+      ? statusOverride.status
+      : s.status) as StepStatus,
+    blockedBy: s.blockedBy,
+    workflowStepType: s.workflowStepType,
+  }));
+
+  const unblockedIds = findBlockedStepsReadyToUnblock(currentTaskSteps);
+  const stepsById = new Map(allTaskSteps.map((s) => [s._id, s] as const));
+  for (const unblockedStepId of unblockedIds) {
+    const blockedStep = stepsById.get(unblockedStepId);
+    if (!blockedStep) continue;
+    await applyStepTransition(ctx, blockedStep as Parameters<typeof applyStepTransition>[1], {
+      stepId: unblockedStepId,
+      fromStatus: blockedStep.status,
+      expectedStateVersion: getStepStateVersion(blockedStep),
+      toStatus: "assigned",
+      reason: "Dependencies resolved",
+      idempotencyKey: `unblock:${String(unblockedStepId)}:${getStepStateVersion(blockedStep)}`,
+    });
+    await logActivity(ctx, {
+      taskId: blockedStep.taskId,
+      agentName: blockedStep.assignedAgent,
+      eventType: "step_unblocked",
+      description: `Step unblocked and assigned: "${blockedStep.title}"`,
+      timestamp,
+    });
+  }
+
+  return { unblockedIds, currentTaskSteps };
+}
+
+/**
+ * After a step is completed, unblock dependents and reconcile parent task.
+ * Used by acceptHumanStep (gate path) and manualMoveStep (completion path).
+ */
+async function completeStepAndUnblockDependents(
+  ctx: MutationCtx,
+  step: Doc<"steps">,
+  stepId: Id<"steps">,
+  timestamp: string,
+): Promise<void> {
+  const task = await ctx.db.get(step.taskId);
+  if (!task) throw new ConvexError("Parent task not found");
+
+  const { currentTaskSteps } = await unblockReadyDependents(ctx, step.taskId, timestamp, {
+    stepId,
+    status: "completed",
+  });
+  await applyManualParentTaskTransition(ctx, { task, step, currentTaskSteps });
+}
 
 function deriveManualParentTaskStatus(
   steps: Array<{
     status?: string;
-    workflowStepType?: string;
   }>,
-): "done" | "crashed" | "in_progress" | "review" {
+): "done" | "crashed" | "in_progress" {
   const activeSteps = steps.filter((step) => step.status !== "deleted");
   if (activeSteps.length > 0 && activeSteps.every((step) => step.status === "completed")) {
     return "done";
   }
   if (activeSteps.some((step) => step.status === "crashed")) {
     return "crashed";
-  }
-  if (activeSteps.some((step) => step.status === "review" && step.workflowStepType === "review")) {
-    return "review";
   }
   return "in_progress";
 }
@@ -62,14 +127,12 @@ async function applyManualParentTaskTransition(
       ? `All ${currentTaskSteps.filter((taskStep) => taskStep.status !== "deleted").length} steps completed`
       : nextTaskStatus === "crashed"
         ? "One or more steps crashed"
-        : nextTaskStatus === "review"
-          ? "Workflow review is pending"
-          : "Step state changed; task returned to in_progress";
+        : "Step state changed; task returned to in_progress";
 
   const transitionStatuses: ParentTaskTransitionStatus[] = [];
   let transitionStartStatus = task.status;
 
-  if (transitionStartStatus === "done" && nextTaskStatus !== "review") {
+  if (transitionStartStatus === "done") {
     transitionStatuses.push("assigned");
     transitionStartStatus = "assigned";
   }
@@ -386,14 +449,21 @@ export const acceptHumanStep = mutation({
     }
 
     const timestamp = new Date().toISOString();
+
+    // Accept = complete. Every step accepted from waiting_human completes
+    // directly and unblocks dependents. No intermediate "running" state —
+    // there is no executor to pick it up, so "running" causes a deadlock
+    // in the dispatch loop.
     await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
       stepId: args.stepId,
       fromStatus: step.status,
       expectedStateVersion: getStepStateVersion(step),
-      toStatus: "running",
+      toStatus: "completed",
       reason: "Human accepted step",
       idempotencyKey: `accept:${String(args.stepId)}:${getStepStateVersion(step)}`,
     });
+
+    await completeStepAndUnblockDependents(ctx, step, args.stepId, timestamp);
 
     await logActivity(ctx, {
       taskId: step.taskId,
@@ -421,8 +491,7 @@ export const manualMoveStep = mutation({
     if (!step) {
       throw new ConvexError("Step not found");
     }
-    const isWorkflowGate =
-      step.workflowStepType === "human" || step.workflowStepType === "checkpoint";
+    const isWorkflowGate = step.workflowStepType === "human";
     if (step.assignedAgent !== "human" && !isWorkflowGate) {
       throw new ConvexError("Only human-assigned steps or workflow gates can be manually moved");
     }
@@ -451,65 +520,33 @@ export const manualMoveStep = mutation({
       return step.taskId;
     }
 
-    const task = await ctx.db.get(step.taskId);
-    if (!task) {
-      throw new ConvexError("Parent task not found");
-    }
-
-    const allTaskSteps = await ctx.db
-      .query("steps")
-      .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
-      .collect();
-    const currentTaskSteps: StepWithDependencies[] = allTaskSteps.map((taskStep) =>
-      taskStep._id === args.stepId
-        ? {
-            _id: taskStep._id,
-            status: args.newStatus as StepStatus,
-            blockedBy: taskStep.blockedBy,
-            workflowStepType: taskStep.workflowStepType,
-          }
-        : {
-            _id: taskStep._id,
-            status: taskStep.status as StepStatus,
-            blockedBy: taskStep.blockedBy,
-            workflowStepType: taskStep.workflowStepType,
-          },
-    );
-
     if (args.newStatus === "completed") {
-      // Note: step metric increment is handled by applyStepTransition (Story 31.11)
-
-      const unblockedIds = findBlockedStepsReadyToUnblock(currentTaskSteps);
-      const stepsById = new Map(allTaskSteps.map((s) => [s._id, s] as const));
-
-      for (const unblockedStepId of unblockedIds) {
-        const blockedStep = stepsById.get(unblockedStepId);
-        if (!blockedStep) continue;
-
-        await applyStepTransition(ctx, blockedStep as Parameters<typeof applyStepTransition>[1], {
-          stepId: unblockedStepId,
-          fromStatus: blockedStep.status,
-          expectedStateVersion: getStepStateVersion(blockedStep),
-          toStatus: "assigned",
-          reason: "Dependencies resolved",
-          idempotencyKey: `unblock:${String(unblockedStepId)}:${getStepStateVersion(blockedStep)}`,
-        });
-
-        await ctx.db.insert("activities", {
-          taskId: blockedStep.taskId,
-          agentName: blockedStep.assignedAgent,
-          eventType: "step_unblocked",
-          description: `Step unblocked and assigned: "${blockedStep.title}"`,
-          timestamp,
-        });
-      }
+      await completeStepAndUnblockDependents(ctx, step, args.stepId, timestamp);
+    } else {
+      // Non-completion moves still need parent task reconciliation
+      const task = await ctx.db.get(step.taskId);
+      if (!task) throw new ConvexError("Parent task not found");
+      const allTaskSteps = await ctx.db
+        .query("steps")
+        .withIndex("by_taskId", (q) => q.eq("taskId", step.taskId))
+        .collect();
+      const currentTaskSteps: StepWithDependencies[] = allTaskSteps.map((taskStep) =>
+        taskStep._id === args.stepId
+          ? {
+              _id: taskStep._id,
+              status: args.newStatus as StepStatus,
+              blockedBy: taskStep.blockedBy,
+              workflowStepType: taskStep.workflowStepType,
+            }
+          : {
+              _id: taskStep._id,
+              status: taskStep.status as StepStatus,
+              blockedBy: taskStep.blockedBy,
+              workflowStepType: taskStep.workflowStepType,
+            },
+      );
+      await applyManualParentTaskTransition(ctx, { task, step, currentTaskSteps });
     }
-
-    await applyManualParentTaskTransition(ctx, {
-      task,
-      step,
-      currentTaskSteps,
-    });
 
     return step.taskId;
   },
@@ -1145,43 +1182,11 @@ export const checkAndUnblockDependents = internalMutation({
       return [];
     }
 
-    const allTaskSteps = await ctx.db
-      .query("steps")
-      .withIndex("by_taskId", (q) => q.eq("taskId", completedStep.taskId))
-      .collect();
-
-    const unblockedIds = findBlockedStepsReadyToUnblock(allTaskSteps);
-    if (unblockedIds.length === 0) {
-      return [];
-    }
-
-    const timestamp = new Date().toISOString();
-    const stepsById = new Map(allTaskSteps.map((step) => [step._id, step] as const));
-
-    for (const stepId of unblockedIds) {
-      const blockedStep = stepsById.get(stepId);
-      if (!blockedStep) {
-        continue;
-      }
-
-      await applyStepTransition(ctx, blockedStep as Parameters<typeof applyStepTransition>[1], {
-        stepId,
-        fromStatus: blockedStep.status,
-        expectedStateVersion: getStepStateVersion(blockedStep),
-        toStatus: "assigned",
-        reason: "Dependencies resolved",
-        idempotencyKey: `unblock:${String(stepId)}:${getStepStateVersion(blockedStep)}`,
-      });
-
-      await logActivity(ctx, {
-        taskId: blockedStep.taskId,
-        agentName: blockedStep.assignedAgent,
-        eventType: "step_unblocked",
-        description: `Step unblocked and assigned: "${blockedStep.title}"`,
-        timestamp,
-      });
-    }
-
+    const { unblockedIds } = await unblockReadyDependents(
+      ctx,
+      completedStep.taskId,
+      new Date().toISOString(),
+    );
     return unblockedIds;
   },
 });

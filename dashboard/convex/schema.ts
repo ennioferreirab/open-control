@@ -110,7 +110,6 @@ export const reviewScopeValidator = v.union(
 export const workflowStepTypeValidator = v.union(
   v.literal("agent"),
   v.literal("human"),
-  v.literal("checkpoint"),
   v.literal("review"),
   v.literal("system"),
 );
@@ -133,6 +132,9 @@ export const taskFileMetadataValidator = v.object({
   subfolder: v.string(),
   uploadedAt: v.string(),
   restoredAt: v.optional(v.string()),
+  stepId: v.optional(v.id("steps")),
+  isFavorite: v.optional(v.boolean()),
+  isArchived: v.optional(v.boolean()),
 });
 
 export const taskFilesValidator = v.optional(v.array(taskFileMetadataValidator));
@@ -377,7 +379,7 @@ export default defineSchema({
 
   agents: defineTable({
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     role: v.string(),
     prompt: v.optional(v.string()),
     soul: v.optional(v.string()),
@@ -505,7 +507,7 @@ export default defineSchema({
 
   agentSpecs: defineTable({
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     role: v.string(),
     purpose: v.optional(v.string()),
     nonGoals: v.optional(v.array(v.string())),
@@ -521,6 +523,8 @@ export default defineSchema({
     reviewPolicyRef: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),
     model: v.optional(v.string()),
+    prompt: v.optional(v.string()),
+    soul: v.optional(v.string()),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
     version: v.number(),
     compiledAgentId: v.optional(v.id("agents")),
@@ -533,7 +537,7 @@ export default defineSchema({
 
   squadSpecs: defineTable({
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     description: v.optional(v.string()),
     outcome: v.optional(v.string()),
     reviewPolicy: v.optional(v.string()),
@@ -562,7 +566,6 @@ export default defineSchema({
         type: v.union(
           v.literal("agent"),
           v.literal("human"),
-          v.literal("checkpoint"),
           v.literal("review"),
           v.literal("system"),
         ),

@@ -1,6 +1,7 @@
 import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import type { DbWriter } from "./types";
+import { validateWorkflowStepReferences } from "./validators/workflowReferences";
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -9,7 +10,7 @@ import type { DbWriter } from "./types";
 export interface WorkflowStandaloneStepInput {
   id?: string;
   title: string;
-  type: "agent" | "human" | "checkpoint" | "review" | "system";
+  type: "agent" | "human" | "review" | "system";
   agentKey?: string;
   reviewSpecId?: Id<"reviewSpecs">;
   inputs?: string[];
@@ -32,7 +33,7 @@ export interface WorkflowStandaloneInput {
 export type ResolvedStep = {
   id: string;
   title: string;
-  type: "agent" | "human" | "checkpoint" | "review" | "system";
+  type: "agent" | "human" | "review" | "system";
   agentId?: Id<"agents">;
   reviewSpecId?: Id<"reviewSpecs">;
   description?: string;
@@ -117,6 +118,22 @@ export async function publishWorkflowStandalone(
       }
     }
   }
+
+  // Step 3b: Validate internal cross-references (dependsOn and onReject must reference existing step ids)
+  const stepsWithKeys = workflow.steps.map((step, index) => ({
+    key: step.id ?? `${workflow.name}-${step.title}-${index}`,
+    type: step.type,
+    dependsOn: step.dependsOn,
+    onReject: step.onReject,
+  }));
+  // Guard against synthetic key collisions
+  const keySet = new Set(stepsWithKeys.map((s) => s.key));
+  if (keySet.size !== stepsWithKeys.length) {
+    throw new ConvexError(
+      `Workflow '${workflow.name}' has duplicate step ids. Ensure each step has a unique id.`,
+    );
+  }
+  validateWorkflowStepReferences(stepsWithKeys, `workflow '${workflow.name}'`);
 
   // Step 4: Transform steps — replace agentKey with resolved agentId, generate step id if absent
   const resolvedSteps: ResolvedStep[] = workflow.steps.map((step) => {

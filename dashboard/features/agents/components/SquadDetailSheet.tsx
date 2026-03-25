@@ -35,7 +35,7 @@ interface SquadDetailSheetProps {
 type EditableSquadDraft = {
   squad: {
     name: string;
-    displayName: string;
+    displayName: string | undefined;
     description: string;
     outcome: string;
   };
@@ -211,7 +211,7 @@ export function SquadDetailSheet({
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <SheetTitle className="text-lg font-semibold">{squad.displayName}</SheetTitle>
+                      <SheetTitle className="text-lg font-semibold">{squad.name}</SheetTitle>
                       <Badge
                         variant={squad.status === "published" ? "default" : "secondary"}
                         className="text-xs"
@@ -342,9 +342,7 @@ export function SquadDetailSheet({
                                   <Bot className="h-4 w-4" />
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="text-sm font-medium truncate">
-                                    {agent.displayName}
-                                  </p>
+                                  <p className="text-sm font-medium truncate">{agent.name}</p>
                                   <p className="text-xs text-muted-foreground truncate">
                                     {agent.role}
                                   </p>
@@ -524,7 +522,7 @@ export function SquadDetailSheet({
             onMissionLaunched?.(taskId);
           }}
           squadSpecId={squadId}
-          squadDisplayName={squad.displayName}
+          squadDisplayName={squad.name}
           boardId={boardId}
         />
       )}

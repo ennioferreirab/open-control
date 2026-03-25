@@ -23,7 +23,6 @@ def bridge() -> MagicMock:
     b.list_deleted_agents = MagicMock(return_value=[])
     b.list_agents = MagicMock(return_value=[])
     b.backup_agent_memory = MagicMock()
-    b.write_agent_config = MagicMock()
     b.get_agent_memory_backup = MagicMock(return_value=None)
     b.get_agent_by_name = MagicMock(return_value=None)
     return b
@@ -67,7 +66,6 @@ class TestAgentSyncServiceInit:
 class TestSyncAgentRegistry:
     """Test the sync_agent_registry method — happy path and edge cases."""
 
-    @patch("mc.contexts.agents.sync._write_back_convex_agents")
     @patch("mc.contexts.agents.sync.validate_agent_file")
     @patch("mc.contexts.agents.sync.ensure_low_agent")
     @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
@@ -76,7 +74,6 @@ class TestSyncAgentRegistry:
         mock_ensure_nanobot: MagicMock,
         mock_ensure_low: MagicMock,
         mock_validate: MagicMock,
-        mock_write_back: MagicMock,
         service: AgentSyncService,
         agents_dir: Path,
         bridge: MagicMock,
@@ -100,7 +97,6 @@ class TestSyncAgentRegistry:
         bridge.sync_agent.assert_called_once()
 
     @patch("mc.contexts.agents.sync._config_default_model", return_value="anthropic/default")
-    @patch("mc.contexts.agents.sync._write_back_convex_agents")
     @patch("mc.contexts.agents.sync.validate_agent_file")
     @patch("mc.contexts.agents.sync.ensure_low_agent")
     @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
@@ -109,7 +105,6 @@ class TestSyncAgentRegistry:
         mock_ensure_nanobot: MagicMock,
         mock_ensure_low: MagicMock,
         mock_validate: MagicMock,
-        mock_write_back: MagicMock,
         mock_default_model: MagicMock,
         service: AgentSyncService,
         agents_dir: Path,
@@ -123,7 +118,6 @@ class TestSyncAgentRegistry:
         assert "bad-agent" in errors
 
     @patch("mc.contexts.agents.sync._config_default_model", return_value="anthropic/default")
-    @patch("mc.contexts.agents.sync._write_back_convex_agents")
     @patch("mc.contexts.agents.sync.validate_agent_file")
     @patch("mc.contexts.agents.sync.ensure_low_agent")
     @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
@@ -132,7 +126,6 @@ class TestSyncAgentRegistry:
         mock_ensure_nanobot: MagicMock,
         mock_ensure_low: MagicMock,
         mock_validate: MagicMock,
-        mock_write_back: MagicMock,
         mock_default_model: MagicMock,
         service: AgentSyncService,
         agents_dir: Path,
@@ -279,7 +272,6 @@ class TestSyncSkills:
 class TestProjectionProtection:
     """Test that AgentSyncService does NOT overwrite projection-backed agents."""
 
-    @patch("mc.contexts.agents.sync._write_back_convex_agents")
     @patch("mc.contexts.agents.sync.validate_agent_file")
     @patch("mc.contexts.agents.sync.ensure_low_agent")
     @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
@@ -288,7 +280,6 @@ class TestProjectionProtection:
         mock_ensure_nanobot: MagicMock,
         mock_ensure_low: MagicMock,
         mock_validate: MagicMock,
-        mock_write_back: MagicMock,
         service: AgentSyncService,
         agents_dir: Path,
         bridge: MagicMock,
@@ -324,7 +315,6 @@ class TestProjectionProtection:
         # The bulk list_agents call must have been used (no N+1 per-agent query needed)
         bridge.list_agents.assert_called()
 
-    @patch("mc.contexts.agents.sync._write_back_convex_agents")
     @patch("mc.contexts.agents.sync.validate_agent_file")
     @patch("mc.contexts.agents.sync.ensure_low_agent")
     @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
@@ -333,7 +323,6 @@ class TestProjectionProtection:
         mock_ensure_nanobot: MagicMock,
         mock_ensure_low: MagicMock,
         mock_validate: MagicMock,
-        mock_write_back: MagicMock,
         service: AgentSyncService,
         agents_dir: Path,
         bridge: MagicMock,
@@ -360,7 +349,6 @@ class TestProjectionProtection:
 
         bridge.sync_agent.assert_called_once()
 
-    @patch("mc.contexts.agents.sync._write_back_convex_agents")
     @patch("mc.contexts.agents.sync.validate_agent_file")
     @patch("mc.contexts.agents.sync.ensure_low_agent")
     @patch("mc.contexts.agents.sync.ensure_nanobot_agent")
@@ -369,7 +357,6 @@ class TestProjectionProtection:
         mock_ensure_nanobot: MagicMock,
         mock_ensure_low: MagicMock,
         mock_validate: MagicMock,
-        mock_write_back: MagicMock,
         service: AgentSyncService,
         agents_dir: Path,
         bridge: MagicMock,
@@ -392,31 +379,3 @@ class TestProjectionProtection:
         _synced, _errors = service.sync_agent_registry(default_model="anthropic/claude-sonnet-4-5")
 
         bridge.sync_agent.assert_called_once()
-
-
-class TestWriteBackProjectionProtection:
-    """Test that write-back materializes config.yaml/SOUL.md from projection."""
-
-    def test_write_back_still_works_for_projection_backed_agent(self, tmp_path: Path) -> None:
-        """Write-back should still materialize config.yaml from a projection-backed agent."""
-        from mc.runtime.gateway import _write_back_convex_agents
-
-        mock_bridge = MagicMock()
-        mock_bridge.get_agent_memory_backup.return_value = None
-        mock_bridge.list_agents.return_value = [
-            {
-                "name": "compiled-agent",
-                "role": "Developer",
-                "prompt": "Compiled prompt.",
-                "compiled_from_spec_id": "spec-id-abc",
-                "compiled_at": "2099-01-01T00:00:00Z",
-                "last_active_at": "2099-01-01T00:00:00+00:00",
-            }
-        ]
-
-        _write_back_convex_agents(mock_bridge, tmp_path)
-
-        # Write-back SHOULD still be called for projection-backed agents
-        mock_bridge.write_agent_config.assert_called_once()
-        call_args = mock_bridge.write_agent_config.call_args[0]
-        assert call_args[0]["name"] == "compiled-agent"

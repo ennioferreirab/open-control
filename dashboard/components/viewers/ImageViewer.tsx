@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Maximize2, Minus, Plus } from "lucide-react";
+import { Download } from "lucide-react";
 
 interface Props {
   blobUrl: string;
@@ -10,33 +10,8 @@ interface Props {
   onDownload: () => void;
 }
 
-const SCALES = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-
 export function ImageViewer({ blobUrl, filename, onDownload }: Props) {
-  const [scale, setScale] = useState<number | "fit">("fit");
   const [error, setError] = useState(false);
-  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
-
-  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
-  };
-
-  const zoomIn = () => {
-    if (scale === "fit") {
-      setScale(1.0);
-    } else {
-      const idx = SCALES.indexOf(scale);
-      if (idx < SCALES.length - 1) setScale(SCALES[idx + 1]);
-    }
-  };
-
-  const zoomOut = () => {
-    if (scale === "fit") return;
-    const idx = SCALES.indexOf(scale);
-    if (idx > 0) setScale(SCALES[idx - 1]);
-    else setScale("fit");
-  };
 
   if (error) {
     return (
@@ -51,81 +26,14 @@ export function ImageViewer({ blobUrl, filename, onDownload }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Controls */}
-      <div className="flex items-center gap-1 px-4 py-2 border-b shrink-0">
-        <Button
-          variant={scale === "fit" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setScale("fit")}
-        >
-          <Maximize2 className="h-3.5 w-3.5 mr-1" />
-          Fit
-        </Button>
-        <Button
-          variant={scale === 1.0 ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setScale(1.0)}
-        >
-          1:1
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          aria-label="Zoom out"
-          onClick={zoomOut}
-          disabled={scale === "fit"}
-        >
-          <Minus className="h-3 w-3" />
-        </Button>
-        {scale !== "fit" && (
-          <span className="text-xs text-muted-foreground w-10 text-center">
-            {Math.round((scale as number) * 100)}%
-          </span>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          aria-label="Zoom in"
-          onClick={zoomIn}
-          disabled={scale === 2.0}
-        >
-          <Plus className="h-3 w-3" />
-        </Button>
-      </div>
-
-      {/* Image area */}
-      <div className="flex-1 overflow-auto bg-muted/20 p-4">
-        {scale === "fit" ? (
-          <div className="flex items-center justify-center h-full">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={blobUrl}
-              alt={filename}
-              className="max-w-full max-h-full object-contain"
-              onLoad={handleLoad}
-              onError={() => setError(true)}
-            />
-          </div>
-        ) : (
-          <div className="min-h-full min-w-full inline-flex items-start justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={blobUrl}
-              alt={filename}
-              style={{
-                width: naturalSize ? naturalSize.w * (scale as number) : undefined,
-                height: naturalSize ? naturalSize.h * (scale as number) : undefined,
-              }}
-              className="block"
-              onLoad={handleLoad}
-              onError={() => setError(true)}
-            />
-          </div>
-        )}
-      </div>
+    <div className="flex items-center justify-center h-full overflow-auto bg-muted/20 p-4">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={blobUrl}
+        alt={filename}
+        className="max-w-full max-h-full object-contain"
+        onError={() => setError(true)}
+      />
     </div>
   );
 }

@@ -310,6 +310,54 @@ describe("useDocumentFetch", () => {
     expect(result.current.loading).toBe(false);
   });
 
+  it("re-fetches when same binary file is closed and reopened (no stale revoked blob URL)", async () => {
+    let blobCounter = 0;
+    mockCreateObjectURL.mockImplementation(() => `blob:http://localhost/blob-${++blobCounter}`);
+
+    const mockBlob = new Blob(["binary"], { type: "image/png" });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      blob: vi.fn().mockResolvedValue(mockBlob),
+      text: vi.fn(),
+    });
+
+    const { result, rerender } = renderHook(
+      ({ file }: { file: { name: string; subfolder: string } | null }) =>
+        useDocumentFetch("task_1", file),
+      { initialProps: { file: binaryFile as { name: string; subfolder: string } | null } },
+    );
+
+    // Wait for first fetch to complete
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.blobUrl).toBe("blob:http://localhost/blob-1");
+    expect(result.current.loading).toBe(false);
+
+    // Close the modal (file becomes null)
+    rerender({ file: null });
+
+    expect(mockRevokeObjectURL).toHaveBeenCalledWith("blob:http://localhost/blob-1");
+    expect(result.current.blobUrl).toBeNull();
+    expect(result.current.loading).toBe(false);
+
+    // Reopen the same file — must NOT return the revoked blob URL
+    rerender({ file: binaryFile });
+
+    // Should be loading (not returning stale revoked blob URL)
+    expect(result.current.blobUrl).toBeNull();
+    expect(result.current.loading).toBe(true);
+
+    // Wait for the new fetch to complete
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.blobUrl).toBe("blob:http://localhost/blob-2");
+    expect(result.current.loading).toBe(false);
+  });
+
   it("aborts the in-flight request when the hook unmounts", () => {
     const fetchDeferred = deferred<Response>();
     mockFetch.mockReturnValue(fetchDeferred.promise);

@@ -10,22 +10,15 @@ import {
 } from "@/components/ui/sidebar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSquadSidebarData } from "@/features/agents/hooks/useSquadSidebarData";
+import { getInitials } from "@/lib/agentUtils";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface SquadSidebarSectionProps {
   onSelectSquad: (squadId: Id<"squadSpecs">) => void;
   deleteMode?: boolean;
   selectedSquadIds?: Set<string>;
-  onToggleSquadSelect?: (squadId: Id<"squadSpecs">, displayName: string) => void;
+  onToggleSquadSelect?: (squadId: Id<"squadSpecs">, displayName: string | undefined) => void;
   filterQuery?: string;
-}
-
-function getSquadInitials(displayName: string): string {
-  const words = displayName.trim().split(/\s+/);
-  if (words.length >= 2) {
-    return (words[0][0] + words[1][0]).toUpperCase();
-  }
-  return displayName.slice(0, 2).toUpperCase();
 }
 
 export function SquadSidebarSection({
@@ -40,7 +33,10 @@ export function SquadSidebarSection({
   const filteredSquads = filterQuery
     ? squads.filter((s) => {
         const lower = filterQuery.toLowerCase();
-        return s.displayName.toLowerCase().includes(lower) || s.name.toLowerCase().includes(lower);
+        return (
+          (s.displayName ?? "").toLowerCase().includes(lower) ||
+          s.name.toLowerCase().includes(lower)
+        );
       })
     : squads;
 
@@ -67,21 +63,19 @@ export function SquadSidebarSection({
                     : onSelectSquad(squad._id)
                 }
                 className="!h-8 cursor-pointer"
-                tooltip={`${squad.displayName}${squad.description ? ` — ${squad.description}` : ""}`}
+                tooltip={`${squad.name}${squad.description ? ` — ${squad.description}` : ""}`}
               >
                 <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-500 text-[10px] font-medium text-white">
-                  {getSquadInitials(squad.displayName)}
+                  {getInitials(squad.name)}
                 </div>
-                <span className="truncate text-xs text-sidebar-foreground">
-                  {squad.displayName}
-                </span>
+                <span className="truncate text-xs text-sidebar-foreground">{squad.name}</span>
               </SidebarMenuButton>
               {deleteMode && (
                 <div className="shrink-0 px-2">
                   <Checkbox
                     checked={selectedSquadIds?.has(squad._id)}
                     onCheckedChange={() => onToggleSquadSelect?.(squad._id, squad.displayName)}
-                    aria-label={`Select ${squad.displayName}`}
+                    aria-label={`Select ${squad.name}`}
                   />
                 </div>
               )}

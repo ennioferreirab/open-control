@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 export interface WorkflowStepDraft {
   id: string;
   title: string;
-  type: "agent" | "human" | "checkpoint" | "review" | "system";
+  type: "agent" | "human" | "review" | "system";
   description: string;
 }
 
@@ -90,9 +90,9 @@ function extractGraphFromDraft(draftGraph: Record<string, unknown>) {
               : typeof step.id === "string"
                 ? step.id
                 : "step",
-          type: (["agent", "human", "checkpoint", "review", "system"].includes(step.type as string)
+          type: (["agent", "human", "review", "system"].includes(step.type as string)
             ? step.type
-            : "agent") as "agent" | "human" | "checkpoint" | "review" | "system",
+            : "agent") as "agent" | "human" | "review" | "system",
           agentKey: typeof step.agentKey === "string" ? step.agentKey : undefined,
           title: typeof step.title === "string" ? step.title : undefined,
           description: typeof step.description === "string" ? step.description : undefined,

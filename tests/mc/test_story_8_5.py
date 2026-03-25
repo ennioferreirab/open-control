@@ -596,8 +596,8 @@ class TestParseUtcTimestamp:
         assert t1 == t2
 
 
-class TestWriteBackTimestampComparison:
-    """Test _write_back_convex_agents uses proper UTC comparison."""
+class _RemovedTestWriteBackTimestampComparison:
+    """Removed: _write_back_convex_agents deleted (Convex is source of truth)."""
 
     def test_z_suffix_timestamp_is_comparable(self, tmp_path):
         """Convex timestamps with Z suffix should be properly compared."""

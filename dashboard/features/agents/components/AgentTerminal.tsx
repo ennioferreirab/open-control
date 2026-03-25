@@ -4,6 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 
+async function copyToClipboard(text: string): Promise<void> {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    if (typeof document === "undefined") return;
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "true");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+}
+
 interface AgentTerminalProps {
   agentName: string;
   provider: string;
@@ -35,6 +53,7 @@ export function AgentTerminal({
       fontFamily: '"SFMono-Regular", "Menlo", "Monaco", monospace',
       fontSize: 15,
       lineHeight: 1.25,
+      scrollback: 10000,
       theme: {
         background: "#09090b",
         foreground: "#f4f4f5",
@@ -54,6 +73,30 @@ export function AgentTerminal({
 
     terminal.open(container);
     fitAddon.fit();
+
+    // --- Clipboard / selection support ---
+    // Without tmux mouse mode, xterm.js handles text selection natively.
+    // Intercept Cmd+C / Ctrl+C when there is a selection so it copies
+    // instead of sending ^C to the process.
+    terminal.attachCustomKeyEventHandler((event) => {
+      const isCopy =
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        event.key.toLowerCase() === "c" &&
+        terminal.hasSelection();
+      if (!isCopy) return true;
+      void copyToClipboard(terminal.getSelection());
+      event.preventDefault();
+      return false;
+    });
+
+    // Document-level copy event handler so right-click → Copy also works.
+    const handleDocCopy = (event: ClipboardEvent) => {
+      if (!terminal.hasSelection()) return;
+      event.clipboardData?.setData("text/plain", terminal.getSelection());
+      event.preventDefault();
+    };
+    document.addEventListener("copy", handleDocCopy);
 
     const resolvedScopeId = scopeId ?? `create:${agentName}`;
 
@@ -151,6 +194,7 @@ export function AgentTerminal({
       }
       socket.close();
       inputSubscription.dispose();
+      document.removeEventListener("copy", handleDocCopy);
       resizeObserver.disconnect();
       terminal.dispose();
       fitAddon.dispose();

@@ -1,0 +1,33 @@
+{
+  "version": "1.0.0",
+  "entity": "reviewSpec",
+  "description": "Review specification — quality criteria and approval thresholds.",
+
+  "operations": {
+    "create": {
+      "mcpTool": "create_review_spec",
+      "mcpDescription": "Create and publish a review specification in Mission Control. Defines quality criteria, approval thresholds, and veto conditions for review steps.",
+      "ipcMethod": "create_review_spec",
+      "convexMutation": "reviewSpecs:createDraft",
+      "publishMutation": "reviewSpecs:publish",
+      "restMethod": "POST",
+      "restPath": "/api/specs/review-spec"
+    }
+  },
+
+  "fields": {
+    "name":                    { "type": "string",   "required": true, "description": "Slug-safe review spec name." },
+    "scope":                   { "type": "string",   "required": true, "enum": ["agent", "workflow", "execution"], "description": "Review scope." },
+    "criteria":                { "type": "object[]", "required": true, "description": "Scoring criteria (at least one required).", "minItems": 1, "itemProperties": {
+      "id":          { "type": "string", "required": true, "description": "Criterion identifier." },
+      "label":       { "type": "string", "required": true, "description": "Human label." },
+      "weight":      { "type": "number", "required": true, "description": "Weight between 0 and 1." },
+      "description": { "type": "string", "description": "Optional criterion description." }
+    }},
+    "approvalThreshold":       { "type": "number",   "required": true, "description": "Score threshold (0-1) required to pass." },
+    "vetoConditions":          { "type": "string[]", "description": "Conditions that auto-reject regardless of score." },
+    "feedbackContract":        { "type": "string",   "description": "Expected feedback format description." },
+    "reviewerPolicy":          { "type": "string",   "description": "Who performs the review." },
+    "rejectionRoutingPolicy":  { "type": "string",   "description": "What happens on rejection." }
+  }
+}

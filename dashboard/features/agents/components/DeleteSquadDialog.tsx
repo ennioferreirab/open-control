@@ -87,7 +87,7 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
     onDeleted,
   ]);
 
-  const displayName = squad?.displayName ?? "";
+  const displayName = squad?.name ?? "";
   const agentList = agents ?? [];
   const hasSharedAgents = agentList.some((a) => a.memberOf.length > 1);
 
@@ -137,7 +137,7 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
                                   id={`agent-${id}`}
                                   checked={checkedAgents.get(id) ?? true}
                                   onCheckedChange={() => handleToggle(id)}
-                                  aria-label={`Delete ${agent.displayName}`}
+                                  aria-label={`Delete ${agent.name}`}
                                 />
                               </td>
                               <td className="px-3 py-2">
@@ -145,7 +145,7 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
                                   htmlFor={`agent-${id}`}
                                   className="cursor-pointer font-medium"
                                 >
-                                  {agent.displayName}
+                                  {agent.name}
                                 </label>
                               </td>
                               {hasSharedAgents && (
@@ -162,7 +162,7 @@ export function DeleteSquadDialog({ squadId, onClose, onDeleted }: DeleteSquadDi
                                               : "text-muted-foreground"
                                         }
                                       >
-                                        {s.displayName}
+                                        {s.name ?? "—"}
                                       </span>
                                     </span>
                                   ))}

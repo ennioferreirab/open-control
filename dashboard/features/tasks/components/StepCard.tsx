@@ -8,15 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useStepCardActions } from "@/hooks/useStepCardActions";
-import {
-  AlertTriangle,
-  CheckCircle,
-  ExternalLink,
-  Lock,
-  Paperclip,
-  Trash2,
-  User,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle, ExternalLink, Lock, Paperclip, Trash2 } from "lucide-react";
 import { Doc } from "@/convex/_generated/dataModel";
 import { STEP_STATUS_COLORS, type StepStatus } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -39,8 +31,7 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
   const colors = STEP_STATUS_COLORS[step.status as StepStatus] ?? STEP_STATUS_COLORS.assigned;
   const assignedAgentName = step.assignedAgent ?? "Unassigned";
   const isHuman = step.assignedAgent === "human";
-  const isWorkflowGate =
-    step.workflowStepType === "human" || step.workflowStepType === "checkpoint";
+  const isWorkflowGate = step.workflowStepType === "human";
   const isWaitingHuman = step.status === "waiting_human";
   const isRunningGateStep = step.status === "running" && (isHuman || isWorkflowGate);
   const assignedAgentInitials = step.assignedAgent
@@ -179,7 +170,7 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
                   }
                 }}
               >
-                <User className="h-3 w-3 mr-1" />
+                <CheckCircle className="h-3 w-3 mr-1" />
                 Accept
               </Button>
             </div>

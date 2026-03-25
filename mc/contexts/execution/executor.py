@@ -15,10 +15,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mc.application.execution.completion_status import (
-    resolve_completion_review_phase,
-    resolve_completion_status,
-)
+from mc.application.execution.completion_status import resolve_completion_status
 from mc.application.execution.interactive_mode import resolve_task_runner_type
 from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_kind
 from mc.contexts.execution.agent_runner import (  # noqa: F401
@@ -103,14 +100,13 @@ async def _transition_completion(
         **(task_data or {}),
         **(snapshot or {}),
     }
-    final_status = resolve_completion_status(snapshot_for_status)
+    final_status = resolve_completion_status()
     result = await asyncio.to_thread(
         bridge.transition_task_from_snapshot,
         snapshot_for_status,
         final_status,
         reason=f"Agent {agent_name} completed task '{title}'",
         agent_name=agent_name,
-        review_phase=resolve_completion_review_phase(snapshot_for_status),
     )
     return result, final_status, snapshot
 

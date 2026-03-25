@@ -14,10 +14,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mc.application.execution.completion_status import (
-    resolve_completion_review_phase,
-    resolve_completion_status,
-)
+from mc.application.execution.completion_status import resolve_completion_status
 from mc.application.execution.interactive_mode import resolve_step_runner_type
 from mc.types import (
     NANOBOT_AGENT_NAME,
@@ -77,7 +74,7 @@ def _coerce_step_run_result(value: Any) -> tuple[str, bool, str | None]:
 
 
 def _is_workflow_gate_step(step_type: str | None) -> bool:
-    return step_type in ("human", "checkpoint")
+    return step_type == "human"
 
 
 def _maybe_inject_orientation(
@@ -338,6 +335,25 @@ class StepDispatcher:
                 ]
 
                 if not assigned_steps:
+                    # Check if human/gate steps are still pending and could
+                    # unblock blocked dependents when the user completes them.
+                    # Without this, the loop exits and no one re-dispatches
+                    # the newly-assigned steps after the human acts.
+                    has_human_pending = any(
+                        s.get("status") in (StepStatus.WAITING_HUMAN, StepStatus.RUNNING)
+                        for s in steps
+                        if s.get("workflow_step_type") == "human"
+                        or s.get("assigned_agent") == "human"
+                    )
+                    has_blocked = any(s.get("status") == StepStatus.BLOCKED for s in steps)
+                    if has_human_pending and has_blocked:
+                        logger.info(
+                            "[dispatcher] Waiting for human step resolution on task %s via subscription",
+                            task_id,
+                        )
+                        resolved = await self._wait_for_human_step_resolution(task_id)
+                        if resolved:
+                            continue
                     break
 
                 groups = self._group_by_parallel_group(assigned_steps)
@@ -381,13 +397,12 @@ class StepDispatcher:
                     "tasks:getById",
                     {"task_id": task_id},
                 )
-                final_status = resolve_completion_status(task_data)
+                final_status = resolve_completion_status()
                 transition_result = await _transition_task_from_snapshot(
                     self._bridge,
                     task_data,
                     final_status,
                     reason=f"All {step_count} steps completed",
-                    review_phase=resolve_completion_review_phase(task_data),
                 )
                 if not isinstance(transition_result, dict) or transition_result.get("kind") not in {
                     "applied",
@@ -399,16 +414,12 @@ class StepDispatcher:
                         transition_result,
                     )
                     return
-                if final_status == TaskStatus.REVIEW:
-                    await asyncio.to_thread(
-                        self._bridge.create_activity,
-                        ActivityEventType.REVIEW_REQUESTED,
-                        (
-                            f"Execution completed -- all {step_count} steps finished; "
-                            "awaiting explicit approval"
-                        ),
-                        task_id,
-                    )
+                await asyncio.to_thread(
+                    self._bridge.create_activity,
+                    ActivityEventType.TASK_COMPLETED,
+                    f"Execution completed -- all {step_count} steps finished",
+                    task_id,
+                )
         except Exception as exc:
             logger.error(
                 "[dispatcher] Dispatch failed for task %s",
@@ -429,6 +440,38 @@ class StepDispatcher:
                     "[dispatcher] Failed to post dispatch failure message",
                     exc_info=True,
                 )
+
+    async def _wait_for_human_step_resolution(self, task_id: str) -> bool:
+        """Wait indefinitely for step changes via Convex subscription (WebSocket).
+
+        Human gate steps are approval checkpoints — no timeout.
+        The workflow stays paused until the human acts.
+
+        Returns True if new assigned steps appeared (human approved),
+        False if the task left the waiting state (paused, cancelled, etc.).
+        """
+        queue = self._bridge.async_subscribe(
+            "steps:getByTask",
+            {"task_id": task_id},
+        )
+        while True:
+            steps_snapshot = await queue.get()
+            if not isinstance(steps_snapshot, list):
+                continue
+
+            has_assigned = any(s.get("status") == StepStatus.ASSIGNED for s in steps_snapshot)
+            if has_assigned:
+                return True
+
+            # If no longer waiting on human + blocked, stop watching
+            has_human_pending = any(
+                s.get("status") in (StepStatus.WAITING_HUMAN, StepStatus.RUNNING)
+                for s in steps_snapshot
+                if s.get("workflow_step_type") == "human" or s.get("assigned_agent") == "human"
+            )
+            has_blocked = any(s.get("status") == StepStatus.BLOCKED for s in steps_snapshot)
+            if not (has_human_pending and has_blocked):
+                return False
 
     @staticmethod
     def _group_by_parallel_group(steps: list[dict[str, Any]]) -> dict[int, list[dict[str, Any]]]:
@@ -619,6 +662,53 @@ class StepDispatcher:
             board_name = req.board_name
             memory_workspace = req.memory_workspace
 
+            # Dump the final interpolated prompt for debugging/analysis.
+            try:
+                from mc.contexts.execution.output_artifacts import write_prompt_log
+
+                prompt_log_parts = [
+                    "=== MC Step Prompt Log ===",
+                    f"step_id: {step_id}",
+                    f"step_title: {step_title}",
+                    f"agent_name: {agent_name}",
+                    f"agent_model: {agent_model}",
+                    f"runner_type: {req.runner_type}",
+                    f"memory_workspace: {memory_workspace}",
+                    f"board_name: {board_name}",
+                    f"predecessor_step_ids: {req.predecessor_step_ids}",
+                    f"reasoning_level: {reasoning_level}",
+                    "",
+                    "=== AGENT PROMPT (system instructions) ===",
+                    agent_prompt or "(none)",
+                    "",
+                    "=== DESCRIPTION (enriched context: files, thread, tags, review) ===",
+                    execution_description or "(none)",
+                    "",
+                    "=== FILE MANIFEST ===",
+                    str(req.file_manifest) if req.file_manifest else "(none)",
+                    "",
+                    "=== THREAD CONTEXT ===",
+                    req.thread_context or "(none)",
+                    "",
+                    "=== TAG ATTRIBUTES ===",
+                    req.tag_attributes or "(none)",
+                    "",
+                    "=== FINAL ASSEMBLED PROMPT (sent to agent) ===",
+                    req.prompt or "(none)",
+                ]
+                await asyncio.to_thread(
+                    write_prompt_log,
+                    task_id,
+                    "system_prompt_log_{DDHHMMSS}.txt",
+                    "\n".join(prompt_log_parts),
+                )
+            except Exception:
+                logger.warning(
+                    "[dispatcher] Failed to write prompt log for step %s",
+                    step_id,
+                    exc_info=True,
+                )
+
             # Snapshot output dir before agent execution for artifact detection
             # (Story 2.5).
             pre_snapshot = await asyncio.to_thread(snapshot_output_dir, task_id)
@@ -674,6 +764,7 @@ class StepDispatcher:
                     task_id,
                     task_data,
                     agent_name,
+                    step_id=step_id,
                 )
             except Exception:
                 logger.exception(

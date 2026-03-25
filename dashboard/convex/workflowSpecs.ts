@@ -3,13 +3,15 @@ import { ConvexError, v } from "convex/values";
 
 import { specStatusValidator, workflowStepTypeValidator } from "./schema";
 import { publishWorkflowStandalone } from "./lib/workflowStandalonePublisher";
+import { validateWorkflowStepReferences } from "./lib/validators/workflowReferences";
 
 type WorkflowStepRecord = {
   id: string;
-  type: "agent" | "human" | "checkpoint" | "review" | "system";
+  type: "agent" | "human" | "review" | "system";
   agentId?: string;
   reviewSpecId?: string;
   onReject?: string;
+  dependsOn?: string[];
 };
 
 function validateReviewSteps(steps: WorkflowStepRecord[] | undefined): void {
@@ -92,6 +94,15 @@ export const publish = internalMutation({
       throw new ConvexError("Can only publish specs in draft status");
     }
     validateReviewSteps(spec.steps as WorkflowStepRecord[] | undefined);
+    const stepsForRefValidation = ((spec.steps as WorkflowStepRecord[] | undefined) ?? []).map(
+      (s) => ({
+        key: s.id,
+        type: s.type,
+        dependsOn: s.dependsOn,
+        onReject: s.onReject,
+      }),
+    );
+    validateWorkflowStepReferences(stepsForRefValidation, `workflow spec '${args.specId}'`);
     const now = new Date().toISOString();
     await ctx.db.patch(args.specId, {
       status: "published",
@@ -179,5 +190,18 @@ export const publishStandalone = mutation({
   },
   handler: async (ctx, args) => {
     return await publishWorkflowStandalone(ctx, args.squadSpecId, args.workflow);
+  },
+});
+
+export const archiveWorkflow = mutation({
+  args: { workflowSpecId: v.id("workflowSpecs") },
+  handler: async (ctx, args) => {
+    const spec = await ctx.db.get(args.workflowSpecId);
+    if (!spec) throw new ConvexError("Workflow not found");
+    if (spec.status === "archived") throw new ConvexError("Already archived");
+    await ctx.db.patch(args.workflowSpecId, {
+      status: "archived",
+      updatedAt: new Date().toISOString(),
+    });
   },
 });

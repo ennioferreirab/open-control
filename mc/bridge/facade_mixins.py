@@ -140,10 +140,14 @@ class BridgeRepositoryFacadeMixin:
         return self._tasks.get_task(task_id)
 
     def sync_task_output_files(
-        self, task_id: str, task_data: dict, agent_name: str = "agent"
+        self,
+        task_id: str,
+        task_data: dict,
+        agent_name: str = "agent",
+        step_id: str | None = None,
     ) -> None:
         self._ensure_repos()
-        self._tasks.sync_task_output_files(task_id, task_data, agent_name)
+        self._tasks.sync_task_output_files(task_id, task_data, agent_name, step_id=step_id)
 
     def sync_output_files_to_parent(
         self, source_task_id: str, parent_task_id: str, agent_name: str = "agent"
@@ -345,10 +349,6 @@ class BridgeRepositoryFacadeMixin:
         self._ensure_repos()
         return self._agents.update_agent_status(agent_name, status, description)
 
-    def write_agent_config(self, agent_data: dict[str, Any], agents_dir: Any) -> None:
-        self._ensure_repos()
-        self._agents.write_agent_config(agent_data, agents_dir)
-
     def get_board_by_id(self, board_id: str) -> dict[str, Any] | None:
         self._ensure_repos()
         return self._boards.get_board_by_id(board_id)
@@ -441,6 +441,78 @@ class BridgeRepositoryFacadeMixin:
     def publish_squad_graph(self, graph: dict[str, Any]) -> Any:
         self._ensure_repos()
         return self._specs.publish_squad_graph(graph)
+
+    def publish_workflow(self, squad_spec_id: str, workflow: dict[str, Any]) -> Any:
+        self._ensure_repos()
+        return self._specs.publish_workflow(squad_spec_id, workflow)
+
+    def create_review_spec(
+        self,
+        name: str,
+        scope: str,
+        criteria: list[dict[str, Any]],
+        approval_threshold: float,
+        veto_conditions: list[str] | None = None,
+        feedback_contract: str | None = None,
+        reviewer_policy: str | None = None,
+        rejection_routing_policy: str | None = None,
+    ) -> Any:
+        self._ensure_repos()
+        return self._specs.create_review_spec(
+            name=name,
+            scope=scope,
+            criteria=criteria,
+            approval_threshold=approval_threshold,
+            veto_conditions=veto_conditions,
+            feedback_contract=feedback_contract,
+            reviewer_policy=reviewer_policy,
+            rejection_routing_policy=rejection_routing_policy,
+        )
+
+    def list_skills(self, available_only: bool = False) -> list[dict[str, Any]]:
+        self._ensure_repos()
+        return self._specs.list_skills(available_only)
+
+    def update_agent(self, name: str, **updates: Any) -> None:
+        self._ensure_repos()
+        self._specs.update_agent(name, **updates)
+
+    def delete_skill(self, name: str) -> None:
+        self._ensure_repos()
+        self._specs.delete_skill(name)
+
+    def archive_squad(self, squad_spec_id: str) -> None:
+        self._ensure_repos()
+        self._specs.archive_squad(squad_spec_id)
+
+    def archive_workflow(self, workflow_spec_id: str) -> None:
+        self._ensure_repos()
+        self._specs.archive_workflow(workflow_spec_id)
+
+    def register_skill(
+        self,
+        name: str,
+        description: str,
+        content: str,
+        source: str = "workspace",
+        supported_providers: list[str] | None = None,
+        available: bool = True,
+        always: bool = False,
+        requires: str | None = None,
+        metadata: str | None = None,
+    ) -> None:
+        self._ensure_repos()
+        self._specs.register_skill(
+            name=name,
+            description=description,
+            content=content,
+            source=source,
+            supported_providers=supported_providers,
+            available=available,
+            always=always,
+            requires=requires,
+            metadata=metadata,
+        )
 
     def get_enabled_integration_configs(self) -> list[dict[str, Any]]:
         self._ensure_repos()

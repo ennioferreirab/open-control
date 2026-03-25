@@ -1,0 +1,63 @@
+{
+  "version": "1.0.0",
+  "entity": "workflow",
+  "description": "Workflow specification — execution flow for a squad.",
+
+  "operations": {
+    "publish": {
+      "mcpTool": "publish_workflow",
+      "mcpDescription": "Publish a new workflow to an existing squad in Mission Control. Creates workflow steps linked to the squad's agent roster.",
+      "ipcMethod": "publish_workflow",
+      "convexMutation": "workflowSpecs:publishStandalone",
+      "restMethod": "POST",
+      "restPath": "/api/specs/workflow"
+    },
+    "archive": {
+      "mcpTool": "archive_workflow",
+      "mcpDescription": "Archive a workflow in Mission Control. Sets the workflow status to archived.",
+      "ipcMethod": "archive_workflow",
+      "convexMutation": "workflowSpecs:archiveWorkflow",
+      "restMethod": "DELETE",
+      "restPath": "/api/specs/workflow"
+    }
+  },
+
+  "fields": {
+    "squadSpecId": {
+      "type": "string",
+      "required": true,
+      "description": "Convex ID of the published squad."
+    },
+    "workflow": {
+      "type": "object",
+      "required": true,
+      "description": "Workflow definition.",
+      "operations": ["publish"],
+      "properties": {
+        "name":         { "type": "string", "required": true, "description": "Workflow name slug." },
+        "description":  { "type": "string", "description": "Optional workflow description." },
+        "steps":        { "type": "object[]", "required": true, "description": "Workflow steps.", "ref": "#/sharedTypes/workflow_step" },
+        "exitCriteria": { "type": "string", "description": "Optional workflow exit criteria." }
+      }
+    },
+    "workflowSpecId": {
+      "type": "string",
+      "required": true,
+      "description": "Convex ID of the workflow to archive.",
+      "operations": ["archive"]
+    }
+  },
+
+  "sharedTypes": {
+    "workflow_step": {
+      "id":           { "type": "string", "description": "Optional step ID override." },
+      "title":        { "type": "string", "required": true, "description": "Step title." },
+      "type":         { "type": "string", "required": true, "enum": ["agent", "human", "review", "system"], "description": "Step type." },
+      "agentKey":     { "type": "string", "description": "Agent key from the squad roster." },
+      "reviewSpecId": { "type": "string", "description": "Review spec ID (required for review steps)." },
+      "onReject":     { "type": "string", "description": "Step to return to on rejection (required for review steps).", "validation": "must be a valid step.id within the same workflow" },
+      "dependsOn":    { "type": "string[]", "description": "Step keys this step depends on.", "validation": "each item must be a valid step.id within the same workflow" },
+      "description":  { "type": "string", "description": "Optional step description." }
+    }
+  }
+}

@@ -136,3 +136,17 @@ def _relocate_invalid_memory_files(task_id: str, workspace: Path) -> list[Path]:
         MemoryIndex(memory_dir).sync()
 
     return moved
+
+
+def write_prompt_log(task_id: str, filename: str, content: str) -> None:
+    """Write a prompt log file to the task's output directory."""
+    from datetime import datetime as _dt
+
+    safe_id = task_safe_id(task_id)
+    output_dir = get_tasks_dir() / safe_id / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ts = _dt.now().strftime("%d%H%M%S")
+    final_name = filename.replace("{DDHHMMSS}", ts)
+    path = output_dir / final_name
+    path.write_text(content, encoding="utf-8")
+    logger.info("[prompt-log] Wrote %s (%d bytes)", path, len(content))

@@ -685,7 +685,7 @@ class TestExecutorShim:
 
 
 def test_file_attachments_in_user_message():
-    """File attachments are rendered as (attached: ...) suffix."""
+    """File attachments are rendered as indexed <UserAttached> XML tags."""
     builder = ThreadContextBuilder()
     messages = [
         {
@@ -702,5 +702,37 @@ def test_file_attachments_in_user_message():
         },
     ]
     result = builder.build(messages)
-    assert "(attached: report.pdf, data.csv)" in result
     assert "Analyze this report" in result
+    assert '<UserAttached idx="1" name="report.pdf" type="application/pdf" size="1024" />' in result
+    assert '<UserAttached idx="2" name="data.csv" type="text/csv" size="512" />' in result
+
+
+def test_file_attachments_in_thread_history():
+    """File attachments in thread history messages also use XML tags."""
+    builder = ThreadContextBuilder()
+    messages = [
+        {
+            "author_name": "User",
+            "author_type": "user",
+            "message_type": "user_message",
+            "type": "user_message",
+            "content": "First message with file",
+            "timestamp": "2026-03-05T09:00:00Z",
+            "file_attachments": [
+                {"name": "spec.docx", "type": "application/vnd.openxmlformats", "size": 2048},
+            ],
+        },
+        {
+            "author_name": "User",
+            "author_type": "user",
+            "message_type": "user_message",
+            "type": "user_message",
+            "content": "Follow up",
+            "timestamp": "2026-03-05T10:00:00Z",
+        },
+    ]
+    result = builder.build(messages)
+    # First message goes to thread history with XML tag
+    assert '<UserAttached idx="1" name="spec.docx"' in result
+    # Latest message has no attachments
+    assert "[Latest Follow-up]\nUser: Follow up" in result

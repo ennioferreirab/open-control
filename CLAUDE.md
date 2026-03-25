@@ -9,7 +9,7 @@ mc/                  Python backend — runtime, workers, orchestrator, bridge t
   runtime/           Gateway, orchestrator, workers (inbox, execution)
   contexts/          Domain logic — conversation, execution, routing, planning, agents
   bridge/            Python↔Convex communication layer (HTTP client, key conversion, repos)
-  cli/               CLI entry point (currently `uv run nanobot mc start` via compatibility alias)
+  cli/               CLI entry point (`uv run open-control mc start`; `nanobot` alias also works)
 dashboard/           Next.js app + Convex backend
   convex/            Convex functions (queries, mutations, actions) and schema
   convex/lib/        Pure logic extracted from Convex functions — testable units
@@ -59,6 +59,8 @@ All code, comments, commit messages, and docstrings in **English**.
 | Lint + typecheck | `make lint && make typecheck` |
 
 The stack runs via Docker Compose. Source code is bind-mounted for hot reload (Next.js and Convex auto-reload; Python requires `docker compose restart mc`). Self-hosted Convex inside the container — no port conflicts, no singleton issues.
+
+**Global solutions rule:** Every fix must apply to ALL services (mc, mc-test, future instances). Never solve a problem for one service only. If `mc-test` has a volume mount, env var, or entrypoint fix, the main `mc` service (via `docker-compose.override.yml`) must have it too, and vice versa. Think holistically — test, frontend, backend, database.
 
 ### Development Method — BMAD
 
@@ -112,9 +114,24 @@ All features follow the **BMAD method** (v6.0.1). Use `/bmad-help` to see next s
 
 **Subagent efficiency:** when dispatching subagents to write tests, provide all context upfront — target file, example test to follow, specific scenarios, output path. Do not let subagents explore the codebase to discover patterns.
 
+### Bug Fixes — TDD Mandatory
+
+When fixing a bug in already-implemented functionality, always follow the red-green TDD cycle:
+
+1. **Investigate** — understand the root cause before writing any code
+2. **Write a failing test** — create a test that reproduces the bug. Run it and confirm it **fails** (red)
+3. **Implement the fix** — write the minimal code to address the root cause
+4. **Verify the test passes** — run the same test and confirm it **passes** (green)
+
+Never skip the red phase. A fix without a test that first proves the failure is not verified.
+
 ### Error Handling
 
 Never add silent fallbacks that mask failures. Fail explicitly with clear errors. Only add fallbacks if explicitly requested.
+
+### Docker Volumes — NEVER Delete
+
+**NEVER run `docker volume rm` on any project volume.** Convex data, agent memory, task history, and squad definitions live in Docker volumes. Deleting a volume destroys all persistent state with no recovery. If Convex fails to start, investigate the root cause (port conflicts, stale locks, resource limits) — do NOT delete the volume as a shortcut.
 
 ### Vendor Boundary
 

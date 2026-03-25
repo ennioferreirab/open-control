@@ -9,7 +9,7 @@ Contains:
 - sync_agent_registry / sync_skills / sync_nanobot_default_model
 - _sync_model_tiers / _sync_embedding_model
 - _distribute_builtin_skills
-- _cleanup_deleted_agents / _write_back_convex_agents / _restore_archived_files
+- _cleanup_deleted_agents / _restore_archived_files
 - _fetch_bot_identity
 """
 
@@ -20,7 +20,6 @@ import logging
 import os
 import shutil
 import tempfile
-from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -28,7 +27,6 @@ import yaml
 
 from mc.infrastructure.config import (
     _config_default_model,
-    _parse_utc_timestamp,
     _read_file_or_none,
 )
 from mc.infrastructure.runtime_home import get_boards_dir, get_runtime_path, get_workspace_dir
@@ -484,66 +482,6 @@ def _cleanup_deleted_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
             )
 
 
-def _write_back_convex_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
-    """Write-back Convex -> local for agents where Convex is newer.
-
-    Both timestamps are compared as UTC-aware datetime objects.
-    After writing config.yaml, checks if board memory directories are missing
-    and restores from Convex backup if available. Archive is never cleared.
-    """
-    from datetime import datetime
-
-    try:
-        convex_agents = bridge.list_agents()
-    except Exception:
-        logger.exception("Failed to list agents from Convex for write-back")
-        return
-
-    for agent_data in convex_agents:
-        name = agent_data.get("name")
-        if not name:
-            continue
-
-        # System agents (e.g. low-agent) are Convex-only — skip local write-back
-        if agent_data.get("is_system"):
-            continue
-
-        config_path = agents_dir / name / "config.yaml"
-        last_active = agent_data.get("last_active_at")
-        if not last_active:
-            continue
-
-        convex_ts = _parse_utc_timestamp(last_active)
-        if convex_ts is None:
-            logger.warning(
-                "Write-back: skipping agent '%s' — unparseable timestamp '%s'",
-                name,
-                last_active,
-            )
-            continue
-
-        if config_path.is_file():
-            local_mtime = datetime.fromtimestamp(config_path.stat().st_mtime, tz=UTC)
-            if convex_ts > local_mtime:
-                try:
-                    bridge.write_agent_config(agent_data, agents_dir)
-                    logger.info("Write-back: updated local config for agent '%s'", name)
-                except Exception:
-                    logger.exception("Write-back failed for agent '%s'", name)
-        else:
-            # Agent exists in Convex but has no local YAML — create it
-            try:
-                bridge.write_agent_config(agent_data, agents_dir)
-                logger.info("Write-back: created local config for agent '%s'", name)
-            except Exception:
-                logger.exception("Write-back failed for new agent '%s'", name)
-                continue
-
-        # Restore memory from backup if board workspaces are missing on disk.
-        # Archive data is kept persistent — never cleared after restore.
-        _restore_memory_from_backup(bridge, name, agents_dir / name)
-
-
 def _sync_model_tiers(bridge: ConvexBridge) -> None:
     """Sync connected models list and seed default tiers on startup.
 
@@ -671,9 +609,6 @@ def sync_agent_registry(
 
     # Step 0a: Cleanup — archive and remove local folders for soft-deleted agents
     _cleanup_deleted_agents(bridge, agents_dir)
-
-    # Step 0b: Write-back — Convex → local for dashboard-edited agents
-    _write_back_convex_agents(bridge, agents_dir)
 
     # Step 1: Validate agent YAML in each subdirectory
     valid_agents: list[AgentData] = []

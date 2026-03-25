@@ -90,13 +90,10 @@ class PlanMaterializer:
                 continue  # Visual-only alias, not a real step
             title = (step.title or step.description or f"Step {index}").strip()
             description = (step.description or title).strip()
-            # Human/checkpoint workflow steps must keep "human" as the
-            # assigned agent so the UI renders them correctly instead of
-            # falling back to "nanobot".
-            if step.workflow_step_type in (
-                WorkflowStepType.HUMAN,
-                WorkflowStepType.CHECKPOINT,
-            ):
+            # Human workflow steps must keep "human" as the assigned agent
+            # so the UI renders them correctly instead of falling back to
+            # "nanobot".
+            if step.workflow_step_type == WorkflowStepType.HUMAN:
                 assigned_agent = HUMAN_AGENT_NAME
             else:
                 assigned_agent = (

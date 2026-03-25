@@ -192,7 +192,7 @@ describe("agent resolution", () => {
     expect(writeStep!.assignedAgent).toBe("post-writer");
   });
 
-  it("assigns empty string for assignedAgent when agentId is absent (human/checkpoint step)", () => {
+  it("assigns empty string for assignedAgent when agentId is absent (human step)", () => {
     const humanWorkflow: WorkflowSpecInput = {
       specId: "wf-human",
       name: "Human Review Workflow",

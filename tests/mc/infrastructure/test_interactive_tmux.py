@@ -28,6 +28,7 @@ def test_ensure_session_creates_detached_tmux_session_when_missing() -> None:
                     "claude",
                 ]
             ),
+            _completed(["tmux", "set-option", "-g", "-a", "terminal-overrides", "..."]),
         ]
     )
     manager = TmuxSessionManager(run=runner)
@@ -39,6 +40,7 @@ def test_ensure_session_creates_detached_tmux_session_when_missing() -> None:
     )
 
     assert created is True
+    assert runner.call_count == 3
     assert runner.call_args_list[0] == call(
         ["tmux", "has-session", "-t", "mc-int-123"],
         capture_output=True,
@@ -63,6 +65,14 @@ def test_ensure_session_creates_detached_tmux_session_when_missing() -> None:
     assert kwargs["check"] is False
     assert kwargs["env"]["TERM"] == "xterm-256color"
     assert kwargs["env"]["COLORTERM"] == "truecolor"
+    # Alternate screen disabled so xterm.js scrollback works with mouse wheel
+    assert runner.call_args_list[2][0][0][:5] == [
+        "tmux",
+        "set-option",
+        "-g",
+        "-a",
+        "terminal-overrides",
+    ]
 
 
 def test_ensure_session_merges_provider_env_with_terminal_env() -> None:
@@ -70,6 +80,7 @@ def test_ensure_session_merges_provider_env_with_terminal_env() -> None:
         side_effect=[
             _completed(["tmux", "has-session", "-t", "mc-int-123"], returncode=1),
             _completed(["tmux", "new-session", "-d", "-s", "mc-int-123"]),
+            _completed(["tmux", "set-option", "-g", "-a", "terminal-overrides", "..."]),
         ]
     )
     manager = TmuxSessionManager(run=runner)

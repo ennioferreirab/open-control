@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "entity": "skill",
+  "description": "Skill registration — capabilities that agents can use.",
+
+  "operations": {
+    "register": {
+      "mcpTool": "register_skill",
+      "mcpDescription": "Register or update a skill in Mission Control. Creates the skill record in the database so agents can use it.",
+      "ipcMethod": "register_skill",
+      "convexMutation": "skills:upsertByName",
+      "restMethod": "POST",
+      "restPath": "/api/specs/skills"
+    },
+    "delete": {
+      "mcpTool": "delete_skill",
+      "mcpDescription": "Delete a skill from Mission Control. Removes the skill record from the database and the SKILL.md from disk.",
+      "ipcMethod": "delete_skill",
+      "convexMutation": "skills:deleteByName",
+      "restMethod": "DELETE",
+      "restPath": "/api/specs/skills"
+    },
+    "list": {
+      "mcpTool": "list_skills",
+      "mcpDescription": "List all registered skills in Mission Control. Returns the full skill catalog with availability, providers, and metadata.",
+      "ipcMethod": "list_skills",
+      "restMethod": "GET",
+      "restPath": "/api/specs/skills"
+    }
+  },
+
+  "fields": {
+    "name":               { "type": "string",   "required": true,  "description": "Skill name slug." },
+    "description":        { "type": "string",   "required": true,  "description": "What the skill does and when to use it.", "operations": ["register"] },
+    "content":            { "type": "string",   "required": true,  "description": "Full skill content (SKILL.md body).", "operations": ["register"] },
+    "source":             { "type": "string",   "enum": ["builtin", "workspace"], "default": "workspace", "description": "Skill source.", "operations": ["register"] },
+    "supportedProviders": { "type": "string[]", "enum": ["claude-code", "codex", "nanobot"], "default": ["claude-code"], "description": "Providers that support this skill.", "operations": ["register"] },
+    "available":          { "type": "boolean",  "default": true,   "description": "Whether the skill is available for use.", "operations": ["register"] },
+    "always":             { "type": "boolean",  "default": false,  "description": "Whether the skill is always loaded.", "operations": ["register"] },
+    "requires":           { "type": "string",   "description": "Optional requirement description.", "operations": ["register"] },
+    "metadata":           { "type": "string",   "description": "Optional JSON metadata string.", "operations": ["register"] }
+  },
+
+  "listParams": {
+    "available_only": { "type": "boolean", "default": false, "description": "If true, only return available skills." }
+  }
+}

@@ -18,7 +18,7 @@ echo "[init-convex] Pushing schema to local Convex backend..."
 cd "$DASHBOARD_DIR"
 
 # convex dev --local --once starts an embedded backend, pushes schema, then exits
-npx convex dev --local --once
+npx convex dev --local --local-force-upgrade --once
 
 # Validate that the database was created
 if [ ! -f "$DASHBOARD_DIR/.convex/local/default/convex_local_backend.sqlite3" ]; then

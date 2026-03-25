@@ -17,10 +17,7 @@ from mc.application.execution.background_tasks import (
     create_background_task,
     get_background_tasks,
 )
-from mc.application.execution.completion_status import (
-    resolve_completion_review_phase,
-    resolve_completion_status,
-)
+from mc.application.execution.completion_status import resolve_completion_status
 from mc.application.execution.file_enricher import (
     build_merged_source_context,
     load_merged_source_payloads,
@@ -551,15 +548,13 @@ class CCExecutorMixin:
         if result.session_id:
             await self._store_cc_session(agent_name, task_id, result.session_id)
 
-        final_status = resolve_completion_status(task_data)
+        final_status = resolve_completion_status()
         await asyncio.to_thread(
             self._bridge.update_task_status,
             task_id,
             final_status,
             agent_name,
             f"Agent {agent_name} completed task '{title}'",
-            None,
-            resolve_completion_review_phase(task_data),
         )
 
         # Write completion to global HEARTBEAT.md

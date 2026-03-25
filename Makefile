@@ -19,7 +19,7 @@
 # make format       Format all code
 # ──────────────────────────────────────────────────────────────────
 
-.PHONY: install build start up down test test-full check check-full \
+.PHONY: install build start up down sync test test-full check check-full \
         test-py test-py-full test-ts test-ts-full lint lint-py lint-ts typecheck typecheck-py typecheck-ts \
         format format-py format-ts \
         test-up test-down
@@ -43,6 +43,11 @@ up:
 
 down:
 	@docker compose down
+
+# ─── Convex sync (push functions to cloud) ─────────────────────
+
+sync:
+	cd dashboard && npx convex dev --once
 
 # ─── Testing ──────────────────────────────────────────────────────
 # Unit tests are fully mocked — no Convex needed.

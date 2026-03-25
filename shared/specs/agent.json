@@ -1,0 +1,46 @@
+{
+  "version": "1.0.0",
+  "entity": "agent",
+  "description": "Agent specification — identity, behavior, and configuration.",
+
+  "operations": {
+    "create": {
+      "mcpTool": "create_agent_spec",
+      "mcpDescription": "Create a V2 agent specification in Mission Control. Defines the agent's identity, responsibilities, principles, and policies.",
+      "ipcMethod": "create_agent_spec",
+      "convexMutation": "agentSpecs:createDraft",
+      "publishMutation": "agentSpecs:publish",
+      "restMethod": "POST",
+      "restPath": "/api/specs/agent"
+    },
+    "update": {
+      "mcpTool": "update_agent",
+      "mcpDescription": "Update an existing agent's configuration in Mission Control. Can modify skills, model, prompt, role, display name, soul, and other fields.",
+      "ipcMethod": "update_agent",
+      "convexMutation": "agents:updateConfig",
+      "restMethod": "PATCH",
+      "restPath": "/api/specs/agent"
+    }
+  },
+
+  "fields": {
+    "name":              { "type": "string",   "required": true, "description": "Agent name slug (unique identifier)." },
+    "displayName":       { "type": "string",   "required": false, "description": "Human-readable display name. Optional — UI generates initials from name slug if omitted.", "operations": ["create"] },
+    "role":              { "type": "string",   "required": true, "description": "Agent role description." },
+    "prompt":            { "type": "string",   "description": "System prompt for the agent." },
+    "soul":              { "type": "string",   "description": "Soul/personality description (SOUL.md content)." },
+    "skills":            { "type": "string[]", "description": "List of skill names the agent uses.", "validation": "each item must exist as an available skill in the skills table" },
+    "model":             { "type": "string",   "description": "Model identifier (e.g. 'tier:standard-low')." },
+    "responsibilities":  { "type": "string[]", "description": "What this agent is responsible for.", "operations": ["create"] },
+    "nonGoals":          { "type": "string[]", "description": "What this agent explicitly does NOT do.", "operations": ["create"] },
+    "principles":        { "type": "string[]", "description": "Core principles guiding the agent.", "operations": ["create"] },
+    "workingStyle":      { "type": "string",   "description": "Description of how the agent approaches tasks.", "operations": ["create"] },
+    "qualityRules":      { "type": "string[]", "description": "Rules for producing quality output.", "operations": ["create"] },
+    "antiPatterns":      { "type": "string[]", "description": "Patterns this agent explicitly avoids.", "operations": ["create"] },
+    "outputContract":    { "type": "string",   "description": "Description of outputs this agent produces.", "operations": ["create"] },
+    "toolPolicy":        { "type": "string",   "description": "Policy for tool usage.", "operations": ["create"] },
+    "memoryPolicy":      { "type": "string",   "description": "Policy for memory and context persistence.", "operations": ["create"] },
+    "executionPolicy":   { "type": "string",   "description": "Policy for task execution.", "operations": ["create"] },
+    "reviewPolicyRef":   { "type": "string",   "description": "Reference to a review policy.", "operations": ["create"] }
+  }
+}

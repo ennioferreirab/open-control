@@ -79,7 +79,7 @@ async def test_process_configs(dashboard_dir, project_root):
 
     assert configs[0].label == "convex"
     assert configs[0].command == "npm"
-    assert configs[0].args == ["run", "dev:backend", "--", "--local"]
+    assert configs[0].args == ["run", "dev:backend", "--", "--local", "--local-force-upgrade"]
     assert configs[0].cwd == dashboard_dir
 
     assert configs[1].label == "dashboard"

@@ -868,6 +868,12 @@ All routes under `dashboard/app/api/`. These handle operations requiring server-
 |--------|-------|---------|
 | `POST` | `/api/specs/agent` | `agentSpecs:createDraft` + `agentSpecs:publish` via `ConvexHttpClient` (admin key) |
 | `POST` | `/api/specs/squad` | `squadSpecs:publishGraph` via `ConvexHttpClient` (admin key) |
+| `GET` | `/api/specs/skills` | Lists all skills (supports `?available=true` filter) |
+| `POST` | `/api/specs/skills` | Registers or updates a skill via `skills:upsertByName` |
+| `DELETE` | `/api/specs/skills?name=x` | Deletes a skill from Convex and disk |
+| `PATCH` | `/api/specs/agent` | Updates agent config (skills, model, prompt, etc.) via `agents:updateConfig` |
+| `DELETE` | `/api/specs/squad?squadSpecId=x` | Archives a squad (`status → archived`) |
+| `DELETE` | `/api/specs/workflow?workflowSpecId=x` | Archives a workflow (`status → archived`) |
 | `GET` | `/api/specs/squad/context` | Queries Convex for agents, skills, reviewSpecs, models |
 
 #### Other

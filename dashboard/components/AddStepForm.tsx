@@ -131,7 +131,7 @@ export function AddStepForm({
             </SelectItem>
             {selectableAgents.map((agent) => (
               <SelectItem key={agent.name} value={agent.name}>
-                {agent.displayName || agent.name}
+                {agent.name}
               </SelectItem>
             ))}
           </SelectContent>

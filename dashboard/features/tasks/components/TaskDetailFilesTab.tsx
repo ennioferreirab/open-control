@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, type ChangeEventHandler, type RefObject } from "react";
+import { useMemo, useState, type ChangeEventHandler, type RefObject } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TabsContent } from "@/components/ui/tabs";
 import {
+  Archive,
+  ArchiveRestore,
   ChevronRight,
+  Eye,
+  EyeOff,
   File,
   FileCode,
   FileText,
@@ -14,8 +18,10 @@ import {
   Image,
   Loader2,
   Paperclip,
+  Star,
   Trash2,
 } from "lucide-react";
+import type { Doc } from "@/convex/_generated/dataModel";
 import type { DetailFileRef } from "@/features/tasks/hooks/useTaskDetailView";
 
 const formatSize = (bytes: number) =>
@@ -25,6 +31,10 @@ const formatSize = (bytes: number) =>
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
 const CODE_EXTS = new Set([".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".sh"]);
+
+function truncate(text: string, max: number) {
+  return text.length > max ? text.slice(0, max - 1) + "\u2026" : text;
+}
 
 function getDisplayFileKey(file: {
   name: string;
@@ -116,6 +126,9 @@ function FileRow({
   isMergeLockedSource,
   showDelete = false,
   hideSourceLabel = false,
+  stepTitle,
+  onToggleFavorite,
+  onToggleArchive,
 }: {
   file: DetailFileRef;
   onOpenFile: (file: DetailFileRef) => void;
@@ -125,28 +138,74 @@ function FileRow({
   isMergeLockedSource?: boolean;
   showDelete?: boolean;
   hideSourceLabel?: boolean;
+  stepTitle?: string;
+  onToggleFavorite?: (file: DetailFileRef) => void;
+  onToggleArchive?: (file: DetailFileRef) => void;
 }) {
   const key = getDisplayFileKey(file);
   const isDeleting = deletingFiles?.has(key) ?? false;
   const canDelete = showDelete && !file.sourceTaskId && !isMergeLockedSource;
+  const isFavorite = file.isFavorite === true;
+  const isArchived = file.isArchived === true;
 
   return (
     <div
       className={`group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-opacity hover:bg-muted/50 animate-in fade-in duration-300 ${
         isDeleting ? "pointer-events-none opacity-40" : ""
-      }`}
+      } ${isArchived ? "opacity-50" : ""}`}
       style={{ paddingLeft: `${8 + indent * 16}px` }}
       onClick={() => onOpenFile(file)}
       data-testid="file-row"
     >
+      {onToggleFavorite && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(file);
+          }}
+          className="flex-shrink-0"
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        >
+          <Star
+            className={`h-3.5 w-3.5 transition-colors ${
+              isFavorite
+                ? "fill-amber-400 text-amber-400"
+                : "text-muted-foreground/40 hover:text-amber-400"
+            }`}
+          />
+        </button>
+      )}
       <FileIcon name={file.name} />
       <span className="min-w-0 flex-1 truncate text-sm">{file.name.split("/").pop()}</span>
+      {stepTitle && (
+        <Badge variant="outline" className="flex-shrink-0 text-[10px] font-normal">
+          {truncate(stepTitle, 25)}
+        </Badge>
+      )}
       {!hideSourceLabel && file.sourceLabel && (
         <Badge variant="secondary" className="text-[10px]">
           {file.sourceLabel}
         </Badge>
       )}
       <span className="flex-shrink-0 text-xs text-muted-foreground">{formatSize(file.size)}</span>
+      {onToggleArchive && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleArchive(file);
+          }}
+          className={`flex-shrink-0 text-muted-foreground transition-opacity hover:text-foreground ${
+            isArchived ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+          aria-label={isArchived ? "Restore from archive" : "Archive file"}
+        >
+          {isArchived ? (
+            <ArchiveRestore className="h-3.5 w-3.5" />
+          ) : (
+            <Archive className="h-3.5 w-3.5" />
+          )}
+        </button>
+      )}
       {canDelete && onDeleteFile && (
         <button
           onClick={(event) => {
@@ -181,6 +240,9 @@ function FolderGroup({
   isMergeLockedSource,
   showDelete = false,
   hideSourceLabel = false,
+  stepTitle,
+  onToggleFavorite,
+  onToggleArchive,
 }: {
   node: FileTreeNode;
   onOpenFile: (file: DetailFileRef) => void;
@@ -190,6 +252,9 @@ function FolderGroup({
   isMergeLockedSource?: boolean;
   showDelete?: boolean;
   hideSourceLabel?: boolean;
+  stepTitle?: string;
+  onToggleFavorite?: (file: DetailFileRef) => void;
+  onToggleArchive?: (file: DetailFileRef) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const entries = Array.from(node.children.values());
@@ -224,6 +289,9 @@ function FolderGroup({
               isMergeLockedSource={isMergeLockedSource}
               showDelete={showDelete}
               hideSourceLabel={hideSourceLabel}
+              stepTitle={stepTitle}
+              onToggleFavorite={onToggleFavorite}
+              onToggleArchive={onToggleArchive}
             />
           ))}
           {files.map((leaf) => (
@@ -237,6 +305,9 @@ function FolderGroup({
               isMergeLockedSource={isMergeLockedSource}
               showDelete={showDelete}
               hideSourceLabel={hideSourceLabel}
+              stepTitle={stepTitle}
+              onToggleFavorite={onToggleFavorite}
+              onToggleArchive={onToggleArchive}
             />
           ))}
         </div>
@@ -255,6 +326,9 @@ function FileTreeSection({
   isMergeLockedSource,
   showDelete = false,
   hideSourceLabel = false,
+  stepTitle,
+  onToggleFavorite,
+  onToggleArchive,
 }: {
   files: DetailFileRef[];
   onOpenFile: (file: DetailFileRef) => void;
@@ -263,6 +337,9 @@ function FileTreeSection({
   isMergeLockedSource?: boolean;
   showDelete?: boolean;
   hideSourceLabel?: boolean;
+  stepTitle?: string;
+  onToggleFavorite?: (file: DetailFileRef) => void;
+  onToggleArchive?: (file: DetailFileRef) => void;
 }) {
   const tree = buildFileTree(files);
   return (
@@ -274,6 +351,9 @@ function FileTreeSection({
       isMergeLockedSource={isMergeLockedSource}
       showDelete={showDelete}
       hideSourceLabel={hideSourceLabel}
+      stepTitle={stepTitle}
+      onToggleFavorite={onToggleFavorite}
+      onToggleArchive={onToggleArchive}
     />
   );
 }
@@ -289,6 +369,8 @@ function SourceTaskGroup({
   deletingFiles,
   isMergeLockedSource,
   showDelete = false,
+  onToggleFavorite,
+  onToggleArchive,
 }: {
   title: string;
   label: string;
@@ -298,6 +380,8 @@ function SourceTaskGroup({
   deletingFiles?: Set<string>;
   isMergeLockedSource?: boolean;
   showDelete?: boolean;
+  onToggleFavorite?: (file: DetailFileRef) => void;
+  onToggleArchive?: (file: DetailFileRef) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const totalSize = files.reduce((sum, f) => sum + f.size, 0);
@@ -330,7 +414,82 @@ function SourceTaskGroup({
             isMergeLockedSource={isMergeLockedSource}
             showDelete={showDelete}
             hideSourceLabel
+            onToggleFavorite={onToggleFavorite}
+            onToggleArchive={onToggleArchive}
           />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Step group ---
+
+function StepGroup({
+  stepTitle,
+  files,
+  onOpenFile,
+  onDeleteFile,
+  deletingFiles,
+  isMergeLockedSource,
+  onToggleFavorite,
+  onToggleArchive,
+}: {
+  stepTitle: string;
+  files: DetailFileRef[];
+  onOpenFile: (file: DetailFileRef) => void;
+  onDeleteFile?: (file: DetailFileRef) => void | Promise<void>;
+  deletingFiles?: Set<string>;
+  isMergeLockedSource?: boolean;
+  onToggleFavorite?: (file: DetailFileRef) => void;
+  onToggleArchive?: (file: DetailFileRef) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const { local, bySource } = groupBySource(files);
+
+  return (
+    <div>
+      <button
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <ChevronRight
+          className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+        />
+        <span className="min-w-0 flex-1 truncate text-left font-medium">
+          {truncate(stepTitle, 40)}
+        </span>
+        <Badge variant="secondary" className="text-[10px]">
+          {files.length}
+        </Badge>
+      </button>
+      {expanded && (
+        <div className="ml-2 border-l border-muted-foreground/15 pl-1">
+          {local.length > 0 && (
+            <FileTreeSection
+              files={local}
+              onOpenFile={onOpenFile}
+              onDeleteFile={onDeleteFile}
+              deletingFiles={deletingFiles}
+              isMergeLockedSource={isMergeLockedSource}
+              onToggleFavorite={onToggleFavorite}
+              onToggleArchive={onToggleArchive}
+            />
+          )}
+          {Array.from(bySource.entries()).map(([sourceId, source]) => (
+            <SourceTaskGroup
+              key={sourceId}
+              title={source.title}
+              label={source.label}
+              files={source.files}
+              onOpenFile={onOpenFile}
+              onDeleteFile={onDeleteFile}
+              deletingFiles={deletingFiles}
+              isMergeLockedSource={isMergeLockedSource}
+              onToggleFavorite={onToggleFavorite}
+              onToggleArchive={onToggleArchive}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -339,8 +498,11 @@ function SourceTaskGroup({
 
 // --- Main component ---
 
+type StepInfo = Pick<Doc<"steps">, "_id" | "title" | "order">;
+
 interface TaskDetailFilesTabProps {
   displayFiles: DetailFileRef[];
+  steps: StepInfo[];
   attachInputRef: RefObject<HTMLInputElement | null>;
   onAttachFiles: ChangeEventHandler<HTMLInputElement>;
   isMergeLockedSource: boolean;
@@ -350,10 +512,13 @@ interface TaskDetailFilesTabProps {
   deletingFiles: Set<string>;
   onOpenFile: (file: DetailFileRef) => void;
   onDeleteFile: (file: DetailFileRef) => void | Promise<void>;
+  onToggleFavorite: (file: DetailFileRef) => void;
+  onToggleArchive: (file: DetailFileRef) => void;
 }
 
 export function TaskDetailFilesTab({
   displayFiles,
+  steps,
   attachInputRef,
   onAttachFiles,
   isMergeLockedSource,
@@ -363,41 +528,133 @@ export function TaskDetailFilesTab({
   deletingFiles,
   onOpenFile,
   onDeleteFile,
+  onToggleFavorite,
+  onToggleArchive,
 }: TaskDetailFilesTabProps) {
-  const attachments = displayFiles.filter((file) => file.subfolder === "attachments");
-  const outputs = displayFiles.filter((file) => file.subfolder === "output");
+  const [showArchived, setShowArchived] = useState(false);
 
-  const { local: localAttachments, bySource: attachmentSources } = groupBySource(attachments);
-  const { local: localOutputs, bySource: outputSources } = groupBySource(outputs);
+  const stepMap = useMemo(() => {
+    const map = new Map<string, StepInfo>();
+    for (const step of steps) {
+      map.set(step._id, step);
+    }
+    return map;
+  }, [steps]);
+
+  const archivedCount = useMemo(
+    () => displayFiles.filter((f) => f.isArchived).length,
+    [displayFiles],
+  );
+
+  const visibleFiles = useMemo(
+    () => (showArchived ? displayFiles : displayFiles.filter((f) => !f.isArchived)),
+    [displayFiles, showArchived],
+  );
+
+  const {
+    favorites,
+    stepGroups,
+    localAttachments,
+    attachmentSources,
+    localUngrouped,
+    ungroupedSources,
+  } = useMemo(() => {
+    const favs: DetailFileRef[] = [];
+    const byStep = new Map<string, DetailFileRef[]>();
+    const attachs: DetailFileRef[] = [];
+    const ungrouped: DetailFileRef[] = [];
+
+    for (const file of visibleFiles) {
+      if (file.isFavorite) {
+        favs.push(file);
+        continue;
+      }
+
+      if (file.subfolder === "attachments") {
+        attachs.push(file);
+      } else if (file.stepId) {
+        const stepId = file.stepId as string;
+        if (!byStep.has(stepId)) byStep.set(stepId, []);
+        byStep.get(stepId)!.push(file);
+      } else {
+        ungrouped.push(file);
+      }
+    }
+
+    const sortedStepGroups = Array.from(byStep.entries())
+      .map(([stepId, files]) => ({
+        stepId,
+        stepTitle: stepMap.get(stepId)?.title ?? "Unknown step",
+        order: stepMap.get(stepId)?.order ?? Infinity,
+        files,
+      }))
+      .sort((a, b) => a.order - b.order);
+
+    const { local: localAtt, bySource: attSources } = groupBySource(attachs);
+    const { local: localUng, bySource: ungSources } = groupBySource(ungrouped);
+
+    return {
+      favorites: favs,
+      stepGroups: sortedStepGroups,
+      localAttachments: localAtt,
+      attachmentSources: attSources,
+      localUngrouped: localUng,
+      ungroupedSources: ungSources,
+    };
+  }, [visibleFiles, stepMap]);
+
+  const hasAttachments = localAttachments.length > 0 || attachmentSources.size > 0;
+  const hasUngrouped = localUngrouped.length > 0 || ungroupedSources.size > 0;
+
+  const hasContent = visibleFiles.length > 0;
 
   return (
     <TabsContent value="files" className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col">
       <ScrollArea className="flex-1 px-6 py-4">
         <div className="mb-4 flex items-center justify-between">
-          <input
-            type="file"
-            multiple
-            ref={attachInputRef}
-            onChange={onAttachFiles}
-            className="hidden"
-          />
-          {!isMergeLockedSource && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => attachInputRef.current?.click()}
-              disabled={isUploading}
-              data-testid="attach-file-button"
-            >
-              <Paperclip className="mr-1.5 h-3.5 w-3.5" />
-              {isUploading ? "Uploading..." : "Attach File"}
-            </Button>
-          )}
-          {uploadError && (
-            <p className="text-xs text-red-500" data-testid="upload-error">
-              {uploadError}
-            </p>
-          )}
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              multiple
+              ref={attachInputRef}
+              onChange={onAttachFiles}
+              className="hidden"
+            />
+            {!isMergeLockedSource && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => attachInputRef.current?.click()}
+                disabled={isUploading}
+                data-testid="attach-file-button"
+              >
+                <Paperclip className="mr-1.5 h-3.5 w-3.5" />
+                {isUploading ? "Uploading..." : "Attach File"}
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {uploadError && (
+              <p className="text-xs text-red-500" data-testid="upload-error">
+                {uploadError}
+              </p>
+            )}
+            {archivedCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs text-muted-foreground"
+                onClick={() => setShowArchived(!showArchived)}
+              >
+                {showArchived ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+                {archivedCount} archived
+              </Button>
+            )}
+          </div>
         </div>
         {deleteError && (
           <p className="mb-3 text-xs text-red-500" data-testid="delete-error">
@@ -405,23 +662,74 @@ export function TaskDetailFilesTab({
           </p>
         )}
 
-        {displayFiles.length === 0 ? (
+        {!hasContent && displayFiles.length === 0 ? (
           <p
             className="py-8 text-center text-sm text-muted-foreground"
             data-testid="files-empty-placeholder"
           >
             No files yet. Attach files or wait for agent output.
           </p>
+        ) : !hasContent ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            All files are archived. Click &ldquo;Show archived&rdquo; to see them.
+          </p>
         ) : (
-          <div className="space-y-6">
-            <div>
-              <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Attachments
-              </h4>
-              {attachments.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">No attachments yet.</p>
-              ) : (
-                <div className="flex flex-col gap-1">
+          <div className="space-y-4">
+            {/* Favorites section */}
+            {favorites.length > 0 && (
+              <div>
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Favorites
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {favorites.map((file) => (
+                    <FileRow
+                      key={getDisplayFileKey(file)}
+                      file={file}
+                      onOpenFile={onOpenFile}
+                      onDeleteFile={onDeleteFile}
+                      deletingFiles={deletingFiles}
+                      isMergeLockedSource={isMergeLockedSource}
+                      showDelete={file.subfolder === "attachments"}
+                      stepTitle={
+                        file.stepId ? stepMap.get(file.stepId as string)?.title : undefined
+                      }
+                      onToggleFavorite={onToggleFavorite}
+                      onToggleArchive={onToggleArchive}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step groups */}
+            {stepGroups.map((group) => (
+              <StepGroup
+                key={group.stepId}
+                stepTitle={group.stepTitle}
+                files={group.files}
+                onOpenFile={onOpenFile}
+                onDeleteFile={onDeleteFile}
+                deletingFiles={deletingFiles}
+                isMergeLockedSource={isMergeLockedSource}
+                onToggleFavorite={onToggleFavorite}
+                onToggleArchive={onToggleArchive}
+              />
+            ))}
+
+            {/* Attachments section */}
+            {hasAttachments && (
+              <div>
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Attachments
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
                   {localAttachments.length > 0 && (
                     <FileTreeSection
                       files={localAttachments}
@@ -430,6 +738,8 @@ export function TaskDetailFilesTab({
                       deletingFiles={deletingFiles}
                       isMergeLockedSource={isMergeLockedSource}
                       showDelete
+                      onToggleFavorite={onToggleFavorite}
+                      onToggleArchive={onToggleArchive}
                     />
                   )}
                   {Array.from(attachmentSources.entries()).map(([sourceId, source]) => (
@@ -439,35 +749,43 @@ export function TaskDetailFilesTab({
                       label={source.label}
                       files={source.files}
                       onOpenFile={onOpenFile}
+                      onToggleFavorite={onToggleFavorite}
+                      onToggleArchive={onToggleArchive}
                     />
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            <div>
-              <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Outputs
-              </h4>
-              {outputs.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">No outputs yet.</p>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  {localOutputs.length > 0 && (
-                    <FileTreeSection files={localOutputs} onOpenFile={onOpenFile} />
+            {/* Ungrouped outputs */}
+            {hasUngrouped && (
+              <div>
+                <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Other outputs
+                </h4>
+                <div className="flex flex-col gap-0.5">
+                  {localUngrouped.length > 0 && (
+                    <FileTreeSection
+                      files={localUngrouped}
+                      onOpenFile={onOpenFile}
+                      onToggleFavorite={onToggleFavorite}
+                      onToggleArchive={onToggleArchive}
+                    />
                   )}
-                  {Array.from(outputSources.entries()).map(([sourceId, source]) => (
+                  {Array.from(ungroupedSources.entries()).map(([sourceId, source]) => (
                     <SourceTaskGroup
                       key={sourceId}
                       title={source.title}
                       label={source.label}
                       files={source.files}
                       onOpenFile={onOpenFile}
+                      onToggleFavorite={onToggleFavorite}
+                      onToggleArchive={onToggleArchive}
                     />
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>

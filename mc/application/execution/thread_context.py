@@ -189,11 +189,13 @@ class ThreadContextBuilder:
             latest = window[latest_user_idx_in_window]
             latest_content = latest.get("content", "")
             file_attachments = latest.get("file_attachments") or []
-            attachment_suffix = ""
-            if file_attachments:
-                names = ", ".join(fa.get("name", "unknown") for fa in file_attachments)
-                attachment_suffix = f" (attached: {names})"
-            result_parts.append(f"[Latest Follow-up]\nUser: {latest_content}{attachment_suffix}")
+            attachment_block = self._format_attachment_tags(file_attachments)
+            if attachment_block:
+                result_parts.append(
+                    f"[Latest Follow-up]\nUser: {latest_content}\n{attachment_block}"
+                )
+            else:
+                result_parts.append(f"[Latest Follow-up]\nUser: {latest_content}")
 
         return "\n\n".join(result_parts)
 
@@ -221,12 +223,9 @@ class ThreadContextBuilder:
         content = message.get("content", "")
         msg_type = message.get("type")
 
-        # Format file attachments suffix
+        # Format file attachments as XML tags
         file_attachments = message.get("file_attachments") or []
-        attachment_suffix = ""
-        if file_attachments:
-            names = ", ".join(fa.get("name", "unknown") for fa in file_attachments)
-            attachment_suffix = f" (attached: {names})"
+        attachment_block = self._format_attachment_tags(file_attachments)
 
         if msg_type == "step_completion":
             line = f"{author} [{author_type}] ({ts}) [Step Completion]: {content}"
@@ -235,11 +234,33 @@ class ThreadContextBuilder:
                 artifact_str = self._format_artifacts(artifacts)
                 if artifact_str:
                     line += "\n" + artifact_str
+            if attachment_block:
+                line += f"\n{attachment_block}"
             return line
         elif msg_type == "comment":
-            return f"{author} [Comment]: {content}{attachment_suffix}"
+            line = f"{author} [Comment]: {content}"
+            if attachment_block:
+                line += f"\n{attachment_block}"
+            return line
         else:
-            return f"{author} [{author_type}] ({ts}): {content}{attachment_suffix}"
+            line = f"{author} [{author_type}] ({ts}): {content}"
+            if attachment_block:
+                line += f"\n{attachment_block}"
+            return line
+
+    def _format_attachment_tags(self, file_attachments: list[dict[str, Any]]) -> str:
+        """Render file attachments as indexed XML tags for agent consumption."""
+        if not file_attachments:
+            return ""
+        lines = []
+        for idx, fa in enumerate(file_attachments, start=1):
+            name = fa.get("name", "unknown")
+            file_type = fa.get("type", "unknown")
+            size = fa.get("size", 0)
+            lines.append(
+                f'<UserAttached idx="{idx}" name="{name}" type="{file_type}" size="{size}" />'
+            )
+        return "\n".join(lines)
 
     def _format_artifacts(self, artifacts: list[dict[str, Any]]) -> str:
         """Format artifacts for LLM context injection.

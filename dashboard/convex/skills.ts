@@ -1,5 +1,5 @@
-import { internalMutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { internalMutation, mutation, query } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
 
 import { skillProviderValidator } from "./schema";
 
@@ -62,6 +62,20 @@ export const upsertByName = internalMutation({
         requires: args.requires,
       });
     }
+  },
+});
+
+export const deleteByName = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const skill = await ctx.db
+      .query("skills")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+    if (!skill) {
+      throw new ConvexError(`Skill '${args.name}' not found`);
+    }
+    await ctx.db.delete(skill._id);
   },
 });
 

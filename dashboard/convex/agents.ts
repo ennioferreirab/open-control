@@ -2,6 +2,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 
 import { agentStatusValidator, interactiveProviderValidator } from "./schema";
+import { validateSkillReferences } from "./lib/validators/agentReferences";
 
 const LEGACY_LEAD_AGENT_NAME = "lead-agent";
 const ORCHESTRATOR_AGENT_NAME = "orchestrator-agent";
@@ -197,7 +198,7 @@ export const listActiveRegistryView = query({
 export const upsertByName = mutation({
   args: {
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     role: v.string(),
     prompt: v.optional(v.string()),
     soul: v.optional(v.string()),
@@ -214,6 +215,11 @@ export const upsertByName = mutation({
     isSystem: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    // NOTE: skill validation is intentionally skipped in upsertByName.
+    // This is the internal agent-sync path called at boot from YAML configs.
+    // Agents may reference skills registered through squad definitions that aren't
+    // in the global skills table. Validation happens at squad graph publication time.
+
     const existing = await ctx.db
       .query("agents")
       .withIndex("by_name", (q) => q.eq("name", args.name))
@@ -234,7 +240,7 @@ export const upsertByName = mutation({
       // Convex is source of truth for prompt, variables, and skills edited in
       // the dashboard. Startup YAML sync should only refresh identity/model.
       const patch: Record<string, unknown> = {
-        displayName: args.displayName,
+        displayName: args.displayName ?? undefined,
         role: args.role,
         model: args.model,
         interactiveProvider: args.interactiveProvider,
@@ -274,7 +280,7 @@ export const upsertByName = mutation({
     } else {
       await ctx.db.insert("agents", {
         name: args.name,
-        displayName: args.displayName,
+        displayName: args.displayName ?? undefined,
         role: args.role,
         prompt: args.prompt,
         soul: args.soul,
@@ -293,7 +299,7 @@ export const upsertByName = mutation({
     await ctx.db.insert("activities", {
       agentName: args.name,
       eventType: "agent_connected",
-      description: `Agent '${args.displayName}' (${args.role}) registered`,
+      description: `Agent '${args.displayName ?? args.name}' (${args.role}) registered`,
       timestamp,
     });
   },
@@ -365,6 +371,9 @@ export const updateConfig = mutation({
     variables: v.optional(v.array(v.object({ name: v.string(), value: v.string() }))),
   },
   handler: async (ctx, args) => {
+    // NOTE: skill validation skipped — updateConfig is called from the dashboard
+    // and may set skills from squad context. Validation at squad graph publication.
+
     const agent = await ctx.db
       .query("agents")
       .withIndex("by_name", (q) => q.eq("name", args.name))
@@ -561,7 +570,7 @@ export const getMemoryBackup = query({
 export const publishProjection = mutation({
   args: {
     name: v.string(),
-    displayName: v.string(),
+    displayName: v.optional(v.string()),
     role: v.string(),
     prompt: v.string(),
     soul: v.string(),
@@ -573,6 +582,14 @@ export const publishProjection = mutation({
     compiledAt: v.string(),
   },
   handler: async (ctx, args) => {
+    if (args.skills.length > 0) {
+      await validateSkillReferences(
+        ctx as unknown as Parameters<typeof validateSkillReferences>[0],
+        args.skills,
+        args.name,
+      );
+    }
+
     const existing = await ctx.db
       .query("agents")
       .withIndex("by_name", (q) => q.eq("name", args.name))
@@ -589,7 +606,7 @@ export const publishProjection = mutation({
         );
       }
       const patch: Record<string, unknown> = {
-        displayName: args.displayName,
+        displayName: args.displayName ?? undefined,
         role: args.role,
         // publishProjection always overwrites prompt/soul with the compiled values.
         prompt: args.prompt,
@@ -607,7 +624,7 @@ export const publishProjection = mutation({
     } else {
       await ctx.db.insert("agents", {
         name: args.name,
-        displayName: args.displayName,
+        displayName: args.displayName ?? undefined,
         role: args.role,
         prompt: args.prompt,
         soul: args.soul,
@@ -627,7 +644,7 @@ export const publishProjection = mutation({
     await ctx.db.insert("activities", {
       agentName: args.name,
       eventType: "agent_config_updated",
-      description: `Agent '${args.displayName}' runtime projection published from spec '${args.compiledFromSpecId}' v${args.compiledFromVersion}`,
+      description: `Agent '${args.displayName ?? args.name}' runtime projection published from spec '${args.compiledFromSpecId}' v${args.compiledFromVersion}`,
       timestamp,
     });
   },

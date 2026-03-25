@@ -89,30 +89,6 @@ def test_human_step_type_survives_materialization() -> None:
     assert payload[0]["assigned_agent"] == "human"
 
 
-def test_checkpoint_step_type_survives_materialization() -> None:
-    """Checkpoint step type is preserved."""
-    bridge = MagicMock()
-    bridge.batch_create_steps.return_value = ["step-a"]
-
-    plan = ExecutionPlan(
-        steps=[
-            _make_workflow_step(
-                "step_1",
-                "Checkpoint",
-                "Quality gate checkpoint",
-                workflow_step_type=WorkflowStepType.CHECKPOINT,
-                workflow_step_id="quality-gate",
-            )
-        ]
-    )
-
-    PlanMaterializer(bridge).materialize("task-1", plan)
-
-    _, payload = bridge.batch_create_steps.call_args[0]
-    assert payload[0]["workflow_step_type"] == "checkpoint"
-    assert payload[0]["assigned_agent"] == "human"
-
-
 def test_review_step_type_with_review_spec_id_preserved() -> None:
     """Review step preserves reviewSpecId for the dispatcher."""
     bridge = MagicMock()

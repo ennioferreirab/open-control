@@ -38,7 +38,7 @@ export function AgentSidebarItem({
 }: AgentSidebarItemProps) {
   const { state, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
-  const initials = getInitials(agent.displayName);
+  const initials = getInitials(agent.name);
   const avatarColor = getAvatarColor(agent.name);
   const isDisabled = agent.enabled === false;
 
@@ -81,8 +81,8 @@ export function AgentSidebarItem({
     );
 
   const tooltipContent = isDisabled
-    ? `${agent.displayName} - ${agent.role} - Deactivated`
-    : `${agent.displayName} - ${agent.role} - ${agent.status}`;
+    ? `${agent.name} - ${agent.role} - Deactivated`
+    : `${agent.name} - ${agent.role} - ${agent.status}`;
 
   if (isCollapsed) {
     return (
@@ -143,7 +143,7 @@ export function AgentSidebarItem({
         <span
           className={`truncate text-xs ${isDisabled ? "text-muted-foreground opacity-60" : isRemoteTerminal ? "font-mono text-sidebar-foreground/70" : "text-sidebar-foreground"}`}
         >
-          {isRemoteTerminal ? ipAddress || agent.displayName : agent.displayName}
+          {isRemoteTerminal ? ipAddress || agent.name : agent.name}
         </span>
         {!selectable && !onRestore && (
           <span
@@ -156,7 +156,7 @@ export function AgentSidebarItem({
           <Checkbox
             checked={selected}
             onCheckedChange={() => onToggleSelect?.()}
-            aria-label={`Select ${agent.displayName}`}
+            aria-label={`Select ${agent.name}`}
           />
         </div>
       )}
@@ -167,7 +167,7 @@ export function AgentSidebarItem({
             onRestore();
           }}
           className="shrink-0 px-2 text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={`Restore ${agent.displayName}`}
+          aria-label={`Restore ${agent.name}`}
         >
           <RotateCcw className="h-3.5 w-3.5" />
         </button>

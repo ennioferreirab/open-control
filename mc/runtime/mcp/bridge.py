@@ -334,6 +334,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                     "review_policy_ref": arguments.get("reviewPolicyRef"),
                     "skills": arguments.get("skills"),
                     "model": arguments.get("model"),
+                    "prompt": arguments.get("prompt"),
+                    "soul": arguments.get("soul"),
                     "agent_name": _get_agent_name(),
                     "task_id": _get_task_id(),
                 },
@@ -369,6 +371,210 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if "error" in result:
             return [TextContent(type="text", text=f"Error: {result['error']}")]
         return [TextContent(type="text", text=f"Squad published: {result.get('squad_id', 'ok')}")]
+
+    elif name == "publish_workflow":
+        try:
+            result = await ipc.request(
+                "publish_workflow",
+                {
+                    "squad_spec_id": arguments["squadSpecId"],
+                    "workflow": arguments["workflow"],
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [
+            TextContent(
+                type="text",
+                text=f"Workflow published: {result.get('workflow_spec_id', 'ok')}",
+            )
+        ]
+
+    elif name == "create_review_spec":
+        try:
+            result = await ipc.request(
+                "create_review_spec",
+                {
+                    "name": arguments["name"],
+                    "scope": arguments["scope"],
+                    "criteria": arguments["criteria"],
+                    "approval_threshold": arguments["approvalThreshold"],
+                    "veto_conditions": arguments.get("vetoConditions"),
+                    "feedback_contract": arguments.get("feedbackContract"),
+                    "reviewer_policy": arguments.get("reviewerPolicy"),
+                    "rejection_routing_policy": arguments.get("rejectionRoutingPolicy"),
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [
+            TextContent(
+                type="text",
+                text=f"Review spec created: {result.get('spec_id', 'ok')}",
+            )
+        ]
+
+    elif name == "list_skills":
+        try:
+            result = await ipc.request(
+                "list_skills",
+                {
+                    "available_only": arguments.get("available_only", False),
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        import json
+
+        return [TextContent(type="text", text=json.dumps(result.get("skills", []), indent=2))]
+
+    elif name == "register_skill":
+        try:
+            result = await ipc.request(
+                "register_skill",
+                {
+                    "name": arguments["name"],
+                    "description": arguments["description"],
+                    "content": arguments["content"],
+                    "source": arguments.get("source", "workspace"),
+                    "supported_providers": arguments.get("supportedProviders", ["claude-code"]),
+                    "available": arguments.get("available", True),
+                    "always": arguments.get("always", False),
+                    "requires": arguments.get("requires"),
+                    "metadata": arguments.get("metadata"),
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=f"Skill registered: {arguments['name']}")]
+
+    elif name == "update_agent":
+        try:
+            update_args: dict[str, object] = {
+                "name": arguments["name"],
+                "agent_name": _get_agent_name(),
+                "task_id": _get_task_id(),
+            }
+            for field in (
+                "displayName",
+                "role",
+                "prompt",
+                "soul",
+                "skills",
+                "model",
+            ):
+                if field in arguments:
+                    update_args[field] = arguments[field]
+            result = await ipc.request("update_agent", update_args)
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=f"Agent updated: {arguments['name']}")]
+
+    elif name == "delete_skill":
+        try:
+            result = await ipc.request(
+                "delete_skill",
+                {
+                    "name": arguments["name"],
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=f"Skill deleted: {arguments['name']}")]
+
+    elif name == "archive_squad":
+        try:
+            result = await ipc.request(
+                "archive_squad",
+                {
+                    "squad_spec_id": arguments["squadSpecId"],
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=f"Squad archived: {arguments['squadSpecId']}")]
+
+    elif name == "archive_workflow":
+        try:
+            result = await ipc.request(
+                "archive_workflow",
+                {
+                    "workflow_spec_id": arguments["workflowSpecId"],
+                    "agent_name": _get_agent_name(),
+                    "task_id": _get_task_id(),
+                },
+            )
+        except ConnectionError:
+            return [
+                TextContent(
+                    type="text",
+                    text="Mission Control not reachable. Is the gateway running?",
+                )
+            ]
+        if "error" in result:
+            return [TextContent(type="text", text=f"Error: {result['error']}")]
+        return [TextContent(type="text", text=f"Workflow archived: {arguments['workflowSpecId']}")]
 
     elif name == "search_memory":
         query = arguments.get("query", "")

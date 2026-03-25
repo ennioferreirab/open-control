@@ -24,7 +24,12 @@ import {
   updateTaskTags,
   updateTaskTitle,
 } from "./lib/taskMetadata";
-import { appendTaskFiles, removeAttachmentTaskFile, replaceTaskOutputFiles } from "./lib/taskFiles";
+import {
+  appendTaskFiles,
+  removeAttachmentTaskFile,
+  replaceTaskOutputFiles,
+  toggleFileField,
+} from "./lib/taskFiles";
 import { isValidTaskTransition } from "./lib/taskLifecycle";
 import {
   assertExistingMergeTask,
@@ -758,9 +763,24 @@ export const updateTaskOutputFiles = internalMutation({
   args: {
     taskId: v.id("tasks"),
     outputFiles: v.array(taskFileMetadataValidator),
+    stepId: v.optional(v.id("steps")),
   },
-  handler: async (ctx, { taskId, outputFiles }) => {
-    await replaceTaskOutputFiles(ctx, taskId, outputFiles);
+  handler: async (ctx, { taskId, outputFiles, stepId }) => {
+    await replaceTaskOutputFiles(ctx, taskId, outputFiles, stepId);
+  },
+});
+
+export const toggleFileFavorite = mutation({
+  args: { taskId: v.id("tasks"), fileName: v.string(), subfolder: v.string() },
+  handler: async (ctx, args) => {
+    await toggleFileField(ctx, args.taskId, args.fileName, args.subfolder, "isFavorite");
+  },
+});
+
+export const toggleFileArchived = mutation({
+  args: { taskId: v.id("tasks"), fileName: v.string(), subfolder: v.string() },
+  handler: async (ctx, args) => {
+    await toggleFileField(ctx, args.taskId, args.fileName, args.subfolder, "isArchived");
   },
 });
 

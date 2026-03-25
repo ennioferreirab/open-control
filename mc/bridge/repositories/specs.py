@@ -110,15 +110,42 @@ class SpecsRepository:
         return self._client.query("agentSpecs:getByName", {"name": name})
 
     def publish_agent_spec(self, spec_id: str) -> Any:
-        """Publish an Agent Spec V2 record, compiling it into a runtime projection.
+        """Publish an Agent Spec V2 and project it into the agents table.
 
-        Args:
-            spec_id: The Convex document ID of the spec to publish.
+        1. Sets the spec status to "published".
+        2. Reads the spec back.
+        3. Calls ``agents:publishProjection`` to create/update the runtime agent.
 
-        Returns:
-            Mutation result (if any).
+        The agent then appears in ``activeAgents`` immediately.
         """
-        return self._client.mutation("agentSpecs:publish", {"spec_id": spec_id})
+        self._client.mutation("agentSpecs:publish", {"spec_id": spec_id})
+
+        # Read the published spec to get all fields for projection
+        spec = self._client.query("agentSpecs:getDraft", {"spec_id": spec_id})
+        if not spec:
+            return spec_id
+
+        from datetime import UTC, datetime
+
+        now = datetime.now(UTC).isoformat()
+        self._client.mutation(
+            "agents:publishProjection",
+            {
+                "name": spec.get("name", ""),
+                "display_name": spec.get("display_name", ""),
+                "role": spec.get("role", ""),
+                "prompt": spec.get("prompt")
+                or f"You are {spec.get('display_name', spec.get('name', 'an agent'))}.",
+                "soul": spec.get("soul")
+                or f"# Soul\n\nI am {spec.get('display_name', spec.get('name', 'an agent'))}.",
+                "skills": spec.get("skills") or [],
+                "model": spec.get("model"),
+                "compiled_from_spec_id": spec_id,
+                "compiled_from_version": spec.get("version", 1),
+                "compiled_at": now,
+            },
+        )
+        return spec_id
 
     def create_board_agent_binding(
         self,
@@ -150,3 +177,148 @@ class SpecsRepository:
             The new squad document ID, or None if the mutation returned nothing.
         """
         return self._client.mutation("squadSpecs:publishGraph", {"graph": graph})
+
+    def publish_workflow(
+        self,
+        squad_spec_id: str,
+        workflow: dict[str, Any],
+    ) -> Any:
+        """Publish a standalone workflow to an existing squad.
+
+        Args:
+            squad_spec_id: The Convex document ID of the published squad.
+            workflow: Workflow definition with name, steps, and optional exitCriteria.
+
+        Returns:
+            The new workflow spec document ID, or None if the mutation returned nothing.
+        """
+        return self._client.mutation(
+            "workflowSpecs:publishStandalone",
+            {"squad_spec_id": squad_spec_id, "workflow": workflow},
+        )
+
+    def create_review_spec(
+        self,
+        name: str,
+        scope: str,
+        criteria: list[dict[str, Any]],
+        approval_threshold: float,
+        veto_conditions: list[str] | None = None,
+        feedback_contract: str | None = None,
+        reviewer_policy: str | None = None,
+        rejection_routing_policy: str | None = None,
+    ) -> str | None:
+        """Create and publish a review specification.
+
+        Args:
+            name: Slug-safe review spec name.
+            scope: One of 'agent', 'workflow', 'execution'.
+            criteria: Scoring criteria list.
+            approval_threshold: Score threshold (0-1) required to pass.
+            veto_conditions: Conditions that auto-reject.
+            feedback_contract: Expected feedback format.
+            reviewer_policy: Who performs the review.
+            rejection_routing_policy: What happens on rejection.
+
+        Returns:
+            The new review spec document ID, or None.
+        """
+        args: dict[str, Any] = {
+            "name": name,
+            "scope": scope,
+            "criteria": criteria,
+            "approval_threshold": approval_threshold,
+        }
+        if veto_conditions is not None:
+            args["veto_conditions"] = veto_conditions
+        if feedback_contract is not None:
+            args["feedback_contract"] = feedback_contract
+        if reviewer_policy is not None:
+            args["reviewer_policy"] = reviewer_policy
+        if rejection_routing_policy is not None:
+            args["rejection_routing_policy"] = rejection_routing_policy
+
+        spec_id = self._client.mutation("reviewSpecs:createDraft", args)
+        if spec_id:
+            self._client.mutation("reviewSpecs:publish", {"spec_id": str(spec_id)})
+        return spec_id
+
+    def list_skills(self, available_only: bool = False) -> list[dict[str, Any]]:
+        """List all registered skills.
+
+        Args:
+            available_only: If True, only return available skills.
+
+        Returns:
+            List of skill records.
+        """
+        skills = self._client.query("skills:list", {}) or []
+        if available_only:
+            return [s for s in skills if s.get("available")]
+        return skills
+
+    def register_skill(
+        self,
+        name: str,
+        description: str,
+        content: str,
+        source: str = "workspace",
+        supported_providers: list[str] | None = None,
+        available: bool = True,
+        always: bool = False,
+        requires: str | None = None,
+        metadata: str | None = None,
+    ) -> None:
+        """Register or update a skill in the database.
+
+        Args:
+            name: Skill name slug.
+            description: What the skill does and when to use it.
+            content: Full skill content (SKILL.md body).
+            source: 'builtin' or 'workspace'.
+            supported_providers: List of provider names.
+            available: Whether the skill is available for use.
+            always: Whether the skill is always loaded.
+            requires: Optional requirement description.
+            metadata: Optional JSON metadata string.
+        """
+        args: dict[str, Any] = {
+            "name": name,
+            "description": description,
+            "content": content,
+            "source": source,
+            "supported_providers": supported_providers or ["claude-code"],
+            "available": available,
+        }
+        if always:
+            args["always"] = True
+        if requires is not None:
+            args["requires"] = requires
+        if metadata is not None:
+            args["metadata"] = metadata
+        self._client.mutation("skills:upsertByName", args)
+
+    def update_agent(self, name: str, **updates: Any) -> None:
+        """Update an agent's configuration fields.
+
+        Args:
+            name: Agent name slug.
+            **updates: Fields to update (displayName, role, prompt, soul, skills, model).
+        """
+        args: dict[str, Any] = {"name": name}
+        args.update(updates)
+        self._client.mutation("agents:updateConfig", args)
+
+    def delete_skill(self, name: str) -> None:
+        """Delete a skill by name from Convex."""
+        self._client.mutation("skills:deleteByName", {"name": name})
+
+    def archive_squad(self, squad_spec_id: str) -> None:
+        """Archive a squad by setting its status to archived."""
+        self._client.mutation("squadSpecs:archiveSquad", {"squad_spec_id": squad_spec_id})
+
+    def archive_workflow(self, workflow_spec_id: str) -> None:
+        """Archive a workflow by setting its status to archived."""
+        self._client.mutation(
+            "workflowSpecs:archiveWorkflow", {"workflow_spec_id": workflow_spec_id}
+        )

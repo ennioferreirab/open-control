@@ -19,7 +19,7 @@
 // Input types
 // ---------------------------------------------------------------------------
 
-export type WorkflowStepType = "agent" | "human" | "checkpoint" | "review" | "system";
+export type WorkflowStepType = "agent" | "human" | "review" | "system";
 
 /** A single step as stored in a workflowSpecs document. */
 export interface WorkflowSpecStep {

@@ -211,7 +211,6 @@ class WorkflowStepType(StrEnum):
 
     AGENT = "agent"
     HUMAN = "human"
-    CHECKPOINT = "checkpoint"
     REVIEW = "review"
     SYSTEM = "system"
 

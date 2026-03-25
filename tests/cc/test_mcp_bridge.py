@@ -361,6 +361,14 @@ class TestListTools:
             "search_memory",
             "create_agent_spec",
             "publish_squad_graph",
+            "publish_workflow",
+            "create_review_spec",
+            "list_skills",
+            "register_skill",
+            "update_agent",
+            "delete_skill",
+            "archive_squad",
+            "archive_workflow",
         }
 
     async def test_tools_have_required_fields(self):
@@ -483,6 +491,215 @@ class TestCronTool:
 
 
 # ---------------------------------------------------------------------------
+# Test publish_workflow tool
+# ---------------------------------------------------------------------------
+
+
+class TestPublishWorkflowTool:
+    async def test_publish_workflow_success(self):
+        """publish_workflow returns workflow_spec_id on success."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"publish_workflow": {"workflow_spec_id": "wf123"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "publish_workflow",
+                {
+                    "squadSpecId": "squad-1",
+                    "workflow": {
+                        "name": "default",
+                        "steps": [{"title": "Draft", "type": "agent", "agentKey": "writer"}],
+                    },
+                },
+            )
+
+        assert "wf123" in result[0].text
+
+    async def test_publish_workflow_error(self):
+        """publish_workflow surfaces IPC errors."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"publish_workflow": {"error": "Squad not found"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "publish_workflow",
+                {"squadSpecId": "bad", "workflow": {"name": "x", "steps": []}},
+            )
+
+        assert "Error" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# Test create_review_spec tool
+# ---------------------------------------------------------------------------
+
+
+class TestCreateReviewSpecTool:
+    async def test_create_review_spec_success(self):
+        """create_review_spec returns spec_id on success."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"create_review_spec": {"spec_id": "rs456"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "create_review_spec",
+                {
+                    "name": "quality-check",
+                    "scope": "workflow",
+                    "criteria": [{"id": "accuracy", "label": "Accuracy", "weight": 1.0}],
+                    "approvalThreshold": 0.8,
+                },
+            )
+
+        assert "rs456" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# Test list_skills tool
+# ---------------------------------------------------------------------------
+
+
+class TestListSkillsTool:
+    async def test_list_skills_returns_json(self):
+        """list_skills returns JSON array of skills."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc(
+            {"list_skills": {"skills": [{"name": "writing", "available": True}]}}
+        )
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("list_skills", {})
+
+        assert "writing" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# Test register_skill tool
+# ---------------------------------------------------------------------------
+
+
+class TestRegisterSkillTool:
+    async def test_register_skill_success(self):
+        """register_skill returns confirmation."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"register_skill": {"name": "my-skill"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "register_skill",
+                {
+                    "name": "my-skill",
+                    "description": "Does things",
+                    "content": "# My Skill\nDo the thing.",
+                },
+            )
+
+        assert "my-skill" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# Test update_agent tool
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateAgentTool:
+    async def test_update_agent_success(self):
+        """update_agent returns confirmation."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"update_agent": {"name": "my-agent"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool(
+                "update_agent",
+                {"name": "my-agent", "skills": ["coding", "testing"], "model": "claude-opus-4-6"},
+            )
+
+        assert "my-agent" in result[0].text
+
+    async def test_update_agent_error(self):
+        """update_agent surfaces IPC errors."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"update_agent": {"error": "Agent not found"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("update_agent", {"name": "ghost"})
+
+        assert "Error" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# Test delete_skill tool
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteSkillTool:
+    async def test_delete_skill_success(self):
+        """delete_skill returns confirmation."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"delete_skill": {"name": "old-skill"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("delete_skill", {"name": "old-skill"})
+
+        assert "old-skill" in result[0].text
+
+    async def test_delete_skill_error(self):
+        """delete_skill surfaces IPC errors."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"delete_skill": {"error": "Skill not found"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("delete_skill", {"name": "ghost"})
+
+        assert "Error" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# Test archive_squad tool
+# ---------------------------------------------------------------------------
+
+
+class TestArchiveSquadTool:
+    async def test_archive_squad_success(self):
+        """archive_squad returns confirmation."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"archive_squad": {"squad_spec_id": "sq1"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("archive_squad", {"squadSpecId": "sq1"})
+
+        assert "sq1" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# Test archive_workflow tool
+# ---------------------------------------------------------------------------
+
+
+class TestArchiveWorkflowTool:
+    async def test_archive_workflow_success(self):
+        """archive_workflow returns confirmation."""
+        import mc.runtime.mcp.bridge as bridge_mod
+
+        mock_ipc = _make_mock_ipc({"archive_workflow": {"workflow_spec_id": "wf1"}})
+
+        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
+            result = await bridge_mod.call_tool("archive_workflow", {"workflowSpecId": "wf1"})
+
+        assert "wf1" in result[0].text
+
+
+# ---------------------------------------------------------------------------
 # Test search_memory board-scoped workspace
 # ---------------------------------------------------------------------------
 
@@ -491,7 +708,6 @@ class TestSearchMemoryBoardScope:
     async def test_search_memory_uses_board_workspace_when_set(self, tmp_path):
         """search_memory resolves board-scoped workspace when BOARD_NAME is set."""
         import mc.runtime.mcp.bridge as bridge_mod
-
         from mc.memory.store import HybridMemoryStore
 
         board_ws = tmp_path / "board-agent"
@@ -507,7 +723,6 @@ class TestSearchMemoryBoardScope:
     async def test_search_memory_uses_global_workspace_without_board(self, tmp_path):
         """search_memory falls back to global agent workspace when no BOARD_NAME."""
         import mc.runtime.mcp.bridge as bridge_mod
-
         from mc.memory.store import HybridMemoryStore
 
         global_ws = tmp_path / "global-agent"
@@ -568,8 +783,9 @@ class TestSearchMemoryBoardScope:
 
     async def test_search_memory_finds_cc_consolidated_content(self, tmp_path):
         """search_memory must retrieve facts written by the CC consolidator."""
-        import mc.runtime.mcp.bridge as bridge_mod
         from claude_code.memory_consolidator import CCMemoryConsolidator
+
+        import mc.runtime.mcp.bridge as bridge_mod
 
         response = MagicMock()
         tool_call = MagicMock()

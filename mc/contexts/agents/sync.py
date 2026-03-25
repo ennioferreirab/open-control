@@ -67,13 +67,6 @@ def _config_default_model() -> str:
     return _impl()
 
 
-def _write_back_convex_agents(bridge: ConvexBridge, agents_dir: Path) -> None:
-    """Delegate to gateway._write_back_convex_agents."""
-    from mc.infrastructure.agent_bootstrap import _write_back_convex_agents as _impl
-
-    _impl(bridge, agents_dir)
-
-
 class AgentSyncService:
     """Consolidates agent registry sync, skills sync, settings sync,
     model-tier sync, and embedding-settings sync.
@@ -97,8 +90,9 @@ class AgentSyncService:
     ) -> tuple[list[AgentData], dict[str, list[str]]]:
         """Sync agent YAML files to Convex agents table.
 
-        Write-back first (Convex -> local), then validate, resolve models,
-        upsert, and deactivate removed agents.
+        Validates local YAMLs, resolves models, upserts to Convex,
+        and deactivates removed agents. Convex is the source of truth
+        for agents — no write-back to disk.
 
         Returns (synced_agents, errors_by_filename).
         """
@@ -114,9 +108,6 @@ class AgentSyncService:
 
         # Step 0a: Cleanup soft-deleted agents
         self.cleanup_deleted_agents()
-
-        # Step 0b: Write-back Convex -> local (uses module-level delegate)
-        _write_back_convex_agents(self._bridge, self._agents_dir)
 
         # Step 1: Validate agent YAML in each subdirectory
         valid_agents: list[AgentData] = []

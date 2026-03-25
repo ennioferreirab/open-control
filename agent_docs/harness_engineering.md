@@ -391,4 +391,5 @@ Squad graph publication: `publish_squad_graph(graph)` in `mc/bridge/repositories
 | Board workspace | `mc/infrastructure/boards.py` | `resolve_board_workspace()` |
 | Agent types | `mc/types.py` | `AgentData` dataclass |
 | Convex schema | `dashboard/convex/schema.ts` | `messages`, `agents`, `skills`, `squadSpecs` tables |
-| Skills API | `dashboard/app/api/skills/[skillName]/files/` | REST endpoints for skill file R/W |
+| Skills API | `dashboard/app/api/specs/skills/` | `GET /api/specs/skills` — list all skills (`?available=true` filter); `POST` — register/update skill |
+| Skills file API | `dashboard/app/api/skills/[skillName]/files/` | REST endpoints for skill file R/W |

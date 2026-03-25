@@ -52,6 +52,25 @@ class TmuxSessionManager:
             raise RuntimeError(
                 f"Failed to create tmux session {session_name}: {result.stderr or result.stdout}"
             )
+
+        # Disable alternate screen (smcup/rmcup) so tmux outputs everything
+        # to the primary buffer.  This lets the browser-side xterm.js
+        # accumulate output in its scrollback — the scroll wheel works
+        # natively without tmux mouse mode, and text selection/copy
+        # are handled by xterm.js instead of being hijacked by tmux.
+        self._run(
+            [
+                "tmux",
+                "set-option",
+                "-g",
+                "-a",
+                "terminal-overrides",
+                ",xterm-256color:smcup@:rmcup@",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         return True
 
     def has_session(self, session_name: str) -> bool:

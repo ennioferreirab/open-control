@@ -85,6 +85,13 @@ How to use it:
 - Use `availableReviewSpecs` when designing any `review` step. Never invent a textual `reviewSpecId`.
 - Use `availableModels` for reference when discussing agent capabilities.
 
+For skills-only queries (e.g., verifying agent skills exist), use the dedicated
+endpoint:
+
+```bash
+curl -s http://localhost:3000/api/specs/skills?available=true
+```
+
 ## Phase 1: Intent & Squad Selection
 
 Understand the goal and select the target squad.
@@ -158,7 +165,7 @@ Design steps one by one, or accept a batch proposal from the user.
 Each step requires:
 
 - `key` — unique slug within this workflow
-- `type` — one of: `agent`, `human`, `checkpoint`, `review`, `system`
+- `type` — one of: `agent`, `human`, `review`, `system`
 - `agentKey` — required for `agent` and `review` types; must match a key from the squad roster
 - `title` — short human-readable description
 - `dependsOn` — list of step keys this step waits for (omit if none)
@@ -175,8 +182,49 @@ Default to explicit quality gates:
 
 If you add a `review` step and no suitable `availableReviewSpecs` exist, stop and ask the user whether to:
 
-- Switch the step to `checkpoint` or `human` instead, or
-- Create a review spec before continuing.
+- Switch the step to `human` instead, or
+- Create a new review spec before continuing (see "Creating a Review Spec" below).
+
+### Creating a Review Spec
+
+When no existing review spec fits, create one via the API. Collaborate with the
+user to define:
+
+- **name** — slug-safe identifier (e.g., `content-quality-check`)
+- **scope** — `agent`, `workflow`, or `execution`
+- **criteria** — at least one criterion with `id`, `label`, `weight` (0-1),
+  and optional `description`
+- **approvalThreshold** — number between 0 and 1
+
+Optional fields: `vetoConditions`, `feedbackContract`, `reviewerPolicy`,
+`rejectionRoutingPolicy`.
+
+Present the spec for confirmation, then create:
+
+```bash
+curl -s -X POST http://localhost:3000/api/specs/review-spec \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "content-quality-check",
+    "scope": "workflow",
+    "criteria": [
+      { "id": "accuracy", "label": "Accuracy", "weight": 0.4, "description": "Factual correctness" },
+      { "id": "clarity", "label": "Clarity", "weight": 0.3, "description": "Clear writing" },
+      { "id": "completeness", "label": "Completeness", "weight": 0.3, "description": "All sections present" }
+    ],
+    "approvalThreshold": 0.8
+  }'
+```
+
+Response: `{"success": true, "specId": "..."}`.
+
+After creation, refresh context:
+
+```bash
+curl -s http://localhost:3000/api/specs/workflow/context
+```
+
+Use the returned `specId` as the `reviewSpecId` for the review step.
 
 When presenting a review step, show the chosen review spec by name:
 
@@ -271,6 +319,9 @@ Success response:
 {"success": true, "workflowSpecId": "..."}
 ```
 
+MCP agents can also use the `publish_workflow` tool directly with the same
+payload structure.
+
 Report the created `workflowSpecId` and offer next steps, such as testing the workflow or adding another workflow to the same squad.
 
 ## Contract Rules
@@ -278,7 +329,8 @@ Report the created `workflowSpecId` and offer next steps, such as testing the wo
 - Workflow name must be a slug: `^[a-z0-9]+(-[a-z0-9]+)*$`
 - Step keys must be unique slugs within the workflow, matching `^[a-z0-9]+(-[a-z0-9]+)*$`
 - `agent` and `review` steps must reference a valid `agentKey` from the selected squad's roster
-- `review` steps must include `reviewSpecId` taken from `availableReviewSpecs`
+- `review` steps must include `reviewSpecId` — a real ID from `availableReviewSpecs`,
+  or created via `POST /api/specs/review-spec` during this flow
 - `review` steps must include `onReject` pointing to a valid step key
 - Never fabricate `reviewSpecId` values
 - Do not create agents or skills in this flow — agents belong to the squad

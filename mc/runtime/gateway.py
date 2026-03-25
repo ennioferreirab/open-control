@@ -38,7 +38,6 @@ from mc.infrastructure.agent_bootstrap import (  # noqa: F401
     _restore_memory_from_backup,
     _sync_embedding_model,
     _sync_model_tiers,
-    _write_back_convex_agents,
     cleanup_orphaned_tasks,
     ensure_low_agent,
     ensure_nanobot_agent,

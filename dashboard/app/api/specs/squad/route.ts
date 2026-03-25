@@ -39,3 +39,31 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const squadSpecId = searchParams.get("squadSpecId");
+
+    if (!squadSpecId) {
+      return NextResponse.json(
+        { error: "squadSpecId query parameter is required" },
+        { status: 400 },
+      );
+    }
+
+    const convex = getClient();
+
+    await convex.mutation(api.squadSpecs.archiveSquad, {
+      squadSpecId: squadSpecId as Parameters<typeof api.squadSpecs.archiveSquad>[0]["squadSpecId"],
+    });
+
+    return NextResponse.json({ success: true, squadSpecId });
+  } catch (error) {
+    console.error("Squad archive failed:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to archive squad" },
+      { status: 500 },
+    );
+  }
+}

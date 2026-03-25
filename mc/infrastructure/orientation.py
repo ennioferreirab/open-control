@@ -14,6 +14,12 @@ from mc.infrastructure.runtime_home import get_runtime_path
 
 logger = logging.getLogger(__name__)
 
+FILE_ATTACHMENT_INSTRUCTION = (
+    "\n\nIMPORTANT: When user messages include <UserAttached> tags, these are files "
+    "the user explicitly attached for your analysis. Read these files FIRST before "
+    "proceeding with your task — they contain critical context for the request."
+)
+
 
 def _read_saved_orientation(bridge: Any | None) -> str | None:
     """Read the saved global orientation prompt from Convex settings."""
@@ -77,5 +83,8 @@ def load_orientation(agent_name: str, bridge: Any | None = None) -> str | None:
             return None
 
     orientation = _interpolate_orientation(orientation)
+    # Always append — orientation is loaded once at agent startup before any
+    # messages arrive, so we cannot know whether attachments will appear later.
+    orientation += FILE_ATTACHMENT_INSTRUCTION
     logger.info("[orientation] Global orientation loaded for agent '%s'", agent_name)
     return orientation

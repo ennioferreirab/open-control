@@ -290,13 +290,13 @@ class TestSpecToolsRegistration:
         assert "publish_squad_graph" in names
 
     def test_create_agent_spec_has_required_fields_in_schema(self):
-        """create_agent_spec schema requires name, displayName, role."""
+        """create_agent_spec schema requires name and role; displayName is optional."""
         from mc.runtime.mcp.tool_specs import MC_TOOLS
 
         tool = next(t for t in MC_TOOLS if t.name == "create_agent_spec")
         required = tool.inputSchema.get("required", [])
         assert "name" in required
-        assert "displayName" in required
+        assert "displayName" not in required
         assert "role" in required
 
     def test_publish_squad_graph_has_required_fields_in_schema(self):

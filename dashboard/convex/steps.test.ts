@@ -233,13 +233,21 @@ describe("acceptHumanStep", () => {
       title: "Review documents",
       status: "waiting_human",
       assignedAgent: "human",
+      blockedBy: [],
       ...stepOverrides,
+    };
+
+    const task = {
+      _id: "task-1",
+      status: "in_progress",
+      stateVersion: 1,
     };
 
     const ctx = {
       db: {
         get: async (id: string) => {
           if (id === "step-1") return step;
+          if (id === "task-1") return task;
           return null;
         },
         patch: async (_id: string, values: Record<string, unknown>) => {
@@ -249,7 +257,6 @@ describe("acceptHumanStep", () => {
           insertedActivities.push(value);
           return "activity-1";
         },
-        // Query returns only the human step itself (no blocked dependents)
         query: makeCollectOnlyQuery(() => [step]),
       },
     };
@@ -257,14 +264,37 @@ describe("acceptHumanStep", () => {
     return { ctx, step, patchedValues, insertedActivities };
   }
 
-  it("transitions waiting_human step to running", async () => {
+  it("transitions waiting_human step to completed", async () => {
     const handler = getHandler();
-    const { ctx, patchedValues } = makeCtx();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+    const step = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Review documents",
+      status: "waiting_human",
+      assignedAgent: "human",
+      blockedBy: [],
+    };
+    const task = { _id: "task-1", status: "in_progress", stateVersion: 1 };
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return step;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, values: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...values };
+        },
+        insert: async () => "activity-1",
+        query: makeCollectOnlyQuery(() => [step]),
+      },
+    };
 
     await handler(ctx, { stepId: "step-1" });
 
-    expect(patchedValues.status).toBe("running");
-    expect(patchedValues.startedAt).toBeDefined();
+    expect(patchedById["step-1"]?.status).toBe("completed");
+    expect(patchedById["step-1"]?.completedAt).toBeDefined();
   });
 
   it("creates activity event with 'Human accepted step' description", async () => {
@@ -310,9 +340,7 @@ describe("acceptHumanStep", () => {
     await expect(handler(ctx, { stepId: "step-1" })).rejects.toThrow(/not in waiting_human status/);
   });
 
-  it("does NOT unblock dependents on accept (deferred to manual completion)", async () => {
-    // acceptHumanStep transitions to running, not completed.
-    // Dependent unblocking happens in manualMoveStep when the human completes the step.
+  it("completes step and unblocks dependents on accept", async () => {
     const handler = getHandler();
     const patchedByStepId: Record<string, Record<string, unknown>> = {};
 
@@ -322,28 +350,96 @@ describe("acceptHumanStep", () => {
       title: "Review",
       status: "waiting_human",
       assignedAgent: "human",
+      blockedBy: [],
+    };
+
+    const blockedStep = {
+      _id: "step-2",
+      taskId: "task-1",
+      title: "Next Step",
+      status: "blocked",
+      assignedAgent: "writer",
+      blockedBy: ["step-1"],
+    };
+
+    const task = {
+      _id: "task-1",
+      status: "in_progress",
+      stateVersion: 1,
     };
 
     const ctx = {
       db: {
         get: async (id: string) => {
           if (id === "step-1") return humanStep;
+          if (id === "step-2") return blockedStep;
+          if (id === "task-1") return task;
           return null;
         },
         patch: async (id: string, values: Record<string, unknown>) => {
           patchedByStepId[id] = { ...(patchedByStepId[id] ?? {}), ...values };
         },
         insert: async () => "activity-id",
+        query: makeCollectOnlyQuery(() => [humanStep, blockedStep]),
       },
     };
 
     await handler(ctx, { stepId: "step-1" });
 
-    // The human step must become running (not completed)
-    expect(patchedByStepId["step-1"]?.status).toBe("running");
+    // The human step must become completed
+    expect(patchedByStepId["step-1"]?.status).toBe("completed");
 
-    // No other steps should have been patched
-    expect(Object.keys(patchedByStepId)).toEqual(["step-1"]);
+    // The blocked dependent must become assigned
+    expect(patchedByStepId["step-2"]?.status).toBe("assigned");
+  });
+
+  it("completes review-type step from waiting_human (root cause scenario)", async () => {
+    // This is the exact scenario that caused the deadlock:
+    // workflowStepType="review" + status="waiting_human" → accept → should complete, not go to "running"
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const reviewStep = {
+      _id: "step-1",
+      taskId: "task-1",
+      title: "Human Review",
+      status: "waiting_human",
+      assignedAgent: "human",
+      workflowStepType: "review",
+      blockedBy: [],
+    };
+    const dependentStep = {
+      _id: "step-2",
+      taskId: "task-1",
+      title: "Final Step",
+      status: "blocked",
+      assignedAgent: "writer",
+      blockedBy: ["step-1"],
+    };
+    const task = { _id: "task-1", status: "in_progress", stateVersion: 1 };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-1") return reviewStep;
+          if (id === "step-2") return dependentStep;
+          if (id === "task-1") return task;
+          return null;
+        },
+        patch: async (id: string, values: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...values };
+        },
+        insert: async () => "activity-id",
+        query: makeCollectOnlyQuery(() => [reviewStep, dependentStep]),
+      },
+    };
+
+    await handler(ctx, { stepId: "step-1" });
+
+    // Review-type step must complete (NOT go to "running")
+    expect(patchedById["step-1"]?.status).toBe("completed");
+    // Dependent must be unblocked
+    expect(patchedById["step-2"]?.status).toBe("assigned");
   });
 });
 
@@ -438,7 +534,7 @@ describe("manualMoveStep", () => {
     )._handler;
   }
 
-  it("allows completing a workflow checkpoint gate even when assigned to a non-human agent", async () => {
+  it("allows completing a workflow human gate even when assigned to a non-human agent", async () => {
     const handler = getHandler();
     const patchedById: Record<string, Record<string, unknown>> = {};
 
@@ -453,7 +549,7 @@ describe("manualMoveStep", () => {
             title: "Final approval gate",
             description: "Wait for the workflow owner to approve",
             assignedAgent: "nanobot",
-            workflowStepType: "checkpoint",
+            workflowStepType: "human",
             blockedBy: [],
             parallelGroup: 1,
             order: 1,
@@ -469,7 +565,7 @@ describe("manualMoveStep", () => {
       title: "Final approval gate",
       status: "running",
       assignedAgent: "nanobot",
-      workflowStepType: "checkpoint",
+      workflowStepType: "human",
       order: 1,
     };
 
@@ -1041,7 +1137,7 @@ describe("updateStatus", () => {
           },
           {
             tempId: "step_2",
-            title: "Checkpoint",
+            title: "Human Gate",
             description: "Wait here",
             assignedAgent: "human",
             blockedBy: [],
@@ -1066,11 +1162,11 @@ describe("updateStatus", () => {
     const genericReviewStep = {
       _id: "step-2",
       taskId: "task-1",
-      title: "Checkpoint",
+      title: "Human Gate",
       description: "Wait here",
       status: "review",
       assignedAgent: "human",
-      workflowStepType: "checkpoint",
+      workflowStepType: "human",
       order: 2,
       stateVersion: 5,
     };
@@ -1100,7 +1196,7 @@ describe("updateStatus", () => {
     expect(patchedById["task-1"]).toBeUndefined();
   });
 
-  it("preserves parent workflow review when another human step is manually moved", async () => {
+  it("returns task to in_progress when human step is moved and review step is pending", async () => {
     const handler = (
       manualMoveStep as unknown as {
         _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<string>;
@@ -1110,8 +1206,8 @@ describe("updateStatus", () => {
 
     const task = {
       _id: "task-1",
-      title: "Workflow review task",
-      status: "review",
+      title: "Workflow task",
+      status: "in_progress",
       stateVersion: 3,
       executionPlan: {
         steps: [
@@ -1133,7 +1229,7 @@ describe("updateStatus", () => {
             blockedBy: [],
             parallelGroup: 2,
             order: 2,
-            status: "review",
+            status: "waiting_human",
           },
         ],
       },
@@ -1154,7 +1250,7 @@ describe("updateStatus", () => {
       taskId: "task-1",
       title: "Formal review",
       description: "Approve the result",
-      status: "review",
+      status: "waiting_human",
       assignedAgent: "human",
       workflowStepType: "review",
       order: 2,
@@ -1182,6 +1278,7 @@ describe("updateStatus", () => {
       status: "assigned",
       stateVersion: 3,
     });
+    // Task stays in_progress (no status change needed)
     expect(patchedById["task-1"]?.status).toBeUndefined();
   });
 });

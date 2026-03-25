@@ -32,6 +32,17 @@ def _merge_codex_models(models: list[str]) -> list[str]:
     return models + [m for m in CODEX_MODELS if m not in existing]
 
 
+def _to_cc_prefix(models: list[str]) -> list[str]:
+    """Replace anthropic-oauth/ prefix with cc/ so models route through Claude Code backend."""
+    result: list[str] = []
+    for m in models:
+        if m.startswith("anthropic-oauth/") or m.startswith("anthropic_oauth/"):
+            result.append("cc/" + m.split("/", 1)[1])
+        else:
+            result.append(m)
+    return result
+
+
 def list_available_models() -> list[str]:
     """Return model identifiers available from the configured provider.
 
@@ -40,6 +51,9 @@ def list_available_models() -> list[str]:
       2. Authenticated OAuth providers — Codex models merged in if token exists.
       3. Provider API query — e.g. GET /v1/models for OpenRouter, Anthropic, etc.
       4. Fallback — just the default model if everything else fails.
+
+    Anthropic OAuth models are exposed with the cc/ prefix so they route
+    through the Claude Code backend instead of the direct OAuth provider.
     """
     from nanobot.config.loader import load_config
 
@@ -50,20 +64,20 @@ def list_available_models() -> list[str]:
     if config.agents.models:
         models: list[str] = list(config.agents.models)
         # 2. Merge Codex models if authenticated
-        return _merge_codex_models(models)
+        return _to_cc_prefix(_merge_codex_models(models))
 
     # 2. Query the active provider's models endpoint
     try:
         provider, _ = create_provider(model=None)
         models_from_api = provider.list_models()
         if models_from_api:
-            return _merge_codex_models(models_from_api)
+            return _to_cc_prefix(_merge_codex_models(models_from_api))
     except Exception as e:
         logger.warning("list_available_models: provider query failed: %s", e)
 
     # 4. Fallback
     base = [default_model] if default_model else []
-    return _merge_codex_models(base)
+    return _to_cc_prefix(_merge_codex_models(base))
 
 
 class ProviderError(Exception):

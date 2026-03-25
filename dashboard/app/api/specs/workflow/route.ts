@@ -37,3 +37,33 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const workflowSpecId = searchParams.get("workflowSpecId");
+
+    if (!workflowSpecId) {
+      return NextResponse.json(
+        { error: "workflowSpecId query parameter is required" },
+        { status: 400 },
+      );
+    }
+
+    const convex = getClient();
+
+    await convex.mutation(api.workflowSpecs.archiveWorkflow, {
+      workflowSpecId: workflowSpecId as Parameters<
+        typeof api.workflowSpecs.archiveWorkflow
+      >[0]["workflowSpecId"],
+    });
+
+    return NextResponse.json({ success: true, workflowSpecId });
+  } catch (error) {
+    console.error("Workflow archive failed:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to archive workflow" },
+      { status: 500 },
+    );
+  }
+}

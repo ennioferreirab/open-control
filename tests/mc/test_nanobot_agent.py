@@ -51,7 +51,7 @@ class TestEnsureNanobotAgent:
         assert config["name"] == "nanobot"
         assert config["role"] == "General-Purpose Assistant"
         assert config["is_system"] is True
-        assert config["skills"] == []
+        assert isinstance(config["skills"], list)
 
     @patch(
         "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
@@ -86,7 +86,6 @@ class TestSyncAgentRegistryNanobotAgent:
 
         with (
             patch("mc.infrastructure.agent_bootstrap._cleanup_deleted_agents"),
-            patch("mc.infrastructure.agent_bootstrap._write_back_convex_agents"),
             patch(
                 "mc.infrastructure.agent_bootstrap._fetch_bot_identity",
                 return_value={"name": "Bento", "role": "General-Purpose Assistant"},

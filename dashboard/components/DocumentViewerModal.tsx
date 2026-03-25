@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, FileText, Minus, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileText, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useDocumentFetch } from "@/hooks/useDocumentFetch";
 import {
@@ -32,6 +32,8 @@ interface Props {
   taskId?: string;
   source?: DocumentSource;
   file: DocumentFileRef | null;
+  files?: DocumentFileRef[];
+  onNavigate?: (file: DocumentFileRef) => void;
   onClose: () => void;
 }
 
@@ -91,10 +93,13 @@ function getExt(name: string) {
   return name.split(".").pop()?.toLowerCase() ?? "";
 }
 
-function formatSize(bytes: number) {
-  return bytes < 1024 * 1024
-    ? `${(bytes / 1024).toFixed(0)} KB`
-    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+/** Abbreviate parent dirs to first char: "reports/deep/file.txt" → "r/d/file.txt" */
+function abbreviatePath(name: string): string {
+  const parts = name.split("/");
+  if (parts.length <= 1) return name;
+  const fileName = parts[parts.length - 1];
+  const abbreviated = parts.slice(0, -1).map((p) => (p.length > 0 ? p[0] : ""));
+  return [...abbreviated, fileName].join("/");
 }
 
 function getViewerType(
@@ -110,13 +115,51 @@ function getViewerType(
   return "unsupported";
 }
 
-export function DocumentViewerModal({ taskId, source, file, onClose }: Props) {
-  const [fontSize, setFontSize] = useState(14);
+function getFileKey(f: DocumentFileRef): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sourceTaskId = (f as any).sourceTaskId ?? "local";
+  return `${sourceTaskId}:${f.subfolder}:${f.name}`;
+}
+
+export function DocumentViewerModal({ taskId, source, file, files, onNavigate, onClose }: Props) {
   const resolvedSource = resolveDocumentSource(source, taskId);
   const { content, blobUrl, loading, error } = useDocumentFetch(
     resolvedSource ?? source ?? { kind: "task", taskId: taskId ?? "" },
     file,
   );
+
+  const currentIndex = useMemo(() => {
+    if (!file || !files?.length) return -1;
+    const key = getFileKey(file);
+    return files.findIndex((f) => getFileKey(f) === key);
+  }, [file, files]);
+
+  const hasPrev = currentIndex > 0;
+  const hasNext = files ? currentIndex < files.length - 1 : false;
+
+  const goPrev = useCallback(() => {
+    if (hasPrev && files && onNavigate) onNavigate(files[currentIndex - 1]);
+  }, [hasPrev, files, onNavigate, currentIndex]);
+
+  const goNext = useCallback(() => {
+    if (hasNext && files && onNavigate) onNavigate(files[currentIndex + 1]);
+  }, [hasNext, files, onNavigate, currentIndex]);
+
+  useEffect(() => {
+    if (!file) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goPrev();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goNext();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [file, goPrev, goNext]);
 
   const handleDownload = () => {
     if (!file || !resolvedSource) return;
@@ -190,69 +233,24 @@ export function DocumentViewerModal({ taskId, source, file, onClose }: Props) {
 
     if (viewerType === "text") {
       return (
-        <div className="h-full flex flex-col">
-          <div className="flex items-center gap-1 px-4 py-2 border-b">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => setFontSize((s) => Math.max(10, s - 2))}
-            >
-              <Minus className="h-3 w-3" />
-            </Button>
-            <span className="text-xs text-muted-foreground w-8 text-center">{fontSize}px</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => setFontSize((s) => Math.min(24, s + 2))}
-            >
-              <Plus className="h-3 w-3" />
-            </Button>
-          </div>
-          <pre
-            className="flex-1 overflow-auto p-4 font-mono whitespace-pre-wrap break-all"
-            style={{ fontSize }}
-          >
-            {content}
-          </pre>
-        </div>
+        <pre className="h-full overflow-auto p-4 font-mono text-sm whitespace-pre-wrap break-all">
+          {content}
+        </pre>
       );
     }
 
     if (viewerType === "code") {
       return (
-        <div className="h-full flex flex-col">
-          <div className="flex items-center gap-1 px-4 py-2 border-b">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => setFontSize((s) => Math.max(10, s - 2))}
-            >
-              <Minus className="h-3 w-3" />
-            </Button>
-            <span className="text-xs text-muted-foreground w-8 text-center">{fontSize}px</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => setFontSize((s) => Math.min(24, s + 2))}
-            >
-              <Plus className="h-3 w-3" />
-            </Button>
-          </div>
-          <div className="flex-1 overflow-auto" style={{ fontSize }}>
-            <SyntaxHighlighter
-              language={LANG_MAP[ext] ?? "text"}
-              style={vscDarkPlus}
-              showLineNumbers
-              wrapLongLines={false}
-              customStyle={{ margin: 0, height: "100%", borderRadius: 0, fontSize: "inherit" }}
-            >
-              {content ?? ""}
-            </SyntaxHighlighter>
-          </div>
+        <div className="h-full overflow-auto text-sm">
+          <SyntaxHighlighter
+            language={LANG_MAP[ext] ?? "text"}
+            style={vscDarkPlus}
+            showLineNumbers
+            wrapLongLines={false}
+            customStyle={{ margin: 0, height: "100%", borderRadius: 0, fontSize: "inherit" }}
+          >
+            {content ?? ""}
+          </SyntaxHighlighter>
         </div>
       );
     }
@@ -291,6 +289,8 @@ export function DocumentViewerModal({ taskId, source, file, onClose }: Props) {
     );
   };
 
+  const showNav = files && files.length > 1;
+
   return (
     <Dialog
       open={file !== null}
@@ -299,9 +299,41 @@ export function DocumentViewerModal({ taskId, source, file, onClose }: Props) {
       }}
     >
       <DialogContent className="max-w-4xl w-full h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
-        <DialogHeader className="flex flex-row items-center justify-between px-6 py-4 border-b shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <DialogTitle className="text-base font-medium truncate">{file?.name}</DialogTitle>
+        <DialogHeader className="flex flex-row items-center px-4 py-3 border-b shrink-0 gap-2">
+          {/* Left: navigation */}
+          {showNav ? (
+            <div className="flex items-center gap-0.5 shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label="Previous file"
+                disabled={!hasPrev}
+                onClick={goPrev}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground min-w-[40px] text-center tabular-nums">
+                {currentIndex + 1} / {files.length}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label="Next file"
+                disabled={!hasNext}
+                onClick={goNext}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
+
+          {/* Center: path + badge */}
+          <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
+            <DialogTitle className="text-sm font-medium truncate">
+              {file ? abbreviatePath(file.name) : ""}
+            </DialogTitle>
             <DialogDescription className="sr-only">
               {file ? `Preview and download ${file.name}` : "Preview the selected file"}
             </DialogDescription>
@@ -310,13 +342,10 @@ export function DocumentViewerModal({ taskId, source, file, onClose }: Props) {
                 {getExt(file.name).toUpperCase()}
               </Badge>
             )}
-            {file && (
-              <span className="text-xs text-muted-foreground flex-shrink-0">
-                {formatSize(file.size ?? 0)}
-              </span>
-            )}
           </div>
-          <div className="flex items-center gap-1 shrink-0 ml-4">
+
+          {/* Right: actions */}
+          <div className="flex items-center gap-1 shrink-0">
             {viewerType === "markdown" && (
               <Button variant="ghost" size="sm" onClick={handlePrintPdf}>
                 <FileText className="h-3.5 w-3.5 mr-1.5" />

@@ -111,10 +111,10 @@ class TestCleanupLogicAccessible:
 
         assert callable(_restore_archived_files)
 
-    def test_write_back_convex_agents_importable(self) -> None:
-        from mc.infrastructure.agent_bootstrap import _write_back_convex_agents
+    def test_sync_model_tiers_importable(self) -> None:
+        from mc.infrastructure.agent_bootstrap import _sync_model_tiers
 
-        assert callable(_write_back_convex_agents)
+        assert callable(_sync_model_tiers)
 
 
 class TestCrashHandlerAccessible:
@@ -165,7 +165,6 @@ class TestGatewayReExports:
             _restore_archived_files,
             _sync_embedding_model,
             _sync_model_tiers,
-            _write_back_convex_agents,
             ensure_low_agent,
             ensure_nanobot_agent,
             sync_agent_registry,
@@ -185,7 +184,6 @@ class TestGatewayReExports:
         assert callable(_distribute_builtin_skills)
         assert callable(_cleanup_deleted_agents)
         assert callable(_restore_archived_files)
-        assert callable(_write_back_convex_agents)
         assert callable(_fetch_bot_identity)
 
     def test_gateway_reexports_crash_handler(self) -> None:

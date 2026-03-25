@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useReducedMotion } from "motion/react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   Sheet,
@@ -78,6 +80,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const providerSession = useProviderSession(liveSession.session);
   const actions = useTaskDetailActions();
   const planState = usePlanEditorState(view.taskExecutionPlan, view.isAwaitingKickoff);
+  const toggleFileFavoriteMutation = useMutation(api.tasks.toggleFileFavorite);
+  const toggleFileArchivedMutation = useMutation(api.tasks.toggleFileArchived);
 
   const {
     task,
@@ -176,9 +180,9 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const shouldReduceMotion = useReducedMotion();
   const [viewerFile, setViewerFile] = useState<{
     name: string;
-    type: string;
-    size: number;
-    subfolder: string;
+    type?: string;
+    size?: number;
+    subfolder?: string;
     sourceTaskId?: Id<"tasks">;
     sourceLabel?: string;
     sourceTaskTitle?: string;
@@ -684,6 +688,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               )}
               <TaskDetailFilesTab
                 displayFiles={displayFiles}
+                steps={liveSteps ?? []}
                 attachInputRef={attachInputRef}
                 onAttachFiles={handleAttachFiles}
                 isMergeLockedSource={isMergeLockedSource}
@@ -693,6 +698,22 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 deletingFiles={deletingFiles}
                 onOpenFile={setViewerFile}
                 onDeleteFile={handleDeleteFile}
+                onToggleFavorite={(file) => {
+                  if (task)
+                    void toggleFileFavoriteMutation({
+                      taskId: task._id,
+                      fileName: file.name,
+                      subfolder: file.subfolder,
+                    });
+                }}
+                onToggleArchive={(file) => {
+                  if (task)
+                    void toggleFileArchivedMutation({
+                      taskId: task._id,
+                      fileName: file.name,
+                      subfolder: file.subfolder,
+                    });
+                }}
               />
             </Tabs>
           </>
@@ -709,6 +730,8 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
         <DocumentViewerModal
           taskId={viewerFile?.sourceTaskId ?? task!._id}
           file={viewerFile}
+          files={displayFiles}
+          onNavigate={setViewerFile}
           onClose={() => setViewerFile(null)}
         />
       )}

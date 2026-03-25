@@ -46,13 +46,12 @@ describe("reviewScopeValidator", () => {
 });
 
 describe("workflowStepTypeValidator", () => {
-  it("defines 5 step types for workflow specs", () => {
+  it("defines 4 step types for workflow specs", () => {
     expect(workflowStepTypeValidator.kind).toBe("union");
-    expect(workflowStepTypeValidator.members).toHaveLength(5);
+    expect(workflowStepTypeValidator.members).toHaveLength(4);
     expect(workflowStepTypeValidator.members.map((m: { value?: string }) => m.value)).toEqual([
       "agent",
       "human",
-      "checkpoint",
       "review",
       "system",
     ]);

@@ -18,17 +18,38 @@ Ask 1-2 questions at a time. Keep the flow structured but natural.
 
 ## Load Context First
 
-Before starting, fetch the current platform context:
+Before starting, fetch the full skills catalog:
 
 ```bash
-curl -s http://localhost:3000/api/specs/squad/context
+curl -s http://localhost:3000/api/specs/skills
 ```
+
+Expected shape:
+
+```json
+{
+  "skills": [
+    {
+      "name": "writing",
+      "description": "Create clear written content",
+      "source": "workspace",
+      "always": false,
+      "available": true,
+      "supportedProviders": ["claude-code", "nanobot"],
+      "requires": null,
+      "metadata": { "categories": ["content"] }
+    }
+  ]
+}
+```
+
+Use `?available=true` to filter to only available skills.
 
 Use the response to:
 
-- **`availableSkills`** — check for overlap or reuse candidates before creating
-- **`knownSkills`** — identify skills that exist but may be unavailable
-- **`availableModels`** — know the runtime environment
+- Check for overlap or reuse candidates before creating
+- Identify skills that exist but may be unavailable (check `available` and `requires`)
+- Know which providers are already supported
 
 If a skill with similar purpose already exists, surface it immediately:
 
@@ -240,21 +261,34 @@ uv run python /Users/ennio/.codex/skills/.system/skill-creator/scripts/quick_val
 
 Fix any errors before proceeding.
 
-### Sync to Convex
+### Register the Skill
+
+Register via API (writes SKILL.md to disk and syncs to Convex):
 
 ```bash
-uv run nanobot mc sync
+curl -s -X POST http://localhost:3000/api/specs/skills \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "<skill-name>",
+    "description": "<what it does and when to use it>",
+    "content": "<full SKILL.md body content>",
+    "source": "workspace",
+    "supportedProviders": ["claude-code"],
+    "available": true
+  }'
 ```
+
+MCP agents can also use the `register_skill` tool directly.
 
 ### Verify
 
 Re-fetch context to confirm the skill appears:
 
 ```bash
-curl -s http://localhost:3000/api/specs/squad/context | python3 -c "
+curl -s http://localhost:3000/api/specs/skills | python3 -c "
 import json, sys
 ctx = json.load(sys.stdin)
-skills = [s for s in ctx.get('availableSkills', []) if s['name'] == '<skill-name>']
+skills = [s for s in ctx.get('skills', []) if s['name'] == '<skill-name>']
 print(json.dumps(skills, indent=2) if skills else 'NOT FOUND')
 "
 ```

@@ -45,7 +45,7 @@ export interface SquadGraphWorkflowStepInput {
   /** Short key identifying this step within the workflow. */
   key: string;
   /** Step type — determines execution semantics. */
-  type: "agent" | "human" | "checkpoint" | "review" | "system";
+  type: "agent" | "human" | "review" | "system";
   /**
    * Key of the agent in the `agents` array that owns this step.
    * Only meaningful when type is "agent".
@@ -77,7 +77,7 @@ export interface SquadGraphWorkflowInput {
 export interface SquadGraphInput {
   squad: {
     name: string;
-    displayName: string;
+    displayName?: string;
     description?: string;
     outcome?: string;
     [key: string]: unknown;

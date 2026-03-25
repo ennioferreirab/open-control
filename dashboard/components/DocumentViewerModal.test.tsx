@@ -150,6 +150,7 @@ vi.mock("@/components/ui/button", () => ({
     size,
     className,
     disabled,
+    "aria-label": ariaLabel,
   }: {
     children: React.ReactNode;
     onClick?: () => void;
@@ -157,6 +158,7 @@ vi.mock("@/components/ui/button", () => ({
     size?: string;
     className?: string;
     disabled?: boolean;
+    "aria-label"?: string;
   }) => (
     <button
       onClick={onClick}
@@ -164,6 +166,7 @@ vi.mock("@/components/ui/button", () => ({
       data-size={size}
       className={className}
       disabled={disabled}
+      aria-label={ariaLabel}
     >
       {children}
     </button>
@@ -172,10 +175,10 @@ vi.mock("@/components/ui/button", () => ({
 
 // Mock lucide-react icons so Button text is clean
 vi.mock("lucide-react", () => ({
+  ChevronLeft: () => <span data-testid="icon-chevron-left" />,
+  ChevronRight: () => <span data-testid="icon-chevron-right" />,
   Download: () => <span data-testid="icon-download" />,
   FileText: () => <span data-testid="icon-file-text" />,
-  Minus: () => <span data-testid="icon-minus" />,
-  Plus: () => <span data-testid="icon-plus" />,
   X: () => <span data-testid="icon-x" />,
 }));
 
@@ -262,12 +265,6 @@ describe("DocumentViewerModal", () => {
     );
   });
 
-  it("shows formatted file size in header", () => {
-    render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
-    // 2048 bytes = 2 KB
-    expect(screen.getByText("2 KB")).toBeInTheDocument();
-  });
-
   it("shows a Download button in modal header", () => {
     render(<DocumentViewerModal taskId="task_1" file={baseFile} onClose={vi.fn()} />);
     // Find button containing the download icon
@@ -311,7 +308,7 @@ describe("DocumentViewerModal", () => {
     spy.mockRestore();
   });
 
-  // ---- AC #2: Text viewer with zoom controls ----
+  // ---- AC #2: Text viewer ----
 
   it("renders text file content in monospace pre element", () => {
     mockUseDocumentFetch.mockReturnValue({
@@ -330,84 +327,6 @@ describe("DocumentViewerModal", () => {
     const pre = document.querySelector("pre");
     expect(pre).not.toBeNull();
     expect(pre?.textContent).toContain("line1");
-  });
-
-  it("renders text viewer with initial font size of 14px displayed", () => {
-    render(
-      <DocumentViewerModal
-        taskId="task_1"
-        file={{ ...baseFile, name: "log.txt" }}
-        onClose={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("14px")).toBeInTheDocument();
-  });
-
-  it("zoom Plus button increments font size by 2", () => {
-    render(
-      <DocumentViewerModal
-        taskId="task_1"
-        file={{ ...baseFile, name: "log.txt" }}
-        onClose={vi.fn()}
-      />,
-    );
-
-    const plusIcons = screen.getAllByTestId("icon-plus");
-    fireEvent.click(plusIcons[0].closest("button")!);
-    expect(screen.getByText("16px")).toBeInTheDocument();
-  });
-
-  it("zoom Minus button decrements font size by 2", () => {
-    render(
-      <DocumentViewerModal
-        taskId="task_1"
-        file={{ ...baseFile, name: "log.txt" }}
-        onClose={vi.fn()}
-      />,
-    );
-
-    const minusIcons = screen.getAllByTestId("icon-minus");
-    fireEvent.click(minusIcons[0].closest("button")!);
-    expect(screen.getByText("12px")).toBeInTheDocument();
-  });
-
-  it("zoom is clamped to minimum of 10px", () => {
-    render(
-      <DocumentViewerModal
-        taskId="task_1"
-        file={{ ...baseFile, name: "log.txt" }}
-        onClose={vi.fn()}
-      />,
-    );
-
-    const minusIcons = screen.getAllByTestId("icon-minus");
-    const minusBtn = minusIcons[0].closest("button")!;
-
-    // Initial 14px, click Minus many times — min is 10
-    for (let i = 0; i < 10; i++) {
-      fireEvent.click(minusBtn);
-    }
-    expect(screen.getByText("10px")).toBeInTheDocument();
-  });
-
-  it("zoom is clamped to maximum of 24px", () => {
-    render(
-      <DocumentViewerModal
-        taskId="task_1"
-        file={{ ...baseFile, name: "log.txt" }}
-        onClose={vi.fn()}
-      />,
-    );
-
-    const plusIcons = screen.getAllByTestId("icon-plus");
-    const plusBtn = plusIcons[0].closest("button")!;
-
-    // Initial 14px, click Plus many times — max is 24
-    for (let i = 0; i < 10; i++) {
-      fireEvent.click(plusBtn);
-    }
-    expect(screen.getByText("24px")).toBeInTheDocument();
   });
 
   it("renders .json as text viewer (pre with font-mono)", () => {
@@ -545,18 +464,6 @@ describe("DocumentViewerModal", () => {
       "data-show-line-numbers",
       "true",
     );
-  });
-
-  it("renders code viewer with zoom controls showing initial font size", () => {
-    render(
-      <DocumentViewerModal
-        taskId="task_1"
-        file={{ ...baseFile, name: "script.py" }}
-        onClose={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("14px")).toBeInTheDocument();
   });
 
   // ---- AC #4: Unsupported file type fallback ----
@@ -785,5 +692,194 @@ describe("DocumentViewerModal", () => {
     expect(mockAnchor.click).toHaveBeenCalledTimes(1);
 
     spy.mockRestore();
+  });
+
+  // ---- Path abbreviation in header ----
+
+  it("shows abbreviated path for nested files", () => {
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={{ ...baseFile, name: "reports/deep/summary.txt" }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("dialog-title")).toHaveTextContent("r/d/summary.txt");
+  });
+
+  it("shows plain filename when no directory path", () => {
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={{ ...baseFile, name: "notes.txt" }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("dialog-title")).toHaveTextContent("notes.txt");
+  });
+
+  // ---- File navigation ----
+
+  const fileList = [
+    { name: "a.txt", type: "text/plain", size: 100, subfolder: "output" },
+    { name: "b.txt", type: "text/plain", size: 200, subfolder: "output" },
+    { name: "c.txt", type: "text/plain", size: 300, subfolder: "output" },
+  ];
+
+  it("shows navigation arrows and position indicator when files list has multiple items", () => {
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[1]}
+        files={fileList}
+        onNavigate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+    expect(screen.getByLabelText("Previous file")).toBeInTheDocument();
+    expect(screen.getByLabelText("Next file")).toBeInTheDocument();
+  });
+
+  it("does not show navigation when files list has one item", () => {
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[0]}
+        files={[fileList[0]]}
+        onNavigate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Previous file")).toBeNull();
+    expect(screen.queryByLabelText("Next file")).toBeNull();
+  });
+
+  it("disables previous button on first file", () => {
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[0]}
+        files={fileList}
+        onNavigate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Previous file")).toBeDisabled();
+    expect(screen.getByLabelText("Next file")).not.toBeDisabled();
+  });
+
+  it("disables next button on last file", () => {
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[2]}
+        files={fileList}
+        onNavigate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Previous file")).not.toBeDisabled();
+    expect(screen.getByLabelText("Next file")).toBeDisabled();
+  });
+
+  it("calls onNavigate with next file when next button is clicked", () => {
+    const onNavigate = vi.fn();
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[0]}
+        files={fileList}
+        onNavigate={onNavigate}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Next file"));
+    expect(onNavigate).toHaveBeenCalledWith(fileList[1]);
+  });
+
+  it("calls onNavigate with previous file when previous button is clicked", () => {
+    const onNavigate = vi.fn();
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[2]}
+        files={fileList}
+        onNavigate={onNavigate}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Previous file"));
+    expect(onNavigate).toHaveBeenCalledWith(fileList[1]);
+  });
+
+  it("ArrowRight key navigates to next file", () => {
+    const onNavigate = vi.fn();
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[0]}
+        files={fileList}
+        onNavigate={onNavigate}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(onNavigate).toHaveBeenCalledWith(fileList[1]);
+  });
+
+  it("ArrowLeft key navigates to previous file", () => {
+    const onNavigate = vi.fn();
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[2]}
+        files={fileList}
+        onNavigate={onNavigate}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(onNavigate).toHaveBeenCalledWith(fileList[1]);
+  });
+
+  it("ArrowRight does not navigate when on last file", () => {
+    const onNavigate = vi.fn();
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[2]}
+        files={fileList}
+        onNavigate={onNavigate}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("ArrowLeft does not navigate when on first file", () => {
+    const onNavigate = vi.fn();
+    render(
+      <DocumentViewerModal
+        taskId="task_1"
+        file={fileList[0]}
+        files={fileList}
+        onNavigate={onNavigate}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 });

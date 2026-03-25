@@ -35,6 +35,10 @@ try:
 except ImportError:  # pragma: no cover – vendor package not on path
     _VENDOR_SKILLS_DIR = Path(__file__).parent.parent.parent / "nanobot" / "nanobot" / "skills"
 
+# Project root — used to anchor `uv run --project` in hook commands so that
+# hooks work when executed from agent workspaces outside the project tree.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
 _MCP_TOOLS_GUIDE = """\
 ## Available MCP Tools (mc server)
 
@@ -714,7 +718,14 @@ class CCWorkspaceManager:
             "mcpServers": {
                 "openmc": {
                     "command": "uv",
-                    "args": ["run", "python", "-m", "mc.runtime.mcp.bridge"],
+                    "args": [
+                        "run",
+                        "--project",
+                        str(_PROJECT_ROOT),
+                        "python",
+                        "-m",
+                        "mc.runtime.mcp.bridge",
+                    ],
                     "env": env,
                 }
             }
@@ -773,4 +784,5 @@ class CCWorkspaceManager:
         ]
         if task_id:
             env_parts.append(f"TASK_ID={shlex.quote(task_id)}")
-        return " ".join([*env_parts, "uv run python -m claude_code.hook_bridge"])
+        project_flag = f"--project {shlex.quote(str(_PROJECT_ROOT))}"
+        return " ".join([*env_parts, f"uv run {project_flag} python -m claude_code.hook_bridge"])

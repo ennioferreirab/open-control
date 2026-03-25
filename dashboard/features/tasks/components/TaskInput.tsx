@@ -463,7 +463,7 @@ export function TaskInput() {
                           agent.enabled === false ? "text-muted-foreground opacity-60" : ""
                         }
                       >
-                        {agent.displayName}
+                        {agent.name}
                         {agent.enabled === false ? " (Deactivated)" : ""}
                       </SelectItem>
                     ))}

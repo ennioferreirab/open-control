@@ -93,7 +93,7 @@ describe("filterResults", () => {
     const groups = filterResults("code", "all", SAMPLE_TASKS, SAMPLE_AGENTS, SAMPLE_SQUADS);
     const agentGroup = groups.find((g) => g.category === "agent");
     expect(agentGroup).toBeDefined();
-    expect(agentGroup!.results[0].title).toBe("Code Agent");
+    expect(agentGroup!.results[0].title).toBe("code-agent");
   });
 
   it("excludes system agents from results", () => {
@@ -107,7 +107,7 @@ describe("filterResults", () => {
     const groups = filterResults("dev", "all", SAMPLE_TASKS, SAMPLE_AGENTS, SAMPLE_SQUADS);
     const squadGroup = groups.find((g) => g.category === "squad");
     expect(squadGroup).toBeDefined();
-    expect(squadGroup!.results[0].title).toBe("Dev Squad");
+    expect(squadGroup!.results[0].title).toBe("dev-squad");
   });
 
   it("restricts results to tasks when categoryFilter is 'task'", () => {
@@ -153,7 +153,7 @@ describe("filterResults", () => {
     );
     const agentGroup = groups.find((g) => g.category === "agent");
     expect(agentGroup).toBeDefined();
-    expect(agentGroup!.results[0].title).toBe("Review Agent");
+    expect(agentGroup!.results[0].title).toBe("review-agent");
   });
 
   it("includes quick actions when query matches action title", () => {
