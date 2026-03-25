@@ -300,7 +300,11 @@ class TaskRepository:
                     )
 
     def sync_task_output_files(
-        self, task_id: str, task_data: dict, agent_name: str = "agent"
+        self,
+        task_id: str,
+        task_data: dict,
+        agent_name: str = "agent",
+        step_id: str | None = None,
     ) -> None:
         """Scan output/ directory recursively and sync file manifest in Convex.
 
@@ -356,6 +360,7 @@ class TaskRepository:
                 {
                     "task_id": task_id,
                     "output_files": fs_files,
+                    **({"step_id": step_id} if step_id else {}),
                 },
             )
             logger.info("[bridge] Synced %d output file(s) for task %s", len(fs_files), task_id)

@@ -132,6 +132,9 @@ export const taskFileMetadataValidator = v.object({
   subfolder: v.string(),
   uploadedAt: v.string(),
   restoredAt: v.optional(v.string()),
+  stepId: v.optional(v.id("steps")),
+  isFavorite: v.optional(v.boolean()),
+  isArchived: v.optional(v.boolean()),
 });
 
 export const taskFilesValidator = v.optional(v.array(taskFileMetadataValidator));

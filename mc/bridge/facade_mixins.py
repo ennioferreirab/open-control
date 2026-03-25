@@ -140,10 +140,14 @@ class BridgeRepositoryFacadeMixin:
         return self._tasks.get_task(task_id)
 
     def sync_task_output_files(
-        self, task_id: str, task_data: dict, agent_name: str = "agent"
+        self,
+        task_id: str,
+        task_data: dict,
+        agent_name: str = "agent",
+        step_id: str | None = None,
     ) -> None:
         self._ensure_repos()
-        self._tasks.sync_task_output_files(task_id, task_data, agent_name)
+        self._tasks.sync_task_output_files(task_id, task_data, agent_name, step_id=step_id)
 
     def sync_output_files_to_parent(
         self, source_task_id: str, parent_task_id: str, agent_name: str = "agent"

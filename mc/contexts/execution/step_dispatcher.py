@@ -338,6 +338,24 @@ class StepDispatcher:
                 ]
 
                 if not assigned_steps:
+                    # Check if human/gate steps are still pending and could
+                    # unblock blocked dependents when the user completes them.
+                    # Without this, the loop exits and no one re-dispatches
+                    # the newly-assigned steps after the human acts.
+                    has_human_pending = any(
+                        s.get("status") in (StepStatus.WAITING_HUMAN, StepStatus.RUNNING)
+                        for s in steps
+                        if s.get("workflow_step_type") == "human"
+                        or s.get("assigned_agent") == "human"
+                    )
+                    has_blocked = any(s.get("status") == StepStatus.BLOCKED for s in steps)
+                    if has_human_pending and has_blocked:
+                        logger.debug(
+                            "[dispatcher] Waiting for human step resolution on task %s",
+                            task_id,
+                        )
+                        await asyncio.sleep(5)
+                        continue
                     break
 
                 groups = self._group_by_parallel_group(assigned_steps)
@@ -399,16 +417,12 @@ class StepDispatcher:
                         transition_result,
                     )
                     return
-                if final_status == TaskStatus.REVIEW:
-                    await asyncio.to_thread(
-                        self._bridge.create_activity,
-                        ActivityEventType.REVIEW_REQUESTED,
-                        (
-                            f"Execution completed -- all {step_count} steps finished; "
-                            "awaiting explicit approval"
-                        ),
-                        task_id,
-                    )
+                await asyncio.to_thread(
+                    self._bridge.create_activity,
+                    ActivityEventType.TASK_COMPLETED,
+                    f"Execution completed -- all {step_count} steps finished",
+                    task_id,
+                )
         except Exception as exc:
             logger.error(
                 "[dispatcher] Dispatch failed for task %s",
@@ -674,6 +688,7 @@ class StepDispatcher:
                     task_id,
                     task_data,
                     agent_name,
+                    step_id=step_id,
                 )
             except Exception:
                 logger.exception(
