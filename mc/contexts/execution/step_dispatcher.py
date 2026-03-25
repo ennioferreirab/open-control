@@ -662,6 +662,53 @@ class StepDispatcher:
             board_name = req.board_name
             memory_workspace = req.memory_workspace
 
+            # Dump the final interpolated prompt for debugging/analysis.
+            try:
+                from mc.contexts.execution.output_artifacts import write_prompt_log
+
+                prompt_log_parts = [
+                    "=== MC Step Prompt Log ===",
+                    f"step_id: {step_id}",
+                    f"step_title: {step_title}",
+                    f"agent_name: {agent_name}",
+                    f"agent_model: {agent_model}",
+                    f"runner_type: {req.runner_type}",
+                    f"memory_workspace: {memory_workspace}",
+                    f"board_name: {board_name}",
+                    f"predecessor_step_ids: {req.predecessor_step_ids}",
+                    f"reasoning_level: {reasoning_level}",
+                    "",
+                    "=== AGENT PROMPT (system instructions) ===",
+                    agent_prompt or "(none)",
+                    "",
+                    "=== DESCRIPTION (enriched context: files, thread, tags, review) ===",
+                    execution_description or "(none)",
+                    "",
+                    "=== FILE MANIFEST ===",
+                    str(req.file_manifest) if req.file_manifest else "(none)",
+                    "",
+                    "=== THREAD CONTEXT ===",
+                    req.thread_context or "(none)",
+                    "",
+                    "=== TAG ATTRIBUTES ===",
+                    req.tag_attributes or "(none)",
+                    "",
+                    "=== FINAL ASSEMBLED PROMPT (sent to agent) ===",
+                    req.prompt or "(none)",
+                ]
+                await asyncio.to_thread(
+                    write_prompt_log,
+                    task_id,
+                    "system_prompt_log_{DDHHMMSS}.txt",
+                    "\n".join(prompt_log_parts),
+                )
+            except Exception:
+                logger.warning(
+                    "[dispatcher] Failed to write prompt log for step %s",
+                    step_id,
+                    exc_info=True,
+                )
+
             # Snapshot output dir before agent execution for artifact detection
             # (Story 2.5).
             pre_snapshot = await asyncio.to_thread(snapshot_output_dir, task_id)

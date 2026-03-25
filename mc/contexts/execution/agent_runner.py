@@ -198,6 +198,40 @@ async def _run_agent_on_task(
         ),
     )
 
+    # Dump the nanobot system prompt (identity + bootstrap + memory + skills)
+    # and the final user message for debugging/analysis.
+    try:
+        from mc.contexts.execution.output_artifacts import write_prompt_log
+
+        nanobot_system_prompt = loop.context.build_system_prompt(agent_skills)
+        nanobot_log_parts = [
+            "=== Nanobot System Prompt Log ===",
+            f"agent_name: {agent_name}",
+            f"agent_model: {agent_model}",
+            f"reasoning_level: {reasoning_level}",
+            f"session_key: {session_key}",
+            f"workspace: {workspace}",
+            f"memory_workspace: {memory_workspace}",
+            "",
+            "=== NANOBOT SYSTEM PROMPT (identity + bootstrap + memory + skills) ===",
+            nanobot_system_prompt,
+            "",
+            "=== USER MESSAGE (sent to LLM) ===",
+            message,
+        ]
+        if task_id:
+            write_prompt_log(
+                task_id,
+                "system_prompt_nanobot_{DDHHMMSS}.txt",
+                "\n".join(nanobot_log_parts),
+            )
+    except Exception:
+        logger.warning(
+            "[agent_runner] Failed to write nanobot prompt log for '%s'",
+            agent_name,
+            exc_info=True,
+        )
+
     # Unregister native tools that overlap with the Phase 1 MCP surface.
     # The model must see one canonical surface (the MCP tools), not duplicates.
     # delegate_task is also in the overlap set; keep unregistering it for safety.

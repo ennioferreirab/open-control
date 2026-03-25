@@ -18,7 +18,7 @@ import { applyTaskTransition, getTaskStateVersion } from "./lib/taskTransitions"
 import { stepStatusValidator, workflowStepTypeValidator } from "./schema";
 import { logActivity } from "./lib/workflowHelpers";
 
-type ParentTaskTransitionStatus = "assigned" | "in_progress" | "review" | "done" | "crashed";
+type ParentTaskTransitionStatus = "assigned" | "in_progress" | "done" | "crashed";
 
 /**
  * Unblock dependents whose blockers are all completed and return a
@@ -92,18 +92,14 @@ async function completeStepAndUnblockDependents(
 function deriveManualParentTaskStatus(
   steps: Array<{
     status?: string;
-    workflowStepType?: string;
   }>,
-): "done" | "crashed" | "in_progress" | "review" {
+): "done" | "crashed" | "in_progress" {
   const activeSteps = steps.filter((step) => step.status !== "deleted");
   if (activeSteps.length > 0 && activeSteps.every((step) => step.status === "completed")) {
     return "done";
   }
   if (activeSteps.some((step) => step.status === "crashed")) {
     return "crashed";
-  }
-  if (activeSteps.some((step) => step.status === "review" && step.workflowStepType === "review")) {
-    return "review";
   }
   return "in_progress";
 }
@@ -131,14 +127,12 @@ async function applyManualParentTaskTransition(
       ? `All ${currentTaskSteps.filter((taskStep) => taskStep.status !== "deleted").length} steps completed`
       : nextTaskStatus === "crashed"
         ? "One or more steps crashed"
-        : nextTaskStatus === "review"
-          ? "Workflow review is pending"
-          : "Step state changed; task returned to in_progress";
+        : "Step state changed; task returned to in_progress";
 
   const transitionStatuses: ParentTaskTransitionStatus[] = [];
   let transitionStartStatus = task.status;
 
-  if (transitionStartStatus === "done" && nextTaskStatus !== "review") {
+  if (transitionStartStatus === "done") {
     transitionStatuses.push("assigned");
     transitionStartStatus = "assigned";
   }
@@ -454,46 +448,29 @@ export const acceptHumanStep = mutation({
       throw new ConvexError(`Step is not in waiting_human status (current: ${step.status})`);
     }
 
-    const isGateStep = step.workflowStepType === "human";
     const timestamp = new Date().toISOString();
 
-    if (isGateStep) {
-      // Gate steps complete directly — no intermediate "running" state.
-      await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
-        stepId: args.stepId,
-        fromStatus: step.status,
-        expectedStateVersion: getStepStateVersion(step),
-        toStatus: "completed",
-        reason: "Human approved gate step",
-        idempotencyKey: `accept:${String(args.stepId)}:${getStepStateVersion(step)}`,
-      });
+    // Accept = complete. Every step accepted from waiting_human completes
+    // directly and unblocks dependents. No intermediate "running" state —
+    // there is no executor to pick it up, so "running" causes a deadlock
+    // in the dispatch loop.
+    await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
+      stepId: args.stepId,
+      fromStatus: step.status,
+      expectedStateVersion: getStepStateVersion(step),
+      toStatus: "completed",
+      reason: "Human accepted step",
+      idempotencyKey: `accept:${String(args.stepId)}:${getStepStateVersion(step)}`,
+    });
 
-      await completeStepAndUnblockDependents(ctx, step, args.stepId, timestamp);
+    await completeStepAndUnblockDependents(ctx, step, args.stepId, timestamp);
 
-      await logActivity(ctx, {
-        taskId: step.taskId,
-        eventType: "step_status_changed",
-        description: `Human approved gate step: "${step.title}"`,
-        timestamp,
-      });
-    } else {
-      // Regular human-assigned steps: move to running (human will work on it)
-      await applyStepTransition(ctx, step as Parameters<typeof applyStepTransition>[1], {
-        stepId: args.stepId,
-        fromStatus: step.status,
-        expectedStateVersion: getStepStateVersion(step),
-        toStatus: "running",
-        reason: "Human accepted step",
-        idempotencyKey: `accept:${String(args.stepId)}:${getStepStateVersion(step)}`,
-      });
-
-      await logActivity(ctx, {
-        taskId: step.taskId,
-        eventType: "step_status_changed",
-        description: `Human accepted step: "${step.title}"`,
-        timestamp,
-      });
-    }
+    await logActivity(ctx, {
+      taskId: step.taskId,
+      eventType: "step_status_changed",
+      description: `Human accepted step: "${step.title}"`,
+      timestamp,
+    });
 
     return step.taskId;
   },
