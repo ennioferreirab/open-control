@@ -133,6 +133,7 @@ export function useDocumentFetch(
       if (createdObjectUrl) {
         URL.revokeObjectURL(createdObjectUrl);
       }
+      setState(INITIAL_STATE);
     };
   }, [file, requestKey, source]);
 
