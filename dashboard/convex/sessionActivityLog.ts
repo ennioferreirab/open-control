@@ -71,9 +71,9 @@ export const listForSession = query({
     const events = await ctx.db
       .query("sessionActivityLog")
       .withIndex("by_session_seq", (q) => q.eq("sessionId", args.sessionId))
-      .order("asc")
-      .take(500);
+      .order("desc")
+      .take(100);
 
-    return events;
+    return events.reverse();
   },
 });

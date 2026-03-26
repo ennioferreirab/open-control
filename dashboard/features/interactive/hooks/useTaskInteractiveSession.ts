@@ -211,19 +211,19 @@ export function describeTaskInteractiveSession(
 export function useTaskInteractiveSession(
   taskId: Id<"tasks"> | null,
   selectedStepId: Id<"steps"> | string | null = null,
+  externalData?: {
+    steps: StepDoc[] | undefined;
+    assignedAgent: string | undefined;
+  },
 ) {
-  const detailView = useQuery(api.tasks.getDetailView, taskId ? { taskId } : "skip") as
-    | { steps?: StepDoc[]; task?: Pick<Doc<"tasks">, "_id" | "assignedAgent"> | null }
-    | null
-    | undefined;
   const focusedStep = useMemo(() => {
-    const steps = detailView?.steps ?? [];
+    const steps = externalData?.steps ?? [];
     if (selectedStepId) {
       return steps.find((step) => step._id === selectedStepId) ?? null;
     }
     return selectActiveTaskLiveStep(steps);
-  }, [detailView?.steps, selectedStepId]);
-  const fallbackAgentName = detailView?.task?.assignedAgent ?? null;
+  }, [externalData?.steps, selectedStepId]);
+  const fallbackAgentName = externalData?.assignedAgent ?? null;
   const targetAgentName = focusedStep?.assignedAgent ?? fallbackAgentName;
   const activeAgent = useQuery(
     api.agents.getByName,
@@ -235,9 +235,10 @@ export function useTaskInteractiveSession(
       >
     | null
     | undefined;
-  const sessions = useQuery(api.interactiveSessions.listSessions, {}) as
-    | InteractiveSessionDoc[]
-    | undefined;
+  const sessions = useQuery(
+    api.interactiveSessions.listSessions,
+    taskId ? { taskId: taskId as string } : "skip",
+  ) as InteractiveSessionDoc[] | undefined;
   const target = useMemo<TaskLiveTarget | null>(() => {
     if (!taskId || !targetAgentName) {
       return null;
@@ -269,8 +270,8 @@ export function useTaskInteractiveSession(
   );
   const liveStepIds = useMemo(() => collectTaskLiveStepIds(sessions, taskId), [sessions, taskId]);
   const liveChoices = useMemo(
-    () => buildLiveChoices(sessions, detailView?.steps ?? null, taskId),
-    [sessions, detailView?.steps, taskId],
+    () => buildLiveChoices(sessions, externalData?.steps ?? null, taskId),
+    [sessions, externalData?.steps, taskId],
   );
   const stateLabel = useMemo(() => describeTaskInteractiveSession(session), [session]);
   const identityLabel = useMemo(() => {

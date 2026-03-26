@@ -198,9 +198,18 @@ export const getForRuntime = internalQuery({
 export const listSessions = query({
   args: {
     agentName: v.optional(v.string()),
+    taskId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const agentName = args.agentName;
+    const { taskId, agentName } = args;
+    if (typeof taskId === "string") {
+      const sessions = await ctx.db
+        .query("interactiveSessions")
+        .withIndex("by_taskId", (q) => q.eq("taskId", taskId))
+        .collect();
+      return sessions.map(omitAttachToken);
+    }
+
     if (typeof agentName === "string") {
       const sessions = await ctx.db
         .query("interactiveSessions")
