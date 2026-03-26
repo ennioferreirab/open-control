@@ -102,6 +102,7 @@ class TestOnProgressCallback:
         ):
             await callback("Agent thinking about the task")
 
+        strategy._activity.flush()
         bridge.mutation.assert_called_once()
         args = bridge.mutation.call_args
         assert args[0][0] == "sessionActivityLog:append"
@@ -127,6 +128,7 @@ class TestOnProgressCallback:
 
         await callback('web_search("query string")', tool_hint=True)
 
+        strategy._activity.flush()
         bridge.mutation.assert_called_once()
         payload = bridge.mutation.call_args[0][1]
         assert payload["kind"] == "tool_use"
@@ -149,6 +151,7 @@ class TestOnProgressCallback:
         ):
             await callback(long_text)
 
+        strategy._activity.flush()
         payload = bridge.mutation.call_args[0][1]
         assert len(payload["summary"]) == 1000
         assert payload["raw_text"] == long_text
@@ -164,6 +167,7 @@ class TestOnProgressCallback:
 
         await callback(long_text, tool_hint=True)
 
+        strategy._activity.flush()
         payload = bridge.mutation.call_args[0][1]
         assert len(payload["summary"]) == 1000
 
@@ -181,6 +185,7 @@ class TestOnProgressCallback:
         ) as mock_safe:
             await callback("big content")
 
+        strategy._activity.flush()
         mock_safe.assert_called_once()
         payload = bridge.mutation.call_args[0][1]
         assert payload["raw_text"] == "[safe]"

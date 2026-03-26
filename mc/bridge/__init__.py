@@ -47,6 +47,7 @@ from mc.bridge.retry import (
     BACKOFF_BASE_SECONDS,
     MAX_RETRIES,
 )
+from mc.bridge.settings_cache import SettingsCache
 from mc.bridge.subscriptions import SubscriptionManager
 from mc.types import task_safe_id  # noqa: F401
 
@@ -66,6 +67,7 @@ class ConvexBridge(BridgeRepositoryFacadeMixin):
                 "internal mutations will fail. Set CONVEX_ADMIN_KEY."
             )
         logger.info("ConvexBridge connected to %s", deployment_url)
+        self.settings_cache = SettingsCache(self)
         self._init_repositories()
 
     def _init_repositories(self) -> None:

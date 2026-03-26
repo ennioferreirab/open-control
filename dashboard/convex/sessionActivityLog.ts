@@ -65,6 +65,76 @@ export const append = internalMutation({
   },
 });
 
+const eventSchema = {
+  sessionId: v.string(),
+  kind: v.string(),
+  ts: v.string(),
+  toolName: v.optional(v.string()),
+  toolInput: v.optional(v.string()),
+  filePath: v.optional(v.string()),
+  summary: v.optional(v.string()),
+  error: v.optional(v.string()),
+  turnId: v.optional(v.string()),
+  itemId: v.optional(v.string()),
+  stepId: v.optional(v.string()),
+  agentName: v.optional(v.string()),
+  provider: v.optional(v.string()),
+  requiresAction: v.optional(v.boolean()),
+  sourceType: v.optional(v.string()),
+  sourceSubtype: v.optional(v.string()),
+  groupKey: v.optional(v.string()),
+  rawText: v.optional(v.string()),
+  rawJson: v.optional(v.string()),
+};
+
+export const appendBatch = internalMutation({
+  args: {
+    events: v.array(v.object(eventSchema)),
+  },
+  handler: async (ctx, args) => {
+    if (args.events.length === 0) return;
+
+    // All events in a batch share the same sessionId (enforced by Python buffer)
+    const sessionId = args.events[0].sessionId;
+
+    // Query max seq once for the session
+    const last = await ctx.db
+      .query("sessionActivityLog")
+      .withIndex("by_session_seq", (q) => q.eq("sessionId", sessionId))
+      .order("desc")
+      .take(1);
+
+    let seq = last.length > 0 ? last[0].seq : 0;
+
+    for (const event of args.events) {
+      seq += 1;
+      await ctx.db.insert("sessionActivityLog", {
+        sessionId: event.sessionId,
+        seq,
+        kind: event.kind,
+        ts: event.ts,
+        toolName: event.toolName,
+        toolInput:
+          event.toolInput !== undefined ? event.toolInput.slice(0, TOOL_INPUT_MAX) : undefined,
+        filePath: event.filePath,
+        summary: event.summary !== undefined ? event.summary.slice(0, SUMMARY_MAX) : undefined,
+        error: event.error !== undefined ? event.error.slice(0, ERROR_MAX) : undefined,
+        turnId: event.turnId,
+        itemId: event.itemId,
+        stepId: event.stepId,
+        agentName: event.agentName,
+        provider: event.provider,
+        requiresAction: event.requiresAction,
+        sourceType: event.sourceType,
+        sourceSubtype: event.sourceSubtype,
+        groupKey: event.groupKey,
+        rawText: event.rawText,
+        rawJson: event.rawJson,
+      });
+    }
+  },
+});
+
 export const listForSession = query({
   args: { sessionId: v.string() },
   handler: async (ctx, args) => {

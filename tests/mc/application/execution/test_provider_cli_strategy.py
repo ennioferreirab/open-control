@@ -25,6 +25,19 @@ from mc.types import AgentData, ClaudeCodeOpts
 # ---------------------------------------------------------------------------
 
 
+def _extract_activity_events(bridge: MagicMock) -> list[dict]:
+    """Extract activity log event payloads from both append and appendBatch calls."""
+    events: list[dict] = []
+    for call in bridge.mutation.call_args_list:
+        fn_name = call[0][0]
+        if fn_name == "sessionActivityLog:append":
+            events.append(call[0][1])
+        elif fn_name == "sessionActivityLog:appendBatch":
+            batch = call[0][1].get("events", [])
+            events.extend(batch)
+    return events
+
+
 def _make_request(
     task_id: str = "task-001",
     agent_name: str = "dev",
@@ -1478,15 +1491,13 @@ async def test_strategy_appends_provider_cli_events_to_session_activity_log() ->
     result = await strategy.execute(_make_request(step_id="step-live-001"))
 
     assert result.success is True
-    activity_calls = [
-        call for call in bridge.mutation.call_args_list if call[0][0] == "sessionActivityLog:append"
-    ]
-    assert len(activity_calls) == 2
-    assert activity_calls[0][0][1]["kind"] == "tool_use"
-    assert activity_calls[0][0][1]["tool_name"] == "WebSearch"
-    assert activity_calls[0][0][1]["tool_input"] == "copy examples"
-    assert activity_calls[1][0][1]["kind"] == "result"
-    assert activity_calls[1][0][1]["summary"] == "Found examples"
+    activity_events = _extract_activity_events(bridge)
+    assert len(activity_events) == 2
+    assert activity_events[0]["kind"] == "tool_use"
+    assert activity_events[0]["tool_name"] == "WebSearch"
+    assert activity_events[0]["tool_input"] == "copy examples"
+    assert activity_events[1]["kind"] == "result"
+    assert activity_events[1]["summary"] == "Found examples"
 
 
 @pytest.mark.asyncio
@@ -1539,13 +1550,9 @@ async def test_strategy_omits_null_step_id_from_direct_task_activity_log() -> No
     result = await strategy.execute(request)
 
     assert result.success is True
-    activity_calls = [
-        call[0][1]
-        for call in bridge.mutation.call_args_list
-        if call[0][0] == "sessionActivityLog:append"
-    ]
-    assert activity_calls
-    assert "step_id" not in activity_calls[0]
+    activity_events = _extract_activity_events(bridge)
+    assert activity_events
+    assert "step_id" not in activity_events[0]
 
 
 @pytest.mark.asyncio
@@ -1594,10 +1601,8 @@ async def test_strategy_stringifies_tool_input_dict_for_activity_log() -> None:
     result = await strategy.execute(_make_request(step_id="step-live-dict-001"))
 
     assert result.success is True
-    activity_calls = [
-        call for call in bridge.mutation.call_args_list if call[0][0] == "sessionActivityLog:append"
-    ]
-    assert activity_calls[0][0][1]["tool_input"] == '{"maxResults": 1, "query": "WebSearch"}'
+    activity_events = _extract_activity_events(bridge)
+    assert activity_events[0]["tool_input"] == '{"maxResults": 1, "query": "WebSearch"}'
 
 
 @pytest.mark.asyncio

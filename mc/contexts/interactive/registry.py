@@ -16,6 +16,7 @@ class InteractiveSessionRegistry:
     def __init__(self, bridge: Any, *, token_factory: Any | None = None) -> None:
         self._bridge = bridge
         self._token_factory = token_factory or (lambda: secrets.token_urlsafe(24))
+        self._session_cache: dict[str, dict[str, Any]] = {}
 
     def register(
         self,
@@ -61,10 +62,15 @@ class InteractiveSessionRegistry:
         return metadata
 
     def get(self, session_id: str) -> dict[str, Any] | None:
+        cached = self._session_cache.get(session_id)
+        if cached is not None:
+            return cached
         result = self._bridge.query(
             "interactiveSessions:getForRuntime",
             {"session_id": session_id},
         )
+        if result is not None:
+            self._session_cache[session_id] = result
         return result
 
     def list_sessions(self, *, agent_name: str | None = None) -> list[dict[str, Any]]:
@@ -124,6 +130,7 @@ class InteractiveSessionRegistry:
             ended_at=timestamp,
         )
         self._upsert(metadata)
+        self._session_cache.pop(session_id, None)
         event_type = (
             ActivityEventType.AGENT_CRASHED
             if outcome == "crashed"
@@ -144,7 +151,11 @@ class InteractiveSessionRegistry:
     ) -> dict[str, Any]:
         existing = self.get(identity.session_key)
         if existing is not None:
-            return self.end_session(identity.session_key, timestamp=timestamp, outcome="terminated")
+            result = self.end_session(
+                identity.session_key, timestamp=timestamp, outcome="terminated"
+            )
+            self._session_cache.pop(identity.session_key, None)
+            return result
         metadata = identity.to_metadata(
             status="ended",
             capabilities=[],
@@ -231,6 +242,9 @@ class InteractiveSessionRegistry:
 
     def _upsert(self, metadata: dict[str, Any]) -> None:
         self._bridge.mutation("interactiveSessions:upsert", metadata)
+        session_id = metadata.get("session_id")
+        if session_id:
+            self._session_cache[session_id] = metadata
 
     def _require_session(self, session_id: str) -> dict[str, Any]:
         existing = self.get(session_id)

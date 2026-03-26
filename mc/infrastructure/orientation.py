@@ -22,12 +22,21 @@ FILE_ATTACHMENT_INSTRUCTION = (
 
 
 def _read_saved_orientation(bridge: Any | None) -> str | None:
-    """Read the saved global orientation prompt from Convex settings."""
+    """Read the saved global orientation prompt from Convex settings.
+
+    Uses the bridge's settings_cache if available for TTL-based caching.
+    """
     if bridge is None:
         return None
 
     try:
-        saved = bridge.query("settings:get", {"key": "global_orientation_prompt"})
+        from mc.bridge.settings_cache import SettingsCache
+
+        settings_cache = getattr(bridge, "settings_cache", None)
+        if isinstance(settings_cache, SettingsCache):
+            saved = settings_cache.get("global_orientation_prompt")
+        else:
+            saved = bridge.query("settings:get", {"key": "global_orientation_prompt"})
     except Exception:
         logger.warning("[orientation] Failed to fetch saved global orientation", exc_info=True)
         return None

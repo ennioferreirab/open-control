@@ -11,7 +11,6 @@ Updated to accept RuntimeContext per Story 20.3.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -58,26 +57,22 @@ async def generate_title_via_low_agent(
 
     low_model: str | None = agent_data.get("model") or None
 
-    # Resolve tier reference to concrete model string
+    # Resolve tier reference to concrete model string using TierResolver
     if low_model and low_model.startswith("tier:"):
         try:
-            raw_tiers = await asyncio.to_thread(
-                bridge.query, "settings:get", {"key": "model_tiers"}
-            )
-            if raw_tiers:
-                tiers = json.loads(raw_tiers)
-                tier_name = low_model[len("tier:") :]
-                low_model = tiers.get(tier_name) or None
-                if low_model:
-                    logger.info(
-                        "[orchestrator] low-agent tier resolved to: %s",
-                        low_model,
-                    )
-                else:
-                    logger.info(
-                        "[orchestrator] tier '%s' not configured; using default",
-                        tier_name,
-                    )
+            from mc.infrastructure.providers.tier_resolver import TierResolver
+
+            tier_resolver = TierResolver(bridge)
+            resolved = tier_resolver.resolve_model(low_model)
+            if resolved:
+                logger.info("[orchestrator] low-agent tier resolved to: %s", resolved)
+                low_model = resolved
+            else:
+                logger.info(
+                    "[orchestrator] tier '%s' not configured; using default",
+                    low_model[len("tier:") :],
+                )
+                low_model = None
         except Exception:
             logger.warning(
                 "[orchestrator] Failed to resolve tier for low-agent",

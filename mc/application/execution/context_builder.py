@@ -317,8 +317,28 @@ class ContextBuilder:
             agent_skills,
         )
 
-        # 2. Sync from Convex (source of truth)
-        convex_agent = await self._fetch_convex_agent(agent_name)
+        # 2+5. Fetch agent config and fresh task data in parallel
+        files_dir, output_dir = resolve_task_dirs(task_id)
+        req.files_dir = files_dir
+        req.output_dir = output_dir
+
+        convex_agent_result, fresh_task_result = await asyncio.gather(
+            self._fetch_convex_agent(agent_name),
+            asyncio.to_thread(self._bridge.query, "tasks:getById", {"task_id": task_id}),
+            return_exceptions=True,
+        )
+
+        # Process agent result
+        convex_agent: dict[str, Any] | None = None
+        if isinstance(convex_agent_result, BaseException):
+            logger.warning(
+                "[context] Could not fetch Convex agent for '%s', using YAML",
+                agent_name,
+                exc_info=convex_agent_result,
+            )
+        else:
+            convex_agent = convex_agent_result
+
         agent_prompt, agent_model, agent_skills = sync_agent_from_convex(
             agent_name,
             agent_prompt,
@@ -342,23 +362,17 @@ class ContextBuilder:
         else:
             req.model = agent_model
 
-        # 5. Fetch fresh task data + build file manifest
-        files_dir, output_dir = resolve_task_dirs(task_id)
-        req.files_dir = files_dir
-        req.output_dir = output_dir
-
+        # Process fresh task result
         fresh_task: dict[str, Any] | None = None
-        try:
-            fresh_task = await asyncio.to_thread(
-                self._bridge.query, "tasks:getById", {"task_id": task_id}
-            )
-            raw_files = (fresh_task or {}).get("files") or []
-        except Exception:
+        if isinstance(fresh_task_result, BaseException):
             logger.warning(
                 "[context] Failed to fetch fresh task for '%s', using snapshot",
                 title,
             )
             raw_files = (task_data or {}).get("files") or []
+        else:
+            fresh_task = fresh_task_result
+            raw_files = (fresh_task or {}).get("files") or []
 
         req.files = raw_files
         req.file_manifest = build_file_manifest(raw_files)
@@ -634,7 +648,31 @@ class ContextBuilder:
         )
 
         # 7. Build thread context with predecessor awareness
-        thread_messages = await asyncio.to_thread(self._bridge.get_task_messages, task_id)
+        # Parallelize thread messages + task steps fetch
+        thread_messages_result, all_task_steps_result = await asyncio.gather(
+            asyncio.to_thread(self._bridge.get_task_messages, task_id),
+            asyncio.to_thread(self._bridge.get_steps_by_task, task_id),
+            return_exceptions=True,
+        )
+        thread_messages = (
+            thread_messages_result if not isinstance(thread_messages_result, BaseException) else []
+        )
+        all_task_steps = (
+            all_task_steps_result if not isinstance(all_task_steps_result, BaseException) else []
+        )
+        if isinstance(thread_messages_result, BaseException):
+            logger.warning(
+                "[context] Failed to fetch thread messages for step '%s'",
+                step_title,
+                exc_info=thread_messages_result,
+            )
+        if isinstance(all_task_steps_result, BaseException):
+            logger.warning(
+                "[context] Failed to fetch task steps for step '%s'",
+                step_title,
+                exc_info=all_task_steps_result,
+            )
+
         req.thread_messages = thread_messages
         journal_service = ThreadJournalService(bridge=self._bridge)
         journal_snapshot = journal_service.sync_task_thread(
@@ -661,7 +699,6 @@ class ContextBuilder:
         )
 
         review_feedback_context = build_review_feedback_context(thread_messages, step_id)
-        all_task_steps = await asyncio.to_thread(self._bridge.get_steps_by_task, task_id)
         review_output_contract_context = build_review_output_contract_context(
             step, all_task_steps=all_task_steps
         )
@@ -712,16 +749,14 @@ class ContextBuilder:
 
     async def _build_tag_attrs(self, task_id: str, task_tags: list[str]) -> str:
         """Build tag attributes context string."""
+        from mc.bridge.tag_attributes_cache import get_tag_attributes
+
         tag_attr_values = await asyncio.to_thread(
             self._bridge.query,
             "tagAttributeValues:getByTask",
             {"task_id": task_id},
         )
-        tag_attr_catalog = await asyncio.to_thread(
-            self._bridge.query,
-            "tagAttributes:list",
-            {},
-        )
+        tag_attr_catalog = await asyncio.to_thread(get_tag_attributes, self._bridge)
         return build_tag_attributes_context(
             task_tags,
             tag_attr_values if isinstance(tag_attr_values, list) else [],

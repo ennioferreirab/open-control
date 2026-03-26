@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { append, listForSession } from "./sessionActivityLog";
+import { append, appendBatch, listForSession } from "./sessionActivityLog";
 
 type ActivityLogDoc = {
   _id?: string;
@@ -30,6 +30,14 @@ function getAppendHandler() {
   return (
     append as unknown as {
       _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<void>;
+    }
+  )._handler;
+}
+
+function getAppendBatchHandler() {
+  return (
+    appendBatch as unknown as {
+      _handler: (ctx: unknown, args: { events: Array<Record<string, unknown>> }) => Promise<void>;
     }
   )._handler;
 }
@@ -289,5 +297,107 @@ describe("sessionActivityLog.listForSession", () => {
     const result = await handler(ctx, { sessionId: "session-unknown" });
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("sessionActivityLog.appendBatch", () => {
+  it("inserts all events with incrementing seq starting from max", async () => {
+    const handler = getAppendBatchHandler();
+    const existing: ActivityLogDoc = {
+      _id: "doc-1",
+      sessionId: "session-abc",
+      seq: 5,
+      kind: "turn_started",
+      ts: "2026-03-14T09:00:00.000Z",
+    };
+    const { ctx, inserts } = makeAppendCtx(existing);
+
+    await handler(ctx, {
+      events: [
+        {
+          sessionId: "session-abc",
+          kind: "tool_call",
+          ts: "2026-03-14T10:00:00.000Z",
+          toolName: "Bash",
+        },
+        {
+          sessionId: "session-abc",
+          kind: "tool_result",
+          ts: "2026-03-14T10:00:01.000Z",
+          summary: "Done",
+        },
+        {
+          sessionId: "session-abc",
+          kind: "text",
+          ts: "2026-03-14T10:00:02.000Z",
+          rawText: "Response text",
+        },
+      ],
+    });
+
+    expect(inserts).toHaveLength(3);
+    expect(inserts[0].value).toMatchObject({ seq: 6, kind: "tool_call", toolName: "Bash" });
+    expect(inserts[1].value).toMatchObject({ seq: 7, kind: "tool_result", summary: "Done" });
+    expect(inserts[2].value).toMatchObject({
+      seq: 8,
+      kind: "text",
+      rawText: "Response text",
+    });
+  });
+
+  it("starts from seq=1 when no prior events exist", async () => {
+    const handler = getAppendBatchHandler();
+    const { ctx, inserts } = makeAppendCtx(null);
+
+    await handler(ctx, {
+      events: [
+        {
+          sessionId: "session-new",
+          kind: "session_started",
+          ts: "2026-03-14T10:00:00.000Z",
+        },
+        {
+          sessionId: "session-new",
+          kind: "turn_started",
+          ts: "2026-03-14T10:00:01.000Z",
+        },
+      ],
+    });
+
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0].value).toMatchObject({ seq: 1 });
+    expect(inserts[1].value).toMatchObject({ seq: 2 });
+  });
+
+  it("does nothing for empty events array", async () => {
+    const handler = getAppendBatchHandler();
+    const { ctx, inserts } = makeAppendCtx(null);
+
+    await handler(ctx, { events: [] });
+
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("truncates toolInput and summary in batch events", async () => {
+    const handler = getAppendBatchHandler();
+    const { ctx, inserts } = makeAppendCtx(null);
+    const longInput = "x".repeat(3000);
+    const longSummary = "s".repeat(1500);
+
+    await handler(ctx, {
+      events: [
+        {
+          sessionId: "session-abc",
+          kind: "tool_call",
+          ts: "2026-03-14T10:00:00.000Z",
+          toolInput: longInput,
+          summary: longSummary,
+        },
+      ],
+    });
+
+    expect(inserts).toHaveLength(1);
+    expect((inserts[0].value.toolInput as string).length).toBe(2000);
+    expect((inserts[0].value.summary as string).length).toBe(1000);
   });
 });

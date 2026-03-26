@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -31,15 +32,25 @@ def _resolve_overflow_dir(session_id: str) -> Path | None:
         return None
 
 
+BATCH_SIZE_THRESHOLD = 20
+BATCH_TIME_THRESHOLD_SECONDS = 0.3
+
+
 class SessionActivityService:
     """Unified service for session metadata and activity log persistence.
 
     All runner strategies should use this service instead of calling
     ``bridge.mutation`` directly for session and activity log writes.
+
+    Activity log events are buffered and flushed in batches to reduce
+    Convex mutation calls. Flush triggers: buffer reaches 20 events OR
+    300ms since last flush on the next append_event call.
     """
 
     def __init__(self, bridge: Any | None = None) -> None:
         self._bridge = bridge
+        self._event_buffer: list[dict[str, Any]] = []
+        self._last_flush_time: float = time.monotonic()
 
     @property
     def has_bridge(self) -> bool:
@@ -96,6 +107,8 @@ class SessionActivityService:
             metadata["last_error"] = last_error
         if status in ("ended", "error"):
             metadata["ended_at"] = timestamp
+            # Flush any buffered activity events before session ends
+            self.flush()
         # Provider-specific extras (bootstrap_prompt, provider_session_id, …)
         for key, value in extra.items():
             if value is not None:
@@ -182,10 +195,41 @@ class SessionActivityService:
             if value is not None:
                 payload[key] = value
 
+        self._event_buffer.append(payload)
+
+        # Flush if buffer is full or time threshold exceeded
+        now = time.monotonic()
+        if (
+            len(self._event_buffer) >= BATCH_SIZE_THRESHOLD
+            or now - self._last_flush_time > BATCH_TIME_THRESHOLD_SECONDS
+        ):
+            self._flush_buffer()
+
+    def flush(self) -> None:
+        """Flush any buffered events to Convex.
+
+        Should be called at session boundaries and error paths to avoid
+        losing buffered events.
+        """
+        if self._event_buffer:
+            self._flush_buffer()
+
+    def _flush_buffer(self) -> None:
+        """Send buffered events to Convex as a batch and reset buffer."""
+        if not self._event_buffer or self._bridge is None:
+            return
+
+        events = self._event_buffer
+        self._event_buffer = []
+        self._last_flush_time = time.monotonic()
+
         try:
-            self._bridge.mutation("sessionActivityLog:append", payload)
+            if len(events) == 1:
+                self._bridge.mutation("sessionActivityLog:append", events[0])
+            else:
+                self._bridge.mutation("sessionActivityLog:appendBatch", {"events": events})
         except Exception:
-            logger.debug("[activity-service] Failed to append event kind=%s", kind)
+            logger.debug("[activity-service] Failed to flush %d event(s)", len(events))
 
     def append_result(
         self,
@@ -209,6 +253,8 @@ class SessionActivityService:
             summary=content[:1000],
             raw_text=content,
         )
+        # Result marks end of execution -- flush remaining events
+        self.flush()
 
     def append_parsed_cli_event(
         self,

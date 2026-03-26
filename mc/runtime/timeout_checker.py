@@ -91,9 +91,18 @@ class TimeoutChecker:
         return found_work
 
     async def _get_setting(self, key: str, default: int) -> int:
-        """Read a timeout setting from Convex, falling back to default."""
+        """Read a timeout setting from Convex, falling back to default.
+
+        Uses the bridge's settings_cache if available for TTL-based caching.
+        """
         try:
-            value = await asyncio.to_thread(self._bridge.query, "settings:get", {"key": key})
+            from mc.bridge.settings_cache import SettingsCache
+
+            settings_cache = getattr(self._bridge, "settings_cache", None)
+            if isinstance(settings_cache, SettingsCache):
+                value = await asyncio.to_thread(settings_cache.get, key)
+            else:
+                value = await asyncio.to_thread(self._bridge.query, "settings:get", {"key": key})
             if value is not None:
                 return int(value)
         except (ValueError, TypeError):
