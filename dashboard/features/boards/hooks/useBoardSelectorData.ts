@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Id, Doc } from "@/convex/_generated/dataModel";
+import { useAppData } from "@/components/AppDataProvider";
 import { useBoard } from "@/components/BoardContext";
 import { SYSTEM_AGENT_NAMES } from "@/lib/constants";
 
@@ -16,16 +17,15 @@ export interface AgentMemoryEntry {
 
 export interface BoardSelectorData {
   activeBoardId: Id<"boards"> | null;
-  boards: ReturnType<typeof useQuery<typeof api.boards.list>>;
+  boards: Doc<"boards">[] | undefined;
   createBoard: ReturnType<typeof useMutation<typeof api.boards.create>>;
   displayName: string;
-  nonSystemAgents: NonNullable<ReturnType<typeof useQuery<typeof api.agents.list>>>;
+  nonSystemAgents: Doc<"agents">[];
   setActiveBoardId: (boardId: Id<"boards">) => void;
 }
 
 export function useBoardSelectorData(): BoardSelectorData {
-  const boards = useQuery(api.boards.list);
-  const agents = useQuery(api.agents.list);
+  const { boards, agents } = useAppData();
   const createBoard = useMutation(api.boards.create);
   const { activeBoardId, setActiveBoardId } = useBoard();
 

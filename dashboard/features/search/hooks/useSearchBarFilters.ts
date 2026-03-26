@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import { useAppData } from "@/components/AppDataProvider";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 export type TagAttribute = Doc<"tagAttributes">;
@@ -19,8 +18,7 @@ export interface SearchBarFiltersData {
 }
 
 export function useSearchBarFilters(): SearchBarFiltersData {
-  const tags = useQuery(api.taskTags.list);
-  const allAttributes = useQuery(api.tagAttributes.list);
+  const { taskTags: tags, tagAttributes: allAttributes } = useAppData();
 
   const attrById = useMemo(() => {
     if (!allAttributes) return new Map();

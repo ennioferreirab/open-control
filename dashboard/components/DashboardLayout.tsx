@@ -21,6 +21,7 @@ import {
 import { SettingsPanel } from "@/features/settings/components/SettingsPanel";
 import { TagsPanel } from "@/features/settings/components/TagsPanel";
 import { Settings, Tag, Clock, PanelRightOpen, Search } from "lucide-react";
+import { AppDataProvider } from "@/components/AppDataProvider";
 import { BoardProvider, useBoard } from "@/components/BoardContext";
 import { BoardSelector } from "@/features/boards/components/BoardSelector";
 import { BoardSettingsSheet } from "@/features/boards/components/BoardSettingsSheet";
@@ -313,8 +314,10 @@ export function DashboardLayout() {
   }
 
   return (
-    <BoardProvider>
-      <DashboardContent isXl={isXl} />
-    </BoardProvider>
+    <AppDataProvider>
+      <BoardProvider>
+        <DashboardContent isXl={isXl} />
+      </BoardProvider>
+    </AppDataProvider>
   );
 }

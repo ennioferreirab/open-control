@@ -14,8 +14,13 @@ export interface ActivityFeedState {
   scrollToTop: () => void;
 }
 
-export function useActivityFeed(): ActivityFeedState {
-  const activities = useQuery(api.activities.listRecent);
+interface UseActivityFeedOptions {
+  enabled?: boolean;
+}
+
+export function useActivityFeed(options?: UseActivityFeedOptions): ActivityFeedState {
+  const { enabled = true } = options ?? {};
+  const activities = useQuery(api.activities.listRecent, enabled ? {} : "skip");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [isAtTop, setIsAtTop] = useState(true);
   const [hasNewActivity, setHasNewActivity] = useState(false);

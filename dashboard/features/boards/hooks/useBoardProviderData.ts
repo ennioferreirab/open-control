@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useAppData } from "@/components/AppDataProvider";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 interface BoardProviderData {
@@ -10,8 +11,9 @@ interface BoardProviderData {
 }
 
 export function useBoardProviderData(): BoardProviderData {
+  const { boards } = useAppData();
   return {
-    boards: useQuery(api.boards.list),
+    boards,
     defaultBoard: useQuery(api.boards.getDefault),
   };
 }

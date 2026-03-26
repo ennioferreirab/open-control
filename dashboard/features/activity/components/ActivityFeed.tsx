@@ -5,9 +5,13 @@ import { FeedItem } from "@/components/FeedItem";
 import { motion } from "motion/react";
 import { useActivityFeed } from "@/features/activity/hooks/useActivityFeed";
 
-export function ActivityFeed() {
+interface ActivityFeedProps {
+  enabled?: boolean;
+}
+
+export function ActivityFeed({ enabled }: ActivityFeedProps) {
   const { activities, hasNewActivity, isReconnecting, scrollAreaRef, scrollToTop } =
-    useActivityFeed();
+    useActivityFeed({ enabled });
 
   // Reconnecting state: had data before but now loading
   if (isReconnecting) {

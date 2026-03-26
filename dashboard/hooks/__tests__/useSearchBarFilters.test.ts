@@ -12,19 +12,14 @@ const SAMPLE_ATTRS = [
   { _id: "a2", name: "Severity", type: "select", options: ["low", "high"] },
 ];
 
-vi.mock("convex/react", () => ({
-  useQuery: (ref: string) => {
-    if (ref === "taskTags:list") return SAMPLE_TAGS;
-    if (ref === "tagAttributes:list") return SAMPLE_ATTRS;
-    return undefined;
-  },
-}));
-
-vi.mock("../../convex/_generated/api", () => ({
-  api: {
-    taskTags: { list: "taskTags:list" },
-    tagAttributes: { list: "tagAttributes:list" },
-  },
+vi.mock("@/components/AppDataProvider", () => ({
+  useAppData: () => ({
+    agents: [],
+    deletedAgents: [],
+    boards: [],
+    taskTags: SAMPLE_TAGS,
+    tagAttributes: SAMPLE_ATTRS,
+  }),
 }));
 
 import { useSearchBarFilters } from "@/features/search/hooks/useSearchBarFilters";
