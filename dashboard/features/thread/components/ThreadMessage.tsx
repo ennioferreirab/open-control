@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertTriangle, CheckCircle2, XCircle, MessageCircle } from "lucide-react";
 import { Doc } from "@/convex/_generated/dataModel";
@@ -150,6 +150,20 @@ function ThreadMessageComponent({
   // Resolve step title for step_completion messages (Option A: passed from parent)
   const stepTitle = resolveStepTitle(message, steps);
 
+  // Build set of artifact paths for inline file-path linkification.
+  // The outer memo(areThreadMessagePropsEqual) prevents re-renders when artifacts
+  // haven't structurally changed, so referential instability of message.artifacts
+  // within the same render is not a concern here.
+  const artifactPathSet = useMemo(
+    () => new Set(message.artifacts?.map((a) => a.path) ?? []),
+    [message.artifacts],
+  );
+
+  const handleFilePathClick = useCallback(
+    (path: string) => onArtifactClick?.(path, resolvedTaskId),
+    [onArtifactClick, resolvedTaskId],
+  );
+
   return (
     <div
       className={`flex w-full min-w-0 max-w-full gap-2 p-2 ${styles.bg} ${
@@ -188,7 +202,12 @@ function ThreadMessageComponent({
               {message.content}
             </p>
           ) : (
-            <MarkdownRenderer content={message.content} className="text-muted-foreground" />
+            <MarkdownRenderer
+              content={message.content}
+              className="text-muted-foreground"
+              validArtifactPaths={artifactPathSet}
+              onFilePathClick={onArtifactClick ? handleFilePathClick : undefined}
+            />
           )}
         </div>
 

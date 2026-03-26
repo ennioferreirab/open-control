@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { linkifyFilePaths } from "@/lib/filePathLinker";
 import { Check, Copy } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -69,10 +70,30 @@ function CodeBlock({ code, language = "text" }: CodeBlockProps) {
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  validArtifactPaths?: Set<string>;
+  onFilePathClick?: (path: string) => void;
 }
 
-export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
-  const processed = useMemo(() => content || "", [content]);
+export function MarkdownRenderer({
+  content,
+  className = "",
+  validArtifactPaths,
+  onFilePathClick,
+}: MarkdownRendererProps) {
+  // Serialize artifact paths for stable useMemo dependency (Set references are unstable)
+  const artifactPathsKey = useMemo(
+    () => (validArtifactPaths ? [...validArtifactPaths].sort().join("\0") : ""),
+    [validArtifactPaths],
+  );
+
+  const processed = useMemo(() => {
+    const text = content || "";
+    if (validArtifactPaths && validArtifactPaths.size > 0) {
+      return linkifyFilePaths(text, validArtifactPaths);
+    }
+    return text;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- artifactPathsKey is a stable serialization of validArtifactPaths
+  }, [content, artifactPathsKey]);
 
   return (
     <div
@@ -131,6 +152,24 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
             );
           },
           a({ href, children }) {
+            if (href?.startsWith("artifact://")) {
+              if (onFilePathClick) {
+                const path = decodeURIComponent(
+                  href.slice("artifact://".length).replace(/\\([()])/g, "$1"),
+                );
+                return (
+                  <button
+                    type="button"
+                    className="text-blue-500 hover:underline font-mono text-xs"
+                    onClick={() => onFilePathClick(path)}
+                  >
+                    {children}
+                  </button>
+                );
+              }
+              // No click handler — render as plain text, not a broken link
+              return <span className="font-mono text-xs">{children}</span>;
+            }
             return (
               <a
                 href={href}
