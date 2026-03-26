@@ -20,6 +20,7 @@ import {
 } from "@/lib/planUtils";
 import { useExecutionPlanActions } from "@/features/tasks/hooks/useExecutionPlanActions";
 import { StepListView } from "@/components/StepListView";
+import { formatDuration } from "@/lib/formatDuration";
 
 const nodeTypes = { flowStep: FlowStepNode, start: StartNode, end: EndNode };
 
@@ -102,6 +103,8 @@ interface NormalizedStep {
   order: number;
   errorMessage?: string;
   isVisualOnly?: boolean;
+  startedAt?: string;
+  completedAt?: string;
 }
 
 /* ── Utility functions ── */
@@ -230,6 +233,8 @@ function mergeStepsWithLiveData(
       status: normalizeStatus(liveStep.status) || planStep.status,
       order: liveStep.order ?? planStep.order,
       errorMessage: liveStep.errorMessage ?? planStep.errorMessage,
+      startedAt: liveStep.startedAt,
+      completedAt: liveStep.completedAt,
     };
   });
 }
@@ -599,6 +604,11 @@ export function ExecutionPlanTab({
     // Inject status + handlers into node data (skip START/END terminal nodes)
     const statusMap = new Map(displaySteps.map((step) => [step.stepId, step.status]));
     const errorMessageMap = new Map(displaySteps.map((step) => [step.stepId, step.errorMessage]));
+    const durationMap = new Map(
+      displaySteps
+        .filter((s) => s.startedAt && s.completedAt)
+        .map((s) => [s.stepId, formatDuration(s.startedAt!, s.completedAt!)]),
+    );
     const nodesWithStatus = rawNodes.map((n) => {
       if (n.id === "__start__" || n.id === "__end__") return n;
       // Compute hasParallelSiblings for merge button visibility
@@ -614,6 +624,7 @@ export function ExecutionPlanTab({
         data: {
           ...(n.data as FlowStepNodeData),
           status: statusMap.get(n.id) ?? "planned",
+          duration: durationMap.get(n.id),
           isPaused,
           stepErrorMessage: errorMessageMap.get(n.id),
           isEditMode: canEditCanvas,
@@ -994,6 +1005,10 @@ export function ExecutionPlanTab({
               parallelGroup: s.parallelGroup,
               errorMessage: s.errorMessage,
               isLiveStep: !!s.liveId,
+              duration:
+                s.startedAt && s.completedAt
+                  ? formatDuration(s.startedAt, s.completedAt)
+                  : undefined,
             }))}
             onStepClick={(stepId) => {
               handleStepClick(stepId);

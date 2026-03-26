@@ -247,6 +247,8 @@ export default defineSchema({
     workflowSpecId: v.optional(v.id("workflowSpecs")),
     createdAt: v.string(),
     updatedAt: v.string(),
+    startedAt: v.optional(v.string()),
+    completedAt: v.optional(v.string()),
   })
     .index("by_status", ["status"])
     .index("by_boardId", ["boardId"])
@@ -771,7 +773,8 @@ export default defineSchema({
     .index("by_sessionId", ["sessionId"])
     .index("by_agentName", ["agentName"])
     .index("by_provider", ["provider"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_taskId", ["taskId"]),
 
   // ---------------------------------------------------------------------------
   // Integration Tables (Linear adapter V1)

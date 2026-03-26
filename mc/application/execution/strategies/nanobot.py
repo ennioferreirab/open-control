@@ -223,6 +223,7 @@ class NanobotRunnerStrategy:
             board_name=request.board_name,
             memory_workspace=request.memory_workspace,
             task_id=request.task_id,
+            step_id=request.step_id,
             bridge=self._bridge,
             on_progress=on_progress,
         )

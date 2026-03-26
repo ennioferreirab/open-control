@@ -233,6 +233,13 @@ export async function applyTaskTransition(
   if (args.toStatus === "assigned") {
     patch.assignedAgent = nextAssignedAgent;
   }
+  if (args.toStatus === "in_progress") {
+    patch.startedAt = task.startedAt ?? now;
+    patch.completedAt = undefined;
+  }
+  if (args.toStatus === "done") {
+    patch.completedAt = now;
+  }
   if (["done", "review", "crashed", "failed", "deleted"].includes(args.toStatus)) {
     patch.activeCronJobId = undefined;
   }

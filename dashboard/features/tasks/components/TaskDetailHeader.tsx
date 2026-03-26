@@ -12,6 +12,7 @@ import { Loader2, Pause, Pencil, Play, Trash2 } from "lucide-react";
 import { TAG_COLORS } from "@/lib/constants";
 import { TagChip } from "@/components/TagChip";
 import { StatusBadge } from "@/components/StatusBadge";
+import { formatDuration } from "@/lib/formatDuration";
 import type {
   ExecutionProvenance,
   MergedTaskRef,
@@ -198,6 +199,11 @@ export function TaskDetailHeader({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={task.status} type="task" size="sm" />
+            {task.status === "done" && task.startedAt && task.completedAt && (
+              <span className="text-xs font-mono text-muted-foreground">
+                {formatDuration(task.startedAt, task.completedAt)}
+              </span>
+            )}
             {(task.tags ?? []).map((tag) => {
               const colorKey = tagColorMap[tag] as keyof typeof TAG_COLORS | undefined;
               const attrs =

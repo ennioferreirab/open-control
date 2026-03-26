@@ -156,6 +156,7 @@ function getBorderColorClass(avatarBgClass: string): string {
 export type FlowStepNodeData = {
   step: EditablePlanStep;
   status?: string;
+  duration?: string;
   isEditMode?: boolean;
   isVisualOnly?: boolean;
   hasParallelSiblings?: boolean;
@@ -300,12 +301,17 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
           </span>
         </div>
 
-        {/* Row 2: Status dot + step title + duration placeholder */}
+        {/* Row 2: Status dot + step title + duration */}
         <div className="flex items-center gap-1.5 min-w-0">
           <StatusDot meta={meta} />
           <span className="text-[13px] font-medium truncate flex-1 leading-tight">
             {step.title || "Untitled"}
           </span>
+          {data.duration && normalizedStatus === "completed" && (
+            <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+              {data.duration}
+            </span>
+          )}
         </div>
 
         {isLiveStep && onOpenLive && !isEditMode && (

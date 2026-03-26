@@ -72,6 +72,8 @@ def _collect_output_artifacts(
     for entry in output_dir.rglob("*"):
         if not entry.is_file():
             continue
+        if entry.name.startswith("system_prompt_"):
+            continue
         # relative to task base dir (parent of output/)
         rel = str(entry.relative_to(output_dir.parent))
         size = entry.stat().st_size

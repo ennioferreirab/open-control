@@ -58,6 +58,11 @@ def _collect_output_artifacts(
         if not entry.is_file():
             continue
 
+        # Prompt logs are diagnostic files — show in Files tab only, not as
+        # thread artifacts.
+        if entry.name.startswith("system_prompt_"):
+            continue
+
         rel = str(entry.relative_to(output_dir.parent))
         size = entry.stat().st_size
 
@@ -146,15 +151,25 @@ def _relocate_invalid_memory_files(task_id: str, workspace: Path) -> list[Path]:
     return moved
 
 
-def write_prompt_log(task_id: str, filename: str, content: str) -> None:
+def write_prompt_log(
+    task_id: str,
+    filename: str,
+    content: str,
+    *,
+    step_id: str | None = None,
+) -> None:
     """Write a prompt log file to the task's output directory."""
     from datetime import datetime as _dt
 
     safe_id = task_safe_id(task_id)
     output_dir = get_tasks_dir() / safe_id / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
-    ts = _dt.now().strftime("%d%H%M%S")
+    ts = _dt.now().strftime("%d:%H:%M:%S")
     final_name = filename.replace("{DDHHMMSS}", ts)
+    if step_id:
+        stem, dot, ext = final_name.rpartition(".")
+        suffix = f"_{step_id[-6:]}"
+        final_name = f"{stem}{suffix}{dot}{ext}" if dot else f"{final_name}{suffix}"
     path = output_dir / final_name
     path.write_text(content, encoding="utf-8")
     logger.info("[prompt-log] Wrote %s (%d bytes)", path, len(content))

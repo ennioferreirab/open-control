@@ -698,14 +698,12 @@ class StepDispatcher:
                     "=== FINAL ASSEMBLED PROMPT (sent to agent) ===",
                     req.prompt or "(none)",
                 ]
-                from mc.contexts.execution.output_artifacts import slugify
-
-                step_slug = slugify(step_title)
                 await asyncio.to_thread(
                     write_prompt_log,
                     task_id,
-                    f"system_prompt_log_{step_slug}_{{DDHHMMSS}}.txt",
+                    "system_prompt_log_{DDHHMMSS}.txt",
                     "\n".join(prompt_log_parts),
+                    step_id=step_id,
                 )
             except Exception:
                 logger.warning(
@@ -715,7 +713,9 @@ class StepDispatcher:
                 )
 
             # Snapshot output dir before agent execution for artifact detection
-            # (Story 2.5).
+            # (Story 2.5).  Prompt logs are intentionally written *before* this
+            # snapshot so they are excluded from thread artifacts — they only
+            # appear in the Files tab via sync_task_output_files.
             pre_snapshot = await asyncio.to_thread(snapshot_output_dir, task_id)
 
             req.runner_type = resolve_step_runner_type(req)
