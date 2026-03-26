@@ -116,8 +116,8 @@ export function KanbanBoard({ onTaskClick, search }: KanbanBoardProps) {
           </button>
         </div>
       </div>
-      <TrashBinSheet open={trashOpen} onClose={() => setTrashOpen(false)} />
-      <DoneTasksSheet open={doneSheetOpen} onClose={() => setDoneSheetOpen(false)} />
+      {trashOpen && <TrashBinSheet open={true} onClose={() => setTrashOpen(false)} />}
+      {doneSheetOpen && <DoneTasksSheet open={true} onClose={() => setDoneSheetOpen(false)} />}
     </LayoutGroup>
   );
 }

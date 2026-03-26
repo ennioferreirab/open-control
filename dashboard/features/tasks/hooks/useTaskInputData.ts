@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
+import { useAppData } from "@/components/AppDataProvider";
 import type { Id, Doc } from "@/convex/_generated/dataModel";
 
 /** Arguments for creating a task via the semantic API. */
@@ -45,8 +46,7 @@ export interface TaskInputData {
 
 export function useTaskInputData(): TaskInputData {
   const _createTask = useMutation(api.tasks.create);
-  const predefinedTags = useQuery(api.taskTags.list);
-  const allAttributes = useQuery(api.tagAttributes.list);
+  const { taskTags: predefinedTags, tagAttributes: allAttributes } = useAppData();
   const _upsertAttrValue = useMutation(api.tagAttributeValues.upsert);
   const autoTitleSetting = useQuery(api.settings.get, {
     key: "auto_title_enabled",

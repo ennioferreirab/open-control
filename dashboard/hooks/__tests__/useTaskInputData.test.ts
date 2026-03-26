@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
 
-// Mock convex/react
 const mockCreateTask = vi.fn();
 const mockUpsertAttrValue = vi.fn();
 
@@ -13,8 +12,6 @@ vi.mock("convex/react", () => ({
     return vi.fn();
   },
   useQuery: (ref: string, args?: { key?: string }) => {
-    if (ref === "taskTags:list") return [];
-    if (ref === "tagAttributes:list") return [];
     if (ref === "settings:get" && args?.key === "auto_title_enabled") {
       return "true";
     }
@@ -25,11 +22,19 @@ vi.mock("convex/react", () => ({
 vi.mock("../../convex/_generated/api", () => ({
   api: {
     tasks: { create: "tasks:create" },
-    taskTags: { list: "taskTags:list" },
-    tagAttributes: { list: "tagAttributes:list" },
     tagAttributeValues: { upsert: "tagAttributeValues:upsert" },
     settings: { get: "settings:get" },
   },
+}));
+
+vi.mock("@/components/AppDataProvider", () => ({
+  useAppData: () => ({
+    agents: [],
+    deletedAgents: [],
+    boards: [],
+    taskTags: [],
+    tagAttributes: [],
+  }),
 }));
 
 import { useTaskInputData } from "@/features/tasks/hooks/useTaskInputData";

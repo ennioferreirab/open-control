@@ -66,6 +66,17 @@ vi.mock("@/features/terminal/components/TerminalBoard", () => ({
   TerminalBoard: () => <div data-testid="terminal-board">Terminal Board</div>,
 }));
 
+vi.mock("@/components/AppDataProvider", () => ({
+  AppDataProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
+  useAppData: () => ({
+    agents: [],
+    deletedAgents: [],
+    boards: [],
+    taskTags: [],
+    tagAttributes: [],
+  }),
+}));
+
 vi.mock("@/components/BoardContext", () => ({
   BoardProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
   useBoard: () => ({ openTerminals: [], activeBoardId: null, closeAllTerminals: () => {} }),
