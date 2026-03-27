@@ -39,6 +39,22 @@
     --radius-sm: 0.375rem;
     --radius-lg: 0.75rem;
     --radius-xl: 1rem;
+
+    /* Task Detail Sheet Layout */
+    --task-detail-width: 70vw;
+    --task-detail-max: 1400px;
+    --task-detail-header: 48px;
+    --task-detail-rail: 300px;
+    --task-detail-rail-collapsed: 48px;
+    --task-detail-mobile-header: 44px;
+    --task-detail-mobile-nav: 48px;
+
+    /* Chat Bubbles */
+    --bubble-agent: var(--card);
+    --bubble-user: hsl(var(--primary) / 0.08);
+    --bubble-system: var(--muted);
+    --bubble-radius: 12px;
+
     --sidebar-background: 220 20% 98.5%;
     --sidebar-foreground: 220 13% 10%;
     --sidebar-primary: 220 70% 50%;
@@ -77,6 +93,22 @@
     --chart-3: 30 80% 60%;
     --chart-4: 280 65% 65%;
     --chart-5: 340 75% 60%;
+
+    /* Task Detail Sheet Layout */
+    --task-detail-width: 70vw;
+    --task-detail-max: 1400px;
+    --task-detail-header: 48px;
+    --task-detail-rail: 300px;
+    --task-detail-rail-collapsed: 48px;
+    --task-detail-mobile-header: 44px;
+    --task-detail-mobile-nav: 48px;
+
+    /* Chat Bubbles */
+    --bubble-agent: var(--card);
+    --bubble-user: hsl(var(--primary) / 0.08);
+    --bubble-system: var(--muted);
+    --bubble-radius: 12px;
+
     --sidebar-background: 220 13% 6%;
     --sidebar-foreground: 220 10% 93%;
     --sidebar-primary: 220 70% 55%;
