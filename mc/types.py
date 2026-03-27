@@ -234,6 +234,7 @@ class ExecutionPlanStep:
     agent_spec_id: str | None = None
     review_spec_id: str | None = None
     on_reject_step_id: str | None = None
+    skip: bool = False
 
 
 def _as_int(value: Any, default: int) -> int:

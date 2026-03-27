@@ -636,3 +636,85 @@ describe("STEP_TRANSITIONS consistency", () => {
     expect(STEP_TRANSITIONS.completed).toEqual(["assigned", "blocked"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// skipped status
+// ---------------------------------------------------------------------------
+
+describe("skipped status", () => {
+  it("skipped is a valid step status", () => {
+    expect(isValidStepStatus("skipped")).toBe(true);
+  });
+
+  it("planned -> skipped is valid", () => {
+    expect(isValidStepTransition("planned", "skipped")).toBe(true);
+  });
+
+  it("assigned -> skipped is valid", () => {
+    expect(isValidStepTransition("assigned", "skipped")).toBe(true);
+  });
+
+  it("blocked -> skipped is valid", () => {
+    expect(isValidStepTransition("blocked", "skipped")).toBe(true);
+  });
+
+  it("skipped -> assigned is valid (un-skip)", () => {
+    expect(isValidStepTransition("skipped", "assigned")).toBe(true);
+  });
+
+  it("running -> skipped is NOT valid", () => {
+    expect(isValidStepTransition("running", "skipped")).toBe(false);
+  });
+
+  it("completed -> skipped is NOT valid", () => {
+    expect(isValidStepTransition("completed", "skipped")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findBlockedStepsReadyToUnblock — skipped blockers
+// ---------------------------------------------------------------------------
+
+describe("findBlockedStepsReadyToUnblock with skipped blockers", () => {
+  it("unblocks when all blockers are skipped", () => {
+    const steps = [
+      { _id: "s1", status: "skipped" },
+      { _id: "s2", status: "skipped" },
+      { _id: "s3", status: "blocked", blockedBy: ["s1", "s2"] },
+    ];
+
+    const ready = findBlockedStepsReadyToUnblock(
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
+    );
+
+    expect(ready).toEqual(["s3"]);
+  });
+
+  it("unblocks with mixed completed and skipped blockers", () => {
+    const steps = [
+      { _id: "s1", status: "completed" },
+      { _id: "s2", status: "skipped" },
+      { _id: "s3", status: "blocked", blockedBy: ["s1", "s2"] },
+    ];
+
+    const ready = findBlockedStepsReadyToUnblock(
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
+    );
+
+    expect(ready).toEqual(["s3"]);
+  });
+
+  it("does NOT unblock when one blocker is still running", () => {
+    const steps = [
+      { _id: "s1", status: "skipped" },
+      { _id: "s2", status: "running" },
+      { _id: "s3", status: "blocked", blockedBy: ["s1", "s2"] },
+    ];
+
+    const ready = findBlockedStepsReadyToUnblock(
+      steps as Parameters<typeof findBlockedStepsReadyToUnblock>[0],
+    );
+
+    expect(ready).toEqual([]);
+  });
+});

@@ -23,6 +23,7 @@ export const STEP_STATUSES = [
   "running",
   "review",
   "completed",
+  "skipped",
   "crashed",
   "blocked",
   "waiting_human",
@@ -32,13 +33,23 @@ export const STEP_STATUSES = [
 export type StepStatus = (typeof STEP_STATUSES)[number];
 
 export const STEP_TRANSITIONS: Record<StepStatus, StepStatus[]> = {
-  planned: ["assigned", "blocked", "deleted"],
-  assigned: ["running", "review", "completed", "crashed", "blocked", "waiting_human", "deleted"],
+  planned: ["assigned", "blocked", "skipped", "deleted"],
+  assigned: [
+    "running",
+    "review",
+    "completed",
+    "skipped",
+    "crashed",
+    "blocked",
+    "waiting_human",
+    "deleted",
+  ],
   running: ["assigned", "blocked", "review", "completed", "crashed", "waiting_human", "deleted"],
   review: ["assigned", "running", "completed", "crashed", "waiting_human", "deleted"],
   completed: ["assigned", "blocked"],
+  skipped: ["assigned"],
   crashed: ["assigned", "deleted"],
-  blocked: ["assigned", "crashed", "deleted"],
+  blocked: ["assigned", "skipped", "crashed", "deleted"],
   waiting_human: ["running", "completed", "crashed", "deleted"],
   deleted: [],
 };
@@ -190,9 +201,10 @@ export function findBlockedStepsReadyToUnblock(steps: StepWithDependencies[]): I
     .filter((step) => step.status === "blocked")
     .filter((step) => (step.blockedBy ?? []).length > 0)
     .filter((step) =>
-      (step.blockedBy ?? []).every(
-        (blockedStepId) => stepStatusById.get(blockedStepId) === "completed",
-      ),
+      (step.blockedBy ?? []).every((blockedStepId) => {
+        const s = stepStatusById.get(blockedStepId);
+        return s === "completed" || s === "skipped";
+      }),
     )
     .map((step) => step._id);
 }

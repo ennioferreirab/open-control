@@ -386,8 +386,9 @@ class StepDispatcher:
                         task_id,
                     )
                 return
+            terminal_success = {StepStatus.COMPLETED, StepStatus.SKIPPED}
             all_completed = bool(final_steps) and all(
-                step.get("status") == StepStatus.COMPLETED for step in final_steps
+                step.get("status") in terminal_success for step in final_steps
             )
             if all_completed:
                 step_count = len(final_steps)
@@ -598,6 +599,30 @@ class StepDispatcher:
         )
         workflow_step_type = step.get("workflow_step_type")
         is_gate_step = _is_workflow_gate_step(workflow_step_type)
+
+        # --- Skip check: bypass execution for steps marked skip=True ---
+        if step.get("skip"):
+            await asyncio.to_thread(
+                self._bridge.update_step_status,
+                step_id,
+                StepStatus.SKIPPED,
+            )
+            await asyncio.to_thread(
+                self._bridge.create_activity,
+                ActivityEventType.STEP_SKIPPED,
+                f"Step skipped: {step_title}",
+                task_id,
+                agent_name,
+            )
+            logger.info(
+                "[dispatcher] Step '%s' skipped by configuration",
+                step_title,
+            )
+            unblocked = await asyncio.to_thread(
+                self._bridge.check_and_unblock_dependents,
+                step_id,
+            )
+            return [str(uid) for uid in unblocked]
 
         if agent_name == "human" or is_gate_step:
             # Gate steps and human-assigned steps go to waiting_human immediately.

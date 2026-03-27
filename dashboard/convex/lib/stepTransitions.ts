@@ -103,6 +103,10 @@ function buildStepTransitionPatch(
       patch.completedAt = now;
       patch.errorMessage = undefined;
       break;
+    case "skipped":
+      patch.completedAt = undefined;
+      patch.errorMessage = undefined;
+      break;
     case "crashed":
       patch.completedAt = undefined;
       patch.errorMessage = errorMessage;

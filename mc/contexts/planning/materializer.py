@@ -119,6 +119,8 @@ class PlanMaterializer:
                 entry["review_spec_id"] = step.review_spec_id
             if step.on_reject_step_id is not None:
                 entry["on_reject_step_id"] = step.on_reject_step_id
+            if step.skip:
+                entry["skip"] = True
 
             payload.append(entry)
 
