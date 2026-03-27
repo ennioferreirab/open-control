@@ -8,7 +8,15 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useStepCardActions } from "@/hooks/useStepCardActions";
-import { AlertTriangle, CheckCircle, ExternalLink, Lock, Paperclip, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle,
+  ExternalLink,
+  Lock,
+  Paperclip,
+  SkipForward,
+  Trash2,
+} from "lucide-react";
 import { Doc } from "@/convex/_generated/dataModel";
 import { STEP_STATUS_COLORS, type StepStatus } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -23,8 +31,9 @@ interface StepCardProps {
 
 export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: StepCardProps) {
   const shouldReduceMotion = useReducedMotion();
-  const { deleteStep, acceptHumanStep, manualMoveStep } = useStepCardActions();
+  const { deleteStep, acceptHumanStep, manualMoveStep, skipStep } = useStepCardActions();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isActioning, setIsActioning] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -34,6 +43,8 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
   const isWorkflowGate = step.workflowStepType === "human";
   const isWaitingHuman = step.status === "waiting_human";
   const isRunningGateStep = step.status === "running" && (isHuman || isWorkflowGate);
+  const isSkipped = step.status === "skipped";
+  const isSkippable = ["planned", "assigned", "blocked", "skipped"].includes(step.status);
   const assignedAgentInitials = step.assignedAgent
     ? step.assignedAgent
         .split(/[\s-_]+/)
@@ -79,6 +90,7 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
             isInteractive ? "cursor-pointer" : "",
             isHuman && !isWaitingHuman ? "cursor-grab" : "",
             isDragging ? "opacity-50 shadow-lg" : "",
+            isSkipped ? "opacity-60" : "",
           ].join(" ")}
           onClick={onClick}
           onKeyDown={handleKeyDown}
@@ -107,7 +119,12 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
           </div>
 
           <div className="mb-1.5 flex items-start justify-between gap-2">
-            <h3 className="min-w-0 text-[13px] font-medium text-foreground line-clamp-2">
+            <h3
+              className={[
+                "min-w-0 text-[13px] font-medium text-foreground line-clamp-2",
+                isSkipped ? "line-through" : "",
+              ].join(" ")}
+            >
               {step.title}
             </h3>
             <div className="mt-0.5 flex shrink-0 items-center gap-1">
@@ -142,6 +159,25 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
                 <Paperclip className="h-3 w-3" />
                 {step.attachedFiles.length}
               </span>
+            )}
+            {isSkippable && (
+              <SkipForward
+                className={[
+                  "h-3.5 w-3.5 cursor-pointer transition-colors",
+                  isSkipped
+                    ? "text-slate-500 hover:text-foreground"
+                    : "text-muted-foreground hover:text-slate-600",
+                ].join(" ")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isSkipped) {
+                    void skipStep({ stepId: step._id, skip: false });
+                  } else {
+                    setShowSkipConfirm((prev) => !prev);
+                  }
+                }}
+                title={isSkipped ? "Un-skip step" : "Skip step"}
+              />
             )}
             <Trash2
               className="ml-auto h-3.5 w-3.5 cursor-pointer text-muted-foreground transition-colors hover:text-red-500"
@@ -201,6 +237,21 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
           )}
           {actionError && <p className="mt-1 text-[10px] text-red-600 truncate">{actionError}</p>}
           <AnimatePresence>
+            {showSkipConfirm && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <InlineConfirm
+                  message="Skip this step?"
+                  onConfirm={() => {
+                    void skipStep({ stepId: step._id, skip: true });
+                    setShowSkipConfirm(false);
+                  }}
+                  onCancel={() => setShowSkipConfirm(false)}
+                  confirmLabel="Skip"
+                  cancelLabel="Cancel"
+                  variant="default"
+                />
+              </div>
+            )}
             {showDeleteConfirm && (
               <div onClick={(e) => e.stopPropagation()}>
                 <InlineConfirm

@@ -21,17 +21,25 @@ export interface ManualMoveStepArgs {
   newStatus: string;
 }
 
+/** Arguments for skipping or un-skipping a step. */
+export interface SkipStepArgs {
+  stepId: Id<"steps">;
+  skip: boolean;
+}
+
 /** Return type for the useStepCardActions hook. */
 export interface StepCardActionsData {
   deleteStep: (args: DeleteStepArgs) => Promise<void>;
   acceptHumanStep: (args: AcceptHumanStepArgs) => Promise<void>;
   manualMoveStep: (args: ManualMoveStepArgs) => Promise<void>;
+  skipStep: (args: SkipStepArgs) => Promise<void>;
 }
 
 export function useStepCardActions(): StepCardActionsData {
   const _deleteStep = useMutation(api.steps.deleteStep);
   const _acceptHumanStep = useMutation(api.steps.acceptHumanStep);
   const _manualMoveStep = useMutation(api.steps.manualMoveStep);
+  const _skipStep = useMutation(api.steps.skipStep);
 
   return {
     deleteStep: async (args: DeleteStepArgs): Promise<void> => {
@@ -42,6 +50,9 @@ export function useStepCardActions(): StepCardActionsData {
     },
     manualMoveStep: async (args: ManualMoveStepArgs): Promise<void> => {
       await _manualMoveStep(args);
+    },
+    skipStep: async (args: SkipStepArgs): Promise<void> => {
+      await _skipStep(args);
     },
   };
 }
