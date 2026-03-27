@@ -78,6 +78,7 @@ export function ProviderLiveChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
   const isAtBottomRef = useRef(true);
+  const isMouseSelectingRef = useRef(false);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -86,13 +87,35 @@ export function ProviderLiveChatPanel({
     isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
   }, []);
 
+  // Track mouse selection state — more reliable than window.getSelection()
+  // which can briefly collapse during React DOM mutations.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onMouseDown = () => {
+      isMouseSelectingRef.current = true;
+    };
+    const onMouseUp = () => {
+      isMouseSelectingRef.current = false;
+    };
+    el.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      el.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
   // Track both count and last event id so we scroll when events are added to
   // an existing group (count unchanged) or when filters produce different results.
   const eventCount = filteredNodes?.length ?? filteredEvents.length;
   const lastEventId = filteredEvents[filteredEvents.length - 1]?.id ?? null;
   useEffect(() => {
     if (eventCount === 0) return;
-    // Skip auto-scroll while the user is selecting text to avoid breaking the selection
+    // Skip auto-scroll while the user is selecting text to avoid breaking the selection.
+    // Primary guard: mousedown state (synchronous, unaffected by DOM mutations).
+    // Secondary guard: window.getSelection() for selections made via keyboard or other means.
+    if (isMouseSelectingRef.current) return;
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return;
     if (!userScrolledRef.current || isAtBottomRef.current) {
