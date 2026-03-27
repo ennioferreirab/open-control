@@ -5,7 +5,6 @@ import * as motion from "motion/react-client";
 import { X, ChevronDown } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ThreadInput } from "@/features/thread/components/ThreadInput";
 import { ThreadMessage } from "@/features/thread/components/ThreadMessage";
@@ -134,7 +133,7 @@ export function TaskDetailThreadTab({
   }, [dropdownOpen]);
 
   return (
-    <TabsContent value="thread" className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col">
+    <div className="flex-1 min-h-0 flex flex-col">
       {onFilterStepIdsChange && completedSteps.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background px-6 py-2">
           <div ref={dropdownRef} className="relative">
@@ -292,6 +291,6 @@ export function TaskDetailThreadTab({
       {task && !isMergeLockedSource && (
         <ThreadInput task={task} onMessageSent={handleMessageSent} />
       )}
-    </TabsContent>
+    </div>
   );
 }

@@ -179,6 +179,8 @@ export type FlowStepNodeData = {
   retryError?: string;
   onOpenLive?: (stepId: string) => void;
   isLiveStep?: boolean;
+  /** Whether this node is the currently selected node in the canvas */
+  isSelectedNode?: boolean;
 };
 
 export type FlowStepNodeType = Node<FlowStepNodeData, "flowStep">;
@@ -212,6 +214,7 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
     isVisualOnly,
     onOpenLive,
     isLiveStep,
+    isSelectedNode,
     isPaused,
     stepErrorMessage,
   } = data;
@@ -254,8 +257,10 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
       <div
         data-testid={`flow-step-node-${step.tempId}`}
         className={cn(
-          "relative rounded-lg border border-l-2 bg-background px-3 py-2 shadow-sm w-[220px]",
-          borderColorClass,
+          "relative rounded-lg border bg-background px-3 py-2 shadow-sm w-[220px]",
+          isSelectedNode
+            ? "border-2 border-primary shadow-[0_0_20px_rgba(35,131,226,0.15)]"
+            : cn("border-l-2", borderColorClass),
           selected ? "ring-1 ring-primary/40" : "border-border",
           meta.runningPulse && "motion-safe:animate-pulse",
           onStepClick && "cursor-pointer hover:border-primary/50 transition-colors",

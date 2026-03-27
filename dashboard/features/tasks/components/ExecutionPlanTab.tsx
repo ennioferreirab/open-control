@@ -89,6 +89,10 @@ interface ExecutionPlanTabProps {
   hasUnsavedChanges?: boolean;
   onOpenLive?: (stepId: string) => void;
   liveStepIds?: string[];
+  /** Called when a flow node is clicked in canvas mode (for external selection tracking) */
+  onNodeSelect?: (stepId: string) => void;
+  /** The currently selected node ID (receives blue border with glow) */
+  selectedNodeId?: string | null;
 }
 
 interface NormalizedStep {
@@ -310,6 +314,8 @@ export function ExecutionPlanTab({
   hasUnsavedChanges = false,
   onOpenLive,
   liveStepIds,
+  onNodeSelect,
+  selectedNodeId,
 }: ExecutionPlanTabProps) {
   const { acceptHumanStep, retryStep, stopStep, manualMoveStep, addStep, updateStep, deleteStep } =
     useExecutionPlanActions();
@@ -580,10 +586,12 @@ export function ExecutionPlanTab({
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (node.id === "__start__" || node.id === "__end__") return;
+      if (node.id === VISUAL_MERGE_ALIAS_ID) return;
+      onNodeSelect?.(node.id);
       if (!canAddOrEdit) return;
       handleStepClick(node.id);
     },
-    [canAddOrEdit, handleStepClick],
+    [canAddOrEdit, handleStepClick, onNodeSelect],
   );
 
   // Compute leaf steps: steps that no other step depends on (closest to END)
@@ -650,6 +658,7 @@ export function ExecutionPlanTab({
             liveStepIdSet.has(n.id) ||
               (matchedDisplayStep?.liveId != null && liveStepIdSet.has(matchedDisplayStep.liveId)),
           ),
+          isSelectedNode: selectedNodeId === n.id,
         },
       };
     });
@@ -680,6 +689,7 @@ export function ExecutionPlanTab({
     handleStepClick,
     onOpenLive,
     liveStepIdSet,
+    selectedNodeId,
   ]);
 
   // Build existingSteps for the blocked-by selector

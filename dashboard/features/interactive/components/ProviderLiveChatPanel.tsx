@@ -30,6 +30,8 @@ interface ProviderLiveChatPanelProps {
   provider: string;
   isLoading: boolean;
   errorMessage?: string;
+  /** Called when user clicks "View" on a write_file tool_use event */
+  onOpenArtifact?: (path: string) => void;
 }
 
 export function ProviderLiveChatPanel({
@@ -41,6 +43,7 @@ export function ProviderLiveChatPanel({
   provider,
   isLoading,
   errorMessage,
+  onOpenArtifact: _onOpenArtifact,
 }: ProviderLiveChatPanelProps) {
   const availableCategories = useMemo(() => {
     const counts = new Map<ProviderLiveCategory, number>();
