@@ -1,5 +1,3 @@
-"use client";
-
 import { cn } from "@/lib/utils";
 import { Plus } from "lucide-react";
 
@@ -16,7 +14,7 @@ export function AttachButton({ onClick, className, disabled }: AttachButtonProps
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "w-8 h-8 rounded-full bg-[#1e1e1e] border border-[#333] text-[#999] flex items-center justify-center hover:bg-[#252525] hover:text-[#bbb] transition-colors",
+        "w-8 h-8 rounded-full bg-card border border-border text-muted-foreground flex items-center justify-center hover:bg-muted hover:text-foreground transition-colors",
         disabled && "opacity-50 cursor-not-allowed",
         className,
       )}

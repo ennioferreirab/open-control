@@ -17,6 +17,8 @@ const options = [
 export function ViewToggle({ value, onChange, className }: ViewToggleProps) {
   return (
     <div
+      role="group"
+      aria-label="View mode"
       className={cn("bg-card border border-border rounded-lg p-[3px] flex gap-[1px]", className)}
     >
       {options.map((option) => {
@@ -26,6 +28,7 @@ export function ViewToggle({ value, onChange, className }: ViewToggleProps) {
           <button
             key={option.value}
             type="button"
+            aria-pressed={isActive}
             onClick={() => onChange(option.value)}
             className={cn(
               "px-3.5 py-1 text-xs font-medium flex items-center gap-1.5 rounded-[5px] transition-colors",

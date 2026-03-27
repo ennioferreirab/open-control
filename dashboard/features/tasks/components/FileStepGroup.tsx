@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { ChevronRight, File, FileText, Image, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { STEP_STATUS_COLORS, type StepStatus } from "@/lib/constants";
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
 const TEXT_EXTS = new Set([".md", ".txt", ".pdf"]);
@@ -39,12 +38,21 @@ interface FileStepGroupProps {
   onToggleFavorite?: (file: FileStepGroupFile) => void;
 }
 
+const STEP_DOT_COLORS: Record<string, string> = {
+  planned: "bg-slate-500",
+  assigned: "bg-cyan-500",
+  running: "bg-blue-500",
+  review: "bg-amber-500",
+  completed: "bg-green-500",
+  crashed: "bg-red-500",
+  blocked: "bg-amber-500",
+  waiting_human: "bg-amber-500",
+  deleted: "bg-gray-500",
+};
+
 function getStatusDotColor(status?: string): string {
   if (!status) return "bg-muted-foreground/40";
-  const colors = STEP_STATUS_COLORS[status as StepStatus];
-  if (!colors) return "bg-muted-foreground/40";
-  const match = colors.bg.match(/bg-(\w+)-/);
-  return match ? `bg-${match[1]}-500` : "bg-muted-foreground/40";
+  return STEP_DOT_COLORS[status] ?? "bg-muted-foreground/40";
 }
 
 export function FileStepGroup({
