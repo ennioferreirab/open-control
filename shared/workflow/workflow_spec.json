@@ -87,7 +87,7 @@
     "running": ["assigned", "blocked", "review", "completed", "crashed"],
     "review": ["running", "completed", "crashed"],
     "completed": ["assigned"],
-    "skipped": ["assigned"],
+    "skipped": ["assigned", "deleted"],
     "crashed": ["assigned"],
     "blocked": ["assigned", "crashed", "skipped"],
     "waiting_human": ["running", "completed", "crashed"],

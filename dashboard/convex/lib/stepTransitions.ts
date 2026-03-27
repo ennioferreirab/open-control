@@ -104,6 +104,7 @@ function buildStepTransitionPatch(
       patch.errorMessage = undefined;
       break;
     case "skipped":
+      patch.skippedAt = now;
       patch.completedAt = undefined;
       patch.errorMessage = undefined;
       break;
@@ -125,6 +126,7 @@ function buildStepTransitionPatch(
     default:
       patch.startedAt = undefined;
       patch.completedAt = undefined;
+      patch.skippedAt = undefined;
       patch.errorMessage = undefined;
       break;
   }

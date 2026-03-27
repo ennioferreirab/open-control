@@ -1212,10 +1212,16 @@ export const skipStep = mutation({
         idempotencyKey: `skip:${String(args.stepId)}:${getStepStateVersion(step)}`,
       });
 
-      await unblockReadyDependents(ctx, step.taskId, timestamp, {
+      const { currentTaskSteps } = await unblockReadyDependents(ctx, step.taskId, timestamp, {
         stepId: args.stepId,
         status: "skipped",
       });
+
+      // Reconcile parent task status after skip
+      const task = await ctx.db.get(step.taskId);
+      if (task) {
+        await applyManualParentTaskTransition(ctx, { task, step, currentTaskSteps });
+      }
 
       await logActivity(ctx, {
         taskId: step.taskId,

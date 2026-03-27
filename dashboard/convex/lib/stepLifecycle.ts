@@ -47,7 +47,7 @@ export const STEP_TRANSITIONS: Record<StepStatus, StepStatus[]> = {
   running: ["assigned", "blocked", "review", "completed", "crashed", "waiting_human", "deleted"],
   review: ["assigned", "running", "completed", "crashed", "waiting_human", "deleted"],
   completed: ["assigned", "blocked"],
-  skipped: ["assigned"],
+  skipped: ["assigned", "deleted"],
   crashed: ["assigned", "deleted"],
   blocked: ["assigned", "skipped", "crashed", "deleted"],
   waiting_human: ["running", "completed", "crashed", "deleted"],
