@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef } from "react";
+import { useMutation } from "convex/react";
 import { Loader2, Plus } from "lucide-react";
 import { ReactFlow, Background, Controls, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { Id } from "@/convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
 import { FlowStepNode, normalizeStatus, type FlowStepNodeData } from "@/components/FlowStepNode";
 import { StartNode, EndNode } from "@/components/StartEndNode";
 import { ParallelLabelNode } from "@/components/ParallelLabelNode";
@@ -706,6 +708,9 @@ export function ExecutionPlanTab({
             liveStepIdSet.has(n.id) ||
               (matchedDisplayStep?.liveId != null && liveStepIdSet.has(matchedDisplayStep.liveId)),
           ),
+          onSkip: readOnly || isVisualOnly ? undefined : handleSkip,
+          isSkipping: skippingStepIds.has(n.id),
+          skipError: skipErrors.get(n.id),
         },
       };
     });
@@ -736,6 +741,9 @@ export function ExecutionPlanTab({
     handleStepClick,
     onOpenLive,
     liveStepIdSet,
+    handleSkip,
+    skippingStepIds,
+    skipErrors,
   ]);
 
   // Build existingSteps for the blocked-by selector
