@@ -74,6 +74,7 @@
     "running",
     "review",
     "completed",
+    "skipped",
     "crashed",
     "blocked",
     "waiting_human",
@@ -81,13 +82,14 @@
   ],
 
   "stepTransitions": {
-    "planned": ["assigned", "blocked"],
-    "assigned": ["running", "review", "completed", "crashed", "blocked", "waiting_human"],
+    "planned": ["assigned", "blocked", "skipped"],
+    "assigned": ["running", "review", "completed", "skipped", "crashed", "blocked", "waiting_human"],
     "running": ["assigned", "blocked", "review", "completed", "crashed"],
     "review": ["running", "completed", "crashed"],
     "completed": ["assigned"],
+    "skipped": ["assigned"],
     "crashed": ["assigned"],
-    "blocked": ["assigned", "crashed"],
+    "blocked": ["assigned", "crashed", "skipped"],
     "waiting_human": ["running", "completed", "crashed"],
     "deleted": []
   },
@@ -111,7 +113,11 @@
     "assigned->waiting_human": "step_dispatched",
     "waiting_human->running": "step_started",
     "waiting_human->completed": "step_completed",
-    "waiting_human->crashed": "system_error"
+    "waiting_human->crashed": "system_error",
+    "planned->skipped": "step_skipped",
+    "assigned->skipped": "step_skipped",
+    "blocked->skipped": "step_skipped",
+    "skipped->assigned": "step_dispatched"
   },
 
   "mentionSafeTaskStatuses": [

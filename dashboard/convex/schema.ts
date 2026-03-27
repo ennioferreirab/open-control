@@ -24,6 +24,7 @@ export const stepStatusValidator = v.union(
   v.literal("running"),
   v.literal("review"),
   v.literal("completed"),
+  v.literal("skipped"),
   v.literal("crashed"),
   v.literal("blocked"),
   v.literal("waiting_human"),
@@ -75,6 +76,7 @@ export const activityEventTypeValidator = v.union(
   v.literal("step_dispatched"),
   v.literal("step_started"),
   v.literal("step_completed"),
+  v.literal("step_skipped"),
   v.literal("step_created"),
   v.literal("step_status_changed"),
   v.literal("step_unblocked"),
@@ -291,6 +293,9 @@ export default defineSchema({
     reviewSpecId: v.optional(v.id("reviewSpecs")),
     onRejectStepId: v.optional(v.string()),
     rejectionCount: v.optional(v.number()),
+    // Skip configuration — when true, execution engine bypasses this step.
+    skip: v.optional(v.boolean()),
+    skippedAt: v.optional(v.string()),
   })
     .index("by_taskId", ["taskId"])
     .index("by_status", ["status"]),

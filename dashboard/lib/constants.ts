@@ -19,6 +19,7 @@ export const STEP_STATUS = {
   RUNNING: "running",
   REVIEW: "review",
   COMPLETED: "completed",
+  SKIPPED: "skipped",
   CRASHED: "crashed",
   BLOCKED: "blocked",
   WAITING_HUMAN: "waiting_human",
@@ -69,6 +70,7 @@ export const ACTIVITY_EVENT_TYPE = {
   BOARD_UPDATED: "board_updated",
   BOARD_DELETED: "board_deleted",
   STEP_RETRYING: "step_retrying",
+  STEP_SKIPPED: "step_skipped",
 } as const;
 
 // Message type values
@@ -207,6 +209,11 @@ export const STEP_STATUS_COLORS: Record<StepStatus, { border: string; bg: string
       border: "border-l-green-500",
       bg: "bg-green-100 dark:bg-green-950",
       text: "text-green-700 dark:text-green-300",
+    },
+    skipped: {
+      border: "border-l-slate-400",
+      bg: "bg-slate-50 dark:bg-slate-900",
+      text: "text-slate-500 dark:text-slate-400",
     },
     crashed: {
       border: "border-l-red-500",
