@@ -142,12 +142,19 @@ def register_lifecycle_commands(mc_app: typer.Typer) -> None:
         if _cli.PID_FILE.exists():
             try:
                 old_pid = int(_cli.PID_FILE.read_text().strip())
-                os.kill(old_pid, 0)
-                _cli.console.print(
-                    f"[yellow]Open Control is already running (PID {old_pid}).[/yellow]"
-                )
-                _cli.console.print("Run [bold]open-control mc down[/bold] first.")
-                raise typer.Exit(1)
+                current_pid = os.getpid()
+                # In Docker, PID 1 is the entrypoint which exec's into us,
+                # so a stale PID file with PID 1 (or our own PID) is not a
+                # different running instance — just clean it up.
+                if old_pid != current_pid and old_pid != 1:
+                    os.kill(old_pid, 0)
+                    _cli.console.print(
+                        f"[yellow]Open Control is already running (PID {old_pid}).[/yellow]"
+                    )
+                    _cli.console.print("Run [bold]open-control mc down[/bold] first.")
+                    raise typer.Exit(1)
+                else:
+                    _cli._cleanup_pid_file()
             except (ValueError, OSError):
                 _cli._cleanup_pid_file()
 

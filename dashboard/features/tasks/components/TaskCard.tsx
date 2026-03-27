@@ -89,7 +89,7 @@ export function TaskCard({ task, onClick, tagColorMap, layoutIdPrefix, progress 
       >
         <Card
           className={[
-            "cursor-pointer rounded-[10px] border-t-[3px] p-4 transition-shadow hover:shadow-md",
+            "cursor-pointer rounded-[10px] p-4 transition-shadow hover:shadow-md",
             colors.border,
             isDragging ? "opacity-50 shadow-lg" : "",
             isManual ? "cursor-grab" : "",

@@ -8,6 +8,7 @@ import { TAG_COLORS } from "@/lib/constants";
 import { TagChip } from "@/components/TagChip";
 import { ViewToggle } from "@/components/ViewToggle";
 import { Check, Pause, Play, Star, X } from "lucide-react";
+import type { ReactNode } from "react";
 
 interface CompactHeaderProps {
   task: Doc<"tasks">;
@@ -26,6 +27,7 @@ interface CompactHeaderProps {
   onDeleteConfirmOpen: () => void;
   onClose: () => void;
   className?: string;
+  children?: ReactNode;
 }
 
 const STATUS_DOT_COLORS: Record<string, string> = {
@@ -61,6 +63,7 @@ export function CompactHeader({
   onDeleteConfirmOpen: _onDeleteConfirmOpen,
   onClose,
   className,
+  children,
 }: CompactHeaderProps) {
   const toggleFavorite = useMutation(api.tasks.toggleFavorite);
   const dotColor = getStatusDotColor(task.status);
@@ -115,6 +118,8 @@ export function CompactHeader({
       )}
 
       <ViewToggle value={viewMode} onChange={onViewModeChange} />
+
+      {children}
 
       <button
         type="button"

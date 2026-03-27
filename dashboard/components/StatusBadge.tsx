@@ -13,12 +13,17 @@ function formatStatusLabel(status: string): string {
 }
 
 /**
- * Derives a dot background class (e.g. "bg-teal-500") from a border directional class
- * (e.g. "border-l-teal-500" or "border-t-teal-500"). Falls back to "bg-current" if pattern doesn't match.
+ * Derives a dot background class (e.g. "bg-teal-500") from a border class string.
+ * Handles both simple ("border-l-teal-500") and compound ("border-r-[3px] border-r-teal-500/30") formats.
+ * Strips opacity suffixes so the dot renders at full opacity.
  */
 function dotClassFromBorder(borderClass: string): string {
-  const match = borderClass.match(/^border-[a-z]+-(.+)$/);
-  return match ? `bg-${match[1]}` : "bg-current";
+  // Try the color part of a compound border (e.g. "border-r-teal-500/30" → "teal-500")
+  const compoundMatch = borderClass.match(/border-[a-z]+-([a-z]+-\d+)(?:\/\d+)?(?:\s|$)/);
+  if (compoundMatch) return `bg-${compoundMatch[1]}`;
+  // Simple single-class fallback (e.g. "border-l-teal-500")
+  const simpleMatch = borderClass.match(/^border-[a-z]+-(.+)$/);
+  return simpleMatch ? `bg-${simpleMatch[1]}` : "bg-current";
 }
 
 export function StatusBadge({ status, type = "task", size = "sm", className }: StatusBadgeProps) {

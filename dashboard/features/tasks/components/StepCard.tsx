@@ -85,7 +85,7 @@ export function StepCard({ step, parentTaskTitle, onClick, onNavigateToTask }: S
       >
         <Card
           className={[
-            "rounded-[10px] border-l-[3px] p-3 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            "rounded-[10px] p-3 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             colors.border,
             isInteractive ? "cursor-pointer" : "",
             isHuman && !isWaitingHuman ? "cursor-grab" : "",

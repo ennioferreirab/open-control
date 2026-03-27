@@ -12,7 +12,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { FolderOpen, LayoutList, Settings, X, Zap } from "lucide-react";
+import { ChevronsLeft, ChevronDown, FolderOpen, LayoutList, Settings, X, Zap } from "lucide-react";
 import {
   ExecutionPlanTab,
   type ExecutionPlanViewMode,
@@ -34,6 +34,7 @@ import { SquadDetailSheet } from "@/features/agents/components/SquadDetailSheet"
 import { useTaskDetailView } from "@/features/tasks/hooks/useTaskDetailView";
 import { useTaskDetailActions } from "@/features/tasks/hooks/useTaskDetailActions";
 import { usePlanEditorState } from "@/features/tasks/hooks/usePlanEditorState";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn } from "@/lib/utils";
 import type { ExecutionPlan } from "@/lib/types";
 import type { DetailFileRef } from "@/features/tasks/hooks/useTaskDetailView";
@@ -187,7 +188,12 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
   const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
   const [selectedSquadId, setSelectedSquadId] = useState<Id<"squadSpecs"> | null>(null);
   const [focusedWorkflowId, setFocusedWorkflowId] = useState<Id<"workflowSpecs"> | null>(null);
-  const [isRailCollapsed, setIsRailCollapsed] = useState(false);
+  const isMobile = useIsMobile();
+  const [isRailCollapsed, setIsRailCollapsed] = useState(true);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const mobileFilterRef = useRef<HTMLDivElement>(null);
+  const [liveSessionDropdownOpen, setLiveSessionDropdownOpen] = useState(false);
+  const liveSessionDropdownRef = useRef<HTMLDivElement>(null);
 
   const shouldReduceMotion = useReducedMotion();
   const [viewerFile, setViewerFile] = useState<{
@@ -479,6 +485,48 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
 
   const completedStepCount = miniPlanSteps.filter((s) => s.status === "completed").length;
 
+  const completedSteps = useMemo(
+    () => liveSteps?.filter((s) => s.status === "completed") ?? [],
+    [liveSteps],
+  );
+
+  // Close mobile filter dropdown on outside click
+  useEffect(() => {
+    if (!mobileFilterOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (mobileFilterRef.current && !mobileFilterRef.current.contains(e.target as Node)) {
+        setMobileFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [mobileFilterOpen]);
+
+  // Close live session dropdown on outside click
+  useEffect(() => {
+    if (!liveSessionDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        liveSessionDropdownRef.current &&
+        !liveSessionDropdownRef.current.contains(e.target as Node)
+      ) {
+        setLiveSessionDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [liveSessionDropdownOpen]);
+
+  const toggleFilterStep = useCallback(
+    (stepId: string) => {
+      const next = new Set(filterStepIds);
+      if (next.has(stepId)) next.delete(stepId);
+      else next.add(stepId);
+      setFilterStepIds(next);
+    },
+    [filterStepIds],
+  );
+
   const selectedStepDetail = useMemo(() => {
     if (!selectedCanvasNodeId || !liveSteps) return null;
     const step = liveSteps.find((s) => s._id === selectedCanvasNodeId);
@@ -535,9 +583,52 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
               onResume={handleResume}
               onDeleteConfirmOpen={() => setShowDeleteConfirm(true)}
               onClose={onClose}
-            />
+            >
+              {isMobile && completedSteps.length > 0 && viewMode === "thread" && (
+                <div ref={mobileFilterRef} className="relative">
+                  <button
+                    type="button"
+                    className="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2 text-xs hover:bg-muted/50"
+                    onClick={() => setMobileFilterOpen((v) => !v)}
+                    aria-label="Filter by steps"
+                  >
+                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                  {mobileFilterOpen && (
+                    <div className="fixed left-1/2 -translate-x-1/2 top-14 z-50 min-w-[250px] max-w-[85vw] rounded-md border border-border bg-popover p-1 shadow-lg">
+                      {completedSteps.map((step) => (
+                        <label
+                          key={step._id}
+                          className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted/50"
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 rounded border-input"
+                            checked={filterStepIds?.has(step._id) ?? false}
+                            onChange={() => toggleFilterStep(step._id)}
+                          />
+                          <span className="truncate">
+                            {step.title || step.description?.slice(0, 40)}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={() => setIsRailCollapsed((prev) => !prev)}
+                  className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted inline-flex items-center justify-center flex-shrink-0"
+                  aria-label="Toggle context rail"
+                >
+                  <ChevronsLeft className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </CompactHeader>
 
-            <div className="flex flex-1 min-h-0">
+            <div className="relative flex flex-1 min-h-0">
               {/* Main content area */}
               <div className={cn("flex min-w-0", liveStepId ? "flex-row" : "flex-col flex-1")}>
                 {/* Thread view (narrowed when live panel is open) */}
@@ -565,6 +656,7 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                       onMessageSent={noop}
                       filterStepIds={filterStepIds}
                       onFilterStepIdsChange={setFilterStepIds}
+                      hideFilterBar={isMobile}
                     />
                   </div>
                 )}
@@ -599,27 +691,62 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
 
                 {/* Full-view live mode (legacy, from header live button) */}
                 {viewMode === "live" && task && liveSession.session && !liveStepId && (
-                  <div className="min-h-0 flex-1 px-6 py-4 flex flex-col gap-3">
+                  <div className="min-h-0 flex-1 px-2 md:px-6 py-4 flex flex-col gap-3">
                     {liveSession.liveChoices.length > 1 && (
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs text-zinc-500" htmlFor="live-session-selector">
-                          Session:
-                        </label>
-                        <select
-                          id="live-session-selector"
-                          className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200"
-                          value={selectedLiveStepId ?? liveSession.activeStep?._id ?? ""}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setSelectedLiveStepId(value === "task" ? null : value || null);
-                          }}
+                      <div
+                        ref={liveSessionDropdownRef}
+                        className="relative flex items-center gap-2"
+                      >
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs hover:bg-muted/50"
+                          onClick={() => setLiveSessionDropdownOpen((v) => !v)}
+                          aria-label="Select session"
                         >
-                          {liveSession.liveChoices.map((choice) => (
-                            <option key={choice.id} value={choice.id}>
-                              {choice.label} {choice.isActive ? "(active)" : `(${choice.status})`}
-                            </option>
-                          ))}
-                        </select>
+                          <Zap className="h-3 w-3 text-emerald-400" />
+                          <span className="truncate max-w-[200px]">
+                            {liveSession.liveChoices.find(
+                              (c) => c.id === (selectedLiveStepId ?? liveSession.activeStep?._id),
+                            )?.label ?? "Select session"}
+                          </span>
+                          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                        {liveSessionDropdownOpen && (
+                          <div className="absolute left-0 top-full z-50 mt-1 min-w-[220px] max-w-[85vw] rounded-md border border-border bg-popover p-1 shadow-lg">
+                            {liveSession.liveChoices.map((choice) => {
+                              const isSelected =
+                                choice.id === (selectedLiveStepId ?? liveSession.activeStep?._id);
+                              return (
+                                <button
+                                  key={choice.id}
+                                  type="button"
+                                  className={cn(
+                                    "flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted/50 text-left",
+                                    isSelected && "bg-muted",
+                                  )}
+                                  onClick={() => {
+                                    setSelectedLiveStepId(
+                                      choice.id === "task" ? null : choice.id || null,
+                                    );
+                                    setLiveSessionDropdownOpen(false);
+                                  }}
+                                >
+                                  <span className="truncate flex-1">{choice.label}</span>
+                                  <span
+                                    className={cn(
+                                      "text-[10px] px-1.5 py-0.5 rounded-full",
+                                      choice.isActive
+                                        ? "bg-emerald-500/10 text-emerald-400"
+                                        : "bg-muted text-muted-foreground",
+                                    )}
+                                  >
+                                    {choice.isActive ? "active" : choice.status}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border">
@@ -677,186 +804,202 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
                 )}
               </div>
 
+              {/* Mobile overlay backdrop */}
+              {isMobile && !isRailCollapsed && (
+                <div
+                  className="absolute inset-0 z-20 bg-black/40"
+                  onClick={() => setIsRailCollapsed(true)}
+                  aria-hidden="true"
+                />
+              )}
+
               {/* Context Rail - right side */}
-              <ContextRail
-                title={task!.title}
-                tags={task!.tags}
-                tagColorMap={tagColorMap as Record<string, never>}
-                isCollapsed={isRailCollapsed}
-                onToggleCollapse={() => setIsRailCollapsed((prev) => !prev)}
-              >
-                {viewMode === "canvas" && (
-                  <CanvasRailContent
-                    selectedStep={selectedStepDetail}
-                    threadPreview={threadMiniPreview}
-                    onOpenLive={handleOpenLivePanel}
-                    onFilterThread={(stepId) => {
-                      setFilterStepIds(new Set([stepId]));
-                      handleViewModeChange("thread");
-                    }}
-                    onViewThread={() => handleViewModeChange("thread")}
-                  />
-                )}
-
-                <RailSection
-                  icon={FolderOpen}
-                  label="Files"
-                  badge={displayFiles.length > 0 ? displayFiles.length : undefined}
-                  defaultOpen
-                  trailing={
-                    <input
-                      type="file"
-                      multiple
-                      ref={attachInputRef}
-                      onChange={handleAttachFiles}
-                      className="hidden"
-                    />
-                  }
-                >
-                  <div className="px-2 pb-2">
-                    {displayFiles.length === 0 ? (
-                      <p className="py-2 text-center text-[11px] text-muted-foreground">
-                        No files yet
-                      </p>
-                    ) : (
-                      <>
-                        {railFileGroups.groups.map((group, index) => (
-                          <FileStepGroup
-                            key={group.stepId}
-                            stepName={group.stepName}
-                            stepStatus={group.stepStatus}
-                            files={group.files.map((f) => ({
-                              name: f.name,
-                              subfolder: f.subfolder,
-                              type: f.type,
-                              size: f.size,
-                              isFavorite: f.isFavorite,
-                              sourceTaskId: f.sourceTaskId,
-                            }))}
-                            defaultExpanded={index === railFileGroups.groups.length - 1}
-                            onFileClick={(file) =>
-                              setViewerFile({
-                                name: file.name,
-                                subfolder: file.subfolder,
-                                type: file.type,
-                                size: file.size,
-                                sourceTaskId: file.sourceTaskId as Id<"tasks"> | undefined,
-                              })
-                            }
-                            onToggleFavorite={(file) => {
-                              if (task)
-                                void toggleFileFavoriteMutation({
-                                  taskId: task._id,
-                                  fileName: file.name,
-                                  subfolder: file.subfolder,
-                                });
-                            }}
-                          />
-                        ))}
-                        {railFileGroups.ungrouped.length > 0 && (
-                          <FileStepGroup
-                            stepName="Other files"
-                            files={railFileGroups.ungrouped.map((f) => ({
-                              name: f.name,
-                              subfolder: f.subfolder,
-                              type: f.type,
-                              size: f.size,
-                              isFavorite: f.isFavorite,
-                              sourceTaskId: f.sourceTaskId,
-                            }))}
-                            defaultExpanded={railFileGroups.groups.length === 0}
-                            onFileClick={(file) =>
-                              setViewerFile({
-                                name: file.name,
-                                subfolder: file.subfolder,
-                                type: file.type,
-                                size: file.size,
-                                sourceTaskId: file.sourceTaskId as Id<"tasks"> | undefined,
-                              })
-                            }
-                            onToggleFavorite={(file) => {
-                              if (task)
-                                void toggleFileFavoriteMutation({
-                                  taskId: task._id,
-                                  fileName: file.name,
-                                  subfolder: file.subfolder,
-                                });
-                            }}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
-                </RailSection>
-
-                <RailSection
-                  icon={LayoutList}
-                  label="Plan"
-                  badge={
-                    miniPlanSteps.length > 0
-                      ? `${completedStepCount}/${miniPlanSteps.length}`
+              {!(isMobile && isRailCollapsed) && (
+                <ContextRail
+                  title={task!.title}
+                  tags={task!.tags}
+                  tagColorMap={tagColorMap as Record<string, never>}
+                  isCollapsed={isMobile ? false : isRailCollapsed}
+                  onToggleCollapse={() => setIsRailCollapsed((prev) => !prev)}
+                  className={
+                    isMobile
+                      ? "absolute right-0 top-0 bottom-0 z-30 w-[280px] shadow-xl"
                       : undefined
                   }
-                  defaultOpen
                 >
-                  <div className="px-2 pb-2">
-                    {miniPlanSteps.length === 0 ? (
-                      <p className="py-2 text-center text-[11px] text-muted-foreground">
-                        No plan yet
-                      </p>
-                    ) : (
-                      <MiniPlanList
-                        steps={miniPlanSteps}
-                        onStepClick={(stepId) => handleOpenLive(stepId)}
-                        onViewCanvas={() => handleViewModeChange("canvas")}
-                      />
-                    )}
-                  </div>
-                </RailSection>
+                  {viewMode === "canvas" && (
+                    <CanvasRailContent
+                      selectedStep={selectedStepDetail}
+                      threadPreview={threadMiniPreview}
+                      onOpenLive={handleOpenLivePanel}
+                      onFilterThread={(stepId) => {
+                        setFilterStepIds(new Set([stepId]));
+                        handleViewModeChange("thread");
+                      }}
+                      onViewThread={() => handleViewModeChange("thread")}
+                    />
+                  )}
 
-                <RailSection icon={Settings} label="Config">
-                  <div className="px-2 pb-2">
-                    {task && (
-                      <TaskDetailConfigTab
-                        task={task}
-                        directMergeSources={directMergeSources}
-                        canRemoveDirectSources={canRemoveDirectSources}
-                        removeMergeSourceError={removeMergeSourceError}
-                        onTaskOpen={onTaskOpen}
-                        onRemoveMergeSource={handleRemoveMergeSource}
-                        isRemovingMergeSource={isRemovingMergeSource}
-                        mergeQuery={mergeQuery}
-                        onMergeQueryChange={setMergeQuery}
-                        isAddingMergeSource={isAddingMergeSource}
-                        mergeCandidates={mergeCandidates}
-                        selectedMergeTaskId={selectedMergeTaskId}
-                        onSelectedMergeTaskIdChange={setSelectedMergeTaskId}
-                        onAddMergeSource={handleAddMergeSource}
-                        addMergeSourceError={addMergeSourceError}
-                        isMergeLockedSource={isMergeLockedSource}
-                        onCreateMergeTask={handleCreateMergeTask}
-                        isCreatingMergeTask={isCreatingMergeTask}
-                        createMergeTaskError={createMergeTaskError}
-                        tagColorMap={tagColorMap}
-                        tagsList={tagsList}
-                        onAddTag={handleAddTag}
-                        onRemoveTag={handleRemoveTag}
-                        tagAttributesList={tagAttributesList}
-                        tagAttrValues={tagAttrValues}
-                        expandedTags={expandedTags}
-                        onToggleTagExpansion={(tag) => {
-                          setExpandedTags((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(tag)) next.delete(tag);
-                            else next.add(tag);
-                            return next;
-                          });
-                        }}
+                  <RailSection
+                    icon={FolderOpen}
+                    label="Files"
+                    badge={displayFiles.length > 0 ? displayFiles.length : undefined}
+                    defaultOpen
+                    trailing={
+                      <input
+                        type="file"
+                        multiple
+                        ref={attachInputRef}
+                        onChange={handleAttachFiles}
+                        className="hidden"
                       />
-                    )}
-                  </div>
-                </RailSection>
-              </ContextRail>
+                    }
+                  >
+                    <div className="px-2 pb-2">
+                      {displayFiles.length === 0 ? (
+                        <p className="py-2 text-center text-[11px] text-muted-foreground">
+                          No files yet
+                        </p>
+                      ) : (
+                        <>
+                          {railFileGroups.groups.map((group, index) => (
+                            <FileStepGroup
+                              key={group.stepId}
+                              stepName={group.stepName}
+                              stepStatus={group.stepStatus}
+                              files={group.files.map((f) => ({
+                                name: f.name,
+                                subfolder: f.subfolder,
+                                type: f.type,
+                                size: f.size,
+                                isFavorite: f.isFavorite,
+                                sourceTaskId: f.sourceTaskId,
+                              }))}
+                              defaultExpanded={index === railFileGroups.groups.length - 1}
+                              onFileClick={(file) =>
+                                setViewerFile({
+                                  name: file.name,
+                                  subfolder: file.subfolder,
+                                  type: file.type,
+                                  size: file.size,
+                                  sourceTaskId: file.sourceTaskId as Id<"tasks"> | undefined,
+                                })
+                              }
+                              onToggleFavorite={(file) => {
+                                if (task)
+                                  void toggleFileFavoriteMutation({
+                                    taskId: task._id,
+                                    fileName: file.name,
+                                    subfolder: file.subfolder,
+                                  });
+                              }}
+                            />
+                          ))}
+                          {railFileGroups.ungrouped.length > 0 && (
+                            <FileStepGroup
+                              stepName="Other files"
+                              files={railFileGroups.ungrouped.map((f) => ({
+                                name: f.name,
+                                subfolder: f.subfolder,
+                                type: f.type,
+                                size: f.size,
+                                isFavorite: f.isFavorite,
+                                sourceTaskId: f.sourceTaskId,
+                              }))}
+                              defaultExpanded={railFileGroups.groups.length === 0}
+                              onFileClick={(file) =>
+                                setViewerFile({
+                                  name: file.name,
+                                  subfolder: file.subfolder,
+                                  type: file.type,
+                                  size: file.size,
+                                  sourceTaskId: file.sourceTaskId as Id<"tasks"> | undefined,
+                                })
+                              }
+                              onToggleFavorite={(file) => {
+                                if (task)
+                                  void toggleFileFavoriteMutation({
+                                    taskId: task._id,
+                                    fileName: file.name,
+                                    subfolder: file.subfolder,
+                                  });
+                              }}
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </RailSection>
+
+                  <RailSection
+                    icon={LayoutList}
+                    label="Plan"
+                    badge={
+                      miniPlanSteps.length > 0
+                        ? `${completedStepCount}/${miniPlanSteps.length}`
+                        : undefined
+                    }
+                    defaultOpen
+                  >
+                    <div className="px-2 pb-2">
+                      {miniPlanSteps.length === 0 ? (
+                        <p className="py-2 text-center text-[11px] text-muted-foreground">
+                          No plan yet
+                        </p>
+                      ) : (
+                        <MiniPlanList
+                          steps={miniPlanSteps}
+                          onStepClick={(stepId) => handleOpenLive(stepId)}
+                          onViewCanvas={() => handleViewModeChange("canvas")}
+                        />
+                      )}
+                    </div>
+                  </RailSection>
+
+                  <RailSection icon={Settings} label="Config">
+                    <div className="px-2 pb-2">
+                      {task && (
+                        <TaskDetailConfigTab
+                          task={task}
+                          directMergeSources={directMergeSources}
+                          canRemoveDirectSources={canRemoveDirectSources}
+                          removeMergeSourceError={removeMergeSourceError}
+                          onTaskOpen={onTaskOpen}
+                          onRemoveMergeSource={handleRemoveMergeSource}
+                          isRemovingMergeSource={isRemovingMergeSource}
+                          mergeQuery={mergeQuery}
+                          onMergeQueryChange={setMergeQuery}
+                          isAddingMergeSource={isAddingMergeSource}
+                          mergeCandidates={mergeCandidates}
+                          selectedMergeTaskId={selectedMergeTaskId}
+                          onSelectedMergeTaskIdChange={setSelectedMergeTaskId}
+                          onAddMergeSource={handleAddMergeSource}
+                          addMergeSourceError={addMergeSourceError}
+                          isMergeLockedSource={isMergeLockedSource}
+                          onCreateMergeTask={handleCreateMergeTask}
+                          isCreatingMergeTask={isCreatingMergeTask}
+                          createMergeTaskError={createMergeTaskError}
+                          tagColorMap={tagColorMap}
+                          tagsList={tagsList}
+                          onAddTag={handleAddTag}
+                          onRemoveTag={handleRemoveTag}
+                          tagAttributesList={tagAttributesList}
+                          tagAttrValues={tagAttrValues}
+                          expandedTags={expandedTags}
+                          onToggleTagExpansion={(tag) => {
+                            setExpandedTags((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(tag)) next.delete(tag);
+                              else next.add(tag);
+                              return next;
+                            });
+                          }}
+                        />
+                      )}
+                    </div>
+                  </RailSection>
+                </ContextRail>
+              )}
             </div>
           </>
         ) : taskId ? (

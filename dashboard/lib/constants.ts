@@ -131,52 +131,52 @@ export type AuthorType = (typeof AUTHOR_TYPE)[keyof typeof AUTHOR_TYPE];
 // Status color mapping for Kanban board
 export const STATUS_COLORS: Record<TaskStatus, { border: string; bg: string; text: string }> = {
   ready: {
-    border: "border-t-teal-500",
+    border: "border-r-[3px] border-r-teal-500/30",
     bg: "bg-teal-100 dark:bg-teal-950",
     text: "text-teal-700 dark:text-teal-300",
   },
   failed: {
-    border: "border-t-rose-500",
+    border: "border-r-[3px] border-r-rose-500/30",
     bg: "bg-rose-100 dark:bg-rose-950",
     text: "text-rose-700 dark:text-rose-300",
   },
   inbox: {
-    border: "border-t-violet-500",
+    border: "border-r-[3px] border-r-violet-500/30",
     bg: "bg-violet-100 dark:bg-violet-950",
     text: "text-violet-700 dark:text-violet-300",
   },
   assigned: {
-    border: "border-t-cyan-500",
+    border: "border-r-[3px] border-r-cyan-500/30",
     bg: "bg-cyan-100 dark:bg-cyan-950",
     text: "text-cyan-700 dark:text-cyan-300",
   },
   in_progress: {
-    border: "border-t-blue-500",
+    border: "border-r-[3px] border-r-blue-500/30",
     bg: "bg-blue-100 dark:bg-blue-950",
     text: "text-blue-700 dark:text-blue-300",
   },
   review: {
-    border: "border-t-amber-500",
+    border: "border-r-[3px] border-r-amber-500/30",
     bg: "bg-amber-100 dark:bg-amber-950",
     text: "text-amber-700 dark:text-amber-300",
   },
   done: {
-    border: "border-t-green-500",
+    border: "border-r-[3px] border-r-green-500/30",
     bg: "bg-green-100 dark:bg-green-950",
     text: "text-green-700 dark:text-green-300",
   },
   retrying: {
-    border: "border-t-amber-600",
+    border: "border-r-[3px] border-r-amber-600/30",
     bg: "bg-amber-100 dark:bg-amber-950",
     text: "text-amber-700 dark:text-amber-300",
   },
   crashed: {
-    border: "border-t-red-500",
+    border: "border-r-[3px] border-r-red-500/30",
     bg: "bg-red-100 dark:bg-red-950",
     text: "text-red-700 dark:text-red-300",
   },
   deleted: {
-    border: "border-t-gray-400",
+    border: "border-r-[3px] border-r-gray-400/30",
     bg: "bg-gray-100 dark:bg-gray-900",
     text: "text-gray-500 dark:text-gray-400",
   },
@@ -186,27 +186,27 @@ export const STATUS_COLORS: Record<TaskStatus, { border: string; bg: string; tex
 export const STEP_STATUS_COLORS: Record<StepStatus, { border: string; bg: string; text: string }> =
   {
     planned: {
-      border: "border-l-slate-400",
+      border: "border-r-[3px] border-r-slate-400/30",
       bg: "bg-slate-100 dark:bg-slate-900",
       text: "text-slate-600 dark:text-slate-400",
     },
     assigned: {
-      border: "border-l-cyan-500",
+      border: "border-r-[3px] border-r-cyan-500/30",
       bg: "bg-cyan-100 dark:bg-cyan-950",
       text: "text-cyan-700 dark:text-cyan-300",
     },
     running: {
-      border: "border-l-blue-500",
+      border: "border-r-[3px] border-r-blue-500/30",
       bg: "bg-blue-100 dark:bg-blue-950",
       text: "text-blue-700 dark:text-blue-300",
     },
     review: {
-      border: "border-l-amber-500",
+      border: "border-r-[3px] border-r-amber-500/30",
       bg: "bg-amber-50 dark:bg-amber-950",
       text: "text-amber-700 dark:text-amber-300",
     },
     completed: {
-      border: "border-l-green-500",
+      border: "border-r-[3px] border-r-green-500/30",
       bg: "bg-green-100 dark:bg-green-950",
       text: "text-green-700 dark:text-green-300",
     },
@@ -216,22 +216,22 @@ export const STEP_STATUS_COLORS: Record<StepStatus, { border: string; bg: string
       text: "text-slate-500 dark:text-slate-400",
     },
     crashed: {
-      border: "border-l-red-500",
+      border: "border-r-[3px] border-r-red-500/30",
       bg: "bg-red-100 dark:bg-red-950",
       text: "text-red-700 dark:text-red-300",
     },
     blocked: {
-      border: "border-l-amber-500",
+      border: "border-r-[3px] border-r-amber-500/30",
       bg: "bg-amber-100 dark:bg-amber-950",
       text: "text-amber-700 dark:text-amber-300",
     },
     waiting_human: {
-      border: "border-l-amber-500",
+      border: "border-r-[3px] border-r-amber-500/30",
       bg: "bg-amber-50 dark:bg-amber-950",
       text: "text-amber-700 dark:text-amber-300",
     },
     deleted: {
-      border: "border-l-gray-400",
+      border: "border-r-[3px] border-r-gray-400/30",
       bg: "bg-gray-100 dark:bg-gray-900",
       text: "text-gray-500 dark:text-gray-400",
     },

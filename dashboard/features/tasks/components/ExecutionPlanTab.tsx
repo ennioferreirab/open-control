@@ -623,18 +623,17 @@ export function ExecutionPlanTab({
   const handleStepClick = useCallback(
     (stepId: string) => {
       if (stepId === VISUAL_MERGE_ALIAS_ID) return;
-      if (!canAddOrEdit) {
-        // In read-only mode, open the live tab for the clicked step
-        if (onOpenLive) {
-          onOpenLive(stepId);
-        }
+      // In live/read-only mode (not editing the plan), open the live tab
+      if (!canEditCanvas && onOpenLive) {
+        onOpenLive(stepId);
         return;
       }
+      if (!canAddOrEdit) return;
       setEditingStepId(stepId);
       setEditStepError(null);
       setShowAddForm(false);
     },
-    [canAddOrEdit, onOpenLive],
+    [canAddOrEdit, canEditCanvas, onOpenLive],
   );
 
   const handleNodeClick = useCallback(

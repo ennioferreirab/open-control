@@ -34,6 +34,7 @@ interface TaskDetailThreadTabProps {
   onMessageSent: () => void;
   filterStepIds?: Set<string>;
   onFilterStepIdsChange?: (stepIds: Set<string>) => void;
+  hideFilterBar?: boolean;
 }
 
 export function TaskDetailThreadTab({
@@ -51,6 +52,7 @@ export function TaskDetailThreadTab({
   onMessageSent,
   filterStepIds,
   onFilterStepIdsChange,
+  hideFilterBar,
 }: TaskDetailThreadTabProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -138,7 +140,7 @@ export function TaskDetailThreadTab({
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      {onFilterStepIdsChange && completedSteps.length > 0 && (
+      {onFilterStepIdsChange && completedSteps.length > 0 && !hideFilterBar && (
         <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background px-6 py-2">
           <div ref={dropdownRef} className="relative">
             <button
@@ -197,7 +199,7 @@ export function TaskDetailThreadTab({
           )}
         </div>
       )}
-      <ScrollArea ref={scrollAreaRef} className="flex-1">
+      <ScrollArea ref={scrollAreaRef} className="flex-1" constrainWidth>
         {filteredMessages === undefined ? (
           <p className="px-6 py-8 text-center text-sm text-muted-foreground">Loading messages...</p>
         ) : filteredMessages.length === 0 && !hasSourceThreads ? (
@@ -264,7 +266,7 @@ export function TaskDetailThreadTab({
             )}
             <div
               data-testid="thread-live-messages"
-              className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-2 px-6 py-4"
+              className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-2 px-2 md:px-6 py-4 overflow-hidden"
             >
               {filteredMessages.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">

@@ -24,7 +24,7 @@ export function ChatBubble({
     return (
       <div
         className={cn(
-          "self-stretch bg-muted border border-border/50 rounded-md text-sm text-muted-foreground py-1.5 px-3.5 flex items-start gap-2",
+          "self-stretch bg-muted border border-border/50 rounded-md text-sm text-muted-foreground py-1.5 px-3.5 flex items-start gap-2 overflow-hidden break-words",
           className,
         )}
         data-testid="chat-bubble-system"
@@ -39,7 +39,7 @@ export function ChatBubble({
     return (
       <div
         className={cn(
-          "self-end max-w-[65%] bg-primary/[0.08] border border-primary/[0.12] rounded-xl rounded-br-[4px] p-3",
+          "self-end max-w-[85%] md:max-w-[65%] bg-primary/[0.08] border border-primary/[0.12] rounded-xl rounded-br-[4px] p-3 overflow-hidden break-words",
           className,
         )}
         data-testid="chat-bubble-user"
@@ -52,7 +52,7 @@ export function ChatBubble({
   return (
     <div
       className={cn(
-        "self-start max-w-[85%] bg-card border border-border border-l-2 rounded-xl rounded-bl-[4px] p-3",
+        "self-start max-w-[95%] md:max-w-[85%] bg-card border border-border border-l-2 rounded-xl rounded-bl-[4px] p-3 overflow-hidden break-words",
         className,
       )}
       style={agentColor ? { borderLeftColor: agentColor } : undefined}

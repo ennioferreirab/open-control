@@ -36,7 +36,7 @@ export function ViewToggle({ value, onChange, className }: ViewToggleProps) {
             )}
           >
             <Icon className="h-3.5 w-3.5" />
-            {option.label}
+            <span className="hidden md:inline">{option.label}</span>
           </button>
         );
       })}

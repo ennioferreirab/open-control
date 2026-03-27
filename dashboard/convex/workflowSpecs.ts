@@ -230,6 +230,36 @@ export const patchStepReviewSpec = internalMutation({
   },
 });
 
+export const patchStep = internalMutation({
+  args: {
+    workflowSpecId: v.id("workflowSpecs"),
+    stepId: v.string(),
+    onReject: v.optional(v.string()),
+    description: v.optional(v.string()),
+    agentId: v.optional(v.id("agents")),
+  },
+  handler: async (ctx, args) => {
+    const spec = await ctx.db.get(args.workflowSpecId);
+    if (!spec) throw new ConvexError("Workflow spec not found");
+
+    const steps = (spec.steps ?? []) as Array<Record<string, unknown>>;
+    const idx = steps.findIndex((s) => s.id === args.stepId);
+    if (idx === -1) throw new ConvexError(`Step "${args.stepId}" not found`);
+
+    const patch: Record<string, unknown> = {};
+    if (args.onReject !== undefined) patch.onReject = args.onReject;
+    if (args.description !== undefined) patch.description = args.description;
+    if (args.agentId !== undefined) patch.agentId = args.agentId;
+
+    steps[idx] = { ...steps[idx], ...patch };
+    await ctx.db.patch(args.workflowSpecId, {
+      steps: steps as typeof spec.steps,
+      version: spec.version + 1,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
 export const archiveWorkflow = mutation({
   args: { workflowSpecId: v.id("workflowSpecs") },
   handler: async (ctx, args) => {
