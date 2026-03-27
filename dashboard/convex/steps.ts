@@ -1014,6 +1014,7 @@ export const updateStep = mutation({
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     assignedAgent: v.optional(v.string()),
+    reviewSpecId: v.optional(v.id("reviewSpecs")),
     blockedByStepIds: v.optional(v.array(v.id("steps"))),
   },
   handler: async (ctx, args) => {
@@ -1043,12 +1044,25 @@ export const updateStep = mutation({
         throw new ConvexError("orchestrator-agent cannot be assigned to steps");
       }
     }
+    if (args.reviewSpecId !== undefined) {
+      if (step.workflowStepType !== "review") {
+        throw new ConvexError("reviewSpecId can only be set on review steps");
+      }
+      const reviewSpec = await ctx.db.get(args.reviewSpecId);
+      if (!reviewSpec) {
+        throw new ConvexError(`Review spec not found: ${args.reviewSpecId}`);
+      }
+      if (reviewSpec.status !== "published") {
+        throw new ConvexError("Review spec must be published");
+      }
+    }
 
     const patch: Record<string, unknown> = {};
     let nextStepStatus: StepStatus | null = null;
     if (args.title !== undefined) patch.title = args.title;
     if (args.description !== undefined) patch.description = args.description;
     if (args.assignedAgent !== undefined) patch.assignedAgent = args.assignedAgent;
+    if (args.reviewSpecId !== undefined) patch.reviewSpecId = args.reviewSpecId;
 
     // Handle blockedBy update
     if (args.blockedByStepIds !== undefined) {

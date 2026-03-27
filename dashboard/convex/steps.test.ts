@@ -1996,4 +1996,125 @@ describe("updateStep", () => {
       stateVersion: 4,
     });
   });
+
+  it("patches reviewSpecId on a blocked review step", async () => {
+    const handler = getHandler();
+    const patchedById: Record<string, Record<string, unknown>> = {};
+
+    const reviewStep = {
+      _id: "step-r",
+      taskId: "task-1",
+      title: "Production review",
+      description: "Review generated assets",
+      assignedAgent: "creative-reviewer",
+      status: "blocked",
+      workflowStepType: "review",
+      reviewSpecId: "old-spec-id",
+      blockedBy: [],
+      order: 5,
+      stateVersion: 1,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-r") return reviewStep;
+          if (id === "new-spec-id")
+            return { _id: "new-spec-id", status: "published", name: "updated-review" };
+          if (id === "task-1")
+            return {
+              _id: "task-1",
+              status: "in_progress",
+              stateVersion: 1,
+              executionPlan: { steps: [] },
+            };
+          return null;
+        },
+        patch: async (id: string, value: Record<string, unknown>) => {
+          patchedById[id] = { ...(patchedById[id] ?? {}), ...value };
+        },
+        insert: async () => "activity-1",
+        query: () => ({
+          withIndex: () => ({
+            collect: async () => [reviewStep],
+          }),
+        }),
+      },
+    };
+
+    await handler(ctx, {
+      stepId: "step-r",
+      reviewSpecId: "new-spec-id",
+    });
+
+    expect(patchedById["step-r"]).toMatchObject({ reviewSpecId: "new-spec-id" });
+  });
+
+  it("rejects reviewSpecId on a non-review step", async () => {
+    const handler = getHandler();
+
+    const agentStep = {
+      _id: "step-a",
+      taskId: "task-1",
+      title: "Generate images",
+      description: "Run image gen",
+      assignedAgent: "image-generator",
+      status: "blocked",
+      workflowStepType: "agent",
+      blockedBy: [],
+      order: 4,
+      stateVersion: 1,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-a") return agentStep;
+          if (id === "spec-1") return { _id: "spec-1", status: "published" };
+          return null;
+        },
+        patch: async () => {},
+        insert: async () => "activity-1",
+        query: () => ({ withIndex: () => ({ collect: async () => [agentStep] }) }),
+      },
+    };
+
+    await expect(handler(ctx, { stepId: "step-a", reviewSpecId: "spec-1" })).rejects.toThrow(
+      "reviewSpecId can only be set on review steps",
+    );
+  });
+
+  it("rejects unpublished reviewSpecId", async () => {
+    const handler = getHandler();
+
+    const reviewStep = {
+      _id: "step-r2",
+      taskId: "task-1",
+      title: "Review",
+      description: "Review step",
+      assignedAgent: "reviewer",
+      status: "planned",
+      workflowStepType: "review",
+      blockedBy: [],
+      order: 3,
+      stateVersion: 1,
+    };
+
+    const ctx = {
+      db: {
+        get: async (id: string) => {
+          if (id === "step-r2") return reviewStep;
+          if (id === "draft-spec") return { _id: "draft-spec", status: "draft", name: "draft" };
+          return null;
+        },
+        patch: async () => {},
+        insert: async () => "activity-1",
+        query: () => ({ withIndex: () => ({ collect: async () => [reviewStep] }) }),
+      },
+    };
+
+    await expect(handler(ctx, { stepId: "step-r2", reviewSpecId: "draft-spec" })).rejects.toThrow(
+      "Review spec must be published",
+    );
+  });
 });

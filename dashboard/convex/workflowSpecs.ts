@@ -193,6 +193,41 @@ export const publishStandalone = mutation({
   },
 });
 
+export const patchStepReviewSpec = internalMutation({
+  args: {
+    workflowSpecId: v.id("workflowSpecs"),
+    stepId: v.string(),
+    reviewSpecId: v.id("reviewSpecs"),
+  },
+  handler: async (ctx, args) => {
+    const spec = await ctx.db.get(args.workflowSpecId);
+    if (!spec) throw new ConvexError("Workflow spec not found");
+    if (spec.status !== "published") {
+      throw new ConvexError(`Cannot patch workflow spec in '${spec.status}' status`);
+    }
+
+    const reviewSpec = await ctx.db.get(args.reviewSpecId);
+    if (!reviewSpec || reviewSpec.status !== "published") {
+      throw new ConvexError("Review spec must exist and be published");
+    }
+
+    const steps = (spec.steps ?? []) as Array<Record<string, unknown>>;
+    const idx = steps.findIndex((s) => s.id === args.stepId);
+    if (idx === -1) throw new ConvexError(`Step "${args.stepId}" not found in workflow`);
+
+    if (steps[idx].type !== "review") {
+      throw new ConvexError(`Step "${args.stepId}" is not a review step`);
+    }
+
+    steps[idx] = { ...steps[idx], reviewSpecId: args.reviewSpecId };
+    await ctx.db.patch(args.workflowSpecId, {
+      steps: steps as typeof spec.steps,
+      version: spec.version + 1,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
 export const archiveWorkflow = mutation({
   args: { workflowSpecId: v.id("workflowSpecs") },
   handler: async (ctx, args) => {

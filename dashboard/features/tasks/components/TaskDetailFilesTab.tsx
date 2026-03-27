@@ -434,6 +434,7 @@ function StepGroup({
   isMergeLockedSource,
   onToggleFavorite,
   onToggleArchive,
+  defaultExpanded = false,
 }: {
   stepTitle: string;
   files: DetailFileRef[];
@@ -443,8 +444,9 @@ function StepGroup({
   isMergeLockedSource?: boolean;
   onToggleFavorite?: (file: DetailFileRef) => void;
   onToggleArchive?: (file: DetailFileRef) => void;
+  defaultExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const { local, bySource } = groupBySource(files);
 
   return (
@@ -706,7 +708,7 @@ export function TaskDetailFilesTab({
             )}
 
             {/* Step groups */}
-            {stepGroups.map((group) => (
+            {stepGroups.map((group, index) => (
               <StepGroup
                 key={group.stepId}
                 stepTitle={group.stepTitle}
@@ -717,6 +719,7 @@ export function TaskDetailFilesTab({
                 isMergeLockedSource={isMergeLockedSource}
                 onToggleFavorite={onToggleFavorite}
                 onToggleArchive={onToggleArchive}
+                defaultExpanded={index === stepGroups.length - 1}
               />
             ))}
 
