@@ -14,6 +14,8 @@ interface ThreadMessageProps {
   steps?: Doc<"steps">[];
   onArtifactClick?: (artifactPath: string, sourceTaskId?: Doc<"messages">["taskId"]) => void;
   taskIdOverride?: Doc<"messages">["taskId"];
+  /** All artifact paths across the task — used for fuzzy filename linking */
+  allArtifactPaths?: Set<string>;
 }
 
 function resolveStepTitle(message: Doc<"messages">, steps?: Doc<"steps">[]): string | undefined {
@@ -74,6 +76,7 @@ function areThreadMessagePropsEqual(
   return (
     previous.onArtifactClick === next.onArtifactClick &&
     previous.taskIdOverride === next.taskIdOverride &&
+    previous.allArtifactPaths === next.allArtifactPaths &&
     areMessagesRenderEquivalent(previous.message, next.message) &&
     resolveStepTitle(previous.message, previous.steps) ===
       resolveStepTitle(next.message, next.steps)
@@ -131,6 +134,7 @@ function ThreadMessageComponent({
   steps,
   onArtifactClick,
   taskIdOverride,
+  allArtifactPaths,
 }: ThreadMessageProps) {
   const styles = getMessageStyles(message);
   const resolvedTaskId = taskIdOverride ?? message.taskId;
@@ -150,14 +154,12 @@ function ThreadMessageComponent({
   // Resolve step title for step_completion messages (Option A: passed from parent)
   const stepTitle = resolveStepTitle(message, steps);
 
-  // Build set of artifact paths for inline file-path linkification.
-  // The outer memo(areThreadMessagePropsEqual) prevents re-renders when artifacts
-  // haven't structurally changed, so referential instability of message.artifacts
-  // within the same render is not a concern here.
-  const artifactPathSet = useMemo(
-    () => new Set(message.artifacts?.map((a) => a.path) ?? []),
-    [message.artifacts],
-  );
+  // Use task-wide artifact paths for linking (fuzzy filename resolution).
+  // Fall back to per-message artifacts when the parent doesn't provide the full set.
+  const linkablePaths = useMemo(() => {
+    if (allArtifactPaths && allArtifactPaths.size > 0) return allArtifactPaths;
+    return new Set(message.artifacts?.map((a) => a.path) ?? []);
+  }, [allArtifactPaths, message.artifacts]);
 
   const handleFilePathClick = useCallback(
     (path: string) => onArtifactClick?.(path, resolvedTaskId),
@@ -205,7 +207,7 @@ function ThreadMessageComponent({
             <MarkdownRenderer
               content={message.content}
               className="text-muted-foreground"
-              validArtifactPaths={artifactPathSet}
+              validArtifactPaths={linkablePaths}
               onFilePathClick={onArtifactClick ? handleFilePathClick : undefined}
             />
           )}

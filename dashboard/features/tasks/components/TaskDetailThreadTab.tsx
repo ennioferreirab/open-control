@@ -56,8 +56,21 @@ export function TaskDetailThreadTab({
 }: TaskDetailThreadTabProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [collapsedSteps, setCollapsedSteps] = useState<Set<string>>(new Set());
 
   const hasFilter = (filterStepIds?.size ?? 0) > 0;
+
+  // Collect ALL artifact paths across every message so any message can
+  // link to any file produced anywhere in the task.
+  const allArtifactPaths = useMemo(() => {
+    const paths = new Set<string>();
+    for (const msg of messages ?? []) {
+      for (const a of msg.artifacts ?? []) {
+        paths.add(a.path);
+      }
+    }
+    return paths;
+  }, [messages]);
 
   const completedSteps = useMemo(
     () => liveSteps?.filter((s) => s.status === "completed") ?? [],
@@ -253,6 +266,7 @@ export function TaskDetailThreadTab({
                                   steps={undefined}
                                   onArtifactClick={handleOpenArtifact}
                                   taskIdOverride={sourceThread.taskId}
+                                  allArtifactPaths={allArtifactPaths}
                                 />
                               ))
                             )}
@@ -299,6 +313,7 @@ export function TaskDetailThreadTab({
                       const isParallel = (pgMembers?.length ?? 0) > 1;
                       const stepIndex = nonDeletedSteps.findIndex((s) => s._id === step._id) + 1;
 
+                      const stepId = step._id;
                       threadElements.push(
                         <StepDivider
                           key={`divider-${msg.stepId}-${dividerIndex++}`}
@@ -320,11 +335,23 @@ export function TaskDetailThreadTab({
                               : undefined
                           }
                           isParallel={isParallel}
+                          isCollapsed={collapsedSteps.has(stepId)}
+                          onToggleCollapse={() => {
+                            setCollapsedSteps((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(stepId)) next.delete(stepId);
+                              else next.add(stepId);
+                              return next;
+                            });
+                          }}
                         />,
                       );
                     }
                     lastStepId = msg.stepId;
                   }
+
+                  // Skip messages for collapsed steps
+                  if (msg.stepId && collapsedSteps.has(msg.stepId)) continue;
 
                   // Determine step label for parallel messages
                   const msgStep = msg.stepId ? stepsById.get(msg.stepId) : undefined;
@@ -366,6 +393,7 @@ export function TaskDetailThreadTab({
                           message={msg}
                           steps={liveSteps ?? undefined}
                           onArtifactClick={handleOpenArtifact}
+                          allArtifactPaths={allArtifactPaths}
                         />
                       </ChatBubble>
                     </motion.div>,

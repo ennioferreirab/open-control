@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Markdown from "react-markdown";
+import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { linkifyFilePaths } from "@/lib/filePathLinker";
 import { Check, Copy } from "lucide-react";
@@ -101,6 +101,10 @@ export function MarkdownRenderer({
     >
       <Markdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => {
+          if (url.startsWith("artifact://")) return url;
+          return defaultUrlTransform(url);
+        }}
         components={{
           code({ className: cls, children, ...props }) {
             const match = /language-(\w+)/.exec(cls || "");

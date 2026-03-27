@@ -61,8 +61,16 @@ describe("linkifyFilePaths", () => {
     expect(linkifyFilePaths(input, paths)).toBe(input);
   });
 
-  it("does NOT modify text inside backtick code spans", () => {
+  it("linkifies valid artifact paths inside single-backtick code spans", () => {
     const paths = new Set(["output/file.md"]);
+    const input = "Run `output/file.md` to see results";
+    expect(linkifyFilePaths(input, paths)).toBe(
+      "Run [output/file.md](artifact://output/file.md) to see results",
+    );
+  });
+
+  it("does NOT linkify non-artifact paths inside single-backtick code spans", () => {
+    const paths = new Set(["output/other.md"]);
     const input = "Run `output/file.md` to see results";
     expect(linkifyFilePaths(input, paths)).toBe(input);
   });
@@ -125,5 +133,40 @@ describe("linkifyFilePaths", () => {
     expect(result).toContain("[output/report.md](artifact://output/report.md)");
     expect(result).toContain("https://example.com/other.md");
     expect(result).not.toContain("[https://");
+  });
+
+  // --- Fuzzy filename matching ---
+
+  it("resolves bare filename to full artifact path when unique match", () => {
+    const paths = new Set(["output/trend_report_adrenahunters.md"]);
+    const input = "Veja o trend_report_adrenahunters.md para detalhes";
+    const result = linkifyFilePaths(input, paths);
+    expect(result).toContain(
+      "[trend_report_adrenahunters.md](artifact://output/trend_report_adrenahunters.md)",
+    );
+  });
+
+  it("resolves bare filename inside backticks to full artifact path", () => {
+    const paths = new Set(["output/trend_report_adrenahunters.md"]);
+    const input = "Arquivo entregue: `trend_report_adrenahunters.md`";
+    const result = linkifyFilePaths(input, paths);
+    expect(result).toContain(
+      "[trend_report_adrenahunters.md](artifact://output/trend_report_adrenahunters.md)",
+    );
+  });
+
+  it("does NOT resolve bare filename when multiple artifacts share the same name", () => {
+    const paths = new Set(["output/report.md", "output/subdir/report.md"]);
+    const input = "See report.md for details";
+    expect(linkifyFilePaths(input, paths)).toBe(input);
+  });
+
+  it("resolves partial path to full artifact path when filename matches uniquely", () => {
+    const paths = new Set(["output/adrenahunters/2026-03-26_data.json"]);
+    const input = "Dados em 2026-03-26_data.json";
+    const result = linkifyFilePaths(input, paths);
+    expect(result).toContain(
+      "[2026-03-26_data.json](artifact://output/adrenahunters/2026-03-26_data.json)",
+    );
   });
 });

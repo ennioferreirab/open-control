@@ -140,19 +140,32 @@ function ArtifactItem({
 }
 
 export function ArtifactRenderer({ artifacts, onArtifactClick }: ArtifactRendererProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (!artifacts || artifacts.length === 0) {
     return null;
   }
 
+  const count = artifacts.length;
+  const summary = `${count} ${count === 1 ? "file" : "files"}`;
+
   return (
-    <div className="mt-2 flex w-full min-w-0 max-w-full flex-col gap-1.5">
-      {artifacts.map((artifact, idx) => (
-        <ArtifactItem
-          key={`${artifact.path}-${idx}`}
-          artifact={artifact}
-          onArtifactClick={onArtifactClick}
-        />
-      ))}
-    </div>
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <CollapsibleTrigger className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <span>{summary}</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1.5 flex w-full min-w-0 max-w-full flex-col gap-1.5">
+          {artifacts.map((artifact, idx) => (
+            <ArtifactItem
+              key={`${artifact.path}-${idx}`}
+              artifact={artifact}
+              onArtifactClick={onArtifactClick}
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

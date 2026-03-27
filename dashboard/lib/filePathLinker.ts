@@ -69,7 +69,17 @@ export function linkifyFilePaths(text: string, validPaths: Set<string>): string 
 
   return segments
     .map((seg) => {
-      if (seg.protected) return seg.text;
+      if (seg.type === "protected") return seg.text;
+      if (seg.type === "code_span") {
+        // Extract content between backticks and try to resolve to an artifact.
+        // If found, replace the entire code span with a clickable link.
+        const inner = seg.text.slice(1, -1);
+        const resolved = resolveArtifactPath(inner, validPaths);
+        if (resolved) {
+          return `[${inner}](artifact://${escapeMarkdownLinkPath(resolved)})`;
+        }
+        return seg.text;
+      }
       return replaceFilePathsInText(seg.text, validPaths);
     })
     .join("");
@@ -77,18 +87,19 @@ export function linkifyFilePaths(text: string, validPaths: Set<string>): string 
 
 interface Segment {
   text: string;
-  protected: boolean;
+  type: "plain" | "code_span" | "protected";
 }
 
 /**
- * Split text into protected segments (code spans, fenced code blocks,
- * bare URLs, existing markdown links) and plain text segments.
+ * Split text into protected segments (fenced code blocks, double-backtick spans,
+ * bare URLs, existing markdown links), code_span segments (single-backtick spans
+ * that may contain linkifiable artifact paths), and plain text segments.
  */
 function splitProtectedSegments(text: string): Segment[] {
   // Match (in order):
   //   1. Fenced code blocks: ```...```
   //   2. Double-backtick code spans: ``...``
-  //   3. Single-backtick code spans: `...`
+  //   3. Single-backtick code spans: `...`  (tagged as code_span for path extraction)
   //   4. Markdown links: [text](url)
   //   5. Bare URLs: http:// or https:// followed by non-whitespace
   const protectedRe = /```[\s\S]*?```|``[^`]*``|`[^`]+`|\[[^\]]*\]\([^)]*\)|https?:\/\/\S+/g;
@@ -98,14 +109,20 @@ function splitProtectedSegments(text: string): Segment[] {
 
   while ((match = protectedRe.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ text: text.slice(lastIndex, match.index), protected: false });
+      segments.push({ text: text.slice(lastIndex, match.index), type: "plain" });
     }
-    segments.push({ text: match[0], protected: true });
+    // Single-backtick code spans get the code_span type so we can
+    // still linkify valid artifact paths inside them.
+    const isSingleBacktick = match[0].startsWith("`") && !match[0].startsWith("``");
+    segments.push({
+      text: match[0],
+      type: isSingleBacktick ? "code_span" : "protected",
+    });
     lastIndex = match.index + match[0].length;
   }
 
   if (lastIndex < text.length) {
-    segments.push({ text: text.slice(lastIndex), protected: false });
+    segments.push({ text: text.slice(lastIndex), type: "plain" });
   }
 
   return segments;
@@ -116,8 +133,31 @@ function escapeMarkdownLinkPath(path: string): string {
 }
 
 /**
+ * Try to resolve a text match to a known artifact path.
+ * 1. Exact match in validPaths
+ * 2. Fuzzy: find a validPath whose filename (last segment) matches
+ *    — only when there's exactly one match (ambiguous = no link)
+ */
+function resolveArtifactPath(candidate: string, validPaths: Set<string>): string | undefined {
+  if (validPaths.has(candidate)) return candidate;
+
+  // Extract the bare filename from the candidate (last segment after /)
+  const filename = candidate.includes("/")
+    ? candidate.slice(candidate.lastIndexOf("/") + 1)
+    : candidate;
+
+  const matches: string[] = [];
+  for (const p of validPaths) {
+    const pFilename = p.includes("/") ? p.slice(p.lastIndexOf("/") + 1) : p;
+    if (pFilename === filename) matches.push(p);
+  }
+
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+/**
  * Replace file path matches in a plain text segment with artifact:// markdown links.
- * Only paths present in validPaths are linkified.
+ * Only paths that resolve to a known artifact are linkified.
  */
 function replaceFilePathsInText(text: string, validPaths: Set<string>): string {
   return text.replace(createFilePathRegex(), (match) => {
@@ -134,9 +174,9 @@ function replaceFilePathsInText(text: string, validPaths: Set<string>): string {
 
     if (!hasSlash && !KNOWN_EXTENSIONS.has(ext)) return match;
 
-    // Only linkify if the path is in the valid set
-    if (!validPaths.has(match)) return match;
+    const resolved = resolveArtifactPath(match, validPaths);
+    if (!resolved) return match;
 
-    return `[${match}](artifact://${escapeMarkdownLinkPath(match)})`;
+    return `[${match}](artifact://${escapeMarkdownLinkPath(resolved)})`;
   });
 }
