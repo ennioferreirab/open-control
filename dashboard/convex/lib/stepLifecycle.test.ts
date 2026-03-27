@@ -662,6 +662,10 @@ describe("skipped status", () => {
     expect(isValidStepTransition("skipped", "assigned")).toBe(true);
   });
 
+  it("skipped -> blocked is valid (un-skip with pending dependencies)", () => {
+    expect(isValidStepTransition("skipped", "blocked")).toBe(true);
+  });
+
   it("running -> skipped is NOT valid", () => {
     expect(isValidStepTransition("running", "skipped")).toBe(false);
   });
