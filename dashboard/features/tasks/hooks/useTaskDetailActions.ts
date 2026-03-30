@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { sanitizeExecutionPlan } from "@/lib/sanitizeExecutionPlan";
 import type { ExecutionPlan } from "@/lib/types";
 
 type ActivityEventType =
@@ -158,7 +159,7 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
       setIsKickingOff(true);
       setKickOffError("");
       try {
-        await kickOffMutation({ taskId, executionPlan: plan });
+        await kickOffMutation({ taskId, executionPlan: sanitizeExecutionPlan(plan) });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         setKickOffError(`Kick-off failed: ${message}`);
@@ -191,7 +192,7 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
       setIsResuming(true);
       setResumeError("");
       try {
-        await resumeTaskMutation({ taskId, executionPlan: plan });
+        await resumeTaskMutation({ taskId, executionPlan: sanitizeExecutionPlan(plan) });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         setResumeError(`Resume failed: ${message}`);
@@ -207,7 +208,7 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
       setIsSavingPlan(true);
       setSavePlanError("");
       try {
-        await saveExecutionPlanMutation({ taskId, executionPlan: plan });
+        await saveExecutionPlanMutation({ taskId, executionPlan: sanitizeExecutionPlan(plan) });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         setSavePlanError(`Save failed: ${message}`);
@@ -241,7 +242,7 @@ export function useTaskDetailActions(): TaskDetailActionsResult {
       setIsStartingInbox(true);
       setStartInboxError("");
       try {
-        await startInboxTaskMutation({ taskId, executionPlan: plan });
+        await startInboxTaskMutation({ taskId, executionPlan: sanitizeExecutionPlan(plan) });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         setStartInboxError(`Start failed: ${message}`);

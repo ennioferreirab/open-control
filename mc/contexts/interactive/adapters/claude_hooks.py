@@ -1,10 +1,17 @@
-"""Claude Code hook relay into the shared interactive supervision sink."""
+"""SHARED: Claude Code hook relay into the interactive supervision sink.
+
+Normalizes Claude Code hook events and forwards them to the supervision
+sink.  Used by both headless (provider-cli) and TUI execution paths.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from mc.contexts.interactive.supervision import normalize_provider_event
+from mc.contexts.interactive.supervision import (
+    SUPERVISION_METADATA_EXCLUDE_KEYS,
+    normalize_provider_event,
+)
 from mc.contexts.interactive.types import InteractiveSupervisionSink
 
 
@@ -34,7 +41,7 @@ class ClaudeHookRelay:
         raw_event["metadata"] = {
             key: value
             for key, value in payload.items()
-            if key not in {"hook_event_name", "session_id", "task_id", "step_id", "agent_name"}
+            if key not in SUPERVISION_METADATA_EXCLUDE_KEYS
         }
         event = normalize_provider_event(provider="claude-code", raw_event=raw_event)
         return self._sink.handle_event(event)

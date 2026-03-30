@@ -1,4 +1,4 @@
-"""Shared types for interactive provider adapters."""
+"""SHARED: Types for interactive provider adapters and session management."""
 
 from __future__ import annotations
 

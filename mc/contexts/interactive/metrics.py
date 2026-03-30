@@ -1,4 +1,4 @@
-"""In-memory metrics for interactive execution rollout."""
+"""SHARED: In-memory metrics for interactive execution rollout."""
 
 from __future__ import annotations
 

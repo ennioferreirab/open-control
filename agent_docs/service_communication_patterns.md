@@ -468,7 +468,7 @@ The CC bridge is a **stdio MCP server** launched as a subprocess by the agent ru
 ```json
 {
   "mcpServers": {
-    "openmc": {
+    "mc": {
       "command": "uv",
       "args": ["run", "python", "-m", "claude_code.mcp_bridge"],
       "env": {
@@ -485,7 +485,7 @@ The CC bridge is a **stdio MCP server** launched as a subprocess by the agent ru
 }
 ```
 
-The agent process (Claude Code CLI) reads `.mcp.json` on startup and spawns the bridge. The JSON key is `"openmc"` and the MCP `Server` name is `"mc"` — tools appear as `mcp__mc__<tool_name>` in the agent's tool palette (the prefix comes from the server name, not the JSON key).
+The agent process (Claude Code CLI) reads `.mcp.json` on startup and spawns the bridge. The JSON key `"mc"` determines the tool prefix — tools appear as `mcp__mc__<tool_name>` in the agent's tool palette.
 
 ### 3.3 Tool Catalog
 

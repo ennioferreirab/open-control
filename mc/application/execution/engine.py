@@ -111,7 +111,7 @@ class ExecutionEngine:
                     parser=_provider_parser,
                     registry=_provider_registry,
                     supervisor=_provider_supervisor,
-                    command=["claude", "--verbose", "--output-format", "stream-json", "-p"],
+                    command=["claude", "--verbose", "--output-format", "stream-json"],
                     cwd=".",
                 ),
             }

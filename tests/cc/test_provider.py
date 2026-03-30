@@ -201,8 +201,12 @@ class TestBuildCommand:
         ctx = _make_workspace(tmp_path)
         cmd = provider._build_command("x", agent, ctx, None)
 
-        idx = cmd.index("--disallowedTools")
-        assert cmd[idx + 1] == "Write"
+        disallowed = [cmd[i + 1] for i, t in enumerate(cmd) if t == "--disallowedTools"]
+        assert "Write" in disallowed
+        assert "AskUserQuestion" in disallowed
+        assert "CronCreate" in disallowed
+        assert "CronDelete" in disallowed
+        assert "CronList" in disallowed
 
     def test_session_resume_flag(self, tmp_path):
         """--resume flag is added when session_id is provided."""

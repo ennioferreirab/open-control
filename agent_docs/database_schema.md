@@ -43,7 +43,7 @@ Core task records with status lifecycle and execution plans.
 | `tags` | `v.optional(v.array(v.string()))` | |
 | `taskTimeout` | `v.optional(v.number())` | Milliseconds |
 | `interAgentTimeout` | `v.optional(v.number())` | Milliseconds |
-| `executionPlan` | `v.optional(v.any())` | Polymorphic plan shape |
+| `executionPlan` | `v.optional(v.any())` | Polymorphic plan shape. Workflow-generated plans persist per-step workflow metadata (`workflowStepId`, `workflowStepType`, `reviewSpecId`, `onRejectStepId`) plus optional plan-level `workflowSpecId` so paused-plan editing can reconcile materialized steps without losing human/review/system semantics. |
 | `supervisionMode` | `v.optional(v.union("autonomous", "supervised"))` | |
 | `stalledAt` | `v.optional(v.string())` | |
 | `isManual` | `v.optional(v.boolean())` | |

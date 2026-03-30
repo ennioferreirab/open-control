@@ -1,4 +1,8 @@
-"""Runtime-owned supervision sink for provider-backed interactive execution."""
+"""SHARED: Runtime-owned supervision sink for provider-backed execution.
+
+Projects normalized supervision events into MC state (task/step transitions,
+activity log).  Used by both headless (ProviderCliRunnerStrategy) and TUI paths.
+"""
 
 from __future__ import annotations
 
@@ -119,6 +123,22 @@ class InteractiveExecutionSupervisor:
             self._bridge.mutation("sessionActivityLog:append", activity_payload)
         except Exception:
             logger.debug("[supervisor] Activity log write failed", exc_info=True)
+
+        # Surface tool/session errors in the Live tab thread so the user can
+        # see what went wrong without digging into the activity log.
+        if merged_event.error and merged_event.task_id:
+            try:
+                tool_name = event.metadata.get("tool_name") if event.metadata else None
+                error_prefix = f"`{tool_name}` error" if tool_name else "Error"
+                error_content = f"{error_prefix}: {merged_event.error}"
+                self._bridge.post_system_error(
+                    task_id=merged_event.task_id,
+                    content=error_content,
+                    step_id=merged_event.step_id,
+                )
+            except Exception:
+                logger.debug("[supervisor] Failed to post error to thread", exc_info=True)
+
         if _string_or_none(metadata.get("control_mode")) == "human":
             return updated_metadata
         current_control_mode = _string_or_none(updated_metadata.get("control_mode"))

@@ -8,6 +8,19 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 // Stub scrollIntoView for jsdom (used by TaskDetailThreadTab on mount)
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 });
 
 // Mock convex/react
@@ -1937,6 +1950,139 @@ describe("TaskDetailSheet", () => {
     await waitFor(() => {
       expect(screen.getByText("Other files")).toBeInTheDocument();
     });
+  });
+
+  it("deduplicates rerun workflow steps in the context rail plan and file groups", async () => {
+    const workflowTask = {
+      ...baseTask,
+      status: "in_progress" as const,
+      files: [
+        {
+          name: "brief_v1.md",
+          type: "text/markdown",
+          size: 1024,
+          subfolder: "output",
+          stepId: "step-brief-old" as never,
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          name: "brief_v2.md",
+          type: "text/markdown",
+          size: 1024,
+          subfolder: "output",
+          stepId: "step-brief-new" as never,
+          uploadedAt: "2026-01-01T00:01:00Z",
+        },
+        {
+          name: "brand_v1.md",
+          type: "text/markdown",
+          size: 1024,
+          subfolder: "output",
+          stepId: "step-brand-old" as never,
+          uploadedAt: "2026-01-01T00:02:00Z",
+        },
+        {
+          name: "brand_v2.md",
+          type: "text/markdown",
+          size: 1024,
+          subfolder: "output",
+          stepId: "step-brand-new" as never,
+          uploadedAt: "2026-01-01T00:03:00Z",
+        },
+      ],
+      executionPlan: {
+        generatedAt: "2026-01-01T00:00:00.000Z",
+        generatedBy: "workflow" as const,
+        steps: [
+          {
+            tempId: "brief-normalization",
+            title: "Normalize Brief",
+            description: "Create the execution brief",
+            assignedAgent: "strategist",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 1,
+          },
+          {
+            tempId: "brand-brief",
+            title: "Build Brand Brief",
+            description: "Research the brand",
+            assignedAgent: "brand-sherlock",
+            blockedBy: ["brief-normalization"],
+            parallelGroup: 2,
+            order: 2,
+          },
+        ],
+      },
+    };
+
+    const duplicateWorkflowSteps: StepDoc[] = [
+      {
+        _id: "step-brief-old" as never,
+        _creationTime: 1,
+        taskId: "task1" as never,
+        title: "Normalize Brief",
+        description: "Create the execution brief",
+        assignedAgent: "strategist",
+        workflowStepId: "brief-normalization",
+        status: "planned",
+        parallelGroup: 1,
+        order: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        _id: "step-brand-old" as never,
+        _creationTime: 2,
+        taskId: "task1" as never,
+        title: "Build Brand Brief",
+        description: "Research the brand",
+        assignedAgent: "brand-sherlock",
+        workflowStepId: "brand-brief",
+        status: "planned",
+        parallelGroup: 2,
+        order: 2,
+        createdAt: "2026-01-01T00:00:01.000Z",
+      },
+      {
+        _id: "step-brief-new" as never,
+        _creationTime: 3,
+        taskId: "task1" as never,
+        title: "Normalize Brief",
+        description: "Create the execution brief",
+        assignedAgent: "strategist",
+        status: "completed",
+        parallelGroup: 1,
+        order: 1,
+        createdAt: "2026-01-01T00:10:00.000Z",
+      },
+      {
+        _id: "step-brand-new" as never,
+        _creationTime: 4,
+        taskId: "task1" as never,
+        title: "Build Brand Brief",
+        description: "Research the brand",
+        assignedAgent: "brand-sherlock",
+        status: "running",
+        parallelGroup: 2,
+        order: 2,
+        createdAt: "2026-01-01T00:11:00.000Z",
+      },
+    ];
+
+    stableQueryMock(workflowTask, [], duplicateWorkflowSteps, null, { isWorkflowTask: true });
+
+    render(<TaskDetailSheet taskId={"task1" as never} onClose={() => {}} />);
+    fireEvent.click(screen.getByLabelText("Expand rail"));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("mini-plan-step")).toHaveLength(2);
+    });
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+
+    const fileGroupHeaders = screen.getAllByTestId("file-step-group-header");
+    const headerLabels = fileGroupHeaders.map((header) => header.textContent ?? "");
+    expect(headerLabels.filter((label) => label.includes("Normalize Brief"))).toHaveLength(1);
+    expect(headerLabels.filter((label) => label.includes("Build Brand Brief"))).toHaveLength(1);
   });
 
   // Files display moved to rail with FileStepGroup; old source-group layout no longer applies

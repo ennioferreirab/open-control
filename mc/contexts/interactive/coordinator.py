@@ -1,4 +1,9 @@
-"""Provider-aware orchestration for interactive sessions."""
+"""TUI-ONLY: Provider-aware orchestration for interactive tmux sessions.
+
+Used exclusively for authoring flows (create squad, etc.) where a real
+terminal is opened for the user.  NOT used for agent execution or chat —
+those go through the headless ProviderCliRunnerStrategy.
+"""
 
 from __future__ import annotations
 

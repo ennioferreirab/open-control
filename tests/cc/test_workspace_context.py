@@ -188,9 +188,8 @@ class TestMemoryInjection:
 class TestSkillsSummary:
     def test_skills_summary_generated(self, tmp_path: Path) -> None:
         """AC: Skills section appears in CLAUDE.md when a skill is mapped."""
-        # Create a skill in the agent workspace's skills directory
-        agent_workspace = tmp_path / "agents" / "test-agent"
-        skill_dir = agent_workspace / "skills" / "my-skill"
+        # Create a skill in the global workspace skills directory
+        skill_dir = tmp_path / "workspace" / "skills" / "my-skill"
         skill_dir.mkdir(parents=True, exist_ok=True)
         (skill_dir / "SKILL.md").write_text(
             "---\ndescription: My awesome skill\n---\n\n# My Skill\nDoes things.",
@@ -205,8 +204,7 @@ class TestSkillsSummary:
 
     def test_skills_summary_includes_configured_skill_name(self, tmp_path: Path) -> None:
         """Configured skill name appears in skills summary."""
-        agent_workspace = tmp_path / "agents" / "test-agent"
-        skill_dir = agent_workspace / "skills" / "custom-skill"
+        skill_dir = tmp_path / "workspace" / "skills" / "custom-skill"
         skill_dir.mkdir(parents=True, exist_ok=True)
         (skill_dir / "SKILL.md").write_text(
             "---\ndescription: Custom skill for testing\n---\n\n# Custom Skill",
@@ -233,8 +231,7 @@ class TestSkillsSummary:
         Verify that when CLAUDE.md is generated, the .claude/skills/ symlinks
         already exist (i.e., _map_skills was called first).
         """
-        agent_workspace = tmp_path / "agents" / "test-agent"
-        skill_dir = agent_workspace / "skills" / "test-skill"
+        skill_dir = tmp_path / "workspace" / "skills" / "test-skill"
         skill_dir.mkdir(parents=True, exist_ok=True)
         (skill_dir / "SKILL.md").write_text("# Test Skill", encoding="utf-8")
 
@@ -244,9 +241,9 @@ class TestSkillsSummary:
         original_map_skills = manager._map_skills
         original_gen_claude_md = manager._generate_claude_md
 
-        def patched_map_skills(workspace: Path, skills: list[str]) -> None:
+        def patched_map_skills(workspace: Path, skills: list[str], **kwargs) -> None:
             call_log.append("_map_skills")
-            original_map_skills(workspace, skills)
+            original_map_skills(workspace, skills, **kwargs)
 
         def patched_gen_claude_md(workspace: Path, config: AgentData, **kwargs) -> None:
             call_log.append("_generate_claude_md")
@@ -256,14 +253,14 @@ class TestSkillsSummary:
         manager._generate_claude_md = patched_gen_claude_md  # type: ignore[method-assign]
 
         agent = _make_agent(skills=["test-skill"])
-        manager.prepare("test-agent", agent, "task123")
+        ctx = manager.prepare("test-agent", agent, "task123")
 
         assert call_log == ["_map_skills", "_generate_claude_md"], (
             f"Expected _map_skills before _generate_claude_md, got: {call_log}"
         )
 
-        # Also verify the skill copy is in place
-        dest = agent_workspace / ".claude" / "skills" / "test-skill"
+        # Also verify the skill copy is in the ephemeral CWD
+        dest = ctx.cwd / ".claude" / "skills" / "test-skill"
         assert dest.is_dir(), "Skill was not copied"
 
 
@@ -315,13 +312,12 @@ class TestWorkspaceGuidance:
         assert "## Workspace" in content
 
     def test_workspace_guidance_contains_path(self, tmp_path: Path) -> None:
-        """## Workspace section includes the resolved workspace path."""
+        """## Workspace section includes the ephemeral workspace path."""
         agent = _make_agent()
         content = _prepare_and_read(tmp_path, agent)
 
-        expected_workspace = tmp_path / "agents" / "test-agent"
-        expected_ws_str = str(expected_workspace.resolve())
-        assert expected_ws_str in content
+        # Workspace path is now the container-local ephemeral CWD
+        assert "/tmp/mc-workspaces/" in content
 
     def test_workspace_guidance_contains_memory_path(self, tmp_path: Path) -> None:
         """## Workspace section references the memory/MEMORY.md path."""
@@ -349,8 +345,8 @@ class TestWorkspaceGuidance:
             board_name="default",
         ).claude_md.read_text(encoding="utf-8")
 
-        expected = tmp_path / "boards" / "default" / "artifacts"
-        assert str(expected.resolve()) in content
+        # Artifacts are copied to the ephemeral CWD
+        assert "artifacts" in content
         assert "Board artifacts" in content
 
 

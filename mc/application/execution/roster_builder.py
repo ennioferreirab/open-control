@@ -61,6 +61,59 @@ def load_agent_data(agent_name: str) -> AgentData | None:
     return result if isinstance(result, AgentData) else None
 
 
+def hydrate_agent_data(
+    agent_name: str,
+    *,
+    convex_agent: dict[str, Any] | None,
+    default_backend: str = "claude-code",
+) -> AgentData | None:
+    """Hydrate AgentData from YAML first, then fall back to Convex-only agents.
+
+    This keeps execution contexts working for system agents such as low-agent,
+    which exist only in Convex and have no local YAML config directory.
+    """
+
+    agent_data = load_agent_data(agent_name)
+    if agent_data is None:
+        if convex_agent is None:
+            return None
+        agent_data = AgentData(
+            name=agent_name,
+            display_name=convex_agent.get("display_name") or agent_name,
+            role=convex_agent.get("role") or "agent",
+            prompt=convex_agent.get("prompt"),
+            soul=convex_agent.get("soul"),
+            skills=convex_agent.get("skills") or [],
+            model=convex_agent.get("model"),
+            backend=convex_agent.get("backend") or default_backend,
+            interactive_provider=convex_agent.get("interactive_provider")
+            or convex_agent.get("backend")
+            or default_backend,
+            is_system=bool(convex_agent.get("is_system") or convex_agent.get("isSystem")),
+        )
+
+    prompt, model, skills = sync_agent_from_convex(
+        agent_name,
+        agent_data.prompt,
+        agent_data.model,
+        agent_data.skills,
+        convex_agent,
+    )
+    agent_data.prompt = prompt
+    agent_data.model = model
+    agent_data.skills = skills or []
+    if convex_agent:
+        agent_data.display_name = convex_agent.get("display_name") or agent_data.display_name
+        agent_data.role = convex_agent.get("role") or agent_data.role
+        agent_data.backend = convex_agent.get("backend") or agent_data.backend
+        agent_data.interactive_provider = (
+            convex_agent.get("interactive_provider")
+            or agent_data.interactive_provider
+            or agent_data.backend
+        )
+    return agent_data
+
+
 def sync_agent_from_convex(
     agent_name: str,
     agent_prompt: str | None,

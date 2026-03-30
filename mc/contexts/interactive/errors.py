@@ -1,4 +1,4 @@
-"""Interactive session error types."""
+"""SHARED: Interactive session error types."""
 
 from __future__ import annotations
 

@@ -121,6 +121,15 @@ vi.mock("@xyflow/react", () => ({
                 Retry
               </button>
             )}
+            {n.data.onDeleteStep && (
+              <button
+                type="button"
+                data-testid={`flow-node-delete-${n.id}`}
+                onClick={() => n.data.onDeleteStep?.(n.id)}
+              >
+                Delete
+              </button>
+            )}
             {n.data.onAddSequential && (
               <button
                 type="button"
@@ -319,6 +328,121 @@ describe("ExecutionPlanTab", () => {
     expect(screen.queryByTestId("plan-editor")).not.toBeInTheDocument();
   });
 
+  it("shows delete controls for steps when the task is paused", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", description: "Step one", title: "One" })],
+      generatedAt: "2026-01-01T00:00:00Z",
+      generatedBy: "orchestrator-agent",
+      createdAt: "2026-01-01",
+    };
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        isEditMode={true}
+        isPaused={true}
+        taskStatus="review"
+        taskId="task-abc"
+        onLocalPlanChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("flow-node-delete-s1")).toBeInTheDocument();
+  });
+
+  it("hides delete controls and blocks editing for completed steps when the task is paused", () => {
+    const plan = {
+      steps: [
+        makeStep({
+          stepId: "s1",
+          description: "Step one",
+          title: "One",
+          status: "completed",
+        }),
+      ],
+      generatedAt: "2026-01-01T00:00:00Z",
+      generatedBy: "orchestrator-agent",
+      createdAt: "2026-01-01",
+    };
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        isEditMode={true}
+        isPaused={true}
+        taskStatus="review"
+        taskId="task-abc"
+        onLocalPlanChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("flow-node-delete-s1")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("flow-node-s1"));
+
+    expect(screen.queryByTestId("edit-step-form")).not.toBeInTheDocument();
+  });
+
+  it("hides delete controls for review editing when the task is not paused", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", description: "Step one", title: "One" })],
+      generatedAt: "2026-01-01T00:00:00Z",
+      generatedBy: "orchestrator-agent",
+      createdAt: "2026-01-01",
+    };
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        isEditMode={true}
+        isPaused={false}
+        taskStatus="review"
+        taskId="task-abc"
+        onLocalPlanChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("flow-node-delete-s1")).not.toBeInTheDocument();
+  });
+
+  it("unlocks the edit form for paused review tasks even when the live step status is running", () => {
+    const plan = {
+      steps: [makeStep({ stepId: "s1", description: "Step one", title: "One", status: "planned" })],
+      generatedAt: "2026-01-01T00:00:00Z",
+      generatedBy: "orchestrator-agent",
+      createdAt: "2026-01-01",
+    };
+    const onLocalPlanChange = vi.fn();
+
+    render(
+      <ExecutionPlanTab
+        executionPlan={plan}
+        liveSteps={[
+          {
+            _id: "s1-live",
+            title: "One",
+            description: "Step one",
+            assignedAgent: "agent-a",
+            status: "running",
+            parallelGroup: 1,
+            order: 1,
+          },
+        ]}
+        isEditMode={true}
+        isPaused={true}
+        taskStatus="review"
+        taskId="task-abc"
+        onLocalPlanChange={onLocalPlanChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("flow-node-s1"));
+
+    expect(screen.getByTestId("edit-step-form")).toBeInTheDocument();
+    expect(screen.queryByText("Read-only (running)")).not.toBeInTheDocument();
+    expect(screen.getByTestId("edit-step-save")).toBeInTheDocument();
+  });
+
   it("renders read-only view when isEditMode=false", () => {
     const plan = {
       steps: [makeStep({ stepId: "s1", description: "Step one" })],
@@ -434,7 +558,7 @@ describe("ExecutionPlanTab", () => {
       />,
     );
 
-    expect(screen.getByTestId("flow-node-new-step-1")).toHaveTextContent(
+    expect(screen.getByTestId("flow-node-step_1")).toHaveTextContent(
       "Gerar logotipo institucional",
     );
     expect(screen.queryByText("Merge task A with B")).not.toBeInTheDocument();
@@ -864,6 +988,116 @@ describe("ExecutionPlanTab", () => {
       // step_2 should now be rerouted to depend on the new step
       const step2 = updatedPlan.steps.find((s: { tempId: string }) => s.tempId === "step_2");
       expect(step2.blockedBy).toEqual([newStep.tempId]);
+    });
+
+    it("keeps canonical tempIds when editing a paused review plan with materialized step ids", () => {
+      const onLocalPlanChange = vi.fn();
+      const pausedPlan = {
+        steps: [
+          {
+            tempId: "step_done",
+            stepId: "step-doc-1",
+            title: "Normaliza o briefing",
+            description: "Consolida o briefing",
+            assignedAgent: "strategist",
+            blockedBy: [] as string[],
+            parallelGroup: 1,
+            order: 1,
+          },
+          {
+            tempId: "step_future",
+            stepId: "step-doc-2",
+            title: "Grava aprendizados aprovados",
+            description: "Persistir learnings",
+            assignedAgent: "low-agent",
+            blockedBy: ["step_done"] as string[],
+            parallelGroup: 2,
+            order: 2,
+          },
+        ],
+        generatedAt: "2026-01-01T00:00:00Z",
+        generatedBy: "orchestrator-agent" as const,
+        createdAt: "2026-01-01",
+      };
+
+      render(
+        <ExecutionPlanTab
+          executionPlan={pausedPlan}
+          taskId="task-abc"
+          taskStatus="review"
+          isPaused={true}
+          onLocalPlanChange={onLocalPlanChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId("flow-node-add-sequential-step_done"));
+
+      expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
+      const updatedPlan = onLocalPlanChange.mock.calls[0][0];
+      expect(updatedPlan.steps.map((step: { tempId: string }) => step.tempId)).toEqual(
+        expect.arrayContaining(["step_done", "step_future"]),
+      );
+      const insertedStep = updatedPlan.steps.find(
+        (step: { tempId: string }) => !["step_done", "step_future"].includes(step.tempId),
+      );
+      expect(insertedStep).toBeDefined();
+      expect(insertedStep.blockedBy).toEqual(["step_done"]);
+      const futureStep = updatedPlan.steps.find(
+        (step: { tempId: string }) => step.tempId === "step_future",
+      );
+      expect(futureStep.blockedBy).toEqual([insertedStep.tempId]);
+    });
+
+    it("preserves workflow gate metadata when editing a paused human-approval step", () => {
+      const onLocalPlanChange = vi.fn();
+      const pausedWorkflowPlan = {
+        steps: [
+          {
+            tempId: "human_approval",
+            stepId: "step-doc-human",
+            title: "Aprovação humana",
+            description: "Aprovação final do lote pronto para publicação.",
+            assignedAgent: "",
+            blockedBy: ["review_assets"],
+            parallelGroup: 3,
+            order: 3,
+            workflowStepId: "human_approval",
+            workflowStepType: "human",
+          },
+        ],
+        generatedAt: "2026-01-01T00:00:00Z",
+        generatedBy: "workflow" as const,
+        createdAt: "2026-01-01",
+      };
+
+      render(
+        <ExecutionPlanTab
+          executionPlan={pausedWorkflowPlan}
+          taskId="task-abc"
+          taskStatus="review"
+          isPaused={true}
+          onLocalPlanChange={onLocalPlanChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId("flow-node-human_approval"));
+      fireEvent.change(screen.getByTestId("edit-step-description"), {
+        target: { value: "Aprovação final do lote pronto para publicação. Revisado." },
+      });
+      fireEvent.click(screen.getByTestId("edit-step-save"));
+
+      expect(onLocalPlanChange).toHaveBeenCalledTimes(1);
+      const updatedPlan = onLocalPlanChange.mock.calls[0][0];
+      const updatedStep = updatedPlan.steps.find(
+        (step: { tempId: string }) => step.tempId === "human_approval",
+      );
+      expect(updatedStep).toMatchObject({
+        tempId: "human_approval",
+        assignedAgent: "",
+        description: "Aprovação final do lote pronto para publicação. Revisado.",
+        workflowStepId: "human_approval",
+        workflowStepType: "human",
+      });
     });
 
     it("clicking parallel button inserts step with same blockers as source", () => {

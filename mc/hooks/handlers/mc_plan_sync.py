@@ -62,7 +62,15 @@ class MCPlanSyncHandler(BaseHandler):
             if mcp_json.is_file():
                 try:
                     config = json.loads(mcp_json.read_text())
-                    env = config.get("mcpServers", {}).get("nanobot", {}).get("env", {})
+                    # Find the first MCP server that has MC_SOCKET_PATH
+                    servers = config.get("mcpServers", {})
+                    env = {}
+                    for srv in servers.values():
+                        if isinstance(srv, dict) and "env" in srv:
+                            candidate = srv["env"]
+                            if isinstance(candidate, dict) and candidate.get("MC_SOCKET_PATH"):
+                                env = candidate
+                                break
                     sp = env.get("MC_SOCKET_PATH")
                     if sp and Path(sp).exists():
                         return {

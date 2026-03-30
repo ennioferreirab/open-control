@@ -1,4 +1,8 @@
-"""Canonical supervision event types for provider-backed interactive sessions."""
+"""SHARED: Canonical supervision event types for provider-backed execution.
+
+Defines the InteractiveSupervisionEvent dataclass and valid event kinds.
+Used by both headless and TUI execution paths.
+"""
 
 from __future__ import annotations
 

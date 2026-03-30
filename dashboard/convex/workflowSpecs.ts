@@ -16,6 +16,9 @@ type WorkflowStepRecord = {
 
 function validateReviewSteps(steps: WorkflowStepRecord[] | undefined): void {
   for (const step of steps ?? []) {
+    if (step.type === "agent" && !step.agentId) {
+      throw new ConvexError(`Agent step "${step.id}" requires agentId`);
+    }
     if (step.type !== "review") {
       continue;
     }

@@ -33,7 +33,7 @@ try:
     from nanobot.agent.skills import (
         BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR,  # type: ignore[import]
     )
-except ImportError:  # pragma: no cover – vendor package not on path
+except ImportError:  # pragma: no cover - vendor package not on path
     _VENDOR_SKILLS_DIR = Path(__file__).parent.parent.parent / "nanobot" / "nanobot" / "skills"
 
 # Project root — used to anchor `uv run --project` in hook commands so that
@@ -61,6 +61,9 @@ Use these tools via the `mcp__mc__` prefix:
 1. Call `mcp__mc__ask_user` with your question.
 2. The call BLOCKS until the user replies — wait for it.
 3. Only then proceed to the next question or action.
+
+Native `AskUserQuestion` and built-in `Cron*` tools are disabled in Mission Control sessions.
+Always use the `mcp__mc__*` tools instead of searching for or relying on those native variants.
 
 Examples of when you MUST use `mcp__mc__ask_user`:
 - Running a questionnaire or wizard (either one question at a time, or a short structured questions array)

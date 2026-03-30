@@ -7,6 +7,7 @@ import {
   taskFileMetadataValidator,
   taskFilesValidator,
   taskStatusValidator,
+  workflowStepTypeValidator,
 } from "./schema";
 import { buildTaskDetailView } from "./lib/taskDetailView";
 import {
@@ -467,10 +468,15 @@ const executionPlanSchema = v.object({
       parallelGroup: v.number(),
       order: v.number(),
       attachedFiles: v.optional(v.array(v.string())),
+      workflowStepId: v.optional(v.string()),
+      workflowStepType: v.optional(workflowStepTypeValidator),
+      reviewSpecId: v.optional(v.id("reviewSpecs")),
+      onRejectStepId: v.optional(v.string()),
     }),
   ),
   generatedAt: v.string(),
   generatedBy: v.union(v.literal("orchestrator-agent"), v.literal("workflow")),
+  workflowSpecId: v.optional(v.string()),
 });
 
 /**

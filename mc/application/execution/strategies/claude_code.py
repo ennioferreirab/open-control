@@ -80,8 +80,14 @@ class _CCStrategyAdapter:
 
 
 class ClaudeCodeRunnerStrategy:
-    """Runs agent work through the Claude Code CLI.
+    """DEPRECATED: Runs agent work through the Claude Code Python SDK.
 
+    This strategy is superseded by ProviderCliRunnerStrategy which uses the
+    headless CLI path (``-p`` flag, JSONL output).  Kept for backward
+    compatibility with cc_step_runner and executor paths that still reference
+    RunnerType.CLAUDE_CODE.  Will be removed in a future PR.
+
+    Original description:
     Mirrors the execution path in mc.executor.TaskExecutor._execute_cc_task()
     but returns a structured ExecutionResult instead of directly mutating
     task state.
@@ -290,6 +296,17 @@ class ClaudeCodeRunnerStrategy:
                 self._ask_user_registry.unregister(request.task_id)
             await ipc_server.stop()
 
+        # Sync container-local workspace data (output files, memory) back to
+        # the persistent bind-mount.  Must run BEFORE artifact collection so
+        # that sync_task_output_files finds the files on the bind-mount.
+        from claude_code.workspace import sync_workspace_back
+
+        sync_workspace_back(ws_ctx)
+
+        # Use the persistent memory path for post-processing (relocate_invalid_memory_files etc.)
+        # so it operates on the canonical bind-mount location, not the ephemeral copy.
+        mem_ws = ws_ctx.persistent_memory_workspace or ws_ctx.cwd
+
         if result_obj.is_error:
             return ExecutionResult(
                 success=False,
@@ -297,7 +314,7 @@ class ClaudeCodeRunnerStrategy:
                 error_message=f"Claude Code error: {result_obj.output[:1000]}",
                 cost_usd=result_obj.cost_usd,
                 session_id=result_obj.session_id,
-                memory_workspace=ws_ctx.cwd,
+                memory_workspace=mem_ws,
             )
 
         return ExecutionResult(
@@ -305,5 +322,5 @@ class ClaudeCodeRunnerStrategy:
             output=result_obj.output,
             cost_usd=result_obj.cost_usd,
             session_id=result_obj.session_id,
-            memory_workspace=ws_ctx.cwd,
+            memory_workspace=mem_ws,
         )

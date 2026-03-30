@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 from mc.application.execution.request import RunnerType
+
+logger = logging.getLogger(__name__)
 
 INTERACTIVE_MODE_ENV = "MC_INTERACTIVE_EXECUTION_MODE"
 
@@ -37,7 +40,13 @@ def _resolve_interactive_runner_type(request: Any) -> RunnerType:
         )
 
     # Explicit legacy escape hatch: interactive-tui routes to the PTY/tmux runtime.
+    # TUI should only be used for authoring sessions (create squad, etc.).
     if mode == "interactive-tui":
+        logger.warning(
+            "[interactive-mode] Legacy TUI escape hatch active for '%s'. "
+            "TUI should only be used for authoring sessions (create squad).",
+            request.agent_name,
+        )
         return RunnerType.INTERACTIVE_TUI
 
     # All other values (provider-cli, interactive-first, or unrecognised) default

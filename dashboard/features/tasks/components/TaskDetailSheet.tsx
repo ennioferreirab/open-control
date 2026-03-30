@@ -71,6 +71,173 @@ function _getDisplayFileKey(file: { name: string; subfolder: string; sourceTaskI
   return `${file.sourceTaskId ?? "local"}:${file.subfolder}:${file.name}`;
 }
 
+type RailLiveStep = {
+  _id: string;
+  _creationTime?: number;
+  title?: string;
+  description?: string;
+  assignedAgent?: string;
+  status: string;
+  parallelGroup: number;
+  order: number;
+  workflowStepId?: string;
+  createdAt?: string;
+};
+
+type CanonicalRailStep = MiniPlanStep & {
+  canonicalId: string;
+  order: number;
+  liveIds: string[];
+};
+
+function getStepDisplayTitle(step: { title?: string; description?: string }): string {
+  return step.title ?? step.description?.slice(0, 40) ?? "Untitled";
+}
+
+function getLiveStepRecency(step: RailLiveStep): number {
+  if (step.createdAt) {
+    const parsed = Date.parse(step.createdAt);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return step._creationTime ?? 0;
+}
+
+function matchesPlanStep(
+  planStep: ExecutionPlan["steps"][number],
+  liveStep: RailLiveStep,
+): boolean {
+  if (liveStep.workflowStepId && liveStep.workflowStepId === planStep.tempId) return true;
+
+  const sameParallelGroup = liveStep.parallelGroup === planStep.parallelGroup;
+  const sameTitle = (liveStep.title ?? "") === (planStep.title ?? "");
+  const sameDescription = liveStep.description === planStep.description;
+
+  if (sameParallelGroup && sameTitle && sameDescription) return true;
+  if (sameParallelGroup && sameTitle && liveStep.order === planStep.order) return true;
+  if (sameTitle && sameDescription) return true;
+
+  return false;
+}
+
+function buildCanonicalRailSteps(
+  executionPlan: ExecutionPlan | null | undefined,
+  liveSteps: RailLiveStep[] | undefined,
+  liveStepIdsWithSessions: string[],
+): {
+  steps: CanonicalRailStep[];
+  liveIdToCanonicalId: Map<string, string>;
+  stepMetaByCanonicalId: Map<string, { title: string; order: number; status: string }>;
+} {
+  const filteredLiveSteps = (liveSteps ?? []).filter((step) => step.status !== "deleted");
+  const liveIdToCanonicalId = new Map<string, string>();
+  const stepMetaByCanonicalId = new Map<string, { title: string; order: number; status: string }>();
+  const liveStepById = new Map(filteredLiveSteps.map((step) => [step._id, step]));
+
+  if (!executionPlan?.steps?.length) {
+    const deduped = new Map<string, CanonicalRailStep>();
+
+    for (const step of filteredLiveSteps) {
+      const canonicalId =
+        step.workflowStepId ??
+        `${step.parallelGroup}:${step.order}:${step.title ?? ""}:${step.description ?? ""}`;
+      const existing = deduped.get(canonicalId);
+      const stepRecency = getLiveStepRecency(step);
+      const existingRecency = existing
+        ? getLiveStepRecency(liveStepById.get(existing.id) ?? step)
+        : -1;
+      if (!existing || stepRecency >= existingRecency) {
+        deduped.set(canonicalId, {
+          canonicalId,
+          id: step._id,
+          title: getStepDisplayTitle(step),
+          assignedAgent: step.assignedAgent ?? "unassigned",
+          status: step.status,
+          parallelGroup: step.parallelGroup,
+          hasLiveSession: liveStepIdsWithSessions.includes(step._id),
+          order: step.order,
+          liveIds: [step._id],
+        });
+      } else {
+        existing.liveIds.push(step._id);
+      }
+      liveIdToCanonicalId.set(step._id, canonicalId);
+    }
+
+    const steps = Array.from(deduped.values()).sort((a, b) => a.order - b.order);
+    for (const step of steps) {
+      stepMetaByCanonicalId.set(step.canonicalId, {
+        title: step.title,
+        order: step.order,
+        status: step.status,
+      });
+    }
+    return { steps, liveIdToCanonicalId, stepMetaByCanonicalId };
+  }
+
+  const remaining = [...filteredLiveSteps];
+  const canonicalSteps: CanonicalRailStep[] = [];
+
+  for (const planStep of executionPlan.steps) {
+    const matching = remaining.filter((liveStep) => matchesPlanStep(planStep, liveStep));
+    for (const liveStep of matching) {
+      const index = remaining.findIndex((candidate) => candidate._id === liveStep._id);
+      if (index >= 0) remaining.splice(index, 1);
+    }
+
+    const representative = [...matching].sort(
+      (a, b) => getLiveStepRecency(b) - getLiveStepRecency(a),
+    )[0];
+    const canonicalId = planStep.tempId;
+    const canonicalStep: CanonicalRailStep = {
+      canonicalId,
+      id: representative?._id ?? canonicalId,
+      title: representative?.title ?? planStep.title ?? planStep.description,
+      assignedAgent: representative?.assignedAgent ?? planStep.assignedAgent ?? "unassigned",
+      status: representative?.status ?? "planned",
+      parallelGroup: representative?.parallelGroup ?? planStep.parallelGroup,
+      hasLiveSession: matching.some((step) => liveStepIdsWithSessions.includes(step._id)),
+      order: planStep.order,
+      liveIds: matching.map((step) => step._id),
+    };
+
+    canonicalSteps.push(canonicalStep);
+    stepMetaByCanonicalId.set(canonicalId, {
+      title: canonicalStep.title,
+      order: canonicalStep.order,
+      status: canonicalStep.status,
+    });
+    for (const liveId of canonicalStep.liveIds) {
+      liveIdToCanonicalId.set(liveId, canonicalId);
+    }
+  }
+
+  const appended = remaining
+    .map((step) => ({
+      canonicalId: step._id,
+      id: step._id,
+      title: getStepDisplayTitle(step),
+      assignedAgent: step.assignedAgent ?? "unassigned",
+      status: step.status,
+      parallelGroup: step.parallelGroup,
+      hasLiveSession: liveStepIdsWithSessions.includes(step._id),
+      order: step.order,
+      liveIds: [step._id],
+    }))
+    .sort((a, b) => a.order - b.order);
+
+  for (const step of appended) {
+    canonicalSteps.push(step);
+    liveIdToCanonicalId.set(step.id, step.canonicalId);
+    stepMetaByCanonicalId.set(step.canonicalId, {
+      title: step.title,
+      order: step.order,
+      status: step.status,
+    });
+  }
+
+  return { steps: canonicalSteps, liveIdToCanonicalId, stepMetaByCanonicalId };
+}
+
 const noop = () => {};
 
 interface TaskDetailSheetProps {
@@ -431,25 +598,26 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
     [displayFiles, isTaskLoaded, task],
   );
 
+  const canonicalRailData = useMemo(
+    () =>
+      buildCanonicalRailSteps(
+        planForDisplay,
+        (liveSteps ?? []) as RailLiveStep[],
+        liveSession.liveStepIds,
+      ),
+    [liveSession.liveStepIds, liveSteps, planForDisplay],
+  );
+
   // --- Rail data: group files by step for FileStepGroup ---
-  const stepMap = useMemo(() => {
-    const map = new Map<string, { title: string; order: number; status: string }>();
-    for (const step of liveSteps ?? []) {
-      map.set(step._id, {
-        title: step.title ?? step.description?.slice(0, 40) ?? "Untitled step",
-        order: step.order,
-        status: step.status,
-      });
-    }
-    return map;
-  }, [liveSteps]);
+  const stepMap = canonicalRailData.stepMetaByCanonicalId;
 
   const railFileGroups = useMemo(() => {
     const byStep = new Map<string, DetailFileRef[]>();
     const ungrouped: DetailFileRef[] = [];
     for (const file of displayFiles) {
       if (file.stepId) {
-        const stepId = file.stepId as string;
+        const rawStepId = file.stepId as string;
+        const stepId = canonicalRailData.liveIdToCanonicalId.get(rawStepId) ?? rawStepId;
         if (!byStep.has(stepId)) byStep.set(stepId, []);
         byStep.get(stepId)!.push(file);
       } else {
@@ -466,22 +634,21 @@ export function TaskDetailSheet({ taskId, onClose, onTaskOpen }: TaskDetailSheet
       }))
       .sort((a, b) => a.order - b.order);
     return { groups, ungrouped };
-  }, [displayFiles, stepMap]);
+  }, [canonicalRailData.liveIdToCanonicalId, displayFiles, stepMap]);
 
   // --- Rail data: convert liveSteps to MiniPlanStep ---
-  const miniPlanSteps = useMemo((): MiniPlanStep[] => {
-    if (!liveSteps) return [];
-    return liveSteps
-      .filter((s) => s.status !== "deleted")
-      .map((step) => ({
-        id: step._id,
-        title: step.title ?? step.description?.slice(0, 40) ?? "Untitled",
-        assignedAgent: step.assignedAgent ?? "unassigned",
+  const miniPlanSteps = useMemo(
+    (): MiniPlanStep[] =>
+      canonicalRailData.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        assignedAgent: step.assignedAgent,
         status: step.status,
         parallelGroup: step.parallelGroup,
-        hasLiveSession: liveSession.liveStepIds.includes(step._id),
-      }));
-  }, [liveSteps, liveSession.liveStepIds]);
+        hasLiveSession: step.hasLiveSession,
+      })),
+    [canonicalRailData.steps],
+  );
 
   const completedStepCount = miniPlanSteps.filter((s) => s.status === "completed").length;
 

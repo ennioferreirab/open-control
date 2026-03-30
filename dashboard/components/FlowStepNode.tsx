@@ -518,39 +518,41 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
       {isEditMode && (
         <>
           {/* Sequential ↓ (bottom edge) */}
-          <div
-            className={cn(
-              "absolute bottom-0 left-1/2 -translate-x-1/2 flex gap-1 transition-opacity",
-              btnVisibility,
-            )}
-          >
-            <button
-              type="button"
-              data-testid={`add-sequential-${step.tempId}`}
-              className={addBtnClass}
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddSequential?.(step.tempId);
-              }}
-              title="Add sequential step"
+          {onAddSequential && (
+            <div
+              className={cn(
+                "absolute bottom-0 left-1/2 -translate-x-1/2 flex gap-1 transition-opacity",
+                btnVisibility,
+              )}
             >
-              <ArrowRight className="h-3 w-3 rotate-90" />
-            </button>
-            {hasParallelSiblings && (
               <button
                 type="button"
-                data-testid={`merge-paths-${step.tempId}`}
+                data-testid={`add-sequential-${step.tempId}`}
                 className={addBtnClass}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onMergePaths?.(step.tempId);
+                  onAddSequential(step.tempId);
                 }}
-                title="Merge parallel paths into one step"
+                title="Add sequential step"
               >
-                <GitMerge className="h-3 w-3" />
+                <ArrowRight className="h-3 w-3 rotate-90" />
               </button>
-            )}
-          </div>
+              {hasParallelSiblings && onMergePaths && (
+                <button
+                  type="button"
+                  data-testid={`merge-paths-${step.tempId}`}
+                  className={addBtnClass}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMergePaths(step.tempId);
+                  }}
+                  title="Merge parallel paths into one step"
+                >
+                  <GitMerge className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
           {onAddParallel && (
             <>
               {/* Parallel ← (left edge) */}
@@ -596,25 +598,27 @@ function FlowStepNodeComponent({ data, selected }: NodeProps<FlowStepNodeType>) 
             </>
           )}
           {/* Trash (top edge) */}
-          <div
-            className={cn(
-              "absolute top-0 left-1/2 -translate-x-1/2 transition-opacity",
-              btnVisibility,
-            )}
-          >
-            <button
-              type="button"
-              data-testid={`delete-step-${step.tempId}`}
-              className="flex items-center justify-center w-5 h-5 rounded-full bg-muted hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-colors shadow-sm border border-border cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteStep?.(step.tempId);
-              }}
-              title="Delete step"
+          {onDeleteStep && (
+            <div
+              className={cn(
+                "absolute top-0 left-1/2 -translate-x-1/2 transition-opacity",
+                btnVisibility,
+              )}
             >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
+              <button
+                type="button"
+                data-testid={`delete-step-${step.tempId}`}
+                className="flex items-center justify-center w-5 h-5 rounded-full bg-muted hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-colors shadow-sm border border-border cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteStep(step.tempId);
+                }}
+                title="Delete step"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

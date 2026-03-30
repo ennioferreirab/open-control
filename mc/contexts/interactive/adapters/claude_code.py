@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from claude_code.ipc_server import MCSocketServer
+from claude_code.tool_policy import merge_mc_disallowed_tools
 from claude_code.workspace import CCWorkspaceManager
 
 from mc.contexts.interactive.errors import (
@@ -161,7 +162,7 @@ class ClaudeCodeInteractiveAdapter:
         for tool in allowed_tools:
             cmd.extend(["--allowedTools", tool])
 
-        for tool in (cc and cc.disallowed_tools) or []:
+        for tool in merge_mc_disallowed_tools((cc and cc.disallowed_tools) or None):
             cmd.extend(["--disallowedTools", tool])
 
         if cc and cc.effort_level:

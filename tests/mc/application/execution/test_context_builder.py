@@ -823,6 +823,44 @@ class TestCCExecutionContext:
         req = await builder.build_step_context("task_123", step)
         assert req.is_cc is True
 
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.roster_builder.load_agent_config",
+        return_value=(None, None, None),
+    )
+    @patch(
+        "mc.application.execution.context_builder.resolve_tier",
+        return_value=("claude-sonnet-4-6", None),
+    )
+    async def test_system_low_agent_is_hydrated_from_convex_without_yaml(
+        self, mock_tier: MagicMock, mock_config: MagicMock
+    ) -> None:
+        bridge = _make_mock_bridge(
+            agent_data={
+                "name": "low-agent",
+                "display_name": "Low Agent",
+                "role": "System utility",
+                "prompt": "You are a system agent.",
+                "model": "tier:standard-low",
+                "backend": "claude-code",
+                "interactive_provider": "claude-code",
+                "skills": [],
+            }
+        )
+        builder = ContextBuilder(bridge)
+        step = {
+            "id": "step_system",
+            "title": "Persist learnings",
+            "assigned_agent": "low-agent",
+            "workflow_step_type": "system",
+        }
+
+        req = await builder.build_step_context("task_123", step)
+
+        assert req.agent is not None
+        assert req.agent.name == "low-agent"
+        assert req.agent.backend == "claude-code"
+
 
 # ── Human Step Context Tests ────────────────────────────────────────────────
 

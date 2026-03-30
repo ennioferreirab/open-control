@@ -178,6 +178,7 @@ class MessageRepository:
             "author_type": "system",
             "content": content,
             "message_type": "system_event",
+            "type": "system_error",
             "timestamp": datetime.now(UTC).isoformat(),
         }
         if step_id is not None:

@@ -81,7 +81,7 @@ function toPlanSteps(workflow: EditableWorkflow): EditablePlanStep[] {
     tempId: step.id,
     title: step.title,
     description: step.description ?? "",
-    assignedAgent: step.agentKey ?? "",
+    assignedAgent: step.agentKey ?? (step.type === "system" ? "low-agent" : ""),
     blockedBy: step.dependsOn,
     parallelGroup: depthMap.get(step.id) ?? index + 1,
     order: index + 1,
@@ -103,7 +103,9 @@ function fromPlanSteps(
       const assignedAgent =
         planStep.assignedAgent && planStep.assignedAgent !== ""
           ? planStep.assignedAgent
-          : (previous?.agentKey ?? fallbackAgent);
+          : previous?.type === "system"
+            ? "low-agent"
+            : (previous?.agentKey ?? fallbackAgent);
 
       return {
         id: planStep.tempId,

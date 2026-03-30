@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -257,6 +258,280 @@ async def test_strategy_returns_failure_on_error_event() -> None:
     result = await strategy.execute(_make_request())
     assert result.success is False
     assert result.error_category == ErrorCategory.RUNNER
+
+
+@pytest.mark.asyncio
+async def test_strategy_pauses_for_nonblocking_ask_user_actions() -> None:
+    handle = _make_handle(mc_session_id="mc-ask-user-action")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+    bridge = MagicMock()
+
+    parser.parse_output.return_value = [
+        ParsedCliEvent(
+            kind="ask_user_requested",
+            text="Agent requested user input",
+            metadata={
+                "tool_name": "AskUserQuestion",
+                "tool_input": {
+                    "question": "Which direction should we use?",
+                    "options": ["Option A", "Option B"],
+                },
+            },
+        ),
+        ParsedCliEvent(kind="result", text="Please answer before I continue."),
+    ]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"ask-user"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request(task_id="task-ask", step_id="step-ask"))
+
+    assert result.success is True
+    assert result.transition_status == "waiting_human"
+    assert registry.get(handle.mc_session_id) is None
+
+    mutation_names = [call[0][0] for call in bridge.mutation.call_args_list]
+    assert "executionQuestions:create" in mutation_names
+    assert "messages:create" in mutation_names
+    prompt_payload = next(
+        call[0][1] for call in bridge.mutation.call_args_list if call[0][0] == "messages:create"
+    )
+    assert prompt_payload["content"].startswith("Which direction should we use?")
+    assert "Please answer before I continue." not in prompt_payload["content"]
+
+
+@pytest.mark.asyncio
+async def test_strategy_omits_null_question_fields_for_nonblocking_questionnaires() -> None:
+    handle = _make_handle(mc_session_id="mc-ask-user-questionnaire")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+    bridge = MagicMock()
+
+    parser.parse_output.return_value = [
+        ParsedCliEvent(
+            kind="ask_user_requested",
+            text="Agent requested questionnaire input",
+            metadata={
+                "tool_name": "AskUserQuestion",
+                "tool_input": {
+                    "questions": [
+                        {
+                            "header": "Approval",
+                            "question": "How should we proceed?",
+                            "options": [
+                                {
+                                    "label": "Fix Post 01",
+                                    "description": "Send Post 01 back for correction.",
+                                },
+                                {
+                                    "label": "Publish as is",
+                                    "description": "Approve the batch with known defects.",
+                                },
+                            ],
+                        }
+                    ],
+                },
+            },
+        ),
+        ParsedCliEvent(kind="result", text="Please answer before I continue."),
+    ]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"ask-user-questionnaire"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request(task_id="task-ask", step_id="step-ask"))
+
+    assert result.success is True
+    assert result.transition_status == "waiting_human"
+
+    question_payload = next(
+        call[0][1]
+        for call in bridge.mutation.call_args_list
+        if call[0][0] == "executionQuestions:create"
+    )
+    assert "question" not in question_payload
+    assert "options" not in question_payload
+    assert question_payload["questions"][0]["question"] == "How should we proceed?"
+
+
+@pytest.mark.asyncio
+async def test_strategy_returns_failure_when_nonblocking_question_persistence_fails() -> None:
+    handle = _make_handle(mc_session_id="mc-ask-user-question-failure")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+    bridge = MagicMock()
+
+    parser.parse_output.return_value = [
+        ParsedCliEvent(
+            kind="ask_user_requested",
+            text="Which direction should we use?",
+            metadata={
+                "tool_name": "AskUserQuestion",
+                "tool_input": {
+                    "question": "Which direction should we use?",
+                    "options": ["Option A", "Option B"],
+                },
+            },
+        ),
+        ParsedCliEvent(kind="result", text="Please answer before I continue."),
+    ]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"ask-user"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    def mutation_side_effect(name: str, payload: dict) -> None:
+        if name == "executionQuestions:create":
+            raise RuntimeError("executionQuestions create failed")
+
+    bridge.mutation.side_effect = mutation_side_effect
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request(task_id="task-ask", step_id="step-ask"))
+
+    assert result.success is False
+    assert result.error_category == ErrorCategory.RUNNER
+    assert "executionQuestions create failed" in (result.error_message or "")
+    assert result.transition_status is None
+    assert registry.get(handle.mc_session_id) is None
+
+
+@pytest.mark.asyncio
+async def test_strategy_returns_failure_when_nonblocking_prompt_post_fails() -> None:
+    handle = _make_handle(mc_session_id="mc-ask-user-message-failure")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+    bridge = MagicMock()
+
+    parser.parse_output.return_value = [
+        ParsedCliEvent(
+            kind="ask_user_requested",
+            text="Which direction should we use?",
+            metadata={
+                "tool_name": "AskUserQuestion",
+                "tool_input": {
+                    "question": "Which direction should we use?",
+                    "options": ["Option A", "Option B"],
+                },
+            },
+        ),
+        ParsedCliEvent(kind="result", text="Please answer before I continue."),
+    ]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"ask-user"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    def mutation_side_effect(name: str, payload: dict) -> None:
+        if name == "messages:create":
+            raise RuntimeError("messages create failed")
+
+    bridge.mutation.side_effect = mutation_side_effect
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request(task_id="task-ask", step_id="step-ask"))
+
+    assert result.success is False
+    assert result.error_category == ErrorCategory.RUNNER
+    assert "messages create failed" in (result.error_message or "")
+    assert result.transition_status is None
+    assert registry.get(handle.mc_session_id) is None
+
+
+@pytest.mark.asyncio
+async def test_strategy_does_not_pause_completed_sessions_for_blocking_mcp_ask_user() -> None:
+    handle = _make_handle(mc_session_id="mc-blocking-ask-user")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+    bridge = MagicMock()
+
+    parser.parse_output.return_value = [
+        ParsedCliEvent(
+            kind="ask_user_requested",
+            text="Which direction should we use?",
+            metadata={
+                "tool_name": "mcp__mc__ask_user",
+                "tool_input": {
+                    "question": "Which direction should we use?",
+                    "options": ["Option A", "Option B"],
+                },
+            },
+        ),
+        ParsedCliEvent(kind="result", text="Done after the user answered."),
+    ]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"blocking-ask-user"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    result = await strategy.execute(_make_request(task_id="task-blocking", step_id="step-blocking"))
+
+    assert result.success is True
+    assert result.transition_status is None
+
+    mutation_names = [call[0][0] for call in bridge.mutation.call_args_list]
+    assert "executionQuestions:create" not in mutation_names
 
 
 @pytest.mark.asyncio
@@ -682,6 +957,10 @@ def test_build_command_includes_claude_agent_runtime_flags(tmp_path: Path) -> No
     assert "mcp__mc__*" in command
     assert "--disallowedTools" in command
     assert "Bash" in command
+    assert "AskUserQuestion" in command
+    assert "CronCreate" in command
+    assert "CronDelete" in command
+    assert "CronList" in command
     assert "--effort" in command
     assert "high" in command
     assert command[1:3] == ["-p", "Analyze copy examples"]
@@ -783,6 +1062,7 @@ async def test_strategy_uses_session_specific_mcp_config_copy(tmp_path: Path) ->
         runner_type=RunnerType.PROVIDER_CLI,
         prompt="Design the proof-of-value offer",
         memory_workspace=shared_memory,
+        is_cc=True,
         agent=AgentData(
             name="offer-strategist",
             display_name="Offer Strategist",
@@ -810,11 +1090,133 @@ async def test_strategy_uses_session_specific_mcp_config_copy(tmp_path: Path) ->
     assert shared_env["MC_SOCKET_PATH"] == "/tmp/shared.sock"
 
     session_data = json.loads(session_config_path.read_text(encoding="utf-8"))
-    session_env = session_data["mcpServers"]["nanobot"]["env"]
+    assert "mc" in session_data["mcpServers"]
+    assert "nanobot" not in session_data["mcpServers"]
+    session_env = session_data["mcpServers"]["mc"]["env"]
     assert session_env["TASK_ID"] == "task-runtime-copy"
     assert session_env["STEP_ID"] == "step-runtime-copy"
     assert session_env["AGENT_NAME"] == "offer-strategist"
     assert session_env["MC_INTERACTIVE_SESSION_ID"] == "task-runtime-copy-step-runtime-copy"
+
+
+@pytest.mark.asyncio
+async def test_strategy_uses_prepared_workspace_mcp_config_when_persistent_config_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPEN_CONTROL_HOME", str(tmp_path))
+
+    handle = _make_handle(mc_session_id="mc-runtime-generated")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    memory_workspace = tmp_path / "boards" / "default" / "agents" / "offer-strategist" / "memory"
+    memory_workspace.mkdir(parents=True)
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"done"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-runtime-generated",
+        task_id="task-runtime-generated",
+        step_id="step-runtime-generated",
+        agent_name="offer-strategist",
+        title="Test generated MCP config",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Design the proof-of-value offer",
+        memory_workspace=memory_workspace,
+        is_cc=True,
+        agent=AgentData(
+            name="offer-strategist",
+            display_name="Offer Strategist",
+            role="Strategist",
+            model="cc/claude-opus-4-6",
+            backend="claude-code",
+            claude_code_opts=ClaudeCodeOpts(permission_mode="bypassPermissions"),
+        ),
+    )
+
+    result = await strategy.execute(request)
+
+    assert result.success is True
+    start_call = parser.start_session.await_args
+    launched_command = start_call.kwargs["command"]
+    assert "--mcp-config" in launched_command
+
+    config_index = launched_command.index("--mcp-config")
+    session_config_path = Path(launched_command[config_index + 1])
+    session_data = json.loads(session_config_path.read_text(encoding="utf-8"))
+
+    assert "mc" in session_data["mcpServers"]
+    session_env = session_data["mcpServers"]["mc"]["env"]
+    assert session_env["TASK_ID"] == "task-runtime-generated"
+    assert session_env["STEP_ID"] == "step-runtime-generated"
+    assert session_env["AGENT_NAME"] == "offer-strategist"
+    assert (
+        session_env["MC_INTERACTIVE_SESSION_ID"] == "task-runtime-generated-step-runtime-generated"
+    )
+
+
+@pytest.mark.asyncio
+async def test_prepare_workspace_supports_claude_code_backend_without_cc_model(
+    tmp_path: Path,
+) -> None:
+    registry = ProviderSessionRegistry()
+    supervisor = MagicMock()
+    parser = MagicMock()
+    parser.provider_name = "claude-code"
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-system",
+        task_id="task-system",
+        step_id="step-system",
+        agent_name="low-agent",
+        title="Persist learnings",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Capture the approved learnings",
+        board_name="default",
+        memory_workspace=tmp_path / "boards" / "default" / "agents" / "low-agent" / "memory",
+        is_cc=False,
+        agent=AgentData(
+            name="low-agent",
+            display_name="Low Agent",
+            role="System utility",
+            model="claude-sonnet-4-6",
+            backend="claude-code",
+        ),
+    )
+
+    fake_workspace = SimpleNamespace(
+        cwd=tmp_path / "task-space",
+        mcp_config=tmp_path / "task-space" / ".mcp.json",
+    )
+
+    with patch("claude_code.workspace.CCWorkspaceManager.prepare", return_value=fake_workspace):
+        workspace = await strategy._prepare_workspace(request)
+
+    assert workspace is fake_workspace
 
 
 @pytest.mark.asyncio
