@@ -8,6 +8,7 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from mc.application.execution.output_internals import is_internal_output_file
 from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import task_safe_id
 
@@ -310,7 +311,7 @@ class TaskRepository:
 
         - Adds new output files not yet in the manifest
         - Replaces the output section if stale entries exist
-        - Creates activity event if new files were found
+        - Creates activity event if new non-internal files were found
         - Uses relative paths so subdirectory structure is preserved
         """
         safe_id = task_safe_id(task_id)
@@ -375,10 +376,14 @@ class TaskRepository:
                 task_id,
             )
 
-        # Activity event for new files
-        if new_files:
-            file_names = ", ".join(f["name"] for f in new_files)
-            msg = f"{agent_name} produced {len(new_files)} output file(s): {file_names}"
+        visible_new_files = [
+            file_entry for file_entry in new_files if not is_internal_output_file(file_entry)
+        ]
+
+        # Activity event for new files visible to humans as deliverables
+        if visible_new_files:
+            file_names = ", ".join(f["name"] for f in visible_new_files)
+            msg = f"{agent_name} produced {len(visible_new_files)} output file(s): {file_names}"
             try:
                 self._client.mutation(
                     "activities:create",
@@ -398,13 +403,14 @@ class TaskRepository:
         """Sync output files from a cron-triggered task to its parent task.
 
         Fetches files from the source task's output/ directory recursively
-        and appends any new filenames (append-only) to the parent task's output section.
+        and appends any new non-internal filenames (append-only) to the parent
+        task's output section.
         """
         safe_source_id = re.sub(r"[^\w\-]", "_", source_task_id)
         source_output_dir = get_tasks_dir() / safe_source_id / "output"
         if not source_output_dir.exists():
             return
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(UTC).isoformat()
         source_files: list[dict] = []
         try:
             for entry in source_output_dir.rglob("*"):
@@ -424,6 +430,9 @@ class TaskRepository:
         except OSError as exc:
             logger.error("[bridge] Failed to scan source output dir %s: %s", source_output_dir, exc)
             return
+        source_files = [
+            file_entry for file_entry in source_files if not is_internal_output_file(file_entry)
+        ]
         if not source_files:
             return
         try:

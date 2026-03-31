@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from mc.application.execution.output_internals import is_internal_output_task_path
 from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import task_safe_id
 
@@ -72,9 +73,9 @@ def collect_output_artifacts(
     for entry in output_dir.rglob("*"):
         if not entry.is_file():
             continue
-        if entry.name.startswith("system_prompt_"):
-            continue
         rel = str(entry.relative_to(output_dir.parent))
+        if is_internal_output_task_path(rel):
+            continue
         size = entry.stat().st_size
 
         if rel not in pre:

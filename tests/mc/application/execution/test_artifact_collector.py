@@ -120,3 +120,23 @@ class TestCollectOutputArtifacts:
             result = collect_output_artifacts("test_task", pre_snapshot)
 
         assert len(result) == 0
+
+    def test_internal_output_files_are_ignored(self, tmp_path: Path) -> None:
+        """Runtime-internal files under output/.internal are never artifacts."""
+        tasks_dir = tmp_path / "tasks"
+        output_dir = tasks_dir / "test_task" / "output"
+        (output_dir / ".internal" / "logs").mkdir(parents=True)
+        (output_dir / ".internal" / "logs" / "system_prompt_log_010203.txt").write_text(
+            "debug",
+            encoding="utf-8",
+        )
+        (output_dir / "report.md").write_text("deliverable", encoding="utf-8")
+
+        with patch(
+            "mc.application.execution.artifact_collector.get_tasks_dir",
+            return_value=tasks_dir,
+        ):
+            result = collect_output_artifacts("test_task", {})
+
+        assert len(result) == 1
+        assert result[0]["path"] == "output/report.md"

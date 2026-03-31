@@ -736,9 +736,10 @@ class StepDispatcher:
                 )
 
             # Snapshot output dir before agent execution for artifact detection
-            # (Story 2.5).  Prompt logs are intentionally written *before* this
-            # snapshot so they are excluded from thread artifacts — they only
-            # appear in the Files tab via sync_task_output_files.
+            # (Story 2.5). Prompt logs are intentionally written *before* this
+            # snapshot, but runtime-internal files under output/.internal/ are
+            # filtered from thread artifacts and agent context while remaining
+            # available in the task Files tab.
             pre_snapshot = await asyncio.to_thread(snapshot_output_dir, task_id)
 
             req.runner_type = resolve_step_runner_type(req)

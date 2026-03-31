@@ -67,6 +67,26 @@ class TestBuildFileManifest:
         assert result[0]["name"] == "a.txt"
         assert result[1]["name"] == "b.pdf"
 
+    def test_internal_output_files_excluded_from_manifest(self) -> None:
+        raw = [
+            {"name": "brief.md", "subfolder": "attachments", "size": 100},
+            {"name": "report.md", "subfolder": "output", "size": 200},
+            {
+                "name": ".internal/logs/system_prompt_log_010203.txt",
+                "subfolder": "output",
+                "size": 300,
+            },
+            {
+                "name": ".internal/THREAD_JOURNAL.md",
+                "subfolder": "output",
+                "size": 400,
+            },
+        ]
+
+        result = build_file_manifest(raw)
+
+        assert [entry["name"] for entry in result] == ["brief.md", "report.md"]
+
 
 class TestResolveTaskDirs:
     """Tests for resolve_task_dirs."""

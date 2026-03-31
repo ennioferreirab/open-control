@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.file_enricher import build_file_context, build_file_manifest
+from mc.application.execution.output_internals import is_internal_output_task_path
 from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import (
     task_safe_id,
@@ -73,10 +74,10 @@ def _collect_output_artifacts(
     for entry in output_dir.rglob("*"):
         if not entry.is_file():
             continue
-        if entry.name.startswith("system_prompt_"):
-            continue
         # relative to task base dir (parent of output/)
         rel = str(entry.relative_to(output_dir.parent))
+        if is_internal_output_task_path(rel):
+            continue
         size = entry.stat().st_size
 
         if rel not in pre:

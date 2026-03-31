@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from mc.application.execution.output_internals import is_internal_output_file
 from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import task_safe_id
 
@@ -26,15 +27,16 @@ def _human_size(b: int) -> str:
 
 def _build_file_summary(files: list[dict]) -> str:
     """Build a human-readable file summary for agent context."""
-    if not files:
+    visible_files = [file_entry for file_entry in files if not is_internal_output_file(file_entry)]
+    if not visible_files:
         return ""
-    total = sum(f.get("size", 0) for f in files)
+    total = sum(f.get("size", 0) for f in visible_files)
     names = ", ".join(
         f"{f['name']} ({f.get('type', 'application/octet-stream')}, {_human_size(f.get('size', 0))})"
-        for f in files
+        for f in visible_files
     )
     return (
-        f"Task has {len(files)} attached file(s) (total {_human_size(total)}): {names}. "
+        f"Task has {len(visible_files)} attached file(s) (total {_human_size(total)}): {names}. "
         f"Consider file types when selecting the best agent."
     )
 
@@ -47,6 +49,8 @@ def build_file_manifest(raw_files: list[dict[str, Any]]) -> list[dict[str, Any]]
 
     Returns:
         List of normalized file manifest dicts with name, type, size, subfolder.
+        Runtime-internal files under ``output/.internal/`` are excluded so they
+        never enter agent context.
     """
     return [
         {
@@ -56,6 +60,7 @@ def build_file_manifest(raw_files: list[dict[str, Any]]) -> list[dict[str, Any]]
             "subfolder": f.get("subfolder", "attachments"),
         }
         for f in raw_files
+        if not is_internal_output_file(f)
     ]
 
 

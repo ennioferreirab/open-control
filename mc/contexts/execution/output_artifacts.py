@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from mc.application.execution.output_internals import is_internal_output_task_path
 from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import task_safe_id
 
@@ -57,13 +58,9 @@ def _collect_output_artifacts(
     for entry in output_dir.rglob("*"):
         if not entry.is_file():
             continue
-
-        # Prompt logs are diagnostic files — show in Files tab only, not as
-        # thread artifacts.
-        if entry.name.startswith("system_prompt_"):
-            continue
-
         rel = str(entry.relative_to(output_dir.parent))
+        if is_internal_output_task_path(rel):
+            continue
         size = entry.stat().st_size
 
         if rel not in pre:
@@ -158,18 +155,18 @@ def write_prompt_log(
     *,
     step_id: str | None = None,
 ) -> None:
-    """Write a prompt log file to the task's output directory."""
+    """Write a prompt log file to the task's internal output logs directory."""
     from datetime import datetime as _dt
 
     safe_id = task_safe_id(task_id)
-    output_dir = get_tasks_dir() / safe_id / "output"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    log_dir = get_tasks_dir() / safe_id / "output" / ".internal" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
     ts = _dt.now().strftime("%d:%H:%M:%S")
     final_name = filename.replace("{DDHHMMSS}", ts)
     if step_id:
         stem, dot, ext = final_name.rpartition(".")
         suffix = f"_{step_id[-6:]}"
         final_name = f"{stem}{suffix}{dot}{ext}" if dot else f"{final_name}{suffix}"
-    path = output_dir / final_name
+    path = log_dir / final_name
     path.write_text(content, encoding="utf-8")
     logger.info("[prompt-log] Wrote %s (%d bytes)", path, len(content))

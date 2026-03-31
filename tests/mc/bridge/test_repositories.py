@@ -165,6 +165,54 @@ class TestTaskRepository:
         mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)
         assert mock_makedirs.call_count == 2
 
+    def test_sync_task_output_files_skips_agent_output_activity_for_internal_only(self, tmp_path):
+        client = _make_client_mock()
+        repo = TaskRepository(client)
+
+        tasks_dir = tmp_path / "tasks"
+        output_dir = tasks_dir / "task_123" / "output" / ".internal" / "logs"
+        output_dir.mkdir(parents=True)
+        (output_dir / "system_prompt_log_010203.txt").write_text("debug", encoding="utf-8")
+
+        with patch("mc.bridge.repositories.tasks.get_tasks_dir", return_value=tasks_dir):
+            repo.sync_task_output_files(
+                "task_123",
+                {"files": []},
+                agent_name="test-agent",
+            )
+
+        client.mutation.assert_called_once()
+        mutation_name, mutation_args = client.mutation.call_args[0]
+        assert mutation_name == "tasks:updateTaskOutputFiles"
+        assert mutation_args["task_id"] == "task_123"
+        assert (
+            mutation_args["output_files"][0]["name"]
+            == ".internal/logs/system_prompt_log_010203.txt"
+        )
+
+    def test_sync_output_files_to_parent_ignores_internal_output_files(self, tmp_path):
+        client = _make_client_mock()
+        client.query.return_value = {"files": []}
+        repo = TaskRepository(client)
+
+        tasks_dir = tmp_path / "tasks"
+        output_dir = tasks_dir / "source_task" / "output"
+        (output_dir / ".internal" / "logs").mkdir(parents=True)
+        (output_dir / ".internal" / "logs" / "system_prompt_log_010203.txt").write_text(
+            "debug",
+            encoding="utf-8",
+        )
+        (output_dir / "report.md").write_text("deliverable", encoding="utf-8")
+
+        with patch("mc.bridge.repositories.tasks.get_tasks_dir", return_value=tasks_dir):
+            repo.sync_output_files_to_parent("source_task", "parent_task", agent_name="test-agent")
+
+        update_call = client.mutation.call_args_list[0]
+        mutation_name, mutation_args = update_call[0]
+        assert mutation_name == "tasks:updateTaskOutputFiles"
+        assert mutation_args["task_id"] == "parent_task"
+        assert [entry["name"] for entry in mutation_args["output_files"]] == ["report.md"]
+
 
 # ── StepRepository Tests ─────────────────────────────────────────────
 

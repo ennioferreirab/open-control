@@ -221,6 +221,45 @@ class TestBuildTaskContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
+    async def test_internal_output_files_excluded_from_file_manifest_and_context(
+        self, mock_config: MagicMock
+    ) -> None:
+        bridge = _make_mock_bridge(
+            task_data={
+                "id": "task_123",
+                "title": "Test",
+                "files": [
+                    {"name": "report.md", "subfolder": "output", "size": 1024},
+                    {
+                        "name": ".internal/logs/system_prompt_log_010203.txt",
+                        "subfolder": "output",
+                        "size": 512,
+                    },
+                    {
+                        "name": ".internal/THREAD_JOURNAL.md",
+                        "subfolder": "output",
+                        "size": 2048,
+                    },
+                ],
+            }
+        )
+        builder = ContextBuilder(bridge)
+        req = await builder.build_task_context(
+            task_id="task_123",
+            title="Test",
+            description=None,
+            agent_name="test-agent",
+        )
+
+        assert [entry["name"] for entry in req.file_manifest] == ["report.md"]
+        assert "report.md" in (req.description or "")
+        assert ".internal/logs/system_prompt_log_010203.txt" not in (req.description or "")
+
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.roster_builder.load_agent_config",
+        return_value=(None, None, None),
+    )
     async def test_merge_sources_include_absolute_paths_and_delimited_threads(
         self, mock_config: MagicMock
     ) -> None:
@@ -734,6 +773,43 @@ class TestBuildStepContext:
         assert 'You are executing step: "Write report"' in req.description
         assert "Step description: Write the final report" in req.description
         assert "Task workspace:" in req.description
+
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.roster_builder.load_agent_config",
+        return_value=(None, None, None),
+    )
+    async def test_step_context_excludes_internal_output_files(
+        self, mock_config: MagicMock
+    ) -> None:
+        bridge = _make_mock_bridge(
+            task_data={
+                "id": "task_123",
+                "title": "Test",
+                "files": [
+                    {"name": "report.md", "subfolder": "output", "size": 1024},
+                    {
+                        "name": ".internal/logs/system_prompt_log_010203.txt",
+                        "subfolder": "output",
+                        "size": 512,
+                    },
+                ],
+            }
+        )
+        builder = ContextBuilder(bridge)
+        step = {
+            "id": "step_1",
+            "title": "Write report",
+            "description": "Write the final report",
+            "assigned_agent": "writer",
+            "blocked_by": [],
+        }
+
+        req = await builder.build_step_context("task_123", step)
+
+        assert [entry["name"] for entry in req.file_manifest] == ["report.md"]
+        assert "report.md" in req.description
+        assert ".internal/logs/system_prompt_log_010203.txt" not in req.description
 
     @pytest.mark.asyncio
     @patch(
