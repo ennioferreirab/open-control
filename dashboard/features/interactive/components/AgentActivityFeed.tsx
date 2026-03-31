@@ -7,6 +7,7 @@ import { useAgentActivity } from "@/features/interactive/hooks/useAgentActivity"
 
 interface AgentActivityFeedProps {
   sessionId: string;
+  hasLiveTranscript?: boolean;
   // Session metadata from interactiveSessions
   provider?: string;
   agentName?: string;
@@ -103,13 +104,14 @@ function ActivityEventRow({ event }: { event: AgentActivityEvent }) {
 
 export function AgentActivityFeed({
   sessionId,
+  hasLiveTranscript,
   provider,
   agentName,
   supervisionState,
   onInterrupt,
   onStop,
 }: AgentActivityFeedProps) {
-  const { events } = useAgentActivity(sessionId);
+  const { events } = useAgentActivity(sessionId, hasLiveTranscript);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new events

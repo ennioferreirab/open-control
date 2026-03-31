@@ -60,6 +60,20 @@ function normalizeRawEntries(
   }));
 }
 
+function mergeEntriesBySeq(
+  current: RawActivityEntry[] | undefined,
+  incoming: RawActivityEntry[],
+): RawActivityEntry[] {
+  const bySeq = new Map<number, RawActivityEntry>();
+  for (const entry of current ?? []) {
+    bySeq.set(entry.seq, entry);
+  }
+  for (const entry of incoming) {
+    bySeq.set(entry.seq, entry);
+  }
+  return [...bySeq.values()].sort((left, right) => left.seq - right.seq);
+}
+
 /**
  * Map a Convex interactive session status to the ProviderSessionStatus enum
  * understood by ProviderLiveChatPanel.
@@ -114,6 +128,8 @@ export function useProviderSession(
 ): UseProviderSessionResult {
   const [activityEntries, setActivityEntries] = useState<RawActivityEntry[] | undefined>(undefined);
   const latestSeqRef = useRef(0);
+  const transcriptAvailableRef = useRef(session?.hasLiveTranscript !== false);
+  const pollInFlightRef = useRef(false);
 
   const sessionStatus = useMemo(() => {
     if (session === undefined) {
@@ -130,13 +146,17 @@ export function useProviderSession(
     const controller = new AbortController();
 
     async function loadInitial() {
-      if (!session?.sessionId) {
+      if (!session?.sessionId || session.hasLiveTranscript === false) {
         setActivityEntries([]);
         latestSeqRef.current = 0;
+        transcriptAvailableRef.current = false;
+        pollInFlightRef.current = false;
         return;
       }
 
       setActivityEntries(undefined);
+      transcriptAvailableRef.current = true;
+      pollInFlightRef.current = false;
 
       try {
         const metaResponse = await fetch(buildLiveSessionMetaUrl(session.sessionId), {
@@ -145,6 +165,7 @@ export function useProviderSession(
         if (!metaResponse.ok) {
           if (metaResponse.status === 404) {
             if (!active) return;
+            transcriptAvailableRef.current = false;
             setActivityEntries([]);
             latestSeqRef.current = 0;
             return;
@@ -155,6 +176,7 @@ export function useProviderSession(
         const meta = (await metaResponse.json()) as LiveSessionMeta;
         if (meta.hasLiveTranscript === false) {
           if (!active) return;
+          transcriptAvailableRef.current = false;
           setActivityEntries([]);
           latestSeqRef.current = 0;
           return;
@@ -165,6 +187,7 @@ export function useProviderSession(
         if (!eventsResponse.ok) {
           if (eventsResponse.status === 404) {
             if (!active) return;
+            transcriptAvailableRef.current = false;
             setActivityEntries([]);
             latestSeqRef.current = 0;
             return;
@@ -187,38 +210,54 @@ export function useProviderSession(
     }
 
     async function loadUpdates() {
-      if (!session?.sessionId) {
+      if (
+        !session?.sessionId ||
+        session.hasLiveTranscript === false ||
+        !transcriptAvailableRef.current ||
+        pollInFlightRef.current
+      ) {
         return;
       }
 
+      pollInFlightRef.current = true;
       try {
         const response = await fetch(
           buildLiveSessionEventsUrl(session.sessionId, latestSeqRef.current),
           { signal: controller.signal },
         );
         if (!response.ok) {
+          if (response.status === 404) {
+            transcriptAvailableRef.current = false;
+          }
           return;
         }
 
         const payload = (await response.json()) as {
           events?: Array<Partial<RawActivityEntry> & { seq: number }>;
         };
-        const nextEntries = normalizeRawEntries(session.sessionId, payload.events ?? []);
+        const nextEntries = normalizeRawEntries(session.sessionId, payload.events ?? []).filter(
+          (entry) => entry.seq > latestSeqRef.current,
+        );
         if (nextEntries.length === 0 || !active) {
           return;
         }
 
         latestSeqRef.current = nextEntries[nextEntries.length - 1]?.seq ?? latestSeqRef.current;
-        setActivityEntries((current) => [...(current ?? []), ...nextEntries]);
+        setActivityEntries((current) => mergeEntriesBySeq(current, nextEntries));
       } catch {
         return;
+      } finally {
+        pollInFlightRef.current = false;
       }
     }
 
     void loadInitial();
 
     const shouldPoll =
-      session?.sessionId && session.status !== "ended" && session.status !== "error";
+      session?.sessionId &&
+      session.hasLiveTranscript !== false &&
+      session.status !== "ended" &&
+      session.status !== "error";
     const interval = shouldPoll ? window.setInterval(() => void loadUpdates(), 1000) : null;
 
     return () => {
@@ -228,7 +267,7 @@ export function useProviderSession(
         window.clearInterval(interval);
       }
     };
-  }, [session?.sessionId, session?.status]);
+  }, [session?.hasLiveTranscript, session?.sessionId, session?.status]);
 
   const events = useMemo<ProviderLiveEvent[]>(
     () => normalizeProviderEvents(activityEntries ?? []),

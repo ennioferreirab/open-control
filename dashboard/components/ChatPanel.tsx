@@ -294,6 +294,7 @@ export function ChatPanel() {
         <div className="shrink-0 border-t border-border">
           <AgentActivityFeed
             sessionId={activeSession.sessionId}
+            hasLiveTranscript={activeSession.hasLiveTranscript}
             provider={activeSession.provider}
             agentName={activeSession.agentName}
             supervisionState={activeSession.supervisionState ?? undefined}
