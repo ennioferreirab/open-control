@@ -1073,7 +1073,8 @@ async def test_strategy_uses_session_specific_mcp_config_copy(tmp_path: Path) ->
         ),
     )
 
-    result = await strategy.execute(request)
+    with patch("claude_code.workspace.sync_workspace_back"):
+        result = await strategy.execute(request)
 
     assert result.success is True
     start_call = parser.start_session.await_args
@@ -1150,7 +1151,8 @@ async def test_strategy_uses_prepared_workspace_mcp_config_when_persistent_confi
         ),
     )
 
-    result = await strategy.execute(request)
+    with patch("claude_code.workspace.sync_workspace_back"):
+        result = await strategy.execute(request)
 
     assert result.success is True
     start_call = parser.start_session.await_args
@@ -1217,6 +1219,292 @@ async def test_prepare_workspace_supports_claude_code_backend_without_cc_model(
         workspace = await strategy._prepare_workspace(request)
 
     assert workspace is fake_workspace
+
+
+@pytest.mark.asyncio
+async def test_strategy_syncs_workspace_back_and_returns_persistent_memory_workspace(
+    tmp_path: Path,
+) -> None:
+    handle = _make_handle(mc_session_id="mc-sync-memory")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"done"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+
+    persistent_workspace = tmp_path / "boards" / "default" / "agents" / "offer-strategist"
+    persistent_workspace.mkdir(parents=True)
+    prepared_workspace = SimpleNamespace(
+        cwd=tmp_path / "ephemeral-workspace",
+        mcp_config=tmp_path / "ephemeral-workspace" / ".mcp.json",
+        sync_targets=[],
+        persistent_memory_workspace=persistent_workspace,
+    )
+    prepared_workspace.cwd.mkdir(parents=True)
+    prepared_workspace.mcp_config.write_text('{"mcpServers": {}}', encoding="utf-8")
+
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-sync-memory",
+        task_id="task-sync-memory",
+        step_id="step-sync-memory",
+        agent_name="offer-strategist",
+        title="Persist memory changes",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Capture the approved learnings",
+        memory_workspace=persistent_workspace,
+        is_cc=True,
+        agent=AgentData(
+            name="offer-strategist",
+            display_name="Offer Strategist",
+            role="Strategist",
+            model="cc/claude-opus-4-6",
+            backend="claude-code",
+            claude_code_opts=ClaudeCodeOpts(permission_mode="bypassPermissions"),
+        ),
+    )
+
+    with (
+        patch.object(strategy, "_prepare_workspace", AsyncMock(return_value=prepared_workspace)),
+        patch("claude_code.workspace.sync_workspace_back") as sync_mock,
+    ):
+        result = await strategy.execute(request)
+
+    assert result.success is True
+    assert result.memory_workspace == persistent_workspace
+    sync_mock.assert_called_once_with(prepared_workspace)
+
+
+@pytest.mark.asyncio
+async def test_strategy_waiting_human_preserves_persistent_memory_workspace(
+    tmp_path: Path,
+) -> None:
+    handle = _make_handle(mc_session_id="mc-waiting-memory")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+    bridge = MagicMock()
+
+    parser.parse_output.return_value = [
+        ParsedCliEvent(
+            kind="ask_user_requested",
+            text="Need a decision",
+            metadata={
+                "tool_name": "AskUserQuestion",
+                "tool_input": {"question": "Proceed?", "options": ["Yes", "No"]},
+            },
+        ),
+        ParsedCliEvent(kind="result", text="Waiting for the human."),
+    ]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"waiting"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+        bridge=bridge,
+    )
+
+    persistent_workspace = tmp_path / "boards" / "default" / "agents" / "offer-strategist"
+    persistent_workspace.mkdir(parents=True)
+    prepared_workspace = SimpleNamespace(
+        cwd=tmp_path / "ephemeral-waiting",
+        mcp_config=tmp_path / "ephemeral-waiting" / ".mcp.json",
+        sync_targets=[],
+        persistent_memory_workspace=persistent_workspace,
+    )
+    prepared_workspace.cwd.mkdir(parents=True)
+    prepared_workspace.mcp_config.write_text('{"mcpServers": {}}', encoding="utf-8")
+
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-waiting-memory",
+        task_id="task-waiting-memory",
+        step_id="step-waiting-memory",
+        agent_name="offer-strategist",
+        title="Need human input",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Ask the user one question",
+        memory_workspace=persistent_workspace,
+        is_cc=True,
+        agent=AgentData(
+            name="offer-strategist",
+            display_name="Offer Strategist",
+            role="Strategist",
+            model="cc/claude-opus-4-6",
+            backend="claude-code",
+            claude_code_opts=ClaudeCodeOpts(permission_mode="bypassPermissions"),
+        ),
+    )
+
+    with (
+        patch.object(strategy, "_prepare_workspace", AsyncMock(return_value=prepared_workspace)),
+        patch("claude_code.workspace.sync_workspace_back") as sync_mock,
+    ):
+        result = await strategy.execute(request)
+
+    assert result.success is True
+    assert result.transition_status == "waiting_human"
+    assert result.memory_workspace == persistent_workspace
+    sync_mock.assert_called_once_with(prepared_workspace)
+
+
+@pytest.mark.asyncio
+async def test_strategy_error_preserves_persistent_memory_workspace(tmp_path: Path) -> None:
+    handle = _make_handle(mc_session_id="mc-error-memory")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="error", text="boom")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"boom"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=1)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+
+    persistent_workspace = tmp_path / "boards" / "default" / "agents" / "offer-strategist"
+    persistent_workspace.mkdir(parents=True)
+    prepared_workspace = SimpleNamespace(
+        cwd=tmp_path / "ephemeral-error",
+        mcp_config=tmp_path / "ephemeral-error" / ".mcp.json",
+        sync_targets=[],
+        persistent_memory_workspace=persistent_workspace,
+    )
+    prepared_workspace.cwd.mkdir(parents=True)
+    prepared_workspace.mcp_config.write_text('{"mcpServers": {}}', encoding="utf-8")
+
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-error-memory",
+        task_id="task-error-memory",
+        step_id="step-error-memory",
+        agent_name="offer-strategist",
+        title="Fail but keep memory path",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Trigger an error",
+        memory_workspace=persistent_workspace,
+        is_cc=True,
+        agent=AgentData(
+            name="offer-strategist",
+            display_name="Offer Strategist",
+            role="Strategist",
+            model="cc/claude-opus-4-6",
+            backend="claude-code",
+            claude_code_opts=ClaudeCodeOpts(permission_mode="bypassPermissions"),
+        ),
+    )
+
+    with (
+        patch.object(strategy, "_prepare_workspace", AsyncMock(return_value=prepared_workspace)),
+        patch("claude_code.workspace.sync_workspace_back") as sync_mock,
+    ):
+        result = await strategy.execute(request)
+
+    assert result.success is False
+    assert result.memory_workspace == persistent_workspace
+    sync_mock.assert_called_once_with(prepared_workspace)
+
+
+@pytest.mark.asyncio
+async def test_strategy_sync_back_failure_returns_runner_error(tmp_path: Path) -> None:
+    handle = _make_handle(mc_session_id="mc-sync-failure")
+    parser = _make_parser(handle)
+    registry = ProviderSessionRegistry()
+
+    parser.parse_output.return_value = [ParsedCliEvent(kind="result", text="Done")]
+
+    async def fake_stream(h: ProviderProcessHandle):
+        yield b"done"
+
+    supervisor = MagicMock()
+    supervisor.stream_output = fake_stream
+    supervisor.wait_for_exit = AsyncMock(return_value=0)
+
+    strategy = ProviderCliRunnerStrategy(
+        parser=parser,
+        registry=registry,
+        supervisor=supervisor,
+        command=["claude", "--output-format", "stream-json", "--print"],
+        cwd="/tmp/workspace",
+    )
+
+    persistent_workspace = tmp_path / "boards" / "default" / "agents" / "offer-strategist"
+    persistent_workspace.mkdir(parents=True)
+    prepared_workspace = SimpleNamespace(
+        cwd=tmp_path / "ephemeral-sync-failure",
+        mcp_config=tmp_path / "ephemeral-sync-failure" / ".mcp.json",
+        sync_targets=[],
+        persistent_memory_workspace=persistent_workspace,
+    )
+    prepared_workspace.cwd.mkdir(parents=True)
+    prepared_workspace.mcp_config.write_text('{"mcpServers": {}}', encoding="utf-8")
+
+    request = ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-sync-failure",
+        task_id="task-sync-failure",
+        step_id="step-sync-failure",
+        agent_name="offer-strategist",
+        title="Fail loudly when sync-back breaks",
+        runner_type=RunnerType.PROVIDER_CLI,
+        prompt="Capture the approved learnings",
+        memory_workspace=persistent_workspace,
+        is_cc=True,
+        agent=AgentData(
+            name="offer-strategist",
+            display_name="Offer Strategist",
+            role="Strategist",
+            model="cc/claude-opus-4-6",
+            backend="claude-code",
+            claude_code_opts=ClaudeCodeOpts(permission_mode="bypassPermissions"),
+        ),
+    )
+
+    with (
+        patch.object(strategy, "_prepare_workspace", AsyncMock(return_value=prepared_workspace)),
+        patch(
+            "claude_code.workspace.sync_workspace_back",
+            side_effect=RuntimeError("sync exploded"),
+        ),
+    ):
+        result = await strategy.execute(request)
+
+    assert result.success is False
+    assert result.error_category == ErrorCategory.RUNNER
+    assert result.memory_workspace == persistent_workspace
+    assert "sync exploded" in (result.error_message or "")
+    assert registry.get(handle.mc_session_id) is None
 
 
 @pytest.mark.asyncio

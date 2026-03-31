@@ -50,6 +50,14 @@ def _omit_none_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if value is not None}
 
 
+class _WorkspaceSyncBackError(RuntimeError):
+    """Raised when the prepared workspace could not be synced back safely."""
+
+    def __init__(self, message: str, *, memory_workspace: Path | None) -> None:
+        super().__init__(message)
+        self.memory_workspace = memory_workspace
+
+
 class ProviderCliRunnerStrategy:
     """Run agent work through the provider CLI session core.
 
@@ -182,6 +190,7 @@ class ProviderCliRunnerStrategy:
                 error_category=ErrorCategory.RUNNER,
                 error_message=f"{type(exc).__name__}: {exc}",
                 error_exception=exc,
+                memory_workspace=getattr(exc, "memory_workspace", request.memory_workspace),
             )
 
     def _build_command(
@@ -381,6 +390,33 @@ class ProviderCliRunnerStrategy:
         if self._control_plane is not None:
             self._control_plane.unregister_parser(mc_session_id)
         self._registry.remove(mc_session_id)
+
+    @staticmethod
+    def _resolve_result_memory_workspace(workspace_ctx: Any | None) -> Path | None:
+        """Return the canonical persistent memory workspace for the execution result."""
+        if workspace_ctx is None:
+            return None
+        return getattr(workspace_ctx, "persistent_memory_workspace", None) or getattr(
+            workspace_ctx, "cwd", None
+        )
+
+    def _sync_prepared_workspace_back(self, workspace_ctx: Any | None) -> None:
+        """Sync from the ephemeral workspace back to persistent storage."""
+        if workspace_ctx is None:
+            return
+        try:
+            from claude_code.workspace import sync_workspace_back
+
+            sync_workspace_back(workspace_ctx)
+        except Exception as exc:
+            logger.error(
+                "[provider-cli-strategy] Failed to sync prepared workspace back",
+                exc_info=True,
+            )
+            raise _WorkspaceSyncBackError(
+                f"Failed to sync prepared workspace back: {exc}",
+                memory_workspace=self._resolve_result_memory_workspace(workspace_ctx),
+            ) from exc
 
     async def _stop_and_cleanup(self, handle: Any) -> None:
         """Best-effort process stop followed by registry/control-plane cleanup."""
@@ -679,6 +715,7 @@ class ProviderCliRunnerStrategy:
         # 0. Prepare agent workspace (skills, commands, CLAUDE.md, MCP config)
         workspace_ctx = await self._prepare_workspace(request)
         session_cwd = str(workspace_ctx.cwd) if workspace_ctx is not None else None
+        result_memory_workspace = self._resolve_result_memory_workspace(workspace_ctx)
 
         # 1. Build the full command, injecting the bootstrap prompt
         command = self._build_command(
@@ -804,6 +841,7 @@ class ProviderCliRunnerStrategy:
         except Exception:
             self._activity.flush()
             await self._stop_and_cleanup(handle)
+            self._sync_prepared_workspace_back(workspace_ctx)
             raise
 
         # 6. Wait for exit
@@ -812,6 +850,13 @@ class ProviderCliRunnerStrategy:
         except Exception:
             self._activity.flush()
             await self._stop_and_cleanup(handle)
+            self._sync_prepared_workspace_back(workspace_ctx)
+            raise
+
+        try:
+            self._sync_prepared_workspace_back(workspace_ctx)
+        except Exception:
+            self._cleanup(handle.mc_session_id)
             raise
 
         # 7. Evaluate result
@@ -862,6 +907,7 @@ class ProviderCliRunnerStrategy:
                 error_category=ErrorCategory.RUNNER,
                 error_message=error_msg,
                 session_id=session_id,
+                memory_workspace=result_memory_workspace,
             )
 
         if has_error:
@@ -895,6 +941,7 @@ class ProviderCliRunnerStrategy:
                 error_category=ErrorCategory.RUNNER,
                 error_message=error_msg,
                 session_id=session_id,
+                memory_workspace=result_memory_workspace,
             )
 
         if nonblocking_ask_user_event is not None:
@@ -928,6 +975,7 @@ class ProviderCliRunnerStrategy:
                     error_message=error_msg,
                     error_exception=exc,
                     session_id=session_id,
+                    memory_workspace=result_memory_workspace,
                 )
             record.update_metadata(final_result=output_text[:500] if output_text else None)
             self._persist_session_to_convex(
@@ -947,6 +995,7 @@ class ProviderCliRunnerStrategy:
                 success=True,
                 output=output_text,
                 session_id=session_id,
+                memory_workspace=result_memory_workspace,
                 transition_status="waiting_human",
             )
 
@@ -969,6 +1018,7 @@ class ProviderCliRunnerStrategy:
             success=True,
             output=output_text,
             session_id=session_id,
+            memory_workspace=result_memory_workspace,
         )
 
     def _build_runtime_env(

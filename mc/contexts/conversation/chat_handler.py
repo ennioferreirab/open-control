@@ -358,6 +358,10 @@ class ChatHandler:
 
         task_id = f"chat-{agent_name}"
         session_key = f"mc-chat:{agent_name}"
+        memory_workspace, memory_mode = self._resolve_chat_memory_workspace(
+            channel_board=channel_board,
+            agent_name=agent_name,
+        )
 
         # Build prompt with system instructions
         message = content
@@ -371,6 +375,8 @@ class ChatHandler:
             title=message,
             board=channel_board,
             board_name=channel_board.get("name") if isinstance(channel_board, dict) else None,
+            memory_workspace=memory_workspace,
+            memory_mode=memory_mode,
             agent=agent_data,
             agent_name=agent_name,
             agent_prompt=agent_prompt,
@@ -378,6 +384,7 @@ class ChatHandler:
             agent_skills=agent_skills,
             runner_type=RunnerType.PROVIDER_CLI,
             session_key=session_key,
+            session_boundary_reason="chat_turn",
             is_cc=is_cc,
         )
 
@@ -471,3 +478,42 @@ class ChatHandler:
                 exc_info=True,
             )
             return None
+
+    def _resolve_chat_memory_workspace(
+        self,
+        *,
+        channel_board: dict[str, Any] | None,
+        agent_name: str,
+    ) -> tuple[Any | None, str | None]:
+        """Resolve the canonical memory workspace for chat sessions."""
+        if not isinstance(channel_board, dict):
+            return None, None
+
+        board_name = str(channel_board.get("name") or "").strip()
+        if not board_name:
+            return None, None
+
+        try:
+            from mc.infrastructure.boards import get_agent_memory_mode, resolve_memory_workspace
+
+            mode = get_agent_memory_mode(channel_board, agent_name)
+            resolved = resolve_memory_workspace(
+                agent_name,
+                board_name=board_name,
+                mode=mode,
+            )
+            logger.info(
+                "[chat] Resolved memory workspace for @%s on board '%s' (mode=%s)",
+                agent_name,
+                board_name,
+                mode,
+            )
+            return resolved.workspace, mode
+        except Exception:
+            logger.warning(
+                "[chat] Failed to resolve memory workspace for @%s on board '%s'",
+                agent_name,
+                board_name,
+                exc_info=True,
+            )
+            return None, None

@@ -11,6 +11,7 @@ import pytest
 from mc.application.execution.post_processing import (
     build_cc_task_memory_consolidation_hook,
     build_interactive_memory_consolidation_hook,
+    build_provider_cli_memory_consolidation_hook,
 )
 from mc.application.execution.request import (
     EntityType,
@@ -64,6 +65,28 @@ def _interactive_result(tmp_path: Path, *, success: bool = True) -> ExecutionRes
         output="interactive final result" if success else "",
         error_message=None if success else "interactive failure",
         session_id="sess-int-1",
+        memory_workspace=tmp_path,
+    )
+
+
+def _provider_cli_request(*, boundary_reason: str | None = "step_completion") -> ExecutionRequest:
+    return ExecutionRequest(
+        entity_type=EntityType.STEP,
+        entity_id="step-1",
+        task_id="task-1",
+        step_id="step-1",
+        title="Consolidate provider-cli step",
+        agent_name="provider-cli-agent",
+        runner_type=RunnerType.PROVIDER_CLI,
+        session_boundary_reason=boundary_reason,
+    )
+
+
+def _provider_cli_result(tmp_path: Path) -> ExecutionResult:
+    return ExecutionResult(
+        success=True,
+        output="provider-cli final result",
+        session_id="sess-pc-1",
         memory_workspace=tmp_path,
     )
 
@@ -232,3 +255,90 @@ class TestInteractiveMemoryConsolidationHook:
 
         create_task_mock.assert_not_called()
         consolidate_mock.assert_not_awaited()
+
+
+class TestProviderCliMemoryConsolidationHook:
+    @pytest.mark.asyncio
+    async def test_provider_cli_boundary_schedules_memory_consolidation(
+        self, tmp_path: Path
+    ) -> None:
+        hook = build_provider_cli_memory_consolidation_hook(bridge=MagicMock())
+        request = _provider_cli_request()
+        result = _provider_cli_result(tmp_path)
+        scheduled: list[asyncio.Task[None]] = []
+
+        def _run_now(coro):
+            task = asyncio.create_task(coro)
+            scheduled.append(task)
+            return task
+
+        with (
+            patch(
+                "mc.application.execution.post_processing.create_background_task",
+                side_effect=_run_now,
+            ),
+            patch(
+                "mc.application.execution.post_processing.resolve_consolidation_model",
+                return_value="provider-cli-test-model",
+            ),
+            patch(
+                "mc.application.execution.post_processing.consolidate_task_output",
+                new=AsyncMock(return_value=True),
+            ) as consolidate_mock,
+        ):
+            await hook(request, result)
+            await asyncio.gather(*scheduled)
+
+        consolidate_mock.assert_awaited_once_with(
+            tmp_path,
+            task_title="Consolidate provider-cli step",
+            task_output="provider-cli final result",
+            task_status="completed",
+            task_id="task-1",
+            model="provider-cli-test-model",
+        )
+
+    @pytest.mark.asyncio
+    async def test_provider_cli_boundary_still_consolidates_empty_success_output(
+        self, tmp_path: Path
+    ) -> None:
+        hook = build_provider_cli_memory_consolidation_hook(bridge=MagicMock())
+        request = _provider_cli_request()
+        result = ExecutionResult(
+            success=True,
+            output="",
+            session_id="sess-pc-empty",
+            memory_workspace=tmp_path,
+        )
+        scheduled: list[asyncio.Task[None]] = []
+
+        def _run_now(coro):
+            task = asyncio.create_task(coro)
+            scheduled.append(task)
+            return task
+
+        with (
+            patch(
+                "mc.application.execution.post_processing.create_background_task",
+                side_effect=_run_now,
+            ),
+            patch(
+                "mc.application.execution.post_processing.resolve_consolidation_model",
+                return_value="provider-cli-test-model",
+            ),
+            patch(
+                "mc.application.execution.post_processing.consolidate_task_output",
+                new=AsyncMock(return_value=True),
+            ) as consolidate_mock,
+        ):
+            await hook(request, result)
+            await asyncio.gather(*scheduled)
+
+        consolidate_mock.assert_awaited_once_with(
+            tmp_path,
+            task_title="Consolidate provider-cli step",
+            task_output="",
+            task_status="completed",
+            task_id="task-1",
+            model="provider-cli-test-model",
+        )
