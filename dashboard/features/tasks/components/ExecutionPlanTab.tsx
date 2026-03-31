@@ -25,6 +25,7 @@ import {
 import { useExecutionPlanActions } from "@/features/tasks/hooks/useExecutionPlanActions";
 import { StepListView } from "@/components/StepListView";
 import { formatDuration } from "@/lib/formatDuration";
+import { isPausedPlanStepEditable } from "@/lib/pausedPlanEditing";
 
 const nodeTypes = {
   flowStep: FlowStepNode,
@@ -50,6 +51,10 @@ export interface ExecutionPlanStep {
   title?: string;
   description: string;
   assignedAgent?: string;
+  workflowStepId?: string;
+  workflowStepType?: "agent" | "human" | "review" | "system";
+  reviewSpecId?: string;
+  onRejectStepId?: string;
   dependsOn?: string[];
   blockedBy?: string[];
   parallelGroup?: string | number;
@@ -63,6 +68,10 @@ interface LiveStep {
   title: string;
   description: string;
   assignedAgent: string;
+  workflowStepId?: string;
+  workflowStepType?: "agent" | "human" | "review" | "system";
+  reviewSpecId?: string;
+  onRejectStepId?: string;
   status: string;
   blockedBy?: string[];
   parallelGroup: number;
@@ -82,7 +91,13 @@ export type ExecutionPlanViewMode = "canvas" | "steps";
 
 interface ExecutionPlanTabProps {
   executionPlan:
-    | { steps: ExecutionPlanStep[]; createdAt?: string; generatedAt?: string }
+    | {
+        steps: ExecutionPlanStep[];
+        createdAt?: string;
+        generatedAt?: string;
+        generatedBy?: "orchestrator-agent" | "workflow";
+        workflowSpecId?: string;
+      }
     | null
     | undefined;
   liveSteps?: LiveStep[];
@@ -111,6 +126,10 @@ interface NormalizedStep {
   title?: string;
   description: string;
   assignedAgent?: string;
+  workflowStepId?: string;
+  workflowStepType?: "agent" | "human" | "review" | "system";
+  reviewSpecId?: string;
+  onRejectStepId?: string;
   dependencies: string[];
   parallelGroup?: string | number;
   status: string;
@@ -130,7 +149,10 @@ function getDependencyIds(step: ExecutionPlanStep): string[] {
   return (step.blockedBy ?? step.dependsOn ?? []).map((id) => String(id));
 }
 
-function normalizePlanSteps(planSteps: ExecutionPlanStep[]): NormalizedStep[] {
+function normalizePlanSteps(
+  planSteps: ExecutionPlanStep[],
+  generatedBy: "orchestrator-agent" | "workflow" | undefined,
+): NormalizedStep[] {
   return planSteps
     .map((step, index) => ({ step, index }))
     .sort((a, b) => {
@@ -139,10 +161,22 @@ function normalizePlanSteps(planSteps: ExecutionPlanStep[]): NormalizedStep[] {
       return aOrder - bOrder;
     })
     .map(({ step }, index) => ({
-      stepId: String(step.stepId ?? step.tempId ?? `step-${index + 1}`),
+      // Keep the plan tempId as the canonical editor/node id so paused-plan edits
+      // never drift onto materialized step document ids.
+      stepId: String(step.tempId ?? step.stepId ?? `step-${index + 1}`),
       title: step.title,
       description: step.description,
       assignedAgent: step.assignedAgent,
+      workflowStepId:
+        step.workflowStepId ??
+        (generatedBy === "workflow"
+          ? String(step.tempId ?? step.stepId ?? `step-${index + 1}`)
+          : undefined),
+      workflowStepType:
+        step.workflowStepType ??
+        (generatedBy === "workflow" && !step.assignedAgent ? "human" : undefined),
+      reviewSpecId: step.reviewSpecId,
+      onRejectStepId: step.onRejectStepId,
       dependencies: getDependencyIds(step),
       parallelGroup: step.parallelGroup,
       status: normalizeStatus(step.status),
@@ -240,6 +274,10 @@ function mergeStepsWithLiveData(
       title: liveStep.title ?? planStep.title,
       description: liveStep.description || planStep.description,
       assignedAgent: liveStep.assignedAgent || planStep.assignedAgent,
+      workflowStepId: liveStep.workflowStepId ?? planStep.workflowStepId,
+      workflowStepType: liveStep.workflowStepType ?? planStep.workflowStepType,
+      reviewSpecId: liveStep.reviewSpecId ?? planStep.reviewSpecId,
+      onRejectStepId: liveStep.onRejectStepId ?? planStep.onRejectStepId,
       dependencies:
         planStep.dependencies.length > 0
           ? planStep.dependencies
@@ -267,6 +305,10 @@ function normalizedStepsToPlanSteps(steps: NormalizedStep[]): EditablePlanStep[]
     blockedBy: s.dependencies,
     parallelGroup: typeof s.parallelGroup === "number" ? s.parallelGroup : 0,
     order: s.order,
+    workflowStepId: s.workflowStepId,
+    workflowStepType: s.workflowStepType,
+    reviewSpecId: s.reviewSpecId,
+    onRejectStepId: s.onRejectStepId,
     skip: s.skip,
   }));
 }
@@ -351,7 +393,7 @@ export function ExecutionPlanTab({
 
   const steps = useMemo(() => {
     if (!executionPlan?.steps || executionPlan.steps.length === 0) return [];
-    const normalizedPlan = normalizePlanSteps(executionPlan.steps);
+    const normalizedPlan = normalizePlanSteps(executionPlan.steps, executionPlan.generatedBy);
     return shouldOverlayLiveSteps
       ? mergeStepsWithLiveData(normalizedPlan, liveSteps)
       : normalizedPlan;
@@ -558,6 +600,7 @@ export function ExecutionPlanTab({
           steps: updatedSteps,
           generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
           generatedBy: currentPlan?.generatedBy ?? "orchestrator-agent",
+          workflowSpecId: currentPlan?.workflowSpecId,
         };
         onLocalPlanChange(updatedPlan);
         setEditingStepId(null);
@@ -592,6 +635,7 @@ export function ExecutionPlanTab({
         steps: updatedSteps,
         generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
         generatedBy: currentPlan?.generatedBy ?? "orchestrator-agent",
+        workflowSpecId: currentPlan?.workflowSpecId,
       });
     },
     [editablePlanSteps, executionPlan, onLocalPlanChange],
@@ -626,6 +670,12 @@ export function ExecutionPlanTab({
   const handleStepClick = useCallback(
     (stepId: string) => {
       if (stepId === VISUAL_MERGE_ALIAS_ID) return;
+      const foundStep = steps.find((candidate) => candidate.stepId === stepId);
+      if (isPaused && foundStep && !isPausedPlanStepEditable(foundStep.status)) {
+        setEditingStepId(null);
+        setEditStepError(null);
+        return;
+      }
       // In live/read-only mode (not editing the plan), open the live tab
       if (!canEditCanvas && onOpenLive) {
         onOpenLive(stepId);
@@ -636,7 +686,7 @@ export function ExecutionPlanTab({
       setEditStepError(null);
       setShowAddForm(false);
     },
-    [canAddOrEdit, canEditCanvas, onOpenLive],
+    [canAddOrEdit, canEditCanvas, isPaused, onOpenLive, steps],
   );
 
   const handleNodeClick = useCallback(
@@ -680,21 +730,32 @@ export function ExecutionPlanTab({
       const hasParallelSiblings = stepData
         ? !isMergeAliasStep && getMergeableSiblingIds(editablePlanSteps, n.id).length > 1
         : false;
+      const stepStatus = statusMap.get(n.id);
+      const canMutatePausedStep = !isPaused || isPausedPlanStepEditable(stepStatus);
       return {
         ...n,
         data: {
           ...(n.data as FlowStepNodeData),
-          status: statusMap.get(n.id) ?? "planned",
+          status: stepStatus ?? "planned",
           duration: durationMap.get(n.id),
           isPaused,
           stepErrorMessage: errorMessageMap.get(n.id),
           isEditMode: canEditCanvas,
           hasParallelSiblings,
           isLeafStep: leafStepIds.has(n.id),
-          onAddSequential: canEditCanvas ? handleAddSequential : undefined,
-          onAddParallel: canEditCanvas && !isMergeAliasStep ? handleAddParallel : undefined,
-          onMergePaths: canEditCanvas && !isMergeAliasStep ? handleMergePaths : undefined,
-          onDeleteStep: canEditCanvas && !isVisualOnly ? handleDeleteStep : undefined,
+          onAddSequential: canEditCanvas && canMutatePausedStep ? handleAddSequential : undefined,
+          onAddParallel:
+            canEditCanvas && canMutatePausedStep && !isMergeAliasStep
+              ? handleAddParallel
+              : undefined,
+          onMergePaths:
+            canEditCanvas && canMutatePausedStep && !isMergeAliasStep
+              ? handleMergePaths
+              : undefined,
+          onDeleteStep:
+            canEditCanvas && isPaused && !isVisualOnly && canMutatePausedStep
+              ? handleDeleteStep
+              : undefined,
           onAccept: readOnly || isVisualOnly ? undefined : handleAccept,
           onRetry: readOnly || isVisualOnly ? undefined : handleRetry,
           onStop: readOnly || isVisualOnly ? undefined : handleStop,
@@ -702,7 +763,10 @@ export function ExecutionPlanTab({
           stopError: stopErrors[n.id],
           isAccepting: acceptingStepId === n.id,
           acceptError: acceptErrors[n.id],
-          onStepClick: !isVisualOnly && (canAddOrEdit || onOpenLive) ? handleStepClick : undefined,
+          onStepClick:
+            !isVisualOnly && (canAddOrEdit || onOpenLive) && canMutatePausedStep
+              ? handleStepClick
+              : undefined,
           isRetrying: retryingStepId === n.id,
           retryError: retryErrors[n.id],
           isVisualOnly,
@@ -751,8 +815,8 @@ export function ExecutionPlanTab({
 
   // Build existingSteps for the blocked-by selector
   const existingStepsForForm: ExistingStep[] = useMemo(() => {
-    // Prefer live step ids only when the canvas is actually operating in live mode.
-    if (shouldOverlayLiveSteps && liveSteps && liveSteps.length > 0) {
+    // When editing the paused/review plan we must stay on plan tempIds, not materialized ids.
+    if (!canEditCanvas && shouldOverlayLiveSteps && liveSteps && liveSteps.length > 0) {
       return liveSteps.map((ls) => ({
         id: ls._id,
         title: ls.title,
@@ -765,7 +829,7 @@ export function ExecutionPlanTab({
       title: s.title ?? s.description.slice(0, 50),
       status: s.status,
     }));
-  }, [liveSteps, shouldOverlayLiveSteps, steps]);
+  }, [canEditCanvas, liveSteps, shouldOverlayLiveSteps, steps]);
 
   const handleAddStep = useCallback(
     async (data: AddStepData) => {
@@ -814,6 +878,7 @@ export function ExecutionPlanTab({
           steps: [...currentSteps, newStep],
           generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
           generatedBy: currentPlan?.generatedBy ?? "orchestrator-agent",
+          workflowSpecId: currentPlan?.workflowSpecId,
         };
         onLocalPlanChange(updatedPlan);
         setAddStepError(null);
@@ -849,19 +914,24 @@ export function ExecutionPlanTab({
     const found = steps.find((s) => s.stepId === editingStepId);
     if (!found) return null;
     const liveBlockedByIds =
-      shouldOverlayLiveSteps && found.liveId
+      !canEditCanvas && shouldOverlayLiveSteps && found.liveId
         ? liveSteps?.find((liveStep) => liveStep._id === found.liveId)?.blockedBy?.map(String)
         : undefined;
     return {
-      stepId: shouldOverlayLiveSteps ? (found.liveId ?? found.stepId) : found.stepId,
+      stepId: canEditCanvas
+        ? found.stepId
+        : shouldOverlayLiveSteps
+          ? (found.liveId ?? found.stepId)
+          : found.stepId,
       liveId: found.liveId,
       title: found.title ?? "",
       description: found.description,
       assignedAgent: found.assignedAgent ?? "",
+      workflowStepType: found.workflowStepType,
       status: found.status,
       blockedByIds: liveBlockedByIds ?? found.dependencies,
     };
-  }, [editingStepId, liveSteps, shouldOverlayLiveSteps, steps]);
+  }, [canEditCanvas, editingStepId, liveSteps, shouldOverlayLiveSteps, steps]);
 
   const handleEditStep = useCallback(
     async (data: EditStepData) => {
@@ -883,6 +953,7 @@ export function ExecutionPlanTab({
           steps: updatedSteps,
           generatedAt: currentPlan?.generatedAt ?? new Date().toISOString(),
           generatedBy: currentPlan?.generatedBy ?? "orchestrator-agent",
+          workflowSpecId: currentPlan?.workflowSpecId,
         };
         onLocalPlanChange(updatedPlan);
         setEditStepError(null);
@@ -1022,6 +1093,7 @@ export function ExecutionPlanTab({
             step={editingStep}
             existingSteps={existingStepsForForm}
             boardId={boardId}
+            isPaused={isPaused}
             onSave={handleEditStep}
             onDelete={handleDeleteStep}
             onCancel={() => {

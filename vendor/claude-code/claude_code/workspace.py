@@ -14,6 +14,7 @@ import logging
 import os
 import platform
 import shlex
+import shutil
 import time
 import uuid
 from datetime import datetime
@@ -32,7 +33,7 @@ try:
     from nanobot.agent.skills import (
         BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR,  # type: ignore[import]
     )
-except ImportError:  # pragma: no cover – vendor package not on path
+except ImportError:  # pragma: no cover - vendor package not on path
     _VENDOR_SKILLS_DIR = Path(__file__).parent.parent.parent / "nanobot" / "nanobot" / "skills"
 
 # Project root — used to anchor `uv run --project` in hook commands so that
@@ -60,6 +61,9 @@ Use these tools via the `mcp__mc__` prefix:
 1. Call `mcp__mc__ask_user` with your question.
 2. The call BLOCKS until the user replies — wait for it.
 3. Only then proceed to the next question or action.
+
+Native `AskUserQuestion` and built-in `Cron*` tools are disabled in Mission Control sessions.
+Always use the `mcp__mc__*` tools instead of searching for or relying on those native variants.
 
 Examples of when you MUST use `mcp__mc__ask_user`:
 - Running a questionnaire or wizard (either one question at a time, or a short structured questions array)
@@ -92,6 +96,37 @@ _MAX_SOCKET_PATH_LEN = 104
 _BOOTSTRAP_FILES = ["AGENTS.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
 
 
+def sync_workspace_back(ctx: WorkspaceContext) -> None:
+    """Sync container-local workspace data back to the persistent volume.
+
+    Called by the execution strategy AFTER the CC agent finishes.
+    Copies output files and memory changes from the ephemeral workspace
+    to the persistent Docker volume paths, then cleans up the ephemeral dir.
+    """
+    if not ctx.sync_targets:
+        return
+    for target in ctx.sync_targets:
+        if not target.local.is_dir():
+            continue
+        try:
+            target.persistent.mkdir(parents=True, exist_ok=True)
+            for entry in target.local.rglob("*"):
+                if not entry.is_file():
+                    continue
+                rel = entry.relative_to(target.local)
+                dest = target.persistent / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(entry, dest)
+            logger.info("[sync] %s → %s", target.local, target.persistent)
+        except OSError:
+            logger.error("[sync] Failed %s → %s", target.local, target.persistent, exc_info=True)
+
+    # Clean up ephemeral workspace to avoid /tmp accumulation
+    if ctx.cwd.exists() and str(ctx.cwd).startswith("/tmp/mc-workspaces/"):
+        shutil.rmtree(ctx.cwd, ignore_errors=True)
+        logger.info("[sync] Cleaned up ephemeral workspace %s", ctx.cwd)
+
+
 class CCWorkspaceManager:
     """Prepares Claude Code agent workspaces."""
 
@@ -100,7 +135,9 @@ class CCWorkspaceManager:
         workspace_root: Path | None = None,
         vendor_skills_dir: Path | None = None,
     ) -> None:
-        self._root = workspace_root or Path.home() / ".nanobot"
+        from mc.infrastructure.runtime_home import get_runtime_home
+
+        self._root = workspace_root or get_runtime_home()
         self._vendor_skills = vendor_skills_dir or _VENDOR_SKILLS_DIR
 
     def prepare(
@@ -180,39 +217,115 @@ class CCWorkspaceManager:
                 memory_workspace = workspace
             artifacts_workspace = None
 
+        # --- Ephemeral CWD (fully container-local) ---
+        # The CC bubblewrap sandbox cannot reliably operate on Docker host
+        # bind-mounts (virtiofs/osxfs).  Everything the agent touches lives in
+        # /tmp/mc-workspaces/.  MC (outside the sandbox) handles sync to/from
+        # the persistent bind-mount before and after execution.
+        suffix = task_id[:8] if task_id else uuid.uuid4().hex[:8]
+        ephemeral_cwd = Path("/tmp/mc-workspaces") / f"{agent_name}-{suffix}"
+        ephemeral_cwd.mkdir(parents=True, exist_ok=True)
+
+        from claude_code.types import SyncTarget
+
+        sync_targets: list[SyncTarget] = []
+
+        # --- Copy memory (not symlink — bind-mount paths break bubblewrap) ---
+        for subdir in ("memory", "sessions"):
+            src = memory_workspace / subdir
+            dest = ephemeral_cwd / subdir
+            if dest.is_symlink():
+                dest.unlink()
+            elif dest.exists():
+                shutil.rmtree(dest)
+            if src.is_dir():
+                shutil.copytree(src, dest)
+            else:
+                dest.mkdir(parents=True, exist_ok=True)
+        # Memory and sessions need sync back after execution
+        sync_targets.append(SyncTarget(
+            local=ephemeral_cwd / "memory",
+            persistent=memory_workspace / "memory",
+        ))
+        sync_targets.append(SyncTarget(
+            local=ephemeral_cwd / "sessions",
+            persistent=memory_workspace / "sessions",
+        ))
+
+        # --- Copy task attachments + create local output dir ---
+        local_task_dir: str | None = None
+        if task_id:
+            from mc.types import task_safe_id
+
+            safe_id = task_safe_id(task_id)
+            persistent_task_dir = self._root / "tasks" / safe_id
+            local_task = ephemeral_cwd / "task"
+            local_task.mkdir(exist_ok=True)
+            local_task_dir = str(local_task)
+
+            # Copy attachments into container-local path
+            persistent_attach = persistent_task_dir / "attachments"
+            local_attach = local_task / "attachments"
+            if local_attach.exists():
+                shutil.rmtree(local_attach)
+            if persistent_attach.is_dir():
+                shutil.copytree(persistent_attach, local_attach)
+            else:
+                local_attach.mkdir(parents=True, exist_ok=True)
+
+            # Create local output dir (agent writes here)
+            local_output = local_task / "output"
+            local_output.mkdir(exist_ok=True)
+            # Sync output back to bind-mount after execution
+            persistent_output = persistent_task_dir / "output"
+            persistent_output.mkdir(parents=True, exist_ok=True)
+            sync_targets.append(SyncTarget(
+                local=local_output,
+                persistent=persistent_output,
+            ))
+
+        # --- Copy board artifacts ---
+        local_artifacts_workspace: Path | None = None
+        if artifacts_workspace and artifacts_workspace.is_dir():
+            local_artifacts = ephemeral_cwd / "artifacts"
+            if local_artifacts.exists():
+                shutil.rmtree(local_artifacts)
+            shutil.copytree(artifacts_workspace, local_artifacts)
+            local_artifacts_workspace = local_artifacts
+
         # Skills must be mapped BEFORE generating CLAUDE.md so the skills
         # summary in _generate_claude_md() can reference the mapped symlinks.
-        self._map_skills(workspace, agent_config.skills)
+        self._map_skills(ephemeral_cwd, agent_config.skills, persistent_workspace=workspace)
         self._generate_claude_md(
-            workspace,
+            ephemeral_cwd,
             agent_config,
             orientation=orientation,
             task_prompt=task_prompt,
-            memory_workspace=memory_workspace,
-            artifacts_workspace=artifacts_workspace,
+            memory_workspace=ephemeral_cwd,
+            artifacts_workspace=local_artifacts_workspace,
             task_id=task_id,
+            persistent_workspace=workspace,
+            local_task_dir=local_task_dir,
         )
 
         # H3: Validate socket path length (macOS limit ~104 chars)
-        # Include first 8 chars of task_id to prevent socket clobber when the
-        # same agent runs concurrent tasks (HIGH-2 fix).
-        socket_suffix = task_id[:8] if task_id else uuid.uuid4().hex[:8]
+        socket_suffix = suffix
         socket_path = f"/tmp/mc-{agent_name}-{socket_suffix}.sock"
         if len(socket_path) > _MAX_SOCKET_PATH_LEN:
             raise ValueError(
                 f"Socket path too long ({len(socket_path)} chars, max {_MAX_SOCKET_PATH_LEN}): {socket_path}"
             )
         self._generate_mcp_json(
-            workspace,
+            ephemeral_cwd,
             agent_name,
             task_id,
             socket_path,
             board_name=board_name,
-            memory_workspace=memory_workspace,
+            memory_workspace=ephemeral_cwd,
             interactive_session_id=interactive_session_id,
         )
         self._generate_hook_settings(
-            workspace,
+            ephemeral_cwd,
             agent_name=agent_name,
             task_id=task_id,
             socket_path=socket_path,
@@ -220,10 +333,12 @@ class CCWorkspaceManager:
         )
 
         return WorkspaceContext(
-            cwd=workspace,
-            mcp_config=workspace / ".mcp.json",
-            claude_md=workspace / "CLAUDE.md",
+            cwd=ephemeral_cwd,
+            mcp_config=ephemeral_cwd / ".mcp.json",
+            claude_md=ephemeral_cwd / "CLAUDE.md",
             socket_path=socket_path,
+            sync_targets=sync_targets,
+            persistent_memory_workspace=memory_workspace,
         )
 
     # ------------------------------------------------------------------
@@ -239,6 +354,8 @@ class CCWorkspaceManager:
         memory_workspace: Path | None = None,
         artifacts_workspace: Path | None = None,
         task_id: str | None = None,
+        persistent_workspace: Path | None = None,
+        local_task_dir: str | None = None,
     ) -> None:
         """Write CLAUDE.md with agent identity, context, and MCP tools guide.
 
@@ -268,9 +385,7 @@ class CCWorkspaceManager:
         parts.append("\n".join(identity_lines))
 
         # 2. Workspace guidance
-        task_dir = None
-        if task_id:
-            task_dir = str(Path.home() / ".nanobot" / "tasks" / task_id)
+        task_dir = local_task_dir
         parts.append(
             self._workspace_guidance(
                 workspace,
@@ -291,8 +406,8 @@ class CCWorkspaceManager:
         if orientation:
             parts.append(f"## Orientation\n\n{orientation}")
 
-        # 5. Bootstrap files
-        bootstrap = self._load_bootstrap_files(workspace)
+        # 5. Bootstrap files (search persistent workspace for agent-local files)
+        bootstrap = self._load_bootstrap_files(persistent_workspace or workspace)
         if bootstrap:
             parts.append(bootstrap)
 
@@ -513,6 +628,7 @@ class CCWorkspaceManager:
                 f"- Task files (attachments + output): {task_dir}\n"
                 f"  - Read input from: {task_dir}/attachments/\n"
                 f"  - Save output to: {task_dir}/output/\n"
+                f"  - **If an output file already exists, Read it before using Write to overwrite.**\n"
             )
         else:
             task_line = "- Task-specific deliverables stay in task output directories.\n"
@@ -525,7 +641,12 @@ class CCWorkspaceManager:
             f"- Custom skills: .claude/skills/{{skill-name}}/SKILL.md\n"
         )
 
-    def _map_skills(self, workspace: Path, skills: list[str]) -> None:
+    def _map_skills(
+        self,
+        workspace: Path,
+        skills: list[str],
+        persistent_workspace: Path | None = None,
+    ) -> None:
         """Copy skill directories into .claude/skills/ for each requested skill.
 
         Also registers each skill as a CC slash command in .claude/commands/
@@ -535,8 +656,8 @@ class CCWorkspaceManager:
         does not traverse symlinked directories.
 
         Search order (first match wins):
-          1. workspace/skills/<skill_name>
-          2. self._root/workspace/skills/<skill_name>
+          1. persistent_workspace/skills/<skill_name>  (agent-local)
+          2. self._root/workspace/skills/<skill_name>  (global)
           3. vendor builtin: vendor/nanobot/nanobot/skills/<skill_name>
         """
         import shutil
@@ -584,7 +705,7 @@ class CCWorkspaceManager:
                 logger.warning("Skipping invalid skill name: %s", skill_name)
                 continue
 
-            target = self._find_skill(workspace, skill_name)
+            target = self._find_skill(workspace, skill_name, persistent_workspace)
             if target is None:
                 logger.warning("Skill '%s' not found in any search location — skipping", skill_name)
                 continue
@@ -618,9 +739,15 @@ class CCWorkspaceManager:
         # can invoke them (e.g. /generate-image).
         self._register_skill_commands(commands_dir, skills_dir, mapped_skills)
 
-    def _find_skill(self, workspace: Path, skill_name: str) -> Path | None:
+    def _find_skill(
+        self,
+        workspace: Path,
+        skill_name: str,
+        persistent_workspace: Path | None = None,
+    ) -> Path | None:
         """Return the first existing skill directory for *skill_name*, or None."""
         candidates = [
+            *([persistent_workspace / "skills" / skill_name] if persistent_workspace else []),
             workspace / "skills" / skill_name,
             self._root / "workspace" / "skills" / skill_name,
             self._vendor_skills / skill_name,
@@ -697,7 +824,7 @@ class CCWorkspaceManager:
         memory_workspace: Path | None = None,
         interactive_session_id: str | None = None,
     ) -> None:
-        """Write .mcp.json that configures the nanobot MCP server subprocess."""
+        """Write .mcp.json that configures the MC MCP bridge subprocess."""
         from mc.infrastructure.secrets import resolve_secret_env
 
         env: dict[str, str] = {
@@ -720,7 +847,7 @@ class CCWorkspaceManager:
             env["CONVEX_ADMIN_KEY"] = os.environ["CONVEX_ADMIN_KEY"]
         config: dict = {
             "mcpServers": {
-                "openmc": {
+                "mc": {
                     "command": "uv",
                     "args": [
                         "run",
@@ -749,22 +876,25 @@ class CCWorkspaceManager:
         claude_dir.mkdir(parents=True, exist_ok=True)
         settings_path = claude_dir / "settings.json"
 
-        # Grant file access to the entire data tree so agents can read task
-        # attachments, write task output, and access memory across workspaces.
-        # Without this the CC sandbox blocks paths outside the agent's CWD.
-        data_root = str(self._root.expanduser().resolve())
+        # The Docker container IS the sandbox boundary — disable CC's
+        # internal bubblewrap sandbox which is unreliable on virtiofs/osxfs
+        # bind-mounts and blocks legitimate file writes from Bash subprocesses.
+        #
+        # Permission rules use bare tool names (no path restriction) so every
+        # tool is auto-approved regardless of path.  With bypassPermissions
+        # mode these are redundant but serve as documentation and fallback.
         base_settings: dict = {
             "permissions": {
                 "allow": [
-                    f"Read({data_root}/**)",
-                    f"Edit({data_root}/**)",
-                    f"Write({data_root}/**)",
+                    "Bash(*)",
+                    "Read",
+                    "Edit",
+                    "Write",
                 ]
             },
+            # Explicitly disable — container provides isolation.
             "sandbox": {
-                "filesystem": {
-                    "allowWrite": [data_root]
-                }
+                "enabled": False,
             },
         }
 

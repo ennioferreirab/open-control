@@ -1,4 +1,4 @@
-"""Identity helpers for interactive TUI sessions."""
+"""SHARED: Identity helpers for interactive sessions (both headless and TUI)."""
 
 from __future__ import annotations
 

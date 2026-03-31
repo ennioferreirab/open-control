@@ -35,9 +35,9 @@ from mc.application.execution.file_enricher import (
 from mc.application.execution.request import EntityType, ExecutionRequest
 from mc.application.execution.roster_builder import (
     build_agent_roster,
+    hydrate_agent_data,
     inject_orientation,
     load_agent_config,
-    load_agent_data,
     resolve_tier,
     sync_agent_from_convex,
 )
@@ -497,9 +497,11 @@ class ContextBuilder:
         req.agent_skills = agent_skills
         req.reasoning_level = reasoning_level
 
-        # Load full AgentData if needed (for CC routing)
-        if req.is_cc:
-            req.agent = load_agent_data(agent_name)
+        req.agent = hydrate_agent_data(agent_name, convex_agent=convex_agent)
+        if req.agent is not None:
+            req.agent.prompt = agent_prompt
+            req.agent.model = agent_model
+            req.agent.skills = agent_skills or []
 
         # Assemble the canonical prompt for the CLI bootstrap.
         # agent_prompt carries the system persona/instructions; description carries the
@@ -711,9 +713,11 @@ class ContextBuilder:
         req.agent_skills = agent_skills
         req.reasoning_level = reasoning_level
 
-        # Load full AgentData if needed (for CC routing)
-        if req.is_cc:
-            req.agent = load_agent_data(agent_name)
+        req.agent = hydrate_agent_data(agent_name, convex_agent=convex_agent)
+        if req.agent is not None:
+            req.agent.prompt = agent_prompt
+            req.agent.model = agent_model
+            req.agent.skills = agent_skills or []
 
         # Assemble the canonical prompt for the CLI bootstrap.
         # agent_prompt carries the system persona/instructions; description carries the

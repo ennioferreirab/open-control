@@ -1,4 +1,8 @@
-"""Provider-agnostic interactive session orchestration."""
+"""TUI-ONLY: Provider-agnostic interactive session orchestration.
+
+Lower-level session management used by the TUI authoring path (create squad).
+Not used by headless agent execution or chat.
+"""
 
 from __future__ import annotations
 

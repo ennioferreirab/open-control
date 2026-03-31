@@ -208,6 +208,23 @@ describe("agent resolution", () => {
     expect(plan.steps[0].assignedAgent).toBe("");
   });
 
+  it("assigns low-agent for system steps without agentId", () => {
+    const systemWorkflow: WorkflowSpecInput = {
+      specId: "wf-system",
+      name: "System Workflow",
+      steps: [
+        {
+          id: "step-system",
+          title: "Persist learnings",
+          type: "system",
+        },
+      ],
+    };
+
+    const plan = compileWorkflowExecutionPlan(systemWorkflow, AGENT_REFS);
+    expect(plan.steps[0].assignedAgent).toBe("low-agent");
+  });
+
   it("throws when an agentId cannot be resolved", () => {
     const badWorkflow: WorkflowSpecInput = {
       specId: "wf-bad",
@@ -222,6 +239,22 @@ describe("agent resolution", () => {
       ],
     };
     expect(() => compileWorkflowExecutionPlan(badWorkflow, AGENT_REFS)).toThrow();
+  });
+
+  it("rejects agent steps that are missing agentId", () => {
+    const badWorkflow: WorkflowSpecInput = {
+      specId: "wf-agent-missing-agent",
+      name: "Bad Agent Workflow",
+      steps: [
+        {
+          id: "step-agent",
+          title: "Generate assets",
+          type: "agent",
+        },
+      ],
+    };
+
+    expect(() => compileWorkflowExecutionPlan(badWorkflow, AGENT_REFS)).toThrow(/requires agentId/);
   });
 
   it("rejects review steps that are missing agentId", () => {

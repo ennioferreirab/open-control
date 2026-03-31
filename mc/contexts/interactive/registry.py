@@ -1,4 +1,7 @@
-"""Bridge-backed registry for interactive TUI session metadata."""
+"""SHARED: Bridge-backed registry for interactive session metadata.
+
+Tracks session state for both headless and TUI execution paths.
+"""
 
 from __future__ import annotations
 

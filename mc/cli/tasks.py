@@ -51,7 +51,8 @@ def tasks_create(
             _cli.console.print("[red]Error:[/red] No default board exists. Create one first.")
             raise typer.Exit(1)
 
-        args: dict[str, object] = {"title": title, "board_id": default_board["_id"]}
+        board_id = default_board.get("_id") or default_board.get("id")
+        args: dict[str, object] = {"title": title, "board_id": board_id}
         if description:
             args["description"] = description
         if tag_list:

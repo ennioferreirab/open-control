@@ -15,6 +15,7 @@ import signal
 from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING
 
+from claude_code.tool_policy import merge_mc_disallowed_tools
 from claude_code.types import CCTaskResult, WorkspaceContext
 from mc.types import AgentData
 
@@ -192,9 +193,8 @@ class ClaudeCodeProvider:
         cmd.extend(["--allowedTools", "mcp__mc__*"])
 
         # Disallowed tools
-        if cc and cc.disallowed_tools:
-            for tool in cc.disallowed_tools:
-                cmd.extend(["--disallowedTools", tool])
+        for tool in merge_mc_disallowed_tools(cc.disallowed_tools if cc else None):
+            cmd.extend(["--disallowedTools", tool])
 
         # Session resume
         if session_id:

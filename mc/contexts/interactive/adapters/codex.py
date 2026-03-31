@@ -1,4 +1,8 @@
-"""Codex adapter for the interactive session runtime."""
+"""TUI-ONLY: Codex adapter for the interactive tmux session runtime.
+
+Builds commands for Codex TUI inside tmux.  Only used for authoring flows.
+Agent execution and chat use the headless ProviderCliRunnerStrategy.
+"""
 
 from __future__ import annotations
 

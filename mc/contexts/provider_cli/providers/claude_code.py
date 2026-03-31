@@ -306,8 +306,41 @@ class ClaudeCodeCLIParser:
         return events
 
     def _parse_user_message(self, data: dict[str, Any]) -> list[ParsedCliEvent]:
-        """Ignore echoed user/tool-result messages from Claude's stream."""
-        return []
+        """Extract tool_result blocks from echoed user messages."""
+        message = data.get("message", {})
+        content = message.get("content", [])
+        events: list[ParsedCliEvent] = []
+
+        for block in content:
+            if block.get("type") != "tool_result":
+                continue
+            tool_use_id = block.get("tool_use_id")
+            result_content = block.get("content", "")
+            if isinstance(result_content, list):
+                # Multi-part content — extract text parts
+                result_content = "\n".join(
+                    p.get("text", "") for p in result_content if p.get("type") == "text"
+                )
+            if not result_content:
+                continue
+            # Truncate large outputs to avoid bloating the activity log
+            max_len = 4000
+            truncated = len(result_content) > max_len
+            display = result_content[:max_len] + ("... (truncated)" if truncated else "")
+            events.append(
+                ParsedCliEvent(
+                    kind="tool_result",
+                    text=display,
+                    provider_session_id=self._discovered_session_id,
+                    metadata={
+                        "tool_use_id": tool_use_id,
+                        "source_type": "tool_result",
+                        "source_subtype": "tool_result",
+                    },
+                )
+            )
+
+        return events
 
     def _parse_result_message(self, data: dict[str, Any]) -> list[ParsedCliEvent]:
         """Handle ``result`` messages."""
@@ -347,7 +380,6 @@ class ClaudeCodeCLIParser:
     ) -> ParsedCliEvent | None:
         normalized = tool_name.strip().lower()
         if normalized not in {
-            "mcp__openmc__ask_user",
             "mcp__mc__ask_user",
             "askuserquestion",
         }:

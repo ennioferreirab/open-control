@@ -209,6 +209,27 @@ describe("workflowSpecs.publish", () => {
       'Review step "review" requires reviewSpecId',
     );
   });
+
+  it("rejects publish when an agent step is missing agentId", async () => {
+    const handler = getHandler(publish);
+    const { ctx } = makeCtx({
+      _id: "workflow-spec-id-agent-missing-agent",
+      squadSpecId: "squad-spec-id-1",
+      status: "draft",
+      version: 1,
+      steps: [
+        {
+          id: "generate-assets",
+          title: "Generate assets",
+          type: "agent",
+        },
+      ],
+    });
+
+    await expect(handler(ctx, { specId: "workflow-spec-id-agent-missing-agent" })).rejects.toThrow(
+      'Agent step "generate-assets" requires agentId',
+    );
+  });
 });
 
 describe("workflowSpecs.listBySquad", () => {

@@ -1,4 +1,8 @@
-"""Provider-event normalization into the shared interactive supervision contract."""
+"""SHARED: Provider-event normalization into the supervision contract.
+
+Normalizes provider-specific events (Claude Code hooks, Codex events) into
+canonical InteractiveSupervisionEvent objects.  Used by both headless and TUI.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,38 @@ from typing import Any, Final
 from mc.contexts.interactive.supervision_types import (
     INTERACTIVE_SUPERVISION_EVENT_KINDS,
     InteractiveSupervisionEvent,
+)
+
+# Keys that normalize_provider_event extracts at the top level or that are
+# hook infrastructure.  Everything else belongs in the metadata dict.
+# Used by MCSocketServer._handle_emit_supervision_event and ClaudeHookRelay.
+SUPERVISION_METADATA_EXCLUDE_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "hook_event_name",
+        "eventName",
+        "session_id",
+        "task_id",
+        "step_id",
+        "agent_name",
+        "kind",
+        "event_name",
+        "event",
+        "type",
+        "summary",
+        "message",
+        "error",
+        "errorMessage",
+        "status",
+        "turn_id",
+        "item_id",
+        "occurred_at",
+        "occurredAt",
+        "timestamp",
+        "final_output",
+        "finalResult",
+        "final_result",
+        "metadata",
+    }
 )
 
 _CLAUDE_EVENT_KIND_MAP: Final[dict[str, str]] = {

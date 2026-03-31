@@ -19,6 +19,8 @@
 
 import { reduceTransitiveDeps } from "./graphUtils";
 
+const SYSTEM_ASSIGNED_AGENT = "low-agent";
+
 // ---------------------------------------------------------------------------
 // Input types
 // ---------------------------------------------------------------------------
@@ -155,18 +157,20 @@ function computeParallelGroups(steps: WorkflowSpecStep[]): Map<string, number> {
 }
 
 function validateWorkflowStep(step: WorkflowSpecStep): void {
-  if (step.type !== "review") {
-    return;
+  if (step.type === "agent" && !step.agentId) {
+    throw new Error(`Agent step "${step.id}" requires agentId`);
   }
 
-  if (!step.agentId) {
-    throw new Error(`Review step "${step.id}" requires agentId`);
-  }
-  if (!step.reviewSpecId) {
-    throw new Error(`Review step "${step.id}" requires reviewSpecId`);
-  }
-  if (!step.onReject) {
-    throw new Error(`Review step "${step.id}" requires onReject`);
+  if (step.type === "review") {
+    if (!step.agentId) {
+      throw new Error(`Review step "${step.id}" requires agentId`);
+    }
+    if (!step.reviewSpecId) {
+      throw new Error(`Review step "${step.id}" requires reviewSpecId`);
+    }
+    if (!step.onReject) {
+      throw new Error(`Review step "${step.id}" requires onReject`);
+    }
   }
 }
 
@@ -196,7 +200,9 @@ export function compileWorkflowExecutionPlan(
 
     // Resolve agent name
     let assignedAgent = "";
-    if (step.agentId !== undefined) {
+    if (step.type === "system" && step.agentId === undefined) {
+      assignedAgent = SYSTEM_ASSIGNED_AGENT;
+    } else if (step.agentId !== undefined) {
       const resolvedName = agentLookup.get(step.agentId);
       if (resolvedName === undefined) {
         throw new Error(

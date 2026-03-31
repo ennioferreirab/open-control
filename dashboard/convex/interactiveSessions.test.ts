@@ -40,6 +40,9 @@ type InteractiveSessionDoc = {
   controlMode?: string;
   manualTakeoverAt?: string;
   manualCompletionRequestedAt?: string;
+  hasLiveTranscript?: boolean;
+  liveStorageMode?: string;
+  liveEventCount?: number;
 };
 
 const takeoverSessionBase: InteractiveSessionDoc = {
@@ -266,6 +269,9 @@ describe("interactiveSessions.upsert", () => {
       taskId: "task-123",
       stepId: "step-456",
       supervisionState: "idle",
+      hasLiveTranscript: true,
+      liveStorageMode: "file",
+      liveEventCount: 12,
     });
 
     expect(inserts).toHaveLength(1);
@@ -283,6 +289,9 @@ describe("interactiveSessions.upsert", () => {
       taskId: "task-123",
       stepId: "step-456",
       supervisionState: "idle",
+      hasLiveTranscript: true,
+      liveStorageMode: "file",
+      liveEventCount: 12,
     });
     expect(inserts[0].value).not.toHaveProperty("output");
     expect(inserts[0].value).not.toHaveProperty("pendingInput");
@@ -323,6 +332,9 @@ describe("interactiveSessions.upsert", () => {
       finalResult: "Implemented the requested step.",
       finalResultSource: "codex-app-server",
       finalResultAt: "2026-03-13T01:12:00.000Z",
+      hasLiveTranscript: true,
+      liveStorageMode: "file",
+      liveEventCount: 13,
     });
 
     expect(inserts).toHaveLength(0);
@@ -342,6 +354,9 @@ describe("interactiveSessions.upsert", () => {
         finalResult: "Implemented the requested step.",
         finalResultSource: "codex-app-server",
         finalResultAt: "2026-03-13T01:12:00.000Z",
+        hasLiveTranscript: true,
+        liveStorageMode: "file",
+        liveEventCount: 13,
       },
     });
     expect(patches[0].patch).not.toHaveProperty("output");

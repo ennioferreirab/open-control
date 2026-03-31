@@ -156,7 +156,7 @@ def test_parse_output_returns_ask_user_requested_for_mcp_tool() -> None:
                     {
                         "type": "tool_use",
                         "id": "tu_ask_001",
-                        "name": "mcp__openmc__ask_user",
+                        "name": "mcp__mc__ask_user",
                         "input": {"question": "What does Easy do?"},
                     }
                 ],
@@ -230,7 +230,7 @@ def test_parse_output_emits_hook_response_as_system_event() -> None:
     assert meta["source_subtype"] == "hook_response"
 
 
-def test_parse_output_ignores_user_tool_result_messages() -> None:
+def test_parse_output_extracts_tool_result_from_user_messages() -> None:
     parser = ClaudeCodeCLIParser()
     line = json.dumps(
         {
@@ -241,7 +241,32 @@ def test_parse_output_ignores_user_tool_result_messages() -> None:
                     {
                         "type": "tool_result",
                         "tool_use_id": "toolu_123",
-                        "content": "verbose output that should stay internal",
+                        "content": "command output here",
+                    }
+                ],
+            },
+        }
+    )
+    events = parser.parse_output(_jsonl(line))
+    assert len(events) == 1
+    assert events[0].kind == "tool_result"
+    assert events[0].text == "command output here"
+    assert events[0].metadata["tool_use_id"] == "toolu_123"
+    assert events[0].metadata["source_type"] == "tool_result"
+
+
+def test_parse_output_ignores_empty_tool_result() -> None:
+    parser = ClaudeCodeCLIParser()
+    line = json.dumps(
+        {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_456",
+                        "content": "",
                     }
                 ],
             },

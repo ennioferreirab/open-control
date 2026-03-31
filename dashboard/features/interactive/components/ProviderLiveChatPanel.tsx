@@ -205,7 +205,7 @@ export function ProviderLiveChatPanel({
         {isLoading ? (
           <p className="text-xs text-zinc-500">Connecting to provider session…</p>
         ) : events.length === 0 ? (
-          <p className="text-xs text-zinc-500">No output yet.</p>
+          <p className="text-xs text-zinc-500">No records.</p>
         ) : filteredNodes !== null && filteredNodes.length === 0 ? (
           <p className="text-xs text-zinc-500">No live events for the selected categories.</p>
         ) : filteredNodes === null && filteredEvents.length === 0 ? (

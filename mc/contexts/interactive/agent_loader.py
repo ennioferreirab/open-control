@@ -1,4 +1,8 @@
-"""Helpers for loading interactive-capable agent metadata."""
+"""TUI-ONLY: Helpers for loading interactive-capable agent metadata.
+
+Used by the WebSocket/tmux authoring flow to load agent data with
+interactive_provider overrides.  Not used by headless execution.
+"""
 
 from __future__ import annotations
 

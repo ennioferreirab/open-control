@@ -93,6 +93,15 @@ async def test_prepare_launch_reuses_cc_workspace_bootstrap_without_headless_fla
     assert "--permission-mode" in launch.command
     assert "--allowedTools" in launch.command
     assert "--disallowedTools" in launch.command
+    disallowed = [
+        launch.command[i + 1]
+        for i, token in enumerate(launch.command)
+        if token == "--disallowedTools"
+    ]
+    assert "AskUserQuestion" in disallowed
+    assert "CronCreate" in disallowed
+    assert "CronDelete" in disallowed
+    assert "CronList" in disallowed
     assert "--effort" in launch.command
     assert "-p" not in launch.command
     assert "--output-format" not in launch.command

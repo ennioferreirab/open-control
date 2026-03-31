@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useSelectableAgents } from "@/hooks/useSelectableAgents";
 import { HUMAN_AGENT_NAME } from "@/lib/constants";
+import { isPausedPlanStepEditable } from "@/lib/pausedPlanEditing";
 import { getStatusMeta } from "./FlowStepNode";
 import type { ExistingStep } from "./AddStepForm";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -36,11 +37,13 @@ interface EditStepFormProps {
     title: string;
     description: string;
     assignedAgent: string;
+    workflowStepType?: "agent" | "human" | "review" | "system";
     status: string;
     blockedByIds: string[];
   };
   existingSteps: ExistingStep[];
   boardId?: Id<"boards">;
+  isPaused?: boolean;
   onSave: (data: EditStepData) => void;
   onDelete?: (stepId: string) => void;
   onCancel: () => void;
@@ -50,6 +53,7 @@ export function EditStepForm({
   step,
   existingSteps,
   boardId,
+  isPaused = false,
   onSave,
   onDelete,
   onCancel,
@@ -65,10 +69,15 @@ export function EditStepForm({
   const selectableAgents = (agents ?? []).filter((a) => a.name !== "orchestrator-agent");
   const selectableBlockers = existingSteps.filter((candidate) => candidate.id !== step.stepId);
 
-  const isLocked = step.status !== "planned" && step.status !== "blocked";
+  const isLocked = isPaused
+    ? !isPausedPlanStepEditable(step.status)
+    : step.status !== "planned" && step.status !== "blocked";
+  const requiresAssignedAgent = step.workflowStepType !== "human";
 
   const isValid =
-    title.trim().length > 0 && description.trim().length > 0 && assignedAgent.length > 0;
+    title.trim().length > 0 &&
+    description.trim().length > 0 &&
+    (!requiresAssignedAgent || assignedAgent.length > 0);
 
   const hasChanges =
     title !== step.title ||

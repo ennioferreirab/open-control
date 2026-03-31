@@ -1,4 +1,7 @@
-"""Claude Code step execution backend.
+"""DEPRECATED: Claude Code step execution backend.
+
+Uses the legacy ClaudeCodeRunnerStrategy (Python SDK path).  New step
+execution should use ProviderCliRunnerStrategy (headless ``-p`` flag).
 
 Handles step execution through the Claude Code CLI when a step's model
 uses the cc/ prefix (e.g. cc/claude-sonnet-4-6). Delegates to

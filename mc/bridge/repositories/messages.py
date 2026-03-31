@@ -6,7 +6,11 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from mc.bridge.overflow import safe_string_for_convex
+from mc.infrastructure.runtime_home import get_tasks_dir
 
 if TYPE_CHECKING:
     from mc.bridge.client import BridgeClientProtocol
@@ -17,6 +21,24 @@ logger = logging.getLogger(__name__)
 def _content_digest(*parts: Any) -> str:
     payload = json.dumps(parts, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _resolve_overflow_dir(task_id: str) -> Path | None:
+    """Return the task overflow directory used for oversized thread content."""
+    try:
+        return get_tasks_dir() / task_id / "output" / "_overflow"
+    except Exception:
+        return None
+
+
+def _safe_message_content(task_id: str, content: str) -> str:
+    """Cap message content to the Convex safe limit with filesystem overflow."""
+    return safe_string_for_convex(
+        content,
+        field_name="content",
+        task_id=task_id,
+        overflow_dir=_resolve_overflow_dir(task_id),
+    )
 
 
 class MessageRepository:
@@ -65,11 +87,12 @@ class MessageRepository:
                       When provided, stored as the `type` field on the message.
                       When omitted, the `type` field is not set (backward compatible).
         """
+        safe_content = _safe_message_content(task_id, content)
         args: dict[str, Any] = {
             "task_id": task_id,
             "author_name": author_name,
             "author_type": author_type,
-            "content": content,
+            "content": safe_content,
             "message_type": message_type,
             "timestamp": datetime.now(UTC).isoformat(),
         }
@@ -106,11 +129,12 @@ class MessageRepository:
                        path, action ("created"|"modified"|"deleted"),
                        description (optional), diff (optional).
         """
+        safe_content = _safe_message_content(task_id, content)
         args: dict[str, Any] = {
             "task_id": task_id,
             "step_id": step_id,
             "agent_name": agent_name,
-            "content": content,
+            "content": safe_content,
         }
         if artifacts:
             args["artifacts"] = artifacts
@@ -141,9 +165,10 @@ class MessageRepository:
             content: Message body (chat message).
             msg_type: ThreadMessageType value -- "orchestrator_agent_chat".
         """
+        safe_content = _safe_message_content(task_id, content)
         args: dict[str, Any] = {
             "task_id": task_id,
-            "content": content,
+            "content": safe_content,
             "type": msg_type,
         }
         if plan_review is not None:
@@ -172,12 +197,14 @@ class MessageRepository:
             content: Error message body.
             step_id: Optional step _id that triggered the error.
         """
+        safe_content = _safe_message_content(task_id, content)
         args: dict[str, Any] = {
             "task_id": task_id,
             "author_name": "System",
             "author_type": "system",
-            "content": content,
+            "content": safe_content,
             "message_type": "system_event",
+            "type": "system_error",
             "timestamp": datetime.now(UTC).isoformat(),
         }
         if step_id is not None:

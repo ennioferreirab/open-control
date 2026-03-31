@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 CC_MODEL_PREFIX = "cc/"
@@ -36,12 +36,22 @@ class ClaudeCodeOpts:
 
 
 @dataclass
+class SyncTarget:
+    """Persistent sync mapping for container-local Claude Code workspaces."""
+
+    local: Path
+    persistent: Path
+
+
+@dataclass
 class WorkspaceContext:
     """Context for a Claude Code agent workspace, returned by CCWorkspaceManager.prepare()."""
     cwd: Path
     mcp_config: Path
     claude_md: Path
     socket_path: str
+    sync_targets: list[SyncTarget] = field(default_factory=list)
+    persistent_memory_workspace: Path | None = None
 
 
 @dataclass

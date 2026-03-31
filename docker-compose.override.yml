@@ -16,14 +16,17 @@ services:
       - ./scripts:/app/scripts
       # Mask host node_modules with container's named volume
       - node_modules:/app/dashboard/node_modules
+      # Dev workspace — unified bind mount for config, secrets, agents, tasks
+      - ./dev_workspace/:/workspace
+      - ./dev_live:/live-workspace
       # Persist Convex data
       - convex-data:/app/dashboard/.convex/local
-      # Runtime data
-      - ~/.nanobot:/root/.nanobot
-      - ~/.convex:/root/.convex
+      # Claude Code config (separate from workspace)
       - ~/.claude:/root/.claude
       - ~/.claude.json:/root/.host-claude.json:ro
     environment:
+      - OPEN_CONTROL_HOME=/workspace
+      - OPEN_CONTROL_LIVE_HOME=/live-workspace
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
       - CLAUDE_CODE_SETTING_SOURCES=project

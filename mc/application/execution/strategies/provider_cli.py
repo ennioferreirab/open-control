@@ -17,10 +17,13 @@ import json
 import logging
 import os
 import shutil
+import uuid
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from claude_code.tool_policy import merge_mc_disallowed_tools
 
 from mc.application.execution.request import (
     ErrorCategory,
@@ -40,6 +43,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_STREAM_IDLE_TIMEOUT_SECONDS = 300.0
 DEFAULT_EXIT_TIMEOUT_SECONDS = 30.0
 DEFAULT_STARTUP_TIMEOUT_SECONDS = 30.0
+
+
+def _omit_none_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Drop keys whose values are None before crossing the Convex boundary."""
+    return {key: value for key, value in payload.items() if value is not None}
 
 
 class ProviderCliRunnerStrategy:
@@ -93,16 +101,20 @@ class ProviderCliRunnerStrategy:
         self._stream_idle_timeout_seconds = stream_idle_timeout_seconds
         self._exit_timeout_seconds = exit_timeout_seconds
 
-    async def _prepare_workspace(self, request: ExecutionRequest) -> str | None:
-        """Prepare the agent workspace and return the resolved cwd.
+    async def _prepare_workspace(self, request: ExecutionRequest) -> Any | None:
+        """Prepare the agent workspace and return the resolved workspace context.
 
         For CC agents, calls CCWorkspaceManager.prepare() to create
         .claude/skills/, .claude/commands/, CLAUDE.md, and .mcp.json
         in the agent's board-scoped workspace.
 
-        Returns the workspace path string, or None to fall back to self._cwd.
+        Returns the workspace context, or None to fall back to self._cwd.
         """
-        if not request.is_cc or request.agent is None:
+        if request.agent is None:
+            return None
+
+        uses_claude_code_workspace = request.is_cc or request.agent.backend == "claude-code"
+        if not uses_claude_code_workspace:
             return None
 
         from claude_code.workspace import CCWorkspaceManager
@@ -149,7 +161,7 @@ class ProviderCliRunnerStrategy:
             request.agent_name,
             ws_ctx.cwd,
         )
-        return str(ws_ctx.cwd)
+        return ws_ctx
 
     async def execute(self, request: ExecutionRequest) -> ExecutionResult:
         """Execute a task via the provider CLI backend.
@@ -172,7 +184,12 @@ class ProviderCliRunnerStrategy:
                 error_exception=exc,
             )
 
-    def _build_command(self, request: ExecutionRequest) -> list[str]:
+    def _build_command(
+        self,
+        request: ExecutionRequest,
+        *,
+        prepared_mcp_config: Path | None = None,
+    ) -> list[str]:
         """Build the full command for the provider CLI process.
 
         Inserts ``-p <request.prompt>`` immediately after the binary (position 1)
@@ -206,7 +223,7 @@ class ProviderCliRunnerStrategy:
         agent = request.agent
         if agent is not None:
             # MCP config — derived from memory workspace if available
-            mcp_config = self._resolve_mcp_config_path(request)
+            mcp_config = prepared_mcp_config or self._resolve_mcp_config_path(request)
             if mcp_config is not None:
                 command.extend(["--mcp-config", str(mcp_config)])
 
@@ -233,9 +250,8 @@ class ProviderCliRunnerStrategy:
                 # Always allow the nanobot MCP tool namespace
                 command.extend(["--allowedTools", "mcp__mc__*"])
 
-                if cc_opts.disallowed_tools:
-                    for tool in cc_opts.disallowed_tools:
-                        command.extend(["--disallowedTools", tool])
+                for tool in merge_mc_disallowed_tools(cc_opts.disallowed_tools):
+                    command.extend(["--disallowedTools", tool])
 
                 if cc_opts.effort_level:
                     command.extend(["--effort", cc_opts.effort_level])
@@ -246,6 +262,8 @@ class ProviderCliRunnerStrategy:
                 command.extend(["--permission-mode", "bypassPermissions"])
                 command.extend(["--allowedTools", "*"])
                 command.extend(["--allowedTools", "mcp__mc__*"])
+                for tool in merge_mc_disallowed_tools(None):
+                    command.extend(["--disallowedTools", tool])
 
         return command
 
@@ -489,6 +507,147 @@ class ProviderCliRunnerStrategy:
         payload.update(fields)
         self._bridge.mutation("interactiveSessions:patchProviderCliMetadata", payload)
 
+    @staticmethod
+    def _get_nonblocking_ask_user_event(
+        events: list[ParsedCliEvent],
+    ) -> ParsedCliEvent | None:
+        for event in reversed(events):
+            if event.kind != "ask_user_requested":
+                continue
+            metadata = event.metadata or {}
+            tool_name = str(metadata.get("tool_name") or "").strip().lower()
+            if tool_name and tool_name != "mcp__mc__ask_user":
+                return event
+        return None
+
+    def _persist_nonblocking_ask_user_pause(
+        self,
+        *,
+        mc_session_id: str,
+        request: ExecutionRequest,
+        ask_user_event: ParsedCliEvent,
+        output_text: str,
+    ) -> None:
+        if self._bridge is None:
+            return
+
+        metadata = ask_user_event.metadata or {}
+        tool_input = metadata.get("tool_input")
+        question: str | None = None
+        options: list[str] | None = None
+        questions: list[dict[str, Any]] | None = None
+        if isinstance(tool_input, dict):
+            raw_question = tool_input.get("question")
+            if isinstance(raw_question, str) and raw_question.strip():
+                question = raw_question.strip()
+
+            raw_options = tool_input.get("options")
+            if isinstance(raw_options, list):
+                normalized_options = [
+                    str(option).strip() for option in raw_options if str(option).strip()
+                ]
+                options = normalized_options or None
+
+            raw_questions = tool_input.get("questions")
+            if isinstance(raw_questions, list):
+                normalized_questions = [item for item in raw_questions if isinstance(item, dict)]
+                questions = normalized_questions or None
+
+        timestamp = datetime.now(UTC).isoformat()
+        question_id = str(uuid.uuid4())
+        prompt_content = self._build_nonblocking_ask_user_prompt(
+            question=question,
+            options=options,
+            questions=questions,
+            fallback_text=ask_user_event.text or output_text,
+        )
+
+        try:
+            self._bridge.mutation(
+                "executionQuestions:create",
+                _omit_none_fields(
+                    {
+                        "question_id": question_id,
+                        "session_id": mc_session_id,
+                        "task_id": request.task_id,
+                        "step_id": request.step_id,
+                        "agent_name": request.agent_name,
+                        "provider": self._parser.provider_name,
+                        "question": question,
+                        "options": options,
+                        "questions": questions,
+                        "created_at": timestamp,
+                    }
+                ),
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to persist nonblocking ask-user question for {mc_session_id}: {exc}"
+            ) from exc
+
+        if not prompt_content:
+            return
+
+        try:
+            self._bridge.mutation(
+                "messages:create",
+                {
+                    "task_id": request.task_id,
+                    "step_id": request.step_id,
+                    "author_name": request.agent_name,
+                    "author_type": "agent",
+                    "content": prompt_content,
+                    "message_type": "work",
+                    "timestamp": timestamp,
+                },
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to persist nonblocking ask-user prompt for {mc_session_id}: {exc}"
+            ) from exc
+
+    def _build_nonblocking_ask_user_prompt(
+        self,
+        *,
+        question: str | None,
+        options: list[str] | None,
+        questions: list[dict[str, Any]] | None,
+        fallback_text: str | None,
+    ) -> str:
+        if questions:
+            blocks = ["### Questionnaire"]
+            blocks.append(
+                "Reply with one message. You may answer using the option labels/numbers or free text."
+            )
+            for index, item in enumerate(questions[:3], start=1):
+                header = str(item.get("header") or f"Question {index}").strip()
+                identifier = str(item.get("id") or f"question_{index}").strip()
+                prompt = str(item.get("question") or "").strip()
+                blocks.append(f"\n**{index}. {header}** (`{identifier}`)\n{prompt}")
+                option_lines: list[str] = []
+                for opt_index, option in enumerate((item.get("options") or [])[:3], start=1):
+                    label = str(option.get("label") or "").strip()
+                    description = str(option.get("description") or "").strip()
+                    if description:
+                        option_lines.append(f"  {opt_index}. {label} — {description}")
+                    else:
+                        option_lines.append(f"  {opt_index}. {label}")
+                option_lines.append("  4. Other — reply with your own text.")
+                blocks.append("Options:\n" + "\n".join(option_lines))
+            return "\n".join(blocks).strip()
+
+        prompt = (question or "").strip()
+        if prompt:
+            if not options:
+                return prompt
+            option_lines = [
+                f"  {index}. {option}" for index, option in enumerate(options[:3], start=1)
+            ]
+            option_lines.append("  4. Other — reply with your own text.")
+            return f"{prompt}\n\nOptions:\n" + "\n".join(option_lines)
+
+        return (fallback_text or "").strip()
+
     def _append_activity_log(
         self,
         *,
@@ -518,10 +677,14 @@ class ProviderCliRunnerStrategy:
         mc_session_id = f"{request.task_id}-{request.entity_id}"
 
         # 0. Prepare agent workspace (skills, commands, CLAUDE.md, MCP config)
-        session_cwd = await self._prepare_workspace(request)
+        workspace_ctx = await self._prepare_workspace(request)
+        session_cwd = str(workspace_ctx.cwd) if workspace_ctx is not None else None
 
         # 1. Build the full command, injecting the bootstrap prompt
-        command = self._build_command(request)
+        command = self._build_command(
+            request,
+            prepared_mcp_config=workspace_ctx.mcp_config if workspace_ctx is not None else None,
+        )
         runtime_env = self._build_runtime_env(request=request, mc_session_id=mc_session_id)
         self._materialize_session_mcp_config(
             command=command,
@@ -676,6 +839,7 @@ class ProviderCliRunnerStrategy:
         # Determine success
         current_status = record.status
         has_error = bool(error_events) or (exit_code is not None and exit_code != 0)
+        nonblocking_ask_user_event = self._get_nonblocking_ask_user_event(collected_events)
 
         if current_status == SessionStatus.STOPPED:
             error_msg = "Session stopped by operator."
@@ -731,6 +895,59 @@ class ProviderCliRunnerStrategy:
                 error_category=ErrorCategory.RUNNER,
                 error_message=error_msg,
                 session_id=session_id,
+            )
+
+        if nonblocking_ask_user_event is not None:
+            try:
+                self._persist_nonblocking_ask_user_pause(
+                    mc_session_id=handle.mc_session_id,
+                    request=request,
+                    ask_user_event=nonblocking_ask_user_event,
+                    output_text=output_text,
+                )
+            except Exception as exc:
+                error_msg = str(exc)
+                self._registry.update_status(handle.mc_session_id, SessionStatus.CRASHED)
+                record.update_metadata(last_error=error_msg)
+                self._persist_session_to_convex(
+                    handle.mc_session_id,
+                    agent_name=request.agent_name,
+                    provider=self._parser.provider_name,
+                    task_id=request.task_id,
+                    step_id=request.step_id,
+                    bootstrap_prompt=bootstrap_prompt,
+                    provider_session_id=session_id,
+                    status="error",
+                    ended_at=datetime.now(UTC).isoformat(),
+                    last_error=error_msg,
+                )
+                self._cleanup(handle.mc_session_id)
+                return ExecutionResult(
+                    success=False,
+                    error_category=ErrorCategory.RUNNER,
+                    error_message=error_msg,
+                    error_exception=exc,
+                    session_id=session_id,
+                )
+            record.update_metadata(final_result=output_text[:500] if output_text else None)
+            self._persist_session_to_convex(
+                handle.mc_session_id,
+                agent_name=request.agent_name,
+                provider=self._parser.provider_name,
+                task_id=request.task_id,
+                step_id=request.step_id,
+                bootstrap_prompt=bootstrap_prompt,
+                provider_session_id=session_id,
+                status="ended",
+                ended_at=datetime.now(UTC).isoformat(),
+                final_result=output_text[:500] if output_text else None,
+            )
+            self._cleanup(handle.mc_session_id)
+            return ExecutionResult(
+                success=True,
+                output=output_text,
+                session_id=session_id,
+                transition_status="waiting_human",
             )
 
         self._registry.update_status(handle.mc_session_id, SessionStatus.COMPLETED)

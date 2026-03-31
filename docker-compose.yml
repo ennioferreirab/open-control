@@ -4,7 +4,7 @@ services:
       context: .
       target: dev
     container_name: open-mc
-    entrypoint: ["/app/scripts/docker-entrypoint.sh"]
+    entrypoint: [ "/app/scripts/docker-entrypoint.sh" ]
     ports:
       - "${NEXT_PORT:-3000}:3000"
       - "${CONVEX_PORT:-3210}:3210"
@@ -21,13 +21,14 @@ services:
       - ./agent_docs:/app/agent_docs
       - ./scripts:/app/scripts
       - ./Makefile:/app/Makefile
-      # Preserve Linux node_modules from image (host bind mount hides it)
       - node-modules:/app/dashboard/node_modules
-      # Persistent state
-      - ~/.nanobot:/root/.nanobot
-      - ~/.convex:/root/.convex
+      - ./dev_workspace/:/workspace
+      - ./dev_live:/live-workspace
+      # Convex database — separate from workspace
       - convex-data:/app/dashboard/.convex/local
     environment:
+      - OPEN_CONTROL_HOME=/workspace
+      - OPEN_CONTROL_LIVE_HOME=/live-workspace
       - MC_LOG_LEVEL=${MC_LOG_LEVEL:-INFO}
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
@@ -60,7 +61,7 @@ services:
       target: dev
     profiles: [ test ]
     container_name: open-mc-test
-    entrypoint: ["/app/scripts/docker-entrypoint-dev.sh"]
+    entrypoint: [ "/app/scripts/docker-entrypoint-dev.sh" ]
     ports:
       - "${TEST_PORT:-3100}:3000"
       - "${TEST_CONVEX_PORT:-3310}:3210"
@@ -81,13 +82,17 @@ services:
       # (avoids lock conflicts with the main mc service)
       - node-modules-test:/app/dashboard/node_modules
       - next-build-test:/app/dashboard/.next
-      # Separate persistent state (no conflict with dev instance)
+      # Dev workspace — unified bind mount for config, secrets, agents, tasks
+      - ./dev_workspace/:/workspace
+      - ./dev_live_test:/live-workspace
+      # Convex database — separate from workspace
       - convex-data-test:/app/dashboard/.convex/local
-      - ~/.nanobot:/root/.nanobot
-      - ~/.convex:/root/.convex
+      # Claude Code config (separate from workspace)
       - ~/.claude:/root/.claude
       - ~/.claude.json:/root/.host-claude.json:ro
     environment:
+      - OPEN_CONTROL_HOME=/workspace
+      - OPEN_CONTROL_LIVE_HOME=/live-workspace
       - MC_LOG_LEVEL=${MC_LOG_LEVEL:-INFO}
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY

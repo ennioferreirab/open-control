@@ -70,9 +70,11 @@ def _resolve_memory_workspace():
         return Path(memory_workspace)
     agent_name = _get_agent_name()
     board_name = _get_board_name()
+    from mc.infrastructure.runtime_home import get_agents_dir, get_boards_dir
+
     if board_name:
-        return Path.home() / ".nanobot" / "boards" / board_name / "agents" / agent_name
-    return Path.home() / ".nanobot" / "agents" / agent_name
+        return get_boards_dir() / board_name / "agents" / agent_name
+    return get_agents_dir() / agent_name
 
 
 def _get_convex_url() -> str | None:

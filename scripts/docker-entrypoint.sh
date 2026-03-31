@@ -5,6 +5,28 @@
 # Convex mode: cloud by default, pass --local for local Convex backend.
 set -e
 
+# ─── Sync host credentials into runtime home ──────────────────
+if [ -n "${OPEN_CONTROL_HOME:-}" ]; then
+    echo "[entrypoint] Using OPEN_CONTROL_HOME=${OPEN_CONTROL_HOME}"
+    mkdir -p "${OPEN_CONTROL_HOME}/workspace"
+    # Symlink Convex CLI state so `npx convex` finds auth at ~/.convex
+    if [ -d "${OPEN_CONTROL_HOME}/.convex" ] && [ ! -d /root/.convex ]; then
+        ln -sf "${OPEN_CONTROL_HOME}/.convex" /root/.convex
+    fi
+else
+    # Legacy: copy from read-only host mounts into container volume
+    echo "[entrypoint] Syncing host config into runtime volume..."
+    mkdir -p /root/.nanobot/workspace
+    for f in config.json secrets.json; do
+        if [ -f "/root/.nanobot-host/$f" ]; then
+            cp "/root/.nanobot-host/$f" "/root/.nanobot/$f"
+        fi
+    done
+    if [ -d /root/.nanobot-host/workspace ]; then
+        cp -r /root/.nanobot-host/workspace/. /root/.nanobot/workspace/
+    fi
+fi
+
 # ─── Detect Convex mode ──────────────────────────────────────
 CONVEX_LOCAL=false
 MC_EXTRA_ARGS=()

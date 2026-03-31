@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from mc.contexts.interactive.live_store import LiveSessionStore
 from mc.contexts.interactive.supervision_types import InteractiveSupervisionEvent
 from mc.contexts.interactive.supervisor import (
     InteractiveExecutionSupervisor,
@@ -12,6 +13,19 @@ from mc.contexts.interactive.supervisor import (
     _stringify_input,
 )
 from mc.types import ActivityEventType
+
+
+@pytest.fixture(autouse=True)
+def isolate_live_home(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    import mc.infrastructure.runtime_home as runtime_home
+
+    monkeypatch.setenv("OPEN_CONTROL_LIVE_HOME", str(tmp_path / "live"))
+    runtime_home._resolved_live = None
+    runtime_home._resolved_live_from_env = None
+
+
+def _read_live_events(session_id: str, *, task_id: str, step_id: str | None = None) -> list[dict]:
+    return LiveSessionStore().read_events(session_id, task_id=task_id, step_id=step_id)
 
 
 def test_supervisor_marks_task_and_step_running_on_turn_started() -> None:
@@ -272,19 +286,18 @@ def test_activity_log_append_called_after_record_supervision_on_item_started() -
     )
 
     registry.record_supervision.assert_called_once()
-    bridge.mutation.assert_called_once()
-    name, payload = bridge.mutation.call_args[0]
-    assert name == "sessionActivityLog:append"
-    assert payload["session_id"] == "interactive_session:claude"
+    bridge.mutation.assert_not_called()
+    [payload] = _read_live_events("interactive_session:claude", task_id="task-1", step_id="step-1")
+    assert payload["sessionId"] == "interactive_session:claude"
     assert payload["kind"] == "item_started"
-    assert payload["tool_name"] == "str_replace_editor"
-    assert payload["tool_input"] == json.dumps({"file_path": "/tmp/foo.py"})
-    assert payload["file_path"] == "/tmp/foo.py"
-    assert payload["requires_action"] is False
+    assert payload["toolName"] == "str_replace_editor"
+    assert payload["toolInput"] == json.dumps({"file_path": "/tmp/foo.py"})
+    assert payload["filePath"] == "/tmp/foo.py"
+    assert payload["requiresAction"] is False
 
 
 def test_activity_log_payload_for_turn_completed_with_summary() -> None:
-    bridge, _registry, supervisor = _make_supervisor()
+    _bridge, _registry, supervisor = _make_supervisor()
 
     supervisor.handle_event(
         InteractiveSupervisionEvent(
@@ -297,16 +310,15 @@ def test_activity_log_payload_for_turn_completed_with_summary() -> None:
         )
     )
 
-    bridge.mutation.assert_called_once()
-    _, payload = bridge.mutation.call_args[0]
+    [payload] = _read_live_events("interactive_session:claude", task_id="task-1", step_id="step-1")
     assert payload["kind"] == "turn_completed"
     assert payload["summary"] == "Turn finished successfully."
-    assert payload["turn_id"] == "turn-2"
-    assert payload["requires_action"] is False
+    assert payload["turnId"] == "turn-2"
+    assert payload["requiresAction"] is False
 
 
 def test_activity_log_missing_metadata_fields_result_in_none() -> None:
-    bridge, _registry, supervisor = _make_supervisor()
+    _bridge, _registry, supervisor = _make_supervisor()
 
     supervisor.handle_event(
         InteractiveSupervisionEvent(
@@ -317,16 +329,15 @@ def test_activity_log_missing_metadata_fields_result_in_none() -> None:
         )
     )
 
-    bridge.mutation.assert_called_once()
-    _, payload = bridge.mutation.call_args[0]
+    [payload] = _read_live_events("interactive_session:claude", task_id="task-1", step_id="step-1")
     # With _set_if, absent optional fields are omitted (not sent as None)
-    assert "tool_name" not in payload
-    assert "tool_input" not in payload
-    assert "file_path" not in payload
+    assert "toolName" not in payload
+    assert "toolInput" not in payload
+    assert "filePath" not in payload
 
 
 def test_activity_log_requires_action_true_for_approval_requested() -> None:
-    bridge, _registry, supervisor = _make_supervisor()
+    _bridge, _registry, supervisor = _make_supervisor()
 
     supervisor.handle_event(
         InteractiveSupervisionEvent(
@@ -338,14 +349,13 @@ def test_activity_log_requires_action_true_for_approval_requested() -> None:
         )
     )
 
-    bridge.mutation.assert_called_once()
-    _, payload = bridge.mutation.call_args[0]
-    assert payload["requires_action"] is True
+    [payload] = _read_live_events("interactive_session:claude", task_id="task-1", step_id="step-1")
+    assert payload["requiresAction"] is True
     assert payload["summary"] == "Approve the shell command?"
 
 
 def test_activity_log_requires_action_true_for_user_input_requested() -> None:
-    bridge, _registry, supervisor = _make_supervisor()
+    _bridge, _registry, supervisor = _make_supervisor()
 
     supervisor.handle_event(
         InteractiveSupervisionEvent(
@@ -356,13 +366,12 @@ def test_activity_log_requires_action_true_for_user_input_requested() -> None:
         )
     )
 
-    _, payload = bridge.mutation.call_args[0]
-    assert payload["requires_action"] is True
+    [payload] = _read_live_events("interactive_session:claude", task_id="task-1", step_id="step-1")
+    assert payload["requiresAction"] is True
 
 
 def test_activity_log_write_failure_does_not_break_supervision_flow() -> None:
     bridge, registry, supervisor = _make_supervisor()
-    bridge.mutation.side_effect = RuntimeError("Convex is down")
 
     # Should not raise; supervision continues normally
     result = supervisor.handle_event(

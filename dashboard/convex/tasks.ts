@@ -7,6 +7,7 @@ import {
   taskFileMetadataValidator,
   taskFilesValidator,
   taskStatusValidator,
+  workflowStepTypeValidator,
 } from "./schema";
 import { buildTaskDetailView } from "./lib/taskDetailView";
 import {
@@ -230,6 +231,34 @@ export const list = query({
   handler: async (ctx) => {
     const all = await ctx.db.query("tasks").collect();
     return all.filter((t) => t.status !== "deleted");
+  },
+});
+
+export const searchForCommandPalette = query({
+  args: {
+    query: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const normalized = args.query.trim().toLowerCase();
+    const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
+    if (!normalized) {
+      return [];
+    }
+
+    const titleMatches = await ctx.db
+      .query("tasks")
+      .withSearchIndex("search_title_global", (q) => q.search("title", normalized))
+      .take(limit);
+
+    return titleMatches
+      .filter((task) => task.status !== "deleted")
+      .slice(0, limit)
+      .map((task) => ({
+        _id: task._id,
+        title: task.title,
+        status: task.status,
+      }));
   },
 });
 
@@ -467,10 +496,15 @@ const executionPlanSchema = v.object({
       parallelGroup: v.number(),
       order: v.number(),
       attachedFiles: v.optional(v.array(v.string())),
+      workflowStepId: v.optional(v.string()),
+      workflowStepType: v.optional(workflowStepTypeValidator),
+      reviewSpecId: v.optional(v.id("reviewSpecs")),
+      onRejectStepId: v.optional(v.string()),
     }),
   ),
   generatedAt: v.string(),
   generatedBy: v.union(v.literal("orchestrator-agent"), v.literal("workflow")),
+  workflowSpecId: v.optional(v.string()),
 });
 
 /**

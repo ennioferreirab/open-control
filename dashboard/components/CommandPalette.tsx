@@ -30,7 +30,7 @@ export function CommandPalette({ isOpen, onClose, onAction }: CommandPaletteProp
   const [selectedIndex, setSelectedIndex] = useState(0);
   const prefersReducedMotion = useReducedMotion();
 
-  const { groups, flatResults } = useCommandPaletteSearch(query, categoryFilter);
+  const { groups, flatResults } = useCommandPaletteSearch(isOpen, query, categoryFilter);
 
   // Refs for scrolling selected item into view
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map());

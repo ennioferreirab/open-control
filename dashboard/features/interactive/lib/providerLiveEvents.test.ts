@@ -96,6 +96,16 @@ describe("classifyProviderEventCategory", () => {
   it("falls back to text when kind is missing", () => {
     expect(classifyProviderEventCategory({ kind: "" })).toBe("text");
   });
+
+  it("classifies tool_result kind as tool", () => {
+    expect(classifyProviderEventCategory({ kind: "tool_result" })).toBe("tool");
+  });
+
+  it("classifies tool_result sourceType as tool", () => {
+    expect(classifyProviderEventCategory({ kind: "tool_result", sourceType: "tool_result" })).toBe(
+      "tool",
+    );
+  });
 });
 
 describe("buildProviderLiveEvent", () => {
@@ -134,6 +144,52 @@ describe("buildProviderLiveEvent", () => {
       body: "",
       toolName: "Read",
       toolInput: "/tmp/file.txt",
+      requiresAction: false,
+    });
+  });
+
+  it("shows error in body for tool events when error is present", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-tool-err",
+      kind: "item_started",
+      ts: "2026-03-18T10:00:00.000Z",
+      toolName: "Bash",
+      toolInput: '{"command":"env"}',
+      error: "Command blocked by sandbox",
+    });
+    expect(event.category).toBe("tool");
+    expect(event.body).toBe("Command blocked by sandbox");
+  });
+
+  it("shows summary in body for tool events when summary is present", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-tool-sum",
+      kind: "item_started",
+      ts: "2026-03-18T10:00:00.000Z",
+      toolName: "Bash",
+      toolInput: '{"command":"echo hi"}',
+      summary: "hi",
+    });
+    expect(event.category).toBe("tool");
+    expect(event.body).toBe("hi");
+  });
+
+  it("builds tool_result event with title 'Tool Output' and rawText as body", () => {
+    const event = buildProviderLiveEvent({
+      _id: "evt-tool-result",
+      kind: "tool_result",
+      ts: "2026-03-28T10:00:00.000Z",
+      sourceType: "tool_result",
+      rawText: "exit code 0\noutput line",
+      summary: "exit code 0\noutput line",
+    });
+
+    expect(event).toMatchObject({
+      id: "evt-tool-result",
+      kind: "tool_result",
+      category: "tool",
+      title: "Tool Output",
+      body: "exit code 0\noutput line",
       requiresAction: false,
     });
   });

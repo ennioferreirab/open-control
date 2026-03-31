@@ -269,16 +269,16 @@ The Gateway spawns agent processes and monitors their lifecycle:
 | `InteractiveTuiRunnerStrategy` | tmux terminal | PTY attachment (legacy) |
 | `HumanRunnerStrategy` | Human | No process — waits for user action |
 
-All strategies that produce live events use `SessionActivityService` for writing to Convex — see Live Reporting below.
+All strategies that produce live events use `SessionActivityService` for lightweight session metadata plus file-backed Live transcripts — see Live Reporting below.
 
 ### Live Reporting (`SessionActivityService`)
 
-All runner strategies use `SessionActivityService` (`mc/contexts/interactive/activity_service.py`) as the unified layer for communicating with the dashboard Live tab. This service writes to two Convex tables:
+All runner strategies use `SessionActivityService` (`mc/contexts/interactive/activity_service.py`) as the unified layer for communicating with the dashboard Live tab. This service writes lightweight discovery metadata to Convex and persists transcript bytes under `OPEN_CONTROL_LIVE_HOME` (default `<OPEN_CONTROL_HOME>/live-sessions`).
 
-| Table | Mutation | Purpose |
-|-------|----------|---------|
-| `interactiveSessions` | `upsert` | Session lifecycle (ready → ended/error) |
-| `sessionActivityLog` | `append` | Streaming events (text, tool_use, result, error) |
+| Store | Write Path | Purpose |
+|-------|------------|---------|
+| `interactiveSessions` | `interactiveSessions:upsert` | Session lifecycle and lightweight discovery metadata |
+| Live filesystem | `LiveSessionStore` | Streaming transcript events and session meta |
 
 ```text
 ┌─────────────────────┐  ┌──────────────┐
@@ -295,12 +295,12 @@ All runner strategies use `SessionActivityService` (`mc/contexts/interactive/act
     └────────────────────┬────────────────────────────┘
                          │
                          ▼
-                    bridge.mutation()
+            `interactiveSessions:upsert` + filesystem writes
 ```
 
 **Key behaviors:**
-- No-ops when `bridge=None` (testing/fallback)
-- Swallows bridge exceptions with `logger.debug` (non-fatal)
+- Still writes transcript files when `bridge=None`
+- Swallows `interactiveSessions:upsert` bridge exceptions with `logger.debug` (non-fatal)
 - Applies `safe_string_for_convex()` overflow protection on `raw_text` and `raw_json`
 - Accepts `ts` override for CLI parser events (preserves parser timestamp)
 - Provider-specific fields pass through `**extra` kwargs

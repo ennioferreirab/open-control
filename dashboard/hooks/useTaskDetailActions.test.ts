@@ -159,6 +159,108 @@ describe("useTaskDetailActions", () => {
     expect(result.current.isResuming).toBe(false);
   });
 
+  it("sanitizes workflow step metadata before savePlan", async () => {
+    const { result } = renderHook(() => useTaskDetailActions());
+    const plan = {
+      steps: [
+        {
+          tempId: "brief-normalization",
+          title: "Normaliza o briefing e valida insumos críticos",
+          description: "Consolidar briefing",
+          assignedAgent: "strategist",
+          blockedBy: [],
+          parallelGroup: 1,
+          order: 0,
+          agentId: "agent-doc-id",
+          workflowStepId: "brief-normalization",
+          workflowStepType: "agent",
+          reviewSpecId: "review-spec-1",
+          onRejectStepId: "revise-copy",
+        },
+      ],
+      generatedAt: "2026-03-30T00:00:00Z",
+      generatedBy: "workflow" as const,
+    };
+
+    await act(async () => {
+      await result.current.savePlan(testId<"tasks">("task1"), plan as never);
+    });
+
+    expect(mockMutationFns["tasks:saveExecutionPlan"]).toHaveBeenCalledWith({
+      taskId: "task1",
+      executionPlan: {
+        generatedAt: "2026-03-30T00:00:00Z",
+        generatedBy: "workflow",
+        steps: [
+          {
+            tempId: "brief-normalization",
+            title: "Normaliza o briefing e valida insumos críticos",
+            description: "Consolidar briefing",
+            assignedAgent: "strategist",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 0,
+            workflowStepId: "brief-normalization",
+            workflowStepType: "agent",
+            reviewSpecId: "review-spec-1",
+            onRejectStepId: "revise-copy",
+          },
+        ],
+      },
+    });
+  });
+
+  it("sanitizes workflow step metadata before resume", async () => {
+    const { result } = renderHook(() => useTaskDetailActions());
+    const plan = {
+      steps: [
+        {
+          tempId: "brief-normalization",
+          title: "Normaliza o briefing e valida insumos críticos",
+          description: "Consolidar briefing",
+          assignedAgent: "strategist",
+          blockedBy: [],
+          parallelGroup: 1,
+          order: 0,
+          agentId: "agent-doc-id",
+          workflowStepId: "brief-normalization",
+          workflowStepType: "agent",
+          reviewSpecId: "review-spec-1",
+          onRejectStepId: "revise-copy",
+        },
+      ],
+      generatedAt: "2026-03-30T00:00:00Z",
+      generatedBy: "workflow" as const,
+    };
+
+    await act(async () => {
+      await result.current.resume(testId<"tasks">("task1"), plan as never);
+    });
+
+    expect(mockMutationFns["tasks:resumeTask"]).toHaveBeenCalledWith({
+      taskId: "task1",
+      executionPlan: {
+        generatedAt: "2026-03-30T00:00:00Z",
+        generatedBy: "workflow",
+        steps: [
+          {
+            tempId: "brief-normalization",
+            title: "Normaliza o briefing e valida insumos críticos",
+            description: "Consolidar briefing",
+            assignedAgent: "strategist",
+            blockedBy: [],
+            parallelGroup: 1,
+            order: 0,
+            workflowStepId: "brief-normalization",
+            workflowStepType: "agent",
+            reviewSpecId: "review-spec-1",
+            onRejectStepId: "revise-copy",
+          },
+        ],
+      },
+    });
+  });
+
   it("calls retry mutation", async () => {
     const { result } = renderHook(() => useTaskDetailActions());
     await act(async () => {

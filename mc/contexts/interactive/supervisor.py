@@ -1,4 +1,8 @@
-"""Runtime-owned supervision sink for provider-backed interactive execution."""
+"""SHARED: Runtime-owned supervision sink for provider-backed execution.
+
+Projects normalized supervision events into MC state (task/step transitions,
+activity log).  Used by both headless (ProviderCliRunnerStrategy) and TUI paths.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from mc.contexts.interactive.live_store import LiveSessionStore
 from mc.contexts.interactive.metrics import increment_interactive_metric
 from mc.contexts.interactive.registry import InteractiveSessionRegistry
 from mc.contexts.interactive.supervision_types import InteractiveSupervisionEvent
@@ -51,6 +56,7 @@ class InteractiveExecutionSupervisor:
     def __init__(self, *, bridge: Any, registry: InteractiveSessionRegistry) -> None:
         self._bridge = bridge
         self._registry = registry
+        self._live_store = LiveSessionStore()
 
     def handle_event(self, event: InteractiveSupervisionEvent) -> dict[str, Any]:
         if not event.session_id:
@@ -116,9 +122,47 @@ class InteractiveExecutionSupervisor:
             _set_if(activity_payload, "step_id", event.step_id)
             _set_if(activity_payload, "agent_name", event.agent_name)
             _set_if(activity_payload, "provider", event.provider)
-            self._bridge.mutation("sessionActivityLog:append", activity_payload)
+            live_task_id = merged_event.task_id or event.session_id
+            self._live_store.upsert_session(
+                {
+                    "session_id": event.session_id,
+                    "task_id": live_task_id,
+                    "step_id": merged_event.step_id,
+                    "agent_name": merged_event.agent_name,
+                    "provider": merged_event.provider,
+                    "status": merged_event.status or "attached",
+                    "updated_at": timestamp,
+                    "has_live_transcript": True,
+                    "live_storage_mode": "file",
+                }
+            )
+            self._live_store.append_event(
+                {
+                    **activity_payload,
+                    "task_id": live_task_id,
+                    "step_id": merged_event.step_id,
+                    "status": merged_event.status or "attached",
+                    "live_storage_mode": "file",
+                }
+            )
         except Exception:
             logger.debug("[supervisor] Activity log write failed", exc_info=True)
+
+        # Surface tool/session errors in the Live tab thread so the user can
+        # see what went wrong without digging into the activity log.
+        if merged_event.error and merged_event.task_id:
+            try:
+                tool_name = event.metadata.get("tool_name") if event.metadata else None
+                error_prefix = f"`{tool_name}` error" if tool_name else "Error"
+                error_content = f"{error_prefix}: {merged_event.error}"
+                self._bridge.post_system_error(
+                    task_id=merged_event.task_id,
+                    content=error_content,
+                    step_id=merged_event.step_id,
+                )
+            except Exception:
+                logger.debug("[supervisor] Failed to post error to thread", exc_info=True)
+
         if _string_or_none(metadata.get("control_mode")) == "human":
             return updated_metadata
         current_control_mode = _string_or_none(updated_metadata.get("control_mode"))

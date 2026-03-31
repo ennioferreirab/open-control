@@ -29,7 +29,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from mc.application.execution.background_tasks import create_background_task
-from mc.application.execution.engine import ExecutionEngine
 from mc.application.execution.request import (
     EntityType,
     ExecutionRequest,
@@ -37,10 +36,10 @@ from mc.application.execution.request import (
     RunnerType,
 )
 from mc.application.execution.roster_builder import inject_orientation
-from mc.application.execution.runtime import relocate_invalid_memory_files
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
+    from mc.types import AgentData
 
 logger = logging.getLogger(__name__)
 
@@ -275,27 +274,18 @@ class ChatHandler:
                 resolver = TierResolver(self._bridge)
                 agent_model = resolver.resolve_model(agent_model)
 
-            # Determine runner type and build request
-            if agent_model and is_cc_model(agent_model):
-                engine_result = await self._run_cc_chat(
-                    agent_name=agent_name,
-                    agent_model=agent_model,
-                    agent_prompt=agent_prompt,
-                    agent_skills=agent_skills,
-                    agent_display_name=agent_display_name,
-                    agent_data_full=agent_data_full,
-                    content=content,
-                    channel_board=channel_board,
-                )
-            else:
-                engine_result = await self._run_provider_cli_chat(
-                    agent_name=agent_name,
-                    agent_model=agent_model,
-                    agent_prompt=agent_prompt,
-                    agent_skills=agent_skills,
-                    content=content,
-                    channel_board=channel_board,
-                )
+            # All chat — CC and non-CC — goes through the headless provider-cli path.
+            engine_result = await self._run_chat(
+                agent_name=agent_name,
+                agent_model=agent_model,
+                agent_prompt=agent_prompt,
+                agent_skills=agent_skills,
+                agent_display_name=agent_display_name,
+                agent_data_full=agent_data_full,
+                content=content,
+                channel_board=channel_board,
+                is_cc=bool(agent_model and is_cc_model(agent_model)),
+            )
 
             if not engine_result.success:
                 raise RuntimeError(
@@ -335,123 +325,70 @@ class ChatHandler:
             except Exception:
                 logger.exception("[chat] Failed to send error response")
 
-    async def _run_cc_chat(
+    async def _run_chat(
         self,
         *,
         agent_name: str,
-        agent_model: str,
+        agent_model: str | None,
         agent_prompt: str | None,
         agent_skills: list[str] | None,
         agent_display_name: str,
         agent_data_full: Any | None,
         content: str,
         channel_board: dict[str, Any] | None,
+        is_cc: bool,
     ) -> ExecutionResult:
-        """Execute CC chat through ExecutionEngine.
+        """Execute chat through the headless provider-cli engine.
 
-        Handles session persistence: loads previous session from settings,
-        persists new session_id from result. Also runs post-execution
-        memory relocation and consolidation.
+        All chat — CC and non-CC models — goes through PROVIDER_CLI
+        (``-p`` flag, JSONL output, no TUI).  For CC models, the agent
+        data is enriched with Convex metadata (claude_code_opts, etc.)
+        and session IDs are persisted for continuity.
         """
-        from mc.types import (
-            AgentData,
-            ClaudeCodeOpts,
-            extract_cc_model_name,
+        agent_data = self._build_chat_agent_data(
+            agent_name=agent_name,
+            agent_model=agent_model,
+            agent_display_name=agent_display_name,
+            agent_data_full=agent_data_full,
+            is_cc=is_cc,
         )
 
-        cc_model_name = extract_cc_model_name(agent_model)
-
-        if agent_data_full:
-            agent_data_for_cc = agent_data_full
-            agent_data_for_cc.model = cc_model_name
-            agent_data_for_cc.backend = "claude-code"
-        else:
-            agent_data_for_cc = AgentData(
-                name=agent_name,
-                display_name=agent_display_name,
-                role="agent",
-                model=cc_model_name,
-                backend="claude-code",
-            )
-
-        # Enrich from Convex agent data
-        try:
-            convex_agent_raw = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
-            if convex_agent_raw:
-                agent_data_for_cc.display_name = convex_agent_raw.get(
-                    "display_name", agent_display_name
-                )
-                agent_data_for_cc.role = convex_agent_raw.get("role", "agent")
-                cc_opts_raw = convex_agent_raw.get("claude_code_opts")
-                if cc_opts_raw and isinstance(cc_opts_raw, dict):
-                    agent_data_for_cc.claude_code_opts = ClaudeCodeOpts(
-                        max_budget_usd=cc_opts_raw.get("max_budget_usd"),
-                        max_turns=cc_opts_raw.get("max_turns"),
-                        permission_mode=cc_opts_raw.get("permission_mode", "bypassPermissions"),
-                        allowed_tools=cc_opts_raw.get("allowed_tools"),
-                        disallowed_tools=cc_opts_raw.get("disallowed_tools"),
-                    )
-        except Exception:
-            logger.warning("[chat] Could not enrich agent data for CC routing")
+        if is_cc:
+            await self._enrich_agent_from_convex(agent_data, agent_name, agent_display_name)
 
         task_id = f"chat-{agent_name}"
+        session_key = f"mc-chat:{agent_name}"
 
         # Build prompt with system instructions
-        prompt = content
+        message = content
         if agent_prompt:
-            prompt = f"[System instructions]\n{agent_prompt}\n\n[Chat message]\n{content}"
+            message = f"[System instructions]\n{agent_prompt}\n\n[Chat message]\n{content}"
 
-        # Build ExecutionRequest for CC chat
         request = ExecutionRequest(
             entity_type=EntityType.TASK,
             entity_id=task_id,
             task_id=task_id,
-            title=prompt,
+            title=message,
             board=channel_board,
             board_name=channel_board.get("name") if isinstance(channel_board, dict) else None,
-            agent=agent_data_for_cc,
+            agent=agent_data,
             agent_name=agent_name,
             agent_prompt=agent_prompt,
             agent_model=agent_model,
             agent_skills=agent_skills,
-            runner_type=RunnerType.CLAUDE_CODE,
-            is_cc=True,
+            runner_type=RunnerType.PROVIDER_CLI,
+            session_key=session_key,
+            is_cc=is_cc,
         )
 
-        # Create strategy with bridge context
-        from mc.application.execution.strategies.claude_code import (
-            ClaudeCodeRunnerStrategy,
-        )
+        from mc.application.execution.post_processing import build_execution_engine
 
-        cc_strategy = ClaudeCodeRunnerStrategy(
-            bridge=self._bridge,
-            ask_user_registry=self._ask_user_registry,
-        )
-
-        engine = ExecutionEngine(
-            strategies={RunnerType.CLAUDE_CODE: cc_strategy},
-        )
-
+        engine = build_execution_engine(bridge=self._bridge)
         engine_result = await engine.run(request)
 
-        # Post-execution: memory relocation
-        if engine_result.memory_workspace:
-            try:
-                await asyncio.to_thread(
-                    relocate_invalid_memory_files,
-                    task_id,
-                    engine_result.memory_workspace,
-                )
-            except Exception:
-                logger.warning(
-                    "[chat] Failed to relocate invalid memory files for @%s",
-                    agent_name,
-                    exc_info=True,
-                )
-
         # Persist session for CC chat continuity
-        settings_key = f"cc_session:{agent_name}:chat"
-        if engine_result.session_id:
+        if is_cc and engine_result.session_id:
+            settings_key = f"cc_session:{agent_name}:chat"
             try:
                 await asyncio.to_thread(
                     self._bridge.mutation,
@@ -463,50 +400,59 @@ class ChatHandler:
 
         return engine_result
 
-    async def _run_provider_cli_chat(
-        self,
+    @staticmethod
+    def _build_chat_agent_data(
         *,
         agent_name: str,
         agent_model: str | None,
-        agent_prompt: str | None,
-        agent_skills: list[str] | None,
-        content: str,
-        channel_board: dict[str, Any] | None,
-    ) -> ExecutionResult:
-        """Execute provider-cli chat through ExecutionEngine.
+        agent_display_name: str,
+        agent_data_full: Any | None,
+        is_cc: bool,
+    ) -> AgentData:
+        """Build AgentData for chat, setting CC-specific fields when needed."""
+        from mc.types import AgentData, extract_cc_model_name
 
-        Uses a chat-specific session key format so sessions persist
-        across messages (no end_task_session call).
-        """
-        # Build prompt with system instructions
-        message = content
-        if agent_prompt:
-            message = f"[System instructions]\n{agent_prompt}\n\n[Chat message]\n{content}"
+        model = extract_cc_model_name(agent_model) if is_cc and agent_model else agent_model
 
-        task_id = f"chat-{agent_name}"
-        session_key = f"mc-chat:{agent_name}"
+        if agent_data_full:
+            agent_data_full.model = model
+            if is_cc:
+                agent_data_full.backend = "claude-code"
+            return agent_data_full
 
-        request = ExecutionRequest(
-            entity_type=EntityType.TASK,
-            entity_id=task_id,
-            task_id=task_id,
-            title=message,
-            description=None,
-            board=channel_board,
-            board_name=channel_board.get("name") if isinstance(channel_board, dict) else None,
-            agent_name=agent_name,
-            agent_prompt=agent_prompt,
-            agent_model=agent_model,
-            agent_skills=agent_skills,
-            runner_type=RunnerType.PROVIDER_CLI,
-            session_key=session_key,
+        return AgentData(
+            name=agent_name,
+            display_name=agent_display_name,
+            role="agent",
+            model=model,
+            backend="claude-code" if is_cc else None,
         )
 
-        from mc.application.execution.post_processing import build_execution_engine
+    async def _enrich_agent_from_convex(
+        self,
+        agent_data: AgentData,
+        agent_name: str,
+        agent_display_name: str,
+    ) -> None:
+        """Enrich AgentData with Convex metadata (claude_code_opts, role, etc.)."""
+        from mc.types import ClaudeCodeOpts
 
-        engine = build_execution_engine(bridge=self._bridge)
-
-        return await engine.run(request)
+        try:
+            convex_agent_raw = await asyncio.to_thread(self._bridge.get_agent_by_name, agent_name)
+            if convex_agent_raw:
+                agent_data.display_name = convex_agent_raw.get("display_name", agent_display_name)
+                agent_data.role = convex_agent_raw.get("role", "agent")
+                cc_opts_raw = convex_agent_raw.get("claude_code_opts")
+                if cc_opts_raw and isinstance(cc_opts_raw, dict):
+                    agent_data.claude_code_opts = ClaudeCodeOpts(
+                        max_budget_usd=cc_opts_raw.get("max_budget_usd"),
+                        max_turns=cc_opts_raw.get("max_turns"),
+                        permission_mode=cc_opts_raw.get("permission_mode", "bypassPermissions"),
+                        allowed_tools=cc_opts_raw.get("allowed_tools"),
+                        disallowed_tools=cc_opts_raw.get("disallowed_tools"),
+                    )
+        except Exception:
+            logger.warning("[chat] Could not enrich agent data from Convex for @%s", agent_name)
 
     async def _resolve_channel_board_binding(self) -> dict[str, Any] | None:
         """Bind board-scoped official-channel resources to the default board."""

@@ -81,7 +81,7 @@ const SYSTEM_KINDS = new Set([
   "system_event",
 ]);
 
-const TOOL_KINDS = new Set(["tool_use"]);
+const TOOL_KINDS = new Set(["tool_use", "tool_result"]);
 const RESULT_KINDS = new Set(["item_completed", "turn_completed", "result"]);
 const ERROR_KINDS = new Set(["error", "session_failed"]);
 const TEXT_KINDS = new Set(["text", "output"]);
@@ -164,6 +164,7 @@ export function classifyProviderEventCategory(
       if (toolName && SKILL_TOOL_NAMES.has(toolName)) return "skill";
       return "tool";
     }
+    if (sourceType === "tool_result") return "tool";
     if (sourceType === "assistant") return "text";
     if (sourceType === "result") return "result";
     if (sourceType === "system") return "system";
@@ -194,6 +195,7 @@ export function classifyProviderEventCategory(
 
 function getProviderEventTitle(raw: RawEntry, category: ProviderLiveCategory): string {
   if (raw.kind === "session_id") return "Session ID";
+  if (raw.kind === "tool_result") return "Tool Output";
   if (raw.toolName) return raw.toolName;
   if (category === "result") return "Result";
   if (category === "error") return "Error";
@@ -216,9 +218,16 @@ function getProviderEventBody(
     return raw.rawJson;
   }
 
-  // Tool and skill events display toolInput separately — suppress body to avoid duplication
+  // Tool results show the output content directly.
+  if (raw.kind === "tool_result") {
+    return normalizeText(raw.rawText ?? raw.summary ?? "");
+  }
+
+  // Tool and skill events display toolInput separately.
+  // Show error for failed tools, summary when available, otherwise empty.
   if (category === "tool" || category === "skill") {
-    return "";
+    if (raw.error) return raw.error;
+    return normalizeText(raw.summary ?? "");
   }
 
   // Prefer rawText when canonical metadata is available (Story 2.1)

@@ -208,7 +208,9 @@ class MCSocketServer:
                 from mc.types import task_safe_id
 
                 safe_id = task_safe_id(task_id)
-                output_dir = Path.home() / ".nanobot" / "tasks" / safe_id / "output"
+                from mc.infrastructure.runtime_home import get_tasks_dir
+
+                output_dir = get_tasks_dir() / safe_id / "output"
                 output_dir.mkdir(parents=True, exist_ok=True)
                 copied_names: list[str] = []
                 for src_path in media:
@@ -510,7 +512,19 @@ class MCSocketServer:
         if self._interactive_supervisor is None:
             return {"error": "No interactive supervision sink configured."}
 
-        from mc.contexts.interactive.supervision import normalize_provider_event
+        from mc.contexts.interactive.supervision import (
+            SUPERVISION_METADATA_EXCLUDE_KEYS,
+            normalize_provider_event,
+        )
+
+        # CC hooks send tool_name, tool_input, etc. as top-level keys.
+        # normalize_provider_event expects them nested under "metadata".
+        # Build the dict the same way ClaudeHookRelay does (claude_hooks.py).
+        if "metadata" not in raw_event:
+            raw_event["metadata"] = {
+                k: v for k, v in raw_event.items()
+                if k not in SUPERVISION_METADATA_EXCLUDE_KEYS
+            }
 
         event = normalize_provider_event(provider=provider, raw_event=raw_event)
         metadata = self._interactive_supervisor.handle_event(event)

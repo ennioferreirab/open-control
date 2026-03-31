@@ -145,6 +145,9 @@ class TestClaudeMdGeneration:
         ctx = manager.prepare("test-agent", agent, "task123")
 
         content = ctx.claude_md.read_text()
+        assert "AskUserQuestion" in content
+        assert "disabled in Mission Control sessions" in content
+        assert "mcp__mc__ask_user" in content
         assert "structured questions array" in content
         assert "free-text fallback" in content
 
