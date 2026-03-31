@@ -6,6 +6,7 @@ import ast
 import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -738,6 +739,7 @@ class TestCCModelRouting:
         (config_dir / "config.yaml").write_text("name: gpt-agent\nmodel: gpt-4")
 
         captured_requests: list[ExecutionRequest] = []
+        expected_workspace = tmp_path / "boards" / "default" / "agents" / "gpt-agent"
 
         async def capture_run(req: ExecutionRequest) -> ExecutionResult:
             captured_requests.append(req)
@@ -756,6 +758,11 @@ class TestCCModelRouting:
                 "mc.application.execution.post_processing.build_execution_engine",
                 return_value=mock_engine,
             ),
+            patch("mc.infrastructure.boards.get_agent_memory_mode", return_value="clean"),
+            patch(
+                "mc.infrastructure.boards.resolve_memory_workspace",
+                return_value=SimpleNamespace(workspace=expected_workspace),
+            ),
         ):
             await handler._process_chat_message(msg)
 
@@ -764,6 +771,8 @@ class TestCCModelRouting:
             "id": "board_default",
             "name": "default",
         }
+        assert captured_requests[0].memory_workspace == expected_workspace
+        assert captured_requests[0].session_boundary_reason == "chat_turn"
         bridge.get_default_board.assert_called_once_with()
 
 
@@ -923,55 +932,74 @@ class TestChatHandlerEngineIntegration:
         assert mutation_call[0][1]["value"] == "new-session-id"
 
     @pytest.mark.asyncio
-    async def test_cc_chat_does_not_schedule_per_message_memory_consolidation(self, tmp_path):
-        """CC chat should not invent a per-message consolidation trigger."""
+    async def test_cc_chat_runs_session_boundary_memory_consolidation_hook(self, tmp_path):
+        """CC chat should exercise the real provider-cli post-processing hook."""
         from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = _make_bridge()
         bridge.get_agent_by_name = MagicMock(return_value=None)
         handler = ChatHandler(bridge)
-        msg = _make_pending_msg(agent_name="cc-agent", content="No eager consolidation")
-
-        agents_dir = tmp_path / "agents"
-        config_dir = agents_dir / "cc-agent"
-        config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.yaml").write_text("name: cc-agent\nmodel: cc/claude-sonnet-4-6")
+        expected_workspace = tmp_path / "boards" / "default" / "agents" / "cc-agent"
+        expected_workspace.mkdir(parents=True, exist_ok=True)
+        scheduled: list[asyncio.Task[None]] = []
 
         engine_result = ExecutionResult(
             success=True,
             output="CC response",
             session_id="new-session-id",
-            memory_workspace=tmp_path,
+            memory_workspace=expected_workspace,
         )
 
-        mock_engine = MagicMock()
-        mock_engine.run = AsyncMock(return_value=engine_result)
+        def _run_now(coro):
+            task = asyncio.create_task(coro)
+            scheduled.append(task)
+            return task
 
         with (
             patch(
-                "mc.infrastructure.agents.yaml_validator.validate_agent_file",
-                return_value=MagicMock(
-                    prompt="Be helpful.",
-                    model="cc/claude-sonnet-4-6",
-                    skills=[],
-                    display_name="CC Test Agent",
-                ),
+                "mc.application.execution.strategies.provider_cli.ProviderCliRunnerStrategy.execute",
+                new=AsyncMock(return_value=engine_result),
             ),
-            patch("mc.infrastructure.config.AGENTS_DIR", agents_dir),
+            patch("mc.infrastructure.boards.get_agent_memory_mode", return_value="clean"),
             patch(
-                "mc.application.execution.post_processing.build_execution_engine",
-                return_value=mock_engine,
+                "mc.infrastructure.boards.resolve_memory_workspace",
+                return_value=SimpleNamespace(workspace=expected_workspace),
             ),
             patch(
-                "claude_code.memory_consolidator.CCMemoryConsolidator.consolidate",
-                new=AsyncMock(),
+                "mc.application.execution.post_processing.create_background_task",
+                side_effect=_run_now,
+            ),
+            patch(
+                "mc.application.execution.post_processing.resolve_consolidation_model",
+                return_value="chat-test-model",
+            ),
+            patch(
+                "mc.application.execution.post_processing.consolidate_task_output",
+                new=AsyncMock(return_value=True),
             ) as consolidate_mock,
         ):
-            await handler._process_chat_message(msg)
+            result = await handler._run_chat(
+                agent_name="cc-agent",
+                agent_model="cc/claude-sonnet-4-6",
+                agent_prompt=None,
+                agent_skills=[],
+                agent_display_name="CC Test Agent",
+                agent_data_full=None,
+                content="No eager consolidation",
+                channel_board={"id": "board_default", "name": "default"},
+                is_cc=True,
+            )
+            await asyncio.gather(*scheduled)
 
-        consolidate_mock.assert_not_awaited()
-        req = mock_engine.run.call_args[0][0]
-        assert req.session_boundary_reason is None
+        assert result.success is True
+        consolidate_mock.assert_awaited_once_with(
+            expected_workspace,
+            task_title="No eager consolidation",
+            task_output="CC response",
+            task_status="completed",
+            task_id="chat-cc-agent",
+            model="chat-test-model",
+        )
 
     @pytest.mark.asyncio
     async def test_non_cc_chat_routes_through_provider_cli_engine(self, tmp_path):
