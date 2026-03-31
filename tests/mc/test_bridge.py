@@ -844,6 +844,28 @@ class TestConvenienceMethods:
         assert call_args[1]["type"] == "step_completion"
         assert call_args[1]["messageType"] == "work"
 
+    @patch("mc.bridge.repositories.messages.safe_string_for_convex", return_value="safe-content")
+    @patch("mc.bridge.repositories.messages.get_tasks_dir", return_value=Path("/tmp/tasks"))
+    @patch("mc.bridge.ConvexClient")
+    def test_send_message_uses_overflow_protected_content(
+        self, MockClient, _mock_tasks_dir, mock_safe
+    ):
+        """send_message routes content through the message repository overflow helper."""
+        mock_client = MockClient.return_value
+        mock_client.mutation.return_value = None
+
+        bridge = ConvexBridge("https://test.convex.cloud")
+        bridge.send_message("t1", "dev", "agent", "Done!", "work")
+
+        call_args = mock_client.mutation.call_args[0]
+        assert call_args[1]["content"] == "safe-content"
+        mock_safe.assert_called_once_with(
+            "Done!",
+            field_name="content",
+            task_id="t1",
+            overflow_dir=Path("/tmp/tasks") / "t1" / "output" / "_overflow",
+        )
+
 
 # ── Story 2.4: Unified Thread Bridge Methods ─────────────────────────
 

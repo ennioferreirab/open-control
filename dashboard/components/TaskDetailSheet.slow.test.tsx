@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
@@ -29,6 +29,7 @@ const mockMutationFn = vi.fn().mockResolvedValue(undefined);
 const mockDocumentViewerModal = vi.hoisted(() => vi.fn());
 const mockAgentConfigSheet = vi.hoisted(() => vi.fn());
 const mockSquadDetailSheet = vi.hoisted(() => vi.fn());
+const mockFetch = vi.hoisted(() => vi.fn());
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => {
     const result = mockUseQuery(...args);
@@ -36,6 +37,8 @@ vi.mock("convex/react", () => ({
   },
   useMutation: () => mockMutationFn,
 }));
+
+global.fetch = mockFetch;
 
 vi.mock("@/convex/_generated/api", () => ({
   api: {
@@ -349,6 +352,32 @@ function buildDetailView(
 }
 
 describe("TaskDetailSheet", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    mockFetch.mockImplementation((input: string | URL | Request) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/api/live/sessions/") && url.endsWith("/meta")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              sessionId: "interactive_session:claude",
+              taskId: "task1",
+              stepId: "step1",
+              status: "detached",
+              eventCount: 0,
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url.includes("/api/live/sessions/") && url.includes("/events")) {
+        return Promise.resolve(new Response(JSON.stringify({ events: [] }), { status: 200 }));
+      }
+      return Promise.reject(new Error(`Unhandled fetch in test: ${url}`));
+    });
+  });
+
   afterEach(() => {
     cleanup();
     mockUseQuery.mockReset();
@@ -356,6 +385,7 @@ describe("TaskDetailSheet", () => {
     mockDocumentViewerModal.mockReset();
     mockAgentConfigSheet.mockReset();
     mockSquadDetailSheet.mockReset();
+    mockFetch.mockReset();
   });
 
   function oneRenderPass(
@@ -2679,6 +2709,8 @@ describe("TaskDetailSheet", () => {
 describe("ThreadMessage", () => {
   afterEach(() => {
     cleanup();
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({ events: [] }), { status: 200 }));
   });
 
   it("renders artifacts via ArtifactRenderer when present in step_completion", () => {

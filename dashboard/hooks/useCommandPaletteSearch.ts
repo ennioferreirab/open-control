@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useAppData } from "@/components/AppDataProvider";
 import { Settings, Tag, Clock, LayoutDashboard, ListChecks, Bot, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -184,21 +185,45 @@ export interface CommandPaletteSearchResult {
 }
 
 export function useCommandPaletteSearch(
+  enabled: boolean,
   query: string,
   categoryFilter: CategoryFilter,
 ): CommandPaletteSearchResult {
-  const tasks = useQuery(api.tasks.list);
-  const agents = useQuery(api.agents.list);
-  const squads = useQuery(api.squadSpecs.list, {});
+  const trimmedQuery = query.trim();
+  const { agents } = useAppData();
+  const tasks = useQuery(
+    api.tasks.searchForCommandPalette,
+    enabled && trimmedQuery && (categoryFilter === "all" || categoryFilter === "task")
+      ? { query: trimmedQuery, limit: 20 }
+      : "skip",
+  );
+  const squads = useQuery(
+    api.squadSpecs.list,
+    enabled && trimmedQuery && (categoryFilter === "all" || categoryFilter === "squad")
+      ? {}
+      : "skip",
+  );
 
-  const isLoading = tasks === undefined || agents === undefined || squads === undefined;
+  const needsTasks = categoryFilter === "all" || categoryFilter === "task";
+  const needsAgents = categoryFilter === "all" || categoryFilter === "agent";
+  const needsSquads = categoryFilter === "all" || categoryFilter === "squad";
+
+  const isLoading =
+    enabled &&
+    trimmedQuery.length > 0 &&
+    ((needsTasks && tasks === undefined) ||
+      (needsAgents && agents === undefined) ||
+      (needsSquads && squads === undefined));
 
   const groups = useMemo(() => {
+    if (!enabled) {
+      return [];
+    }
     // Exclude archived squads and disabled agents from search
     const activeSquads = (squads ?? []).filter((s) => s.status !== "archived");
     const activeAgents = (agents ?? []).filter((a) => a.enabled !== false);
     return filterResults(query, categoryFilter, tasks ?? [], activeAgents, activeSquads);
-  }, [query, categoryFilter, tasks, agents, squads]);
+  }, [enabled, query, categoryFilter, tasks, agents, squads]);
 
   const flatResults = useMemo(() => groups.flatMap((g) => g.results), [groups]);
 

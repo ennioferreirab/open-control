@@ -234,6 +234,34 @@ export const list = query({
   },
 });
 
+export const searchForCommandPalette = query({
+  args: {
+    query: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const normalized = args.query.trim().toLowerCase();
+    const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
+    if (!normalized) {
+      return [];
+    }
+
+    const titleMatches = await ctx.db
+      .query("tasks")
+      .withSearchIndex("search_title_global", (q) => q.search("title", normalized))
+      .take(limit);
+
+    return titleMatches
+      .filter((task) => task.status !== "deleted")
+      .slice(0, limit)
+      .map((task) => ({
+        _id: task._id,
+        title: task.title,
+        status: task.status,
+      }));
+  },
+});
+
 export const toggleFavorite = mutation({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {

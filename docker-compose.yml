@@ -23,10 +23,12 @@ services:
       - ./Makefile:/app/Makefile
       - node-modules:/app/dashboard/node_modules
       - ./dev_workspace/:/workspace
+      - ./dev_live:/live-workspace
       # Convex database — separate from workspace
       - convex-data:/app/dashboard/.convex/local
     environment:
       - OPEN_CONTROL_HOME=/workspace
+      - OPEN_CONTROL_LIVE_HOME=/live-workspace
       - MC_LOG_LEVEL=${MC_LOG_LEVEL:-INFO}
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
@@ -82,6 +84,7 @@ services:
       - next-build-test:/app/dashboard/.next
       # Dev workspace — unified bind mount for config, secrets, agents, tasks
       - ./dev_workspace/:/workspace
+      - ./dev_live_test:/live-workspace
       # Convex database — separate from workspace
       - convex-data-test:/app/dashboard/.convex/local
       # Claude Code config (separate from workspace)
@@ -89,6 +92,7 @@ services:
       - ~/.claude.json:/root/.host-claude.json:ro
     environment:
       - OPEN_CONTROL_HOME=/workspace
+      - OPEN_CONTROL_LIVE_HOME=/live-workspace
       - MC_LOG_LEVEL=${MC_LOG_LEVEL:-INFO}
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY

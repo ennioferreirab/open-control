@@ -3,6 +3,8 @@ import { join } from "path";
 
 let _resolved: string | undefined;
 let _resolvedFromEnv: string | undefined;
+let _resolvedLive: string | undefined;
+let _resolvedLiveFromEnv: string | undefined;
 
 export function getRuntimeHome(): string {
   const currentEnv = process.env.OPEN_CONTROL_HOME || process.env.NANOBOT_HOME;
@@ -32,4 +34,29 @@ export function getRuntimeHome(): string {
 
 export function getRuntimePath(...parts: string[]): string {
   return join(getRuntimeHome(), ...parts);
+}
+
+export function getLiveHome(): string {
+  const currentEnv = process.env.OPEN_CONTROL_LIVE_HOME;
+  if (_resolvedLive !== undefined && _resolvedLiveFromEnv === currentEnv) {
+    return _resolvedLive;
+  }
+
+  if (process.env.OPEN_CONTROL_LIVE_HOME) {
+    _resolvedLive = process.env.OPEN_CONTROL_LIVE_HOME;
+    _resolvedLiveFromEnv = process.env.OPEN_CONTROL_LIVE_HOME;
+    console.info(
+      `[runtime-home] Live resolved to: ${_resolvedLive} (source: OPEN_CONTROL_LIVE_HOME)`,
+    );
+    return _resolvedLive;
+  }
+
+  _resolvedLive = join(getRuntimeHome(), "live-sessions");
+  _resolvedLiveFromEnv = undefined;
+  console.info(`[runtime-home] Live resolved to: ${_resolvedLive} (source: default)`);
+  return _resolvedLive;
+}
+
+export function getLivePath(...parts: string[]): string {
+  return join(getLiveHome(), ...parts);
 }

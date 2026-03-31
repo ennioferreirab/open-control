@@ -17,6 +17,7 @@ from mc.application.execution.request import (
     RunnerType,
 )
 from mc.application.execution.strategies.provider_cli import ProviderCliRunnerStrategy
+from mc.contexts.interactive.live_store import LiveSessionStore
 from mc.contexts.provider_cli.registry import ProviderSessionRegistry
 from mc.contexts.provider_cli.types import ParsedCliEvent, ProviderProcessHandle, SessionStatus
 from mc.types import AgentData, ClaudeCodeOpts
@@ -26,17 +27,24 @@ from mc.types import AgentData, ClaudeCodeOpts
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def isolate_live_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep file-backed live transcripts under a test-local runtime root."""
+    import mc.infrastructure.runtime_home as runtime_home
+
+    monkeypatch.setenv("OPEN_CONTROL_LIVE_HOME", str(tmp_path / "live"))
+    runtime_home._resolved_live = None
+    runtime_home._resolved_live_from_env = None
+
+
 def _extract_activity_events(bridge: MagicMock) -> list[dict]:
-    """Extract activity log event payloads from both append and appendBatch calls."""
-    events: list[dict] = []
-    for call in bridge.mutation.call_args_list:
-        fn_name = call[0][0]
-        if fn_name == "sessionActivityLog:append":
-            events.append(call[0][1])
-        elif fn_name == "sessionActivityLog:appendBatch":
-            batch = call[0][1].get("events", [])
-            events.extend(batch)
-    return events
+    """Extract activity events from the file-backed Live transcript."""
+    store = LiveSessionStore()
+    events_files = sorted(store._root.glob("sessions/*/*/*/events.jsonl"))
+    if not events_files:
+        return []
+    contents = events_files[-1].read_text(encoding="utf-8").splitlines()
+    return [json.loads(line) for line in contents if line.strip()]
 
 
 def _make_request(
@@ -1896,8 +1904,8 @@ async def test_strategy_appends_provider_cli_events_to_session_activity_log() ->
     activity_events = _extract_activity_events(bridge)
     assert len(activity_events) == 2
     assert activity_events[0]["kind"] == "tool_use"
-    assert activity_events[0]["tool_name"] == "WebSearch"
-    assert activity_events[0]["tool_input"] == "copy examples"
+    assert activity_events[0]["toolName"] == "WebSearch"
+    assert activity_events[0]["toolInput"] == "copy examples"
     assert activity_events[1]["kind"] == "result"
     assert activity_events[1]["summary"] == "Found examples"
 
@@ -1954,7 +1962,7 @@ async def test_strategy_omits_null_step_id_from_direct_task_activity_log() -> No
     assert result.success is True
     activity_events = _extract_activity_events(bridge)
     assert activity_events
-    assert "step_id" not in activity_events[0]
+    assert "stepId" not in activity_events[0]
 
 
 @pytest.mark.asyncio
@@ -2004,7 +2012,7 @@ async def test_strategy_stringifies_tool_input_dict_for_activity_log() -> None:
 
     assert result.success is True
     activity_events = _extract_activity_events(bridge)
-    assert activity_events[0]["tool_input"] == '{"maxResults": 1, "query": "WebSearch"}'
+    assert activity_events[0]["toolInput"] == '{"maxResults": 1, "query": "WebSearch"}'
 
 
 @pytest.mark.asyncio

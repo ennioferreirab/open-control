@@ -20,6 +20,7 @@
     "test:full": "vitest run --config vitest.full.config.ts",
     "test:slow": "vitest run --config vitest.slow.config.ts",
     "test:architecture": "vitest run tests/architecture.test.ts",
+    "convex:bandwidth-report": "node ./scripts/convex-bandwidth-report.mjs",
     "test:e2e": "playwright test e2e/dashboard-smoke.spec.ts",
     "test:e2e:headed": "playwright test e2e/dashboard-smoke.spec.ts --headed"
   },

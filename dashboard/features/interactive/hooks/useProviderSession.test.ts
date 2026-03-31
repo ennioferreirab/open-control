@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
 
-import { selectProviderSessionStatus, normalizeProviderEvents } from "./useProviderSession";
+import {
+  normalizeProviderEvents,
+  selectProviderSessionStatus,
+  useProviderSession,
+} from "./useProviderSession";
 
 describe("selectProviderSessionStatus", () => {
   it("returns loading when the session is undefined (still fetching)", () => {
@@ -37,6 +42,7 @@ describe("normalizeProviderEvents", () => {
     const events = normalizeProviderEvents([
       {
         _id: "act-1",
+        seq: 1,
         kind: "approval_requested",
         ts: "2026-03-15T10:00:00.000Z",
         summary: "Need permission to run tests",
@@ -57,6 +63,7 @@ describe("normalizeProviderEvents", () => {
     const events = normalizeProviderEvents([
       {
         _id: "act-2",
+        seq: 2,
         kind: "item_started",
         ts: "2026-03-15T10:01:00.000Z",
         toolName: "Read",
@@ -76,6 +83,7 @@ describe("normalizeProviderEvents", () => {
     const events = normalizeProviderEvents([
       {
         _id: "act-3",
+        seq: 3,
         kind: "session_failed",
         ts: "2026-03-15T10:02:00.000Z",
         error: "Provider timed out",
@@ -91,7 +99,7 @@ describe("normalizeProviderEvents", () => {
 
   it("falls back safely when summary, error, and toolName are all absent", () => {
     const events = normalizeProviderEvents([
-      { _id: "act-4", kind: "session_ready", ts: "2026-03-15T10:03:00.000Z" },
+      { _id: "act-4", seq: 4, kind: "session_ready", ts: "2026-03-15T10:03:00.000Z" },
     ]);
 
     expect(events[0]).toMatchObject({
@@ -99,5 +107,34 @@ describe("normalizeProviderEvents", () => {
       category: "system",
       body: "",
     });
+  });
+});
+
+describe("useProviderSession", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("treats a missing transcript as an empty event list without crashing", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "Transcript not found" }), { status: 404 }),
+    );
+
+    const { result } = renderHook(() =>
+      useProviderSession({
+        sessionId: "session-1",
+        agentName: "agent-alpha",
+        provider: "claude-code",
+        status: "attached",
+      } as never),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.events).toEqual([]);
+    expect(result.current.groupedTimeline).toEqual([]);
+    expect(result.current.status).toBe("streaming");
   });
 });

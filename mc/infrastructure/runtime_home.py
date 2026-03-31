@@ -7,12 +7,16 @@ import os
 from pathlib import Path
 
 OPEN_CONTROL_HOME_ENV = "OPEN_CONTROL_HOME"
+OPEN_CONTROL_LIVE_HOME_ENV = "OPEN_CONTROL_LIVE_HOME"
 NANOBOT_HOME_ENV = "NANOBOT_HOME"
 LEGACY_RUNTIME_HOME = ".nanobot"
+LEGACY_LIVE_RUNTIME_SUBDIR = "live-sessions"
 
 _logger = logging.getLogger(__name__)
 _resolved: Path | None = None
 _resolved_from_env: str | None = None
+_resolved_live: Path | None = None
+_resolved_live_from_env: str | None = None
 
 
 def get_runtime_home() -> Path:
@@ -69,3 +73,30 @@ def get_config_path() -> Path:
 def get_secrets_path() -> Path:
     """Return the secrets file path."""
     return get_runtime_path("secrets.json")
+
+
+def get_live_home() -> Path:
+    """Return the dedicated filesystem root for live session transcripts."""
+    global _resolved_live, _resolved_live_from_env
+    current_env = os.environ.get(OPEN_CONTROL_LIVE_HOME_ENV)
+    if _resolved_live is not None and _resolved_live_from_env == current_env:
+        return _resolved_live
+
+    configured = os.environ.get(OPEN_CONTROL_LIVE_HOME_ENV)
+    if configured:
+        _resolved_live = Path(configured).expanduser()
+        _resolved_live_from_env = configured
+        _logger.info(
+            "Live home resolved to: %s (source: %s)", _resolved_live, OPEN_CONTROL_LIVE_HOME_ENV
+        )
+        return _resolved_live
+
+    _resolved_live = get_runtime_home() / LEGACY_LIVE_RUNTIME_SUBDIR
+    _resolved_live_from_env = None
+    _logger.info("Live home resolved to: %s (source: default)", _resolved_live)
+    return _resolved_live
+
+
+def get_live_sessions_dir() -> Path:
+    """Return the directory containing persisted live session transcripts."""
+    return get_live_home() / "sessions"

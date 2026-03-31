@@ -389,6 +389,9 @@ Live interactive session metadata with control mode.
 | `lastControlCommand` | `v.optional(v.string())` | |
 | `lastControlOutcome` | `v.optional(v.string())` | |
 | `lastControlError` | `v.optional(v.string())` | |
+| `hasLiveTranscript` | `v.optional(v.boolean())` | Whether a file-backed transcript currently exists |
+| `liveStorageMode` | `v.optional(v.union("convex", "dual", "file"))` | Current storage backend; new sessions should be `file` |
+| `liveEventCount` | `v.optional(v.number())` | Last known event count from `meta.json` |
 
 **Indexes:** `by_sessionId` `["sessionId"]`, `by_agentName` `["agentName"]`, `by_provider` `["provider"]`, `by_status` `["status"]`
 
@@ -396,7 +399,7 @@ Live interactive session metadata with control mode.
 
 ### `sessionActivityLog`
 
-Session-level event log for interactive sessions.
+Legacy Convex event log for interactive sessions.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -422,6 +425,8 @@ Session-level event log for interactive sessions.
 | `rawJson` | `v.optional(v.string())` | Raw JSON payload (truncated to 8000 chars) |
 
 **Indexes:** `by_session` `["sessionId"]`, `by_session_seq` `["sessionId", "seq"]`
+
+**Status:** Deprecated for new writes. Live transcript bytes now live in `/sessions/<taskId>/<stepId-or-task>/<sessionId>/meta.json` and `events.jsonl` under `OPEN_CONTROL_LIVE_HOME`. The table remains for backward compatibility and migration safety.
 
 ---
 

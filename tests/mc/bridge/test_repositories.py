@@ -363,6 +363,28 @@ class TestMessageRepository:
         args = client.mutation.call_args[0][1]
         assert args["type"] == "step_completion"
 
+    def test_send_message_uses_overflow_protection(self, tmp_path: Path):
+        client = _make_client_mock()
+        repo = MessageRepository(client)
+
+        with (
+            patch("mc.bridge.repositories.messages.get_tasks_dir", return_value=tmp_path / "tasks"),
+            patch(
+                "mc.bridge.repositories.messages.safe_string_for_convex",
+                return_value="safe-content",
+            ) as mock_safe,
+        ):
+            repo.send_message("t1", "dev", "agent", "X" * 10, "work")
+
+        args = client.mutation.call_args[0][1]
+        assert args["content"] == "safe-content"
+        mock_safe.assert_called_once_with(
+            "X" * 10,
+            field_name="content",
+            task_id="t1",
+            overflow_dir=tmp_path / "tasks" / "t1" / "output" / "_overflow",
+        )
+
     def test_post_step_completion(self):
         client = _make_client_mock()
         client.mutation.return_value = "msg-1"
@@ -384,6 +406,28 @@ class TestMessageRepository:
         args = client.mutation.call_args[0][1]
         assert args["artifacts"] == artifacts
 
+    def test_post_step_completion_uses_overflow_protection(self, tmp_path: Path):
+        client = _make_client_mock()
+        repo = MessageRepository(client)
+
+        with (
+            patch("mc.bridge.repositories.messages.get_tasks_dir", return_value=tmp_path / "tasks"),
+            patch(
+                "mc.bridge.repositories.messages.safe_string_for_convex",
+                return_value="safe-step-content",
+            ) as mock_safe,
+        ):
+            repo.post_step_completion("t1", "s1", "bot", "Done.")
+
+        args = client.mutation.call_args[0][1]
+        assert args["content"] == "safe-step-content"
+        mock_safe.assert_called_once_with(
+            "Done.",
+            field_name="content",
+            task_id="t1",
+            overflow_dir=tmp_path / "tasks" / "t1" / "output" / "_overflow",
+        )
+
     def test_post_orchestrator_agent_message(self):
         client = _make_client_mock()
         repo = MessageRepository(client)
@@ -391,6 +435,28 @@ class TestMessageRepository:
 
         args = client.mutation.call_args[0][1]
         assert args["type"] == "orchestrator_agent_chat"
+
+    def test_post_orchestrator_agent_message_uses_overflow_protection(self, tmp_path: Path):
+        client = _make_client_mock()
+        repo = MessageRepository(client)
+
+        with (
+            patch("mc.bridge.repositories.messages.get_tasks_dir", return_value=tmp_path / "tasks"),
+            patch(
+                "mc.bridge.repositories.messages.safe_string_for_convex",
+                return_value="safe-orchestrator-content",
+            ) as mock_safe,
+        ):
+            repo.post_orchestrator_agent_message("t1", "Chat text", "orchestrator_agent_chat")
+
+        args = client.mutation.call_args[0][1]
+        assert args["content"] == "safe-orchestrator-content"
+        mock_safe.assert_called_once_with(
+            "Chat text",
+            field_name="content",
+            task_id="t1",
+            overflow_dir=tmp_path / "tasks" / "t1" / "output" / "_overflow",
+        )
 
     def test_post_system_error(self):
         client = _make_client_mock()
@@ -410,6 +476,28 @@ class TestMessageRepository:
 
         args = client.mutation.call_args[0][1]
         assert "step_id" not in args
+
+    def test_post_system_error_uses_overflow_protection(self, tmp_path: Path):
+        client = _make_client_mock()
+        repo = MessageRepository(client)
+
+        with (
+            patch("mc.bridge.repositories.messages.get_tasks_dir", return_value=tmp_path / "tasks"),
+            patch(
+                "mc.bridge.repositories.messages.safe_string_for_convex",
+                return_value="safe-error-content",
+            ) as mock_safe,
+        ):
+            repo.post_system_error("t1", "Error")
+
+        args = client.mutation.call_args[0][1]
+        assert args["content"] == "safe-error-content"
+        mock_safe.assert_called_once_with(
+            "Error",
+            field_name="content",
+            task_id="t1",
+            overflow_dir=tmp_path / "tasks" / "t1" / "output" / "_overflow",
+        )
 
 
 # ── AgentRepository Tests ────────────────────────────────────────────

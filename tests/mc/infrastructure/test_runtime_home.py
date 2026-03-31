@@ -18,9 +18,13 @@ def reset_runtime_home_cache() -> None:
 
     runtime_home._resolved = None
     runtime_home._resolved_from_env = None
+    runtime_home._resolved_live = None
+    runtime_home._resolved_live_from_env = None
     yield
     runtime_home._resolved = None
     runtime_home._resolved_from_env = None
+    runtime_home._resolved_live = None
+    runtime_home._resolved_live_from_env = None
 
 
 class TestDefaultResolution:
@@ -149,3 +153,53 @@ class TestHelperFunctions:
         assert get_workspace_dir() == root_path / "workspace"
         assert get_config_path() == root_path / "config.json"
         assert get_secrets_path() == root_path / "secrets.json"
+
+    def test_get_live_home_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """get_live_home returns <runtime_home>/live-sessions by default."""
+        from mc.infrastructure.runtime_home import get_live_home, get_runtime_home
+
+        monkeypatch.delenv("OPEN_CONTROL_HOME", raising=False)
+        monkeypatch.delenv("NANOBOT_HOME", raising=False)
+        monkeypatch.delenv("OPEN_CONTROL_LIVE_HOME", raising=False)
+
+        assert get_live_home() == get_runtime_home() / "live-sessions"
+
+    def test_get_live_home_defaults_under_runtime_home(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """get_live_home falls back to <runtime_home>/live-sessions."""
+        from mc.infrastructure.runtime_home import get_live_home
+
+        root = str(tmp_path / "custom-root")
+        monkeypatch.setenv("OPEN_CONTROL_HOME", root)
+        monkeypatch.delenv("OPEN_CONTROL_LIVE_HOME", raising=False)
+        monkeypatch.delenv("NANOBOT_HOME", raising=False)
+
+        assert get_live_home() == Path(root) / "live-sessions"
+
+    def test_get_live_home_respects_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """OPEN_CONTROL_LIVE_HOME overrides the default live storage root."""
+        from mc.infrastructure.runtime_home import get_live_home
+
+        root = str(tmp_path / "custom-root")
+        live_root = str(tmp_path / "live-root")
+        monkeypatch.setenv("OPEN_CONTROL_HOME", root)
+        monkeypatch.setenv("OPEN_CONTROL_LIVE_HOME", live_root)
+        monkeypatch.delenv("NANOBOT_HOME", raising=False)
+
+        assert get_live_home() == Path(live_root)
+
+    def test_get_live_sessions_dir_uses_live_home(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """get_live_sessions_dir returns <live_home>/sessions."""
+        from mc.infrastructure.runtime_home import get_live_home, get_live_sessions_dir
+
+        live_root = str(tmp_path / "live-root")
+        monkeypatch.setenv("OPEN_CONTROL_LIVE_HOME", live_root)
+        monkeypatch.delenv("OPEN_CONTROL_HOME", raising=False)
+        monkeypatch.delenv("NANOBOT_HOME", raising=False)
+
+        assert get_live_sessions_dir() == get_live_home() / "sessions"

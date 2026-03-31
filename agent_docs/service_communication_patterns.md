@@ -347,20 +347,19 @@ In-memory cache of session documents with 30s TTL and 500-entry cap. Eliminates 
 - `_upsert()` updates cache with written data + resets timestamp
 - `end_session()` / `terminate()` evict from cache
 
-#### Activity Log Batching
+#### File-Backed Live Storage
 
 **File:** `mc/contexts/interactive/activity_service.py`
 
-`sessionActivityLog:append` mutations are buffered and flushed in batches via `sessionActivityLog:appendBatch`. This reduces Convex mutation volume from ~30/sec to ~3/sec during active execution.
+Live transcript events are written to the filesystem via `LiveSessionStore` under `OPEN_CONTROL_LIVE_HOME` (default `<OPEN_CONTROL_HOME>/live-sessions`). The in-memory buffer remains only as a compatibility lifecycle hook so callers can continue invoking `flush()` at session/result boundaries.
 
-| Trigger | Threshold |
-|---------|-----------|
-| Buffer size | 20 events |
-| Time since last flush | 300ms |
-| Session end / result | Explicit `flush()` call |
-| Exception paths | Explicit `flush()` in strategy error handlers |
+| Path | Purpose |
+|------|---------|
+| `sessions/<taskId>/<stepId-or-task>/<sessionId>/meta.json` | Session metadata for the Live tab |
+| `sessions/<taskId>/<stepId-or-task>/<sessionId>/events.jsonl` | Append-only transcript stream |
+| `session-index/<sessionId>.json` | Reverse lookup used by dashboard HTTP routes |
 
-**Rule:** All new code calling `activity_service.append_event()` must ensure `flush()` is called in error/finally paths. Lost buffer events are not recoverable.
+**Rule:** All new code calling `activity_service.append_event()` must provide enough metadata (`task_id`, optional `step_id`) for deterministic file placement. `flush()` is still required in error/finally paths, but now only clears transient compatibility state.
 
 ### 2.7 All Convex Functions Called from Python
 
@@ -618,9 +617,9 @@ claude -p "<prompt>" --output-format stream-json --verbose
 
 ### Provider-to-Live Canonical Translation
 
-All runner strategies write to `sessionActivityLog` via `SessionActivityService` (`mc/contexts/interactive/activity_service.py`). This service is the **single point** for Live tab persistence.
+All runner strategies write Live transcripts via `SessionActivityService` (`mc/contexts/interactive/activity_service.py`). This service is the **single point** for Live tab persistence.
 
-| Python metadata key | Convex field | Description |
+| Python metadata key | Stored field | Description |
 |---------------------|-------------|-------------|
 | `source_type` | `sourceType` | Canonical event classification: `system`, `assistant`, `tool_use`, `result`, `error` |
 | `source_subtype` | `sourceSubtype` | Finer classification (e.g. `init`, `text`, tool name, `success`, `error`) |
@@ -787,7 +786,7 @@ The dashboard connects to Convex via the JS SDK WebSocket (reactive). Key subscr
 | Agents | `agents.list`, `agents.listDeleted`, `agents.getByName` | `useAgentSidebarData`, `useAgentConfigSheetData` |
 | Steps | (via `tasks.getDetailView`) | `useTaskDetailView` |
 | Messages | (via `tasks.getDetailView`) | `useTaskDetailView` |
-| Sessions | `interactiveSessions.listSessions`, `sessionActivityLog.listForSession` | `useTaskInteractiveSession`, `useProviderSession` |
+| Sessions | `interactiveSessions.listSessions`, `/api/live/sessions/[sessionId]/meta`, `/api/live/sessions/[sessionId]/events` | `useTaskInteractiveSession`, `useProviderSession` |
 | Settings | `settings.list`, `settings.get`, `settings.getGatewaySleepRuntime` | `useSettingsPanelState`, `useModelTierSettings`, `useGatewaySleepRuntime` |
 | Tags | `taskTags.list`, `tagAttributes.list` | `useTagsPanelData`, `useTaskInputData` |
 | Squads | `squadSpecs.list`, `squadSpecs.getById`, `workflowSpecs.listBySquad` | `useSquadSidebarData`, `useSquadDetailData` |
@@ -838,7 +837,7 @@ Every Convex `useQuery` subscription re-evaluates when ANY document in its read-
 | `agents.list` | agents | Any agent mutation (including metric updates) |
 | `activities.listRecent` | activities | Every activity insert (very frequent during execution) |
 | `interactiveSessions.listSessions` | interactiveSessions (via `by_taskId` index) | Session upserts for the specific task |
-| `sessionActivityLog.listForSession` | sessionActivityLog (via `by_session_seq` index) | Activity log appends for the specific session |
+| `/api/live/sessions/[sessionId]/events` | Live transcript files under `OPEN_CONTROL_LIVE_HOME` | File appends for the specific session |
 
 **Rule:** When adding queries to `getBoardView` or `getDetailView`, avoid adding new table reads — each table widens the invalidation surface. Prefer separate small queries over mega-queries.
 

@@ -767,6 +767,9 @@ export default defineSchema({
     controlMode: v.optional(interactiveSessionControlModeValidator),
     manualTakeoverAt: v.optional(v.string()),
     manualCompletionRequestedAt: v.optional(v.string()),
+    hasLiveTranscript: v.optional(v.boolean()),
+    liveStorageMode: v.optional(v.union(v.literal("convex"), v.literal("dual"), v.literal("file"))),
+    liveEventCount: v.optional(v.number()),
     // Provider-CLI metadata (Stories 28-19, 28-22, 28-26)
     bootstrapPrompt: v.optional(v.string()),
     providerSessionId: v.optional(v.string()),
