@@ -52,6 +52,33 @@ class TestEnrichCCDescription:
         assert "Save ALL output files" in result
 
     @pytest.mark.asyncio
+    async def test_enrich_uses_relative_task_paths_for_cc_workspace(self):
+        bridge = _make_bridge()
+        bridge.query = MagicMock(
+            return_value={
+                "files": [
+                    {
+                        "name": "visual_direction_ifood.md",
+                        "type": "text/markdown",
+                        "size": 1024,
+                        "subfolder": "attachments",
+                    }
+                ]
+            }
+        )
+        executor = _make_executor(bridge)
+
+        result = await executor._enrich_cc_description("task1", "Base desc", None)
+
+        assert "Task workspace: task" in result
+        assert (
+            "Save ALL output files (reports, summaries, generated content) to: task/output"
+            in result
+        )
+        assert "Task has 1 attached file(s) at task/attachments." in result
+        assert "/.nanobot/tasks/task1" not in result
+
+    @pytest.mark.asyncio
     async def test_enrich_appends_merged_source_paths(self):
         bridge = _make_bridge()
 

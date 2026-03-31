@@ -19,6 +19,8 @@ from mc.application.execution.background_tasks import (
 )
 from mc.application.execution.completion_status import resolve_completion_status
 from mc.application.execution.file_enricher import (
+    build_file_context,
+    build_file_manifest,
     build_merged_source_context,
     load_merged_source_payloads,
 )
@@ -30,7 +32,7 @@ from mc.application.execution.runtime import (
     relocate_invalid_memory_files,
     snapshot_output_dir,
 )
-from mc.infrastructure.runtime_home import get_tasks_dir, get_workspace_dir
+from mc.infrastructure.runtime_home import get_workspace_dir
 from mc.types import (
     ActivityEventType,
     AuthorType,
@@ -38,20 +40,12 @@ from mc.types import (
     TaskStatus,
     extract_cc_model_name,
     is_cc_model,
-    task_safe_id,
 )
 
 if TYPE_CHECKING:
     from mc.types import AgentData, CCTaskResult
 
 logger = logging.getLogger(__name__)
-
-
-def _human_size(bytes_count: int) -> str:
-    """Convert a byte count to a compact human-readable string."""
-    if bytes_count < 1024 * 1024:
-        return f"{bytes_count // 1024} KB"
-    return f"{bytes_count / (1024 * 1024):.1f} MB"
 
 
 class CCExecutorMixin:
@@ -81,8 +75,6 @@ class CCExecutorMixin:
         description = description or ""
         fresh_task: dict[str, Any] | None = None
         try:
-            safe_id = task_safe_id(task_id)
-            files_dir = str(get_tasks_dir() / safe_id)
             try:
                 fresh_task = await asyncio.to_thread(
                     self._bridge.query, "tasks:getById", {"task_id": task_id}
@@ -94,27 +86,12 @@ class CCExecutorMixin:
                     task_id,
                 )
                 raw_files = (task_data or {}).get("files") or []
-            file_manifest = [
-                {
-                    "name": f.get("name", "unknown"),
-                    "type": f.get("type", "application/octet-stream"),
-                    "size": f.get("size", 0),
-                    "subfolder": f.get("subfolder", "attachments"),
-                }
-                for f in raw_files
-            ]
-            output_dir = str(get_tasks_dir() / safe_id / "output")
-            task_instruction = (
-                f"Task workspace: {files_dir}\n"
-                f"Save ALL output files (reports, summaries, generated content) to: {output_dir}\n"
-                f"Do NOT save output files outside this directory."
+            task_instruction = build_file_context(
+                build_file_manifest(raw_files),
+                files_dir="task",
+                output_dir="task/output",
+                use_relative_task_paths=True,
             )
-            if file_manifest:
-                manifest_summary = ", ".join(
-                    f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})"
-                    for f in file_manifest
-                )
-                task_instruction += f"\nTask has {len(file_manifest)} attached file(s) at {files_dir}/attachments. File manifest: {manifest_summary}"
             description += f"\n\n{task_instruction}"
         except Exception:
             logger.warning(

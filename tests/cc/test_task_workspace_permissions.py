@@ -126,8 +126,8 @@ class TestInstagramPostSquadPermissions:
         (local_output / "test_write.txt").write_text("writable")
         assert (local_output / "test_write.txt").read_text() == "writable"
 
-    def test_step9_claude_md_points_to_ephemeral_task_dir(self, tmp_path: Path) -> None:
-        """CLAUDE.md correctly references ephemeral task paths — not /workspace/ paths.
+    def test_step9_claude_md_points_to_relative_task_dir(self, tmp_path: Path) -> None:
+        """CLAUDE.md should use relative task paths instead of runtime internals.
 
         The guidance is correct, but the agent often ignores it and tries
         the persistent /workspace/tasks/ path instead (observed in live tab).
@@ -139,20 +139,18 @@ class TestInstagramPostSquadPermissions:
         ctx = manager.prepare("post-designer", agent, self.TASK_ID)
         claude_md = ctx.claude_md.read_text(encoding="utf-8")
 
-        # CLAUDE.md should reference the ephemeral task directory
-        ephemeral_task_dir = str(ctx.cwd / "task")
-        assert ephemeral_task_dir in claude_md, (
-            f"CLAUDE.md should reference ephemeral task dir {ephemeral_task_dir}"
-        )
-        assert f"{ephemeral_task_dir}/attachments/" in claude_md
-        assert f"{ephemeral_task_dir}/output/" in claude_md
+        assert "current working directory" in claude_md
+        assert "Task files (attachments + output): task" in claude_md
+        assert "Read input from: task/attachments/" in claude_md
+        assert "Save output to: task/output/" in claude_md
 
-        # CLAUDE.md should NOT contain the persistent /workspace/ path
+        # CLAUDE.md should NOT contain persistent or ephemeral absolute paths
         persistent_path = f"/workspace/tasks/{self.TASK_ID}"
         assert persistent_path not in claude_md, (
             f"CLAUDE.md must NOT reference persistent path {persistent_path} — "
             "agents cannot access /workspace/ from the CC sandbox"
         )
+        assert "/tmp/mc-workspaces/" not in claude_md
 
     def test_step9_settings_do_not_grant_access_to_workspace_paths(self, tmp_path: Path) -> None:
         """BUG: settings.json permissions don't explicitly allow the ephemeral workspace path.
@@ -275,20 +273,8 @@ class TestInstagramPostSquadPermissions:
         persistent_output = tmp_path / "tasks" / safe_id / "output"
         assert (persistent_output / "visual_direction.md").exists()
 
-    def test_step10_receives_step9_output_as_attachment(self, tmp_path: Path) -> None:
-        """Step 10 workspace must contain Step 9's output for the agent to read.
-
-        BUG: The current workspace preparation copies from tasks/{id}/attachments/
-        only. Step 9's output goes to tasks/{id}/output/. Step 10 does NOT
-        automatically receive step 9's output in its task/attachments/ directory.
-
-        The Image Generator agent would need to read from task/output/ from the
-        PREVIOUS step, but:
-        1. It only gets its own fresh ephemeral workspace
-        2. task/attachments/ only has the original task attachments (logo, spec)
-        3. task/output/ is empty (fresh for this step's output)
-        4. Step 9's visual_direction.md is NOT available anywhere in step 10's workspace
-        """
+    def test_step10_receives_step9_output_in_local_output(self, tmp_path: Path) -> None:
+        """Step 10 workspace must preload prior task output into task/output/."""
         from mc.types import task_safe_id
 
         safe_id = task_safe_id(self.TASK_ID)
@@ -312,19 +298,10 @@ class TestInstagramPostSquadPermissions:
         assert (local_attachments / "logo_adrena-removebg-preview.png").exists()
         assert (local_attachments / "post_spec.md").exists()
 
-        # BUG: Step 9's output is NOT in step 10's workspace
-        # The visual_direction.md from step 9 is missing
         local_output = ctx.cwd / "task" / "output"
-        assert not (local_output / "visual_direction.md").exists(), (
-            "CONFIRMED: Step 10 does NOT receive Step 9's output. "
-            "The visual_direction.md is missing from the ephemeral workspace."
-        )
-
-        # The output IS on the persistent path, but the agent can't reach it
-        # from the CC sandbox (observed: "blocked, allowed: /app")
-        persistent_output = tmp_path / "tasks" / safe_id / "output"
-        assert (persistent_output / "visual_direction.md").exists(), (
-            "Step 9's output exists on persistent path but is unreachable from CC sandbox"
+        assert (local_output / "visual_direction.md").exists(), (
+            "Step 10 should receive prior task outputs in its local task/output directory "
+            "so CC agents can read them without reaching for persistent /workspace paths."
         )
 
     def test_step10_output_dir_accessible_but_persistent_path_blocked(self, tmp_path: Path) -> None:
@@ -500,15 +477,8 @@ class TestCrossStepOutputSharing:
 
     TASK_ID = "n9760zrfdcd80svyvftybjahp183spr6"
 
-    def test_step_output_not_included_in_next_step_attachments(self, tmp_path: Path) -> None:
-        """BUG: workspace.prepare() copies attachments/ but NOT output/ from prior steps.
-
-        Step 9 writes visual_direction.md to task/output/.
-        After sync_workspace_back(), it lands on persistent tasks/{id}/output/.
-        Step 10's workspace.prepare() copies tasks/{id}/attachments/ → ephemeral.
-        It does NOT copy tasks/{id}/output/ → ephemeral.
-        Step 10 cannot read step 9's output.
-        """
+    def test_step_output_is_preloaded_into_next_step_output(self, tmp_path: Path) -> None:
+        """workspace.prepare() should preload prior task outputs into local task/output/."""
         from mc.types import task_safe_id
 
         safe_id = task_safe_id(self.TASK_ID)
@@ -529,20 +499,12 @@ class TestCrossStepOutputSharing:
         # Attachments are copied ✓
         assert (ctx.cwd / "task" / "attachments" / "post_spec.md").exists()
 
-        # Prior step output is NOT copied ✗
-        assert not (ctx.cwd / "task" / "output" / "visual_direction.md").exists()
-        assert not (ctx.cwd / "task" / "output" / "color_palette.json").exists()
+        # Prior step output is copied into the local output dir ✓
+        assert (ctx.cwd / "task" / "output" / "visual_direction.md").exists()
+        assert (ctx.cwd / "task" / "output" / "color_palette.json").exists()
 
-        # The output directory exists but is empty (fresh for this step)
-        output_files = list((ctx.cwd / "task" / "output").iterdir())
-        assert output_files == [], f"Step 10's output dir should be empty but has: {output_files}"
-
-    def test_persistent_output_exists_but_unreachable_from_sandbox(self, tmp_path: Path) -> None:
-        """The prior step's output IS on the persistent path but the sandbox blocks access.
-
-        This exactly matches the production behavior seen in the live tab:
-        agent runs `ls /workspace/tasks/{id}/output/` → BLOCKED (allowed: /app)
-        """
+    def test_persistent_output_is_mirrored_locally_for_sandbox_access(self, tmp_path: Path) -> None:
+        """The local CC workspace should mirror prior output so the sandbox never needs /workspace."""
         from mc.types import task_safe_id
 
         safe_id = task_safe_id(self.TASK_ID)
@@ -561,20 +523,13 @@ class TestCrossStepOutputSharing:
         # The persistent path has the data
         assert (prior_output / "visual_direction.md").exists()
 
-        # But the ephemeral workspace does NOT have it
-        assert not (ctx.cwd / "task" / "output" / "visual_direction.md").exists()
-
-        # The agent would need to access:
-        #   /workspace/tasks/{safe_id}/output/visual_direction.md  (persistent)
-        # But CC sandbox allows only: /app (project root from .git)
-        #
-        # Even the ephemeral CWD (/tmp/mc-workspaces/image-generator-{suffix}/)
-        # is outside /app, so Bash commands fail there too.
+        # The ephemeral workspace now has the same artifact available locally
+        assert (ctx.cwd / "task" / "output" / "visual_direction.md").exists()
 
         # Verify: the persistent path is different from the ephemeral path
         persistent_output_path = str(prior_output)
         ephemeral_output_path = str(ctx.cwd / "task" / "output")
         assert persistent_output_path != ephemeral_output_path, (
-            "Persistent and ephemeral output paths are different — "
-            "agent gets ephemeral (empty), persistent (has data) is blocked"
+            "Persistent and ephemeral output paths are still different — "
+            "the fix is to mirror prior outputs locally, not to make the agent use /workspace."
         )

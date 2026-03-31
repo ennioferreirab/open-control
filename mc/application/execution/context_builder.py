@@ -69,6 +69,17 @@ def _is_review_feedback_message(message: dict[str, Any]) -> bool:
     )
 
 
+def _cc_prompt_thread_journal_path(files_dir: str, journal_path: str, *, is_cc: bool) -> str:
+    """Return a thread journal path that is reachable from the current agent prompt."""
+    if not is_cc:
+        return journal_path
+    try:
+        rel = Path(journal_path).relative_to(files_dir)
+        return f"task/{rel.as_posix()}"
+    except ValueError:
+        return "task/output/.internal/THREAD_JOURNAL.md"
+
+
 def build_review_feedback_context(messages: list[dict[str, Any]], step_id: str) -> str:
     """Build an explicit rerun block for the latest rejected attempt and reviewer feedback."""
     latest_attempt_output: str | None = None
@@ -406,6 +417,7 @@ class ContextBuilder:
             output_dir,
             memory_dir=memory_dir,
             artifacts_dir=artifacts_dir,
+            use_relative_task_paths=req.is_cc,
         )
         req.description = (req.description or "") + f"\n\n{file_context}"
 
@@ -438,7 +450,11 @@ class ContextBuilder:
             thread_context = build_thread_context(
                 thread_messages,
                 compacted_summary=journal_snapshot.state.compacted_summary,
-                thread_journal_path=journal_snapshot.journal_path,
+                thread_journal_path=_cc_prompt_thread_journal_path(
+                    files_dir,
+                    journal_snapshot.journal_path,
+                    is_cc=req.is_cc,
+                ),
                 recent_window_messages=journal_snapshot.state.recent_window_messages,
             )
             if thread_context:
@@ -639,6 +655,7 @@ class ContextBuilder:
             step_description=step_description,
             task_title=task_title,
             raw_files=raw_files,
+            use_relative_task_paths=req.is_cc,
         )
 
         # 7. Build thread context with predecessor awareness
@@ -681,7 +698,11 @@ class ContextBuilder:
             thread_messages,
             predecessor_step_ids=req.predecessor_step_ids,
             compacted_summary=journal_snapshot.state.compacted_summary,
-            thread_journal_path=journal_snapshot.journal_path,
+            thread_journal_path=_cc_prompt_thread_journal_path(
+                files_dir,
+                journal_snapshot.journal_path,
+                is_cc=req.is_cc,
+            ),
             recent_window_messages=journal_snapshot.state.recent_window_messages,
         )
         req.thread_context = thread_context

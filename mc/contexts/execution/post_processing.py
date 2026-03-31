@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mc.application.execution.file_enricher import build_file_context, build_file_manifest
 from mc.infrastructure.runtime_home import get_tasks_dir
 from mc.types import (
     task_safe_id,
@@ -346,8 +347,6 @@ async def _enrich_nanobot_description(
     )
 
     description = description or ""
-    safe_id = task_safe_id(task_id)
-    files_dir = str(get_tasks_dir() / safe_id)
     try:
         fresh_task = await asyncio.to_thread(bridge.query, "tasks:getById", {"task_id": task_id})
         raw_files = (fresh_task or {}).get("files") or []
@@ -357,30 +356,12 @@ async def _enrich_nanobot_description(
             title,
         )
         raw_files = (task_data or {}).get("files") or []
-    file_manifest = [
-        {
-            "name": f.get("name", "unknown"),
-            "type": f.get("type", "application/octet-stream"),
-            "size": f.get("size", 0),
-            "subfolder": f.get("subfolder", "attachments"),
-        }
-        for f in raw_files
-    ]
-    output_dir = str(get_tasks_dir() / safe_id / "output")
-    task_instruction = (
-        f"Task workspace: {files_dir}\n"
-        f"Save ALL output files (reports, summaries, generated content) "
-        f"to: {output_dir}\n"
-        f"Do NOT save output files outside this directory."
+    task_instruction = build_file_context(
+        build_file_manifest(raw_files),
+        files_dir="task",
+        output_dir="task/output",
+        use_relative_task_paths=True,
     )
-    if file_manifest:
-        manifest_summary = ", ".join(
-            f"{f['name']} ({f['subfolder']}, {_human_size(f['size'])})" for f in file_manifest
-        )
-        task_instruction += (
-            f"\nTask has {len(file_manifest)} attached file(s) at "
-            f"{files_dir}/attachments. File manifest: {manifest_summary}"
-        )
     description = (description or "") + f"\n\n{task_instruction}"
     try:
         thread_messages = await asyncio.to_thread(bridge.get_task_messages, task_id)

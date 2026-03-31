@@ -826,6 +826,40 @@ class TestCCExecutionContext:
     @pytest.mark.asyncio
     @patch(
         "mc.application.execution.roster_builder.load_agent_config",
+        return_value=(None, "cc/claude-sonnet-4-20250514", None),
+    )
+    async def test_cc_step_context_uses_relative_task_paths(self, mock_config: MagicMock) -> None:
+        bridge = _make_mock_bridge(
+            task_data={
+                "files": [
+                    {
+                        "name": "visual_direction_ifood.md",
+                        "type": "text/markdown",
+                        "size": 2048,
+                        "subfolder": "attachments",
+                    }
+                ]
+            },
+            agent_data={"model": "cc/claude-sonnet-4-20250514"},
+        )
+        builder = ContextBuilder(bridge)
+        step = {
+            "id": "step_1",
+            "title": "Generate images",
+            "description": "Read the approved visual direction and render assets.",
+            "assigned_agent": "image-generator",
+        }
+
+        req = await builder.build_step_context("task_123", step)
+
+        assert "Task workspace: task" in req.description
+        assert "Save ALL output files to: task/output" in req.description
+        assert "task/attachments" in req.description
+        assert "/.nanobot/tasks/task_123" not in req.description
+
+    @pytest.mark.asyncio
+    @patch(
+        "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
     @patch(

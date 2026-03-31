@@ -311,13 +311,26 @@ class TestWorkspaceGuidance:
 
         assert "## Workspace" in content
 
-    def test_workspace_guidance_contains_path(self, tmp_path: Path) -> None:
-        """## Workspace section includes the ephemeral workspace path."""
+    def test_workspace_guidance_hides_ephemeral_tmp_path(self, tmp_path: Path) -> None:
+        """Workspace guidance should describe relative paths, not /tmp internals."""
         agent = _make_agent()
         content = _prepare_and_read(tmp_path, agent)
 
-        # Workspace path is now the container-local ephemeral CWD
-        assert "/tmp/mc-workspaces/" in content
+        assert "/tmp/mc-workspaces/" not in content
+        assert "current working directory" in content
+
+    def test_workspace_guidance_uses_relative_task_paths(self, tmp_path: Path) -> None:
+        """Task guidance in CLAUDE.md should point agents at task/ paths."""
+        manager = CCWorkspaceManager(workspace_root=tmp_path)
+        agent = _make_agent()
+
+        content = manager.prepare("test-agent", agent, "task123").claude_md.read_text(
+            encoding="utf-8"
+        )
+
+        assert "Task files (attachments + output): task" in content
+        assert "Read input from: task/attachments/" in content
+        assert "Save output to: task/output/" in content
 
     def test_workspace_guidance_contains_memory_path(self, tmp_path: Path) -> None:
         """## Workspace section references the memory/MEMORY.md path."""

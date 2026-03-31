@@ -97,6 +97,18 @@ def resolve_thread_journal_paths(task_id: str) -> tuple[str, str]:
     return (str(journal), str(state))
 
 
+def _prompt_task_paths(
+    files_dir: str,
+    output_dir: str,
+    *,
+    use_relative_task_paths: bool,
+) -> tuple[str, str, str]:
+    """Return task workspace, output, and attachments paths for agent prompts."""
+    if use_relative_task_paths:
+        return ("task", "task/output", "task/attachments")
+    return (files_dir, output_dir, f"{files_dir}/attachments")
+
+
 def build_file_context(
     file_manifest: list[dict[str, Any]],
     files_dir: str,
@@ -109,6 +121,7 @@ def build_file_context(
     step_description: str = "",
     task_title: str = "",
     raw_files: list[dict[str, Any]] | None = None,
+    use_relative_task_paths: bool = False,
 ) -> str:
     """Build the file-related context string for agent injection.
 
@@ -129,6 +142,11 @@ def build_file_context(
         Assembled file context string.
     """
     parts: list[str] = []
+    task_workspace, prompt_output_dir, prompt_attachments_dir = _prompt_task_paths(
+        files_dir,
+        output_dir,
+        use_relative_task_paths=use_relative_task_paths,
+    )
 
     if is_step:
         # Step format: execution description with step + task context
@@ -136,8 +154,8 @@ def build_file_context(
             f'You are executing step: "{step_title}"\n'
             f"Step description: {step_description}\n\n"
             f'This step is part of task: "{task_title}"\n'
-            f"Task workspace: {files_dir}\n"
-            f"Save ALL output files to: {output_dir}\n"
+            f"Task workspace: {task_workspace}\n"
+            f"Save ALL output files to: {prompt_output_dir}\n"
             "Do NOT save output files outside this directory."
         )
 
@@ -158,7 +176,7 @@ def build_file_context(
             if file_routing_summary:
                 delegation_summary = file_routing_summary.replace(
                     "Consider file types when selecting the best agent.",
-                    f"Files available at: {files_dir}/attachments",
+                    f"Files available at: {prompt_attachments_dir}",
                 )
                 desc += f"\n\n{delegation_summary}"
 
@@ -169,16 +187,16 @@ def build_file_context(
             )
         if artifacts_dir:
             guidance_lines.append(f"Store reusable board artifacts in: {artifacts_dir}")
-        guidance_lines.append(f"Save task deliverables to: {output_dir}")
+        guidance_lines.append(f"Save task deliverables to: {prompt_output_dir}")
         desc += "\n\n[Persistence Rules]\n" + "\n".join(guidance_lines)
 
         parts.append(desc)
     else:
         # Task format: workspace instructions
         task_instruction = (
-            f"Task workspace: {files_dir}\n"
+            f"Task workspace: {task_workspace}\n"
             f"Save ALL output files (reports, summaries, generated content) "
-            f"to: {output_dir}\n"
+            f"to: {prompt_output_dir}\n"
             f"Do NOT save output files outside this directory."
         )
         if file_manifest:
@@ -187,7 +205,7 @@ def build_file_context(
             )
             task_instruction += (
                 f"\nTask has {len(file_manifest)} attached file(s) "
-                f"at {files_dir}/attachments. "
+                f"at {prompt_attachments_dir}. "
                 f"File manifest: {manifest_summary}"
             )
         guidance_lines: list[str] = []
@@ -197,7 +215,7 @@ def build_file_context(
             )
         if artifacts_dir:
             guidance_lines.append(f"Store reusable board artifacts in: {artifacts_dir}")
-        guidance_lines.append(f"Save task deliverables to: {output_dir}")
+        guidance_lines.append(f"Save task deliverables to: {prompt_output_dir}")
         task_instruction += "\n\n[Persistence Rules]\n" + "\n".join(guidance_lines)
         parts.append(task_instruction)
 

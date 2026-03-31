@@ -273,11 +273,18 @@ class CCWorkspaceManager:
             else:
                 local_attach.mkdir(parents=True, exist_ok=True)
 
-            # Create local output dir (agent writes here)
+            # Seed local output with any existing task outputs so later steps
+            # can read upstream artifacts from the same relative task/output path.
             local_output = local_task / "output"
-            local_output.mkdir(exist_ok=True)
-            # Sync output back to bind-mount after execution
             persistent_output = persistent_task_dir / "output"
+            if local_output.exists():
+                shutil.rmtree(local_output)
+            if persistent_output.is_dir():
+                shutil.copytree(persistent_output, local_output)
+            else:
+                local_output.mkdir(parents=True, exist_ok=True)
+
+            # Sync output back to bind-mount after execution
             persistent_output.mkdir(parents=True, exist_ok=True)
             sync_targets.append(SyncTarget(
                 local=local_output,
@@ -615,27 +622,47 @@ class CCWorkspaceManager:
         """
         ws = str(workspace.expanduser().resolve())
         memory_ws = str((memory_workspace or workspace).expanduser().resolve())
+        ephemeral_workspace = "mc-workspaces" in workspace.expanduser().resolve().parts
         artifacts_ws = (
             str(artifacts_workspace.expanduser().resolve())
             if artifacts_workspace is not None
             else None
         )
+        if ephemeral_workspace:
+            workspace_line = "Your workspace is the current working directory for this session.\n"
+            memory_line = "- Long-term memory: memory/MEMORY.md\n"
+        else:
+            workspace_line = f"Your workspace is at: {ws}\n"
+            memory_line = f"- Long-term memory: {memory_ws}/memory/MEMORY.md\n"
+
         artifacts_line = ""
         if artifacts_ws:
-            artifacts_line = f"- Board artifacts: {artifacts_ws}\n"
-        if task_dir:
-            task_line = (
-                f"- Task files (attachments + output): {task_dir}\n"
-                f"  - Read input from: {task_dir}/attachments/\n"
-                f"  - Save output to: {task_dir}/output/\n"
-                f"  - **If an output file already exists, Read it before using Write to overwrite.**\n"
+            artifacts_line = (
+                "- Board artifacts: artifacts/\n"
+                if ephemeral_workspace
+                else f"- Board artifacts: {artifacts_ws}\n"
             )
+        if task_dir:
+            if ephemeral_workspace:
+                task_line = (
+                    "- Task files (attachments + output): task\n"
+                    "  - Read input from: task/attachments/\n"
+                    "  - Save output to: task/output/\n"
+                    "  - **If an output file already exists, Read it before using Write to overwrite.**\n"
+                )
+            else:
+                task_line = (
+                    f"- Task files (attachments + output): {task_dir}\n"
+                    f"  - Read input from: {task_dir}/attachments/\n"
+                    f"  - Save output to: {task_dir}/output/\n"
+                    f"  - **If an output file already exists, Read it before using Write to overwrite.**\n"
+                )
         else:
             task_line = "- Task-specific deliverables stay in task output directories.\n"
         return (
             f"## Workspace\n\n"
-            f"Your workspace is at: {ws}\n"
-            f"- Long-term memory: {memory_ws}/memory/MEMORY.md\n"
+            f"{workspace_line}"
+            f"{memory_line}"
             f"{artifacts_line}"
             f"{task_line}"
             f"- Custom skills: .claude/skills/{{skill-name}}/SKILL.md\n"
