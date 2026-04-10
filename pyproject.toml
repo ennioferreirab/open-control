@@ -9,7 +9,7 @@ dependencies = [
     "nanobot-ai",
     "claude-code-backend",
     "convex>=0.7.0,<1.0.0",
-    "filelock>=3.24.3",
+    "filelock>=3.25.2",
     "sqlite-vec>=0.1.6",
 ]
 
