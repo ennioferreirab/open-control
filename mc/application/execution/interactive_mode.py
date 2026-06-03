@@ -7,10 +7,30 @@ import os
 from typing import Any
 
 from mc.application.execution.request import RunnerType
+from mc.infrastructure.acp.harness_registry import get_harness
 
 logger = logging.getLogger(__name__)
 
 INTERACTIVE_MODE_ENV = "MC_INTERACTIVE_EXECUTION_MODE"
+
+
+def _acp_harness_for(selector: str | None) -> str | None:
+    """Return the registered ACP harness a selector opts into, or None.
+
+    Phase 4-5 opt-in convention: a ``<harness>-acp`` backend value routes to
+    ACP while the bare harness name keeps the legacy path. Phase 6 deletes this
+    helper and routes the harness name itself to ACP.
+
+    Raises:
+        ValueError: the selector opts into ACP but names a harness absent from
+            the registry. Surfaced explicitly rather than silently degrading to
+            PROVIDER_CLI.
+    """
+    if not selector or not selector.endswith("-acp"):
+        return None
+    harness = selector.removesuffix("-acp")
+    get_harness(harness)
+    return harness
 
 
 def _resolve_interactive_runner_type(request: Any) -> RunnerType:
@@ -25,6 +45,8 @@ def _resolve_interactive_runner_type(request: Any) -> RunnerType:
     agent = getattr(request, "agent", None)
     interactive_provider = getattr(agent, "interactive_provider", None) if agent else None
     backend = getattr(agent, "backend", None) if agent else None
+    if _acp_harness_for(interactive_provider or backend) is not None:
+        return RunnerType.ACP
     is_interactive = (
         interactive_provider in {"claude-code", "codex"}
         or request.is_cc
