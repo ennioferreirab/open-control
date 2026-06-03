@@ -4,7 +4,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from claude_code.provider import ClaudeCodeProvider
 
 from mc.contexts.interactive.adapters.claude_code import ClaudeCodeInteractiveAdapter
 from mc.contexts.interactive.errors import (
@@ -166,42 +165,6 @@ async def test_prepare_launch_supports_resume_without_using_print_mode() -> None
     resume_index = launch.command.index("--resume")
     assert launch.command[resume_index + 1] == "2f2dd2f2-1111-4444-8888-111122223333"
     assert "-p" not in launch.command
-
-
-@pytest.mark.asyncio
-async def test_interactive_and_headless_paths_diverge_after_shared_workspace_setup() -> None:
-    workspace_manager = MagicMock()
-    workspace_manager.prepare.return_value = _workspace()
-    socket_server = MagicMock()
-    socket_server.start = AsyncMock()
-    adapter = ClaudeCodeInteractiveAdapter(
-        bridge=MagicMock(),
-        workspace_manager=workspace_manager,
-        socket_server_factory=MagicMock(return_value=socket_server),
-        cli_path="claude",
-        which=MagicMock(return_value="/usr/local/bin/claude"),
-    )
-    provider = ClaudeCodeProvider(cli_path="claude")
-
-    launch = await adapter.prepare_launch(
-        identity=_identity(),
-        agent=_agent(),
-        task_id="task-123",
-        board_name="default",
-    )
-    headless_command = provider._build_command(
-        "Investigate failing test",
-        _agent(),
-        _workspace(),
-        session_id=None,
-    )
-
-    assert str(_workspace().mcp_config) in launch.command
-    assert str(_workspace().mcp_config) in headless_command
-    assert "-p" not in launch.command
-    assert "--output-format" not in launch.command
-    assert "-p" in headless_command
-    assert "--output-format" in headless_command
 
 
 @pytest.mark.asyncio

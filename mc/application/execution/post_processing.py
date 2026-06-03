@@ -17,9 +17,6 @@ from mc.application.execution.request import (
 )
 from mc.application.execution.runtime import relocate_invalid_memory_files
 from mc.application.execution.strategies.acp import AcpRunnerStrategy
-from mc.application.execution.strategies.claude_code import (
-    ClaudeCodeRunnerStrategy,
-)
 from mc.application.execution.strategies.human import HumanRunnerStrategy
 from mc.application.execution.strategies.interactive import InteractiveTuiRunnerStrategy
 from mc.application.execution.strategies.provider_cli import ProviderCliRunnerStrategy
@@ -197,17 +194,6 @@ def build_session_boundary_memory_consolidation_hook(
     return session_boundary_memory_consolidation_hook
 
 
-def build_cc_task_memory_consolidation_hook(
-    *,
-    bridge: Any | None = None,
-):
-    """Return the canonical Claude Code task-boundary consolidation hook."""
-    return build_session_boundary_memory_consolidation_hook(
-        bridge=bridge,
-        runner_type=RunnerType.CLAUDE_CODE,
-    )
-
-
 def build_interactive_memory_consolidation_hook(
     *,
     bridge: Any | None = None,
@@ -268,11 +254,6 @@ def build_execution_engine(
 
     return ExecutionEngine(
         strategies={
-            RunnerType.CLAUDE_CODE: ClaudeCodeRunnerStrategy(
-                bridge=bridge,
-                cron_service=cron_service,
-                ask_user_registry=ask_user_registry,
-            ),
             RunnerType.HUMAN: HumanRunnerStrategy(),
             # DEPRECATED: INTERACTIVE_TUI is the legacy escape hatch.
             # The supported path for new step execution is PROVIDER_CLI.

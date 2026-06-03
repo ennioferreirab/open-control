@@ -98,7 +98,6 @@ REMOVED_ROOT_MODULES = {
 
 RUNTIME_FACING_MODULES = [
     MC_ROOT / "contexts" / "conversation" / "chat_handler.py",
-    MC_ROOT / "contexts" / "execution" / "cc_executor.py",
     MC_ROOT / "contexts" / "execution" / "step_dispatcher.py",
 ]
 RUNTIME_FACING_MODULES.extend(
@@ -270,7 +269,6 @@ def test_execution_executor_does_not_keep_output_artifact_helpers_inline() -> No
 def test_execution_modules_use_canonical_completion_status_helper() -> None:
     files = [
         MC_ROOT / "contexts" / "execution" / "executor.py",
-        MC_ROOT / "contexts" / "execution" / "cc_executor.py",
         MC_ROOT / "contexts" / "execution" / "step_dispatcher.py",
     ]
 
