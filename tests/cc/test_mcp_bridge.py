@@ -787,28 +787,22 @@ class TestSearchMemoryBoardScope:
 
         import mc.runtime.mcp.bridge as bridge_mod
 
-        response = MagicMock()
-        tool_call = MagicMock()
-        tool_call.arguments = json.dumps(
+        utility_text = json.dumps(
             {
                 "history_entry": "[2026-03-05 12:07] Stored rollback checklist for payments.",
                 "memory_update": "Payments deploys require a rollback checklist before release.",
             }
         )
-        response.tool_calls = [tool_call]
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=response)
 
         with patch(
-            "mc.memory.service.create_provider",
-            return_value=(provider, "resolved-model"),
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=utility_text),
         ):
             ok = await CCMemoryConsolidator(tmp_path).consolidate(
                 task_title="Payments release",
                 task_output="Prepared rollback checklist and release notes",
                 task_status="completed",
                 task_id="task-9",
-                model="claude-haiku",
             )
 
         assert ok is True

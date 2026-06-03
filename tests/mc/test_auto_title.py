@@ -1,29 +1,21 @@
 """Tests for auto-title generation in the orchestrator (heuristic default + LLM opt-in)."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from mc.runtime.orchestrator import generate_title_via_low_agent, heuristic_title
 
-_TIERS = {
-    "standard-low": "anthropic/claude-haiku-3-5",
-    "standard-medium": "anthropic/claude-sonnet-4-6",
-    "standard-high": "anthropic/claude-opus-4-6",
-}
 
-
-def _llm_enabled_bridge(*, agent_model, tiers=None):
-    """Bridge whose settings report the LLM title toggle ON and the given tier map."""
+def _llm_enabled_bridge(*, agent_model):
+    """Bridge whose settings report the LLM title toggle ON."""
     bridge = MagicMock()
     bridge.get_agent_by_name.return_value = {"model": agent_model}
-    tiers_json = json.dumps(_TIERS if tiers is None else tiers)
 
     def _query(name, args=None):
         if name == "settings:get" and (args or {}).get("key") == "auto_title_enabled":
             return "true"
-        return tiers_json
+        return None
 
     bridge.query.side_effect = _query
     return bridge
@@ -34,91 +26,100 @@ async def _sync_to_thread(func, *args, **kwargs):
 
 
 @pytest.mark.asyncio
-async def test_generate_title_via_low_agent_calls_llm_with_low_tier():
-    """With the toggle on, auto-title uses the low-agent model resolved from its tier."""
-    mock_bridge = _llm_enabled_bridge(agent_model="tier:standard-low")
+async def test_generate_title_returns_llm_text():
+    """With the toggle on, auto-title returns the text the utility turn produces."""
+    mock_bridge = _llm_enabled_bridge(agent_model="anthropic/claude-haiku-3-5")
 
-    mock_provider = MagicMock()
-    mock_response = MagicMock()
-    mock_response.finish_reason = "stop"
-    mock_response.content = "Fix login validation bug"
-    mock_provider.chat = AsyncMock(return_value=mock_response)
-
-    with patch(
-        "mc.runtime.orchestrator.create_provider",
-        return_value=(mock_provider, "anthropic/claude-haiku-3-5"),
-    ) as mock_create:
-        with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
-            result = await generate_title_via_low_agent(
-                mock_bridge,
-                "When users try to log in with an email that contains special characters "
-                "like + or dots, the validation rejects them even though they are valid "
-                "RFC 5322 email addresses. This needs to be fixed in the auth module.",
-            )
+    with (
+        patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value="Fix login validation bug"),
+        ),
+        patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread),
+    ):
+        result = await generate_title_via_low_agent(
+            mock_bridge,
+            "When users try to log in with an email that contains special characters "
+            "like + or dots, the validation rejects them even though they are valid "
+            "RFC 5322 email addresses. This needs to be fixed in the auth module.",
+        )
 
     assert result == "Fix login validation bug"
     mock_bridge.get_agent_by_name.assert_called_once()
-    mock_create.assert_called_once_with(model="anthropic/claude-haiku-3-5")
-    mock_provider.chat.assert_called_once()
-    assert mock_provider.chat.call_args.kwargs["max_tokens"] == 60
 
 
 @pytest.mark.asyncio
-async def test_generate_title_via_low_agent_falls_back_to_default_on_missing_tier():
-    """If the tier resolves to null in model_tiers, falls back to the default model."""
-    mock_bridge = _llm_enabled_bridge(
-        agent_model="tier:standard-low",
-        tiers={"standard-low": None, "standard-medium": "anthropic/claude-sonnet-4-6"},
-    )
+async def test_generate_title_strips_quotes():
+    """An LLM response with surrounding quotes is cleaned."""
+    mock_bridge = _llm_enabled_bridge(agent_model="anthropic/claude-haiku-3-5")
 
-    mock_provider = MagicMock()
-    mock_response = MagicMock()
-    mock_response.finish_reason = "stop"
-    mock_response.content = "Short description title"
-    mock_provider.chat = AsyncMock(return_value=mock_response)
+    with (
+        patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value='"Fix the login bug"'),
+        ),
+        patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread),
+    ):
+        result = await generate_title_via_low_agent(mock_bridge, "description")
 
-    with patch(
-        "mc.runtime.orchestrator.create_provider",
-        return_value=(mock_provider, "default-model"),
-    ) as mock_create:
-        with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
-            result = await generate_title_via_low_agent(mock_bridge, "Some task description")
-
-    assert result == "Short description title"
-    mock_create.assert_called_once_with(model=None)
+    assert result == "Fix the login bug"
 
 
 @pytest.mark.asyncio
-async def test_generate_title_via_low_agent_returns_none_when_agent_not_found():
+async def test_generate_title_returns_none_when_agent_not_found():
     """With the toggle on but no low-agent, returns None without calling the LLM."""
-    mock_bridge = _llm_enabled_bridge(agent_model=None)
-    mock_bridge.get_agent_by_name.return_value = None
+    bridge = MagicMock()
+    bridge.get_agent_by_name.return_value = None
+
+    def _query(name, args=None):
+        if name == "settings:get" and (args or {}).get("key") == "auto_title_enabled":
+            return "true"
+        return None
+
+    bridge.query.side_effect = _query
 
     with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
+        result = await generate_title_via_low_agent(bridge, "Some task description")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_generate_title_returns_none_on_llm_error():
+    """When run_utility_turn raises, returns None (the function catches and returns None)."""
+    from mc.infrastructure.providers.errors import ProviderError
+
+    mock_bridge = _llm_enabled_bridge(agent_model="anthropic/claude-haiku-3-5")
+
+    with (
+        patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(side_effect=ProviderError("timeout")),
+        ),
+        patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread),
+    ):
         result = await generate_title_via_low_agent(mock_bridge, "Some task description")
 
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_generate_title_via_low_agent_strips_quotes():
-    """An LLM response with surrounding quotes is cleaned."""
+async def test_generate_title_returns_none_on_empty_text():
+    """When run_utility_turn returns empty string, returns None."""
+    from mc.infrastructure.providers.errors import ProviderError
+
     mock_bridge = _llm_enabled_bridge(agent_model="anthropic/claude-haiku-3-5")
 
-    mock_provider = MagicMock()
-    mock_response = MagicMock()
-    mock_response.finish_reason = "stop"
-    mock_response.content = '"Fix the login bug"'
-    mock_provider.chat = AsyncMock(return_value=mock_response)
-
-    with patch(
-        "mc.runtime.orchestrator.create_provider",
-        return_value=(mock_provider, "anthropic/claude-haiku-3-5"),
+    with (
+        patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(side_effect=ProviderError("ACP utility turn returned empty text")),
+        ),
+        patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread),
     ):
-        with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
-            result = await generate_title_via_low_agent(mock_bridge, "description")
+        result = await generate_title_via_low_agent(mock_bridge, "Some task description")
 
-    assert result == "Fix the login bug"
+    assert result is None
 
 
 @pytest.mark.parametrize(
@@ -153,12 +154,14 @@ async def test_generate_title_uses_heuristic_when_llm_disabled():
     mock_bridge = MagicMock()
     mock_bridge.query.side_effect = lambda name, args=None: None
 
-    with patch("mc.runtime.orchestrator.create_provider") as mock_create:
-        with patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread):
-            result = await generate_title_via_low_agent(
-                mock_bridge, "Fix the login bug. More detail follows."
-            )
+    with (
+        patch("mc.infrastructure.acp.utility.run_utility_turn") as mock_utility,
+        patch("mc.runtime.orchestrator.asyncio.to_thread", side_effect=_sync_to_thread),
+    ):
+        result = await generate_title_via_low_agent(
+            mock_bridge, "Fix the login bug. More detail follows."
+        )
 
     assert result == "Fix the login bug."
-    mock_create.assert_not_called()
+    mock_utility.assert_not_called()
     mock_bridge.get_agent_by_name.assert_not_called()

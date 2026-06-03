@@ -199,7 +199,6 @@ async def test_consolidation_worker_loops_until_history_below_threshold(
     tmp_path,
 ):
     with (
-        patch.object(HybridMemoryStore, "_resolve_consolidation_model", return_value="test-model"),
         patch("mc.memory.consolidation.is_history_above_threshold") as threshold_mock,
         patch(
             "mc.memory.consolidation.consolidate_history_and_memory", new_callable=AsyncMock
@@ -225,7 +224,6 @@ async def test_consolidation_failure_enters_cooldown_and_skips_immediate_retry(
     tmp_path,
 ):
     with (
-        patch.object(HybridMemoryStore, "_resolve_consolidation_model", return_value="test-model"),
         patch("mc.memory.consolidation.is_history_above_threshold", return_value=True),
         patch(
             "mc.memory.consolidation.consolidate_history_and_memory", new_callable=AsyncMock

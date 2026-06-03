@@ -90,10 +90,6 @@ class TestInteractiveMemoryConsolidationHook:
                 side_effect=_run_now,
             ),
             patch(
-                "mc.application.execution.post_processing.resolve_consolidation_model",
-                return_value="interactive-test-model",
-            ),
-            patch(
                 "mc.application.execution.post_processing.consolidate_task_output",
                 new=AsyncMock(return_value=True),
             ) as consolidate_mock,
@@ -107,7 +103,6 @@ class TestInteractiveMemoryConsolidationHook:
             task_output="interactive final result",
             task_status="completed",
             task_id="task-1",
-            model="interactive-test-model",
         )
 
     @pytest.mark.asyncio
@@ -130,10 +125,6 @@ class TestInteractiveMemoryConsolidationHook:
                 side_effect=_run_now,
             ),
             patch(
-                "mc.application.execution.post_processing.resolve_consolidation_model",
-                return_value="interactive-test-model",
-            ),
-            patch(
                 "mc.application.execution.post_processing.consolidate_task_output",
                 new=AsyncMock(return_value=True),
             ) as consolidate_mock,
@@ -147,7 +138,6 @@ class TestInteractiveMemoryConsolidationHook:
             task_output="interactive failure",
             task_status="error",
             task_id="task-1",
-            model="interactive-test-model",
         )
 
     @pytest.mark.asyncio
@@ -194,10 +184,6 @@ class TestProviderCliMemoryConsolidationHook:
                 side_effect=_run_now,
             ),
             patch(
-                "mc.application.execution.post_processing.resolve_consolidation_model",
-                return_value="provider-cli-test-model",
-            ),
-            patch(
                 "mc.application.execution.post_processing.consolidate_task_output",
                 new=AsyncMock(return_value=True),
             ) as consolidate_mock,
@@ -211,7 +197,6 @@ class TestProviderCliMemoryConsolidationHook:
             task_output="provider-cli final result",
             task_status="completed",
             task_id="task-1",
-            model="provider-cli-test-model",
         )
 
     @pytest.mark.asyncio
@@ -239,10 +224,6 @@ class TestProviderCliMemoryConsolidationHook:
                 side_effect=_run_now,
             ),
             patch(
-                "mc.application.execution.post_processing.resolve_consolidation_model",
-                return_value="provider-cli-test-model",
-            ),
-            patch(
                 "mc.application.execution.post_processing.consolidate_task_output",
                 new=AsyncMock(return_value=True),
             ) as consolidate_mock,
@@ -256,5 +237,4 @@ class TestProviderCliMemoryConsolidationHook:
             task_output="",
             task_status="completed",
             task_id="task-1",
-            model="provider-cli-test-model",
         )
