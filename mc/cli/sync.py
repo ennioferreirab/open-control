@@ -60,8 +60,7 @@ def _run_sync(bridge, agents_dir: Path) -> None:
     # 2. Distribute builtin skills
     _header("Skill distribution")
     try:
-        from nanobot.config.loader import load_config as _lc
-
+        from mc.infrastructure.config import load_config as _lc
         from mc.skills import MC_SKILLS_DIR
 
         ws = _lc().workspace_path

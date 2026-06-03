@@ -5,6 +5,8 @@ Extracted from mc.gateway so that internal modules can import config/path
 helpers without depending on the gateway composition root.
 
 Contains:
+- mc-owned Config schema (Pydantic BaseModel, subset of nanobot schema)
+- load_config() — raises ValueError on malformed JSON (no silent fallback)
 - AGENTS_DIR constant
 - Convex URL / admin key resolution
 - Config default model lookup
@@ -26,11 +28,190 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datetime import datetime
 
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
+
 from mc.infrastructure.runtime_home import get_agents_dir
 
 logger = logging.getLogger(__name__)
 
 AGENTS_DIR = get_agents_dir()
+
+
+# ---------------------------------------------------------------------------
+# Shared base model — accepts both camelCase and snake_case keys, ignores extras
+# ---------------------------------------------------------------------------
+
+
+class _Base(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="ignore",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Config schema — models only the fields mc reads
+# ---------------------------------------------------------------------------
+
+
+class AgentDefaults(_Base):
+    model: str = "anthropic/claude-opus-4-5"
+    provider: str = "auto"
+    workspace: str = ""
+
+
+class AgentsConfig(_Base):
+    defaults: AgentDefaults = Field(default_factory=AgentDefaults)
+    models: list[str] = []
+
+
+class ProviderConfig(_Base):
+    api_key: str = ""
+    api_base: str | None = None
+    extra_headers: dict[str, str] | None = None
+
+
+class ClaudeCodeConfig(_Base):
+    cli_path: str = "claude"
+    default_model: str = "claude-sonnet-4-6"
+    default_max_budget_usd: float = 5.0
+    default_max_turns: int = 50
+    default_permission_mode: str = "bypassPermissions"
+    auth_method: str = "oauth"
+
+
+class WebSearchConfig(_Base):
+    api_key: str = ""
+
+
+class WebConfig(_Base):
+    search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+
+
+class ToolsConfig(_Base):
+    web: WebConfig = Field(default_factory=WebConfig)
+
+
+class TelegramConfig(_Base):
+    token: str = ""
+
+
+class ChannelsConfig(_Base):
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+
+
+class Config(_Base):
+    agents: AgentsConfig = Field(default_factory=AgentsConfig)
+    providers: dict[str, ProviderConfig] = {}
+    claude_code: ClaudeCodeConfig = Field(
+        default_factory=ClaudeCodeConfig,
+        alias="claudeCode",
+    )
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
+
+    @property
+    def workspace_path(self) -> Path:
+        ws = self.agents.defaults.workspace
+        if ws:
+            return Path(ws).expanduser()
+        from mc.infrastructure.runtime_home import get_workspace_dir
+
+        return get_workspace_dir()
+
+    def _match_provider(self, model: str | None = None) -> tuple[ProviderConfig | None, str | None]:
+        """Match provider config and its registry name. Returns (config, spec_name)."""
+        from mc.infrastructure.provider_registry import PROVIDERS
+
+        forced = self.agents.defaults.provider
+        if forced != "auto":
+            p = self.providers.get(forced)
+            return (p, forced) if p else (None, None)
+
+        model_lower = (model or self.agents.defaults.model).lower()
+        model_normalized = model_lower.replace("-", "_")
+        model_prefix = model_lower.split("/", 1)[0] if "/" in model_lower else ""
+        normalized_prefix = model_prefix.replace("-", "_")
+
+        def _kw_matches(kw: str) -> bool:
+            kw = kw.lower()
+            return kw in model_lower or kw.replace("-", "_") in model_normalized
+
+        # Explicit provider prefix wins — prevents `github-copilot/...codex` matching openai_codex.
+        for spec in PROVIDERS:
+            p = self.providers.get(spec.name)
+            if p and model_prefix and normalized_prefix == spec.name:
+                if spec.is_oauth or p.api_key:
+                    return p, spec.name
+
+        # Match by keyword (order follows PROVIDERS registry)
+        for spec in PROVIDERS:
+            p = self.providers.get(spec.name)
+            if p and any(_kw_matches(kw) for kw in spec.keywords):
+                if spec.is_oauth or p.api_key:
+                    return p, spec.name
+
+        # Fallback: gateways first, then others (follows registry order)
+        # OAuth providers are NOT valid fallbacks — they require explicit model selection
+        for spec in PROVIDERS:
+            if spec.is_oauth:
+                continue
+            p = self.providers.get(spec.name)
+            if p and p.api_key:
+                return p, spec.name
+        return None, None
+
+    def get_provider(self, model: str | None = None) -> ProviderConfig | None:
+        """Get matched provider config. Falls back to first available."""
+        p, _ = self._match_provider(model)
+        return p
+
+    def get_provider_name(self, model: str | None = None) -> str | None:
+        """Get the registry name of the matched provider."""
+        _, name = self._match_provider(model)
+        return name
+
+    def get_api_base(self, model: str | None = None) -> str | None:
+        """Get API base URL for the given model. Applies default URLs for known gateways."""
+        from mc.infrastructure.provider_registry import find_by_name
+
+        p, name = self._match_provider(model)
+        if p and p.api_base:
+            return p.api_base
+        if name:
+            spec = find_by_name(name)
+            if spec and spec.is_gateway and spec.default_api_base:
+                return spec.default_api_base
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Loader
+# ---------------------------------------------------------------------------
+
+
+def load_config(config_path: Path | None = None) -> Config:
+    """Load config from disk, returning defaults for a fresh install.
+
+    Raises ValueError on malformed JSON — no silent fallback.
+    """
+    from mc.infrastructure.runtime_home import get_config_path
+
+    path = config_path or get_config_path()
+    if not path.exists():
+        return Config()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid config at {path}: {exc}") from exc
+    return Config.model_validate(data)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 
 def _config_default_model() -> str:
@@ -39,8 +220,6 @@ def _config_default_model() -> str:
     Reads ``agents.defaults.model`` from the configured runtime home config.
     This is the single source of truth for the active model/provider.
     """
-    from nanobot.config.loader import load_config
-
     return load_config().agents.defaults.model
 
 

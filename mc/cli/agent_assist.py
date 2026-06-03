@@ -234,8 +234,9 @@ def build_llm_provider():
     Raises:
         SystemExit: If no provider is configured.
     """
-    from nanobot.config.loader import load_config
     from nanobot.providers.litellm_provider import LiteLLMProvider
+
+    from mc.infrastructure.config import load_config
 
     config = load_config()
     provider_cfg = config.get_provider()

@@ -16,7 +16,7 @@ def _isolate_workspace(tmp_path, monkeypatch):
     empty_ws.mkdir()
     fake_config = MagicMock()
     fake_config.workspace_path = empty_ws
-    monkeypatch.setattr("nanobot.config.loader.load_config", lambda: fake_config)
+    monkeypatch.setattr("mc.infrastructure.config.load_config", lambda: fake_config)
 
 
 def _make_skill_md(

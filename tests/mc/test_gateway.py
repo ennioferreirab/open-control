@@ -125,7 +125,7 @@ class TestRunGateway:
             patch("mc.contexts.conversation.chat_handler.ChatHandler") as mock_ch_cls,
             patch("mc.contexts.conversation.ask_user.watcher.AskUserReplyWatcher") as mock_auw_cls,
             patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls),
-            patch("nanobot.config.loader.load_config"),
+            patch("mc.infrastructure.config.load_config"),
             patch("nanobot.bus.queue.MessageBus"),
             patch(
                 "nanobot.channels.mission_control.MissionControlChannel",

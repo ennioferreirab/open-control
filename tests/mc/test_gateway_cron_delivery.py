@@ -113,7 +113,7 @@ async def _run_gateway_and_capture(captured: dict) -> None:
         patch("mc.runtime.gateway.TimeoutChecker", return_value=mock_tc_instance),
         patch("mc.contexts.execution.executor.TaskExecutor", mock_exec_cls),
         patch("mc.contexts.conversation.chat_handler.ChatHandler", return_value=mock_chat_instance),
-        patch("nanobot.config.loader.load_config"),
+        patch("mc.infrastructure.config.load_config"),
         patch(
             "mc.contexts.conversation.mentions.watcher.MentionWatcher",
             return_value=mock_mention_instance,
@@ -165,7 +165,7 @@ class TestOnCronJobDelivery:
             patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x),
             patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]),
             patch("telegram.Bot") as MockBot,
-            patch("nanobot.config.loader.load_config") as mock_cfg,
+            patch("mc.infrastructure.config.load_config") as mock_cfg,
         ):
             mock_cfg.return_value.channels.telegram.token = "tok"
             mock_bot = AsyncMock()
@@ -196,7 +196,7 @@ class TestOnCronJobDelivery:
         # because the failed mutation means no task_id was registered.
         with (
             patch("telegram.Bot") as MockBot,
-            patch("nanobot.config.loader.load_config") as mock_cfg,
+            patch("mc.infrastructure.config.load_config") as mock_cfg,
         ):
             mock_cfg.return_value.channels.telegram.token = "tok"
             mock_bot = AsyncMock()
@@ -231,7 +231,7 @@ class TestOnCronJobDelivery:
         # MC channel requeues tasks directly — no Telegram delivery should happen
         with (
             patch("telegram.Bot") as MockBot,
-            patch("nanobot.config.loader.load_config") as mock_cfg,
+            patch("mc.infrastructure.config.load_config") as mock_cfg,
         ):
             mock_cfg.return_value.channels.telegram.token = "tok"
             mock_bot = AsyncMock()
@@ -258,7 +258,7 @@ class TestOnCronJobDelivery:
         # deliver=False means no entry in pending_deliveries — send_message must not be called
         with (
             patch("telegram.Bot") as MockBot,
-            patch("nanobot.config.loader.load_config") as mock_cfg,
+            patch("mc.infrastructure.config.load_config") as mock_cfg,
         ):
             mock_cfg.return_value.channels.telegram.token = "tok"
             mock_bot = AsyncMock()
@@ -393,7 +393,7 @@ class TestOnCronJobDelivery:
                 MockBot.return_value = mock_bot_instance
                 mock_bot_instance.send_message = AsyncMock()
 
-                with patch("nanobot.config.loader.load_config") as mock_cfg:
+                with patch("mc.infrastructure.config.load_config") as mock_cfg:
                     mock_cfg.return_value.channels.telegram.token = "fake-token"
                     await on_task_completed("task-abc", "YouTube summary result")
 
@@ -420,7 +420,7 @@ class TestOnCronJobDelivery:
             mock_bot_instance = AsyncMock()
             MockBot.return_value = mock_bot_instance
 
-            with patch("nanobot.config.loader.load_config") as mock_cfg:
+            with patch("mc.infrastructure.config.load_config") as mock_cfg:
                 mock_cfg.return_value.channels.telegram.token = "fake-token"
                 await on_task_completed("task-xyz", "")  # empty result
 
