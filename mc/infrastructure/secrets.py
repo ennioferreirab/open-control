@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 from mc.infrastructure.runtime_home import get_secrets_path
 
 if TYPE_CHECKING:
-    from nanobot.config.schema import Config, ProviderConfig
-    from nanobot.providers.registry import ProviderSpec
+    from mc.infrastructure.config import Config, ProviderConfig
+    from mc.infrastructure.provider_registry import ProviderSpec
 
 _SECRETS_PATH = get_secrets_path()
 
@@ -38,7 +38,7 @@ def _load_secrets_file() -> dict[str, str]:
 
 def _known_secret_env_names() -> set[str]:
     """Return all env var names that may carry configured secrets."""
-    from nanobot.providers.registry import PROVIDERS
+    from mc.infrastructure.provider_registry import PROVIDERS
 
     names = {"BRAVE_API_KEY"}
     for spec in PROVIDERS:
@@ -77,8 +77,8 @@ def _populate_provider_secret_env(
 
 def resolve_secret_env(config: Config | None = None) -> dict[str, str]:
     """Resolve secret env vars from the current env and nanobot config."""
-    from nanobot.config.loader import load_config
-    from nanobot.providers.registry import PROVIDERS, find_by_name
+    from mc.infrastructure.config import load_config
+    from mc.infrastructure.provider_registry import PROVIDERS, find_by_name
 
     cfg = config or load_config()
     resolved: dict[str, str] = {}

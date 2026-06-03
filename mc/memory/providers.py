@@ -74,7 +74,7 @@ class LiteLLMProvider:
         then checks: env var → nanobot config.json providers section.
         """
         try:
-            from nanobot.providers.registry import find_by_model, find_by_name
+            from mc.infrastructure.provider_registry import find_by_model, find_by_name
         except ImportError:
             return None
 
