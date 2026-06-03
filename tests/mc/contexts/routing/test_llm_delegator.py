@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+import json
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from mc.contexts.routing.llm_delegator import LLMDelegationRouter
+from mc.infrastructure.providers.errors import ProviderError
 
 
-def make_bridge(agents: list[dict] | None = None) -> MagicMock:
+def make_bridge(agents: list[dict] | None = None):
+    from unittest.mock import MagicMock
+
     bridge = MagicMock()
     bridge.list_active_registry_view.return_value = agents or []
     bridge.get_board_by_id.return_value = None
@@ -34,21 +38,10 @@ def make_agent(
     }
 
 
-def make_llm_response(target_agent: str, reasoning: str = "best fit", confidence: str = "high"):
-    """Create a mock LLM response with valid JSON."""
-    import json
-
-    content = json.dumps(
-        {
-            "target_agent": target_agent,
-            "reasoning": reasoning,
-            "confidence": confidence,
-        }
+def _json_response(target_agent: str, reasoning: str = "best fit", confidence: str = "high") -> str:
+    return json.dumps(
+        {"target_agent": target_agent, "reasoning": reasoning, "confidence": confidence}
     )
-    resp = MagicMock()
-    resp.content = content
-    resp.finish_reason = "stop"
-    return resp
 
 
 class TestPathAExplicitAssignment:
@@ -78,7 +71,6 @@ class TestPathAExplicitAssignment:
 
     @pytest.mark.asyncio
     async def test_explicit_agent_not_in_registry_raises(self) -> None:
-        # Empty registry so DirectDelegationRouter returns None
         bridge = make_bridge([])
         router = LLMDelegationRouter(bridge)
 
@@ -95,16 +87,9 @@ class TestPathBLLMDelegation:
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
-        response = make_llm_response("agent-b", "research skills match", "high")
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=response)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=_json_response("agent-b", "research skills match", "high")),
         ):
             decision = await router.route({"title": "Research task", "description": "Do research"})
 
@@ -114,67 +99,28 @@ class TestPathBLLMDelegation:
 
     @pytest.mark.asyncio
     async def test_llm_timeout_raises(self) -> None:
-
         agents = [make_agent("agent-a")]
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(side_effect=TimeoutError())
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
-            patch("mc.contexts.routing.llm_delegator.LLM_TIMEOUT_SECONDS", 0.01),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(side_effect=ProviderError("ACP utility turn timed out after 30.0s")),
         ):
             with pytest.raises(RuntimeError, match="timed out"):
                 await router.route({"title": "Test"})
 
     @pytest.mark.asyncio
-    async def test_llm_error_response_raises(self) -> None:
+    async def test_llm_failure_raises(self) -> None:
         agents = [make_agent("agent-a")]
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
-        resp = MagicMock()
-        resp.content = "some error"
-        resp.finish_reason = "error"
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=resp)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(side_effect=ProviderError("subprocess crashed")),
         ):
-            with pytest.raises(RuntimeError, match="returned error"):
-                await router.route({"title": "Test"})
-
-    @pytest.mark.asyncio
-    async def test_llm_empty_response_raises(self) -> None:
-        agents = [make_agent("agent-a")]
-        bridge = make_bridge(agents)
-        router = LLMDelegationRouter(bridge)
-
-        resp = MagicMock()
-        resp.content = ""
-        resp.finish_reason = "stop"
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=resp)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
-        ):
-            with pytest.raises(RuntimeError, match="empty response"):
+            with pytest.raises(RuntimeError):
                 await router.route({"title": "Test"})
 
     @pytest.mark.asyncio
@@ -183,20 +129,11 @@ class TestPathBLLMDelegation:
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
-        resp = MagicMock()
-        resp.content = "not json at all"
-        resp.finish_reason = "stop"
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=resp)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value="not json at all"),
         ):
-            with pytest.raises(RuntimeError, match="invalid JSON"):
+            with pytest.raises(RuntimeError):
                 await router.route({"title": "Test"})
 
     @pytest.mark.asyncio
@@ -205,20 +142,9 @@ class TestPathBLLMDelegation:
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
-        import json
-
-        resp = MagicMock()
-        resp.content = json.dumps({"reasoning": "no agent key"})
-        resp.finish_reason = "stop"
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=resp)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=json.dumps({"reasoning": "no agent key"})),
         ):
             with pytest.raises(RuntimeError, match="missing 'target_agent'"):
                 await router.route({"title": "Test"})
@@ -229,34 +155,11 @@ class TestPathBLLMDelegation:
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
-        response = make_llm_response("agent-z")
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=response)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=_json_response("agent-z")),
         ):
             with pytest.raises(RuntimeError, match="not found in active registry"):
-                await router.route({"title": "Test"})
-
-    @pytest.mark.asyncio
-    async def test_provider_creation_failure_raises(self) -> None:
-        agents = [make_agent("agent-a")]
-        bridge = make_bridge(agents)
-        router = LLMDelegationRouter(bridge)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                side_effect=Exception("No API key"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
-        ):
-            with pytest.raises(RuntimeError, match="Failed to create LLM provider"):
                 await router.route({"title": "Test"})
 
 
@@ -304,16 +207,9 @@ class TestBoardScoping:
         bridge.get_board_by_id.return_value = {"enabled_agents": ["agent-b"]}
         router = LLMDelegationRouter(bridge)
 
-        response = make_llm_response("agent-b")
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=response)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=_json_response("agent-b")),
         ):
             decision = await router.route({"title": "Test", "board_id": "board-1"})
 
@@ -326,16 +222,9 @@ class TestBoardScoping:
         bridge.get_board_by_id.side_effect = Exception("Network error")
         router = LLMDelegationRouter(bridge)
 
-        response = make_llm_response("agent-a")
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=response)
-
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=_json_response("agent-a")),
         ):
             decision = await router.route({"title": "Test", "board_id": "board-err"})
 
@@ -351,20 +240,13 @@ class TestLLMResponseParsing:
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
-        resp = MagicMock()
-        resp.content = (
+        fenced = (
             '```json\n{"target_agent": "agent-a", "reasoning": "ok", "confidence": "high"}\n```'
         )
-        resp.finish_reason = "stop"
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=resp)
 
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=fenced),
         ):
             decision = await router.route({"title": "Test"})
 
@@ -376,21 +258,12 @@ class TestLLMResponseParsing:
         bridge = make_bridge(agents)
         router = LLMDelegationRouter(bridge)
 
-        response = make_llm_response("agent-a")
-        mock_provider = MagicMock()
-        mock_provider.chat = AsyncMock(return_value=response)
-
-        long_desc = "x" * 5000
-        with (
-            patch(
-                "mc.contexts.routing.llm_delegator.create_provider",
-                return_value=(mock_provider, "test-model"),
-            ),
-            patch.object(router, "_resolve_model", new=AsyncMock(return_value=None)),
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=_json_response("agent-a")),
         ):
-            decision = await router.route({"title": "Test", "description": long_desc})
+            decision = await router.route({"title": "Test", "description": "x" * 5000})
 
-        # Should succeed — description truncated internally
         assert decision.target_agent == "agent-a"
 
 

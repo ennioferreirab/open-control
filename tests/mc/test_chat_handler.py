@@ -971,10 +971,6 @@ class TestChatHandlerEngineIntegration:
                 side_effect=_run_now,
             ),
             patch(
-                "mc.application.execution.post_processing.resolve_consolidation_model",
-                return_value="chat-test-model",
-            ),
-            patch(
                 "mc.application.execution.post_processing.consolidate_task_output",
                 new=AsyncMock(return_value=True),
             ) as consolidate_mock,
@@ -999,7 +995,6 @@ class TestChatHandlerEngineIntegration:
             task_output="CC response",
             task_status="completed",
             task_id="chat-cc-agent",
-            model="chat-test-model",
         )
 
     @pytest.mark.asyncio

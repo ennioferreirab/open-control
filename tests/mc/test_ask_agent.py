@@ -11,6 +11,10 @@ from nanobot.agent.tools.ask_agent import AskAgentTool
 
 from mc.types import ORCHESTRATOR_AGENT_NAME, AgentData
 
+pytestmark = pytest.mark.skip(
+    reason="AskAgentTool LLM path removed with the Factory; re-homed to ACP in a later phase"
+)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -133,12 +133,6 @@ class HybridMemoryStore(MemoryStore):
         if not is_history_above_threshold(self.memory_dir):
             return
 
-        # Resolve model for consolidation
-        model = self._resolve_consolidation_model()
-        if not model:
-            logger.warning("History above threshold but no consolidation model available")
-            return
-
         self._consolidation_in_progress = True
 
         async def _run():
@@ -147,7 +141,7 @@ class HybridMemoryStore(MemoryStore):
 
                 ran = False
                 while is_history_above_threshold(self.memory_dir):
-                    ok = await consolidate_history_and_memory(self.memory_dir, model)
+                    ok = await consolidate_history_and_memory(self.memory_dir)
                     if not ok:
                         self._consolidation_retry_after = (
                             time.monotonic() + _CONSOLIDATION_FAILURE_COOLDOWN_SECONDS
@@ -174,10 +168,6 @@ class HybridMemoryStore(MemoryStore):
             # No running event loop — skip async consolidation
             logger.debug("No event loop available for consolidation, skipping")
             self._consolidation_in_progress = False
-
-    def _resolve_consolidation_model(self) -> str | None:
-        """Resolve the model to use for file-based consolidation."""
-        return os.environ.get("NANOBOT_CONSOLIDATION_MODEL", "openrouter/anthropic/claude-haiku")
 
     def search(self, query: str, top_k: int = 5, **kwargs) -> str:
         results = self._index.search(query, top_k, **kwargs)

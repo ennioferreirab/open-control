@@ -8,13 +8,10 @@ No silent fallbacks: LLM failure → explicit task failure.
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 from mc.contexts.routing.router import DirectDelegationRouter, RoutingDecision
-from mc.infrastructure.providers.factory import create_provider
 
 if TYPE_CHECKING:
     from mc.bridge import ConvexBridge
@@ -22,10 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 LLM_TIMEOUT_SECONDS = 30
-LLM_TEMPERATURE = 0.2
-LLM_MAX_TOKENS = 256
 DESCRIPTION_TRUNCATE = 2000
-PREFERRED_TIER = "tier:standard-low"
 
 SYSTEM_PROMPT = """\
 You are an agent routing assistant. Select the single best agent for this task \
@@ -138,52 +132,15 @@ class LLMDelegationRouter:
             agent_roster=agent_roster,
         )
 
-        # Resolve model: prefer tier:standard-low, fall back to orchestrator-agent model
-        model = await self._resolve_model()
+        full_prompt = SYSTEM_PROMPT + "\n\n" + user_prompt
 
-        # Call LLM
+        from mc.infrastructure.acp.utility import extract_json, run_utility_turn
+
         try:
-            provider, resolved_model = create_provider(model=model)
+            text = await run_utility_turn(full_prompt, tier="low", timeout_s=LLM_TIMEOUT_SECONDS)
+            parsed = extract_json(text)
         except Exception as exc:
-            raise RuntimeError(f"Failed to create LLM provider for delegation: {exc}") from exc
-
-        try:
-            response = await asyncio.wait_for(
-                provider.chat(
-                    model=resolved_model,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=LLM_TEMPERATURE,
-                    max_tokens=LLM_MAX_TOKENS,
-                ),
-                timeout=LLM_TIMEOUT_SECONDS,
-            )
-        except TimeoutError as exc:
-            raise RuntimeError(f"LLM delegation timed out after {LLM_TIMEOUT_SECONDS}s") from exc
-        except Exception as exc:
-            raise RuntimeError(f"LLM delegation call failed: {exc}") from exc
-
-        if response.finish_reason == "error":
-            raise RuntimeError(f"LLM delegation returned error: {response.content or 'unknown'}")
-
-        content = (response.content or "").strip()
-        if not content:
-            raise RuntimeError("LLM delegation returned empty response")
-
-        # Parse JSON response
-        try:
-            # Strip markdown fences if present
-            if content.startswith("```"):
-                lines = content.split("\n")
-                lines = [line for line in lines if not line.startswith("```")]
-                content = "\n".join(lines)
-            parsed = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                f"LLM delegation returned invalid JSON: {exc}\nResponse: {content[:500]}"
-            ) from exc
+            raise RuntimeError(f"LLM delegation failed: {exc}") from exc
 
         target_agent = parsed.get("target_agent")
         reasoning = parsed.get("reasoning", "")
@@ -209,40 +166,6 @@ class LLMDelegationRouter:
             registry_snapshot=registry_snapshot,
             routed_at=datetime.now(UTC).isoformat(),
         )
-
-    async def _resolve_model(self) -> str | None:
-        """Resolve the model to use for delegation LLM call.
-
-        Prefers tier:standard-low. Falls back to the orchestrator-agent's configured model.
-        Returns None if neither is available (factory will use config default).
-        """
-        from mc.infrastructure.providers.tier_resolver import TierResolver
-        from mc.types import ORCHESTRATOR_AGENT_NAME
-
-        # Try tier:standard-low first
-        try:
-            resolver = TierResolver(self._bridge)
-            resolved = resolver.resolve_model(PREFERRED_TIER)
-            if resolved:
-                return resolved
-        except (ValueError, Exception):
-            logger.debug(
-                "[llm_delegator] tier:standard-low not configured, trying orchestrator-agent model"
-            )
-
-        # Fall back to orchestrator-agent model
-        try:
-            agent_data = await asyncio.to_thread(
-                self._bridge.get_agent_by_name, ORCHESTRATOR_AGENT_NAME
-            )
-            if agent_data:
-                lead_model = agent_data.get("model")
-                if lead_model:
-                    return lead_model
-        except Exception:
-            logger.debug("[llm_delegator] Failed to fetch orchestrator-agent model", exc_info=True)
-
-        return None
 
     @staticmethod
     def _format_agent_roster(agents: list[dict[str, Any]]) -> str:

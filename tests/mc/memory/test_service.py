@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -11,7 +11,6 @@ from mc.memory.service import (
     consolidate_task_output,
     create_memory_store,
     quarantine_invalid_memory_files,
-    resolve_consolidation_model,
 )
 from mc.memory.store import HybridMemoryStore
 
@@ -39,7 +38,6 @@ class TestCreateMemoryStore:
 
     def test_passes_embedding_model(self, tmp_path):
         store = create_memory_store(tmp_path, embedding_model="test-embed")
-        # The store should be created successfully with the model parameter
         assert isinstance(store, HybridMemoryStore)
 
 
@@ -138,7 +136,6 @@ class TestQuarantineInvalidMemoryFiles:
         quarantine_dir = tmp_path / ".memory-quarantine"
         quarantine_dir.mkdir(parents=True, exist_ok=True)
 
-        # Pre-populate quarantine with a file of the same name
         (quarantine_dir / "rogue.md").write_text("first", encoding="utf-8")
 
         (memory_dir / "rogue.md").write_text("second", encoding="utf-8")
@@ -146,10 +143,8 @@ class TestQuarantineInvalidMemoryFiles:
         result = quarantine_invalid_memory_files(tmp_path)
 
         assert len(result) == 1
-        # Should use a suffixed name to avoid overwriting
         assert result[0].name == "rogue-2.md"
         assert result[0].read_text(encoding="utf-8") == "second"
-        # Original quarantined file is untouched
         assert (quarantine_dir / "rogue.md").read_text(encoding="utf-8") == "first"
 
     def test_preserves_valid_memory_files(self, tmp_path):
@@ -163,12 +158,10 @@ class TestQuarantineInvalidMemoryFiles:
         mem.write_text("mem", encoding="utf-8")
         hist.write_text("hist", encoding="utf-8")
         archive.write_text("arch", encoding="utf-8")
-        # Create a valid (empty) SQLite database so MemoryIndex.sync() can open it
         conn = sqlite3.connect(str(sqlite_path))
         conn.close()
         lock.write_text("lock", encoding="utf-8")
 
-        # Add a rogue file
         (memory_dir / "rogue.json").write_text("{}", encoding="utf-8")
 
         result = quarantine_invalid_memory_files(tmp_path)
@@ -184,25 +177,9 @@ class TestQuarantineInvalidMemoryFiles:
 # ── consolidate_task_output ─────────────────────────────────────────────────
 
 
-def _make_llm_response(history_entry: str, memory_update: str):
-    """Build a mock provider response with a save_memory tool call."""
-    tool_call = MagicMock()
-    tool_call.arguments = json.dumps(
-        {
-            "history_entry": history_entry,
-            "memory_update": memory_update,
-        }
-    )
-    response = MagicMock()
-    response.tool_calls = [tool_call]
-    return response
-
-
-def _make_llm_response_no_tool_calls():
-    """Build a mock provider response with no tool calls."""
-    response = MagicMock()
-    response.tool_calls = None
-    return response
+def _json_text(history_entry: str, memory_update: str) -> str:
+    """Return a JSON string as run_utility_turn would return it."""
+    return json.dumps({"history_entry": history_entry, "memory_update": memory_update})
 
 
 class TestConsolidateTaskOutput:
@@ -210,22 +187,21 @@ class TestConsolidateTaskOutput:
 
     @pytest.fixture
     def workspace(self, tmp_path):
-        """Set up a workspace with a memory directory."""
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir(parents=True, exist_ok=True)
         (memory_dir / "MEMORY.md").write_text("# Existing Memory\nFact 1", encoding="utf-8")
         return tmp_path
 
+    @pytest.mark.asyncio
     async def test_successful_consolidation(self, workspace):
-        mock_response = _make_llm_response(
+        text = _json_text(
             "[2026-03-05 10:00] Task completed successfully",
             "# Updated Memory\nFact 1\nFact 2",
         )
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
 
         with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=text),
         ):
             result = await consolidate_task_output(
                 workspace,
@@ -236,19 +212,18 @@ class TestConsolidateTaskOutput:
             )
 
         assert result is True
-        # Check history was appended
         history = (workspace / "memory" / "HISTORY.md").read_text(encoding="utf-8")
         assert "Task completed successfully" in history
-        # Check memory was updated
         memory = (workspace / "memory" / "MEMORY.md").read_text(encoding="utf-8")
         assert "Fact 2" in memory
 
+    @pytest.mark.asyncio
     async def test_llm_call_failure_returns_false(self, workspace):
-        provider = MagicMock()
-        provider.chat = AsyncMock(side_effect=Exception("API error"))
+        from mc.infrastructure.providers.errors import ProviderError
 
         with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(side_effect=ProviderError("API error")),
         ):
             result = await consolidate_task_output(
                 workspace,
@@ -260,13 +235,12 @@ class TestConsolidateTaskOutput:
 
         assert result is False
 
+    @pytest.mark.asyncio
     async def test_no_tool_calls_returns_false(self, workspace):
-        mock_response = _make_llm_response_no_tool_calls()
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
+        """When the LLM returns text with no parseable JSON, returns False."""
         with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value="not valid json here"),
         ):
             result = await consolidate_task_output(
                 workspace,
@@ -278,19 +252,19 @@ class TestConsolidateTaskOutput:
 
         assert result is False
 
+    @pytest.mark.asyncio
     async def test_truncates_long_output(self, workspace):
+        """Verify truncation is applied to long task output."""
         long_output = "x" * 5000
+        text = _json_text("[2026-03-05 10:00] Done", "# Memory")
 
-        mock_response = _make_llm_response(
-            "[2026-03-05 10:00] Done",
-            "# Memory",
-        )
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
+        captured_prompt: list[str] = []
 
-        with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
-        ):
+        async def _capture(prompt, **kwargs):
+            captured_prompt.append(prompt)
+            return text
+
+        with patch("mc.infrastructure.acp.utility.run_utility_turn", side_effect=_capture):
             await consolidate_task_output(
                 workspace,
                 task_title="Test Task",
@@ -300,64 +274,18 @@ class TestConsolidateTaskOutput:
                 max_output_chars=3000,
             )
 
-            call_args = provider.chat.call_args
-            messages = call_args.kwargs["messages"]
-            user_msg = messages[1]["content"]
-            assert "truncated" in user_msg
-            assert "5000" in user_msg
+        assert captured_prompt
+        assert "truncated" in captured_prompt[0]
+        assert "5000" in captured_prompt[0]
 
-    async def test_custom_system_prompt(self, workspace):
-        mock_response = _make_llm_response("[2026-03-05] Done", "# Memory")
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
-        ):
-            await consolidate_task_output(
-                workspace,
-                task_title="Test Task",
-                task_output="output",
-                task_status="completed",
-                task_id="task-prompt",
-                system_prompt="Custom prompt",
-            )
-
-            call_args = provider.chat.call_args
-            messages = call_args.kwargs["messages"]
-            assert messages[0]["content"] == "Custom prompt"
-
-    async def test_default_system_prompt_used(self, workspace):
-        mock_response = _make_llm_response("[2026-03-05] Done", "# Memory")
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
-        ):
-            await consolidate_task_output(
-                workspace,
-                task_title="Test Task",
-                task_output="output",
-                task_status="completed",
-                task_id="task-default",
-            )
-
-            call_args = provider.chat.call_args
-            messages = call_args.kwargs["messages"]
-            assert messages[0]["content"] == DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT
-
+    @pytest.mark.asyncio
     async def test_unchanged_memory_not_rewritten(self, workspace):
         existing_memory = (workspace / "memory" / "MEMORY.md").read_text(encoding="utf-8")
-        mock_response = _make_llm_response(
-            "[2026-03-05 10:00] Nothing new",
-            existing_memory,  # Same as current
-        )
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
+        text = _json_text("[2026-03-05 10:00] Nothing new", existing_memory)
 
         with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=text),
         ):
             result = await consolidate_task_output(
                 workspace,
@@ -368,126 +296,18 @@ class TestConsolidateTaskOutput:
             )
 
         assert result is True
-        # History should still be appended
         history = (workspace / "memory" / "HISTORY.md").read_text(encoding="utf-8")
         assert "Nothing new" in history
-        # Memory should remain unchanged
         memory = (workspace / "memory" / "MEMORY.md").read_text(encoding="utf-8")
         assert memory == existing_memory
 
-    async def test_string_args_from_llm(self, workspace):
-        """When the LLM returns arguments as a JSON string (not pre-parsed dict)."""
-        tool_call = MagicMock()
-        tool_call.arguments = json.dumps(
-            {
-                "history_entry": "[2026-03-05] String args",
-                "memory_update": "# New memory",
-            }
-        )
-        response = MagicMock()
-        response.tool_calls = [tool_call]
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=response)
-
-        with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
-        ):
-            result = await consolidate_task_output(
-                workspace,
-                task_title="Test",
-                task_output="out",
-                task_status="done",
-                task_id="task-str",
-            )
-
-        assert result is True
-
-    async def test_non_dict_args_returns_false(self, workspace):
-        """When parsed arguments are not a dict, return False."""
-        tool_call = MagicMock()
-        tool_call.arguments = '"just a string"'
-        response = MagicMock()
-        response.tool_calls = [tool_call]
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=response)
-
-        with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
-        ):
-            result = await consolidate_task_output(
-                workspace,
-                task_title="Test",
-                task_output="out",
-                task_status="done",
-                task_id="task-bad-args",
-            )
-
-        assert result is False
-
-    async def test_malformed_tool_call_returns_false(self, workspace):
-        """When tool call arguments can't be parsed, return False."""
-        tool_call = MagicMock()
-        tool_call.arguments = "not valid json {{{"
-        response = MagicMock()
-        response.tool_calls = [tool_call]
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=response)
-
-        with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
-        ):
-            result = await consolidate_task_output(
-                workspace,
-                task_title="Test",
-                task_output="out",
-                task_status="done",
-                task_id="task-malformed",
-            )
-
-        assert result is False
-
-    async def test_non_string_entry_converted_to_json(self, workspace):
-        """When history_entry is not a string (e.g. dict), it gets JSON-encoded."""
-        tool_call = MagicMock()
-        tool_call.arguments = {
-            "history_entry": {"key": "value"},
-            "memory_update": "# Memory",
-        }
-        response = MagicMock()
-        response.tool_calls = [tool_call]
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=response)
-
-        with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
-        ):
-            result = await consolidate_task_output(
-                workspace,
-                task_title="Test",
-                task_output="out",
-                task_status="done",
-                task_id="task-nonstr",
-            )
-
-        assert result is True
-        history = (workspace / "memory" / "HISTORY.md").read_text(encoding="utf-8")
-        assert '"key"' in history
-
+    @pytest.mark.asyncio
     async def test_empty_workspace_creates_memory_dir(self, tmp_path):
-        """consolidate_task_output works even when memory dir doesn't exist yet."""
-        mock_response = _make_llm_response(
-            "[2026-03-05 10:00] First entry",
-            "# First memory",
-        )
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
+        text = _json_text("[2026-03-05 10:00] First entry", "# First memory")
 
         with patch(
-            "mc.memory.service.create_provider", return_value=(provider, "resolved-medium-model")
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=text),
         ):
             result = await consolidate_task_output(
                 tmp_path,
@@ -510,94 +330,7 @@ class TestConstants:
         assert isinstance(DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT, str)
         assert len(DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT) > 50
 
-    def test_system_prompt_mentions_save_memory(self):
-        assert "save_memory" in DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT
-
-
-# ── resolve_consolidation_model ────────────────────────────────────────────
-
-
-class TestResolveConsolidationModel:
-    """Tests for resolve_consolidation_model()."""
-
-    def test_tier_resolution_success(self):
-        """When TierResolver works, returns the resolved model."""
-        bridge = MagicMock()
-        with patch("mc.infrastructure.providers.tier_resolver.TierResolver") as mock_resolver:
-            mock_resolver.return_value.resolve_model.return_value = "openai-codex/gpt-5.4"
-            result = resolve_consolidation_model(bridge)
-
-        assert result == "openai-codex/gpt-5.4"
-
-    def test_tier_resolution_failure_falls_back_to_config(self):
-        """When TierResolver fails, falls back to config default model."""
-        bridge = MagicMock()
-        mock_config = MagicMock()
-        mock_config.agents.defaults.model = "anthropic-oauth/claude-sonnet-4-6"
-
-        with (
-            patch(
-                "mc.infrastructure.providers.tier_resolver.TierResolver",
-                side_effect=ValueError("no tier"),
-            ),
-            patch("nanobot.config.loader.load_config", return_value=mock_config),
-        ):
-            result = resolve_consolidation_model(bridge)
-
-        assert result == "anthropic-oauth/claude-sonnet-4-6"
-
-    def test_both_fail_returns_none(self):
-        """When both tier and config fail, returns None."""
-        bridge = MagicMock()
-
-        with (
-            patch(
-                "mc.infrastructure.providers.tier_resolver.TierResolver",
-                side_effect=Exception("convex down"),
-            ),
-            patch(
-                "nanobot.config.loader.load_config",
-                side_effect=Exception("no config"),
-            ),
-        ):
-            result = resolve_consolidation_model(bridge)
-
-        assert result is None
-
-    def test_no_bridge_skips_tier_uses_config(self):
-        """When bridge is None, skips tier resolution entirely."""
-        mock_config = MagicMock()
-        mock_config.agents.defaults.model = "anthropic-oauth/claude-sonnet-4-6"
-
-        with patch("nanobot.config.loader.load_config", return_value=mock_config):
-            result = resolve_consolidation_model(None)
-
-        assert result == "anthropic-oauth/claude-sonnet-4-6"
-
-    def test_no_bridge_no_config_returns_none(self):
-        """When bridge is None and config fails, returns None."""
-        with patch(
-            "nanobot.config.loader.load_config",
-            side_effect=Exception("no config"),
-        ):
-            result = resolve_consolidation_model(None)
-
-        assert result is None
-
-    def test_never_raises(self):
-        """Regardless of failures, never raises — returns None."""
-        bridge = MagicMock()
-
-        with (
-            patch(
-                "mc.infrastructure.providers.tier_resolver.TierResolver",
-                side_effect=RuntimeError("boom"),
-            ),
-            patch(
-                "nanobot.config.loader.load_config",
-                side_effect=RuntimeError("boom"),
-            ),
-        ):
-            result = resolve_consolidation_model(bridge)
-
-        assert result is None
+    def test_system_prompt_requests_json_contract(self):
+        # The parser reads these keys from the returned JSON, so the prompt must name them.
+        assert "history_entry" in DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT
+        assert "memory_update" in DEFAULT_TASK_CONSOLIDATION_SYSTEM_PROMPT

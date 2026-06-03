@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from claude_code.memory_consolidator import CCMemoryConsolidator
@@ -9,46 +9,37 @@ from claude_code.memory_consolidator import CCMemoryConsolidator
 from mc.memory import create_memory_store
 
 
-def _make_llm_response(history_entry: str, memory_update: str) -> MagicMock:
-    response = MagicMock()
-    tool_call = MagicMock()
-    tool_call.arguments = json.dumps(
-        {
-            "history_entry": history_entry,
-            "memory_update": memory_update,
-        }
-    )
-    response.tool_calls = [tool_call]
-    return response
+def _utility_text(history_entry: str, memory_update: str) -> str:
+    """The JSON text an ACP utility turn returns for task consolidation."""
+    return json.dumps({"history_entry": history_entry, "memory_update": memory_update})
 
 
-def _mock_provider(response: object | Exception):
-    provider = MagicMock()
-    if isinstance(response, Exception):
-        provider.chat = AsyncMock(side_effect=response)
-    else:
-        provider.chat = AsyncMock(return_value=response)
+def _mock_utility_turn(result: str | Exception):
+    if isinstance(result, Exception):
+        return patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(side_effect=result),
+        )
     return patch(
-        "mc.memory.service.create_provider",
-        return_value=(provider, "resolved-model"),
+        "mc.infrastructure.acp.utility.run_utility_turn",
+        new=AsyncMock(return_value=result),
     )
 
 
 @pytest.mark.asyncio
 async def test_consolidate_writes_history(tmp_path):
     consolidator = CCMemoryConsolidator(tmp_path)
-    response = _make_llm_response(
+    text = _utility_text(
         "[2026-03-05 12:00] Completed parser fix and updated tests.",
         "Known facts.",
     )
 
-    with _mock_provider(response):
+    with _mock_utility_turn(text):
         ok = await consolidator.consolidate(
             task_title="Fix parser",
             task_output="Patched parser and tests",
             task_status="completed",
             task_id="task-1",
-            model="claude-haiku",
         )
 
     assert ok is True
@@ -64,18 +55,17 @@ async def test_consolidate_updates_memory(tmp_path):
     memory_path.write_text("Old memory", encoding="utf-8")
 
     consolidator = CCMemoryConsolidator(tmp_path)
-    response = _make_llm_response(
+    text = _utility_text(
         "[2026-03-05 12:01] Added deployment note.",
         "New memory content",
     )
 
-    with _mock_provider(response):
+    with _mock_utility_turn(text):
         ok = await consolidator.consolidate(
             task_title="Deploy",
             task_output="Deployment finished",
             task_status="completed",
             task_id="task-2",
-            model="claude-haiku",
         )
 
     assert ok is True
@@ -90,18 +80,17 @@ async def test_consolidate_skips_memory_if_unchanged(tmp_path):
     memory_path.write_text("Same memory", encoding="utf-8")
 
     consolidator = CCMemoryConsolidator(tmp_path)
-    response = _make_llm_response(
+    text = _utility_text(
         "[2026-03-05 12:02] No new facts.",
         "Same memory",
     )
 
-    with _mock_provider(response):
+    with _mock_utility_turn(text):
         ok = await consolidator.consolidate(
             task_title="No-op task",
             task_output="No changes",
             task_status="completed",
             task_id="task-3",
-            model="claude-haiku",
         )
 
     assert ok is True
@@ -112,31 +101,27 @@ async def test_consolidate_skips_memory_if_unchanged(tmp_path):
 async def test_consolidate_returns_false_on_llm_failure(tmp_path):
     consolidator = CCMemoryConsolidator(tmp_path)
 
-    with _mock_provider(RuntimeError("boom")):
+    with _mock_utility_turn(RuntimeError("boom")):
         ok = await consolidator.consolidate(
             task_title="Crashy task",
             task_output="whatever",
             task_status="completed",
             task_id="task-4",
-            model="claude-haiku",
         )
 
     assert ok is False
 
 
 @pytest.mark.asyncio
-async def test_consolidate_returns_false_on_no_tool_call(tmp_path):
+async def test_consolidate_returns_false_on_unparseable_output(tmp_path):
     consolidator = CCMemoryConsolidator(tmp_path)
-    response = MagicMock()
-    response.tool_calls = []
 
-    with _mock_provider(response):
+    with _mock_utility_turn("sorry, I cannot produce that"):
         ok = await consolidator.consolidate(
             task_title="Bad response",
             task_output="none",
             task_status="completed",
             task_id="task-5",
-            model="claude-haiku",
         )
 
     assert ok is False
@@ -145,18 +130,17 @@ async def test_consolidate_returns_false_on_no_tool_call(tmp_path):
 @pytest.mark.asyncio
 async def test_consolidate_error_status_task(tmp_path):
     consolidator = CCMemoryConsolidator(tmp_path)
-    response = _make_llm_response(
+    text = _utility_text(
         "[2026-03-05 12:03] Task failed; captured stack trace cause.",
         "Captured: parser crash when input empty.",
     )
 
-    with _mock_provider(response):
+    with _mock_utility_turn(text):
         ok = await consolidator.consolidate(
             task_title="Failing task",
             task_output="Traceback ...",
             task_status="error",
             task_id="task-6",
-            model="claude-haiku",
         )
 
     assert ok is True
@@ -173,19 +157,17 @@ async def test_consolidate_skips_memory_if_unchanged_with_trailing_whitespace(tm
     memory_path.write_text("Same memory", encoding="utf-8")
 
     consolidator = CCMemoryConsolidator(tmp_path)
-    # LLM returns the same content but with a trailing newline (common LLM behaviour)
-    response = _make_llm_response(
+    text = _utility_text(
         "[2026-03-05 12:05] No new facts.",
         "Same memory\n",
     )
 
-    with _mock_provider(response):
+    with _mock_utility_turn(text):
         ok = await consolidator.consolidate(
             task_title="No-op trailing-ws task",
             task_output="No changes",
             task_status="completed",
             task_id="task-3b",
-            model="claude-haiku",
         )
 
     assert ok is True
@@ -195,18 +177,17 @@ async def test_consolidate_skips_memory_if_unchanged_with_trailing_whitespace(tm
 @pytest.mark.asyncio
 async def test_consolidate_creates_memory_dir(tmp_path):
     consolidator = CCMemoryConsolidator(tmp_path)
-    response = _make_llm_response(
+    text = _utility_text(
         "[2026-03-05 12:04] Created memory folder and stored summary.",
         "Initial memory facts.",
     )
 
-    with _mock_provider(response):
+    with _mock_utility_turn(text):
         ok = await consolidator.consolidate(
             task_title="First task",
             task_output="output",
             task_status="completed",
             task_id="task-7",
-            model="claude-haiku",
         )
 
     assert ok is True
@@ -216,18 +197,17 @@ async def test_consolidate_creates_memory_dir(tmp_path):
 @pytest.mark.asyncio
 async def test_consolidate_syncs_index_for_search(tmp_path):
     consolidator = CCMemoryConsolidator(tmp_path)
-    response = _make_llm_response(
+    text = _utility_text(
         "[2026-03-05 12:06] Captured canary rollout preference for deploys.",
         "Deployment policy: prefer canary rollout before broad release.",
     )
 
-    with _mock_provider(response):
+    with _mock_utility_turn(text):
         ok = await consolidator.consolidate(
             task_title="Deploy API",
             task_output="Used canary rollout and verified health checks",
             task_status="completed",
             task_id="task-8",
-            model="claude-haiku",
         )
 
     assert ok is True

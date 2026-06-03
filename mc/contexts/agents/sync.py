@@ -48,7 +48,7 @@ def sync_skills_impl(
 
 def list_available_models() -> list[str]:
     """Delegate to provider_factory.list_available_models."""
-    from mc.infrastructure.providers.factory import list_available_models as _impl
+    from mc.infrastructure.providers.model_listing import list_available_models as _impl
 
     return _impl()
 
