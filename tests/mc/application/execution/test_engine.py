@@ -91,7 +91,7 @@ class TestExecutionEngine:
         return ExecutionEngine(
             strategies={
                 RunnerType.PROVIDER_CLI: FakeSuccessStrategy(),
-                RunnerType.CLAUDE_CODE: FakeSuccessStrategy(),
+                RunnerType.ACP: FakeSuccessStrategy(),
                 RunnerType.HUMAN: FakeSuccessStrategy(),
             }
         )
@@ -115,7 +115,7 @@ class TestExecutionEngine:
             task_id="task_2",
             title="Build Feature",
             agent_name="coder",
-            runner_type=RunnerType.CLAUDE_CODE,
+            runner_type=RunnerType.ACP,
         )
 
     @pytest.fixture()
@@ -161,7 +161,7 @@ class TestExecutionEngine:
         engine = ExecutionEngine(
             strategies={
                 RunnerType.PROVIDER_CLI: provider_cli_strategy,
-                RunnerType.CLAUDE_CODE: cc_strategy,
+                RunnerType.ACP: cc_strategy,
             }
         )
 
@@ -179,7 +179,7 @@ class TestExecutionEngine:
             task_id="t2",
             title="CC",
             agent_name="cc",
-            runner_type=RunnerType.CLAUDE_CODE,
+            runner_type=RunnerType.ACP,
         )
 
         result_pcli = await engine.run(req_pcli)

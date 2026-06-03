@@ -1,43 +1,22 @@
-"""Tests for Claude Code backend integration in TaskExecutor (Story CC-5).
+"""Tests for Claude Code backend integration in TaskExecutor.
 
 Covers:
-- Backend routing: claude-code → _execute_cc_task
+- Backend routing: claude-code → ACP engine path
 - Provider CLI backend → engine execution path
-- Workspace preparation failure → crash
-- IPC server failure → crash
-- CC execution failure → crash
-- Successful CC execution → done (message + activity + status)
-- Stream callback posts step_started activities
-- Cost tracking in completion activity
+- cc/ model prefix → ACP engine path with synthetic agent data
 """
 
 from __future__ import annotations
 
-import asyncio
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import mc.contexts.execution.executor as _executor_module
 from mc.contexts.execution.executor import TaskExecutor
 from mc.types import (
-    ActivityEventType,
     AgentData,
-    AuthorType,
-    CCTaskResult,
     ClaudeCodeOpts,
-    MessageType,
-    TaskStatus,
-    WorkspaceContext,
 )
-
-# Patch targets for lazy-imported CC modules (imported inside _execute_cc_task).
-# These must match the location where the name is looked up (the source module).
-_PATCH_WS_MGR = "claude_code.workspace.CCWorkspaceManager"
-_PATCH_IPC_SRV = "claude_code.ipc_server.MCSocketServer"
-_PATCH_PROVIDER = "claude_code.provider.ClaudeCodeProvider"
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -45,7 +24,6 @@ _PATCH_PROVIDER = "claude_code.provider.ClaudeCodeProvider"
 
 
 def _make_bridge() -> MagicMock:
-    """Return a minimal ConvexBridge mock."""
     bridge = MagicMock()
     bridge.send_message = MagicMock(return_value=None)
     bridge.create_activity = MagicMock(return_value=None)
@@ -59,15 +37,6 @@ def _make_executor(bridge: MagicMock | None = None) -> TaskExecutor:
     return TaskExecutor(bridge)
 
 
-def _make_ipc_server_mock() -> MagicMock:
-    """Return an IPC server mock that matches MCSocketServer's sync/async contract."""
-    ipc_server = MagicMock()
-    ipc_server.set_ask_user_handler = MagicMock(return_value=None)
-    ipc_server.start = AsyncMock(return_value=None)
-    ipc_server.stop = AsyncMock(return_value=None)
-    return ipc_server
-
-
 def _cc_agent(backend: str = "claude-code") -> AgentData:
     return AgentData(
         name="my-cc-agent",
@@ -78,43 +47,8 @@ def _cc_agent(backend: str = "claude-code") -> AgentData:
     )
 
 
-def _ws_ctx() -> WorkspaceContext:
-    return WorkspaceContext(
-        cwd=Path("/tmp/test-ws"),
-        mcp_config=Path("/tmp/test-ws/.mcp.json"),
-        claude_md=Path("/tmp/test-ws/CLAUDE.md"),
-        socket_path="/tmp/mc-test.sock",
-    )
-
-
-def _cc_result(
-    output: str = "All done",
-    cost_usd: float = 0.0123,
-    is_error: bool = False,
-) -> CCTaskResult:
-    return CCTaskResult(
-        output=output,
-        session_id="sess-abc",
-        cost_usd=cost_usd,
-        usage={"input_tokens": 100, "output_tokens": 50},
-        is_error=is_error,
-    )
-
-
-async def _drain_background_tasks() -> None:
-    """Await all module-level background tasks to completion.
-
-    Uses asyncio.gather on the current snapshot of _background_tasks rather
-    than asyncio.sleep(0), which is fragile and may not yield enough times to
-    let all tasks schedule and complete.
-    """
-    pending = list(_executor_module._background_tasks)
-    if pending:
-        await asyncio.gather(*pending, return_exceptions=True)
-
-
 # ---------------------------------------------------------------------------
-# Backend routing: claude-code → _execute_cc_task
+# Backend routing: claude-code → ACP engine
 # ---------------------------------------------------------------------------
 
 
@@ -278,636 +212,19 @@ class TestBackendRouting:
 
 
 # ---------------------------------------------------------------------------
-# _execute_cc_task happy path
-# ---------------------------------------------------------------------------
-
-
-class TestExecuteCCTaskHappyPath:
-    @pytest.mark.asyncio
-    async def test_successful_execution_transitions_to_review(self):
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-        result = _cc_result(output="All done", cost_usd=0.0123)
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(return_value=result)
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch(
-                "mc.contexts.execution.executor._relocate_invalid_memory_files", return_value=[]
-            ) as mock_relocate,
-        ):
-            await executor._execute_cc_task(
-                "t1",
-                "My task",
-                "desc",
-                "my-cc-agent",
-                agent_data,
-                task_data={"board_id": "board_001"},
-            )
-
-        # Should send a work message
-        bridge.send_message.assert_called_once()
-        call_args = bridge.send_message.call_args[0]
-        assert call_args[0] == "t1"  # task_id
-        assert call_args[1] == "my-cc-agent"  # author_name
-        assert call_args[2] == AuthorType.AGENT
-        assert "All done" in call_args[3]  # content
-
-        # Should update status to REVIEW
-        bridge.update_task_status.assert_called_once()
-        status_args = bridge.update_task_status.call_args[0]
-        assert status_args[1] == TaskStatus.REVIEW
-        mock_relocate.assert_called_once_with("t1", ws_ctx.cwd)
-
-        # IPC server should be stopped
-        mock_ipc.stop.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_prompt_combines_title_and_description(self):
-        executor = _make_executor()
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        captured: list[str] = []
-
-        async def capture_execute_task(**kwargs):
-            captured.append(kwargs["prompt"])
-            return _cc_result()
-
-        mock_provider.execute_task = capture_execute_task
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-        ):
-            await executor._execute_cc_task(
-                "t1",
-                "My title",
-                "My description",
-                "agent",
-                agent_data,
-                task_data={"board_id": "board_001"},
-            )
-
-        assert len(captured) == 1
-        assert "My title" in captured[0]
-        assert "My description" in captured[0]
-
-    @pytest.mark.asyncio
-    async def test_prompt_uses_title_only_when_no_description(self):
-        executor = _make_executor()
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        captured: list[str] = []
-
-        async def capture_execute_task(**kwargs):
-            captured.append(kwargs["prompt"])
-            return _cc_result()
-
-        mock_provider.execute_task = capture_execute_task
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch("mc.infrastructure.orientation.load_orientation", return_value=None),
-            patch("mc.contexts.execution.executor._snapshot_output_dir", return_value={}),
-            patch("mc.contexts.execution.executor._collect_output_artifacts", return_value=[]),
-        ):
-            await executor._execute_cc_task(
-                "t1",
-                "Title only",
-                None,
-                "agent",
-                agent_data,
-                needs_enrichment=False,
-                task_data={"board_id": "board_001"},
-            )
-
-        assert captured[0] == "Title only"
-
-
-# ---------------------------------------------------------------------------
-# _execute_cc_task failure scenarios
-# ---------------------------------------------------------------------------
-
-
-class TestExecuteCCTaskFailures:
-    @pytest.mark.asyncio
-    async def test_workspace_prep_failure_crashes_task(self):
-        executor = _make_executor()
-        agent_data = _cc_agent()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.side_effect = RuntimeError("disk full")
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
-        ):
-            await executor._execute_cc_task(
-                "t1", "Failing task", None, "agent", agent_data, task_data={"board_id": "board_001"}
-            )
-
-        mock_crash.assert_awaited_once()
-        crash_args = mock_crash.call_args[0]
-        assert "Workspace preparation failed" in crash_args[2]
-        assert "disk full" in crash_args[2]
-
-    @pytest.mark.asyncio
-    async def test_ipc_server_failure_crashes_task(self):
-        executor = _make_executor()
-        agent_data = _cc_agent()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = _ws_ctx()
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_ipc.start.side_effect = OSError("address in use")
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
-        ):
-            await executor._execute_cc_task(
-                "t1", "IPC failure", None, "agent", agent_data, task_data={"board_id": "board_001"}
-            )
-
-        mock_crash.assert_awaited_once()
-        crash_args = mock_crash.call_args[0]
-        assert "MCP IPC server failed" in crash_args[2]
-
-    @pytest.mark.asyncio
-    async def test_cc_execution_failure_crashes_task(self):
-        executor = _make_executor()
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(side_effect=RuntimeError("subprocess died"))
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
-        ):
-            await executor._execute_cc_task(
-                "t1", "Exec failure", None, "agent", agent_data, task_data={"board_id": "board_001"}
-            )
-
-        mock_crash.assert_awaited_once()
-        crash_args = mock_crash.call_args[0]
-        assert "Claude Code execution failed" in crash_args[2]
-        # IPC server should still be stopped even on provider failure
-        mock_ipc.stop.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_cc_error_result_crashes_task(self):
-        executor = _make_executor()
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-        error_result = _cc_result(output="something went wrong", is_error=True)
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(return_value=error_result)
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch.object(executor, "_crash_task", new_callable=AsyncMock) as mock_crash,
-        ):
-            await executor._execute_cc_task(
-                "t1", "Error result", None, "agent", agent_data, task_data={"board_id": "board_001"}
-            )
-
-        mock_crash.assert_awaited_once()
-        crash_args = mock_crash.call_args[0]
-        assert "Claude Code error" in crash_args[2]
-
-
-# ---------------------------------------------------------------------------
-# IPC server always stopped (finally block)
-# ---------------------------------------------------------------------------
-
-
-class TestIPCServerCleanup:
-    @pytest.mark.asyncio
-    async def test_ipc_server_stopped_on_success(self):
-        executor = _make_executor()
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(return_value=_cc_result())
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-        ):
-            await executor._execute_cc_task(
-                "t1", "title", None, "agent", agent_data, task_data={"board_id": "board_001"}
-            )
-
-        mock_ipc.stop.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_ipc_server_stopped_on_provider_exception(self):
-        executor = _make_executor()
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(side_effect=RuntimeError("boom"))
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-            patch.object(executor, "_crash_task", new_callable=AsyncMock),
-        ):
-            await executor._execute_cc_task(
-                "t1", "title", None, "agent", agent_data, task_data={"board_id": "board_001"}
-            )
-
-        mock_ipc.stop.assert_awaited_once()
-
-
-# ---------------------------------------------------------------------------
-# Stream callback posts activities
-# ---------------------------------------------------------------------------
-
-
-class TestStreamCallback:
-    @pytest.mark.asyncio
-    async def test_on_stream_callback_posts_activity(self):
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-
-        # Capture the on_stream callback and call it during execute_task
-        captured_callback: list = []
-
-        async def execute_task_with_stream(**kwargs):
-            cb = kwargs.get("on_stream")
-            if cb:
-                captured_callback.append(cb)
-                cb({"type": "text", "text": "Working on it..."})
-            return _cc_result()
-
-        mock_provider = MagicMock()
-        mock_provider.execute_task = execute_task_with_stream
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-        ):
-            await executor._execute_cc_task(
-                "t1",
-                "Stream task",
-                "desc",
-                "my-cc-agent",
-                agent_data,
-                task_data={"board_id": "board_001"},
-            )
-
-        assert len(captured_callback) == 1
-
-        # Drain any pending asyncio background tasks (the create_task from on_stream callback)
-        await _drain_background_tasks()
-
-        # An activity should have been created for the stream text
-        activity_calls = bridge.create_activity.call_args_list
-        # The completion activity is also posted; find the step_started one
-        step_started_calls = [
-            c for c in activity_calls if c[0][0] == ActivityEventType.STEP_STARTED
-        ]
-        assert len(step_started_calls) >= 1
-        assert "Working on it..." in step_started_calls[0][0][1]
-
-    @pytest.mark.asyncio
-    async def test_non_text_stream_events_do_not_post_activity(self):
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-
-        async def execute_task_with_tool_use(**kwargs):
-            cb = kwargs.get("on_stream")
-            if cb:
-                cb({"type": "tool_use", "name": "Read"})  # should NOT post activity
-            return _cc_result()
-
-        mock_provider = MagicMock()
-        mock_provider.execute_task = execute_task_with_tool_use
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-        ):
-            await executor._execute_cc_task(
-                "t1",
-                "tool use task",
-                None,
-                "agent",
-                agent_data,
-                task_data={"board_id": "board_001"},
-            )
-
-        await _drain_background_tasks()
-
-        # Only the completion activity should be posted
-        activity_calls = bridge.create_activity.call_args_list
-        step_started_calls = [
-            c for c in activity_calls if c[0][0] == ActivityEventType.STEP_STARTED
-        ]
-        assert len(step_started_calls) == 0
-
-
-# ---------------------------------------------------------------------------
-# Cost tracking
-# ---------------------------------------------------------------------------
-
-
-class TestCostTracking:
-    @pytest.mark.asyncio
-    async def test_completion_activity_includes_cost(self):
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-        result = _cc_result(cost_usd=0.0456)
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(return_value=result)
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-        ):
-            await executor._execute_cc_task(
-                "t1",
-                "Cost task",
-                None,
-                "my-cc-agent",
-                agent_data,
-                task_data={"board_id": "board_001"},
-            )
-
-        # Find the TASK_COMPLETED activity (posted in _complete_cc_task)
-        activity_calls = bridge.create_activity.call_args_list
-        completed_calls = [c for c in activity_calls if c[0][0] == ActivityEventType.TASK_COMPLETED]
-        assert len(completed_calls) == 1
-        description = completed_calls[0][0][1]
-        assert "0.0456" in description
-        assert "Cost" in description
-
-
-# ---------------------------------------------------------------------------
-# _crash_task
-# ---------------------------------------------------------------------------
-
-
-class TestCrashTask:
-    @pytest.mark.asyncio
-    async def test_crash_task_sends_message_and_updates_status(self):
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-
-        await executor._crash_task("t1", "Crashed task", "Something went wrong")
-
-        bridge.send_message.assert_called_once()
-        msg_args = bridge.send_message.call_args[0]
-        assert "Something went wrong" in msg_args[3]
-
-        bridge.update_task_status.assert_called_once()
-        status_args = bridge.update_task_status.call_args[0]
-        assert status_args[1] == TaskStatus.CRASHED
-
-    @pytest.mark.asyncio
-    async def test_crash_task_tolerates_bridge_errors(self):
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-        bridge.send_message.side_effect = RuntimeError("connection lost")
-        bridge.update_task_status.side_effect = RuntimeError("connection lost")
-
-        # Must not raise
-        await executor._crash_task("t1", "Flaky task", "error")
-
-
-# ---------------------------------------------------------------------------
-# _complete_cc_task
-# ---------------------------------------------------------------------------
-
-
-class TestCompleteCCTask:
-    @pytest.mark.asyncio
-    async def test_complete_sends_message_activity_and_status(self):
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-        result = _cc_result(output="Great success", cost_usd=0.001)
-
-        await executor._complete_cc_task("t1", "My task", "agent-x", result)
-
-        # Work message
-        bridge.send_message.assert_called_once()
-        msg_args = bridge.send_message.call_args[0]
-        assert "Great success" in msg_args[3]
-        assert msg_args[2] == AuthorType.AGENT
-        assert msg_args[4] == MessageType.WORK
-
-        # Cost activity
-        bridge.create_activity.assert_called_once()
-        act_args = bridge.create_activity.call_args[0]
-        assert act_args[0] == ActivityEventType.TASK_COMPLETED
-        assert "0.0010" in act_args[1]
-
-        # Status update to REVIEW
-        bridge.update_task_status.assert_called_once()
-        status_args = bridge.update_task_status.call_args[0]
-        assert status_args[1] == TaskStatus.REVIEW
-
-    @pytest.mark.asyncio
-    async def test_complete_cron_run_transitions_to_done(self):
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-        result = _cc_result(output="Great success", cost_usd=0.001)
-
-        await executor._complete_cc_task(
-            "t1",
-            "My task",
-            "agent-x",
-            result,
-            task_data={"active_cron_job_id": "cron-job-1"},
-        )
-
-        bridge.update_task_status.assert_called_once()
-        status_args = bridge.update_task_status.call_args[0]
-        assert status_args[1] == TaskStatus.DONE
-
-
-# ---------------------------------------------------------------------------
-# _on_task_completed callback
-# ---------------------------------------------------------------------------
-
-
-class TestOnTaskCompletedCallback:
-    @pytest.mark.asyncio
-    async def test_on_task_completed_called_after_successful_cc_execution(self):
-        """_on_task_completed must be called after a successful CC task (M1)."""
-        bridge = _make_bridge()
-        executor = _make_executor(bridge)
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-        result = _cc_result(output="Done", cost_usd=0.001)
-
-        completed_task_ids: list[str] = []
-
-        async def on_completed(task_id: str, result_text: str) -> None:
-            completed_task_ids.append(task_id)
-
-        executor._on_task_completed = on_completed
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(return_value=result)
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-        ):
-            await executor._execute_cc_task(
-                "t42",
-                "Successful task",
-                "desc",
-                "my-cc-agent",
-                agent_data,
-                task_data={"board_id": "board_001"},
-            )
-
-        assert completed_task_ids == ["t42"]
-
-    @pytest.mark.asyncio
-    async def test_on_task_completed_not_called_on_error_result(self):
-        """_on_task_completed must NOT be called when CC task crashes (is_error=True)."""
-        executor = _make_executor()
-        agent_data = _cc_agent()
-        ws_ctx = _ws_ctx()
-        error_result = _cc_result(output="failed", is_error=True)
-
-        completed_task_ids: list[str] = []
-
-        async def on_completed(task_id: str) -> None:
-            completed_task_ids.append(task_id)
-
-        executor._on_task_completed = on_completed
-
-        mock_ws_mgr = MagicMock()
-        mock_ws_mgr.prepare.return_value = ws_ctx
-
-        mock_ipc = _make_ipc_server_mock()
-        mock_provider = MagicMock()
-        mock_provider.execute_task = AsyncMock(return_value=error_result)
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=mock_ws_mgr),
-            patch(_PATCH_IPC_SRV, return_value=mock_ipc),
-            patch(_PATCH_PROVIDER, return_value=mock_provider),
-        ):
-            await executor._execute_cc_task(
-                "t43",
-                "Error task",
-                None,
-                "my-cc-agent",
-                agent_data,
-                task_data={"board_id": "board_001"},
-            )
-
-        assert completed_task_ids == []
-
-
-# ---------------------------------------------------------------------------
 # cc/ model prefix routing
 # ---------------------------------------------------------------------------
 
 
 class TestCCModelRouting:
-    """Tests for cc/ model routing in _execute_task.
-
-    Updated for the engine cutover: ContextBuilder detects cc/ model prefix and
-    the task path normalizes agent metadata before routing through ExecutionEngine.
-    """
+    """cc/ model prefix detected by ContextBuilder routes through ExecutionEngine to ACP."""
 
     @pytest.mark.asyncio
     async def test_cc_model_routes_direct_task_through_acp(self):
-        """When agent_model resolves to cc/*, direct tasks should use provider-cli."""
+        """When agent_model resolves to cc/*, direct tasks should use ACP."""
         bridge = _make_bridge()
         executor = _make_executor(bridge)
 
-        # Agent with model set to cc/claude-sonnet-4-6
         cc_agent = AgentData(
             name="test-agent",
             display_name="Test Agent",
@@ -916,7 +233,6 @@ class TestCCModelRouting:
             backend="claude-code",
         )
 
-        # ContextBuilder detects cc/ prefix and sets is_cc=True
         from mc.application.execution.request import (
             EntityType,
             ExecutionRequest,
@@ -978,7 +294,6 @@ class TestCCModelRouting:
         bridge = _make_bridge()
         executor = _make_executor(bridge)
 
-        # ContextBuilder detects cc/ prefix, but agent is None
         from mc.application.execution.request import (
             EntityType,
             ExecutionRequest,
@@ -1042,7 +357,6 @@ class TestCCModelRouting:
 class TestLoadAgentData:
     def test_returns_none_for_missing_config(self, tmp_path):
         executor = _make_executor()
-        # Patch AGENTS_DIR to a temp directory where the agent dir does NOT exist
         with patch("mc.infrastructure.config.AGENTS_DIR", tmp_path):
             result = executor._load_agent_data("no-such-agent")
         assert result is None
@@ -1087,98 +401,3 @@ class TestLoadAgentData:
             result = executor._load_agent_data("bad-agent")
 
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Board-scoped workspace resolution in _execute_cc_task (H1 / L2 coverage)
-# ---------------------------------------------------------------------------
-
-
-class TestCCBoardScopedWorkspace:
-    """Board resolution in _execute_cc_task: happy path and failure fallback.
-
-    These tests follow the same minimal patch pattern as TestExecuteCCTaskHappyPath:
-    stub out CCWorkspaceManager, MCSocketServer, and ClaudeCodeProvider, then
-    configure bridge.get_board_by_id to control the board lookup outcome.
-    """
-
-    def _make_cc_mocks(self):
-        """Return (ws_mock, ipc_mock, provider_mock) with prepare/execute stubs."""
-        ws_mock = MagicMock()
-        ws_mock.prepare.return_value = _ws_ctx()
-
-        ipc_mock = _make_ipc_server_mock()
-
-        provider_mock = MagicMock()
-        provider_mock.execute_task = AsyncMock(return_value=_cc_result())
-
-        return ws_mock, ipc_mock, provider_mock
-
-    @pytest.mark.asyncio
-    async def test_board_found_passes_board_name_to_workspace(self):
-        """When board_id resolves to a board, board_name is forwarded to CCWorkspaceManager."""
-        bridge = _make_bridge()
-        bridge.get_board_by_id = MagicMock(return_value={"name": "my-board"})
-        bridge.get_agent_by_name = MagicMock(return_value=None)
-        bridge.query = MagicMock(return_value=None)
-
-        executor = _make_executor(bridge)
-        agent_data = _cc_agent()
-        ws_mock, ipc_mock, provider_mock = self._make_cc_mocks()
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=ws_mock),
-            patch(_PATCH_IPC_SRV, return_value=ipc_mock),
-            patch(_PATCH_PROVIDER, return_value=provider_mock),
-            patch("mc.infrastructure.boards.get_agent_memory_mode", return_value="clean"),
-        ):
-            await executor._execute_cc_task(
-                task_id="task-99",
-                title="Board task",
-                description=None,
-                agent_name="my-cc-agent",
-                agent_data=agent_data,
-                task_data={"board_id": "board-abc"},
-                needs_enrichment=False,
-            )
-
-        ws_mock.prepare.assert_called_once()
-        call_kwargs = ws_mock.prepare.call_args.kwargs
-        assert call_kwargs.get("board_name") == "my-board"
-        assert call_kwargs.get("memory_mode") == "clean"
-
-    @pytest.mark.asyncio
-    async def test_board_lookup_failure_falls_back_to_global_workspace(self):
-        """When get_board_by_id raises for nanobot agent, falls back to global workspace.
-
-        Only 'nanobot' is allowed to fall back; non-nanobot agents raise RuntimeError.
-        """
-        bridge = _make_bridge()
-        bridge.get_board_by_id = MagicMock(side_effect=RuntimeError("Convex unavailable"))
-        bridge.get_agent_by_name = MagicMock(return_value=None)
-        bridge.query = MagicMock(return_value=None)
-
-        executor = _make_executor(bridge)
-        agent_data = _cc_agent()
-        agent_data.name = "nanobot"
-        ws_mock, ipc_mock, provider_mock = self._make_cc_mocks()
-
-        with (
-            patch(_PATCH_WS_MGR, return_value=ws_mock),
-            patch(_PATCH_IPC_SRV, return_value=ipc_mock),
-            patch(_PATCH_PROVIDER, return_value=provider_mock),
-        ):
-            await executor._execute_cc_task(
-                task_id="task-100",
-                title="Fallback task",
-                description=None,
-                agent_name="nanobot",
-                agent_data=agent_data,
-                task_data={"board_id": "board-xyz"},
-                needs_enrichment=False,
-            )
-
-        # board_name must be None — global workspace fallback
-        ws_mock.prepare.assert_called_once()
-        call_kwargs = ws_mock.prepare.call_args.kwargs
-        assert call_kwargs.get("board_name") is None

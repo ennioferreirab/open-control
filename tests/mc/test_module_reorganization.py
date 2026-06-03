@@ -23,16 +23,8 @@ def test_context_packages_reexport_public_api() -> None:
         ConversationService as ContextConversationService,
     )
     from mc.contexts.execution import (
-        CCExecutorMixin,
         StepDispatcher,
         TaskExecutor,
-        execute_step_via_cc,
-    )
-    from mc.contexts.execution.cc_executor import (
-        CCExecutorMixin as ContextCCExecutorMixin,
-    )
-    from mc.contexts.execution.cc_step_runner import (
-        execute_step_via_cc as context_execute_step_via_cc,
     )
     from mc.contexts.execution.executor import TaskExecutor as ContextTaskExecutor
     from mc.contexts.execution.step_dispatcher import (
@@ -68,8 +60,6 @@ def test_context_packages_reexport_public_api() -> None:
     assert PlanMaterializer is ContextPlanMaterializer
     assert TaskExecutor is ContextTaskExecutor
     assert StepDispatcher is ContextStepDispatcher
-    assert CCExecutorMixin is ContextCCExecutorMixin
-    assert execute_step_via_cc is context_execute_step_via_cc
     assert ChatHandler is ContextChatHandler
     assert ConversationService is ContextConversationService
     assert ConversationIntent is ContextConversationIntent

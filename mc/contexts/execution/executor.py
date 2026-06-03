@@ -23,7 +23,6 @@ from mc.contexts.execution.agent_runner import (  # noqa: F401
     _coerce_agent_run_result,
     _make_provider,
 )
-from mc.contexts.execution.cc_executor import CCExecutorMixin
 from mc.contexts.execution.completion_reporting import append_task_completion_heartbeat
 from mc.contexts.execution.crash_recovery import AgentGateway
 from mc.contexts.execution.executor_agent_config import (
@@ -68,7 +67,6 @@ from mc.types import (
     ActivityEventType,
     AgentData,
     AuthorType,
-    CCTaskResult,
     MessageType,
     OrchestratorAgentExecutionError,
     TaskStatus,
@@ -164,7 +162,7 @@ def _build_tag_attributes_context(
     return build_tag_attributes_context(tags, attr_values, attr_catalog)
 
 
-class TaskExecutor(CCExecutorMixin):
+class TaskExecutor:
     """Picks up assigned tasks and runs agent execution."""
 
     def __init__(
@@ -487,10 +485,8 @@ class TaskExecutor(CCExecutorMixin):
         try:
             from mc.application.execution.request import (
                 ErrorCategory,
-                RunnerType,
             )
 
-            req.runner_type = RunnerType.CLAUDE_CODE
             if agent_data is None:
                 cc_model_name = req.model if req.is_cc else agent_model
                 agent_data = AgentData(
@@ -518,26 +514,6 @@ class TaskExecutor(CCExecutorMixin):
                         execution_result.error_message or "Provider error"
                     )
                     await self._handle_provider_error(task_id, title, agent_name, provider_exc)
-                elif req.runner_type == RunnerType.CLAUDE_CODE:
-                    try:
-                        await asyncio.to_thread(
-                            self._bridge.sync_task_output_files,
-                            task_id,
-                            task_data or {},
-                            agent_name,
-                        )
-                    except Exception:
-                        logger.warning(
-                            "[executor] CC: output sync failed for errored task '%s'",
-                            title,
-                            exc_info=True,
-                        )
-                    await self._crash_task(
-                        task_id,
-                        title,
-                        execution_result.error_message or "Claude Code execution failed",
-                        agent_name,
-                    )
                 else:
                     crash_exc = execution_result.error_exception or RuntimeError(
                         execution_result.error_message or "Execution failed"
@@ -564,50 +540,6 @@ class TaskExecutor(CCExecutorMixin):
 
             # Collect file artifacts produced during agent execution.
             artifacts = await asyncio.to_thread(_collect_output_artifacts, task_id, pre_snapshot)
-
-            if req.runner_type == RunnerType.CLAUDE_CODE:
-                cc_result = CCTaskResult(
-                    output=result,
-                    cost_usd=execution_result.cost_usd,
-                    session_id=execution_result.session_id or "",
-                    usage={},
-                    is_error=False,
-                )
-                await self._complete_cc_task(
-                    task_id,
-                    title,
-                    agent_name,
-                    cc_result,
-                    trust_level=trust_level,
-                )
-                try:
-                    if artifacts:
-                        logger.info(
-                            "[executor] CC: %d artifact(s) detected for task '%s'",
-                            len(artifacts),
-                            title,
-                        )
-                    await asyncio.to_thread(
-                        self._bridge.sync_task_output_files,
-                        task_id,
-                        task_data or {},
-                        agent_name,
-                    )
-                except Exception:
-                    logger.warning(
-                        "[executor] CC: artifact sync failed for '%s'",
-                        title,
-                        exc_info=True,
-                    )
-                if self._on_task_completed:
-                    try:
-                        await self._on_task_completed(task_id, result or "")
-                    except Exception:
-                        logger.exception(
-                            "[executor] on_task_completed failed for CC task '%s'",
-                            title,
-                        )
-                return
 
             if step_id:
                 # Post structured completion message with step context (Story 2.5).

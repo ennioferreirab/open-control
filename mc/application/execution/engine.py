@@ -19,7 +19,6 @@ from mc.application.execution.request import (
 )
 from mc.application.execution.strategies.acp import AcpRunnerStrategy
 from mc.application.execution.strategies.base import RunnerStrategy
-from mc.application.execution.strategies.claude_code import ClaudeCodeRunnerStrategy
 from mc.application.execution.strategies.human import HumanRunnerStrategy
 from mc.application.execution.strategies.interactive import InteractiveTuiRunnerStrategy
 from mc.application.execution.strategies.provider_cli import ProviderCliRunnerStrategy
@@ -102,7 +101,6 @@ class ExecutionEngine:
             _provider_parser = ClaudeCodeCLIParser(supervisor=_provider_supervisor)
 
             self._strategies = {
-                RunnerType.CLAUDE_CODE: ClaudeCodeRunnerStrategy(),
                 RunnerType.HUMAN: HumanRunnerStrategy(),
                 RunnerType.INTERACTIVE_TUI: InteractiveTuiRunnerStrategy(
                     bridge=None,

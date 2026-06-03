@@ -36,9 +36,6 @@ class TestRunnerType:
     def test_provider_cli_value(self) -> None:
         assert RunnerType.PROVIDER_CLI.value == "provider-cli"
 
-    def test_claude_code_value(self) -> None:
-        assert RunnerType.CLAUDE_CODE.value == "claude-code"
-
     def test_human_value(self) -> None:
         assert RunnerType.HUMAN.value == "human"
 
@@ -144,7 +141,7 @@ class TestExecutionRequestPopulated:
             tag_attributes="urgent: priority=high",
             trust_level="human_approved",
             task_data={"id": "task_abc", "title": "Test Task"},
-            runner_type=RunnerType.CLAUDE_CODE,
+            runner_type=RunnerType.PROVIDER_CLI,
             session_key="mc:task:test-agent:task_abc",
         )
         assert req.title == "Test Task"
@@ -156,7 +153,7 @@ class TestExecutionRequestPopulated:
         assert req.thread_context.startswith("[Thread History]")
         assert req.tags == ["urgent"]
         assert req.trust_level == "human_approved"
-        assert req.runner_type == RunnerType.CLAUDE_CODE
+        assert req.runner_type == RunnerType.PROVIDER_CLI
         assert req.session_key == "mc:task:test-agent:task_abc"
 
     def test_step_request_with_predecessors(self) -> None:
