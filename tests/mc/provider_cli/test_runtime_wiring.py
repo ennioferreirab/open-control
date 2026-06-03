@@ -1,7 +1,7 @@
 """Tests for provider-CLI runtime wiring defaults.
 
-These tests verify that the default execution path routes interactive agents
-through PROVIDER_CLI (not INTERACTIVE_TUI), and that the legacy TUI path is
+These tests verify that the default execution path routes claude-code agents
+through ACP (Phase 6), codex through PROVIDER_CLI, and the legacy TUI path is
 only reachable via an explicit escape hatch.
 """
 
@@ -44,19 +44,18 @@ def _make_request(
 # ---------------------------------------------------------------------------
 
 
-def test_default_no_env_resolves_to_provider_cli_for_claude_code() -> None:
-    """With no env var set, interactive agents default to PROVIDER_CLI."""
+def test_default_no_env_resolves_to_acp_for_claude_code() -> None:
+    """With no env var set, claude-code agents route to ACP (Phase 6 default)."""
     with patch.dict("os.environ", {}, clear=False):
-        # Ensure the env var is not present
         import os
 
         os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
         runner = resolve_step_runner_type(_make_request(provider="claude-code"))
 
-    assert runner == RunnerType.PROVIDER_CLI
+    assert runner == RunnerType.ACP
 
 
-def test_direct_task_defaults_to_provider_cli_for_claude_code() -> None:
+def test_direct_task_defaults_to_acp_for_claude_code() -> None:
     with patch.dict("os.environ", {}, clear=False):
         import os
 
@@ -65,7 +64,7 @@ def test_direct_task_defaults_to_provider_cli_for_claude_code() -> None:
         request.entity_type = EntityType.TASK
         runner = resolve_task_runner_type(request)
 
-    assert runner == RunnerType.PROVIDER_CLI
+    assert runner == RunnerType.ACP
 
 
 def test_default_no_env_resolves_to_provider_cli_for_codex() -> None:
@@ -93,20 +92,20 @@ def test_default_no_env_resolves_to_provider_cli_for_mc() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_explicit_provider_cli_env_resolves_to_provider_cli() -> None:
-    """Explicit env var value 'provider-cli' resolves to PROVIDER_CLI."""
+def test_explicit_provider_cli_env_resolves_to_acp_for_claude_code() -> None:
+    """For claude-code, 'provider-cli' env value still routes to ACP (Phase 6 default)."""
     with patch.dict("os.environ", {"MC_INTERACTIVE_EXECUTION_MODE": "provider-cli"}):
         runner = resolve_step_runner_type(_make_request(provider="claude-code"))
 
-    assert runner == RunnerType.PROVIDER_CLI
+    assert runner == RunnerType.ACP
 
 
-def test_interactive_first_resolves_to_provider_cli() -> None:
-    """Legacy 'interactive-first' mode now routes to PROVIDER_CLI."""
+def test_interactive_first_resolves_to_acp_for_claude_code() -> None:
+    """For claude-code, 'interactive-first' routes to ACP (Phase 6 default)."""
     with patch.dict("os.environ", {"MC_INTERACTIVE_EXECUTION_MODE": "interactive-first"}):
         runner = resolve_step_runner_type(_make_request(provider="claude-code"))
 
-    assert runner == RunnerType.PROVIDER_CLI
+    assert runner == RunnerType.ACP
 
 
 # ---------------------------------------------------------------------------
@@ -144,10 +143,11 @@ def test_off_mode_raises_runtime_error() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_non_interactive_agents_route_to_provider_cli() -> None:
+def test_claude_code_backend_no_provider_routes_to_acp() -> None:
+    """backend=claude-code with no interactive_provider still identifies as claude-code → ACP."""
     runner = resolve_step_runner_type(_make_request(provider=None, backend="claude-code"))
 
-    assert runner == RunnerType.PROVIDER_CLI
+    assert runner == RunnerType.ACP
 
 
 # ---------------------------------------------------------------------------
@@ -208,13 +208,13 @@ def test_build_execution_engine_keeps_interactive_tui_separate() -> None:
 class TestBackendCutoverGates:
     """Documents and enforces the Story 28-11 backend cutover criteria."""
 
-    def test_gate_1_default_mode_resolves_to_provider_cli(self) -> None:
+    def test_gate_1_default_mode_resolves_to_acp_for_claude_code(self) -> None:
         import os
 
         env_backup = os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
         try:
             runner = resolve_step_runner_type(_make_request(provider="claude-code"))
-            assert runner == RunnerType.PROVIDER_CLI
+            assert runner == RunnerType.ACP
         finally:
             if env_backup is not None:
                 os.environ["MC_INTERACTIVE_EXECUTION_MODE"] = env_backup

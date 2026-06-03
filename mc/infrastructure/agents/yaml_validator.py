@@ -68,9 +68,8 @@ class AgentConfig(BaseModel):
     def validate_interactive_provider(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        # "claude-code-acp" is the Phase 4-5 ACP opt-in: the resolver routes it
-        # to RunnerType.ACP. Phase 6 makes "claude-code" itself route to ACP.
-        valid = {"claude-code", "codex", "mc", "claude-code-acp"}
+        # Phase 6: plain "claude-code" routes to ACP; the "-acp" opt-in is gone.
+        valid = {"claude-code", "codex", "mc"}
         if v not in valid:
             raise ValueError(
                 f"Invalid interactive_provider '{v}'. Valid options: {', '.join(sorted(valid))}"

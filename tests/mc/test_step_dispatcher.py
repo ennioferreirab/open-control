@@ -277,7 +277,7 @@ class TestStepDispatcher:
 
         engine.run.assert_awaited_once()
         request = engine.run.await_args.args[0]
-        assert request.runner_type == RunnerType.PROVIDER_CLI
+        assert request.runner_type == RunnerType.ACP
         assert request.agent_name == "cc-agent"
 
     @pytest.mark.asyncio

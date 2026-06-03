@@ -140,7 +140,7 @@ class TestFullPathIntegration:
 
         Verifies the full path:
         1. ContextBuilder builds a step request.
-        2. resolve_step_runner_type returns PROVIDER_CLI.
+        2. resolve_step_runner_type returns PROVIDER_CLI (codex stays on provider-cli).
         3. ProviderCliRunnerStrategy executes and returns a result.
         4. Session registry is cleaned up after execution.
         """
@@ -166,13 +166,13 @@ class TestFullPathIntegration:
             req = await builder.build_step_context(task_id="task-001", step=step)
 
         # Manually set fields that require a live CC agent
-        req.is_cc = True
+        req.is_cc = False
         req.agent = AgentData(
-            name="agent-cc",
-            display_name="CC Agent",
+            name="agent-codex",
+            display_name="Codex Agent",
             role="Engineer",
-            backend="claude-code",
-            interactive_provider="claude-code",
+            backend=None,
+            interactive_provider="codex",
         )
         req.prompt = req.description or req.step_description or req.step_title
 
