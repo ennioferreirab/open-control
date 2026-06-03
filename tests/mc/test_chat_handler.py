@@ -635,7 +635,8 @@ class TestCCModelRouting:
 
     @pytest.mark.asyncio
     async def test_cc_request_has_provider_cli_runner_type(self, tmp_path):
-        """CC chat request should use RunnerType.PROVIDER_CLI (headless)."""
+        """CC chat request uses RunnerType.PROVIDER_CLI; the @mention reply path is
+        hardcoded and moves to a harness turn in Phase 7, not the Phase 6 selector flip."""
         from mc.contexts.conversation.chat_handler import ChatHandler
 
         bridge = self._make_cc_bridge()

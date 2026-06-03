@@ -398,8 +398,8 @@ class TestBackendField:
         assert result.backend == "claude-code"
         assert result.interactive_provider == "mc"
 
-    def test_interactive_provider_accepts_claude_code_acp_opt_in(self, tmp_path: Path) -> None:
-        """claude-code-acp is the ACP opt-in; it must validate."""
+    def test_interactive_provider_rejects_claude_code_acp(self, tmp_path: Path) -> None:
+        """claude-code-acp is no longer valid; Phase 6 routes plain claude-code to ACP."""
         path = _write_yaml(
             tmp_path,
             "agent.yaml",
@@ -411,8 +411,28 @@ class TestBackendField:
         """,
         )
         result = validate_agent_file(path)
+        assert isinstance(result, list)
+        assert any(
+            "invalid_interactive_provider" in e.lower()
+            or "invalid interactive_provider" in e.lower()
+            for e in result
+        )
+
+    def test_interactive_provider_accepts_claude_code(self, tmp_path: Path) -> None:
+        """Plain claude-code is valid and routes to ACP by default (Phase 6)."""
+        path = _write_yaml(
+            tmp_path,
+            "agent.yaml",
+            """\
+            name: cc-acp-agent
+            role: Agent
+            prompt: "You run over ACP."
+            interactive_provider: claude-code
+        """,
+        )
+        result = validate_agent_file(path)
         assert isinstance(result, AgentData)
-        assert result.interactive_provider == "claude-code-acp"
+        assert result.interactive_provider == "claude-code"
 
     def test_invalid_interactive_provider_value(self, tmp_path: Path) -> None:
         path = _write_yaml(

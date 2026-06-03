@@ -30,7 +30,7 @@ def _request(
 
 
 def test_resolve_step_runner_type_prefers_provider_cli_for_supported_agents() -> None:
-    """Default (no env var) now routes to PROVIDER_CLI (Story 28.7)."""
+    """Codex stays on PROVIDER_CLI regardless of env."""
     import os
 
     os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
@@ -48,51 +48,35 @@ def test_resolve_step_runner_type_supports_mc_interactive_provider() -> None:
     assert runner_type == RunnerType.PROVIDER_CLI
 
 
-def test_resolve_step_runner_type_keeps_noninteractive_agents_on_provider_cli() -> None:
-    runner_type = resolve_step_runner_type(_request(provider=None, backend="claude-code"))
-
-    assert runner_type == RunnerType.PROVIDER_CLI
-
-
 def test_resolve_step_runner_type_surfaces_disabled_interactive_execution() -> None:
     with patch.dict("os.environ", {"MC_INTERACTIVE_EXECUTION_MODE": "disabled"}):
         with pytest.raises(RuntimeError, match="Interactive execution is disabled"):
             resolve_step_runner_type(_request(provider="claude-code", backend="claude-code"))
 
 
-def test_resolve_acp_backend_routes_to_acp() -> None:
-    """An explicit ``<harness>-acp`` backend opts the agent into the ACP path."""
-    runner_type = resolve_step_runner_type(_request(provider=None, backend="claude-code-acp"))
+def test_resolve_claude_code_routes_to_acp_by_default() -> None:
+    """Plain claude-code backend routes to ACP when no env var is set (Phase 6 default)."""
+    with patch.dict("os.environ", {"MC_INTERACTIVE_EXECUTION_MODE": "provider-cli"}):
+        runner_type = resolve_step_runner_type(_request(provider=None, backend="claude-code"))
 
     assert runner_type == RunnerType.ACP
 
 
-def test_resolve_acp_via_interactive_provider_after_roundtrip() -> None:
-    """backend does not persist; the opt-in rides interactive_provider on read."""
-    runner_type = resolve_step_runner_type(
-        _request(provider="claude-code-acp", backend="claude-code")
-    )
+def test_resolve_claude_code_is_cc_routes_to_acp() -> None:
+    """is_cc=True identifies a claude-code agent and routes to ACP."""
+    with patch.dict("os.environ", {"MC_INTERACTIVE_EXECUTION_MODE": "provider-cli"}):
+        runner_type = resolve_step_runner_type(
+            _request(provider=None, backend="claude-code", is_cc=True)
+        )
 
     assert runner_type == RunnerType.ACP
 
 
-def test_resolve_acp_precedes_legacy_interactive_branches() -> None:
-    """The ACP branch wins over is_cc / legacy interactive selection."""
-    runner_type = resolve_step_runner_type(
-        _request(provider="claude-code-acp", backend="claude-code", is_cc=True)
-    )
+def test_resolve_claude_code_tui_escape_hatch() -> None:
+    """The interactive-tui env value routes claude-code to INTERACTIVE_TUI."""
+    with patch.dict("os.environ", {"MC_INTERACTIVE_EXECUTION_MODE": "interactive-tui"}):
+        runner_type = resolve_step_runner_type(
+            _request(provider="claude-code", backend="claude-code")
+        )
 
-    assert runner_type == RunnerType.ACP
-
-
-def test_resolve_default_claude_code_stays_provider_cli() -> None:
-    """Additive guard: the bare harness name keeps the legacy PROVIDER_CLI path."""
-    runner_type = resolve_step_runner_type(_request(provider=None, backend="claude-code"))
-
-    assert runner_type == RunnerType.PROVIDER_CLI
-
-
-def test_resolve_unknown_acp_harness_raises() -> None:
-    """An -acp opt-in naming an unregistered harness fails loudly, no silent default."""
-    with pytest.raises(ValueError, match="Unknown harness"):
-        resolve_step_runner_type(_request(provider=None, backend="hermes-acp"))
+    assert runner_type == RunnerType.INTERACTIVE_TUI
