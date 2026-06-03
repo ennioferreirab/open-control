@@ -538,31 +538,14 @@ def sync_skills(
 
     Returns list of synced skill names.
     """
-    # Lazy import to avoid heavy dependency chain through nanobot.agent.__init__
-    import importlib.util
+    from mc.infrastructure.skills_loader import BUILTIN_SKILLS_DIR, SkillsLoader
 
-    _skills_path = (
-        Path(__file__).parent.parent.parent
-        / "vendor"
-        / "nanobot"
-        / "nanobot"
-        / "agent"
-        / "skills.py"
-    )
-    spec = importlib.util.spec_from_file_location("_nanobot_skills", str(_skills_path))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load skill module from {_skills_path}")
-    skills_mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(skills_mod)
-    skills_loader_cls = skills_mod.SkillsLoader
-    default_dir = skills_mod.BUILTIN_SKILLS_DIR
-
-    resolved_dir = builtin_skills_dir or default_dir
-    # Use configured workspace path (e.g. ~/.nanobot/workspace) for skill discovery
+    resolved_dir = builtin_skills_dir or BUILTIN_SKILLS_DIR
+    # Use configured workspace path (e.g. ~/.open-control/workspace) for skill discovery
     from mc.infrastructure.config import load_config
 
     workspace = load_config().workspace_path
-    loader = skills_loader_cls(workspace, builtin_skills_dir=resolved_dir)
+    loader = SkillsLoader(workspace, builtin_skills_dir=resolved_dir)
 
     all_skills = loader.list_skills(filter_unavailable=False)
     synced_names: list[str] = []
