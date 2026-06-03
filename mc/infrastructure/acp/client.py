@@ -192,10 +192,14 @@ class AcpClient:
         command: list[str],
         cwd: str,
         model: str | None = None,
+        mcp_servers: list[Any] | None = None,
+        allowed_tools: list[str] | None = None,
     ) -> None:
         self._command = command
         self._cwd = cwd
         self._model = model
+        self._mcp_servers = mcp_servers
+        self._allowed_tools = allowed_tools
         self._session_id: str | None = None
         self._conn: Any = None
         self._ctx: Any = None
@@ -221,7 +225,20 @@ class AcpClient:
             client_capabilities=ClientCapabilities(),
             client_info=_CLIENT_INFO,
         )
-        session_resp = await self._conn.new_session(cwd=self._cwd, mcp_servers=[])
+        servers = self._mcp_servers or []
+        if self._mcp_servers or self._allowed_tools:
+            session_resp = await self._conn.new_session(
+                cwd=self._cwd,
+                mcp_servers=servers,
+                claudeCode={
+                    "options": {
+                        "strictMcpConfig": True,
+                        "allowedTools": self._allowed_tools or [],
+                    }
+                },
+            )
+        else:
+            session_resp = await self._conn.new_session(cwd=self._cwd, mcp_servers=[])
         self._session_id = session_resp.session_id
         logger.debug("[acp] session opened session_id=%s", self._session_id)
         return self

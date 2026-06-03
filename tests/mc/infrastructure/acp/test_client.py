@@ -487,3 +487,61 @@ async def test_prompt_on_update_receives_updates() -> None:
     # Only updates fired after prompt() was called reach on_update
     assert len(received) == 1
     assert isinstance(received[0], AgentMessageChunk)
+
+
+# ---------------------------------------------------------------------------
+# AcpClient — mcp_servers / claudeCode kwarg
+# ---------------------------------------------------------------------------
+
+
+async def test_new_session_called_with_mcp_servers_and_claude_code_kwarg() -> None:
+    """When mcp_servers and allowed_tools are set, new_session receives claudeCode."""
+    conn = _make_fake_conn()
+    fake_server = MagicMock()
+
+    def fake_spawn(adapter: Any, cmd: str, *args: str, env: dict | None = None, **kwargs: Any):
+        @asynccontextmanager
+        async def _ctx():
+            yield conn, MagicMock()
+
+        return _ctx()
+
+    with patch("mc.infrastructure.acp.client.acp.spawn_agent_process", side_effect=fake_spawn):
+        async with AcpClient(
+            command=["npx"],
+            cwd="/tmp",
+            mcp_servers=[fake_server],
+            allowed_tools=["mcp__mc__ask_user"],
+        ):
+            pass
+
+    conn.new_session.assert_called_once()
+    call_kwargs = conn.new_session.call_args.kwargs
+    assert call_kwargs["mcp_servers"] == [fake_server]
+    assert call_kwargs["claudeCode"] == {
+        "options": {
+            "strictMcpConfig": True,
+            "allowedTools": ["mcp__mc__ask_user"],
+        }
+    }
+
+
+async def test_new_session_called_without_claude_code_when_no_mcp() -> None:
+    """When no mcp_servers or allowed_tools are set, new_session has no claudeCode kwarg."""
+    conn = _make_fake_conn()
+
+    def fake_spawn(adapter: Any, cmd: str, *args: str, env: dict | None = None, **kwargs: Any):
+        @asynccontextmanager
+        async def _ctx():
+            yield conn, MagicMock()
+
+        return _ctx()
+
+    with patch("mc.infrastructure.acp.client.acp.spawn_agent_process", side_effect=fake_spawn):
+        async with AcpClient(command=["npx"], cwd="/tmp"):
+            pass
+
+    conn.new_session.assert_called_once()
+    call_kwargs = conn.new_session.call_args.kwargs
+    assert "claudeCode" not in call_kwargs
+    assert call_kwargs["mcp_servers"] == []
