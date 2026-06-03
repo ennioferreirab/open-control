@@ -201,6 +201,11 @@ class AcpClient:
         self._ctx: Any = None
         self._adapter: _AcpAdapter | None = None
 
+    @property
+    def session_id(self) -> str | None:
+        """The ACP session ID, available after entering the context manager."""
+        return self._session_id
+
     async def __aenter__(self) -> AcpClient:
         child_env: dict[str, str] = dict(os.environ)
         if self._model is not None:

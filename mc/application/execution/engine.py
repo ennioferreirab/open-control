@@ -17,6 +17,7 @@ from mc.application.execution.request import (
     ExecutionResult,
     RunnerType,
 )
+from mc.application.execution.strategies.acp import AcpRunnerStrategy
 from mc.application.execution.strategies.base import RunnerStrategy
 from mc.application.execution.strategies.claude_code import ClaudeCodeRunnerStrategy
 from mc.application.execution.strategies.human import HumanRunnerStrategy
@@ -112,6 +113,12 @@ class ExecutionEngine:
                     registry=_provider_registry,
                     supervisor=_provider_supervisor,
                     command=["claude", "--verbose", "--output-format", "stream-json"],
+                    cwd=".",
+                ),
+                # TODO Phase 3: harness registry supplies command
+                RunnerType.ACP: AcpRunnerStrategy(
+                    registry=_provider_registry,
+                    command=["npx", "-y", "@agentclientprotocol/claude-agent-acp"],
                     cwd=".",
                 ),
             }
