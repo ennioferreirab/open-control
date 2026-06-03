@@ -287,17 +287,6 @@ def _provider_error_action(exc: Exception) -> str:
     return "Check provider configuration in ~/.nanobot/config.json"
 
 
-def _make_provider(model: str | None = None):
-    """Create the LLM provider from the user's nanobot config.
-
-    Delegates to the shared provider_factory.create_provider() to avoid
-    duplication with nanobot/cli/commands.py.
-    """
-    from mc.infrastructure.providers.factory import create_provider
-
-    return create_provider(model)
-
-
 def build_task_message(title: str, description: str | None) -> str:
     """Build the task message sent to the agent.
 

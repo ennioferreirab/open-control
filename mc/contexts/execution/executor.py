@@ -21,7 +21,6 @@ from mc.bridge.runtime_claims import acquire_runtime_claim, task_snapshot_claim_
 from mc.contexts.execution.agent_runner import (  # noqa: F401
     AgentRunResult,
     _coerce_agent_run_result,
-    _make_provider,
 )
 from mc.contexts.execution.completion_reporting import append_task_completion_heartbeat
 from mc.contexts.execution.crash_recovery import AgentGateway
