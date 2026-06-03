@@ -18,6 +18,7 @@ from mc.contexts.interactive.activity_service import SessionActivityService
 from mc.contexts.provider_cli.registry import ProviderSessionRegistry
 from mc.contexts.provider_cli.types import ParsedCliEvent, SessionStatus
 from mc.infrastructure.acp.client import AcpClient
+from mc.infrastructure.acp.harness_registry import get_harness, resolve_model
 
 if TYPE_CHECKING:
     from mc.runtime.provider_cli.live_stream import LiveStreamProjector
@@ -101,7 +102,7 @@ class AcpRunnerStrategy:
         self,
         *,
         registry: ProviderSessionRegistry,
-        command: list[str],
+        harness: str = "claude-code",
         cwd: str,
         projector: LiveStreamProjector | None = None,
         supervision_sink: Callable[[dict[str, Any]], None] | None = None,
@@ -109,7 +110,7 @@ class AcpRunnerStrategy:
         bridge: Any | None = None,
     ) -> None:
         self._registry = registry
-        self._command = command
+        self._harness = harness
         self._cwd = cwd
         self._projector = projector
         self._supervision_sink = supervision_sink
@@ -215,6 +216,10 @@ class AcpRunnerStrategy:
         """Core execution — raises on failure for the outer handler."""
         mc_session_id = f"{request.task_id}-{request.entity_id}"
 
+        spec = get_harness(self._harness)
+        command = list(spec.launch_command)
+        model = resolve_model(spec, request.model)
+
         bootstrap_prompt = (request.prompt or "")[:500] or None
         self._registry.create(
             mc_session_id=mc_session_id,
@@ -242,9 +247,9 @@ class AcpRunnerStrategy:
 
         server, allowed = self._build_mc_mcp(request, mc_session_id)
         async with AcpClient(
-            command=self._command,
+            command=command,
             cwd=self._cwd,
-            model=request.model,
+            model=model,
             mcp_servers=[server],
             allowed_tools=allowed,
         ) as client:

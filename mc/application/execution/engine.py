@@ -115,10 +115,8 @@ class ExecutionEngine:
                     command=["claude", "--verbose", "--output-format", "stream-json"],
                     cwd=".",
                 ),
-                # TODO Phase 3: harness registry supplies command
                 RunnerType.ACP: AcpRunnerStrategy(
                     registry=_provider_registry,
-                    command=["npx", "-y", "@agentclientprotocol/claude-agent-acp"],
                     cwd=".",
                 ),
             }

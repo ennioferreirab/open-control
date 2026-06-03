@@ -291,10 +291,8 @@ def build_execution_engine(
                 control_plane=provider_cli_control_plane,
                 bridge=bridge,
             ),
-            # TODO Phase 3: harness registry supplies the command
             RunnerType.ACP: AcpRunnerStrategy(
                 registry=_registry,
-                command=["npx", "-y", "@agentclientprotocol/claude-agent-acp"],
                 cwd=provider_cli_cwd,
                 projector=provider_cli_projector,
                 supervision_sink=provider_cli_supervision_sink,

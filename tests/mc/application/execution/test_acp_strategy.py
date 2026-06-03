@@ -138,7 +138,7 @@ async def test_execute_returns_populated_result() -> None:
         patch("mc.application.execution.strategies.acp.AcpClient", fake),
         patch("mc.application.execution.strategies.acp.SessionActivityService") as activity_cls,
     ):
-        strategy = AcpRunnerStrategy(registry=registry, command=["x"], cwd=".")
+        strategy = AcpRunnerStrategy(registry=registry, cwd=".")
         result = await strategy.execute(_request())
 
     assert result.success is True
@@ -159,7 +159,7 @@ async def test_execute_maps_error_stop_reason_to_failure() -> None:
         patch("mc.application.execution.strategies.acp.AcpClient", fake),
         patch("mc.application.execution.strategies.acp.SessionActivityService"),
     ):
-        strategy = AcpRunnerStrategy(registry=registry, command=["x"], cwd=".")
+        strategy = AcpRunnerStrategy(registry=registry, cwd=".")
         result = await strategy.execute(_request())
 
     assert result.success is False
@@ -172,7 +172,7 @@ async def test_execute_handles_client_exception() -> None:
         patch("mc.application.execution.strategies.acp.AcpClient", fake),
         patch("mc.application.execution.strategies.acp.SessionActivityService"),
     ):
-        strategy = AcpRunnerStrategy(registry=registry, command=["x"], cwd=".")
+        strategy = AcpRunnerStrategy(registry=registry, cwd=".")
         result = await strategy.execute(_request())
 
     assert result.success is False
@@ -185,7 +185,7 @@ async def test_execute_handles_client_exception() -> None:
 
 
 def test_build_mc_mcp_returns_correct_server_and_allowed_tools() -> None:
-    strategy = AcpRunnerStrategy(registry=MagicMock(), command=["x"], cwd=".")
+    strategy = AcpRunnerStrategy(registry=MagicMock(), cwd=".")
     request = _request()
     mc_session_id = f"{request.task_id}-{request.entity_id}"
 
