@@ -39,6 +39,7 @@ output/.DS_Store
 .claire/
 bmad_history/
 docs/*
+!docs/plans/
 instagram-post-squad-registry.md
 instagram-post-squad-v2-bundle.zip
 output/*
