@@ -102,10 +102,9 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     Args:
         bridge: ConvexBridge instance used by all components.
     """
-    from nanobot.cron.service import CronService
-
     from mc.contexts.execution.executor import TaskExecutor
     from mc.infrastructure.config import load_config
+    from mc.runtime.cron.service import CronService
 
     logger.info("[gateway] Agent Gateway started")
 
