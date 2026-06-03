@@ -24,11 +24,6 @@ The system runs as **three cooperating processes** plus external provider APIs:
 │  │  Agent Processes                      │                   │
 │  │  (Claude Code, Codex)                 │                   │
 │  └──────────────────────────────────────┘                   │
-│                                                             │
-│  ┌──────────────┐                                           │
-│  │  Terminal     │  (optional, for remote terminal agents)   │
-│  │  Bridge       │                                           │
-│  └──────────────┘                                           │
 └─────────────────────────────────────────────────────────────┘
           │
           ▼
@@ -418,34 +413,6 @@ The dashboard provides REST endpoints for operations that need server-side logic
 
 ---
 
-## 4. Terminal Bridge (Optional)
-
-| Property | Value |
-|----------|-------|
-| Entry point | `terminal_bridge.py` |
-| Transport | Polling-based (not WebSocket) |
-| Purpose | Connect remote terminal agents to Convex |
-
-### Architecture
-
-```text
-[Convex DB] ←→ [Terminal Bridge] ←→ [tmux/Claude]
-```
-
-Two daemon threads:
-- **Input poll loop** — polls Convex for `pendingInput`
-- **Screen monitor loop** — polls tmux screen, pushes changes to Convex
-
-### Polling Intervals
-
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `POLL_INTERVAL` | 0.1s | Local pane reads |
-| `ACTIVE_POLL_INTERVAL` | 1.0s | Active Convex polling |
-| `SLEEP_POLL_INTERVAL` | 30.0s | When sleeping |
-| `AUTO_SLEEP_AFTER_SECONDS` | 300s | Auto-sleep after 5 min inactivity |
-
----
 
 ## 5. Vendor Services
 
@@ -520,8 +487,6 @@ Resolved by `TierResolver` → concrete model strings based on user configuratio
 | Dashboard → Interactive Runtime | WebSocket | WS to `:8765` | `mc/runtime/interactive.py` |
 | Agent subprocess → MC Gateway | JSON-RPC | Unix socket | `mc/runtime/mcp/bridge.py` |
 | Hooks → MC Gateway | JSON-RPC | Unix socket | `mc/hooks/ipc_sync.py` |
-| Terminal Bridge → Convex | Convex SDK | WebSocket to `:3210` | `terminal_bridge.py` |
-| Terminal Bridge → tmux | `subprocess` | Process control | `terminal_bridge.py` |
 | MC Gateway → LLM APIs | Provider SDK | HTTPS | `mc/infrastructure/providers/` |
 | MC Gateway → Agent process | `subprocess` | stdout/stdin | `mc/runtime/provider_cli/` |
 

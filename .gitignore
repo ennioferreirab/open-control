@@ -21,7 +21,6 @@ poetry.lock
 botpy.log
 dashboard/components/ActivityFeedPanel.tsx
 start-bridge.sh
-tmux_claude_control
 .claude/*
 !.claude/settings.json
 .worktrees/
@@ -38,10 +37,10 @@ output/.DS_Store
 .vscode/
 .mcp.json
 .claire/
-terminal_bridge.py
 bmad_history/
 docs/*
 instagram-post-squad-registry.md
 instagram-post-squad-v2-bundle.zip
 output/*
 dev_workspace/
+dev_live/*

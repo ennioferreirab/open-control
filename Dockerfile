@@ -40,9 +40,9 @@ COPY vendor/claude-code/pyproject.toml vendor/claude-code/
 # Create minimal package stubs so uv can resolve editable installs.
 # boot.py is a single-file module (not a package) — stub it as a file.
 # nanobot's pyproject.toml has force-include for bridge → nanobot/bridge.
-RUN mkdir -p mc tmux_claude_control \
+RUN mkdir -p mc \
         vendor/nanobot/nanobot vendor/nanobot/bridge vendor/claude-code/claude_code && \
-    touch mc/__init__.py tmux_claude_control/__init__.py boot.py \
+    touch mc/__init__.py boot.py \
         vendor/nanobot/nanobot/__init__.py vendor/claude-code/claude_code/__init__.py
 
 RUN uv sync --frozen
@@ -80,7 +80,7 @@ EXPOSE 3000 3210 3211 8765
 FROM node-deps AS runtime
 
 # Remove python-deps stubs before copying real source
-RUN rm -rf mc/ tmux_claude_control/ boot.py
+RUN rm -rf mc/ boot.py
 
 # Copy all source code (node_modules preserved — excluded by .dockerignore)
 COPY mc/ mc/
