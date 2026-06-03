@@ -24,7 +24,7 @@ def list_available_models() -> list[str]:
 
     Priority: the explicit ``agents.models`` list, else the default model.
     """
-    from nanobot.config.loader import load_config
+    from mc.infrastructure.config import load_config
 
     config = load_config()
     if config.agents.models:

@@ -102,10 +102,10 @@ async def run_gateway(bridge: ConvexBridge) -> None:
     Args:
         bridge: ConvexBridge instance used by all components.
     """
-    from nanobot.config.loader import load_config
     from nanobot.cron.service import CronService
 
     from mc.contexts.execution.executor import TaskExecutor
+    from mc.infrastructure.config import load_config
 
     logger.info("[gateway] Agent Gateway started")
 
@@ -408,8 +408,7 @@ async def main() -> None:
 
         # Distribute builtin skills to workspace before sync (Story SK.1)
         try:
-            from nanobot.config.loader import load_config as _lc
-
+            from mc.infrastructure.config import load_config as _lc
             from mc.skills import MC_SKILLS_DIR
 
             _ws = _lc().workspace_path
