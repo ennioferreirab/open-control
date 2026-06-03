@@ -28,7 +28,6 @@ def _build_mc_mcp_servers(
     The bridge is launched as a Python subprocess (stdio transport) so that
     the model sees the canonical Phase 1 MC tool surface.
     """
-    import sys
 
     env: dict[str, str] = {}
     if task_id:
@@ -73,17 +72,3 @@ def _coerce_agent_run_result(value: Any) -> AgentRunResult:
         is_error=is_error,
         error_message=error_message,
     )
-
-
-def _make_provider(model: str | None = None):
-    """Create the LLM provider from the user's nanobot config."""
-    from mc.infrastructure.providers.factory import create_provider
-
-    return create_provider(model)
-
-
-def _call_provider_factory(model: str | None = None):
-    """Preserve the historical executor patch seam during the hotspot split."""
-    executor_mod = sys.modules.get("mc.contexts.execution.executor")
-    provider_factory = getattr(executor_mod, "_make_provider", _make_provider)
-    return provider_factory(model)
