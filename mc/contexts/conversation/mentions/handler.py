@@ -260,6 +260,13 @@ async def handle_mention(
 
         req.session_boundary_reason = "mention"
 
+        # Resolve the runner from the agent's config (e.g. an ACP-opted agent
+        # routes to RunnerType.ACP). Without this the mention path would always
+        # use the default PROVIDER_CLI runner.
+        from mc.application.execution.interactive_mode import resolve_task_runner_type
+
+        req.runner_type = resolve_task_runner_type(req)
+
         engine = build_execution_engine(bridge=bridge)
         execution_result = await asyncio.wait_for(
             engine.run(req),
