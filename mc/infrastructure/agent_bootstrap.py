@@ -324,7 +324,7 @@ def _sync_model_tiers(bridge: ConvexBridge) -> None:
     Story 11.1 — AC #4.
     """
     # Collect available models from provider config
-    from mc.infrastructure.providers.factory import list_available_models
+    from mc.infrastructure.providers.model_listing import list_available_models
 
     models_list = list_available_models()
 

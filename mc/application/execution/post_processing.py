@@ -20,7 +20,7 @@ from mc.application.execution.strategies.acp import AcpRunnerStrategy
 from mc.application.execution.strategies.human import HumanRunnerStrategy
 from mc.application.execution.strategies.interactive import InteractiveTuiRunnerStrategy
 from mc.application.execution.strategies.provider_cli import ProviderCliRunnerStrategy
-from mc.memory.service import consolidate_task_output, resolve_consolidation_model
+from mc.memory.service import consolidate_task_output
 
 logger = logging.getLogger(__name__)
 
@@ -135,20 +135,6 @@ def build_session_boundary_memory_consolidation_hook(
             try:
                 if result.memory_workspace is None:
                     return
-                model = resolve_consolidation_model(bridge)
-                if model is None:
-                    _log_consolidation_event(
-                        agent_name=request.agent_name,
-                        backend=backend,
-                        channel="mc",
-                        trigger_type="session_boundary",
-                        boundary_reason=request.session_boundary_reason,
-                        memory_workspace=result.memory_workspace,
-                        artifacts_workspace=result.memory_workspace,
-                        action="skipped",
-                        skip_reason="missing_consolidation_model",
-                    )
-                    return
 
                 ok = await consolidate_task_output(
                     result.memory_workspace,
@@ -156,7 +142,6 @@ def build_session_boundary_memory_consolidation_hook(
                     task_output=task_output,
                     task_status="completed" if result.success else "error",
                     task_id=request.task_id,
-                    model=model,
                 )
                 _log_consolidation_event(
                     agent_name=request.agent_name,

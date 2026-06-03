@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 
 from mc.contexts.execution.step_dispatcher import StepDispatcher
 from mc.contexts.planning.materializer import PlanMaterializer
-from mc.infrastructure.providers.factory import create_provider
 from mc.types import (
     LOW_AGENT_NAME,
     MessageType,
@@ -135,33 +134,16 @@ async def generate_title_via_low_agent(
 
     description = description[:5000]
 
+    from mc.infrastructure.acp.utility import run_utility_turn
+
     try:
-        logger.info(
-            "[orchestrator] Auto-title: creating provider with model=%r",
-            low_model,
+        text = await run_utility_turn(
+            AUTO_TITLE_PROMPT.format(description=description),
+            tier=low_model or "low",
         )
-        provider, resolved_model = create_provider(model=low_model)
-        logger.info(
-            "[orchestrator] Auto-title: calling LLM with model=%s",
-            resolved_model,
-        )
-        response = await provider.chat(
-            model=resolved_model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": AUTO_TITLE_PROMPT.format(description=description),
-                },
-            ],
-            temperature=0.3,
-            max_tokens=60,
-        )
-        if response.finish_reason == "error":
-            logger.warning("[orchestrator] Auto-title LLM error: %s", response.content)
-            return None
-        title = (response.content or "").strip().lstrip("#").strip().strip('"').strip("'")
+        title = text.strip().lstrip("#").strip().strip('"').strip("'")
         if not title:
-            logger.warning("[orchestrator] Auto-title LLM returned empty content")
+            logger.warning("[orchestrator] Auto-title returned empty content")
             return None
         logger.info("[orchestrator] Auto-title generated via low-agent: '%s'", title)
         return title

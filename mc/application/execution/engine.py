@@ -40,21 +40,10 @@ def categorize_error(exc: Exception) -> ErrorCategory:
         return ErrorCategory.TIER
 
     # Provider / OAuth errors
-    try:
-        from mc.infrastructure.providers.factory import ProviderError
+    from mc.infrastructure.providers.errors import ProviderError
 
-        if isinstance(exc, ProviderError):
-            return ErrorCategory.PROVIDER
-    except ImportError:
-        pass
-
-    try:
-        from nanobot.providers.anthropic_oauth import AnthropicOAuthExpired
-
-        if isinstance(exc, AnthropicOAuthExpired):
-            return ErrorCategory.PROVIDER
-    except ImportError:
-        pass
+    if isinstance(exc, ProviderError):
+        return ErrorCategory.PROVIDER
 
     if "oauth" in exc_type.lower() or "provider" in exc_type.lower():
         return ErrorCategory.PROVIDER

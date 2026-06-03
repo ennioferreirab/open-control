@@ -247,46 +247,6 @@ def _build_tag_attributes_context(
     return "\n".join(lines)
 
 
-def _collect_provider_error_types() -> tuple[type[Exception], ...]:
-    """Collect provider-specific exception types for targeted catching.
-
-    Returns a tuple of exception classes that represent provider/OAuth
-    errors (as opposed to agent runtime errors). These are caught
-    separately in _execute_task so they get surfaced with actionable
-    instructions instead of being buried in generic crash handling.
-    """
-    from mc.infrastructure.providers.factory import ProviderError
-
-    types: list[type[Exception]] = [ProviderError]
-    try:
-        from nanobot.providers.anthropic_oauth import AnthropicOAuthExpired
-
-        types.append(AnthropicOAuthExpired)
-    except ImportError:
-        pass
-    return tuple(types)
-
-
-_PROVIDER_ERRORS = _collect_provider_error_types()
-
-
-def _provider_error_action(exc: Exception) -> str:
-    """Extract a user-facing action string from a provider error.
-
-    For ProviderError the action is explicit. For AnthropicOAuthExpired
-    the message itself contains the command. Falls back to a generic hint.
-    """
-    from mc.infrastructure.providers.factory import ProviderError
-
-    if isinstance(exc, ProviderError) and exc.action:
-        return exc.action
-    # AnthropicOAuthExpired messages include "Run: nanobot provider login ..."
-    msg = str(exc)
-    if "Run:" in msg:
-        return msg[msg.index("Run:") :]
-    return "Check provider configuration in ~/.nanobot/config.json"
-
-
 def build_task_message(title: str, description: str | None) -> str:
     """Build the task message sent to the agent.
 

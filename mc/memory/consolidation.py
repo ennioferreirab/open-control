@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import tempfile
 from datetime import UTC, datetime
@@ -10,34 +9,11 @@ from pathlib import Path
 
 from filelock import FileLock
 
-from mc.infrastructure.providers.factory import create_provider
-
 logger = logging.getLogger(__name__)
 
 # --- Configurable constants ---
 HISTORY_CONSOLIDATION_THRESHOLD_CHARS = 160_000  # ~40K tokens
 MEMORY_TARGET_MAX_CHARS = 12_000  # ~3K tokens — target size for consolidated MEMORY.md
-MEMORY_CONSOLIDATION_MODEL = "tier:standard-medium"
-
-_CONSOLIDATION_TOOL = [
-    {
-        "type": "function",
-        "function": {
-            "name": "save_consolidated_memory",
-            "description": "Save the consolidated long-term memory.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "memory": {
-                        "type": "string",
-                        "description": "Full consolidated long-term memory as markdown.",
-                    },
-                },
-                "required": ["memory"],
-            },
-        },
-    }
-]
 
 
 def _build_archive_block(snapshot_text: str, snapshot_size: int, archived_at: datetime) -> str:
@@ -66,7 +42,6 @@ def is_history_above_threshold(
 
 async def consolidate_history_and_memory(
     memory_dir: Path,
-    model: str | None = None,
     *,
     memory_target_max_chars: int = MEMORY_TARGET_MAX_CHARS,
 ) -> bool:
@@ -112,11 +87,12 @@ async def consolidate_history_and_memory(
 
         system_prompt = (
             "You are a memory consolidation agent. "
-            "Read the history log and current long-term memory, then call save_consolidated_memory "
-            "with a fresh, comprehensive long-term memory that preserves ALL important facts, decisions, "
+            "Read the history log and current long-term memory, then produce a "
+            "fresh, comprehensive long-term memory that preserves ALL important facts, decisions, "
             "preferences, and patterns. "
             f"Keep the output under {memory_target_max_chars} characters (~{memory_target_max_chars // 4} tokens). "
-            "Use concise markdown. Prioritize: user preferences > project facts > recent decisions > older context."
+            "Use concise markdown. Prioritize: user preferences > project facts > recent decisions > older context. "
+            "Output ONLY the consolidated long-term memory as markdown. No preamble, no code fences, no commentary."
         )
 
         user_prompt = (
@@ -124,34 +100,17 @@ async def consolidate_history_and_memory(
             f"## History Log to Consolidate\n{history_text}"
         )
 
+        full_prompt = system_prompt + "\n\n" + user_prompt
+
+        from mc.infrastructure.acp.utility import run_utility_turn
+
         try:
-            provider, resolved_model = create_provider(model or MEMORY_CONSOLIDATION_MODEL)
-            response = await provider.chat(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                tools=_CONSOLIDATION_TOOL,
-                model=resolved_model,
-            )
+            new_memory = (await run_utility_turn(full_prompt, tier="medium")).strip()
         except Exception:
-            logger.exception("consolidate_history_and_memory: LLM call failed")
+            logger.exception("consolidate_history_and_memory: utility turn failed")
             return False
 
-        # Parse tool call
-        try:
-            if not response.tool_calls:
-                logger.warning("consolidate_history_and_memory: no tool call returned")
-                return False
-            args = response.tool_calls[0].arguments
-            if isinstance(args, str):
-                args = json.loads(args)
-        except Exception:
-            logger.exception("consolidate_history_and_memory: failed to parse tool call")
-            return False
-
-        new_memory = args.get("memory", "")
-        if not isinstance(new_memory, str) or not new_memory.strip():
+        if not new_memory:
             logger.warning("consolidate_history_and_memory: empty memory returned")
             return False
 
