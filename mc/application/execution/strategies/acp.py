@@ -178,6 +178,39 @@ class AcpRunnerStrategy:
             step_id=request.step_id,
         )
 
+    def _build_mc_mcp(self, request: ExecutionRequest, mc_session_id: str) -> tuple[Any, list[str]]:
+        """Build the mc MCP server config and allowed tools list for an ACP session."""
+        import os
+
+        from acp.schema import EnvVariable, McpServerStdio
+        from claude_code.workspace import _PROJECT_ROOT
+
+        from mc.infrastructure.secrets import resolve_secret_env
+
+        env_dict: dict[str, str] = {
+            **resolve_secret_env(),
+            "AGENT_NAME": request.agent_name,
+            "TASK_ID": request.task_id,
+            "MC_INTERACTIVE_SESSION_ID": mc_session_id,
+        }
+        if request.step_id:
+            env_dict["STEP_ID"] = request.step_id
+        convex_url = os.environ.get("CONVEX_URL")
+        convex_admin_key = os.environ.get("CONVEX_ADMIN_KEY")
+        if convex_url:
+            env_dict["CONVEX_URL"] = convex_url
+        if convex_admin_key:
+            env_dict["CONVEX_ADMIN_KEY"] = convex_admin_key
+
+        server = McpServerStdio(
+            name="mc",
+            command="uv",
+            args=["run", "--project", str(_PROJECT_ROOT), "python", "-m", "mc.runtime.mcp.bridge"],
+            env=[EnvVariable(name=k, value=v) for k, v in env_dict.items()],
+        )
+        allowed = ["mcp__mc__ask_user", "mcp__mc__send_message"]
+        return server, allowed
+
     async def _run(self, request: ExecutionRequest) -> ExecutionResult:
         """Core execution — raises on failure for the outer handler."""
         mc_session_id = f"{request.task_id}-{request.entity_id}"
@@ -207,11 +240,13 @@ class AcpRunnerStrategy:
 
         self._registry.update_status(mc_session_id, SessionStatus.RUNNING)
 
-        # TODO Phase 3: harness registry supplies command
+        server, allowed = self._build_mc_mcp(request, mc_session_id)
         async with AcpClient(
             command=self._command,
             cwd=self._cwd,
             model=request.model,
+            mcp_servers=[server],
+            allowed_tools=allowed,
         ) as client:
             if client.session_id is not None:
                 self._registry.update_provider_session_id(mc_session_id, client.session_id)

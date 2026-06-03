@@ -89,7 +89,9 @@ def _fake_acp_client(updates: list[Any], turn: AcpTurnResult, *, fail_enter: boo
     """Build a fake AcpClient class capturing the updates/turn for one test."""
 
     class _FakeAcpClient:
-        def __init__(self, *, command: list[str], cwd: str, model: str | None) -> None:
+        def __init__(
+            self, *, command: list[str], cwd: str, model: str | None, **kwargs: Any
+        ) -> None:
             self.command = command
             self.model = model
 
@@ -175,3 +177,32 @@ async def test_execute_handles_client_exception() -> None:
 
     assert result.success is False
     assert "spawn failed" in (result.error_message or "")
+
+
+# ---------------------------------------------------------------------------
+# AcpRunnerStrategy._build_mc_mcp
+# ---------------------------------------------------------------------------
+
+
+def test_build_mc_mcp_returns_correct_server_and_allowed_tools() -> None:
+    strategy = AcpRunnerStrategy(registry=MagicMock(), command=["x"], cwd=".")
+    request = _request()
+    mc_session_id = f"{request.task_id}-{request.entity_id}"
+
+    with (
+        patch("mc.application.execution.strategies.acp.AcpClient"),
+        patch("mc.infrastructure.secrets.resolve_secret_env", return_value={}),
+    ):
+        server, allowed = strategy._build_mc_mcp(request, mc_session_id)
+
+    assert server.name == "mc"
+    assert server.command == "uv"
+    assert "-m" in server.args
+    assert "mc.runtime.mcp.bridge" in server.args
+
+    env_map = {e.name: e.value for e in server.env}
+    assert env_map["MC_INTERACTIVE_SESSION_ID"] == mc_session_id
+    assert env_map["AGENT_NAME"] == request.agent_name
+    assert env_map["TASK_ID"] == request.task_id
+
+    assert allowed == ["mcp__mc__ask_user", "mcp__mc__send_message"]
