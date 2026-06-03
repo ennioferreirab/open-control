@@ -275,9 +275,10 @@ export function SettingsPanel() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <label className="text-sm font-medium">Auto Title</label>
+                  <label className="text-sm font-medium">Auto Title (AI)</label>
                   <p className="text-xs text-muted-foreground">
-                    Generate task titles automatically using AI
+                    On: AI generates task titles. Off: the title is taken from the start of the
+                    task.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

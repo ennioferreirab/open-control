@@ -34,16 +34,69 @@ AUTO_TITLE_PROMPT = (
     "{description}"
 )
 
+AUTO_TITLE_LLM_SETTING = "auto_title_enabled"
+"""Settings key for the opt-in LLM title toggle. The dashboard stores it as the
+string "true"/"false"; unset or "false" means heuristic titles."""
+
+
+def heuristic_title(description: str) -> str | None:
+    """Derive a title from the start of the task description, no LLM call.
+
+    Takes the first non-empty line, strips markdown heading and quote markers,
+    trims to the first sentence boundary, and caps the length. Preserves the
+    original language. Returns None for empty input.
+    """
+    if not description or not description.strip():
+        return None
+    first_line = next((ln.strip() for ln in description.splitlines() if ln.strip()), "")
+    if not first_line:
+        return None
+    cleaned = first_line.lstrip("#>").strip().strip('"').strip("'").strip()
+    for sep in (". ", "? ", "! "):
+        idx = cleaned.find(sep)
+        if 0 < idx <= 80:
+            cleaned = cleaned[: idx + 1].strip()
+            break
+    if len(cleaned) > 60:
+        cleaned = cleaned[:57].rstrip() + "..."
+    return cleaned or None
+
+
+async def _auto_title_llm_enabled(bridge: ConvexBridge) -> bool:
+    """Read the opt-in setting; default False means heuristic titles.
+
+    LLM-generated titles run only when an operator explicitly enables the
+    ``auto_title_enabled`` toggle in settings. A read failure defaults to the
+    heuristic, never silently to the LLM.
+    """
+    try:
+        value = await asyncio.to_thread(
+            bridge.query, "settings:get", {"key": AUTO_TITLE_LLM_SETTING}
+        )
+    except Exception:
+        logger.warning(
+            "[orchestrator] Failed to read %s; using heuristic title",
+            AUTO_TITLE_LLM_SETTING,
+            exc_info=True,
+        )
+        return False
+    return str(value).strip().lower() == "true"
+
 
 async def generate_title_via_low_agent(
     bridge: ConvexBridge,
     description: str,
 ) -> str | None:
-    """Generate a concise title by delegating to the low-agent system agent.
+    """Generate a task title.
 
-    Reads the model configured on the low-agent from Convex. If the agent is
-    not found or the LLM call fails, returns None.
+    Default is a deterministic heuristic from the start of the description (no
+    LLM, no latency on the blocking intake path). When ``auto_title_llm_enabled``
+    is set, delegates to the low-agent LLM instead, reading the low-agent model
+    from Convex and returning None if the agent is missing or the call fails.
     """
+    if not await _auto_title_llm_enabled(bridge):
+        return heuristic_title(description)
+
     # Fetch low-agent model config
     agent_data: dict | None = None
     try:
