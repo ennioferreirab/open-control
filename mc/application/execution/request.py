@@ -45,6 +45,7 @@ class RunnerType(StrEnum):
     # The production default is now PROVIDER_CLI (Story 28.7).
     INTERACTIVE_TUI = "interactive-tui"
     PROVIDER_CLI = "provider-cli"
+    ACP = "acp"
 
 
 class ErrorCategory(StrEnum):
