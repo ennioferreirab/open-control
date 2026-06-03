@@ -138,10 +138,9 @@ class LLMDelegationRouter:
 
         try:
             text = await run_utility_turn(full_prompt, tier="low", timeout_s=LLM_TIMEOUT_SECONDS)
+            parsed = extract_json(text)
         except Exception as exc:
             raise RuntimeError(f"LLM delegation failed: {exc}") from exc
-
-        parsed = extract_json(text)
 
         target_agent = parsed.get("target_agent")
         reasoning = parsed.get("reasoning", "")

@@ -22,7 +22,6 @@ class CCMemoryConsolidator:
         task_output: str,
         task_status: str,
         task_id: str,
-        model: str,
     ) -> bool:
         """Extract facts from CC task output and persist to MEMORY.md + HISTORY.md.
 
@@ -31,7 +30,6 @@ class CCMemoryConsolidator:
             task_output: Final output text from the CC subprocess.
             task_status: "completed" or "error".
             task_id: Task identifier for logging.
-            model: Resolved LLM model string (e.g. "claude-haiku-4-5-20251001").
 
         Returns:
             True on success (or no-op), False on failure.
@@ -42,7 +40,6 @@ class CCMemoryConsolidator:
             task_output=task_output,
             task_status=task_status,
             task_id=task_id,
-            model=model,
         )
         if ok:
             logger.info("CCMemoryConsolidator: consolidated task %s (%s)", task_id, task_status)
