@@ -239,7 +239,9 @@ def _config_default_model() -> str:
     return load_config().agents.defaults.model
 
 
-def _resolve_convex_url(dashboard_dir: Path | None = None) -> str | None:
+def _resolve_convex_url(
+    dashboard_dir: Path | None = None, *, prefer_env: bool = True
+) -> str | None:
     """Resolve the Convex deployment URL.
 
     Checks CONVEX_URL env var first, then falls back to parsing
@@ -247,13 +249,17 @@ def _resolve_convex_url(dashboard_dir: Path | None = None) -> str | None:
 
     Args:
         dashboard_dir: Path to the dashboard directory. Auto-detected if None.
+        prefer_env: When False, ignore the ambient CONVEX_URL and resolve only from
+            dashboard/.env.local. Used by `--local` startup so an ambient cloud URL
+            (the repo .env ships one) cannot override the local deployment.
 
     Returns:
         The Convex URL string, or None if not found.
     """
-    url = os.environ.get("CONVEX_URL")
-    if url:
-        return url
+    if prefer_env:
+        url = os.environ.get("CONVEX_URL")
+        if url:
+            return url
 
     if dashboard_dir is None:
         candidates = [

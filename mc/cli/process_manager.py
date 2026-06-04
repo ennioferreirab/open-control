@@ -257,11 +257,14 @@ class ProcessManager:
         if self._convex_mode != "local":
             return env
 
+        # --local is an explicit choice: resolve the local Convex from .env.local only
+        # (prefer_env=False) and assign, so an ambient cloud CONVEX_URL (the repo .env
+        # ships one) cannot win.
         dashboard_dir = Path(self._dashboard_dir)
-        if convex_url := _resolve_convex_url(dashboard_dir=dashboard_dir):
-            env.setdefault("CONVEX_URL", convex_url)
+        if convex_url := _resolve_convex_url(dashboard_dir=dashboard_dir, prefer_env=False):
+            env["CONVEX_URL"] = convex_url
         if admin_key := _resolve_admin_key(dashboard_dir=dashboard_dir):
-            env.setdefault("CONVEX_ADMIN_KEY", admin_key)
+            env["CONVEX_ADMIN_KEY"] = admin_key
         return env
 
     async def _spawn_process(self, config: ProcessConfig) -> ManagedProcess:

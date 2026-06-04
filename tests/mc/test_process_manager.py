@@ -160,6 +160,39 @@ async def test_local_mode_injects_local_convex_env_for_python_processes(
 
 
 @pytest.mark.asyncio
+async def test_local_mode_overrides_ambient_cloud_convex_env(
+    dashboard_dir, project_root, monkeypatch
+):
+    """--local must win over an ambient cloud CONVEX_URL (e.g. from the repo .env)."""
+    monkeypatch.setenv("CONVEX_URL", "https://ambient-cloud.convex.cloud")
+    monkeypatch.setenv("CONVEX_ADMIN_KEY", "ambient-cloud-key")
+    dashboard_path = Path(dashboard_dir)
+    (dashboard_path / ".env.local").write_text('NEXT_PUBLIC_CONVEX_URL="http://127.0.0.1:3210"\n')
+    local_config = dashboard_path / ".convex" / "local" / "default"
+    local_config.mkdir(parents=True)
+    (local_config / "config.json").write_text('{"adminKey":"local-admin-key-123"}')
+
+    spawned: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    async def mock_create_subprocess(*args, **kwargs):
+        spawned.append((args, kwargs))
+        return _make_mock_process()
+
+    with patch(
+        "mc.cli.process_manager.asyncio.create_subprocess_exec",
+        side_effect=mock_create_subprocess,
+    ):
+        pm = ProcessManager(dashboard_dir, project_root)
+        await pm.start()
+        await pm.stop()
+
+    gateway_env = spawned[2][1]["env"]
+
+    assert gateway_env["CONVEX_URL"] == "http://127.0.0.1:3210"
+    assert gateway_env["CONVEX_ADMIN_KEY"] == "local-admin-key-123"
+
+
+@pytest.mark.asyncio
 async def test_shutdown_reverse_order(dashboard_dir, project_root):
     """Processes are terminated in reverse startup order."""
     terminate_order = []
