@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from nanobot.agent.memory import MemoryStore
+from mc.memory.base import MemoryStore
 
 from mc.memory import create_memory_store
 from mc.memory.store import HybridMemoryStore
@@ -170,7 +170,7 @@ def test_undated_entries_skipped_in_recent_history(tmp_path):
 
 def test_append_history_adds_date_prefix(tmp_path):
     """MemoryStore.append_history() prepends date if entry lacks one."""
-    from nanobot.agent.memory import MemoryStore
+    from mc.memory.base import MemoryStore
 
     store = MemoryStore(tmp_path / "ws")
     (tmp_path / "ws" / "memory").mkdir(parents=True, exist_ok=True)
@@ -183,7 +183,7 @@ def test_append_history_adds_date_prefix(tmp_path):
 
 def test_append_history_preserves_existing_date(tmp_path):
     """MemoryStore.append_history() does not double-prefix dated entries."""
-    from nanobot.agent.memory import MemoryStore
+    from mc.memory.base import MemoryStore
 
     store = MemoryStore(tmp_path / "ws")
     (tmp_path / "ws" / "memory").mkdir(parents=True, exist_ok=True)

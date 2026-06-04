@@ -11,9 +11,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from nanobot.agent.memory import MemoryStore
-
 from mc.infrastructure.runtime_home import get_runtime_path
+from mc.memory.base import MemoryStore
 from mc.memory.index import MemoryIndex
 
 logger = logging.getLogger(__name__)
