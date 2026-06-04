@@ -130,9 +130,14 @@ async def test_startup_cleans_port_before_spawning_port_bound_process(dashboard_
 
 @pytest.mark.asyncio
 async def test_local_mode_injects_local_convex_env_for_python_processes(
-    dashboard_dir, project_root
+    dashboard_dir, project_root, monkeypatch
 ):
     """Gateway inherits local Convex URL and admin key when available."""
+    # _build_child_env uses env.setdefault, so an ambient CONVEX_URL (the repo
+    # root .env sets a cloud one) would win over local injection and make this
+    # order-dependent. Clear it so the injection path is tested deterministically.
+    monkeypatch.delenv("CONVEX_URL", raising=False)
+    monkeypatch.delenv("CONVEX_ADMIN_KEY", raising=False)
     dashboard_path = Path(dashboard_dir)
     (dashboard_path / ".env.local").write_text('NEXT_PUBLIC_CONVEX_URL="http://127.0.0.1:3210"\n')
     local_config = dashboard_path / ".convex" / "local" / "default"

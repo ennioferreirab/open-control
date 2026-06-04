@@ -122,7 +122,7 @@ class TestStepStatuses:
         assert "deleted" in STEP_STATUSES
 
     def test_count(self) -> None:
-        assert len(STEP_STATUSES) == 9
+        assert len(STEP_STATUSES) == 10
 
 
 # ---------------------------------------------------------------------------
@@ -513,12 +513,21 @@ class TestParityWithConvex:
         """stepTransitions in spec must match Convex STEP_TRANSITIONS exactly."""
         convex_step_transitions: dict[str, list[str]] = {
             "planned": ["assigned", "blocked"],
-            "assigned": ["running", "review", "completed", "crashed", "blocked", "waiting_human"],
+            "assigned": [
+                "running",
+                "review",
+                "completed",
+                "skipped",
+                "crashed",
+                "blocked",
+                "waiting_human",
+            ],
             "running": ["assigned", "blocked", "review", "completed", "crashed"],
-            "review": ["running", "completed", "crashed"],
+            "review": ["running", "completed", "skipped", "crashed"],
             "completed": ["assigned"],
+            "skipped": ["assigned", "deleted"],
             "crashed": ["assigned"],
-            "blocked": ["assigned", "crashed"],
+            "blocked": ["assigned", "crashed", "skipped"],
             "waiting_human": ["running", "completed", "crashed"],
             "deleted": [],
         }

@@ -6,6 +6,8 @@
     claude-code interactive terminal — the dashboard AgentTerminal connects to
     the WebSocket server on INTERACTIVE_PORT. The gateway boots it intentionally
     in run_gateway. Do not delete it while that surface exists.
+
+    The TUI step-execution path is superseded by the ACP / provider-CLI runtimes.
 """
 
 from __future__ import annotations

@@ -97,6 +97,6 @@ async def test_execute_task_completes_with_fresh_task_snapshot_transition() -> N
     bridge.transition_task_from_snapshot.assert_called_once()
     transition_call = bridge.transition_task_from_snapshot.call_args
     assert transition_call.args[0]["state_version"] == 7
-    assert transition_call.args[1] == TaskStatus.REVIEW
+    assert transition_call.args[1] == TaskStatus.DONE
     assert transition_call.kwargs["agent_name"] == "agent-x"
     assert "completed task" in transition_call.kwargs["reason"]

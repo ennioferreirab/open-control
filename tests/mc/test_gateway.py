@@ -425,8 +425,8 @@ class TestTaskExecution:
     """Test task execution writes results and transitions to done/review."""
 
     @pytest.mark.asyncio
-    async def test_autonomous_task_transitions_to_review(self):
-        """Default task execution should complete to 'review'."""
+    async def test_autonomous_task_transitions_to_done(self):
+        """Default task execution should complete to 'done' (review is driven by explicit review steps)."""
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
@@ -468,12 +468,12 @@ class TestTaskExecution:
 
         mock_bridge.transition_task_from_snapshot.assert_called()
         completion_call = mock_bridge.transition_task_from_snapshot.call_args
-        assert completion_call[0][1] == "review"
+        assert completion_call[0][1] == "done"
         assert completion_call[1].get("agent_name") == "test-agent"
 
     @pytest.mark.asyncio
-    async def test_human_approved_task_transitions_to_review(self):
-        """Human-approved trust level should complete to 'review'."""
+    async def test_human_approved_task_transitions_to_done(self):
+        """Human-approved trust level should complete to 'done' (review is driven by explicit review steps)."""
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
@@ -513,7 +513,7 @@ class TestTaskExecution:
 
         mock_bridge.transition_task_from_snapshot.assert_called()
         completion_call = mock_bridge.transition_task_from_snapshot.call_args
-        assert completion_call[0][1] == "review"
+        assert completion_call[0][1] == "done"
         assert completion_call[1].get("agent_name") == "test-agent"
 
     @pytest.mark.asyncio
@@ -689,8 +689,8 @@ class TestTrustLevelStatus:
     """Test trust level determines done vs review."""
 
     @pytest.mark.asyncio
-    async def test_agent_reviewed_transitions_to_review(self):
-        """agent_reviewed trust level should transition to 'review'."""
+    async def test_agent_reviewed_transitions_to_done(self):
+        """agent_reviewed trust level should transition to 'done' (review is driven by explicit review steps)."""
         from mc.contexts.execution.executor import TaskExecutor
 
         mock_bridge = MagicMock()
@@ -730,7 +730,7 @@ class TestTrustLevelStatus:
 
         mock_bridge.transition_task_from_snapshot.assert_called()
         completion_call = mock_bridge.transition_task_from_snapshot.call_args
-        assert completion_call[0][1] == "review"
+        assert completion_call[0][1] == "done"
         assert completion_call[1].get("agent_name") == "review-agent"
 
 

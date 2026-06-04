@@ -42,7 +42,7 @@ class _FakeProcessManager:
         self.stopped = True
 
 
-def test_start_defaults_to_local_convex(tmp_path) -> None:
+def test_start_defaults_to_cloud_convex(tmp_path) -> None:
     dashboard = tmp_path / "dashboard"
     dashboard.mkdir()
     (dashboard / "package.json").write_text("{}")
@@ -60,7 +60,7 @@ def test_start_defaults_to_local_convex(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert len(_FakeProcessManager.instances) == 1
-    assert _FakeProcessManager.instances[0].convex_mode == "local"
+    assert _FakeProcessManager.instances[0].convex_mode == "cloud"
 
 
 def test_start_local_mode_skips_cloud_bootstrap_bridge(tmp_path) -> None:
@@ -103,31 +103,6 @@ def test_start_accepts_cloud_override(tmp_path) -> None:
     assert result.exit_code == 0
     assert len(_FakeProcessManager.instances) == 1
     assert _FakeProcessManager.instances[0].convex_mode == "cloud"
-
-
-def test_start_cloud_mode_runs_bootstrap_bridge(tmp_path) -> None:
-    dashboard = tmp_path / "dashboard"
-    dashboard.mkdir()
-    (dashboard / "package.json").write_text("{}")
-    fake_pid = tmp_path / "mc.pid"
-
-    class _FakeBridge:
-        def close(self) -> None:
-            return None
-
-    _FakeProcessManager.instances.clear()
-
-    with (
-        patch("mc.cli.PID_FILE", fake_pid),
-        patch("mc.cli._find_dashboard_dir", return_value=dashboard),
-        patch("mc.cli.lifecycle._kill_stale_processes"),
-        patch("mc.cli.process_manager.ProcessManager", _FakeProcessManager),
-        patch("mc.cli._get_bridge", return_value=_FakeBridge()) as get_bridge,
-    ):
-        result = runner.invoke(mc_app, ["start", "--cloud"])
-
-    assert result.exit_code == 0
-    get_bridge.assert_called_once()
 
 
 def test_start_rejects_conflicting_convex_mode_flags(tmp_path) -> None:

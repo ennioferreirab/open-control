@@ -247,12 +247,21 @@ def test_step_valid_transitions_match_convex_spec() -> None:
     """
     expected: dict[str, list[str]] = {
         "planned": ["assigned", "blocked"],
-        "assigned": ["running", "review", "completed", "crashed", "blocked", "waiting_human"],
+        "assigned": [
+            "running",
+            "review",
+            "completed",
+            "skipped",
+            "crashed",
+            "blocked",
+            "waiting_human",
+        ],
         "running": ["assigned", "blocked", "review", "completed", "crashed"],
-        "review": ["running", "completed", "crashed"],
+        "review": ["running", "completed", "skipped", "crashed"],
         "completed": ["assigned"],
+        "skipped": ["assigned", "deleted"],
         "crashed": ["assigned"],
-        "blocked": ["assigned", "crashed"],
+        "blocked": ["assigned", "crashed", "skipped"],
         "waiting_human": ["running", "completed", "crashed"],
         "deleted": [],
     }

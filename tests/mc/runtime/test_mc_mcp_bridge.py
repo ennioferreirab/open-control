@@ -18,6 +18,14 @@ EXPECTED_MC_TOOLS = {
     "create_agent_spec",
     "publish_squad_graph",
     "search_memory",
+    "archive_squad",
+    "archive_workflow",
+    "create_review_spec",
+    "delete_skill",
+    "list_skills",
+    "publish_workflow",
+    "register_skill",
+    "update_agent",
 }
 
 # AC3: Transport-coupled names must never appear on the public surface.
@@ -43,7 +51,7 @@ class TestToolSpecs:
     """AC1 / AC3: tool_specs.py exposes exactly the MC canonical surface."""
 
     def test_phase1_tool_names_present(self):
-        """All 7 MC tools are defined in MC_TOOLS."""
+        """All 15 MC tools are defined in MC_TOOLS."""
         from mc.runtime.mcp.tool_specs import MC_TOOLS
 
         names = {t.name for t in MC_TOOLS}
@@ -102,7 +110,7 @@ class TestMCMcpBridgeListTools:
     pytestmark = pytest.mark.asyncio
 
     async def test_list_tools_returns_phase1_set(self):
-        """list_tools() returns all 7 MC tools."""
+        """list_tools() returns all 15 MC tools."""
         import mc.runtime.mcp.bridge as bridge_mod
 
         tools = await bridge_mod.list_tools()

@@ -52,7 +52,7 @@ class TestAgentsList:
             result = runner.invoke(mc_app, ["agents", "list"])
         assert result.exit_code == 0
         assert "No agents found" in result.output
-        assert "nanobot mc agents create" in result.output
+        assert "open-control mc agents create" in result.output
 
     def test_list_empty_dir(self, tmp_path):
         agents_dir = tmp_path / "agents"
