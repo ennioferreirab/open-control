@@ -13,7 +13,6 @@ services:
     volumes:
       # Source code — bind-mounted for live editing (no rebuild needed)
       - ./mc:/app/mc
-      - ./boot.py:/app/boot.py
       - ./shared:/app/shared
       - ./vendor:/app/vendor
       - ./dashboard:/app/dashboard
@@ -68,7 +67,6 @@ services:
     volumes:
       # Source code — bind-mounted for live editing (same as mc service)
       - ./mc:/app/mc
-      - ./boot.py:/app/boot.py
       - ./shared:/app/shared
       - ./vendor:/app/vendor
       - ./dashboard:/app/dashboard

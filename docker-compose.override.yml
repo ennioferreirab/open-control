@@ -10,7 +10,6 @@ services:
       - ./vendor:/app/vendor
       - ./shared:/app/shared
       - ./agent_docs:/app/agent_docs
-      - ./boot.py:/app/boot.py
       - ./pyproject.toml:/app/pyproject.toml
       - ./uv.lock:/app/uv.lock
       - ./scripts:/app/scripts
