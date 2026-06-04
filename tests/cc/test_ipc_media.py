@@ -28,9 +28,10 @@ class TestSendMessageMediaFallback:
         from mc.types import task_safe_id
 
         safe_id = task_safe_id(task_id)
-        output_dir = tmp_path / ".nanobot" / "tasks" / safe_id / "output"
+        tasks_root = tmp_path / "tasks"
+        output_dir = tasks_root / safe_id / "output"
 
-        with patch.object(Path, "home", return_value=tmp_path):
+        with patch("mc.infrastructure.runtime_home.get_tasks_dir", return_value=tasks_root):
             result = await server._handle_send_message(
                 content="Here are the results",
                 media=[str(src_file)],
@@ -52,7 +53,7 @@ class TestSendMessageMediaFallback:
         from mc.types import task_safe_id
 
         safe_id = task_safe_id(task_id)
-        output_dir = tmp_path / ".nanobot" / "tasks" / safe_id / "output"
+        output_dir = tmp_path / ".open-control" / "tasks" / safe_id / "output"
 
         with patch.object(Path, "home", return_value=tmp_path):
             result = await server._handle_send_message(
@@ -109,8 +110,9 @@ class TestSendMessageMediaFallback:
         server = MCSocketServer(bridge, bus=None)
 
         task_id = "multi-file-task"
+        tasks_root = tmp_path / "tasks"
 
-        with patch.object(Path, "home", return_value=tmp_path):
+        with patch("mc.infrastructure.runtime_home.get_tasks_dir", return_value=tasks_root):
             result = await server._handle_send_message(
                 content="Mixed results",
                 media=[str(existing), "/nonexistent/missing.pdf"],
@@ -122,7 +124,7 @@ class TestSendMessageMediaFallback:
         from mc.types import task_safe_id
 
         safe_id = task_safe_id(task_id)
-        output_dir = tmp_path / ".nanobot" / "tasks" / safe_id / "output"
+        output_dir = tasks_root / safe_id / "output"
         assert (output_dir / "chart.png").exists()
         assert not (output_dir / "missing.pdf").exists()
 

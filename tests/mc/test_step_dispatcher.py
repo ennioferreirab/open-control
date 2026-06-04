@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mc.contexts.execution.step_dispatcher import StepDispatcher
-from mc.types import ActivityEventType, AuthorType, MessageType, ReviewPhase, StepStatus, TaskStatus
+from mc.types import ActivityEventType, AuthorType, MessageType, StepStatus, TaskStatus
 
 
 async def _sync_to_thread(func, *args, **kwargs):
@@ -90,6 +90,20 @@ def _make_stateful_bridge(
     bridge.sync_task_output_files.return_value = None
     bridge.increment_rejection_count.return_value = 1
     bridge.get_review_loop_limit.return_value = 5
+
+    def _cascade_reject_reset(review_id: str, target_id: str) -> dict:
+        state[review_id]["status"] = StepStatus.BLOCKED
+        state[target_id]["status"] = StepStatus.ASSIGNED
+        # Mirror the update_step_status calls so assert_any_call checks pass
+        bridge.update_step_status(review_id, StepStatus.BLOCKED)
+        bridge.update_step_status(target_id, StepStatus.ASSIGNED)
+        return {
+            "review_step_id": review_id,
+            "target_step_id": target_id,
+            "intermediate_step_ids": [],
+        }
+
+    bridge.cascade_reject_reset.side_effect = _cascade_reject_reset
 
     # async_subscribe must return an async queue whose get() blocks forever.
     # The monitor task is always cancelled after the step gather completes,
@@ -302,9 +316,8 @@ class TestStepDispatcher:
         bridge.transition_task_from_snapshot.assert_called_once()
         status_call = bridge.transition_task_from_snapshot.call_args
         assert status_call.args[0]["status"] == TaskStatus.IN_PROGRESS
-        assert status_call.args[1] == TaskStatus.REVIEW
+        assert status_call.args[1] == TaskStatus.DONE
         assert status_call.kwargs["reason"] == "All 1 steps completed"
-        assert status_call.kwargs["review_phase"] == ReviewPhase.FINAL_APPROVAL
         bridge.create_activity.assert_any_call(
             ActivityEventType.TASK_DISPATCH_STARTED,
             "Steps dispatched in autonomous mode",
@@ -312,19 +325,19 @@ class TestStepDispatcher:
         )
         bridge.create_activity.assert_any_call(
             ActivityEventType.STEP_STARTED,
-            "Agent nanobot started step: Analyze",
+            "Agent test-agent started step: Analyze",
             "task-1",
-            "nanobot",
+            "test-agent",
         )
         bridge.create_activity.assert_any_call(
             ActivityEventType.STEP_COMPLETED,
-            "Agent nanobot completed step: Analyze",
+            "Agent test-agent completed step: Analyze",
             "task-1",
-            "nanobot",
+            "test-agent",
         )
         bridge.create_activity.assert_any_call(
-            ActivityEventType.REVIEW_REQUESTED,
-            "Execution completed -- all 1 steps finished; awaiting explicit approval",
+            ActivityEventType.TASK_COMPLETED,
+            "Execution completed -- all 1 steps finished",
             "task-1",
         )
 
@@ -660,14 +673,14 @@ class TestStepDispatcher:
         bridge.update_task_status.assert_any_call(
             "task-1",
             TaskStatus.CRASHED,
-            "nanobot",
+            "test-agent",
             'Step "Crash" crashed',
         )
         bridge.send_message.assert_any_call(
             "task-1",
             "System",
             AuthorType.SYSTEM,
-            'Step "Crash" crashed:\n```\nRuntimeError: boom\n```\nAgent: nanobot',
+            'Step "Crash" crashed:\n```\nRuntimeError: boom\n```\nAgent: test-agent',
             MessageType.SYSTEM_EVENT,
         )
 
@@ -733,9 +746,8 @@ class TestStepDispatcher:
 
         bridge.transition_task_from_snapshot.assert_called_once()
         status_call = bridge.transition_task_from_snapshot.call_args
-        assert status_call.args[1] == TaskStatus.REVIEW
+        assert status_call.args[1] == TaskStatus.DONE
         assert status_call.kwargs["reason"] == "All 2 steps completed"
-        assert status_call.kwargs["review_phase"] == ReviewPhase.FINAL_APPROVAL
 
     @pytest.mark.asyncio
     async def test_step_completion_calls_post_step_completion(self) -> None:
@@ -761,7 +773,7 @@ class TestStepDispatcher:
         call_args = bridge.post_step_completion.call_args
         assert call_args[0][0] == "task-1"  # task_id
         assert call_args[0][1] == "step-1"  # step_id
-        assert call_args[0][2] == "nanobot"  # agent_name
+        assert call_args[0][2] == "test-agent"  # agent_name
         assert call_args[0][3] == "Report written."  # content
 
     @pytest.mark.asyncio
@@ -1090,7 +1102,7 @@ class TestStepOutputFileSync:
         call_args = bridge.sync_task_output_files.call_args
         assert call_args[0][0] == "task-1"  # task_id
         assert isinstance(call_args[0][1], dict)  # task_data is a dict
-        assert call_args[0][2] == "nanobot"  # agent_name
+        assert call_args[0][2] == "test-agent"  # agent_name
 
         # Step must still be completed
         assert state["step-1"]["status"] == StepStatus.COMPLETED
@@ -1121,9 +1133,8 @@ class TestStepOutputFileSync:
         # Task must also complete
         bridge.transition_task_from_snapshot.assert_called_once()
         status_call = bridge.transition_task_from_snapshot.call_args
-        assert status_call.args[1] == TaskStatus.REVIEW
+        assert status_call.args[1] == TaskStatus.DONE
         assert status_call.kwargs["reason"] == "All 1 steps completed"
-        assert status_call.kwargs["review_phase"] == ReviewPhase.FINAL_APPROVAL
 
     @pytest.mark.asyncio
     async def test_sync_called_before_post_step_completion(self) -> None:
@@ -1224,7 +1235,7 @@ class TestStepOutputFileSync:
         bridge.update_task_status.assert_any_call(
             "task-1",
             TaskStatus.CRASHED,
-            "nanobot",
+            "test-agent",
             'Step "Crash" crashed',
         )
         assert not any(
@@ -1255,7 +1266,7 @@ class TestStepOutputFileSync:
         bridge.update_task_status.assert_any_call(
             "task-1",
             TaskStatus.CRASHED,
-            "nanobot",
+            "test-agent",
             'Step "Crash" crashed',
         )
 

@@ -37,7 +37,7 @@ def _make_agent(
 
 
 def _write_nanobot_config(home: Path, data: dict) -> None:
-    config_path = home / ".nanobot" / "config.json"
+    config_path = home / ".open-control" / "config.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(data), encoding="utf-8")
 
@@ -54,10 +54,11 @@ class TestWorkspaceContext:
         agent = _make_agent()
         ctx = manager.prepare("test-agent", agent, "task123")
 
-        expected_workspace = tmp_path / "agents" / "test-agent"
-        assert ctx.cwd == expected_workspace
-        assert ctx.mcp_config == expected_workspace / ".mcp.json"
-        assert ctx.claude_md == expected_workspace / "CLAUDE.md"
+        expected_persistent = tmp_path / "agents" / "test-agent"
+        assert str(ctx.cwd).startswith("/tmp/mc-workspaces/test-agent-")
+        assert ctx.persistent_memory_workspace == expected_persistent
+        assert ctx.mcp_config == ctx.cwd / ".mcp.json"
+        assert ctx.claude_md == ctx.cwd / "CLAUDE.md"
         assert ctx.socket_path == "/tmp/mc-test-agent-task123.sock"
 
     def test_returns_workspace_context_type(self, tmp_path: Path) -> None:
@@ -363,17 +364,17 @@ class TestSessionObservability:
 class TestSkillsMapping:
     def test_skill_copied_for_existing_skill(self, tmp_path: Path) -> None:
         """A copy is created in .claude/skills/ for a skill found in workspace/skills/."""
-        # Create a mock skill in the workspace skills directory
-        workspace = tmp_path / "agents" / "test-agent"
-        skill_dir = workspace / "skills" / "my-skill"
+        # Create a mock skill in the persistent workspace skills directory
+        persistent_workspace = tmp_path / "agents" / "test-agent"
+        skill_dir = persistent_workspace / "skills" / "my-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# My Skill")
 
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent(skills=["my-skill"])
-        manager.prepare("test-agent", agent, "task123")
+        ctx = manager.prepare("test-agent", agent, "task123")
 
-        dest = workspace / ".claude" / "skills" / "my-skill"
+        dest = ctx.cwd / ".claude" / "skills" / "my-skill"
         assert dest.is_dir()
         assert not dest.is_symlink(), "Must be a real copy, not a symlink"
         assert (dest / "SKILL.md").read_text() == "# My Skill"
@@ -509,8 +510,8 @@ class TestMcpConfigGeneration:
         data = json.loads(ctx.mcp_config.read_text())
 
         assert "mcpServers" in data
-        assert "openmc" in data["mcpServers"]
-        server = data["mcpServers"]["openmc"]
+        assert "mc" in data["mcpServers"]
+        server = data["mcpServers"]["mc"]
 
         assert server["command"] == "uv"
         assert server["args"][:2] == ["run", "--project"]
@@ -524,7 +525,7 @@ class TestMcpConfigGeneration:
         ctx = manager.prepare("my-agent", agent, "task-abc")
 
         data = json.loads(ctx.mcp_config.read_text())
-        env = data["mcpServers"]["openmc"]["env"]
+        env = data["mcpServers"]["mc"]["env"]
 
         assert env["MC_SOCKET_PATH"] == "/tmp/mc-my-agent-task-abc.sock"
         assert env["AGENT_NAME"] == "my-agent"
@@ -541,7 +542,7 @@ class TestMcpConfigGeneration:
         )
 
         data = json.loads(ctx.mcp_config.read_text())
-        env = data["mcpServers"]["openmc"]["env"]
+        env = data["mcpServers"]["mc"]["env"]
 
         assert env["MC_INTERACTIVE_SESSION_ID"] == "interactive_session:claude"
 
@@ -565,10 +566,9 @@ class TestMcpConfigGeneration:
             )
 
         data = json.loads(ctx.mcp_config.read_text())
-        env = data["mcpServers"]["openmc"]["env"]
+        env = data["mcpServers"]["mc"]["env"]
 
-        expected_memory_workspace = tmp_path / "agents" / "my-agent"
-        assert env["MEMORY_WORKSPACE"] == str(expected_memory_workspace)
+        assert env["MEMORY_WORKSPACE"] == str(ctx.cwd)
         assert env["BOARD_NAME"] == "default"
 
     def test_claude_md_loads_memory_from_effective_shared_workspace(self, tmp_path: Path) -> None:
@@ -603,35 +603,20 @@ class TestMcpConfigGeneration:
     def test_mcp_json_includes_resolved_secret_env_vars(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        monkeypatch.delenv("BRAVE_API_KEY", raising=False)
-        _write_nanobot_config(
-            tmp_path,
-            {
-                "providers": {
-                    "anthropic": {"apiKey": "anthropic-from-config"},
-                    "openai": {"apiKey": "openai-from-config"},
-                },
-                "tools": {
-                    "web": {
-                        "search": {"apiKey": "brave-from-config"},
-                    }
-                },
-            },
-        )
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-from-env")
+        monkeypatch.setenv("OPENAI_API_KEY", "openai-from-env")
+        monkeypatch.setenv("BRAVE_API_KEY", "brave-from-env")
 
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent()
         ctx = manager.prepare("my-agent", agent, "task-abc")
 
         data = json.loads(ctx.mcp_config.read_text())
-        env = data["mcpServers"]["openmc"]["env"]
+        env = data["mcpServers"]["mc"]["env"]
 
-        assert env["ANTHROPIC_API_KEY"] == "anthropic-from-config"
-        assert env["OPENAI_API_KEY"] == "openai-from-config"
-        assert env["BRAVE_API_KEY"] == "brave-from-config"
+        assert env["ANTHROPIC_API_KEY"] == "anthropic-from-env"
+        assert env["OPENAI_API_KEY"] == "openai-from-env"
+        assert env["BRAVE_API_KEY"] == "brave-from-env"
 
     def test_mcp_json_valid_json(self, tmp_path: Path) -> None:
         manager = CCWorkspaceManager(workspace_root=tmp_path)
@@ -694,7 +679,7 @@ class TestIdempotentPreparation:
         ctx1 = manager.prepare("test-agent", agent, "task1")
         ctx2 = manager.prepare("test-agent", agent, "task2")
 
-        assert ctx1.cwd == ctx2.cwd
+        assert ctx1.cwd != ctx2.cwd, "Each prepare() yields a distinct ephemeral cwd"
         assert ctx2.claude_md.exists()
         assert ctx2.mcp_config.exists()
 
@@ -707,7 +692,7 @@ class TestIdempotentPreparation:
         ctx = manager.prepare("test-agent", agent, "task-second")
 
         data = json.loads(ctx.mcp_config.read_text())
-        env = data["mcpServers"]["openmc"]["env"]
+        env = data["mcpServers"]["mc"]["env"]
         assert env["TASK_ID"] == "task-second"
 
 
@@ -812,14 +797,16 @@ class TestBoardScopedWorkspace:
             )
 
         mock_resolve.assert_called_once_with("myboard", "test-agent", mode="clean")
-        assert ctx.cwd == board_workspace
+        assert str(ctx.cwd).startswith("/tmp/mc-workspaces/test-agent-")
+        assert ctx.persistent_memory_workspace == board_workspace
 
     def test_no_board_uses_global_path(self, tmp_path: Path) -> None:
-        """Without board_name, workspace stays at agents/{agent}/."""
+        """Without board_name, persistent workspace stays at agents/{agent}/."""
         manager = CCWorkspaceManager(workspace_root=tmp_path)
         agent = _make_agent()
         ctx = manager.prepare("test-agent", agent, "task123")
-        assert ctx.cwd == tmp_path / "agents" / "test-agent"
+        assert str(ctx.cwd).startswith("/tmp/mc-workspaces/test-agent-")
+        assert ctx.persistent_memory_workspace == tmp_path / "agents" / "test-agent"
 
     def test_with_history_mode_passed_to_board_utils(self, tmp_path: Path) -> None:
         """memory_mode='with_history' is forwarded to resolve_board_workspace."""
@@ -859,8 +846,8 @@ class TestBoardScopedWorkspace:
         with patch(
             "mc.infrastructure.boards.resolve_board_workspace", return_value=board_workspace
         ):
-            manager.prepare("test-agent", agent, "task999", board_name="b1")
+            ctx = manager.prepare("test-agent", agent, "task999", board_name="b1")
 
-        claude_md = board_workspace / "CLAUDE.md"
+        claude_md = ctx.cwd / "CLAUDE.md"
         assert claude_md.exists()
         assert "Board agent prompt." in claude_md.read_text()

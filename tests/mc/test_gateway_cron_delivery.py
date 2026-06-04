@@ -426,5 +426,3 @@ class TestOnCronJobDelivery:
                 await on_task_completed("task-xyz", "")  # empty result
 
             mock_bot_instance.send_message.assert_not_called()
-
-

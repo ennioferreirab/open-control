@@ -221,7 +221,11 @@ class SkillsLoader:
         """Parse the provider metadata block from skill frontmatter (open-control, with nanobot/openclaw fallback)."""
         try:
             data = json.loads(raw)
-            return (data.get("open-control") or data.get("nanobot") or data.get("openclaw") or {}) if isinstance(data, dict) else {}
+            return (
+                (data.get("open-control") or data.get("nanobot") or data.get("openclaw") or {})
+                if isinstance(data, dict)
+                else {}
+            )
         except (json.JSONDecodeError, TypeError):
             return {}
 

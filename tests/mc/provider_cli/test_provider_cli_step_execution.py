@@ -176,14 +176,14 @@ class TestFullPathIntegration:
         )
         req.prompt = req.description or req.step_description or req.step_title
 
-        # 2. Resolve runner type → should be PROVIDER_CLI
+        # 2. Resolve runner type → codex is a registered ACP harness, so ACP
         with patch.dict("os.environ", {}, clear=False):
             import os
 
             os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
             runner_type = resolve_step_runner_type(req)
 
-        assert runner_type == RunnerType.PROVIDER_CLI
+        assert runner_type == RunnerType.ACP
 
         # 3. Execute through strategy (with mocked supervisor and parser)
         registry = ProviderSessionRegistry()

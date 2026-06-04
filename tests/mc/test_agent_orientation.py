@@ -11,6 +11,8 @@ Covers TaskExecutor._maybe_inject_orientation():
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from mc.infrastructure.orientation import FILE_ATTACHMENT_INSTRUCTION
+
 
 def _make_executor(bridge=None):
     from mc.contexts.execution.executor import TaskExecutor
@@ -79,7 +81,8 @@ class TestMaybeInjectOrientation:
         executor = _make_executor()
         with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("agent", None)
-        assert result == "rules"
+        assert result is not None
+        assert result.startswith("rules")
 
     def test_empty_orientation_file_returns_prompt_unchanged(self, tmp_path):
         """Empty orientation file -> returns original prompt unchanged."""
@@ -109,7 +112,8 @@ class TestMaybeInjectOrientation:
         executor = _make_executor()
         with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("worker", "")
-        assert result == "rules"
+        assert result is not None
+        assert result.startswith("rules")
 
     def test_exact_separator_format(self, tmp_path):
         """Verify the exact separator format: orientation + \\n\\n---\\n\\n + agent prompt."""
@@ -119,4 +123,5 @@ class TestMaybeInjectOrientation:
         executor = _make_executor()
         with _orientation_file_patch(tmp_path):
             result = executor._maybe_inject_orientation("worker", "P")
-        assert result == "O\n\n---\n\nP"
+        expected_prefix = "O" + FILE_ATTACHMENT_INSTRUCTION + "\n\n---\n\nP"
+        assert result == expected_prefix
