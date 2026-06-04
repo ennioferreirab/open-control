@@ -8,7 +8,7 @@ import signal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from nanobot.cron.types import CronJob, CronPayload, CronSchedule
+from mc.runtime.cron.types import CronJob, CronPayload, CronSchedule
 
 
 def _make_cron_job(
@@ -118,7 +118,7 @@ async def _run_gateway_and_capture(captured: dict) -> None:
             "mc.contexts.conversation.mentions.watcher.MentionWatcher",
             return_value=mock_mention_instance,
         ),
-        patch("nanobot.cron.service.CronService", mock_cron_cls),
+        patch("mc.runtime.cron.service.CronService", mock_cron_cls),
         patch(
             "mc.runtime.gateway.build_interactive_runtime",
             return_value=mock_interactive_runtime,
@@ -162,8 +162,8 @@ class TestOnCronJobDelivery:
 
         # Verify the delivery is actually registered: calling on_task_completed triggers send
         with (
-            patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x),
-            patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]),
+            patch("mc.runtime.cron_delivery._markdown_to_telegram_html", side_effect=lambda x: x),
+            patch("mc.runtime.cron_delivery._split_message", side_effect=lambda x: [x]),
             patch("telegram.Bot") as MockBot,
             patch("mc.infrastructure.config.load_config") as mock_cfg,
         ):
@@ -382,8 +382,8 @@ class TestOnCronJobDelivery:
             sent_messages.append(content)
 
         with (
-            patch("nanobot.channels.telegram._markdown_to_telegram_html", side_effect=lambda x: x),
-            patch("nanobot.channels.telegram._split_message", side_effect=lambda x: [x]),
+            patch("mc.runtime.cron_delivery._markdown_to_telegram_html", side_effect=lambda x: x),
+            patch("mc.runtime.cron_delivery._split_message", side_effect=lambda x: [x]),
         ):
             # Directly test that on_task_completed calls _send_telegram_direct
             # by verifying it pops the pending delivery and sends the result.
