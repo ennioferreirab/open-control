@@ -205,6 +205,7 @@ export const upsertByName = mutation({
     skills: v.array(v.string()),
     model: v.optional(v.string()),
     interactiveProvider: v.optional(interactiveProviderValidator),
+    profile: v.optional(v.string()),
     claudeCodeOpts: v.optional(
       v.object({
         permissionMode: v.optional(v.string()),
@@ -244,6 +245,7 @@ export const upsertByName = mutation({
         role: args.role,
         model: args.model,
         interactiveProvider: args.interactiveProvider,
+        profile: args.profile,
         lastActiveAt: timestamp,
         // Preserve existing enabled value on update (don't reset on re-sync)
       };
@@ -273,6 +275,9 @@ export const upsertByName = mutation({
       if (args.interactiveProvider !== undefined) {
         patch.interactiveProvider = args.interactiveProvider;
       }
+      if (args.profile !== undefined) {
+        patch.profile = args.profile;
+      }
       if (args.claudeCodeOpts !== undefined) {
         patch.claudeCodeOpts = args.claudeCodeOpts;
       }
@@ -290,6 +295,7 @@ export const upsertByName = mutation({
         isSystem: args.isSystem,
         model: args.model,
         interactiveProvider: args.interactiveProvider,
+        profile: args.profile,
         claudeCodeOpts: args.claudeCodeOpts,
         lastActiveAt: timestamp,
       });

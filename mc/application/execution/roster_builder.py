@@ -85,10 +85,16 @@ def hydrate_agent_data(
             soul=convex_agent.get("soul"),
             skills=convex_agent.get("skills") or [],
             model=convex_agent.get("model"),
-            backend=convex_agent.get("backend") or default_backend,
+            # backend has no Convex column; it is stored as interactive_provider, so
+            # recover it from there. A hermes agent must hydrate as backend "hermes",
+            # not the default, or dispatch silently mis-routes and drops its profile.
+            backend=convex_agent.get("backend")
+            or convex_agent.get("interactive_provider")
+            or default_backend,
             interactive_provider=convex_agent.get("interactive_provider")
             or convex_agent.get("backend")
             or default_backend,
+            profile=convex_agent.get("profile"),
             is_system=bool(convex_agent.get("is_system") or convex_agent.get("isSystem")),
         )
 

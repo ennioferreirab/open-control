@@ -36,8 +36,12 @@ def load_interactive_agent(
             prompt=convex_agent.get("prompt"),
             model=convex_agent.get("model"),
             skills=convex_agent.get("skills") or [],
-            backend=convex_agent.get("backend") or provider,
+            # backend has no Convex column; recover it from interactive_provider.
+            backend=convex_agent.get("backend")
+            or convex_agent.get("interactive_provider")
+            or provider,
             interactive_provider=convex_agent.get("interactive_provider") or provider,
+            profile=convex_agent.get("profile"),
         )
 
     prompt, model, skills = sync_agent_from_convex(
