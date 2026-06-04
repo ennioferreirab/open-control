@@ -28,28 +28,6 @@ def test_normalize_claude_permission_request_into_supervision_event() -> None:
     )
 
 
-def test_normalize_codex_turn_completed_into_supervision_event() -> None:
-    event = normalize_provider_event(
-        provider="codex",
-        raw_event={
-            "event": "turn/completed",
-            "session_id": "interactive_session:codex",
-            "task_id": "task-2",
-            "step_id": "step-2",
-            "turn_id": "turn-9",
-            "summary": "Finished implementing the step.",
-        },
-    )
-
-    assert event.kind == "turn_completed"
-    assert event.session_id == "interactive_session:codex"
-    assert event.provider == "codex"
-    assert event.task_id == "task-2"
-    assert event.step_id == "step-2"
-    assert event.turn_id == "turn-9"
-    assert event.summary == "Finished implementing the step."
-
-
 def test_interactive_supervision_event_rejects_unknown_kind() -> None:
     with pytest.raises(ValueError, match="Unknown interactive supervision event kind"):
         InteractiveSupervisionEvent(kind="mystery_event")

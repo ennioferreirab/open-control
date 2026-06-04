@@ -1,8 +1,8 @@
 """Tests for provider-CLI runtime wiring defaults.
 
-These tests verify that the default execution path routes claude-code agents
-through ACP (Phase 6), codex through PROVIDER_CLI, and the legacy TUI path is
-only reachable via an explicit escape hatch.
+These tests verify that the default execution path routes claude-code and codex
+agents through ACP, and the legacy TUI path is only reachable via an explicit
+escape hatch.
 """
 
 from __future__ import annotations
@@ -67,14 +67,14 @@ def test_direct_task_defaults_to_acp_for_claude_code() -> None:
     assert runner == RunnerType.ACP
 
 
-def test_default_no_env_resolves_to_provider_cli_for_codex() -> None:
+def test_default_no_env_resolves_to_acp_for_codex() -> None:
     with patch.dict("os.environ", {}, clear=False):
         import os
 
         os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
-        runner = resolve_step_runner_type(_make_request(provider="codex"))
+        runner = resolve_step_runner_type(_make_request(provider="codex", backend="codex"))
 
-    assert runner == RunnerType.PROVIDER_CLI
+    assert runner == RunnerType.ACP
 
 
 def test_default_no_env_resolves_to_provider_cli_for_mc() -> None:

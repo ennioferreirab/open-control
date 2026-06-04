@@ -2,12 +2,8 @@
 
 from mc.contexts.interactive.adapters.claude_code import ClaudeCodeInteractiveAdapter
 from mc.contexts.interactive.adapters.claude_hooks import ClaudeHookRelay
-from mc.contexts.interactive.adapters.codex import CodexInteractiveAdapter
-from mc.contexts.interactive.adapters.codex_app_server import CodexSupervisionRelay
 
 __all__ = [
     "ClaudeCodeInteractiveAdapter",
     "ClaudeHookRelay",
-    "CodexInteractiveAdapter",
-    "CodexSupervisionRelay",
 ]

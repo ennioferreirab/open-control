@@ -59,20 +59,6 @@ _CLAUDE_EVENT_KIND_MAP: Final[dict[str, str]] = {
     "stop": "turn_completed",
 }
 
-_CODEX_EVENT_KIND_MAP: Final[dict[str, str]] = {
-    "turn/started": "turn_started",
-    "turn/completed": "turn_completed",
-    "turn/updated": "turn_updated",
-    "item/started": "item_started",
-    "item/completed": "item_completed",
-    "session/started": "session_started",
-    "session/ready": "session_ready",
-    "session/stopped": "session_stopped",
-    "session/failed": "session_failed",
-    "approval/requested": "approval_requested",
-    "request_user_input": "user_input_requested",
-}
-
 
 def normalize_provider_event(
     *, provider: str, raw_event: dict[str, Any]
@@ -114,10 +100,6 @@ def _resolve_event_kind(*, provider: str, raw_event: dict[str, Any]) -> str:
     provider_key = provider.strip().lower()
     if provider_key == "claude-code":
         mapped = _CLAUDE_EVENT_KIND_MAP.get(_condense(raw_kind))
-        if mapped is not None:
-            return mapped
-    if provider_key == "codex":
-        mapped = _CODEX_EVENT_KIND_MAP.get(raw_kind.strip().lower())
         if mapped is not None:
             return mapped
 
