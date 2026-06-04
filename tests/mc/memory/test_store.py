@@ -3,9 +3,9 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from mc.memory.base import MemoryStore
 
 from mc.memory import create_memory_store
+from mc.memory.base import MemoryStore
 from mc.memory.store import HybridMemoryStore
 
 

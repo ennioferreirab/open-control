@@ -8,6 +8,7 @@ import signal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from mc.runtime.cron.types import CronJob, CronPayload, CronSchedule
 
 
