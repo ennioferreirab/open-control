@@ -92,6 +92,11 @@ def get_harness(name: str) -> HarnessSpec:
     return spec
 
 
+def is_registered_harness(name: str | None) -> bool:
+    """Return True if *name* names a harness in the registry."""
+    return name in HARNESSES
+
+
 def resolve_model(spec: HarnessSpec, model: str | None) -> str | None:
     """Translate a tier label to this harness's concrete model ID.
 
