@@ -414,6 +414,27 @@ def _sync_embedding_model(bridge: ConvexBridge) -> None:
         logger.debug("[gateway] Failed to persist embedding model to memory_settings.json")
 
 
+def _resolve_synced_model(
+    backend: str | None, model: str | None, resolved_default: str
+) -> str | None:
+    """Resolve an agent's model at sync time.
+
+    Only the claude-code backend inherits the cc/-prefixed config default.
+    Other harnesses (e.g. codex) keep their explicit model or None; the harness
+    resolves its own default. Stamping a cc/ model on a non-claude backend would
+    silently mis-route the model id (codex would receive a "cc/..." slug it does
+    not recognize) and would wrongly flip the is_cc prompt path.
+    """
+    if (backend or "claude-code") != "claude-code":
+        return model
+    if not model:
+        return resolved_default
+    if "/" not in model and resolved_default.endswith("/" + model):
+        # Bare model name matches config default — use full name with prefix.
+        return resolved_default
+    return model
+
+
 def sync_agent_registry(
     bridge: ConvexBridge,
     agents_dir: Path,
@@ -473,11 +494,7 @@ def sync_agent_registry(
 
     # Step 2-3: Resolve model (with provider prefix) and sync each valid agent
     for agent in valid_agents:
-        if not agent.model:
-            agent.model = resolved_default
-        elif "/" not in agent.model and resolved_default.endswith("/" + agent.model):
-            # Bare model name matches config default — use full name with prefix
-            agent.model = resolved_default
+        agent.model = _resolve_synced_model(agent.backend, agent.model, resolved_default)
 
         try:
             bridge.sync_agent(agent)
