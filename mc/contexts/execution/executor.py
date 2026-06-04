@@ -121,7 +121,7 @@ def _get_iana_timezone() -> str | None:
 def build_executor_agent_roster() -> str:
     """Build a roster of available agents for injection into executor orientation.
 
-    Reads ~/.nanobot/agents/*/config.yaml, excludes system agents and orchestrator-agent.
+    Reads ~/.open-control/agents/*/config.yaml, excludes system agents and orchestrator-agent.
     Returns formatted list for agent orientation interpolation.
     """
     return _build_executor_agent_roster_impl()
@@ -400,7 +400,7 @@ class TaskExecutor:
     def _build_agent_roster(self) -> str:
         """Build a markdown roster of all available agents from AGENTS_DIR.
 
-        Reads ~/.nanobot/agents/ and for each agent reads config.yaml to
+        Reads ~/.open-control/agents/ and for each agent reads config.yaml to
         extract name, display_name, role, and skills. Returns a formatted
         string suitable for injection into the orchestrator-agent context.
         """

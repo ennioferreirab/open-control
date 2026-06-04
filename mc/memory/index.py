@@ -34,7 +34,7 @@ class MemoryIndex:
 
         from mc.memory.providers import get_provider
 
-        model = embedding_model or os.environ.get("NANOBOT_MEMORY_EMBEDDING_MODEL")
+        model = embedding_model or os.environ.get("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL")
         self._provider: typing.Any = get_provider(model)
         self._provider_is_null = self._provider.__class__.__name__ == "NullProvider"
 

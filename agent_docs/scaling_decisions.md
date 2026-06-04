@@ -6,7 +6,7 @@ Architectural decisions that work for the current scale but may need revisiting 
 
 ## 1. Convex 1MB string limit — overflow to filesystem
 
-**Decision:** Convex has a hard, non-configurable 1MB limit per string value. Large content that still touches Convex (for example `messages.content`) is capped at 900KB. When exceeded, the full content is saved to the task's filesystem (`~/.nanobot/tasks/{id}/output/_overflow/`) and the Convex field stores a truncated version with a pointer to the file. Live transcript bytes no longer go to Convex; they live under `OPEN_CONTROL_LIVE_HOME`.
+**Decision:** Convex has a hard, non-configurable 1MB limit per string value. Large content that still touches Convex (for example `messages.content`) is capped at 900KB. When exceeded, the full content is saved to the task's filesystem (`~/.open-control/tasks/{id}/output/_overflow/`) and the Convex field stores a truncated version with a pointer to the file. Live transcript bytes no longer go to Convex; they live under `OPEN_CONTROL_LIVE_HOME`.
 
 **Why this works now:** Claude's output token limit (~200K tokens ≈ ~800KB) means most results fit under 900KB. The overflow path is a safety net, not a common path.
 

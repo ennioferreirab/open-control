@@ -34,16 +34,11 @@ FROM base AS python-deps
 
 # Copy only dependency manifests and minimal vendor stubs
 COPY pyproject.toml uv.lock ./
-COPY vendor/nanobot/pyproject.toml vendor/nanobot/
 COPY vendor/claude-code/pyproject.toml vendor/claude-code/
 
 # Create minimal package stubs so uv can resolve editable installs.
-# boot.py is a single-file module (not a package) — stub it as a file.
-# nanobot's pyproject.toml has force-include for bridge → nanobot/bridge.
-RUN mkdir -p mc \
-        vendor/nanobot/nanobot vendor/nanobot/bridge vendor/claude-code/claude_code && \
-    touch mc/__init__.py boot.py \
-        vendor/nanobot/nanobot/__init__.py vendor/claude-code/claude_code/__init__.py
+RUN mkdir -p mc vendor/claude-code/claude_code && \
+    touch mc/__init__.py vendor/claude-code/claude_code/__init__.py
 
 RUN uv sync --frozen
 
@@ -67,7 +62,7 @@ RUN npm install -g @anthropic-ai/claude-code && \
     ln -sf $(which claude) /root/.local/bin/claude
 
 # Create config directory
-RUN mkdir -p /root/.nanobot
+RUN mkdir -p /root/.open-control
 
 # Ports: Next.js(3000) Convex(3210) ConvexSite(3211) Interactive(8765)
 EXPOSE 3000 3210 3211 8765
@@ -80,11 +75,10 @@ EXPOSE 3000 3210 3211 8765
 FROM node-deps AS runtime
 
 # Remove python-deps stubs before copying real source
-RUN rm -rf mc/ boot.py
+RUN rm -rf mc/
 
 # Copy all source code (node_modules preserved — excluded by .dockerignore)
 COPY mc/ mc/
-COPY boot.py boot.py
 COPY shared/ shared/
 COPY vendor/ vendor/
 COPY dashboard/ dashboard/
@@ -100,7 +94,7 @@ RUN uv sync --frozen
 RUN npm install -g @anthropic-ai/claude-code
 
 # Create config directory
-RUN mkdir -p /root/.nanobot
+RUN mkdir -p /root/.open-control
 
 # Initialize Convex schema and bake template database
 RUN chmod +x scripts/init-convex.sh scripts/docker-entrypoint.sh && \

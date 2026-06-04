@@ -90,7 +90,7 @@ All initialization happens inside `run_gateway()`:
 1. Connect to Convex (`ConvexBridge(deployment_url, admin_key)`)
 2. `AgentSyncService` runs once:
    - Bootstrap system agents (`ensure_low_agent()`)
-   - Sync agent registry from `~/.nanobot/agents/` YAML files
+   - Sync agent registry from `~/.open-control/agents/` YAML files
    - Sync builtin skills and workspace skills to Convex
    - Sync model tier mappings and embedding model config
    - Ensure default board exists
@@ -169,7 +169,7 @@ Periodic detector for stalled tasks and timed-out reviews.
 
 #### Cron Delivery (`mc/runtime/cron_delivery.py`)
 
-Uses `CronService` from nanobot vendor. Loads jobs from `~/.nanobot/cron/jobs.json`. When a cron job fires, it either re-queues an existing task or creates a new one.
+Uses `CronService` from nanobot vendor. Loads jobs from `~/.open-control/cron/jobs.json`. When a cron job fires, it either re-queues an existing task or creates a new one.
 
 #### Sleep Controller (`mc/runtime/sleep_controller.py`)
 
@@ -526,12 +526,12 @@ Status values are **never converted** — they are identical across all layers.
 
 | Path | Owner | Purpose |
 |------|-------|---------|
-| `~/.nanobot/agents/` | MC Gateway | Agent YAML definitions |
-| `~/.nanobot/config.json` | Nanobot | Provider configuration |
-| `~/.nanobot/cron/jobs.json` | CronService | Cron job definitions |
-| `~/.nanobot/boards/{board}/artifacts/` | Dashboard API | Board artifact storage |
-| `~/.nanobot/tasks/{id}/output/` | Agent processes | Task output files |
-| `~/.nanobot/tasks/{id}/attachments/` | Dashboard API | User-uploaded files |
+| `~/.open-control/agents/` | MC Gateway | Agent YAML definitions |
+| `~/.open-control/config.json` | Nanobot | Provider configuration |
+| `~/.open-control/cron/jobs.json` | CronService | Cron job definitions |
+| `~/.open-control/boards/{board}/artifacts/` | Dashboard API | Board artifact storage |
+| `~/.open-control/tasks/{id}/output/` | Agent processes | Task output files |
+| `~/.open-control/tasks/{id}/attachments/` | Dashboard API | User-uploaded files |
 | `dashboard/.env.local` | Convex CLI | `CONVEX_URL`, `CONVEX_ADMIN_KEY` |
 
 ---

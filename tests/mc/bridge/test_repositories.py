@@ -160,7 +160,7 @@ class TestTaskRepository:
         repo = TaskRepository(client)
         repo.create_task_directory("jd7abc123xyz")
 
-        expected_base = Path.home() / ".nanobot" / "tasks" / "jd7abc123xyz"
+        expected_base = Path.home() / ".open-control" / "tasks" / "jd7abc123xyz"
         mock_makedirs.assert_any_call(expected_base / "attachments", exist_ok=True)
         mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)
         assert mock_makedirs.call_count == 2

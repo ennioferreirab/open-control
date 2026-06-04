@@ -76,7 +76,7 @@ def resolve_board_workspace(
         mode: "clean" (default) or "with_history".
 
     Returns:
-        Path to ~/.nanobot/boards/{board_name}/agents/{agent_name}/
+        Path to ~/.open-control/boards/{board_name}/agents/{agent_name}/
     """
     board_workspace = get_boards_dir() / board_name / "agents" / agent_name
     memory_dir = board_workspace / "memory"
@@ -207,7 +207,7 @@ def _setup_clean(memory_dir: Path, agent_name: str, board_name: str) -> None:
 def list_agent_board_workspaces(agent_name: str) -> list[tuple[str, Path]]:
     """Return list of (board_name, workspace_path) for all boards where the agent has a workspace.
 
-    Scans ~/.nanobot/boards/*/agents/{agent_name}/ for existing board workspaces.
+    Scans ~/.open-control/boards/*/agents/{agent_name}/ for existing board workspaces.
     """
     boards_root = get_boards_dir()
     if not boards_root.is_dir():

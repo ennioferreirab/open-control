@@ -30,7 +30,7 @@ grep -i "keyword" memory/HISTORY.md
 
 The search engine is powered by SQLite FTS5 (always available) with optional vector embeddings.
 
-**Environment variable:** `NANOBOT_MEMORY_EMBEDDING_MODEL`
+**Environment variable:** `OPEN_CONTROL_MEMORY_EMBEDDING_MODEL`
 - Not set (default): FTS5/BM25 keyword search only
 - `ollama/nomic-embed-text`: Local embeddings via Ollama
 - `mistral/mistral-embed`: Mistral cloud embeddings

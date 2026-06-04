@@ -23,7 +23,7 @@ class TestRuntimeContext:
 
         bridge = MagicMock()
         ctx = RuntimeContext(bridge=bridge)
-        assert ctx.agents_dir == Path.home() / ".nanobot" / "agents"
+        assert ctx.agents_dir == Path.home() / ".open-control" / "agents"
 
     def test_default_agents_dir_uses_open_control_home_override(self, tmp_path: Path) -> None:
         import mc.infrastructure.runtime_context as runtime_context

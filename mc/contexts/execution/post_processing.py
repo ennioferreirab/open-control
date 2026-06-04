@@ -35,7 +35,7 @@ def _snapshot_output_dir(task_id: str) -> dict[str, float]:
 
     The relative path is relative to the task base directory (two levels above
     the file), e.g. ``"output/report.pdf"`` for a file stored in
-    ``~/.nanobot/tasks/{safe_id}/output/report.pdf``.
+    ``~/.open-control/tasks/{safe_id}/output/report.pdf``.
     """
     safe_id = task_safe_id(task_id)
     output_dir = get_tasks_dir() / safe_id / "output"
@@ -269,7 +269,7 @@ def _get_iana_timezone() -> str | None:
 def build_executor_agent_roster() -> str:
     """Build a roster of available agents for injection into executor orientation.
 
-    Reads ~/.nanobot/agents/*/config.yaml, excludes system agents and orchestrator-agent.
+    Reads ~/.open-control/agents/*/config.yaml, excludes system agents and orchestrator-agent.
     Returns formatted list for agent orientation interpolation.
     """
     from mc.infrastructure.orientation_helpers import build_agent_roster

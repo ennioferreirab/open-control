@@ -10,7 +10,7 @@
 
 ### Configuration
 
-Each agent lives in `~/.nanobot/agents/{agent_name}/` with a mandatory `config.yaml`.
+Each agent lives in `~/.open-control/agents/{agent_name}/` with a mandatory `config.yaml`.
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
@@ -95,7 +95,7 @@ Body max: ~500 lines. Use imperative form ("Extract the data", not "This skill e
 | Priority | Location | Notes |
 |----------|----------|-------|
 | 1 | `{agent_workspace}/skills/{name}/` | Agent-specific overrides |
-| 2 | `~/.nanobot/workspace/skills/{name}/` | Global workspace (user-created + distributed builtins) |
+| 2 | `~/.open-control/workspace/skills/{name}/` | Global workspace (user-created + distributed builtins) |
 | 3 | `vendor/nanobot/nanobot/skills/{name}/` | Upstream vendor builtins |
 
 Project-specific builtins in `mc/skills/` are distributed to the global workspace at startup.
@@ -107,7 +107,7 @@ Project-specific builtins in `mc/skills/` are distributed to the global workspac
 │  1. DISTRIBUTION  (gateway startup)                      │
 │  _distribute_builtin_skills() in agent_bootstrap.py      │
 │  Copies from mc/skills/ and vendor/nanobot/skills/       │
-│  → ~/.nanobot/workspace/skills/                          │
+│  → ~/.open-control/workspace/skills/                          │
 │  (preserves existing — never overwrites user edits)      │
 └──────────────────────────────────────────────────────────┘
                           │
@@ -181,7 +181,7 @@ Unavailable skills are skipped with a warning log. The `requires` field is store
 ### Directory Structure
 
 ```text
-~/.nanobot/
+~/.open-control/
   workspace/                          ← global shared workspace
     skills/                           ← distributed skills (all agents)
   agents/{agent_name}/                ← per-agent workspace
@@ -212,8 +212,8 @@ Unavailable skills are skipped with a warning log. The `requires` field is store
 
 | Scope | Memory path | When used |
 |-------|-------------|-----------|
-| Global | `~/.nanobot/agents/{name}/memory/` | Default — agent accumulates knowledge across all tasks |
-| Board-scoped | `~/.nanobot/boards/{board}/{name}/memory/` | When task belongs to a board — isolated memory per board |
+| Global | `~/.open-control/agents/{name}/memory/` | Default — agent accumulates knowledge across all tasks |
+| Board-scoped | `~/.open-control/boards/{board}/{name}/memory/` | When task belongs to a board — isolated memory per board |
 
 Resolution: `resolve_board_workspace()` in `mc/infrastructure/boards.py`.
 
@@ -281,7 +281,7 @@ Task-level consolidation (`consolidate_task_output()`) runs after task execution
 
 - **Schema:** `files`, `chunks`, `chunks_fts` (BM25), `chunks_vec` (optional vector)
 - **Chunking:** 500 chars per chunk, 50-char overlap
-- **Embedding:** configurable via `NANOBOT_MEMORY_EMBEDDING_MODEL` env var or `~/.nanobot/memory_settings.json`
+- **Embedding:** configurable via `NANOBOT_MEMORY_EMBEDDING_MODEL` env var or `~/.open-control/memory_settings.json`
 - **Settings:** `history_context_days` (default 5), `memory_context_max_chars` (default 40K)
 
 ### Context Loading
@@ -327,7 +327,7 @@ The thread journal reconciles Convex messages into a local markdown journal for 
 |-----------|----------|---------|
 | `ThreadJournalService` | `mc/application/execution/thread_journal_service.py` | Sync Convex → local journal |
 | `ThreadJournalStore` | `mc/infrastructure/thread_journal_store.py` | Markdown journal with compaction |
-| Journal storage | `~/.nanobot/tasks/{task_id}/journal/` | Local journal files |
+| Journal storage | `~/.open-control/tasks/{task_id}/journal/` | Local journal files |
 
 **Compaction:** when the journal exceeds a threshold, old messages are summarized via LLM into a compacted summary, keeping only recent messages in full.
 
