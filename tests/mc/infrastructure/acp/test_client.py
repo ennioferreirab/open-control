@@ -658,3 +658,32 @@ async def test_standard_style_omits_claude_code_block_with_mcp() -> None:
     call_kwargs = conn.new_session.call_args.kwargs
     assert "claudeCode" not in call_kwargs
     assert call_kwargs["mcp_servers"] == [fake_server]
+
+
+async def test_set_session_model_failure_propagates() -> None:
+    """A failed session/set_model must surface, never be silently swallowed.
+
+    The model is how a Codex turn picks its tier. If set_session_model fails,
+    AcpClient must raise so the runner records a failure rather than running on
+    a silently wrong model.
+    """
+    conn = _make_fake_conn()
+    conn.set_session_model = AsyncMock(side_effect=RuntimeError("model rejected"))
+
+    def fake_spawn(adapter: Any, cmd: str, *args: str, env: dict | None = None, **kwargs: Any):
+        @asynccontextmanager
+        async def _ctx():
+            yield conn, MagicMock()
+
+        return _ctx()
+
+    with patch("mc.infrastructure.acp.client.acp.spawn_agent_process", side_effect=fake_spawn):
+        with pytest.raises(RuntimeError, match="model rejected"):
+            async with AcpClient(
+                command=["npx"],
+                cwd="/tmp",
+                model="gpt-5.5",
+                model_env=None,
+                model_via_session=True,
+            ):
+                pass
