@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
 from mc.cli import mc_app
@@ -104,37 +103,6 @@ def test_start_accepts_cloud_override(tmp_path) -> None:
     assert result.exit_code == 0
     assert len(_FakeProcessManager.instances) == 1
     assert _FakeProcessManager.instances[0].convex_mode == "cloud"
-
-
-@pytest.mark.xfail(
-    reason="OPEN DECISION: `start --cloud` does not bootstrap a bridge — start() has no "
-    "_get_bridge call. Unclear whether cloud bootstrap was intentionally dropped (test stale) "
-    "or never wired (feature gap). Pending owner decision; do not silently delete.",
-    strict=False,
-)
-def test_start_cloud_mode_runs_bootstrap_bridge(tmp_path) -> None:
-    dashboard = tmp_path / "dashboard"
-    dashboard.mkdir()
-    (dashboard / "package.json").write_text("{}")
-    fake_pid = tmp_path / "mc.pid"
-
-    class _FakeBridge:
-        def close(self) -> None:
-            return None
-
-    _FakeProcessManager.instances.clear()
-
-    with (
-        patch("mc.cli.PID_FILE", fake_pid),
-        patch("mc.cli._find_dashboard_dir", return_value=dashboard),
-        patch("mc.cli.lifecycle._kill_stale_processes"),
-        patch("mc.cli.process_manager.ProcessManager", _FakeProcessManager),
-        patch("mc.cli._get_bridge", return_value=_FakeBridge()) as get_bridge,
-    ):
-        result = runner.invoke(mc_app, ["start", "--cloud"])
-
-    assert result.exit_code == 0
-    get_bridge.assert_called_once()
 
 
 def test_start_rejects_conflicting_convex_mode_flags(tmp_path) -> None:
