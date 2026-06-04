@@ -545,3 +545,116 @@ async def test_new_session_called_without_claude_code_when_no_mcp() -> None:
     call_kwargs = conn.new_session.call_args.kwargs
     assert "claudeCode" not in call_kwargs
     assert call_kwargs["mcp_servers"] == []
+
+
+# ---------------------------------------------------------------------------
+# AcpClient — harness generalization (Codex)
+# ---------------------------------------------------------------------------
+
+
+def _spawn_capturing_env(conn: AsyncMock, captured_env: dict[str, str]):
+    def fake_spawn(adapter: Any, cmd: str, *args: str, env: dict | None = None, **kwargs: Any):
+        if env is not None:
+            captured_env.clear()
+            captured_env.update(env)
+
+        @asynccontextmanager
+        async def _ctx():
+            yield conn, MagicMock()
+
+        return _ctx()
+
+    return fake_spawn
+
+
+async def test_env_overrides_unset_removes_inherited_keys() -> None:
+    """A None env override drops the inherited variable from the child env."""
+    captured_env: dict[str, str] = {}
+    conn = _make_fake_conn()
+    os.environ["OPENAI_API_KEY"] = "sk-should-be-removed"
+
+    try:
+        with patch(
+            "mc.infrastructure.acp.client.acp.spawn_agent_process",
+            side_effect=_spawn_capturing_env(conn, captured_env),
+        ):
+            async with AcpClient(
+                command=["npx", "-y", "@zed-industries/codex-acp"],
+                cwd="/tmp",
+                model_env=None,
+                env_overrides={"OPENAI_API_KEY": None, "CODEX_API_KEY": None},
+            ):
+                pass
+    finally:
+        os.environ.pop("OPENAI_API_KEY", None)
+
+    assert "OPENAI_API_KEY" not in captured_env
+    assert "CODEX_API_KEY" not in captured_env
+
+
+async def test_model_via_session_calls_set_session_model() -> None:
+    """Codex applies its model through session/set_model, not an env var."""
+    captured_env: dict[str, str] = {}
+    conn = _make_fake_conn()
+    os.environ.pop("ANTHROPIC_MODEL", None)
+
+    with patch(
+        "mc.infrastructure.acp.client.acp.spawn_agent_process",
+        side_effect=_spawn_capturing_env(conn, captured_env),
+    ):
+        async with AcpClient(
+            command=["npx"],
+            cwd="/tmp",
+            model="gpt-5.5",
+            model_env=None,
+            model_via_session=True,
+        ):
+            pass
+
+    conn.set_session_model.assert_called_once_with(model_id="gpt-5.5", session_id="test-session-id")
+    assert "ANTHROPIC_MODEL" not in captured_env
+
+
+async def test_model_via_session_skipped_when_model_none() -> None:
+    conn = _make_fake_conn()
+
+    def fake_spawn(adapter: Any, cmd: str, *args: str, env: dict | None = None, **kwargs: Any):
+        @asynccontextmanager
+        async def _ctx():
+            yield conn, MagicMock()
+
+        return _ctx()
+
+    with patch("mc.infrastructure.acp.client.acp.spawn_agent_process", side_effect=fake_spawn):
+        async with AcpClient(command=["npx"], cwd="/tmp", model=None, model_via_session=True):
+            pass
+
+    conn.set_session_model.assert_not_called()
+
+
+async def test_standard_style_omits_claude_code_block_with_mcp() -> None:
+    """Standard style forwards mcp_servers but never the claudeCode block."""
+    conn = _make_fake_conn()
+    fake_server = MagicMock()
+
+    def fake_spawn(adapter: Any, cmd: str, *args: str, env: dict | None = None, **kwargs: Any):
+        @asynccontextmanager
+        async def _ctx():
+            yield conn, MagicMock()
+
+        return _ctx()
+
+    with patch("mc.infrastructure.acp.client.acp.spawn_agent_process", side_effect=fake_spawn):
+        async with AcpClient(
+            command=["npx", "-y", "@zed-industries/codex-acp"],
+            cwd="/tmp",
+            mcp_servers=[fake_server],
+            allowed_tools=["mcp__mc__ask_user"],
+            session_param_style="standard",
+        ):
+            pass
+
+    conn.new_session.assert_called_once()
+    call_kwargs = conn.new_session.call_args.kwargs
+    assert "claudeCode" not in call_kwargs
+    assert call_kwargs["mcp_servers"] == [fake_server]

@@ -8,7 +8,7 @@ new wiring elsewhere.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -26,12 +26,30 @@ class HarnessSpec:
             the concrete model ID this harness accepts. A label absent from
             this dict is not a valid tier for the harness; callers that pass
             a concrete model ID receive it unchanged (pass-through).
+        model_env: Environment variable the adapter reads to pick the model
+            (e.g. "ANTHROPIC_MODEL" for claude-agent-acp). None when the
+            harness has no env override and selects its model another way
+            (e.g. Codex reads ~/.codex/config.toml).
+        session_param_style: How session/new conveys MCP and tool scoping.
+            "claude_code" wraps them in the adapter's non-standard
+            claudeCode.options block; "standard" passes the spec-defined
+            mcpServers field only.
+        model_via_session: True when the model is applied with an explicit
+            session/set_model after session creation rather than an env var
+            (Codex has no model env; it accepts session/set_model).
+        env_overrides: Adapter subprocess env adjustments. A None value unsets
+            the variable. Codex unsets OPENAI_API_KEY / CODEX_API_KEY so the
+            ChatGPT subscription credentials in auth.json take effect.
     """
 
     name: str
     launch_command: tuple[str, ...]
     native_acp: bool
     model_tiers: dict[str, str]
+    model_env: str | None = "ANTHROPIC_MODEL"
+    session_param_style: str = "claude_code"
+    model_via_session: bool = False
+    env_overrides: dict[str, str | None] = field(default_factory=dict)
 
 
 HARNESSES: dict[str, HarnessSpec] = {
@@ -42,6 +60,21 @@ HARNESSES: dict[str, HarnessSpec] = {
         # Spike-verified: claude-agent-acp v0.40.0 reads ANTHROPIC_MODEL.
         # "default" is the alias for Opus 4.8 on a MAX account.
         model_tiers={"low": "haiku", "medium": "sonnet", "high": "default"},
+    ),
+    "codex": HarnessSpec(
+        name="codex",
+        launch_command=("npx", "-y", "@zed-industries/codex-acp"),
+        native_acp=False,
+        # codex-acp (codex-rs rust-v0.133.0) has no model env var; it reads
+        # ~/.codex/config.toml or accepts session/set_model. Tier slugs from
+        # the bundled catalog: high=gpt-5.5, medium=gpt-5.4, low=gpt-5.4-mini.
+        model_tiers={"low": "gpt-5.4-mini", "medium": "gpt-5.4", "high": "gpt-5.5"},
+        model_env=None,
+        session_param_style="standard",
+        model_via_session=True,
+        # ChatGPT subscription auth (auth_mode=chatgpt in ~/.codex/auth.json)
+        # only wins when no API key env is present.
+        env_overrides={"OPENAI_API_KEY": None, "CODEX_API_KEY": None},
     ),
 }
 
