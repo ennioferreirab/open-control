@@ -120,10 +120,11 @@ class SessionActivityService:
         metadata["live_event_count"] = stored_meta.get(
             "eventCount", metadata.get("live_event_count", 0)
         )
-        try:
-            self._bridge.mutation("interactiveSessions:upsert", metadata)
-        except Exception:
-            logger.debug("[activity-service] Failed to upsert session %s", session_id)
+        if self._bridge is not None:
+            try:
+                self._bridge.mutation("interactiveSessions:upsert", metadata)
+            except Exception:
+                logger.debug("[activity-service] Failed to upsert session %s", session_id)
 
     # ------------------------------------------------------------------
     # Live transcript events (file-backed store)

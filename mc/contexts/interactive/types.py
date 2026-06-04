@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from mc.contexts.interactive.identity import InteractiveSessionIdentity
 from mc.contexts.interactive.supervision_types import InteractiveSupervisionEvent
@@ -36,7 +36,7 @@ class InteractiveProviderAdapter(Protocol):
     """Contract for provider-backed interactive TUI adapters."""
 
     provider_name: str
-    capabilities: list[str]
+    capabilities: ClassVar[list[str]]
 
     async def healthcheck(self, *, agent: AgentData) -> None:
         """Raise when the provider cannot start an interactive session."""

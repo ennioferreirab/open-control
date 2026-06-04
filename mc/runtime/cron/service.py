@@ -328,6 +328,8 @@ class CronService:
         # Handle one-shot jobs
         if job.schedule.kind == "at":
             if job.delete_after_run:
+                if self._store is None:
+                    raise RuntimeError("Cron store not loaded while completing a one-shot job")
                 self._store.jobs = [j for j in self._store.jobs if j.id != job.id]
             else:
                 job.enabled = False
