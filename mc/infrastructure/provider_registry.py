@@ -191,24 +191,6 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         strip_model_prefix=False,
         model_overrides=(),
     ),
-    # OpenAI Codex: uses OAuth, not API key.
-    ProviderSpec(
-        name="openai_codex",
-        keywords=("openai-codex", "codex"),
-        env_key="",  # OAuth-based, no API key
-        display_name="OpenAI Codex",
-        litellm_prefix="",  # Not routed through LiteLLM
-        skip_prefixes=(),
-        env_extras=(),
-        is_gateway=False,
-        is_local=False,
-        detect_by_key_prefix="",
-        detect_by_base_keyword="codex",
-        default_api_base="https://chatgpt.com/backend-api",
-        strip_model_prefix=False,
-        model_overrides=(),
-        is_oauth=True,  # OAuth-based authentication
-    ),
     # Github Copilot: uses OAuth, not API key.
     ProviderSpec(
         name="github_copilot",
@@ -409,7 +391,7 @@ def find_by_model(model: str) -> ProviderSpec | None:
     normalized_prefix = model_prefix.replace("-", "_")
     std_specs = [s for s in PROVIDERS if not s.is_gateway and not s.is_local]
 
-    # Prefer explicit provider prefix — prevents `github-copilot/...codex` matching openai_codex.
+    # Prefer explicit provider prefix over keyword matching.
     for spec in std_specs:
         if model_prefix and normalized_prefix == spec.name:
             return spec

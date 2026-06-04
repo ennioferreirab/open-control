@@ -22,8 +22,8 @@ from websockets.exceptions import ConnectionClosed, ConnectionClosedError, Inval
 
 from mc.contexts.interactive import (
     ClaudeCodeInteractiveAdapter,
-    CodexInteractiveAdapter,
     InteractiveExecutionSupervisor,
+    InteractiveProviderAdapter,
     InteractiveSessionCoordinator,
     InteractiveSessionIdentity,
     InteractiveSessionRegistry,
@@ -178,14 +178,13 @@ def build_interactive_runtime(
 
     registry = InteractiveSessionRegistry(bridge)
     supervisor = InteractiveExecutionSupervisor(bridge=bridge, registry=registry)
-    adapters = {
+    adapters: dict[str, InteractiveProviderAdapter] = {
         "claude-code": ClaudeCodeInteractiveAdapter(
             bridge=bridge,
             bus=bus,
             cron_service=cron_service,
             supervision_sink=supervisor,
         ),
-        "codex": CodexInteractiveAdapter(supervision_sink=supervisor),
     }
     service = InteractiveSessionCoordinator(
         registry=registry,

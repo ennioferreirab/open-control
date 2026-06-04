@@ -1,9 +1,8 @@
 """ProviderCliRunnerStrategy — executes tasks via the generic provider CLI session core.
 
 This strategy is provider-agnostic: it delegates to any ProviderCLIParser
-implementation (e.g. ClaudeCodeCLIParser, CodexCLIParser).  The parser
-encapsulates all provider-specific logic; the strategy only orchestrates the
-execution lifecycle.
+implementation (e.g. ClaudeCodeCLIParser). The parser encapsulates all
+provider-specific logic; the strategy only orchestrates the execution lifecycle.
 
 Story 28.2 wires Claude Code as the first provider.
 Story 28.18 adds LiveStreamProjector and supervision_sink wiring.

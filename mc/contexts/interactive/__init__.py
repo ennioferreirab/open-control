@@ -1,9 +1,6 @@
 """Interactive session context owners."""
 
-from mc.contexts.interactive.adapters import (
-    ClaudeCodeInteractiveAdapter,
-    CodexInteractiveAdapter,
-)
+from mc.contexts.interactive.adapters import ClaudeCodeInteractiveAdapter
 from mc.contexts.interactive.coordinator import InteractiveSessionCoordinator
 from mc.contexts.interactive.errors import (
     InteractiveSessionAttachError,
@@ -31,7 +28,6 @@ from mc.contexts.interactive.types import (
 
 __all__ = [
     "ClaudeCodeInteractiveAdapter",
-    "CodexInteractiveAdapter",
     "InteractiveAttachment",
     "InteractiveExecutionSupervisor",
     "InteractiveLaunchSpec",

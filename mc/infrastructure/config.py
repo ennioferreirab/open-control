@@ -155,7 +155,7 @@ class Config(_Base):
             kw = kw.lower()
             return kw in model_lower or kw.replace("-", "_") in model_normalized
 
-        # Explicit provider prefix wins — prevents `github-copilot/...codex` matching openai_codex.
+        # Explicit provider prefix wins over keyword matching.
         for spec in PROVIDERS:
             p = self.providers.get(spec.name)
             if p and model_prefix and normalized_prefix == spec.name:

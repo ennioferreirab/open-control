@@ -29,9 +29,7 @@ def test_build_interactive_runtime_creates_provider_agnostic_runtime() -> None:
     assert runtime.service is not None
     assert runtime.transport is not None
     assert "claude-code" in runtime.adapters
-    assert "codex" in runtime.adapters
     assert "mc" in runtime.adapters
-    assert runtime.adapters["codex"]._supervision_sink is runtime.supervisor
 
 
 def test_build_interactive_runtime_wires_waiting_human_pause_semantics() -> None:
