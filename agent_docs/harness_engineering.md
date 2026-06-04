@@ -358,7 +358,6 @@ Squad spec fields: `squad_name`, `published_by_spec_id`, `squad_metadata`, `agen
 
 | Mechanism | Tool | Description |
 |-----------|------|-------------|
-| Ask agent | `ask_agent` (MCP) | Query a specific agent from another agent's session |
 | Ask user | `ask_user` (MCP) | Escalate to human for input |
 | Send message | `send_message` (MCP) | Post a message to the task thread |
 

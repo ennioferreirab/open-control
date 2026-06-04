@@ -59,8 +59,7 @@ This document describes every **communication channel, protocol, and data-flow p
                      │  retry+backoff  │     │  │  → ask_user           │ │
                      │  idempotency    │     │  │  → delegate_task      │ │
                      │  OCC locking    │     │  │  → send_message       │ │
-                     └─────────────────┘     │  │  → ask_agent          │ │
-                                             │  │  → cron               │ │
+                     └─────────────────┘     │  │  → cron               │ │
                                              │  │  → create_agent_spec  │ │
                                              │  │  → publish_squad_graph│ │
                                              │  └──────────────────────┘ │
@@ -127,7 +126,6 @@ Server → Client:  {<response>}\n
 | `ask_user` | `_handle_ask_user` | `question`, `options?`, `questions?`, `task_id?` | `{"answer": str}` | Indefinite (waits for user) |
 | `send_message` | `_handle_send_message` | `content`, `channel?`, `chat_id?`, `media?`, `task_id?` | `{"status": "Message sent"}` | — |
 | `delegate_task` | `_handle_delegate_task` | `description`, `agent?`, `priority?` | `{"task_id": str, "status": "created"}` | — |
-| `ask_agent` | `_handle_ask_agent` | `agent_name`, `question`, `depth?` | `{"response": str}` | 120s |
 | `report_progress` | `_handle_report_progress` | `message`, `percentage?` | `{"status": "Progress reported"}` | — |
 | `cron` | `_handle_cron` | `action` (`list`/`add`/`remove`), schedule params | `{"result": str}` | — |
 | `emit_supervision_event` | `_handle_emit_supervision_event` | `provider`, `raw_event` | `{"status": "ok", "session_id": str?}` | — |
@@ -138,8 +136,7 @@ Server → Client:  {<response>}\n
 
 - `ask_user` — blocks until user replies in dashboard. Posts question to task thread via Convex, registers an `asyncio.Future` in `AskUserRegistry`, transitions task to `review` with `review_phase="execution_pause"`.
 - `delegate_task` — self-delegation guard (agent cannot delegate to itself). Creates task via `bridge.mutation("tasks:create", ...)`. Title is silently truncated to 120 chars from the `description` field.
-- `ask_agent` — spawns an isolated `AgentLoop` with a fresh `MessageBus`. Max recursion depth: 2 (`ASK_AGENT_MAX_DEPTH`). 120-second timeout. Resolves tier model references via `TierResolver` before spawning.
-- `send_message` — two delivery paths: (1) `bus.publish_outbound()` if `channel` + `chat_id` given; (2) `bridge.send_message()` if `task_id` + bridge available. Media files copied to `~/.nanobot/tasks/{id}/output/`.
+- `send_message` — posts to the task thread via `bridge.send_message()` when `task_id` + bridge are available. Media files copied to `~/.nanobot/tasks/{id}/output/`.
 
 ### 1.4 Client Implementations
 
@@ -172,7 +169,6 @@ All clients open a new connection per request — no pooling.
 | Async client | `readline()` response | 300s |
 | Async client | `writer.wait_closed()` | 2s |
 | Sync client | `socket.settimeout` | 5s (default) |
-| `ask_agent` handler | `AgentLoop.process_direct()` | 120s |
 | `ask_user` handler | Waits for user reply | Indefinite |
 
 ---
@@ -493,9 +489,8 @@ The agent process (Claude Code CLI) reads `.mcp.json` on startup and spawns the 
 | Tool | IPC Method | Target |
 |------|-----------|--------|
 | `ask_user` | `ask_user` | `AskUserHandler.ask()` → task thread |
-| `send_message` | `send_message` | `MessageBus` or Convex thread |
+| `send_message` | `send_message` | Convex task thread |
 | `delegate_task` | `delegate_task` | `tasks:create` mutation |
-| `ask_agent` | `ask_agent` | Isolated `AgentLoop` (120s, depth≤2) |
 | `cron` | `cron` | `CronService` |
 | `search_memory` | *(local, no IPC)* | `mc.memory.create_memory_store().search()` |
 
