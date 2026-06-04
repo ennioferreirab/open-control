@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 from mc.infrastructure.runtime_home import get_agents_dir
@@ -76,10 +76,26 @@ class ProviderConfig(_Base):
 class ClaudeCodeConfig(_Base):
     cli_path: str = "claude"
     default_model: str = "claude-sonnet-4-6"
-    default_max_budget_usd: float = 5.0
-    default_max_turns: int = 50
+    default_max_budget_usd: float = Field(default=5.0, ge=0)
+    default_max_turns: int = Field(default=50, ge=1)
     default_permission_mode: str = "bypassPermissions"
     auth_method: str = "oauth"
+
+    @field_validator("auth_method")
+    @classmethod
+    def _validate_auth_method(cls, v: str) -> str:
+        allowed = {"oauth", "api_key"}
+        if v not in allowed:
+            raise ValueError(f"auth_method must be one of {sorted(allowed)}")
+        return v
+
+    @field_validator("default_permission_mode")
+    @classmethod
+    def _validate_permission_mode(cls, v: str) -> str:
+        allowed = {"default", "acceptEdits", "bypassPermissions", "plan"}
+        if v not in allowed:
+            raise ValueError(f"default_permission_mode must be one of {sorted(allowed)}")
+        return v
 
 
 class WebSearchConfig(_Base):

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from nanobot.config.schema import ClaudeCodeConfig
 from pydantic import ValidationError
 
+from mc.infrastructure.config import ClaudeCodeConfig
 from mc.types import (
     CC_AVAILABLE_MODELS,
     AgentData,

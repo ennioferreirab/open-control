@@ -524,7 +524,7 @@ class TestAlwaysOnSkills:
         """ImportError in SkillsLoader is handled gracefully (returns empty)."""
         manager = CCWorkspaceManager(workspace_root=tmp_path)
 
-        with patch("nanobot.agent.skills.SkillsLoader", side_effect=ImportError("no module")):
+        with patch("mc.infrastructure.skills_loader.SkillsLoader", side_effect=ImportError("no module")):
             result = manager._build_always_skills_content(tmp_path / "agents" / "test")
 
         assert result == ""

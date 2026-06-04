@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -166,59 +166,41 @@ class TestGenerateAgentYaml:
 
     @pytest.mark.asyncio
     async def test_basic_generation(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = textwrap.dedent("""\
+        text = textwrap.dedent("""\
             name: research-agent
             role: AI Researcher
             prompt: "You research AI trends."
             skills:
               - research
         """)
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await generate_agent_yaml(provider, "create a research agent")
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=text),
+        ) as turn:
+            result = await generate_agent_yaml("create a research agent")
         assert "research-agent" in result
-        provider.chat.assert_called_once()
+        turn.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_generation_with_feedback(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = "name: updated-agent\nrole: Updated\nprompt: Updated."
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await generate_agent_yaml(provider, "create an agent", feedback="add more skills")
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value="name: updated-agent\nrole: Updated\nprompt: Updated."),
+        ) as turn:
+            result = await generate_agent_yaml("create an agent", feedback="add more skills")
         assert "updated-agent" in result
 
-        # Check that feedback was included in the system prompt
-        call_args = provider.chat.call_args
-        messages = call_args.kwargs.get("messages") or call_args[0][0]
-        system_msg = messages[0]["content"]
-        assert "add more skills" in system_msg
+        # Feedback is woven into the prompt sent to the utility turn
+        prompt = turn.call_args.args[0]
+        assert "add more skills" in prompt
 
     @pytest.mark.asyncio
     async def test_empty_response(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = ""
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await generate_agent_yaml(provider, "create an agent")
-        assert result == ""
-
-    @pytest.mark.asyncio
-    async def test_none_response(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = None
-
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await generate_agent_yaml(provider, "create an agent")
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=""),
+        ):
+            result = await generate_agent_yaml("create an agent")
         assert result == ""
 
 

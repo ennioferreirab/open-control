@@ -98,21 +98,6 @@ MC_TOOLS: list[Tool] = [
         },
     ),
     Tool(
-        name="ask_agent",
-        description=(
-            "Ask another agent a question and wait for their response. "
-            "Use for clarification or specialist opinion. Depth limit: 2."
-        ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "agent_name": {"type": "string", "description": "Name of the agent to ask."},
-                "question": {"type": "string", "description": "The question to ask."},
-            },
-            "required": ["agent_name", "question"],
-        },
-    ),
-    Tool(
         name="delegate_task",
         description=(
             "Delegate a task to Mission Control. Creates an async task assigned to another agent."

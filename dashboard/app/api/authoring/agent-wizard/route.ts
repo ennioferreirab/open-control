@@ -49,7 +49,6 @@ import sys
 sys.path.insert(0, ${JSON.stringify(projectRoot)})
 
 from mc.contexts.agents.authoring_assist import build_agent_authoring_response
-from mc.infrastructure.providers.factory import create_provider
 
 async def main():
     with open(${JSON.stringify(tmpInput)}, "r") as f:
@@ -59,9 +58,7 @@ async def main():
     phase = payload["phase"]
 
     try:
-        provider, _model = create_provider()
         result = await build_agent_authoring_response(
-            provider=provider,
             messages=messages,
             current_phase=phase,
         )

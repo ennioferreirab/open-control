@@ -1,7 +1,7 @@
 """Unix socket IPC server for the MC runtime.
 
 The MC runtime starts this server so the MCP bridge (a separate stdio subprocess)
-can call MC-side tools (ask_user, send_message, delegate_task, ask_agent,
+can call MC-side tools (ask_user, send_message, delegate_task,
 report_progress) over a local Unix socket.
 """
 
@@ -12,15 +12,12 @@ import json
 import logging
 import os
 import shutil
-import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from mc.ask_user.handler import AskUserHandler
-    from nanobot.bus.queue import MessageBus
-
     from mc.bridge import ConvexBridge
     from mc.contexts.interactive.types import InteractiveSupervisionSink
 
@@ -30,9 +27,6 @@ _IPC_STREAM_LIMIT = 1024 * 1024
 
 # No timeout for ask_user — wait indefinitely for user reply.
 
-# Maximum ask_agent recursion depth (AC6)
-ASK_AGENT_MAX_DEPTH = 2
-
 
 class MCSocketServer:
     """IPC server that listens on a Unix socket and dispatches to registered handlers."""
@@ -40,7 +34,7 @@ class MCSocketServer:
     def __init__(
         self,
         bridge: ConvexBridge | None,
-        bus: MessageBus | None,
+        bus: Any | None = None,
         cron_service: Any | None = None,
         interactive_supervisor: InteractiveSupervisionSink | None = None,
     ) -> None:
@@ -57,7 +51,6 @@ class MCSocketServer:
         self.register("ask_user", self._handle_ask_user)
         self.register("send_message", self._handle_send_message)
         self.register("delegate_task", self._handle_delegate_task)
-        self.register("ask_agent", self._handle_ask_agent)
         self.register("report_progress", self._handle_report_progress)
         self.register("cron", self._handle_cron)
         self.register("emit_supervision_event", self._handle_emit_supervision_event)
@@ -187,21 +180,8 @@ class MCSocketServer:
         agent_name: str = "agent",
         task_id: str | None = None,
     ) -> dict[str, Any]:
-        """Publish an outbound message to the MessageBus."""
-        if self._bus and channel and chat_id:
-            from nanobot.bus.events import OutboundMessage
-
-            msg = OutboundMessage(
-                channel=channel, chat_id=chat_id, content=content, media=media or []
-            )
-            try:
-                # C2: use publish_outbound() not publish()
-                await self._bus.publish_outbound(msg)
-                return {"status": "Message sent"}
-            except Exception as exc:
-                logger.warning("send_message via bus failed: %s", exc)
-
-        # Fallback: post to task thread if we have bridge + task_id
+        """Post an outbound message to the task thread."""
+        # Post to task thread if we have bridge + task_id
         if self._bridge and task_id:
             # Auto-sync media files to task output dir so sync_task_output_files picks them up
             if media and task_id:
@@ -287,117 +267,6 @@ class MCSocketServer:
             logger.exception("delegate_task failed")
             return {"error": str(exc)}
 
-    async def _handle_ask_agent(
-        self,
-        agent_name: str,
-        question: str,
-        caller_agent: str = "agent",
-        task_id: str | None = None,
-        depth: int = 0,
-    ) -> dict[str, Any]:
-        """Create an isolated session to query a target agent.
-
-        H2: Enforce depth limit of 2 to prevent infinite ask_agent chains.
-        """
-        # H2: Enforce max recursion depth
-        if depth >= ASK_AGENT_MAX_DEPTH:
-            return {
-                "error": (
-                    f"ask_agent depth limit ({ASK_AGENT_MAX_DEPTH}) exceeded. "
-                    "Cannot recurse further."
-                )
-            }
-
-        from mc.infrastructure.agents.yaml_validator import validate_agent_file
-        from mc.infrastructure.config import AGENTS_DIR
-
-        config_file = AGENTS_DIR / agent_name / "config.yaml"
-        if not config_file.exists():
-            return {"error": f"Agent '{agent_name}' not found."}
-
-        result = validate_agent_file(config_file)
-        if isinstance(result, list):
-            return {"error": f"Agent '{agent_name}' config invalid: {'; '.join(result)}"}
-
-        agent_prompt = result.prompt
-        agent_model = result.model
-        agent_skills = result.skills
-
-        # Resolve tier model if needed
-        from mc.types import is_tier_reference
-
-        if agent_model and is_tier_reference(agent_model):
-            if self._bridge:
-                try:
-                    from mc.infrastructure.providers.tier_resolver import TierResolver
-
-                    agent_model = TierResolver(self._bridge).resolve_model(agent_model)
-                except Exception as exc:
-                    return {"error": f"Cannot resolve model tier: {exc}"}
-            else:
-                return {"error": f"Cannot resolve tier model '{agent_model}' without bridge."}
-
-        try:
-            from mc.infrastructure.providers.factory import create_provider
-
-            provider, resolved_model = create_provider(agent_model)
-        except Exception as exc:
-            return {"error": f"Failed to create provider for '{agent_name}': {exc}"}
-
-        focused_prompt = (
-            f"You are being asked by {caller_agent} for clarification during task execution. "
-            f"Answer concisely and specifically.\n\nQuestion: {question}"
-        )
-        if agent_prompt:
-            focused_prompt = (
-                f"[System instructions]\n{agent_prompt}\n\n[Inter-agent query]\n{focused_prompt}"
-            )
-
-        session_key = f"mc:ask:{caller_agent}:{agent_name}:{uuid.uuid4().hex[:8]}"
-
-        from nanobot.agent.loop import AgentLoop
-        from nanobot.bus.queue import MessageBus
-
-        workspace = AGENTS_DIR / agent_name
-        workspace.mkdir(parents=True, exist_ok=True)
-
-        bus = MessageBus()
-        child_loop = AgentLoop(
-            bus=bus,
-            provider=provider,
-            workspace=workspace,
-            model=resolved_model,
-            allowed_skills=agent_skills,
-        )
-
-        try:
-            response = await asyncio.wait_for(
-                child_loop.process_direct(
-                    content=focused_prompt,
-                    session_key=session_key,
-                    channel="mc",
-                    chat_id=agent_name,
-                    # H2: pass depth+1 so child ask_agent calls can enforce depth
-                    extra_params={"depth": depth + 1},
-                ),
-                timeout=120,
-            )
-        except TimeoutError:
-            response = (
-                f"ask_agent timed out after 120 seconds. "
-                f"Agent '{agent_name}' did not respond in time."
-            )
-        except Exception as exc:
-            response = f"ask_agent failed: {exc}"
-        finally:
-            # L2: Clean up bus and AgentLoop to prevent resource leaks
-            try:
-                await bus.close() if hasattr(bus, "close") else None
-            except Exception:
-                pass
-
-        return {"response": response}
-
     async def _handle_report_progress(
         self,
         message: str,
@@ -455,7 +324,7 @@ class MCSocketServer:
         elif action == "add":
             if not message:
                 return {"error": "message is required for add"}
-            from nanobot.cron.types import CronSchedule
+            from mc.runtime.cron.types import CronSchedule
 
             delete_after = False
             if every_seconds:

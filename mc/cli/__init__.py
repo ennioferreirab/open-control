@@ -132,3 +132,6 @@ register_docs_command(mc_app)
 register_sessions_command(mc_app)
 register_init_command(mc_app)
 register_sync_command(mc_app)
+
+# Standalone CLI entry point (open-control = "mc.cli:app")
+app = mc_app

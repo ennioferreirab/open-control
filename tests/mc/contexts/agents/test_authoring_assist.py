@@ -5,7 +5,7 @@ Canonical phases: discovery, proposal, refinement, approval.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -105,8 +105,7 @@ class TestBuildAgentAuthoringResponse:
 
     @pytest.mark.asyncio
     async def test_returns_authoring_response(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = (
+        text = (
             '{"assistant_message": "I propose a researcher agent.", '
             '"phase": "proposal", '
             '"draft_graph_patch": {"agents": [{"key": "researcher", "role": "Researcher"}]}, '
@@ -114,14 +113,14 @@ class TestBuildAgentAuthoringResponse:
             '"preview": {}, '
             '"readiness": 0.5}'
         )
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await build_agent_authoring_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "Create a researcher agent"}],
-            current_phase="proposal",
-        )
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=text),
+        ):
+            result = await build_agent_authoring_response(
+                messages=[{"role": "user", "content": "Create a researcher agent"}],
+                current_phase="proposal",
+            )
 
         assert isinstance(result, AuthoringResponse)
         assert result.phase in CANONICAL_PHASES
@@ -129,8 +128,7 @@ class TestBuildAgentAuthoringResponse:
 
     @pytest.mark.asyncio
     async def test_uses_canonical_phase_from_payload(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = (
+        text = (
             '{"assistant_message": "Starting discovery.", '
             '"phase": "discovery", '
             '"draft_graph_patch": {}, '
@@ -138,30 +136,28 @@ class TestBuildAgentAuthoringResponse:
             '"preview": {}, '
             '"readiness": 0.0}'
         )
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await build_agent_authoring_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "I want an agent"}],
-            current_phase="discovery",
-        )
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value=text),
+        ):
+            result = await build_agent_authoring_response(
+                messages=[{"role": "user", "content": "I want an agent"}],
+                current_phase="discovery",
+            )
 
         assert result.phase == "discovery"
         assert result.unresolved_questions == ["What does this agent do?"]
 
     @pytest.mark.asyncio
     async def test_fallback_on_invalid_llm_response(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = "Not valid JSON at all"
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value=mock_response)
-
-        result = await build_agent_authoring_response(
-            provider=provider,
-            messages=[{"role": "user", "content": "Create an agent"}],
-            current_phase="discovery",
-        )
+        with patch(
+            "mc.infrastructure.acp.utility.run_utility_turn",
+            new=AsyncMock(return_value="Not valid JSON at all"),
+        ):
+            result = await build_agent_authoring_response(
+                messages=[{"role": "user", "content": "Create an agent"}],
+                current_phase="discovery",
+            )
 
         assert isinstance(result, AuthoringResponse)
         assert result.phase in CANONICAL_PHASES

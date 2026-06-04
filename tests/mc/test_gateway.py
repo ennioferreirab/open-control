@@ -104,13 +104,6 @@ class TestRunGateway:
 
         mock_bridge = MagicMock()
 
-        mock_channels_instance = MagicMock()
-        mock_channels_instance.start_all = AsyncMock()
-        mock_channels_instance.stop_all = AsyncMock()
-        mock_channels_instance.enabled_channels = []
-
-        mock_channel_manager_cls = MagicMock(return_value=mock_channels_instance)
-        mock_mc_channel = MagicMock()
         mock_interactive_runtime = MagicMock()
         mock_interactive_runtime.service = MagicMock()
         mock_interactive_runtime.transport = MagicMock()
@@ -124,13 +117,7 @@ class TestRunGateway:
             patch("mc.contexts.execution.executor.TaskExecutor") as mock_exec_cls,
             patch("mc.contexts.conversation.chat_handler.ChatHandler") as mock_ch_cls,
             patch("mc.contexts.conversation.ask_user.watcher.AskUserReplyWatcher") as mock_auw_cls,
-            patch("nanobot.channels.manager.ChannelManager", mock_channel_manager_cls),
             patch("mc.infrastructure.config.load_config"),
-            patch("nanobot.bus.queue.MessageBus"),
-            patch(
-                "nanobot.channels.mission_control.MissionControlChannel",
-                return_value=mock_mc_channel,
-            ),
             patch("mc.contexts.conversation.mentions.watcher.MentionWatcher") as mock_mw_cls,
             patch(
                 "mc.runtime.gateway.build_interactive_runtime",
