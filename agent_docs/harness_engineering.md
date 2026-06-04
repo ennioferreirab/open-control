@@ -31,6 +31,8 @@ Each agent lives in `~/.open-control/agents/{agent_name}/` with a mandatory `con
 
 **Hermes backend.** A Hermes agent is `backend: hermes` plus a `profile`. The profile is Hermes' native multi-agent unit: a state directory (`~/.hermes/profiles/<profile>/`) holding its own `config.yaml` (model + provider + skills), `.env` (provider keys), `SOUL.md`, sessions, and memory. OpenControl selects it by setting `HERMES_HOME` on the adapter subprocess (`hermes-acp` has no profile flag). The model and provider live in the profile, not in OpenControl — so `model` is ignored for Hermes agents. Skills and memory are profile-scoped (Hermes' own), not the OpenControl skill/memory system documented below. Provision a profile with `scripts/hermes-provision-profile.sh <name>`; the `mc` and `mc-test` containers mount `~/.hermes` (mirroring `~/.codex`). The harness launches via `uvx --from 'hermes-agent[acp,mcp]==0.15.2'` — the `[mcp]` extra is mandatory, without it Hermes cannot connect to the mc MCP bridge (ask_user / send_message) and tool registration fails at connect time.
 
+**Cost reporting (Hermes).** Hermes turns report `cost_usd = 0`. Hermes does not surface its OpenRouter spend over ACP, so the ACP strategy records no cost (it only sets `cost_usd` when the harness sends one, and defaults to `0.0`). The dashboard cost figure is therefore `$0.00` for Hermes agents **by design, not a defect**. This is a known limitation on the Hermes side with no fix on ours; do not synthesize a number. Contrast with the Claude Code adapter, whose reported `cost.amount` is a notional API-equivalent estimate drawn against the Agent SDK quota, also not a real charge.
+
 ### Permission Model
 
 All Claude Code agents default to `bypassPermissions` mode. This grants full

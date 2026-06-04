@@ -24,7 +24,7 @@ def _resolve_harness(request: Any) -> str | None:
     interactive_provider = getattr(agent, "interactive_provider", None) if agent else None
     backend = getattr(agent, "backend", None) if agent else None
 
-    if interactive_provider in {"claude-code", "codex"}:
+    if interactive_provider in {"claude-code", "codex", "hermes"}:
         return interactive_provider
     if getattr(request, "is_cc", False):
         return "claude-code"
