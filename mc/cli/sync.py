@@ -61,10 +61,11 @@ def _run_sync(bridge, agents_dir: Path) -> None:
     _header("Skill distribution")
     try:
         from mc.infrastructure.config import load_config as _lc
+        from mc.infrastructure.skills_loader import BUILTIN_SKILLS_DIR
         from mc.skills import MC_SKILLS_DIR
 
         ws = _lc().workspace_path
-        _distribute_builtin_skills(ws / "skills", MC_SKILLS_DIR)
+        _distribute_builtin_skills(ws / "skills", MC_SKILLS_DIR, BUILTIN_SKILLS_DIR)
         console.print("  [green]✓[/green] Builtin skills distributed to workspace")
         totals["ok"] += 1
     except Exception as exc:

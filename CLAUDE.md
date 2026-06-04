@@ -18,7 +18,6 @@ dashboard/           Next.js app + Convex backend
   components/        Shared UI components (shadcn/ui)
 shared/              Cross-language contracts (workflow spec JSON)
 tests/mc/            Python test suite (pytest)
-vendor/nanobot/      Git subtree — upstream HKUDS/nanobot. DO NOT EDIT without permission
 vendor/claude-code/  Our code — follows project conventions
 agent_docs/          Binding contracts for agents — see "Agent Docs" section below
 _bmad/               BMAD engine — do not edit
@@ -62,37 +61,18 @@ The stack runs via Docker Compose. Source code is bind-mounted for hot reload (N
 
 **Global solutions rule:** Every fix must apply to ALL services (mc, mc-test, future instances). Never solve a problem for one service only. If `mc-test` has a volume mount, env var, or entrypoint fix, the main `mc` service (via `docker-compose.override.yml`) must have it too, and vice versa. Think holistically — test, frontend, backend, database.
 
-### Development Method — BMAD
+### CI/CD — none
 
-All features follow the **BMAD method** (v6.0.1). Use `/bmad-help` to see next steps.
+There is no CI/CD pipeline for this project. Do not wait on, monitor, or block on CI checks when committing or opening PRs. Validate every change locally with `make check` before merging.
 
-| Track | When to use | Entry point |
-|-------|-------------|-------------|
-| **Full BMAD** | New product area, complex multi-system feature, >5 stories, requires PRD + Architecture | Phase 1 or 2 |
-| **Quick Flow** | Bug fixes, small features, clear scope (1–15 stories) | `/bmad-bmm-quick-spec` → `/bmad-bmm-quick-dev` |
+### Development Method — BMAD (TEMPORARILY DISABLED)
 
-**Full BMAD implementation cycle** (follow this order strictly):
-
-1. Create an implementation plan
-2. Create stories → `/@_bmad/bmm/workflows/4-implementation/create-story`
-3. Create a wave plan grouping stories for parallel execution
-4. **Delegate story execution to Sonnet subagents** — NEVER implement stories in the orchestrating session. Always spawn Sonnet (Claude) or GPT-5.4 Medium (Codex) agents via `dev-story`. Each agent receives the story file and implements independently.
-5. Dev agent executes → `/@_bmad/bmm/workflows/4-implementation/dev-story`
-6. **Code review with Opus** → `/@_bmad/bmm/workflows/4-implementation/code-review` — Always use Opus for code review. Reviews must find 3–10 issues.
-7. Run full test suite (`make check`)
-8. Integration test — simulate real service interaction using backend functions
-9. `make docker-test` to spin up an isolated test instance (auto-detects free ports, prints dashboard URL)
-10. Share the dashboard URL with the human for manual testing. Stop with `make docker-test-down` when done.
-
-**MANDATORY AGENT DELEGATION:** The orchestrating agent (Opus) creates stories and reviews code. Implementation is ALWAYS delegated to Sonnet/GPT subagents. This is non-negotiable — it ensures separation of concerns and prevents context pollution.
-
-**Workflow rules:**
-- **Step-file discipline.** Load one step at a time, follow exactly, never skip ahead.
-- **Role boundaries.** Dev agents must not modify architecture decisions. Conflict → halt and escalate.
-- **Validation gates are mandatory.** PRD validation, Implementation Readiness, Code Review (must find 3–10 issues).
-- **Stories must be self-contained.** A fresh agent must implement a story without prior conversation history.
-
-**Artifacts:** `_bmad-output/planning-artifacts/` (PRD, architecture), `_bmad-output/implementation-artifacts/` (stories, sprint status), `_bmad-output/project-context.md` (LLM-optimized rules for workflows).
+> **BMAD is paused in this checkout.** The full BMAD method — tracks, the strict implementation cycle, mandatory agent delegation, and the validation gates — is disabled so the pstack `/poteto-mode` workflow can drive engineering instead. Do NOT enforce BMAD steps, story files, wave plans, or the `dev-story` / `create-story` cycle while this notice is in place.
+>
+> **Restore BMAD:** copy the backup back over this file, then restart the session:
+> `cp ~/.claude/backups/CLAUDE.nanobot-ennio.bmad-backup.md /Users/ennio/Documents/nanobot-ennio/CLAUDE.md`
+>
+> The original BMAD section is preserved verbatim in that backup. Everything else in this file (architecture docs, testing, Docker, worktrees, vendor boundary) still applies.
 
 ### Feature Implementation — Always Use Worktrees
 
@@ -135,7 +115,7 @@ Never add silent fallbacks that mask failures. Fail explicitly with clear errors
 
 ### Vendor Boundary
 
-`vendor/nanobot/` is an upstream git subtree. **Do NOT edit** without explicit permission. `vendor/claude-code/` is our code — follows project conventions.
+`vendor/claude-code/` is our code (the Claude Code backend), follows project conventions. The upstream `vendor/nanobot` subtree has been removed; the runtime is fully mc-owned.
 
 ## Agent Docs — Contracts
 

@@ -1,13 +1,13 @@
 # MC Skills
 
 This directory contains **Mission Control builtin skills** — skills maintained
-as part of the MC codebase (not the upstream nanobot vendor).
+as part of the MC codebase (mc-owned).
 
 ## How It Works
 
 At startup, `sync_skills()` in `mc/gateway.py` calls
 `_distribute_builtin_skills()` which copies skill directories from here (and
-from the nanobot vendor builtins) into the workspace (`~/.open-control/workspace/skills/`).
+from mc/infrastructure/builtin_skills) into the workspace (`~/.open-control/workspace/skills/`).
 
 A subdirectory is recognized as a skill if it contains a `SKILL.md` file.
 
@@ -21,7 +21,7 @@ A subdirectory is recognized as a skill if it contains a `SKILL.md` file.
 
 ## MC Skills vs Vendor Skills
 
-| Aspect        | MC Skills (`mc/skills/`)                    | Vendor Skills (`vendor/nanobot/nanobot/skills/`) |
+| Aspect        | MC Skills (`mc/skills/`)                    | Builtin Skills (`mc/infrastructure/builtin_skills/`) |
 |---------------|---------------------------------------------|--------------------------------------------------|
 | Maintained by | This project (Mission Control)              | Upstream nanobot                                 |
 | Updated via   | Normal commits                              | `git subtree pull`                               |

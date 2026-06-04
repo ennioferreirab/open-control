@@ -96,7 +96,7 @@ Body max: ~500 lines. Use imperative form ("Extract the data", not "This skill e
 |----------|----------|-------|
 | 1 | `{agent_workspace}/skills/{name}/` | Agent-specific overrides |
 | 2 | `~/.open-control/workspace/skills/{name}/` | Global workspace (user-created + distributed builtins) |
-| 3 | `vendor/nanobot/nanobot/skills/{name}/` | Upstream vendor builtins |
+| 3 | `mc/infrastructure/builtin_skills/{name}/` | mc-owned builtin skills (SkillsLoader default) |
 
 Project-specific builtins in `mc/skills/` are distributed to the global workspace at startup.
 
@@ -106,7 +106,7 @@ Project-specific builtins in `mc/skills/` are distributed to the global workspac
 ┌──────────────────────────────────────────────────────────┐
 │  1. DISTRIBUTION  (gateway startup)                      │
 │  _distribute_builtin_skills() in agent_bootstrap.py      │
-│  Copies from mc/skills/ and vendor/nanobot/skills/       │
+│  Copies from mc/skills/ and mc/infrastructure/builtin_skills/ │
 │  → ~/.open-control/workspace/skills/                          │
 │  (preserves existing — never overwrites user edits)      │
 └──────────────────────────────────────────────────────────┘

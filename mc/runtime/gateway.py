@@ -408,10 +408,11 @@ async def main() -> None:
         # Distribute builtin skills to workspace before sync (Story SK.1)
         try:
             from mc.infrastructure.config import load_config as _lc
+            from mc.infrastructure.skills_loader import BUILTIN_SKILLS_DIR
             from mc.skills import MC_SKILLS_DIR
 
             _ws = _lc().workspace_path
-            _distribute_builtin_skills(_ws / "skills", MC_SKILLS_DIR)
+            _distribute_builtin_skills(_ws / "skills", MC_SKILLS_DIR, BUILTIN_SKILLS_DIR)
         except Exception:
             logger.exception("[gateway] Builtin skill distribution failed")
 
