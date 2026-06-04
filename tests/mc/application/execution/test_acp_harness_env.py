@@ -29,17 +29,27 @@ def test_build_harness_env_no_profile_env_returns_static_overrides() -> None:
     assert env == dict(spec.env_overrides)
 
 
-def test_build_harness_env_injects_hermes_home(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HERMES_PROFILES_ROOT", "/profiles")
+def test_build_harness_env_injects_hermes_home(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setenv("HERMES_PROFILES_ROOT", str(tmp_path))
+    (tmp_path / "coder").mkdir()
     spec = get_harness("hermes")
     env = _build_harness_env(spec, profile="coder")
-    assert env["HERMES_HOME"] == "/profiles/coder"
+    assert env["HERMES_HOME"] == str(tmp_path / "coder")
 
 
 def test_build_harness_env_raises_when_profile_required_but_missing() -> None:
     spec = get_harness("hermes")
     with pytest.raises(ValueError, match="requires a profile"):
         _build_harness_env(spec, profile=None)
+
+
+def test_build_harness_env_raises_when_profile_dir_absent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setenv("HERMES_PROFILES_ROOT", str(tmp_path))
+    spec = get_harness("hermes")
+    with pytest.raises(FileNotFoundError, match="not found"):
+        _build_harness_env(spec, profile="never-provisioned")
 
 
 def test_build_harness_env_codex_static_overrides_unchanged() -> None:

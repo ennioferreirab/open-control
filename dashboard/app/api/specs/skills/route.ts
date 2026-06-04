@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-const VALID_PROVIDERS = ["claude-code", "codex"];
+const VALID_PROVIDERS = ["claude-code", "codex", "hermes"];
 const VALID_SOURCES = ["builtin", "workspace"];
 
 export async function POST(request: NextRequest) {

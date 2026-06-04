@@ -21,12 +21,15 @@ Each agent lives in `~/.open-control/agents/{agent_name}/` with a mandatory `con
 | `model` | `string` | no | LLM model ID or `tier:standard-low` etc. |
 | `skills` | `list[str]` | no | Skill names available to this agent (default `[]`) |
 | `soul` | `string` | no | Path to or content of SOUL.md personality override |
-| `backend` | `string` | no | `"claude-code"` (default `"claude-code"`) |
+| `backend` | `string` | no | `"claude-code"` (default), `"codex"`, or `"hermes"` |
+| `profile` | `string` | no | Hermes profile name. Required when `backend: hermes` |
 | `is_system` | `bool` | no | System agents cannot be deleted |
 | `interactive_provider` | `string` | no | `"claude-code"`, `"codex"`, or `"mc"` |
 | `claude_code` | `dict` | no | CC-specific: `permission_mode`, `max_budget_usd`, `max_turns` |
 
 **SOUL.md** is a personality override loaded last in the agent's CLAUDE.md so it takes precedence over all other context.
+
+**Hermes backend.** A Hermes agent is `backend: hermes` plus a `profile`. The profile is Hermes' native multi-agent unit: a state directory (`~/.hermes/profiles/<profile>/`) holding its own `config.yaml` (model + provider + skills), `.env` (provider keys), `SOUL.md`, sessions, and memory. OpenControl selects it by setting `HERMES_HOME` on the adapter subprocess (`hermes-acp` has no profile flag). The model and provider live in the profile, not in OpenControl — so `model` is ignored for Hermes agents. Skills and memory are profile-scoped (Hermes' own), not the OpenControl skill/memory system documented below. Provision a profile with `scripts/hermes-provision-profile.sh <name>`; the `mc` and `mc-test` containers mount `~/.hermes` (mirroring `~/.codex`). The harness launches via `uvx --from 'hermes-agent[acp,mcp]==0.15.2'` — the `[mcp]` extra is mandatory, without it Hermes cannot connect to the mc MCP bridge (ask_user / send_message) and tool registration fails at connect time.
 
 ### Permission Model
 
@@ -36,6 +39,12 @@ file and tool access without interactive approval prompts.
 **Why:** MC agents run autonomously in non-interactive backend sessions. There
 is no human to approve permission requests, so restrictive modes cause agents
 to block indefinitely or flail with workarounds.
+
+The same applies to ACP backends (codex, hermes): `AcpClient.request_permission`
+auto-approves every `allow_once` / `allow_always` request. This is intentional
+for autonomous task execution and is not Hermes-specific — there is no
+human-in-the-loop permission surface on the task path. Hermes tool calls
+(terminal, file writes) therefore run auto-approved inside the container.
 
 **Future concern:** As the platform moves toward multi-tenant or production
 use, revisit this to implement:

@@ -81,7 +81,10 @@ HARNESSES: dict[str, HarnessSpec] = {
     ),
     "hermes": HarnessSpec(
         name="hermes",
-        launch_command=("uvx", "--from", "hermes-agent[acp]==0.15.2", "hermes-acp"),
+        # The [mcp] extra is required: without it Hermes cannot connect to the
+        # stdio MCP servers passed on session/new (the mc bridge that exposes
+        # ask_user / send_message); tool registration then fails at connect time.
+        launch_command=("uvx", "--from", "hermes-agent[acp,mcp]==0.15.2", "hermes-acp"),
         native_acp=True,
         # Model is owned by the Hermes profile (config.yaml), not by OpenControl.
         # No tier mapping, no model env, no per-session set_model.

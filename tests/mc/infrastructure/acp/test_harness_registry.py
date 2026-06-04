@@ -75,7 +75,7 @@ def test_is_registered_harness() -> None:
 def test_get_harness_hermes() -> None:
     spec = get_harness("hermes")
     assert spec.name == "hermes"
-    assert spec.launch_command == ("uvx", "--from", "hermes-agent[acp]==0.15.2", "hermes-acp")
+    assert spec.launch_command == ("uvx", "--from", "hermes-agent[acp,mcp]==0.15.2", "hermes-acp")
     assert spec.native_acp is True
     assert spec.model_env is None
     assert spec.session_param_style == "standard"

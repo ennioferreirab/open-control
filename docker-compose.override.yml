@@ -27,6 +27,10 @@ services:
       # Codex config + ChatGPT subscription credentials (~/.codex/auth.json).
       # Read-write so codex-acp can persist refreshed OAuth tokens.
       - ~/.codex:/root/.codex
+      # Hermes profiles (config.yaml + .env with provider keys, skills, sessions).
+      # Read-write so hermes-acp can persist sessions/memory per profile.
+      # _resolve_profile_home defaults to ~/.hermes/profiles → /root/.hermes/profiles.
+      - ~/.hermes:/root/.hermes
     environment:
       - OPEN_CONTROL_HOME=/workspace
       - OPEN_CONTROL_LIVE_HOME=/live-workspace

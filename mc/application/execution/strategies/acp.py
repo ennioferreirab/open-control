@@ -41,13 +41,20 @@ def _build_harness_env(spec: HarnessSpec, profile: str | None) -> dict[str, str 
 
     Starts from the spec's static env_overrides. When the harness selects
     its profile via an env var (spec.profile_env), inject the resolved
-    profile home. A harness that requires a profile but has none is an error.
+    profile home. A harness that requires a profile but has none, or names a
+    profile directory that does not exist, is an error.
     """
     env = dict(spec.env_overrides)
     if spec.profile_env:
         if not profile:
             raise ValueError(f"Harness {spec.name!r} requires a profile but none was provided")
-        env[spec.profile_env] = _resolve_profile_home(profile)
+        home = _resolve_profile_home(profile)
+        if not os.path.isdir(home):
+            raise FileNotFoundError(
+                f"Hermes profile {profile!r} not found at {home}. Provision it first "
+                "(scripts/hermes-provision-profile.sh or `hermes profile create`)."
+            )
+        env[spec.profile_env] = home
     return env
 
 
