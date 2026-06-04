@@ -166,6 +166,7 @@ export const interactiveSessionControlModeValidator = v.union(
 export const interactiveProviderValidator = v.union(
   v.literal("claude-code"),
   v.literal("codex"),
+  v.literal("hermes"),
   v.literal("mc"),
 );
 export const executionInteractionStateValidator = v.union(

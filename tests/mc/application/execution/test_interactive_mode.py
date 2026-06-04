@@ -62,7 +62,7 @@ def test_resolve_unknown_backend_stays_provider_cli() -> None:
     import os
 
     os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
-    runner_type = resolve_step_runner_type(_request(provider=None, backend="hermes"))
+    runner_type = resolve_step_runner_type(_request(provider=None, backend="unknown-harness"))
 
     assert runner_type == RunnerType.PROVIDER_CLI
 

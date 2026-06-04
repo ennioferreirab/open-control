@@ -68,5 +68,23 @@ def test_claude_code_defaults_unchanged() -> None:
 def test_is_registered_harness() -> None:
     assert is_registered_harness("claude-code") is True
     assert is_registered_harness("codex") is True
-    assert is_registered_harness("hermes") is False
+    assert is_registered_harness("hermes") is True
     assert is_registered_harness(None) is False
+
+
+def test_get_harness_hermes() -> None:
+    spec = get_harness("hermes")
+    assert spec.name == "hermes"
+    assert spec.launch_command == ("uvx", "--from", "hermes-agent[acp]==0.15.2", "hermes-acp")
+    assert spec.native_acp is True
+    assert spec.model_env is None
+    assert spec.session_param_style == "standard"
+    assert spec.model_via_session is False
+    assert spec.profile_env == "HERMES_HOME"
+
+
+def test_hermes_model_tiers_empty() -> None:
+    spec = get_harness("hermes")
+    assert spec.model_tiers == {}
+    assert resolve_model(spec, "high") == "high"
+    assert resolve_model(spec, None) is None
