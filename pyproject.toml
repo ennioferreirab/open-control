@@ -6,7 +6,6 @@ requires-python = ">=3.11"
 license = {text = "MIT"}
 
 dependencies = [
-    "nanobot-ai",
     "claude-code-backend",
     "convex>=0.7.0,<1.0.0",
     "filelock>=3.24.3",
@@ -15,32 +14,30 @@ dependencies = [
 ]
 
 [project.scripts]
-nanobot = "boot:cli"
-open-control = "boot:cli"
+open-control = "mc.cli:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mc", "boot"]
+packages = ["mc"]
 
 [tool.uv.sources]
-nanobot-ai = { path = "vendor/nanobot", editable = true }
 claude-code-backend = { path = "vendor/claude-code", editable = true }
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["vendor/nanobot", "mc/skills"]
+extend-exclude = ["mc/skills"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "RUF"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["mc", "boot"]
-known-third-party = ["convex", "nanobot"]
+known-first-party = ["mc"]
+known-third-party = ["convex"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["N803", "N806"]
@@ -55,7 +52,7 @@ pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
-exclude = ["vendor/nanobot", "mc/skills", "**/__pycache__"]
+exclude = ["mc/skills", "**/__pycache__"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 

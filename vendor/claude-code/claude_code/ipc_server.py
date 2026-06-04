@@ -455,7 +455,7 @@ class MCSocketServer:
         elif action == "add":
             if not message:
                 return {"error": "message is required for add"}
-            from nanobot.cron.types import CronSchedule
+            from mc.runtime.cron.types import CronSchedule
 
             delete_after = False
             if every_seconds:

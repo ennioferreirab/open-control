@@ -25,16 +25,8 @@ from mc.types import AgentData
 
 logger = logging.getLogger(__name__)
 
-# Path to the vendor nanobot skills directory (builtin skills).
-# Try to import the canonical constant from upstream; fall back to the
-# path computed from __file__ so this module keeps working if the
-# vendor package layout changes.
-try:
-    from nanobot.agent.skills import (
-        BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR,  # type: ignore[import]
-    )
-except ImportError:  # pragma: no cover - vendor package not on path
-    _VENDOR_SKILLS_DIR = Path(__file__).parent.parent.parent / "nanobot" / "nanobot" / "skills"
+# Path to the mc-owned builtin skills directory.
+from mc.infrastructure.skills_loader import BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR
 
 # Project root — used to anchor `uv run --project` in hook commands so that
 # hooks work when executed from agent workspaces outside the project tree.
@@ -550,7 +542,7 @@ class CCWorkspaceManager:
     def _build_always_skills_content(self, workspace: Path) -> str:
         """Load always-on skills content for injection into CLAUDE.md."""
         try:
-            from nanobot.agent.skills import SkillsLoader  # type: ignore[import]
+            from mc.infrastructure.skills_loader import SkillsLoader  # type: ignore[import]
 
             loader = SkillsLoader(workspace, global_skills_dir=self._root / "workspace" / "skills")
             always_names = loader.get_always_skills()
@@ -563,7 +555,7 @@ class CCWorkspaceManager:
     def _build_skills_summary(self, workspace: Path, skill_names: list[str]) -> str:
         """Build skills summary from mapped skill symlinks.
 
-        Tries to use SkillsLoader from nanobot.agent.skills for rich XML output;
+        Tries to use SkillsLoader from mc.infrastructure.skills_loader for rich XML output;
         falls back to a simple listing from the .claude/skills/ symlinks.
 
         Args:
@@ -574,7 +566,7 @@ class CCWorkspaceManager:
             Skills summary string, or empty string if no skills.
         """
         try:
-            from nanobot.agent.skills import SkillsLoader  # type: ignore[import]
+            from mc.infrastructure.skills_loader import SkillsLoader  # type: ignore[import]
 
             loader = SkillsLoader(workspace, global_skills_dir=self._root / "workspace" / "skills")
             return loader.build_skills_summary(allowed_names=skill_names)
@@ -714,7 +706,7 @@ class CCWorkspaceManager:
 
         _loader = None
         try:
-            from nanobot.agent.skills import SkillsLoader
+            from mc.infrastructure.skills_loader import SkillsLoader
 
             _loader = SkillsLoader(
                 workspace,
