@@ -152,7 +152,7 @@ class SkillsLoader:
             for s in all_skills:
                 name = s["name"]
                 meta = self.get_skill_metadata(name) or {}
-                nb_meta = self._parse_nanobot_metadata(meta.get("metadata", ""))
+                nb_meta = self._parse_provider_metadata(meta.get("metadata", ""))
                 is_always = nb_meta.get("always") or (
                     meta.get("always", "").lower() == "true" if meta.get("always") else False
                 )
@@ -217,11 +217,11 @@ class SkillsLoader:
                 return content[match.end() :].strip()
         return content
 
-    def _parse_nanobot_metadata(self, raw: str) -> dict:
-        """Parse skill metadata JSON from frontmatter (supports nanobot and openclaw keys)."""
+    def _parse_provider_metadata(self, raw: str) -> dict:
+        """Parse the provider metadata block from skill frontmatter (open-control, with nanobot/openclaw fallback)."""
         try:
             data = json.loads(raw)
-            return data.get("nanobot", data.get("openclaw", {})) if isinstance(data, dict) else {}
+            return (data.get("open-control") or data.get("nanobot") or data.get("openclaw") or {}) if isinstance(data, dict) else {}
         except (json.JSONDecodeError, TypeError):
             return {}
 
@@ -237,16 +237,16 @@ class SkillsLoader:
         return True
 
     def _get_skill_meta(self, name: str) -> dict:
-        """Get nanobot metadata for a skill (cached in frontmatter)."""
+        """Get the provider metadata block for a skill (cached in frontmatter)."""
         meta = self.get_skill_metadata(name) or {}
-        return self._parse_nanobot_metadata(meta.get("metadata", ""))
+        return self._parse_provider_metadata(meta.get("metadata", ""))
 
     def get_always_skills(self) -> list[str]:
         """Get skills marked as always=true that meet requirements."""
         result = []
         for s in self.list_skills(filter_unavailable=True):
             meta = self.get_skill_metadata(s["name"]) or {}
-            skill_meta = self._parse_nanobot_metadata(meta.get("metadata", ""))
+            skill_meta = self._parse_provider_metadata(meta.get("metadata", ""))
             if skill_meta.get("always") or meta.get("always"):
                 result.append(s["name"])
         return result
@@ -322,13 +322,13 @@ class SkillsLoader:
             return None
         return self._get_missing_requirements(meta) or None
 
-    def get_nanobot_metadata(self, name: str) -> dict:
-        """Return parsed nanobot-specific metadata for a skill.
+    def get_provider_metadata(self, name: str) -> dict:
+        """Return the parsed provider-specific metadata block for a skill.
 
         Args:
             name: Skill name.
 
         Returns:
-            Dict of nanobot metadata (empty dict if none).
+            Dict of provider metadata (empty dict if none).
         """
         return self._get_skill_meta(name)

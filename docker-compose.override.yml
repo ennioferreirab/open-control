@@ -3,6 +3,7 @@
 services:
   mc:
     entrypoint: ["/app/scripts/docker-entrypoint-dev.sh"]
+    command: ["--local"]
     volumes:
       # Source code (hot reload)
       - ./mc:/app/mc

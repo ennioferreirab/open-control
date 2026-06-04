@@ -184,7 +184,7 @@ def inject_orientation(
     """Prepend global orientation for non-lead agents.
 
     Returns the prompt with orientation prepended, or None if
-    the agent is a system agent (nanobot) which uses SOUL.md.
+    the agent is a system agent, which uses SOUL.md.
     """
     from mc.infrastructure.orientation import load_orientation
 
