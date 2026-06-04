@@ -1,9 +1,11 @@
 """Composition helpers for the interactive TUI runtime.
 
-.. deprecated::
-    Superseded by the provider CLI runtime (Stories 28.1-28.6). The legacy
-    PTY + WebSocket server wiring is retained while the gateway still boots it.
-    Migrate callers to the provider CLI runtime and remove this module.
+.. note::
+    Step execution moved off this module to the provider CLI / ACP runtimes
+    (Stories 28.1-28.6), but this module is NOT dead. It still serves the live
+    claude-code interactive terminal — the dashboard AgentTerminal connects to
+    the WebSocket server on INTERACTIVE_PORT. The gateway boots it intentionally
+    in run_gateway. Do not delete it while that surface exists.
 """
 
 from __future__ import annotations
