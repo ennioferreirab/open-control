@@ -33,8 +33,9 @@ class AgentRepository:
             "display_name": agent_data.display_name,
             "role": agent_data.role,
             "skills": agent_data.skills,
-            "model": agent_data.model,
         }
+        if agent_data.model is not None:
+            args["model"] = agent_data.model
         if agent_data.prompt:
             args["prompt"] = agent_data.prompt
         if agent_data.soul:

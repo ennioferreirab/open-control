@@ -373,12 +373,12 @@ class TestBuildTaskContext:
         assert "[Source Thread B]" in (req.description or "")
         assert source_a_path in (req.description or "")
         assert source_b_path in (req.description or "")
-        assert str(Path.home() / ".open-control" / "tasks" / "task_a" / "output" / "report-a.md") in (
-            req.description or ""
-        )
-        assert str(Path.home() / ".open-control" / "tasks" / "task_b" / "output" / "report-b.md") in (
-            req.description or ""
-        )
+        assert str(
+            Path.home() / ".open-control" / "tasks" / "task_a" / "output" / "report-a.md"
+        ) in (req.description or "")
+        assert str(
+            Path.home() / ".open-control" / "tasks" / "task_b" / "output" / "report-b.md"
+        ) in (req.description or "")
 
     @pytest.mark.asyncio
     @patch(
@@ -848,7 +848,7 @@ class TestBuildStepContext:
         "mc.application.execution.roster_builder.load_agent_config",
         return_value=(None, None, None),
     )
-    async def test_orchestrator_agent_rerouted(self, mock_config: MagicMock) -> None:
+    async def test_orchestrator_agent_raises_on_direct_step(self, mock_config: MagicMock) -> None:
         bridge = _make_mock_bridge()
         builder = ContextBuilder(bridge)
         step = {
@@ -856,8 +856,8 @@ class TestBuildStepContext:
             "title": "Test step",
             "assigned_agent": "orchestrator-agent",
         }
-        req = await builder.build_step_context("task_123", step)
-        assert req.agent_name == "nanobot"
+        with pytest.raises(RuntimeError, match="cannot execute steps directly"):
+            await builder.build_step_context("task_123", step)
 
 
 # ── CC Execution Context Tests ──────────────────────────────────────────────
