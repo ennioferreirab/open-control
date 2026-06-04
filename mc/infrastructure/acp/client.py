@@ -194,12 +194,20 @@ class AcpClient:
         model: str | None = None,
         mcp_servers: list[Any] | None = None,
         allowed_tools: list[str] | None = None,
+        model_env: str | None = "ANTHROPIC_MODEL",
+        session_param_style: str = "claude_code",
+        model_via_session: bool = False,
+        env_overrides: dict[str, str | None] | None = None,
     ) -> None:
         self._command = command
         self._cwd = cwd
         self._model = model
         self._mcp_servers = mcp_servers
         self._allowed_tools = allowed_tools
+        self._model_env = model_env
+        self._session_param_style = session_param_style
+        self._model_via_session = model_via_session
+        self._env_overrides = env_overrides or {}
         self._session_id: str | None = None
         self._conn: Any = None
         self._ctx: Any = None
@@ -212,8 +220,13 @@ class AcpClient:
 
     async def __aenter__(self) -> AcpClient:
         child_env: dict[str, str] = dict(os.environ)
-        if self._model is not None:
-            child_env["ANTHROPIC_MODEL"] = self._model
+        if self._model is not None and self._model_env:
+            child_env[self._model_env] = self._model
+        for key, value in self._env_overrides.items():
+            if value is None:
+                child_env.pop(key, None)
+            else:
+                child_env[key] = value
 
         self._adapter = _AcpAdapter()
         cmd, *args = self._command
@@ -226,7 +239,11 @@ class AcpClient:
             client_info=_CLIENT_INFO,
         )
         servers = self._mcp_servers or []
-        if self._mcp_servers or self._allowed_tools:
+        if self._session_param_style == "claude_code" and (
+            self._mcp_servers or self._allowed_tools
+        ):
+            # The claude-agent-acp adapter scopes MCP and tools through a
+            # non-standard claudeCode.options block on session/new.
             session_resp = await self._conn.new_session(
                 cwd=self._cwd,
                 mcp_servers=servers,
@@ -238,8 +255,13 @@ class AcpClient:
                 },
             )
         else:
-            session_resp = await self._conn.new_session(cwd=self._cwd, mcp_servers=[])
+            # Standard ACP: MCP servers ride the spec-defined mcpServers field.
+            session_resp = await self._conn.new_session(cwd=self._cwd, mcp_servers=servers)
         self._session_id = session_resp.session_id
+        if self._model is not None and self._model_via_session:
+            # Harnesses without a model env (e.g. Codex) take the model through
+            # an explicit session/set_model after the session exists.
+            await self._conn.set_session_model(model_id=self._model, session_id=self._session_id)
         logger.debug("[acp] session opened session_id=%s", self._session_id)
         return self
 

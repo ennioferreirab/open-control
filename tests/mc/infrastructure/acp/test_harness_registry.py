@@ -31,3 +31,31 @@ def test_resolve_model_passes_through_concrete() -> None:
     spec = get_harness("claude-code")
     assert resolve_model(spec, "anthropic/claude-sonnet-4-6") == "anthropic/claude-sonnet-4-6"
     assert resolve_model(spec, None) is None
+
+
+def test_get_harness_codex() -> None:
+    spec = get_harness("codex")
+    assert spec.name == "codex"
+    assert spec.launch_command == ("npx", "-y", "@zed-industries/codex-acp")
+    assert spec.native_acp is False
+    # Codex has no model env var; it takes the model via session/set_model.
+    assert spec.model_env is None
+    assert spec.model_via_session is True
+    assert spec.session_param_style == "standard"
+    # API-key env must be unset so the ChatGPT subscription credentials win.
+    assert spec.env_overrides == {"OPENAI_API_KEY": None, "CODEX_API_KEY": None}
+
+
+def test_resolve_model_maps_codex_tiers() -> None:
+    spec = get_harness("codex")
+    assert resolve_model(spec, "low") == "gpt-5.4-mini"
+    assert resolve_model(spec, "medium") == "gpt-5.4"
+    assert resolve_model(spec, "high") == "gpt-5.5"
+
+
+def test_claude_code_defaults_unchanged() -> None:
+    spec = get_harness("claude-code")
+    assert spec.model_env == "ANTHROPIC_MODEL"
+    assert spec.session_param_style == "claude_code"
+    assert spec.model_via_session is False
+    assert spec.env_overrides == {}

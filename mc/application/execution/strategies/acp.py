@@ -216,7 +216,9 @@ class AcpRunnerStrategy:
         """Core execution — raises on failure for the outer handler."""
         mc_session_id = f"{request.task_id}-{request.entity_id}"
 
-        spec = get_harness(self._harness)
+        agent = getattr(request, "agent", None)
+        harness_name = getattr(agent, "backend", None) or self._harness
+        spec = get_harness(harness_name)
         command = list(spec.launch_command)
         model = resolve_model(spec, request.model)
 
@@ -252,6 +254,10 @@ class AcpRunnerStrategy:
             model=model,
             mcp_servers=[server],
             allowed_tools=allowed,
+            model_env=spec.model_env,
+            session_param_style=spec.session_param_style,
+            model_via_session=spec.model_via_session,
+            env_overrides=spec.env_overrides,
         ) as client:
             if client.session_id is not None:
                 self._registry.update_provider_session_id(mc_session_id, client.session_id)
