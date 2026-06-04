@@ -95,7 +95,7 @@ fi
 
 # Start the full stack
 if [ "$CONVEX_LOCAL" = true ]; then
-    exec /app/.venv/bin/open-control mc start --local "${MC_EXTRA_ARGS[@]}"
+    exec /app/.venv/bin/open-control start --local "${MC_EXTRA_ARGS[@]}"
 else
-    exec /app/.venv/bin/open-control mc start "${MC_EXTRA_ARGS[@]}"
+    exec /app/.venv/bin/open-control start "${MC_EXTRA_ARGS[@]}"
 fi

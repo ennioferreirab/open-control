@@ -159,8 +159,8 @@ fi
 # ─── Start the stack ─────────────────────────────────────────────
 if [ "$CONVEX_LOCAL" = true ]; then
     echo "[dev] Starting Open Control (local Convex)..."
-    exec /app/.venv/bin/open-control mc start --local "${MC_EXTRA_ARGS[@]}"
+    exec /app/.venv/bin/open-control start --local "${MC_EXTRA_ARGS[@]}"
 else
     echo "[dev] Starting Open Control (cloud Convex)..."
-    exec /app/.venv/bin/open-control mc start "${MC_EXTRA_ARGS[@]}"
+    exec /app/.venv/bin/open-control start "${MC_EXTRA_ARGS[@]}"
 fi
