@@ -89,7 +89,7 @@ class LiteLLMProvider:
         if from_env:
             return from_env
 
-        # 2. Read from nanobot config.json providers section
+        # 2. Read from config.json providers section
         try:
             config_path = get_config_path()
             if not config_path.exists():

@@ -56,12 +56,11 @@ import sys
 
 sys.path.insert(0, ${JSON.stringify(projectRoot)})
 
-from nanobot.mc.agent_assist import (
+from mc.cli.agent_assist import (
     extract_yaml_from_response,
     validate_yaml_content,
-    YAML_GENERATION_PROMPT,
+    generate_agent_yaml,
 )
-from nanobot.mc.provider_factory import create_provider
 
 async def main():
     with open(${JSON.stringify(tmpInput)}, "r") as f:
@@ -81,28 +80,7 @@ async def main():
             feedback = "; ".join(prior_exchanges[:-1])
 
     try:
-        provider, model = create_provider()
-
-        # Build the prompt
-        system = YAML_GENERATION_PROMPT
-        if feedback:
-            system += f"\\n\\nPrevious attempt was rejected. User feedback: {feedback}"
-
-        user_content = f"Create an agent from this description: {description}"
-
-        llm_messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_content},
-        ]
-
-        response = await provider.chat(
-            messages=llm_messages,
-            model=model,
-            temperature=0.7,
-            max_tokens=2048,
-        )
-
-        raw = response.content if hasattr(response, "content") else str(response)
+        raw = await generate_agent_yaml(description, feedback=feedback)
         if not raw or not raw.strip():
             print(json.dumps({"message": "I couldn't generate a configuration. Could you describe the agent in more detail?", "yaml": None}))
             return

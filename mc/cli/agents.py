@@ -249,7 +249,6 @@ def assist_agent():
     from rich.syntax import Syntax
 
     from mc.cli.agent_assist import (
-        build_llm_provider,
         create_agent_workspace,
         extract_yaml_from_response,
         generate_agent_yaml,
@@ -262,13 +261,12 @@ def assist_agent():
         console.print("[red]Description cannot be empty.[/red]")
         raise typer.Exit(1)
 
-    provider = build_llm_provider()
     max_iterations = 3
     feedback: str | None = None
 
     for iteration in range(max_iterations):
         console.print("\nGenerating agent configuration...")
-        raw = asyncio.run(generate_agent_yaml(provider, description, feedback=feedback))
+        raw = asyncio.run(generate_agent_yaml(description, feedback=feedback))
         if not raw.strip():
             console.print("[red]LLM returned an empty response. Try again.[/red]")
             raise typer.Exit(1)

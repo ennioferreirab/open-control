@@ -141,32 +141,33 @@ def _build_response_from_payload(
     )
 
 
+def _messages_to_prompt(system: str, messages: list[dict[str, str]]) -> str:
+    """Flatten a system prompt and conversation turns into one ACP prompt string."""
+    parts = [system]
+    for m in messages:
+        role = m.get("role", "user").capitalize()
+        parts.append(f"{role}: {m.get('content', '')}")
+    return "\n\n".join(parts)
+
+
 async def build_agent_authoring_response(
-    provider: Any,
     messages: list[dict[str, str]],
     current_phase: str,
 ) -> AuthoringResponse:
-    """Call the LLM and return a structured agent authoring response.
+    """Call the ACP utility harness and return a structured agent authoring response.
 
     Args:
-        provider: LLM provider with a .chat() coroutine.
         messages: Conversation history (user/assistant turns).
         current_phase: The current canonical phase for context.
 
     Returns:
         AuthoringResponse with mode=AGENT.
     """
-    llm_messages = [
-        {"role": "system", "content": AUTHORING_SYSTEM_PROMPT_AGENT},
-        *messages,
-    ]
+    from mc.infrastructure.acp.utility import run_utility_turn
+
+    prompt = _messages_to_prompt(AUTHORING_SYSTEM_PROMPT_AGENT, messages)
     try:
-        response = await provider.chat(
-            messages=llm_messages,
-            temperature=0.7,
-            max_tokens=2048,
-        )
-        raw = response.content if hasattr(response, "content") else str(response)
+        raw = await run_utility_turn(prompt, tier="medium")
         payload = _parse_llm_json(raw)
         if payload is None:
             return _make_fallback_response(AuthoringMode.AGENT, current_phase)

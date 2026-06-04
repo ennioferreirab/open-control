@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 import yaml
 
 from mc.cli.agent_assist import (
-    build_llm_provider,
     create_agent_workspace,
     extract_yaml_from_response,
     generate_agent_yaml,
@@ -191,8 +190,7 @@ async def generate_custom_agent(description: str) -> tuple[str | None, list[str]
         ``(yaml_text, errors)`` — yaml_text is the validated YAML string on
         success, errors is a list of human-readable strings on failure.
     """
-    provider = build_llm_provider()
-    raw = await generate_agent_yaml(provider, description)
+    raw = await generate_agent_yaml(description)
     if not raw.strip():
         return None, ["LLM returned an empty response."]
 

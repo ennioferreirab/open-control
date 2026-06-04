@@ -97,45 +97,26 @@ def validate_yaml_content(yaml_text: str) -> tuple[dict | None, list[str]]:
 
 
 async def generate_agent_yaml(
-    provider,
     description: str,
     feedback: str | None = None,
-    model: str | None = None,
 ) -> str:
-    """Use the LLM provider to generate agent YAML.
+    """Generate agent YAML via the ACP utility harness.
 
     Args:
-        provider: An ``LLMProvider`` instance (e.g. ``LiteLLMProvider``).
         description: Natural language description of the desired agent.
         feedback: Optional feedback from a previous rejected attempt.
-        model: Optional model override.
 
     Returns:
         Raw LLM response text (may contain code fences).
     """
+    from mc.infrastructure.acp.utility import run_utility_turn
+
     system = YAML_GENERATION_PROMPT
     if feedback:
         system += f"\n\nPrevious attempt was rejected. User feedback: {feedback}"
 
-    user_content = f"Create an agent from this description: {description}"
-
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user_content},
-    ]
-
-    kwargs: dict = {}
-    if model:
-        kwargs["model"] = model
-
-    response = await provider.chat(
-        messages=messages,
-        temperature=0.7,
-        max_tokens=2048,
-        **kwargs,
-    )
-
-    return response.content or ""
+    prompt = f"{system}\n\nCreate an agent from this description: {description}"
+    return await run_utility_turn(prompt, tier="medium")
 
 
 # ---------------------------------------------------------------------------
@@ -218,40 +199,3 @@ def create_agent_workspace(name: str, yaml_text: str) -> Path:
         pass  # YAML already validated upstream; skip soul on parse error
 
     return config_path
-
-
-# ---------------------------------------------------------------------------
-# Provider factory
-# ---------------------------------------------------------------------------
-
-
-def build_llm_provider():
-    """Build an LLM provider from the configuration.
-
-    Returns:
-        A ``LiteLLMProvider`` instance ready for chat calls.
-
-    Raises:
-        SystemExit: If no provider is configured.
-    """
-    from nanobot.providers.litellm_provider import LiteLLMProvider
-
-    from mc.infrastructure.config import load_config
-
-    config = load_config()
-    provider_cfg = config.get_provider()
-    if provider_cfg is None or not provider_cfg.api_key:
-        raise SystemExit(
-            "No LLM provider configured. "
-            "Set a provider in ~/.nanobot/config.json "
-            "(e.g. providers.anthropic.api_key)."
-        )
-
-    provider_name = config.get_provider_name()
-    return LiteLLMProvider(
-        api_key=provider_cfg.api_key,
-        api_base=provider_cfg.api_base or config.get_api_base(),
-        default_model=config.agents.defaults.model,
-        extra_headers=provider_cfg.extra_headers,
-        provider_name=provider_name,
-    )
