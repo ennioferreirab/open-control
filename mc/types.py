@@ -223,7 +223,7 @@ class ExecutionPlanStep:
     temp_id: str
     title: str
     description: str
-    assigned_agent: str = "claude-code"
+    assigned_agent: str | None = "claude-code"
     blocked_by: list[str] = field(default_factory=list)
     parallel_group: int = 1
     order: int = 1
@@ -366,7 +366,7 @@ class AgentData:
     is_system: bool = False  # System agents cannot be deleted/deactivated
     last_active_at: str | None = None
     id: str | None = None  # Convex _id (populated on read)
-    backend: str = "claude-code"
+    backend: str | None = "claude-code"
     claude_code_opts: ClaudeCodeOpts | None = None
     interactive_provider: str | None = None
 
