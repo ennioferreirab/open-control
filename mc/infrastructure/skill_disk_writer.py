@@ -15,7 +15,7 @@ def write_skill_to_disk(
     always: bool = False,
     metadata: str | None = None,
 ) -> Path:
-    """Write a SKILL.md file to ``~/.nanobot/workspace/skills/<name>/SKILL.md``.
+    """Write a SKILL.md file to ``~/.open-control/workspace/skills/<name>/SKILL.md``.
 
     Creates the directory if it doesn't exist.  Writes atomically via a
     temporary file to avoid partial reads.

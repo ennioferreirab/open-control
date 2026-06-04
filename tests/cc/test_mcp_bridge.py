@@ -688,7 +688,7 @@ class TestSearchMemoryBoardScope:
         ):
             ws = bridge_mod._resolve_memory_workspace()
 
-        expected = Path.home() / ".nanobot" / "boards" / "default" / "agents" / "owl"
+        expected = Path.home() / ".open-control" / "boards" / "default" / "agents" / "owl"
         assert ws == expected
 
     async def test_resolve_memory_workspace_without_board(self):
@@ -703,7 +703,7 @@ class TestSearchMemoryBoardScope:
         ):
             ws = bridge_mod._resolve_memory_workspace()
 
-        expected = Path.home() / ".nanobot" / "agents" / "owl"
+        expected = Path.home() / ".open-control" / "agents" / "owl"
         assert ws == expected
 
     async def test_resolve_memory_workspace_prefers_explicit_env_path(self):

@@ -15,7 +15,7 @@ def test_gateway_sets_env_var_when_setting_present():
     with patch.dict(os.environ, {}, clear=False):
         _sync_embedding_model(bridge)
         assert (
-            os.environ.get("NANOBOT_MEMORY_EMBEDDING_MODEL")
+            os.environ.get("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL")
             == "openrouter/openai/text-embedding-3-small"
         )
 
@@ -24,15 +24,15 @@ def test_gateway_clears_env_var_when_setting_empty():
     from mc.runtime.gateway import _sync_embedding_model
 
     bridge = _make_bridge("")
-    with patch.dict(os.environ, {"NANOBOT_MEMORY_EMBEDDING_MODEL": "old-model"}, clear=False):
+    with patch.dict(os.environ, {"OPEN_CONTROL_MEMORY_EMBEDDING_MODEL": "old-model"}, clear=False):
         _sync_embedding_model(bridge)
-        assert "NANOBOT_MEMORY_EMBEDDING_MODEL" not in os.environ
+        assert "OPEN_CONTROL_MEMORY_EMBEDDING_MODEL" not in os.environ
 
 
 def test_gateway_clears_env_var_when_setting_none():
     from mc.runtime.gateway import _sync_embedding_model
 
     bridge = _make_bridge(None)
-    with patch.dict(os.environ, {"NANOBOT_MEMORY_EMBEDDING_MODEL": "old-model"}, clear=False):
+    with patch.dict(os.environ, {"OPEN_CONTROL_MEMORY_EMBEDDING_MODEL": "old-model"}, clear=False):
         _sync_embedding_model(bridge)
-        assert "NANOBOT_MEMORY_EMBEDDING_MODEL" not in os.environ
+        assert "OPEN_CONTROL_MEMORY_EMBEDDING_MODEL" not in os.environ

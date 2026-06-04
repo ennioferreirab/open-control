@@ -264,10 +264,10 @@ class TestBuildTaskContext:
         self, mock_config: MagicMock
     ) -> None:
         source_a_path = str(
-            Path.home() / ".nanobot" / "tasks" / "task_a" / "attachments" / "source-a.pdf"
+            Path.home() / ".open-control" / "tasks" / "task_a" / "attachments" / "source-a.pdf"
         )
         source_b_path = str(
-            Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "source-b.md"
+            Path.home() / ".open-control" / "tasks" / "task_b" / "output" / "source-b.md"
         )
 
         current_task = {
@@ -373,10 +373,10 @@ class TestBuildTaskContext:
         assert "[Source Thread B]" in (req.description or "")
         assert source_a_path in (req.description or "")
         assert source_b_path in (req.description or "")
-        assert str(Path.home() / ".nanobot" / "tasks" / "task_a" / "output" / "report-a.md") in (
+        assert str(Path.home() / ".open-control" / "tasks" / "task_a" / "output" / "report-a.md") in (
             req.description or ""
         )
-        assert str(Path.home() / ".nanobot" / "tasks" / "task_b" / "output" / "report-b.md") in (
+        assert str(Path.home() / ".open-control" / "tasks" / "task_b" / "output" / "report-b.md") in (
             req.description or ""
         )
 
@@ -931,7 +931,7 @@ class TestCCExecutionContext:
         assert "Task workspace: task" in req.description
         assert "Save ALL output files to: task/output" in req.description
         assert "task/attachments" in req.description
-        assert "/.nanobot/tasks/task_123" not in req.description
+        assert "/.open-control/tasks/task_123" not in req.description
 
     @pytest.mark.asyncio
     @patch(

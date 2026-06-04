@@ -7,7 +7,7 @@ as part of the MC codebase (not the upstream nanobot vendor).
 
 At startup, `sync_skills()` in `mc/gateway.py` calls
 `_distribute_builtin_skills()` which copies skill directories from here (and
-from the nanobot vendor builtins) into the workspace (`~/.nanobot/workspace/skills/`).
+from the nanobot vendor builtins) into the workspace (`~/.open-control/workspace/skills/`).
 
 A subdirectory is recognized as a skill if it contains a `SKILL.md` file.
 

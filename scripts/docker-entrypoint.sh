@@ -16,14 +16,14 @@ if [ -n "${OPEN_CONTROL_HOME:-}" ]; then
 else
     # Legacy: copy from read-only host mounts into container volume
     echo "[entrypoint] Syncing host config into runtime volume..."
-    mkdir -p /root/.nanobot/workspace
+    mkdir -p /root/.open-control/workspace
     for f in config.json secrets.json; do
-        if [ -f "/root/.nanobot-host/$f" ]; then
-            cp "/root/.nanobot-host/$f" "/root/.nanobot/$f"
+        if [ -f "/root/.open-control-host/$f" ]; then
+            cp "/root/.open-control-host/$f" "/root/.open-control/$f"
         fi
     done
-    if [ -d /root/.nanobot-host/workspace ]; then
-        cp -r /root/.nanobot-host/workspace/. /root/.nanobot/workspace/
+    if [ -d /root/.open-control-host/workspace ]; then
+        cp -r /root/.open-control-host/workspace/. /root/.open-control/workspace/
     fi
 fi
 
@@ -95,7 +95,7 @@ fi
 
 # Start the full stack
 if [ "$CONVEX_LOCAL" = true ]; then
-    exec /app/.venv/bin/nanobot mc start --local "${MC_EXTRA_ARGS[@]}"
+    exec /app/.venv/bin/open-control mc start --local "${MC_EXTRA_ARGS[@]}"
 else
-    exec /app/.venv/bin/nanobot mc start "${MC_EXTRA_ARGS[@]}"
+    exec /app/.venv/bin/open-control mc start "${MC_EXTRA_ARGS[@]}"
 fi

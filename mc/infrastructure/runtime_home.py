@@ -8,8 +8,7 @@ from pathlib import Path
 
 OPEN_CONTROL_HOME_ENV = "OPEN_CONTROL_HOME"
 OPEN_CONTROL_LIVE_HOME_ENV = "OPEN_CONTROL_LIVE_HOME"
-NANOBOT_HOME_ENV = "NANOBOT_HOME"
-LEGACY_RUNTIME_HOME = ".nanobot"
+DEFAULT_RUNTIME_HOME = ".open-control"
 LEGACY_LIVE_RUNTIME_SUBDIR = "live-sessions"
 
 _logger = logging.getLogger(__name__)
@@ -22,19 +21,18 @@ _resolved_live_from_env: str | None = None
 def get_runtime_home() -> Path:
     """Return the configured runtime home with Open Control compatibility."""
     global _resolved, _resolved_from_env
-    current_env = os.environ.get(OPEN_CONTROL_HOME_ENV) or os.environ.get(NANOBOT_HOME_ENV)
+    current_env = os.environ.get(OPEN_CONTROL_HOME_ENV)
     if _resolved is not None and _resolved_from_env == current_env:
         return _resolved
 
-    for env_name in (OPEN_CONTROL_HOME_ENV, NANOBOT_HOME_ENV):
-        configured = os.environ.get(env_name)
-        if configured:
-            _resolved = Path(configured).expanduser()
-            _resolved_from_env = configured
-            _logger.info("Runtime home resolved to: %s (source: %s)", _resolved, env_name)
-            return _resolved
+    configured = os.environ.get(OPEN_CONTROL_HOME_ENV)
+    if configured:
+        _resolved = Path(configured).expanduser()
+        _resolved_from_env = configured
+        _logger.info("Runtime home resolved to: %s (source: %s)", _resolved, OPEN_CONTROL_HOME_ENV)
+        return _resolved
 
-    _resolved = Path.home() / LEGACY_RUNTIME_HOME
+    _resolved = Path.home() / DEFAULT_RUNTIME_HOME
     _resolved_from_env = None
     _logger.info("Runtime home resolved to: %s (source: default)", _resolved)
     return _resolved

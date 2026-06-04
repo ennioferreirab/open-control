@@ -30,14 +30,13 @@ def reset_runtime_home_cache() -> None:
 class TestDefaultResolution:
     """Default path when no env vars are set."""
 
-    def test_default_resolves_to_nanobot(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Without any env var, runtime home resolves to ~/.nanobot."""
+    def test_default_resolves_to_open_control(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Without any env var, runtime home resolves to ~/.open-control."""
         from mc.infrastructure.runtime_home import get_runtime_home
 
         monkeypatch.delenv("OPEN_CONTROL_HOME", raising=False)
-        monkeypatch.delenv("NANOBOT_HOME", raising=False)
 
-        assert get_runtime_home() == Path.home() / ".nanobot"
+        assert get_runtime_home() == Path.home() / ".open-control"
 
 
 class TestOpenControlHomeOverride:
@@ -54,40 +53,6 @@ class TestOpenControlHomeOverride:
         monkeypatch.delenv("NANOBOT_HOME", raising=False)
 
         assert get_runtime_home() == Path(custom)
-
-
-class TestNanobotHomeOverride:
-    """NANOBOT_HOME legacy env var override."""
-
-    def test_nanobot_home_override(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """NANOBOT_HOME env var sets the runtime home when OPEN_CONTROL_HOME is absent."""
-        from mc.infrastructure.runtime_home import get_runtime_home
-
-        legacy = str(tmp_path / "legacy-home")
-        monkeypatch.delenv("OPEN_CONTROL_HOME", raising=False)
-        monkeypatch.setenv("NANOBOT_HOME", legacy)
-
-        assert get_runtime_home() == Path(legacy)
-
-
-class TestPrecedence:
-    """OPEN_CONTROL_HOME takes precedence over NANOBOT_HOME."""
-
-    def test_open_control_home_takes_precedence(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """When both env vars are set, OPEN_CONTROL_HOME wins."""
-        from mc.infrastructure.runtime_home import get_runtime_home
-
-        open_control = str(tmp_path / "open-control")
-        nanobot = str(tmp_path / "nanobot")
-        monkeypatch.setenv("OPEN_CONTROL_HOME", open_control)
-        monkeypatch.setenv("NANOBOT_HOME", nanobot)
-
-        result = get_runtime_home()
-
-        assert result == Path(open_control)
-        assert result != Path(nanobot)
 
 
 class TestHelperFunctions:

@@ -95,7 +95,7 @@ Present complete config for final review. Handle last-minute changes.
 
 ## Step 5: Generate & Output
 
-Write files directly to `~/.nanobot/agents/{agent-name}/`:
+Write files directly to `~/.open-control/agents/{agent-name}/`:
 
 **config.yaml:**
 ```yaml

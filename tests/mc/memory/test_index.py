@@ -254,7 +254,7 @@ def test_rebuild_clears_and_reindexes(tmp_path):
 
 
 def test_index_reads_embedding_model_from_env(tmp_path, monkeypatch):
-    monkeypatch.setenv("NANOBOT_MEMORY_EMBEDDING_MODEL", "some-model")
+    monkeypatch.setenv("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL", "some-model")
     from mc.memory.index import MemoryIndex
 
     idx = MemoryIndex(tmp_path)

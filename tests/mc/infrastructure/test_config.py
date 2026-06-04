@@ -20,7 +20,7 @@ class TestAgentsDir:
     def test_agents_dir_under_nanobot(self) -> None:
         from mc.infrastructure.config import AGENTS_DIR
 
-        assert AGENTS_DIR == Path.home() / ".nanobot" / "agents"
+        assert AGENTS_DIR == Path.home() / ".open-control" / "agents"
 
 
 class TestRuntimeHome:
@@ -33,7 +33,6 @@ class TestRuntimeHome:
             os.environ,
             {
                 "OPEN_CONTROL_HOME": str(tmp_path / "open-control"),
-                "NANOBOT_HOME": str(tmp_path / "nanobot"),
             },
             clear=True,
         ):
@@ -42,21 +41,13 @@ class TestRuntimeHome:
             assert runtime_home.get_runtime_home() == tmp_path / "open-control"
             assert runtime_home.get_agents_dir() == tmp_path / "open-control" / "agents"
 
-    def test_falls_back_to_nanobot_home_env_var(self, tmp_path: Path) -> None:
-        import mc.infrastructure.runtime_home as runtime_home
-
-        with patch.dict(os.environ, {"NANOBOT_HOME": str(tmp_path / "nanobot")}, clear=True):
-            importlib.reload(runtime_home)
-
-            assert runtime_home.get_runtime_home() == tmp_path / "nanobot"
-
-    def test_defaults_to_legacy_nanobot_home(self) -> None:
+    def test_defaults_to_open_control_home(self) -> None:
         import mc.infrastructure.runtime_home as runtime_home
 
         with patch.dict(os.environ, {}, clear=True):
             importlib.reload(runtime_home)
 
-            assert runtime_home.get_runtime_home() == Path.home() / ".nanobot"
+            assert runtime_home.get_runtime_home() == Path.home() / ".open-control"
 
 
 class TestResolveConvexUrl:

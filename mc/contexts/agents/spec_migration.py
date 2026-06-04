@@ -170,7 +170,7 @@ def migrate_all(
     and calls migrate_agent() for each valid agent.
 
     Args:
-        agents_dir: Path to the local agents directory (e.g. ~/.nanobot/agents).
+        agents_dir: Path to the local agents directory (e.g. ~/.open-control/agents).
         bridge: ConvexBridge instance for Convex communication.
         dry_run: If True, report planned changes without writing to Convex.
 
@@ -262,7 +262,7 @@ Examples:
         "--agents-dir",
         type=Path,
         default=get_agents_dir(),
-        help="Path to local agents directory (default: ~/.nanobot/agents)",
+        help="Path to local agents directory (default: ~/.open-control/agents)",
     )
     parser.add_argument(
         "--dry-run",

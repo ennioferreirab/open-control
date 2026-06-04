@@ -23,4 +23,4 @@ def _provider_error_action(exc: Exception) -> str:
     msg = str(exc)
     if "Run:" in msg:
         return msg[msg.index("Run:") :]
-    return "Check provider configuration in ~/.nanobot/config.json"
+    return "Check provider configuration in ~/.open-control/config.json"

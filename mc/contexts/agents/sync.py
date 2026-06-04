@@ -66,7 +66,7 @@ class AgentSyncService:
 
     Constructor dependencies:
         bridge: ConvexBridge instance for Convex communication.
-        agents_dir: Path to the local agents directory (~/.nanobot/agents).
+        agents_dir: Path to the local agents directory (~/.open-control/agents).
     """
 
     def __init__(self, bridge: ConvexBridge, agents_dir: Path) -> None:
@@ -323,10 +323,10 @@ class AgentSyncService:
             return
 
         if model:
-            os.environ["NANOBOT_MEMORY_EMBEDDING_MODEL"] = model
+            os.environ["OPEN_CONTROL_MEMORY_EMBEDDING_MODEL"] = model
             logger.info("[agent_sync] Memory embedding model set: %s", model)
         else:
-            os.environ.pop("NANOBOT_MEMORY_EMBEDDING_MODEL", None)
+            os.environ.pop("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL", None)
             logger.info("[agent_sync] Memory embedding model cleared (FTS-only)")
 
         # Persist to memory_settings.json

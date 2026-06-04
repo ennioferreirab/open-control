@@ -230,22 +230,22 @@ class TestSyncEmbeddingModel:
     def test_sets_env_var_when_model_configured(
         self, service: AgentSyncService, bridge: MagicMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Sets NANOBOT_MEMORY_EMBEDDING_MODEL when configured."""
+        """Sets OPEN_CONTROL_MEMORY_EMBEDDING_MODEL when configured."""
         bridge.query.return_value = "text-embedding-3-small"
-        monkeypatch.delenv("NANOBOT_MEMORY_EMBEDDING_MODEL", raising=False)
+        monkeypatch.delenv("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL", raising=False)
 
         service.sync_embedding_model()
-        assert os.environ.get("NANOBOT_MEMORY_EMBEDDING_MODEL") == "text-embedding-3-small"
+        assert os.environ.get("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL") == "text-embedding-3-small"
 
     def test_clears_env_var_when_no_model(
         self, service: AgentSyncService, bridge: MagicMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Clears NANOBOT_MEMORY_EMBEDDING_MODEL when no model configured."""
-        monkeypatch.setenv("NANOBOT_MEMORY_EMBEDDING_MODEL", "old-model")
+        """Clears OPEN_CONTROL_MEMORY_EMBEDDING_MODEL when no model configured."""
+        monkeypatch.setenv("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL", "old-model")
         bridge.query.return_value = None
 
         service.sync_embedding_model()
-        assert "NANOBOT_MEMORY_EMBEDDING_MODEL" not in os.environ
+        assert "OPEN_CONTROL_MEMORY_EMBEDDING_MODEL" not in os.environ
 
 
 class TestSyncSkills:

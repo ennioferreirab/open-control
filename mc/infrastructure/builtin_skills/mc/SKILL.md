@@ -5,37 +5,37 @@ description: "Manage Mission Control tasks. Use when user asks to create tasks, 
 
 # Mission Control Task Management
 
-Use `exec` tool to run `nanobot mc tasks <command>` commands.
+Use `exec` tool to run `open-control mc tasks <command>` commands.
 
 ## Quick Reference
 
 | Command | What it does |
 |---------|-------------|
-| `nanobot mc tasks list` | List all tasks |
-| `nanobot mc tasks list --status inbox` | Filter by status |
-| `nanobot mc tasks list --json` | JSON output (for parsing) |
-| `nanobot mc tasks get <id>` | Show task details + thread |
-| `nanobot mc tasks get <id> --json` | Task details as JSON |
-| `nanobot mc tasks create "Title"` | Create basic task |
-| `nanobot mc tasks create "Title" -d "Description"` | With description |
-| `nanobot mc tasks create "Title" --manual` | Human/manual task |
-| `nanobot mc tasks create "Title" --trust-level human_approved` | Requires human approval |
-| `nanobot mc tasks create "Title" --agent secretary` | Assign to agent |
-| `nanobot mc tasks create "Title" --supervision-mode supervised` | Agent creates plan first |
-| `nanobot mc tasks update-status <id> <status>` | Change status (state machine) |
-| `nanobot mc tasks update-status <id> assigned --agent orchestrator-agent` | Assign to agent |
-| `nanobot mc tasks send-message <id> "content"` | Post comment to thread |
-| `nanobot mc tasks update-title <id> "New Title"` | Edit title |
-| `nanobot mc tasks update-description <id> "New desc"` | Edit description |
-| `nanobot mc tasks update-tags <id> "tag1,tag2"` | Set tags |
-| `nanobot mc tasks delete <id>` | Soft-delete |
-| `nanobot mc tasks restore <id>` | Restore deleted task |
-| `nanobot mc tasks restore <id> --mode previous` | Restore to previous state |
-| `nanobot mc tasks approve <id>` | Approve reviewed task → done |
-| `nanobot mc tasks deny <id> "reason"` | Deny reviewed task (stays in review) |
-| `nanobot mc tasks pause <id>` | Pause running task |
-| `nanobot mc tasks resume <id>` | Resume paused task |
-| `nanobot mc tasks manual-move <id> <status>` | Move manual task (bypasses state machine) |
+| `open-control mc tasks list` | List all tasks |
+| `open-control mc tasks list --status inbox` | Filter by status |
+| `open-control mc tasks list --json` | JSON output (for parsing) |
+| `open-control mc tasks get <id>` | Show task details + thread |
+| `open-control mc tasks get <id> --json` | Task details as JSON |
+| `open-control mc tasks create "Title"` | Create basic task |
+| `open-control mc tasks create "Title" -d "Description"` | With description |
+| `open-control mc tasks create "Title" --manual` | Human/manual task |
+| `open-control mc tasks create "Title" --trust-level human_approved` | Requires human approval |
+| `open-control mc tasks create "Title" --agent secretary` | Assign to agent |
+| `open-control mc tasks create "Title" --supervision-mode supervised` | Agent creates plan first |
+| `open-control mc tasks update-status <id> <status>` | Change status (state machine) |
+| `open-control mc tasks update-status <id> assigned --agent orchestrator-agent` | Assign to agent |
+| `open-control mc tasks send-message <id> "content"` | Post comment to thread |
+| `open-control mc tasks update-title <id> "New Title"` | Edit title |
+| `open-control mc tasks update-description <id> "New desc"` | Edit description |
+| `open-control mc tasks update-tags <id> "tag1,tag2"` | Set tags |
+| `open-control mc tasks delete <id>` | Soft-delete |
+| `open-control mc tasks restore <id>` | Restore deleted task |
+| `open-control mc tasks restore <id> --mode previous` | Restore to previous state |
+| `open-control mc tasks approve <id>` | Approve reviewed task → done |
+| `open-control mc tasks deny <id> "reason"` | Deny reviewed task (stays in review) |
+| `open-control mc tasks pause <id>` | Pause running task |
+| `open-control mc tasks resume <id>` | Resume paused task |
+| `open-control mc tasks manual-move <id> <status>` | Move manual task (bypasses state machine) |
 
 ## Task Statuses
 
@@ -93,72 +93,72 @@ Create with `--manual`. Human-only tasks with no agent assignment.
 
 ### Create a task for an agent
 ```bash
-exec("nanobot mc tasks create 'Summarize weekly report' -d 'Read emails and create summary' --agent secretary")
+exec("open-control mc tasks create 'Summarize weekly report' -d 'Read emails and create summary' --agent secretary")
 ```
 
 ### Create a task that needs my approval
 ```bash
-exec("nanobot mc tasks create 'Deploy to production' --trust-level human_approved")
+exec("open-control mc tasks create 'Deploy to production' --trust-level human_approved")
 ```
 
 ### Create a supervised task (plan first)
 ```bash
-exec("nanobot mc tasks create 'Refactor auth module' --supervision-mode supervised --agent orchestrator-agent")
+exec("open-control mc tasks create 'Refactor auth module' --supervision-mode supervised --agent orchestrator-agent")
 ```
 
 ### Create a personal TODO (human task)
 ```bash
-exec("nanobot mc tasks create 'Buy groceries' --manual")
+exec("open-control mc tasks create 'Buy groceries' --manual")
 ```
 
 ### Check what's happening
 ```bash
-exec("nanobot mc tasks list")
-exec("nanobot mc tasks list --status in_progress")
+exec("open-control mc tasks list")
+exec("open-control mc tasks list --status in_progress")
 ```
 
 ### Get task details
 ```bash
-exec("nanobot mc tasks get <id>")
+exec("open-control mc tasks get <id>")
 ```
 
 ### Send feedback on a task
 ```bash
-exec("nanobot mc tasks send-message <id> 'Please also include the sales numbers'")
+exec("open-control mc tasks send-message <id> 'Please also include the sales numbers'")
 ```
 
 ### Approve completed work
 ```bash
-exec("nanobot mc tasks approve <id>")
+exec("open-control mc tasks approve <id>")
 ```
 
 ### Deny and give feedback
 ```bash
-exec("nanobot mc tasks deny <id> 'Missing error handling for edge cases'")
+exec("open-control mc tasks deny <id> 'Missing error handling for edge cases'")
 ```
 
 ### Pause and resume a task
 ```bash
-exec("nanobot mc tasks pause <id>")
-exec("nanobot mc tasks resume <id>")
+exec("open-control mc tasks pause <id>")
+exec("open-control mc tasks resume <id>")
 ```
 
 ### Delete and restore
 ```bash
-exec("nanobot mc tasks delete <id>")
-exec("nanobot mc tasks restore <id>")
+exec("open-control mc tasks delete <id>")
+exec("open-control mc tasks restore <id>")
 ```
 
 ### Move a manual task
 ```bash
-exec("nanobot mc tasks manual-move <id> done")
+exec("open-control mc tasks manual-move <id> done")
 ```
 
 ## Task IDs
 
 Task IDs are Convex document IDs (e.g., `jd7abc123xyz`). Get them from:
-- `nanobot mc tasks list` (ID column)
-- `nanobot mc tasks list --json` (id field)
+- `open-control mc tasks list` (ID column)
+- `open-control mc tasks list --json` (id field)
 
 ## Important Notes
 

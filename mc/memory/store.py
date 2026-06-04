@@ -29,7 +29,7 @@ class HybridMemoryStore(MemoryStore):
         settings = self._read_settings()
         model = (
             embedding_model
-            or os.environ.get("NANOBOT_MEMORY_EMBEDDING_MODEL")
+            or os.environ.get("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL")
             or settings.get("embedding_model")
             or None
         )
@@ -45,7 +45,7 @@ class HybridMemoryStore(MemoryStore):
 
     @staticmethod
     def _read_settings() -> dict:
-        """Read memory settings from ~/.nanobot/memory_settings.json."""
+        """Read memory settings from ~/.open-control/memory_settings.json."""
         try:
             settings_path = get_runtime_path("memory_settings.json")
             if not settings_path.exists():

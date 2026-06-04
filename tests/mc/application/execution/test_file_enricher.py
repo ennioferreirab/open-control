@@ -103,7 +103,7 @@ class TestResolveTaskDirs:
 
     def test_uses_nanobot_tasks_dir(self) -> None:
         files_dir, _ = resolve_task_dirs("task_123")
-        assert ".nanobot/tasks/" in files_dir
+        assert ".open-control/tasks/" in files_dir
 
 
 class TestResolveThreadJournalPaths:

@@ -136,7 +136,7 @@ Server → Client:  {<response>}\n
 
 - `ask_user` — blocks until user replies in dashboard. Posts question to task thread via Convex, registers an `asyncio.Future` in `AskUserRegistry`, transitions task to `review` with `review_phase="execution_pause"`.
 - `delegate_task` — self-delegation guard (agent cannot delegate to itself). Creates task via `bridge.mutation("tasks:create", ...)`. Title is silently truncated to 120 chars from the `description` field.
-- `send_message` — posts to the task thread via `bridge.send_message()` when `task_id` + bridge are available. Media files copied to `~/.nanobot/tasks/{id}/output/`.
+- `send_message` — posts to the task thread via `bridge.send_message()` when `task_id` + bridge are available. Media files copied to `~/.open-control/tasks/{id}/output/`.
 
 ### 1.4 Client Implementations
 
@@ -472,7 +472,7 @@ The CC bridge is a **stdio MCP server** launched as a subprocess by the agent ru
         "TASK_ID": "abc123...",
         "CONVEX_URL": "http://localhost:3210",
         "CONVEX_ADMIN_KEY": "...",
-        "MEMORY_WORKSPACE": "~/.nanobot/agents/researcher/",
+        "MEMORY_WORKSPACE": "~/.open-control/agents/researcher/",
         "BOARD_NAME": "default"
       }
     }
@@ -922,7 +922,7 @@ All routes under `dashboard/app/api/`. These handle operations requiring server-
 
 | Method | Route | Backend |
 |--------|-------|---------|
-| `POST` | `/api/tasks/[taskId]/files` | Writes to `~/.nanobot/tasks/{id}/attachments/` (max 10MB) |
+| `POST` | `/api/tasks/[taskId]/files` | Writes to `~/.open-control/tasks/{id}/attachments/` (max 10MB) |
 | `DELETE` | `/api/tasks/[taskId]/files` | Deletes from `attachments/` only |
 | `GET` | `/api/tasks/[taskId]/files/[subfolder]/[filename]` | Serves from `attachments/` or `output/` (path-traversal-safe) |
 | `GET/POST` | `/api/boards/[boardName]/artifacts` | List / upload board artifacts |
@@ -932,7 +932,7 @@ All routes under `dashboard/app/api/`. These handle operations requiring server-
 
 | Method | Route | Backend |
 |--------|-------|---------|
-| `POST` | `/api/agents/create` | Creates `config.yaml` + `SOUL.md` in `~/.nanobot/agents/{name}/` |
+| `POST` | `/api/agents/create` | Creates `config.yaml` + `SOUL.md` in `~/.open-control/agents/{name}/` |
 | `PUT` | `/api/agents/[name]/config` | Reads, merges, writes agent YAML |
 | `GET/PUT` | `/api/agents/[name]/memory/[file]` | Read/write `MEMORY.md` or `HISTORY.md` |
 | `POST` | `/api/agents/assist` | *Deprecated* — LLM-generates YAML config from chat transcript (Python subprocess) |
@@ -956,9 +956,9 @@ All routes under `dashboard/app/api/`. These handle operations requiring server-
 | Method | Route | Backend |
 |--------|-------|---------|
 | `POST` | `/api/authoring/agent-wizard` | Python subprocess → LLM-driven agent authoring |
-| `GET` | `/api/settings/global-orientation-default` | Reads `~/.nanobot/mc/agent-orientation.md` |
-| `GET` | `/api/channels` | Reads `~/.nanobot/config.json` |
-| `GET/DELETE/PATCH` | `/api/cron[/jobId]` | Reads/writes `~/.nanobot/cron/jobs.json` |
+| `GET` | `/api/settings/global-orientation-default` | Reads `~/.open-control/mc/agent-orientation.md` |
+| `GET` | `/api/channels` | Reads `~/.open-control/config.json` |
+| `GET/DELETE/PATCH` | `/api/cron[/jobId]` | Reads/writes `~/.open-control/cron/jobs.json` |
 | `POST` | `/api/terminal/launch` | Spawns OS terminal running `claude` CLI |
 
 ### 6.4 WebSocket (Interactive Terminal)
@@ -1053,7 +1053,7 @@ User writes "@researcher summarize this"
               negotiable→PLAN_CHAT, active+assigned→FOLLOW_UP, default→COMMENT
   → MENTION → handle_all_mentions()
     → extract_mentions() via regex: r"@([\w][\w\-]*)"
-    → filter to agents with config.yaml in ~/.nanobot/agents/
+    → filter to agents with config.yaml in ~/.open-control/agents/
     → asyncio.gather(handle_mention(agent1), handle_mention(agent2))
       → load agent YAML, resolve tier, inject global orientation
       → build full prompt with task context + thread history

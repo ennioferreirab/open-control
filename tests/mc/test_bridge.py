@@ -1002,7 +1002,7 @@ class TestCreateTaskDirectory:
         bridge = ConvexBridge("https://test.convex.cloud")
         bridge.create_task_directory("jd7abc123xyz")
 
-        expected_base = Path.home() / ".nanobot" / "tasks" / "jd7abc123xyz"
+        expected_base = Path.home() / ".open-control" / "tasks" / "jd7abc123xyz"
         mock_makedirs.assert_any_call(expected_base / "attachments", exist_ok=True)
         mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)
         assert mock_makedirs.call_count == 2
@@ -1014,7 +1014,7 @@ class TestCreateTaskDirectory:
         bridge = ConvexBridge("https://test.convex.cloud")
         bridge.create_task_directory("abc|def/ghi")
 
-        expected_base = Path.home() / ".nanobot" / "tasks" / "abc_def_ghi"
+        expected_base = Path.home() / ".open-control" / "tasks" / "abc_def_ghi"
         mock_makedirs.assert_any_call(expected_base / "attachments", exist_ok=True)
         mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)
 
@@ -1073,6 +1073,6 @@ class TestCreateTaskDirectory:
         bridge = ConvexBridge("https://test.convex.cloud")
         bridge.create_task_directory("task-abc-123")
 
-        expected_base = Path.home() / ".nanobot" / "tasks" / "task-abc-123"
+        expected_base = Path.home() / ".open-control" / "tasks" / "task-abc-123"
         mock_makedirs.assert_any_call(expected_base / "attachments", exist_ok=True)
         mock_makedirs.assert_any_call(expected_base / "output", exist_ok=True)

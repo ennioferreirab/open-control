@@ -393,10 +393,10 @@ def _sync_embedding_model(bridge: ConvexBridge) -> None:
         logger.warning("[gateway] Failed to read memory_embedding_model setting")
         return
     if model:
-        os.environ["NANOBOT_MEMORY_EMBEDDING_MODEL"] = model
+        os.environ["OPEN_CONTROL_MEMORY_EMBEDDING_MODEL"] = model
         logger.info("[gateway] Memory embedding model set: %s", model)
     else:
-        os.environ.pop("NANOBOT_MEMORY_EMBEDDING_MODEL", None)
+        os.environ.pop("OPEN_CONTROL_MEMORY_EMBEDDING_MODEL", None)
         logger.info("[gateway] Memory embedding model cleared (FTS-only)")
 
     # Persist to memory_settings.json for external consumers

@@ -228,7 +228,7 @@ def resolve_tier(
 def build_agent_roster() -> str:
     """Build a markdown roster of all available agents.
 
-    Reads ~/.nanobot/agents/ config files. Excludes system agents
+    Reads ~/.open-control/agents/ config files. Excludes system agents
     and orchestrator-agent.
     """
     from mc.infrastructure.agents.yaml_validator import validate_agent_file

@@ -265,8 +265,8 @@ class TaskRepository:
         """Create the filesystem directory structure for a task.
 
         Creates:
-            ~/.nanobot/tasks/{safe_task_id}/attachments/
-            ~/.nanobot/tasks/{safe_task_id}/output/
+            ~/.open-control/tasks/{safe_task_id}/attachments/
+            ~/.open-control/tasks/{safe_task_id}/output/
 
         Idempotent -- no error if directories already exist.
         On OSError, logs an activity event and continues (does not raise).
