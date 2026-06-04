@@ -136,7 +136,6 @@ class TestClaudeMdGeneration:
         assert "mcp__mc__ask_user" in content
         assert "mcp__mc__send_message" in content
         assert "mcp__mc__delegate_task" in content
-        assert "mcp__mc__ask_agent" in content
 
     def test_claude_md_contains_ask_user_warning(self, tmp_path: Path) -> None:
         """The IMPORTANT warning about AskUserQuestion must be present."""

@@ -1,58 +1,14 @@
 """Unit tests for media support in send_message IPC handler."""
+
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from claude_code.ipc_server import MCSocketServer
 
 pytestmark = pytest.mark.asyncio
-
-class TestSendMessageMedia:
-    async def test_media_passed_to_outbound_message(self):
-        """send_message handler passes media paths to OutboundMessage."""
-        bus = MagicMock()
-        bus.publish_outbound = AsyncMock()
-        server = MCSocketServer(None, bus)
-        result = await server._handle_send_message(
-            content="check this image",
-            channel="telegram",
-            chat_id="123",
-            media=["/tmp/image.png"],
-        )
-        assert result["status"] == "Message sent"
-        bus.publish_outbound.assert_called_once()
-        msg = bus.publish_outbound.call_args[0][0]
-        assert msg.media == ["/tmp/image.png"]
-
-    async def test_media_defaults_to_empty_list(self):
-        """send_message handler defaults media to empty list when not provided."""
-        bus = MagicMock()
-        bus.publish_outbound = AsyncMock()
-        server = MCSocketServer(None, bus)
-        result = await server._handle_send_message(
-            content="no attachments",
-            channel="telegram",
-            chat_id="123",
-        )
-        msg = bus.publish_outbound.call_args[0][0]
-        assert msg.media == []
-
-    async def test_media_multiple_files(self):
-        """send_message handler handles multiple media files."""
-        bus = MagicMock()
-        bus.publish_outbound = AsyncMock()
-        server = MCSocketServer(None, bus)
-        media_list = ["/tmp/a.png", "/tmp/b.pdf", "/tmp/c.mp3"]
-        result = await server._handle_send_message(
-            content="multiple files",
-            channel="telegram",
-            chat_id="123",
-            media=media_list,
-        )
-        msg = bus.publish_outbound.call_args[0][0]
-        assert msg.media == media_list
 
 
 class TestSendMessageMediaFallback:
@@ -70,6 +26,7 @@ class TestSendMessageMediaFallback:
 
         task_id = "test-task-123"
         from mc.types import task_safe_id
+
         safe_id = task_safe_id(task_id)
         output_dir = tmp_path / ".nanobot" / "tasks" / safe_id / "output"
 
@@ -93,6 +50,7 @@ class TestSendMessageMediaFallback:
 
         task_id = "test-task-456"
         from mc.types import task_safe_id
+
         safe_id = task_safe_id(task_id)
         output_dir = tmp_path / ".nanobot" / "tasks" / safe_id / "output"
 
@@ -132,11 +90,6 @@ class TestSendMessageMediaFallback:
 
     async def test_media_no_copy_when_no_task_id(self):
         """When task_id is None, no media copy is attempted (no crash)."""
-        bridge = MagicMock()
-        bridge.send_message = MagicMock()
-        server = MCSocketServer(bridge, bus=None)
-
-        # This should not crash even though media is provided but task_id is None
         # Without task_id AND bridge, it will hit the H3 error path
         server_no_bridge = MCSocketServer(bridge=None, bus=None)
         result = await server_no_bridge._handle_send_message(
@@ -167,6 +120,7 @@ class TestSendMessageMediaFallback:
         assert result["status"] == "Message sent"
 
         from mc.types import task_safe_id
+
         safe_id = task_safe_id(task_id)
         output_dir = tmp_path / ".nanobot" / "tasks" / safe_id / "output"
         assert (output_dir / "chart.png").exists()

@@ -282,64 +282,6 @@ class TestDelegateTaskTool:
 
 
 # ---------------------------------------------------------------------------
-# Test ask_agent tool
-# ---------------------------------------------------------------------------
-
-
-class TestAskAgentTool:
-    async def test_ask_agent_returns_response(self):
-        """ask_agent returns the IPC response string."""
-        import mc.runtime.mcp.bridge as bridge_mod
-
-        mock_ipc = _make_mock_ipc({"ask_agent": {"response": "The answer is 42."}})
-
-        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-            result = await bridge_mod.call_tool(
-                "ask_agent", {"agent_name": "researcher", "question": "What is 6*7?"}
-            )
-
-        assert result[0].text == "The answer is 42."
-
-    async def test_ask_agent_error_response(self):
-        """ask_agent surfaces IPC errors in the result text."""
-        import mc.runtime.mcp.bridge as bridge_mod
-
-        mock_ipc = _make_mock_ipc({"ask_agent": {"error": "Agent 'ghost' not found."}})
-
-        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-            result = await bridge_mod.call_tool(
-                "ask_agent", {"agent_name": "ghost", "question": "hello?"}
-            )
-
-        assert "Error" in result[0].text
-        assert "ghost" in result[0].text
-
-    async def test_ask_agent_passes_caller_and_task(self):
-        """ask_agent passes AGENT_NAME and TASK_ID to IPC."""
-        import mc.runtime.mcp.bridge as bridge_mod
-
-        received: dict = {}
-
-        async def capture(method, params):
-            received.update(params)
-            return {"response": "ok"}
-
-        mock_ipc = MagicMock()
-        mock_ipc.request = capture
-
-        with patch.object(bridge_mod, "AGENT_NAME", "alice"):
-            with patch.object(bridge_mod, "TASK_ID", "task-99"):
-                with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-                    await bridge_mod.call_tool(
-                        "ask_agent",
-                        {"agent_name": "bob", "question": "how?"},
-                    )
-
-        assert received["caller_agent"] == "alice"
-        assert received["task_id"] == "task-99"
-
-
-# ---------------------------------------------------------------------------
 # Test list_tools
 # ---------------------------------------------------------------------------
 
@@ -356,7 +298,6 @@ class TestListTools:
             "ask_user",
             "send_message",
             "delegate_task",
-            "ask_agent",
             "cron",
             "search_memory",
             "create_agent_spec",

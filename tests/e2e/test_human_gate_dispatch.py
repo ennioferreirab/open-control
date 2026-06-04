@@ -277,4 +277,4 @@ class TestHumanGateDispatch:
         assert approve_step is not None
         assert approve_step["status"] == "completed"
 
-        print(f"\n  SUCCESS: All 3 steps completed, task is done.")
+        print("\n  SUCCESS: All 3 steps completed, task is done.")

@@ -12,7 +12,6 @@ import pytest
 
 EXPECTED_MC_TOOLS = {
     "ask_user",
-    "ask_agent",
     "delegate_task",
     "send_message",
     "cron",
@@ -193,20 +192,6 @@ class TestMCMcpBridgeCallTool:
 
         assert len(result) == 1
         assert "t1" in result[0].text or "created" in result[0].text
-
-    async def test_ask_agent_forwarded(self):
-        """ask_agent is forwarded to IPC."""
-        import mc.runtime.mcp.bridge as bridge_mod
-
-        mock_ipc = _make_mock_ipc({"ask_agent": {"response": "I am fine."}})
-
-        with patch.object(bridge_mod, "_ipc_client", mock_ipc):
-            result = await bridge_mod.call_tool(
-                "ask_agent", {"agent_name": "helper", "question": "How are you?"}
-            )
-
-        assert len(result) == 1
-        assert result[0].text == "I am fine."
 
     async def test_cron_forwarded(self):
         """cron is forwarded to IPC."""

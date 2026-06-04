@@ -31,8 +31,8 @@ import time
 from pathlib import Path
 
 import pytest
+from claude_code.workspace import CCWorkspaceManager
 
-from claude_code.workspace import CCWorkspaceManager, sync_workspace_back
 from mc.types import AgentData, task_safe_id
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(180)]

@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
 # Native tool names that overlap with the Phase 1 MCP surface and must be
 # hidden in MC runtime so the model sees only one canonical surface.
 # ---------------------------------------------------------------------------
-_MC_OVERLAPPING_NATIVE_TOOLS = frozenset(
-    {"ask_user", "ask_agent", "delegate_task", "message", "cron"}
-)
+_MC_OVERLAPPING_NATIVE_TOOLS = frozenset({"ask_user", "delegate_task", "message", "cron"})
 
 
 def _build_mc_mcp_servers(

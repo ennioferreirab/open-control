@@ -1,6 +1,7 @@
 import json
 
 import pytest
+
 from mc.runtime.cron.service import CronService
 from mc.runtime.cron.types import CronSchedule
 

@@ -21,12 +21,10 @@ from datetime import datetime
 from pathlib import Path
 
 from claude_code.types import WorkspaceContext
+from mc.infrastructure.skills_loader import BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR
 from mc.types import AgentData
 
 logger = logging.getLogger(__name__)
-
-# Path to the mc-owned builtin skills directory.
-from mc.infrastructure.skills_loader import BUILTIN_SKILLS_DIR as _VENDOR_SKILLS_DIR
 
 # Project root — used to anchor `uv run --project` in hook commands so that
 # hooks work when executed from agent workspaces outside the project tree.
@@ -40,7 +38,6 @@ Use these tools via the `mcp__mc__` prefix:
 - **mcp__mc__ask_user** — Ask the human user a question or a short structured questionnaire and wait for their reply.
 - **mcp__mc__send_message** — Send a message to another agent or to the task thread.
 - **mcp__mc__delegate_task** — Delegate a subtask to a specialist agent.
-- **mcp__mc__ask_agent** — Ask a specific agent a question and get a reply.
 - **mcp__mc__cron** — Schedule reminders and recurring tasks (add/list/remove).
 - **mcp__mc__search_memory** — Search agent memory and history for relevant past events and decisions.
 - **mcp__mc__create_agent_spec** — Create a V2 agent specification in Mission Control.

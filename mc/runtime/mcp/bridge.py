@@ -204,28 +204,6 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             ]
         return [TextContent(type="text", text=result.get("answer", ""))]
 
-    elif name == "ask_agent":
-        try:
-            result = await ipc.request(
-                "ask_agent",
-                {
-                    "agent_name": arguments["agent_name"],
-                    "question": arguments["question"],
-                    "caller_agent": AGENT_NAME,
-                    "task_id": TASK_ID,
-                },
-            )
-        except ConnectionError:
-            return [
-                TextContent(
-                    type="text",
-                    text="Mission Control not reachable. Is the gateway running?",
-                )
-            ]
-        if "error" in result:
-            return [TextContent(type="text", text=f"Error: {result['error']}")]
-        return [TextContent(type="text", text=result.get("response", ""))]
-
     elif name == "delegate_task":
         try:
             result = await ipc.request(
