@@ -58,7 +58,7 @@ class AgentConfig(BaseModel):
     def validate_backend(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        valid = {"claude-code"}
+        valid = {"claude-code", "codex"}
         if v not in valid:
             raise ValueError(f"Invalid backend '{v}'. Valid options: {', '.join(sorted(valid))}")
         return v

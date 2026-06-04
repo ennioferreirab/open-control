@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from mc.infrastructure.acp.harness_registry import get_harness, resolve_model
+from mc.infrastructure.acp.harness_registry import (
+    get_harness,
+    is_registered_harness,
+    resolve_model,
+)
 
 
 def test_get_harness_claude_code() -> None:
@@ -59,3 +63,10 @@ def test_claude_code_defaults_unchanged() -> None:
     assert spec.session_param_style == "claude_code"
     assert spec.model_via_session is False
     assert spec.env_overrides == {}
+
+
+def test_is_registered_harness() -> None:
+    assert is_registered_harness("claude-code") is True
+    assert is_registered_harness("codex") is True
+    assert is_registered_harness("hermes") is False
+    assert is_registered_harness(None) is False

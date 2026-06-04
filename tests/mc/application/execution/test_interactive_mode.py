@@ -29,12 +29,40 @@ def _request(
     )
 
 
-def test_resolve_step_runner_type_prefers_provider_cli_for_supported_agents() -> None:
-    """Codex stays on PROVIDER_CLI regardless of env."""
+def test_resolve_codex_interactive_provider_routes_to_acp() -> None:
+    """A codex agent now runs through ACP (codex-acp harness)."""
     import os
 
     os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
-    runner_type = resolve_step_runner_type(_request(provider="codex"))
+    runner_type = resolve_step_runner_type(_request(provider="codex", backend="codex"))
+
+    assert runner_type == RunnerType.ACP
+
+
+def test_resolve_codex_backend_routes_to_acp() -> None:
+    """backend=codex alone (no interactive_provider) routes to ACP."""
+    import os
+
+    os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
+    runner_type = resolve_step_runner_type(_request(provider=None, backend="codex"))
+
+    assert runner_type == RunnerType.ACP
+
+
+def test_resolve_codex_ignores_tui_escape_hatch() -> None:
+    """The TUI hatch is claude-code-only; codex still resolves to ACP."""
+    with patch.dict("os.environ", {"MC_INTERACTIVE_EXECUTION_MODE": "interactive-tui"}):
+        runner_type = resolve_step_runner_type(_request(provider="codex", backend="codex"))
+
+    assert runner_type == RunnerType.ACP
+
+
+def test_resolve_unknown_backend_stays_provider_cli() -> None:
+    """A backend that names no registered harness falls to PROVIDER_CLI."""
+    import os
+
+    os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
+    runner_type = resolve_step_runner_type(_request(provider=None, backend="hermes"))
 
     assert runner_type == RunnerType.PROVIDER_CLI
 
