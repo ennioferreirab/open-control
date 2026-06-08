@@ -202,4 +202,34 @@ describe("compileAgentSpec", () => {
     const result = compileAgentSpec(fullSpec, "spec-id", 1);
     expect(result.soul.trim().length).toBeGreaterThan(0);
   });
+
+  it("sets interactiveProvider from backend when backend is present and interactiveProvider is absent", () => {
+    const spec: AgentSpecInput = { ...minimalSpec, backend: "hermes" };
+    const result = compileAgentSpec(spec, "spec-id", 1);
+    expect(result.interactiveProvider).toBe("hermes");
+  });
+
+  it("prefers interactiveProvider over backend when both are set", () => {
+    const spec: AgentSpecInput = {
+      ...minimalSpec,
+      backend: "codex",
+      interactiveProvider: "hermes",
+    };
+    const result = compileAgentSpec(spec, "spec-id", 1);
+    expect(result.interactiveProvider).toBe("hermes");
+  });
+
+  it("carries profile through to the projection when set", () => {
+    const spec: AgentSpecInput = { ...minimalSpec, backend: "hermes", profile: "my-profile" };
+    const result = compileAgentSpec(spec, "spec-id", 1);
+    expect(result.profile).toBe("my-profile");
+  });
+
+  it("does not set profile on the projection when absent", () => {
+    const result = compileAgentSpec(minimalSpec, "spec-id", 1) as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(result.profile).toBeUndefined();
+  });
 });

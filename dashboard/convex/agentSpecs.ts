@@ -23,6 +23,8 @@ export const createDraft = internalMutation({
     executionPolicy: v.optional(v.string()),
     memoryPolicy: v.optional(v.string()),
     reviewPolicyRef: v.optional(v.string()),
+    backend: v.optional(v.string()),
+    profile: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
@@ -45,6 +47,8 @@ export const createDraft = internalMutation({
       executionPolicy: args.executionPolicy,
       memoryPolicy: args.memoryPolicy,
       reviewPolicyRef: args.reviewPolicyRef,
+      backend: args.backend,
+      profile: args.profile,
       status: "draft",
       version: 1,
       createdAt: now,

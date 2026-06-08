@@ -13,13 +13,8 @@ interface ProviderOption {
 
 const PROVIDERS: ProviderOption[] = [
   { value: "claude-code", label: "Claude Code", enabled: true },
-  { value: "codex", label: "Codex", enabled: false, disabledReason: "Coming soon" },
-  {
-    value: "hermes",
-    label: "Hermes",
-    enabled: false,
-    disabledReason: "YAML-defined (backend: hermes + profile)",
-  },
+  { value: "codex", label: "Codex", enabled: true },
+  { value: "hermes", label: "Hermes", enabled: true },
 ];
 
 interface ProviderSelectorProps {
