@@ -78,11 +78,6 @@ class ClaudeCodeInteractiveAdapter:
         memory_workspace: Path | None = None,
         resume_session_id: str | None = None,
     ) -> InteractiveLaunchSpec:
-        if not board_name:
-            raise InteractiveSessionBootstrapError(
-                f"Agent '{agent.name}' requires a board-scoped workspace — "
-                "no board_name provided for interactive session."
-            )
         await self.healthcheck(agent=agent)
 
         try:
