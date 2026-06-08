@@ -47,9 +47,13 @@ export function AgentAuthoringWizard({ open, onClose }: AgentAuthoringWizardProp
           {open && (
             <AgentTerminal
               agentName="orchestrator-agent"
-              provider={provider}
+              provider="claude-code"
               scopeId={scopeId}
-              prompt="/create-agent-mc"
+              prompt={
+                provider === "claude-code"
+                  ? "/create-agent-mc"
+                  : `/create-agent-mc backend=${provider}`
+              }
               terminateOnClose
             />
           )}

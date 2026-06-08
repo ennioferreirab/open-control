@@ -100,6 +100,14 @@ Before calling the API, present a compact summary that includes:
 
 Ask for confirmation only once the summary is concrete.
 
+## Backend selection
+
+If invoked with a `backend=<name>` argument (`codex` or `hermes`), set that as the new agent's backend:
+
+- Include `"backend": "<name>"` in the POST payload.
+- When `backend` is `hermes`, you MUST also ask the user for a `profile` (the Hermes profile directory name, e.g. provisioned via `scripts/hermes-provision-profile.sh`) and include `"profile": "<directory>"` in the payload.
+- Omit `backend` and `profile` when the backend is `claude-code` (the default).
+
 ## API calls
 
 Create:

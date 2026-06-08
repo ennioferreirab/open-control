@@ -583,6 +583,7 @@ export const publishProjection = mutation({
     skills: v.array(v.string()),
     model: v.optional(v.string()),
     interactiveProvider: v.optional(interactiveProviderValidator),
+    profile: v.optional(v.string()),
     compiledFromSpecId: v.string(),
     compiledFromVersion: v.number(),
     compiledAt: v.string(),
@@ -626,6 +627,7 @@ export const publishProjection = mutation({
       if (args.model !== undefined) patch.model = args.model;
       if (args.interactiveProvider !== undefined)
         patch.interactiveProvider = args.interactiveProvider;
+      if (args.profile !== undefined) patch.profile = args.profile;
       await ctx.db.patch(existing._id, patch);
     } else {
       await ctx.db.insert("agents", {
@@ -639,6 +641,7 @@ export const publishProjection = mutation({
         enabled: true,
         model: args.model,
         interactiveProvider: args.interactiveProvider,
+        profile: args.profile,
         compiledFromSpecId: args.compiledFromSpecId,
         compiledFromVersion: args.compiledFromVersion,
         compiledAt: args.compiledAt,

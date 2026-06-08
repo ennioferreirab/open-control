@@ -47,8 +47,12 @@ export interface AgentSpecInput {
   model?: string;
   /** Optional explicit soul text. Generated from role if absent. */
   soul?: string;
-  /** Optional interactive provider. */
+  /** Optional interactive provider. Takes precedence over backend. */
   interactiveProvider?: string;
+  /** Backend to use for the agent (codex, hermes, claude-code). Alias for interactiveProvider when interactiveProvider is absent. */
+  backend?: string;
+  /** Hermes profile directory name. Required when backend is hermes. */
+  profile?: string;
 }
 
 /**
@@ -65,6 +69,8 @@ export interface AgentRuntimeProjection {
   skills: string[];
   model?: string;
   interactiveProvider?: string;
+  /** Hermes profile directory name. Set only when interactiveProvider is hermes. */
+  profile?: string;
   /** ID of the `agentSpecs` document this projection was compiled from. */
   compiledFromSpecId: string;
   /** Version of the spec at compile time. */
@@ -188,8 +194,13 @@ export function compileAgentSpec(
     projection.model = spec.model;
   }
 
-  if (spec.interactiveProvider !== undefined) {
-    projection.interactiveProvider = spec.interactiveProvider;
+  const resolvedProvider = spec.interactiveProvider ?? spec.backend;
+  if (resolvedProvider !== undefined) {
+    projection.interactiveProvider = resolvedProvider;
+  }
+
+  if (spec.profile !== undefined) {
+    projection.profile = spec.profile;
   }
 
   return projection;

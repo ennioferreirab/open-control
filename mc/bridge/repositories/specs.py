@@ -36,6 +36,8 @@ class SpecsRepository:
         memory_policy: str | None = None,
         execution_policy: str | None = None,
         review_policy_ref: str | None = None,
+        backend: str | None = None,
+        profile: str | None = None,
     ) -> str | None:
         """Create a new Agent Spec V2 draft record in Convex.
 
@@ -99,6 +101,10 @@ class SpecsRepository:
             args["execution_policy"] = execution_policy
         if review_policy_ref is not None:
             args["review_policy_ref"] = review_policy_ref
+        if backend is not None:
+            args["backend"] = backend
+        if profile is not None:
+            args["profile"] = profile
         return self._client.mutation("agentSpecs:createDraft", args)
 
     def get_agent_spec_by_name(self, name: str) -> dict[str, Any] | None:
@@ -128,23 +134,28 @@ class SpecsRepository:
         from datetime import UTC, datetime
 
         now = datetime.now(UTC).isoformat()
-        self._client.mutation(
-            "agents:publishProjection",
-            {
-                "name": spec.get("name", ""),
-                "display_name": spec.get("display_name", ""),
-                "role": spec.get("role", ""),
-                "prompt": spec.get("prompt")
-                or f"You are {spec.get('display_name', spec.get('name', 'an agent'))}.",
-                "soul": spec.get("soul")
-                or f"# Soul\n\nI am {spec.get('display_name', spec.get('name', 'an agent'))}.",
-                "skills": spec.get("skills") or [],
-                "model": spec.get("model"),
-                "compiled_from_spec_id": spec_id,
-                "compiled_from_version": spec.get("version", 1),
-                "compiled_at": now,
-            },
-        )
+        projection: dict[str, Any] = {
+            "name": spec.get("name", ""),
+            "display_name": spec.get("display_name", ""),
+            "role": spec.get("role", ""),
+            "prompt": spec.get("prompt")
+            or f"You are {spec.get('display_name', spec.get('name', 'an agent'))}.",
+            "soul": spec.get("soul")
+            or f"# Soul\n\nI am {spec.get('display_name', spec.get('name', 'an agent'))}.",
+            "skills": spec.get("skills") or [],
+            "model": spec.get("model"),
+            "compiled_from_spec_id": spec_id,
+            "compiled_from_version": spec.get("version", 1),
+            "compiled_at": now,
+        }
+        # interactiveProvider: prefer explicit interactive_provider, fall back to backend.
+        interactive_provider = spec.get("interactive_provider") or spec.get("backend")
+        if interactive_provider:
+            projection["interactive_provider"] = interactive_provider
+        profile = spec.get("profile")
+        if profile:
+            projection["profile"] = profile
+        self._client.mutation("agents:publishProjection", projection)
         return spec_id
 
     def create_board_agent_binding(

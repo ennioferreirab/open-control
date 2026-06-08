@@ -530,6 +530,8 @@ export default defineSchema({
     model: v.optional(v.string()),
     prompt: v.optional(v.string()),
     soul: v.optional(v.string()),
+    backend: v.optional(v.string()),
+    profile: v.optional(v.string()),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
     version: v.number(),
     compiledAgentId: v.optional(v.id("agents")),
