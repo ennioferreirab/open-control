@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mc.application.execution.roster_builder import (
+    hydrate_agent_data,
     inject_orientation,
     resolve_tier,
     sync_agent_from_convex,
@@ -65,6 +66,37 @@ class TestSyncAgentFromConvex:
         convex = {}  # no "skills" key at all
         _, _, skills = sync_agent_from_convex("test-agent", None, None, ["code"], convex)
         assert skills == ["code"]
+
+
+class TestHydrateAgentData:
+    """Convex-only hydration must reconstruct backend and profile."""
+
+    @patch("mc.application.execution.roster_builder.load_agent_data", return_value=None)
+    def test_convex_only_hermes_agent_recovers_backend_and_profile(
+        self, _mock_load: MagicMock
+    ) -> None:
+        # backend has no Convex column; it is stored as interactive_provider. A hermes
+        # agent with no local YAML must still hydrate as backend "hermes" with its profile,
+        # or dispatch mis-routes to the default backend and drops the profile (ValueError).
+        convex_agent = {
+            "display_name": "Hermes Bot",
+            "role": "agent",
+            "interactive_provider": "hermes",
+            "profile": "research-profile",
+        }
+        agent = hydrate_agent_data("hermes-bot", convex_agent=convex_agent)
+        assert agent is not None
+        assert agent.backend == "hermes"
+        assert agent.profile == "research-profile"
+        assert agent.interactive_provider == "hermes"
+
+    @patch("mc.application.execution.roster_builder.load_agent_data", return_value=None)
+    def test_convex_only_agent_without_profile_is_none(self, _mock_load: MagicMock) -> None:
+        convex_agent = {"role": "agent", "interactive_provider": "claude-code"}
+        agent = hydrate_agent_data("cc-bot", convex_agent=convex_agent)
+        assert agent is not None
+        assert agent.backend == "claude-code"
+        assert agent.profile is None
 
 
 class TestInjectOrientation:

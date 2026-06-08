@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
 from acp.schema import (
     AgentMessageChunk,
     AvailableCommandsUpdate,
@@ -17,6 +19,7 @@ from acp.schema import (
 from mc.application.execution.request import EntityType, ExecutionRequest, RunnerType
 from mc.application.execution.strategies.acp import AcpRunnerStrategy, _acp_update_to_event
 from mc.infrastructure.acp.types import AcpTurnResult
+from mc.types import AgentData
 
 
 def test_agent_message_chunk_maps_to_text() -> None:
@@ -206,3 +209,135 @@ def test_build_mc_mcp_returns_correct_server_and_allowed_tools() -> None:
     assert env_map["TASK_ID"] == request.task_id
 
     assert allowed == ["mcp__mc__ask_user", "mcp__mc__send_message"]
+
+
+# ---------------------------------------------------------------------------
+# Hermes dispatch — _run injects HERMES_HOME and uses the uvx launch command
+# ---------------------------------------------------------------------------
+
+
+def _hermes_request(profile: str) -> ExecutionRequest:
+    agent = AgentData(
+        name="hermes-agent",
+        display_name="Hermes",
+        role="worker",
+        backend="hermes",
+        profile=profile,
+    )
+    return ExecutionRequest(
+        entity_type=EntityType.TASK,
+        entity_id="task_h1",
+        task_id="task_h1",
+        title="Hermes task",
+        agent_name="hermes-agent",
+        agent=agent,
+        prompt="do the hermes thing",
+        model=None,
+        runner_type=RunnerType.ACP,
+    )
+
+
+@dataclass
+class _AcpClientCall:
+    command: list[str]
+    env_overrides: dict[str, str | None]
+    mcp_servers: list[Any]
+    allowed_tools: list[str]
+
+
+def _capturing_acp_client(turn: AcpTurnResult) -> tuple[type, list[_AcpClientCall]]:
+    """Return a fake AcpClient class and a list that receives every __init__ call."""
+    calls: list[_AcpClientCall] = []
+
+    class _FakeAcpClient:
+        def __init__(self, *, command: list[str], **kwargs: Any) -> None:
+            calls.append(
+                _AcpClientCall(
+                    command=command,
+                    env_overrides=kwargs.get("env_overrides", {}),
+                    mcp_servers=kwargs.get("mcp_servers", []),
+                    allowed_tools=kwargs.get("allowed_tools", []),
+                )
+            )
+
+        @property
+        def session_id(self) -> str | None:
+            return None
+
+        async def __aenter__(self) -> _FakeAcpClient:
+            return self
+
+        async def __aexit__(self, *exc: object) -> bool:
+            return False
+
+        async def prompt(self, text: str, on_update: Any = None) -> AcpTurnResult:
+            return turn
+
+    return _FakeAcpClient, calls
+
+
+async def test_hermes_run_injects_hermes_home_and_uvx_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    profile_dir = tmp_path / "coder"
+    profile_dir.mkdir()
+    monkeypatch.setenv("HERMES_PROFILES_ROOT", str(tmp_path))
+
+    turn = AcpTurnResult(
+        text="done", stop_reason="end_turn", session_id=None, usage={}, cost_usd=None
+    )
+    fake_cls, calls = _capturing_acp_client(turn)
+
+    with (
+        patch("mc.application.execution.strategies.acp.AcpClient", fake_cls),
+        patch("mc.application.execution.strategies.acp.SessionActivityService"),
+        patch("mc.infrastructure.secrets.resolve_secret_env", return_value={}),
+    ):
+        strategy = AcpRunnerStrategy(registry=MagicMock(), cwd=".")
+        result = await strategy.execute(_hermes_request("coder"))
+
+    assert result.success is True
+    assert len(calls) == 1
+    call = calls[0]
+
+    cmd = call.command
+    assert cmd[0] == "uvx"
+    assert "--from" in cmd
+    pkg_arg = cmd[cmd.index("--from") + 1]
+    assert "hermes-agent[acp,mcp]" in pkg_arg
+    assert "0.15.2" in pkg_arg
+
+    assert call.env_overrides.get("HERMES_HOME") == str(profile_dir)
+
+
+async def test_hermes_run_passes_mc_mcp_server_and_allowed_tools(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    profile_dir = tmp_path / "coder"
+    profile_dir.mkdir()
+    monkeypatch.setenv("HERMES_PROFILES_ROOT", str(tmp_path))
+
+    turn = AcpTurnResult(
+        text="done", stop_reason="end_turn", session_id=None, usage={}, cost_usd=None
+    )
+    fake_cls, calls = _capturing_acp_client(turn)
+
+    with (
+        patch("mc.application.execution.strategies.acp.AcpClient", fake_cls),
+        patch("mc.application.execution.strategies.acp.SessionActivityService"),
+        patch("mc.infrastructure.secrets.resolve_secret_env", return_value={}),
+    ):
+        strategy = AcpRunnerStrategy(registry=MagicMock(), cwd=".")
+        await strategy.execute(_hermes_request("coder"))
+
+    assert len(calls) == 1
+    call = calls[0]
+
+    server_names = [s.name for s in call.mcp_servers]
+    assert "mc" in server_names
+
+    mc_server = next(s for s in call.mcp_servers if s.name == "mc")
+    assert mc_server.command == "uv"
+    assert "mc.runtime.mcp.bridge" in mc_server.args
+
+    assert "mcp__mc__ask_user" in call.allowed_tools

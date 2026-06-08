@@ -42,10 +42,13 @@ class AgentRepository:
             args["soul"] = agent_data.soul
         if agent_data.is_system:
             args["is_system"] = True
-        # Map backend to interactiveProvider for Convex (backend field not in schema)
+        # Map backend to interactiveProvider for Convex (backend field not in schema).
+        # Hydration recovers backend from interactive_provider, so this is the round trip.
         interactive = agent_data.interactive_provider or agent_data.backend
         if interactive:
             args["interactive_provider"] = interactive
+        if agent_data.profile:
+            args["profile"] = agent_data.profile
         cc_opts = agent_data.claude_code_opts
         if cc_opts is not None:
             cc_payload: dict[str, Any] = {}

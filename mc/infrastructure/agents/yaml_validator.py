@@ -50,6 +50,7 @@ class AgentConfig(BaseModel):
     soul: str | None = None
     is_system: bool | None = None
     backend: str | None = None
+    profile: str | None = None
     interactive_provider: str | None = None
     claude_code: dict | None = None
 
@@ -58,10 +59,18 @@ class AgentConfig(BaseModel):
     def validate_backend(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        valid = {"claude-code", "codex"}
+        valid = {"claude-code", "codex", "hermes"}
         if v not in valid:
             raise ValueError(f"Invalid backend '{v}'. Valid options: {', '.join(sorted(valid))}")
         return v
+
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
 
     @field_validator("interactive_provider")
     @classmethod
@@ -115,6 +124,15 @@ class AgentConfig(BaseModel):
     def set_display_name(self) -> AgentConfig:
         if not self.display_name:
             self.display_name = self.name.replace("-", " ").replace("_", " ").title()
+        return self
+
+    @model_validator(mode="after")
+    def require_profile_for_hermes(self) -> AgentConfig:
+        if self.backend == "hermes" and not self.profile:
+            raise ValueError(
+                "Hermes selects its model, provider credentials, skills, and session state "
+                "from a named profile directory. Add 'profile: <name>' to your agent config."
+            )
         return self
 
 
@@ -294,6 +312,7 @@ def _config_to_agent_data(config: AgentConfig) -> AgentData | list[str]:
         model=config.model,
         is_system=config.is_system or False,
         backend=backend,
+        profile=config.profile,
         claude_code_opts=cc_opts,
         interactive_provider=config.interactive_provider,
     )

@@ -9,6 +9,7 @@ activity infrastructure the provider-cli path uses.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -18,12 +19,43 @@ from mc.contexts.interactive.activity_service import SessionActivityService
 from mc.contexts.provider_cli.registry import ProviderSessionRegistry
 from mc.contexts.provider_cli.types import ParsedCliEvent, SessionStatus
 from mc.infrastructure.acp.client import AcpClient
-from mc.infrastructure.acp.harness_registry import get_harness, resolve_model
+from mc.infrastructure.acp.harness_registry import HarnessSpec, get_harness, resolve_model
 
 if TYPE_CHECKING:
     from mc.runtime.provider_cli.live_stream import LiveStreamProjector
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_profile_home(profile: str) -> str:
+    """Resolve a Hermes profile name to its HERMES_HOME directory.
+
+    Base is HERMES_PROFILES_ROOT when set, else ~/.hermes/profiles.
+    """
+    root = os.environ.get("HERMES_PROFILES_ROOT") or os.path.expanduser("~/.hermes/profiles")
+    return os.path.join(root, profile)
+
+
+def _build_harness_env(spec: HarnessSpec, profile: str | None) -> dict[str, str | None]:
+    """Build the adapter subprocess env overrides for a harness.
+
+    Starts from the spec's static env_overrides. When the harness selects
+    its profile via an env var (spec.profile_env), inject the resolved
+    profile home. A harness that requires a profile but has none, or names a
+    profile directory that does not exist, is an error.
+    """
+    env = dict(spec.env_overrides)
+    if spec.profile_env:
+        if not profile:
+            raise ValueError(f"Harness {spec.name!r} requires a profile but none was provided")
+        home = _resolve_profile_home(profile)
+        if not os.path.isdir(home):
+            raise FileNotFoundError(
+                f"Hermes profile {profile!r} not found at {home}. Provision it first "
+                "(scripts/hermes-provision-profile.sh or `hermes profile create`)."
+            )
+        env[spec.profile_env] = home
+    return env
 
 
 def _acp_update_to_event(update: Any) -> ParsedCliEvent | None:
@@ -181,7 +213,6 @@ class AcpRunnerStrategy:
 
     def _build_mc_mcp(self, request: ExecutionRequest, mc_session_id: str) -> tuple[Any, list[str]]:
         """Build the mc MCP server config and allowed tools list for an ACP session."""
-        import os
 
         from acp.schema import EnvVariable, McpServerStdio
         from claude_code.workspace import _PROJECT_ROOT
@@ -221,6 +252,7 @@ class AcpRunnerStrategy:
         spec = get_harness(harness_name)
         command = list(spec.launch_command)
         model = resolve_model(spec, request.model)
+        extra_env = _build_harness_env(spec, getattr(agent, "profile", None))
 
         bootstrap_prompt = (request.prompt or "")[:500] or None
         self._registry.create(
@@ -257,7 +289,7 @@ class AcpRunnerStrategy:
             model_env=spec.model_env,
             session_param_style=spec.session_param_style,
             model_via_session=spec.model_via_session,
-            env_overrides=spec.env_overrides,
+            env_overrides=extra_env,
         ) as client:
             if client.session_id is not None:
                 self._registry.update_provider_session_id(mc_session_id, client.session_id)

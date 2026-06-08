@@ -50,6 +50,9 @@ class HarnessSpec:
     session_param_style: str = "claude_code"
     model_via_session: bool = False
     env_overrides: dict[str, str | None] = field(default_factory=dict)
+    # Names the env var a harness uses to select its profile/home directory
+    # (Hermes: HERMES_HOME). None for harnesses without profile selection.
+    profile_env: str | None = None
 
 
 HARNESSES: dict[str, HarnessSpec] = {
@@ -75,6 +78,21 @@ HARNESSES: dict[str, HarnessSpec] = {
         # ChatGPT subscription auth (auth_mode=chatgpt in ~/.codex/auth.json)
         # only wins when no API key env is present.
         env_overrides={"OPENAI_API_KEY": None, "CODEX_API_KEY": None},
+    ),
+    "hermes": HarnessSpec(
+        name="hermes",
+        # The [mcp] extra is required: without it Hermes cannot connect to the
+        # stdio MCP servers passed on session/new (the mc bridge that exposes
+        # ask_user / send_message); tool registration then fails at connect time.
+        launch_command=("uvx", "--from", "hermes-agent[acp,mcp]==0.15.2", "hermes-acp"),
+        native_acp=True,
+        # Model is owned by the Hermes profile (config.yaml), not by OpenControl.
+        # No tier mapping, no model env, no per-session set_model.
+        model_tiers={},
+        model_env=None,
+        session_param_style="standard",
+        model_via_session=False,
+        profile_env="HERMES_HOME",
     ),
 }
 

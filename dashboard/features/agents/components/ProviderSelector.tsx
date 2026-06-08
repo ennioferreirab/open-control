@@ -2,7 +2,7 @@
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export type WizardProvider = "claude-code" | "codex";
+export type WizardProvider = "claude-code" | "codex" | "hermes";
 
 interface ProviderOption {
   value: WizardProvider;
@@ -14,6 +14,12 @@ interface ProviderOption {
 const PROVIDERS: ProviderOption[] = [
   { value: "claude-code", label: "Claude Code", enabled: true },
   { value: "codex", label: "Codex", enabled: false, disabledReason: "Coming soon" },
+  {
+    value: "hermes",
+    label: "Hermes",
+    enabled: false,
+    disabledReason: "YAML-defined (backend: hermes + profile)",
+  },
 ];
 
 interface ProviderSelectorProps {

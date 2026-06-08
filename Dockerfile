@@ -50,6 +50,12 @@ FROM python-deps AS node-deps
 COPY dashboard/package.json dashboard/package-lock.json dashboard/
 RUN cd dashboard && npm ci
 
+# Pre-resolve the Hermes ACP harness so the first hermes dispatch does not pay
+# the uvx cold-start (env resolution + download). The [mcp] extra is required
+# for Hermes to connect to the stdio MCP servers we pass on session/new.
+# Inherited by both the dev and runtime stages, so it applies to mc and mc-test.
+RUN uvx --from 'hermes-agent[acp,mcp]==0.15.2' hermes-acp --version
+
 # ---------------------------------------------------------------------------
 # Stage: dev — Dependencies + CLI tools (source code bind-mounted at runtime)
 # ---------------------------------------------------------------------------

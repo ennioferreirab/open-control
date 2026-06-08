@@ -367,6 +367,7 @@ class AgentData:
     last_active_at: str | None = None
     id: str | None = None  # Convex _id (populated on read)
     backend: str | None = "claude-code"
+    profile: str | None = None
     claude_code_opts: ClaudeCodeOpts | None = None
     interactive_provider: str | None = None
 

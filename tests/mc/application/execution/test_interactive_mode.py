@@ -49,6 +49,36 @@ def test_resolve_codex_backend_routes_to_acp() -> None:
     assert runner_type == RunnerType.ACP
 
 
+def test_resolve_hermes_interactive_provider_routes_to_acp() -> None:
+    """A hermes agent runs through ACP via the provider shortcut, not by fallthrough."""
+    import os
+
+    os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
+    runner_type = resolve_step_runner_type(_request(provider="hermes", backend="hermes"))
+
+    assert runner_type == RunnerType.ACP
+
+
+def test_resolve_hermes_provider_wins_when_backend_disagrees() -> None:
+    """interactive_provider=hermes is authoritative even if backend was left stale."""
+    import os
+
+    os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
+    runner_type = resolve_step_runner_type(_request(provider="hermes", backend="claude-code"))
+
+    assert runner_type == RunnerType.ACP
+
+
+def test_resolve_hermes_backend_routes_to_acp() -> None:
+    """backend=hermes alone (no interactive_provider) routes to ACP."""
+    import os
+
+    os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
+    runner_type = resolve_step_runner_type(_request(provider=None, backend="hermes"))
+
+    assert runner_type == RunnerType.ACP
+
+
 def test_resolve_codex_ignores_tui_escape_hatch() -> None:
     """The TUI hatch is claude-code-only; codex still resolves to ACP."""
     with patch.dict("os.environ", {"MC_INTERACTIVE_EXECUTION_MODE": "interactive-tui"}):
@@ -62,7 +92,7 @@ def test_resolve_unknown_backend_stays_provider_cli() -> None:
     import os
 
     os.environ.pop("MC_INTERACTIVE_EXECUTION_MODE", None)
-    runner_type = resolve_step_runner_type(_request(provider=None, backend="hermes"))
+    runner_type = resolve_step_runner_type(_request(provider=None, backend="unknown-harness"))
 
     assert runner_type == RunnerType.PROVIDER_CLI
 

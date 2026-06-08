@@ -171,7 +171,8 @@ Agent registry with config, status, and metrics.
 | `isSystem` | `v.optional(v.boolean())` | |
 | `model` | `v.optional(v.string())` | Tier reference or concrete model |
 | `reasoningLevel` | `v.optional(v.string())` | |
-| `interactiveProvider` | `v.optional(interactiveProviderValidator)` | |
+| `interactiveProvider` | `v.optional(interactiveProviderValidator)` | `claude-code\|codex\|hermes\|mc`. Also carries `backend` (no separate column); hydration recovers `backend` from this. |
+| `profile` | `v.optional(v.string())` | Hermes profile directory name. Required for `backend: hermes`; null otherwise. |
 | `claudeCodeOpts` | `v.optional(v.object({...}))` | `{permissionMode?, maxBudgetUsd?, maxTurns?}` |
 | `variables` | `v.optional(v.array(v.object({...})))` | `{name, value}` |
 | `tasksExecuted` | `v.optional(v.number())` | |

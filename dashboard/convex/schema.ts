@@ -166,6 +166,7 @@ export const interactiveSessionControlModeValidator = v.union(
 export const interactiveProviderValidator = v.union(
   v.literal("claude-code"),
   v.literal("codex"),
+  v.literal("hermes"),
   v.literal("mc"),
 );
 export const executionInteractionStateValidator = v.union(
@@ -393,6 +394,8 @@ export default defineSchema({
     model: v.optional(v.string()),
     reasoningLevel: v.optional(v.string()),
     interactiveProvider: v.optional(interactiveProviderValidator),
+    // Hermes profile directory name. Required for backend "hermes"; null otherwise.
+    profile: v.optional(v.string()),
     claudeCodeOpts: v.optional(
       v.object({
         permissionMode: v.optional(v.string()),
