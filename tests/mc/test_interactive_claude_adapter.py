@@ -381,3 +381,36 @@ async def test_task_prompt_is_stripped_before_bootstrap_input() -> None:
 
     assert launch.bootstrap_input == "Implement the login feature"
     assert "-p" not in launch.command
+
+
+@pytest.mark.asyncio
+async def test_prepare_launch_without_board_name_succeeds_for_authoring_session() -> None:
+    """Sessions without a board_name (e.g. the Create Agent wizard) must succeed.
+
+    The wizard opens an AgentTerminal without a board — it is a global-workspace
+    authoring session, not a board-scoped task. workspace.prepare already handles
+    board_name=None by using the global workspace.
+    """
+    workspace_manager = MagicMock()
+    workspace_manager.prepare.return_value = _workspace()
+    socket_server = MagicMock()
+    socket_server.start = AsyncMock()
+    adapter = ClaudeCodeInteractiveAdapter(
+        bridge=MagicMock(),
+        workspace_manager=workspace_manager,
+        socket_server_factory=MagicMock(return_value=socket_server),
+        cli_path="claude",
+        which=MagicMock(return_value="/usr/local/bin/claude"),
+    )
+
+    launch = await adapter.prepare_launch(
+        identity=_identity(),
+        agent=_agent(),
+        task_id=None,
+        board_name=None,
+    )
+
+    assert launch.command
+    workspace_manager.prepare.assert_called_once()
+    _, kwargs = workspace_manager.prepare.call_args
+    assert kwargs.get("board_name") is None
